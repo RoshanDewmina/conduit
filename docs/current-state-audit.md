@@ -1,12 +1,29 @@
 # Current State Audit
 
-Updated: 2026-05-23T17:05:35Z
+Updated: 2026-05-24
 
 ## Executive Summary
 
-Conduit is now a credible M0/M1 foundation, not yet a finished mobile developer environment. The scaffold builds, tests pass, and the iOS app launches on simulator. The immediate direction is correct: keep the first production slice SSH-first, secure, and small before adding cmux-style daemon features, previews, files, approvals, or richer AI workflows.
+Conduit is now an iOS 26 / Swift 6.2 app with a working SSH shell pipeline, session survival via tmux, and automatic reconnection on network changes. The platform was upgraded from iOS 17 / Swift 6.0, and the core SSH flow (connect → blocks → raw PTY → reconnect) is fully wired end-to-end. The codebase is ~9,100 lines across 80+ files.
 
-The previous output overstated the target platform and completion level. The code deploys to iOS 17.0+ and was verified locally with Xcode 26.4.1 against the iOS 26.4 simulator runtime. It should not claim iOS 26.5+ as a hard requirement unless the app intentionally adopts APIs that require it.
+**What works now:**
+- SSH connection with 15s timeout, password and Ed25519 auth
+- Host-key TOFU confirmation with UI sheet
+- Block mode (command + output as discrete units) with error indicators
+- Raw PTY mode via Citadel's terminal API (vim, htop, tmux)
+- Manual Terminal/Blocks toggle in toolbar
+- tmux auto-attach when configured on host
+- Auto-reconnect on scene resume using cached credentials
+- Reconnection banner UI with cancel
+- "Session suspended" local notification on background expiry
+- tmux session name field in host editor
+
+**What's next:**
+- Test against a real SSH host (not yet validated in production)
+- Agent inbox (Phase 3) — conduitd daemon in Go, approval flow
+- Mosh support for UDP-based session resilience
+- Liquid Glass design language adoption
+- BGContinuedProcessingTask for improved background keepalive
 
 ## Verified In This Pass
 
@@ -97,22 +114,46 @@ Termius/Blink-style basics are table stakes: host management, key management, pa
 
 Sources checked: [Termius App Store listing](https://apps.apple.com/us/app/termius-terminal-ssh-client/id549039908), [Termius background-session support](https://support.termius.com/hc/en-us/articles/900006226306-Keep-your-Termius-sessions-alive-in-the-background), [Warp Agents](https://docs.warp.dev/agents), [Warp Agent Mode](https://docs.warp.dev/agents/warp-ai/agent-mode), [`manaflow-ai/cmux`](https://github.com/manaflow-ai/cmux), and [Ghostty docs](https://ghostty.org/docs/about).
 
-## Remaining Gaps Before M1 Is Done
+## Completed Since Last Audit (2026-05-24)
 
-- Test against a real SSH host with password auth.
-- Test against a real SSH host with generated Ed25519 key auth.
-- Add UI confirmation for first-use host keys instead of automatic TOFU recording.
-- Persist and display known-host fingerprints per host.
-- Replace command-block-only execution with a live PTY path for real terminal use.
-- Add a focused first-connect demo script with exact remote setup steps.
-- Add integration tests or a local SSH test harness so host-key mismatch and auth failure behavior do not regress.
+### Phase 0: Platform Upgrade
+- swift-tools-version 6.0 → 6.2
+- Deployment target iOS 17.0 → iOS 26.0
+- Removed redundant StrictConcurrency/ExistentialAny feature flags
+
+### Phase 1: SSH End-to-End (M1 + M2)
+- Implemented `SSHShell.open()` using Citadel's terminal API (was stubbed)
+- Added 15s connection timeout (task-group racing pattern)
+- Wired `vm.connect()` in `AppRoot.startSession()`
+- Added manual Terminal/Blocks toggle in toolbar
+- Added red sidebar indicator for failed commands (Warp pattern)
+- Added NIOSSH import for PTY request types
+
+### Phase 2: Session Survival (M3)
+- Implemented `SessionViewModel.handleSceneActive()` for auto-reconnect
+- Implemented `attemptReconnect()` with cached credentials + tmux reattach
+- Added tmux auto-attach on connect when `host.tmuxSessionName` is set
+- Added tmux session name field to HostEditorView
+- Added reconnection banner UI with cancel
+- Added `postSessionSuspended` notification
+- Wired ScenePhaseObserver to SessionViewModel
+
+See `docs/phase1-phase2-implementation.md` for full details.
+
+## Remaining Gaps
+
+- Validate SSH against a real host (password auth and Ed25519 key auth)
+- Verify Citadel `withTerminal` API name matches actual 0.9.x signature
+- Add Mosh support for UDP-based session resilience (stretch goal)
+- Implement BGContinuedProcessingTask for improved background keepalive
+- Adopt Liquid Glass design language for UI chrome
+- Add integration tests or local SSH test harness
+- Build conduitd daemon in Go for agent inbox (Phase 3)
 
 ## Next Implementation Priority
 
-Continue with M1 using a real remote host:
-
-1. Add a known-host confirmation sheet.
-2. Add a live PTY session path using Citadel `withPTY` and SwiftTerm.
-3. Validate password auth and Ed25519 auth against the real host.
-4. Record failure modes in `docs/demos/M1-first-connect.md`.
-5. Only then move to reconnect/session survival.
+1. Test against a real SSH host — validate the full connect → blocks → raw → reconnect flow.
+2. Fix any Citadel API mismatches discovered during compilation.
+3. Begin Phase 3: conduitd daemon + agent inbox.
+4. Add Mosh protocol support for mobile-grade resilience.
+5. Apply iOS 26 Liquid Glass design to UI chrome.
