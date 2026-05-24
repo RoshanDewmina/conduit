@@ -125,6 +125,19 @@ public actor SSHSession {
         }
     }
 
+    // MARK: - SFTP
+
+    /// Opens an SFTP subsystem on the underlying SSH connection, executes `body`,
+    /// and closes the subsystem when the closure returns (or throws).
+    public func withSFTP<T: Sendable>(
+        _ body: @escaping @Sendable (Citadel.SFTPClient) async throws -> T
+    ) async throws -> T {
+        guard let client else { throw ConduitError.notConnected }
+        return try await client.withSFTP { sftp in
+            try await body(sftp)
+        }
+    }
+
     // MARK: - Error mapping
 
     public nonisolated static func commandExitCode(from error: any Error) -> Int? {

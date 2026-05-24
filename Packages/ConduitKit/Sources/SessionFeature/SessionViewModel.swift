@@ -63,6 +63,9 @@ public final class SessionViewModel {
     // MARK: - Dependencies
 
     private let sshSession: SSHSession
+    /// The underlying SSH session (exposed for features like Preview that need
+    /// direct session access without going through the block execution path).
+    public var session: SSHSession { sshSession }
     private let credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
     private let aiClient: (any AIClient)?
