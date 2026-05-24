@@ -1,0 +1,96 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// runAgentHook is called by `conduitd agent-hook` from a Claude Code pre-tool hook.
+// It sends an approval event to the running conduitd serve process and waits for
+// the user's decision on their phone.
+//
+// Exit codes (agent hook convention):
+//
+//	0 = approved — the tool call may proceed
+//	1 = denied / error — the tool call must be blocked
+func runAgentHook(args []string) error {
+	fs := flag.NewFlagSet("agent-hook", flag.ContinueOnError)
+	agent   := fs.String("agent",   "",      "agent name (e.g. claude-code)")
+	kind    := fs.String("kind",    "bash",  "tool kind (bash|write|read|…)")
+	command := fs.String("command", "",      "command or path being executed")
+	cwd     := fs.String("cwd",     "",      "current working directory")
+	risk    := fs.String("risk",    "low",   "risk band: low|medium|high")
+	timeout := fs.Duration("timeout", 120*time.Second, "max wait for decision")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *command == "" {
+		return errors.New("--command is required")
+	}
+
+	event := ApprovalEvent{
+		ApprovalID: newUUID(),
+		Agent:      *agent,
+		Kind:       *kind,
+		Command:    *command,
+		CWD:        *cwd,
+		Risk:       *risk,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+
+	sockPath, err := socketPath()
+	if err != nil {
+		return fmt.Errorf("socket path: %w", err)
+	}
+
+	conn, err := net.DialTimeout("unix", sockPath, 5*time.Second)
+	if err != nil {
+		// conduitd serve is not running — default-approve so agents aren't blocked
+		// when the phone is not connected.
+		fmt.Fprintf(os.Stderr, "conduitd not running (%v); auto-approving\n", err)
+		return nil
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(*timeout + 10*time.Second))
+
+	if err := json.NewEncoder(conn).Encode(event); err != nil {
+		return fmt.Errorf("send event: %w", err)
+	}
+
+	var decision ApprovalDecision
+	if err := json.NewDecoder(conn).Decode(&decision); err != nil {
+		return fmt.Errorf("read decision: %w", err)
+	}
+
+	if decision.Decision != "approve" {
+		return fmt.Errorf("denied by user")
+	}
+	return nil
+}
+
+// newUUID returns a random UUID v4 string using crypto/rand.
+func newUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return hex.EncodeToString(b[0:4]) + "-" +
+		hex.EncodeToString(b[4:6]) + "-" +
+		hex.EncodeToString(b[6:8]) + "-" +
+		hex.EncodeToString(b[8:10]) + "-" +
+		hex.EncodeToString(b[10:])
+}
+
+func init() {
+	home, _ := os.UserHomeDir()
+	_ = os.MkdirAll(filepath.Join(home, ".conduit"), 0700)
+}

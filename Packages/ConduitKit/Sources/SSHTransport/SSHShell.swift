@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import Citadel
 @preconcurrency import NIOCore
 import NIOSSH
 import ConduitCore
@@ -25,10 +26,13 @@ public actor SSHShell {
     /// Async sequence of raw byte chunks arriving from the remote PTY.
     public var bytes: AsyncStream<[UInt8]> { byteStream }
 
-    // MARK: - Channel handle
+    // MARK: - Channel handles
 
-    /// The live NIO `Channel`; stored once the PTY handshake completes and
-    /// used for send / resize operations.
+    /// PTY writer for the live shell (set by `storeWriter(_:task:)`).
+    private var ptyWriter: TTYStdinWriter?
+    /// Background task keeping the withPTY closure alive; cancelled on close().
+    private var ptyTask: Task<Void, Never>?
+    /// NIO channel — only used by the test / mock path via `storeChannel(_:)`.
     private var nioChannel: (any Channel)?
 
     // MARK: - Init
@@ -59,23 +63,19 @@ public actor SSHShell {
         let shell = SSHShell()
         let continuation = shell.byteContinuation
 
-        let channel = try await session.requestShellChannel(
+        let (writer, task) = try await session.requestShellChannel(
             width: width,
             height: height,
             dataContinuation: continuation
         )
-        await shell.storeChannel(channel)
+        await shell.storeWriter(writer, task: task)
         return shell
     }
 
-    // MARK: - Internal factory (for tests and future wiring)
+    // MARK: - Internal factory (for tests)
 
     /// Creates an `SSHShell` driven by externally-supplied closures.
-    /// Used by unit tests (via `MockSSHShell`) and by higher-level shell
-    /// wrappers once the iOS 17 NIOSSH path is implemented.
-    ///
-    /// - Parameter setup: Called immediately with the stream `Continuation`
-    ///   so the caller can feed bytes into the shell and register a channel.
+    /// Used by unit tests (via `MockSSHShell`).
     internal static func makeManual(
         setup: (AsyncStream<[UInt8]>.Continuation) -> Void
     ) -> SSHShell {
@@ -84,9 +84,15 @@ public actor SSHShell {
         return shell
     }
 
-    // MARK: - Channel storage (actor-isolated)
+    // MARK: - Storage (actor-isolated)
 
-    /// Store a live NIO channel once the PTY handshake is confirmed.
+    /// Store a live PTY writer + background task once the PTY handshake is confirmed.
+    internal func storeWriter(_ writer: TTYStdinWriter, task: Task<Void, Never>) {
+        ptyWriter = writer
+        ptyTask = task
+    }
+
+    /// Store a raw NIO channel — used by the test / manual path only.
     internal func storeChannel(_ channel: any Channel) {
         nioChannel = channel
     }
@@ -94,38 +100,44 @@ public actor SSHShell {
     // MARK: - Public operations
 
     /// Write raw bytes to the remote PTY's stdin.
-    ///
-    /// - Throws: `ConduitError.channelClosed` if no channel is live.
     public func send(_ bytes: [UInt8]) async throws {
-        guard let ch = nioChannel else {
+        if let w = ptyWriter {
+            let buf = ByteBuffer(bytes: bytes)
+            try await w.write(buf)
+        } else if let ch = nioChannel {
+            var buf = ch.allocator.buffer(capacity: bytes.count)
+            buf.writeBytes(bytes)
+            try await ch.writeAndFlush(
+                SSHChannelData(type: .channel, data: .byteBuffer(buf))
+            )
+        } else {
             throw ConduitError.channelClosed
         }
-        var buf = ch.allocator.buffer(capacity: bytes.count)
-        buf.writeBytes(bytes)
-        try await ch.writeAndFlush(
-            SSHChannelData(type: .channel, data: .byteBuffer(buf))
-        )
     }
 
     /// Signal a window-size change to the remote PTY.
-    ///
-    /// - Throws: `ConduitError.channelClosed` if no channel is live.
     public func resize(cols: Int, rows: Int) async throws {
-        guard let ch = nioChannel else {
+        if let w = ptyWriter {
+            try await w.changeSize(cols: cols, rows: rows, pixelWidth: 0, pixelHeight: 0)
+        } else if let ch = nioChannel {
+            try await ch.triggerUserOutboundEvent(
+                SSHChannelRequestEvent.WindowChangeRequest(
+                    terminalCharacterWidth: cols,
+                    terminalRowHeight: rows,
+                    terminalPixelWidth: 0,
+                    terminalPixelHeight: 0
+                )
+            )
+        } else {
             throw ConduitError.channelClosed
         }
-        try await ch.triggerUserOutboundEvent(
-            SSHChannelRequestEvent.WindowChangeRequest(
-                terminalCharacterWidth: cols,
-                terminalRowHeight: rows,
-                terminalPixelWidth: 0,
-                terminalPixelHeight: 0
-            )
-        )
     }
 
     /// Close the shell channel gracefully and finish the byte stream.
     public func close() async {
+        ptyTask?.cancel()
+        ptyTask = nil
+        ptyWriter = nil
         try? await nioChannel?.close()
         nioChannel = nil
         byteContinuation.finish()
@@ -134,7 +146,6 @@ public actor SSHShell {
     // MARK: - Feed (tests / internal mock wiring)
 
     /// Inject bytes directly into the shell's stream.
-    /// Used by mock implementations and future NIOSSH bridge.
     internal func feedBytes(_ bytes: [UInt8]) {
         byteContinuation.yield(bytes)
     }

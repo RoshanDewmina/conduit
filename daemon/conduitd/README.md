@@ -1,56 +1,93 @@
 # conduitd
 
-The Conduit daemon that runs on the remote host and bridges agent approval
-events to the iOS app via a JSON-RPC stdio channel.
+Remote daemon for Conduit — bridges the iOS app and AI agent hooks on your development machine.
+
+## Architecture
+
+```
+iOS app ←── SSH stdio (JSON-RPC, length-framed) ──→ conduitd serve
+                                                           ↕  Unix socket
+                                              conduitd agent-hook  (Claude Code pre-tool hook)
+```
+
+- **`conduitd serve`** — runs on the remote host. The Conduit iOS app connects via SSH and
+  spawns `conduitd serve` as a subprocess. Communication uses 4-byte big-endian length-prefixed
+  JSON-RPC 2.0 frames over stdio.
+- **`conduitd agent-hook`** — called by Claude Code's `~/.claude/hooks/pre-tool.sh`. Sends an
+  approval event to the running `conduitd serve` via a Unix socket (`~/.conduit/conduitd.sock`),
+  then blocks until the user approves or denies on their phone (or 120 s elapses, defaulting to
+  auto-approve).
 
 ## Build
 
+Requires Go 1.22+. Install with `brew install go` on macOS.
+
 ```bash
-# For local testing on macOS:
-swift build -c release
+cd daemon/conduitd
 
-# Cross-compile for Linux arm64 (requires Swift cross-compilation toolchain):
-swift build -c release --triple aarch64-unknown-linux-gnu
+# Local binary (macOS)
+go build -o conduitd .
 
-# Or use Docker:
-docker run --rm -v $(pwd):/src swift:5.10 \
-  swift build -c release --package-path /src
+# Linux amd64 (most cloud VMs)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conduitd-linux-amd64 .
+
+# Linux arm64 (Raspberry Pi, Graviton, Apple Silicon VMs)
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o conduitd-linux-arm64 .
 ```
 
 ## Install on remote host
 
 ```bash
-scp .build/release/conduitd user@host:~/.conduit/bin/conduitd
-ssh user@host chmod +x ~/.conduit/bin/conduitd
+# Build the correct architecture first, e.g.:
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conduitd-linux-amd64 .
+
+# Copy to remote host
+scp conduitd-linux-amd64 user@host:~/conduitd
+ssh user@host "chmod +x ~/conduitd && ~/conduitd version"
 ```
 
-## Usage
+## Claude Code hook integration
 
-```bash
-# Start the JSON-RPC server (called by the iOS app via SSH exec):
-conduitd serve --stdio
+Add to `~/.claude/hooks/pre-tool.sh` on the remote host:
 
-# Print version:
-conduitd version
-
-# Send an approval event from a Claude Code hook:
-conduitd agent-hook approval \
-  --agent claude-code \
-  --kind command \
-  --command "rm -rf /tmp/old-build" \
-  --cwd /home/user/project \
-  --risk medium
-```
-
-## Hook integration (Claude Code)
-
-Create `~/.claude/hooks/pre-tool.sh`:
 ```bash
 #!/bin/bash
-~/.conduit/bin/conduitd agent-hook approval \
-  --agent claude-code \
-  --kind command \
-  --command "$CLAUDE_TOOL_COMMAND" \
-  --cwd "$PWD" \
-  --risk "${CLAUDE_RISK_LEVEL:-medium}"
+~/conduitd agent-hook \
+  --agent "claude-code" \
+  --kind  "$CLAUDE_TOOL_NAME" \
+  --command "$CLAUDE_TOOL_INPUT" \
+  --cwd "$(pwd)" \
+  --risk "medium"
+```
+
+Make it executable: `chmod +x ~/.claude/hooks/pre-tool.sh`
+
+When `conduitd serve` is not running (phone disconnected), the hook auto-approves so agents
+are never blocked when you're not actively supervising.
+
+## Protocol
+
+Frames: `[uint32 big-endian length][JSON body]`
+
+| Method (iOS → daemon) | Description |
+|---|---|
+| `ping` | Keepalive; daemon replies `"pong"` |
+| `agent.approval.response` | User approved/denied; params: `{approvalId, decision}` |
+
+| Notification (daemon → iOS) | Description |
+|---|---|
+| `agent.approval.pending` | Agent hook is waiting; params: `ApprovalEvent` |
+
+## Approval event schema
+
+```json
+{
+  "approvalId": "uuid",
+  "agent":      "claude-code",
+  "kind":       "bash",
+  "command":    "rm -rf /tmp/build",
+  "cwd":        "/home/user/project",
+  "risk":       "high",
+  "timestamp":  "2026-05-24T12:00:00Z"
+}
 ```

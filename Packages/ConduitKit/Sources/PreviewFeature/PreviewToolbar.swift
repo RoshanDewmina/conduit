@@ -7,6 +7,8 @@ public struct PreviewToolbar: View {
     let session: SSHSession
     var onScreenshot: ((String) -> Void)?
 
+    @State private var showManualPortEntry = false
+
     public init(
         vm: Binding<PreviewViewModel>,
         session: SSHSession,
@@ -19,12 +21,10 @@ public struct PreviewToolbar: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            // Port picker
             portPicker
 
             Divider().frame(height: 20)
 
-            // Viewport presets
             Picker("Viewport", selection: $vm.viewportPreset) {
                 ForEach(PreviewViewModel.ViewportPreset.allCases, id: \.self) { preset in
                     Text(preset.rawValue).tag(preset)
@@ -35,14 +35,12 @@ public struct PreviewToolbar: View {
 
             Divider().frame(height: 20)
 
-            // Reload
             Button {
                 vm.reload()
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
 
-            // Detect ports
             Button {
                 Task { await vm.detectPorts(session: session) }
             } label: {
@@ -54,6 +52,9 @@ public struct PreviewToolbar: View {
             }
         }
         .padding(.horizontal)
+        .sheet(isPresented: $showManualPortEntry) {
+            ManualPortSheet(selectedPort: $vm.selectedPort)
+        }
     }
 
     private var portPicker: some View {
@@ -64,7 +65,7 @@ public struct PreviewToolbar: View {
             if !vm.detectedPorts.isEmpty {
                 Divider()
             }
-            Button("Manual…") { /* TODO: show manual port input sheet */ }
+            Button("Manual…") { showManualPortEntry = true }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "network")
@@ -72,6 +73,50 @@ public struct PreviewToolbar: View {
                     .font(.system(.callout, design: .monospaced))
             }
         }
+    }
+}
+
+private struct ManualPortSheet: View {
+    @Binding var selectedPort: Int?
+    @Environment(\.dismiss) private var dismiss
+    @State private var portText = ""
+    @State private var isInvalid = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Port (1–65535)", text: $portText)
+                        .keyboardType(.numberPad)
+                        .onChange(of: portText) { _, _ in isInvalid = false }
+                } footer: {
+                    if isInvalid {
+                        Text("Enter a number between 1 and 65535.")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Connect to Port")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Connect") { commit() }
+                }
+            }
+        }
+        .presentationDetents([.height(200)])
+    }
+
+    private func commit() {
+        guard let port = Int(portText), (1...65535).contains(port) else {
+            isInvalid = true
+            return
+        }
+        selectedPort = port
+        dismiss()
     }
 }
 #endif

@@ -1,4 +1,4 @@
-#if DEBUG
+#if os(iOS) && DEBUG
 import Foundation
 import ConduitCore
 import PersistenceKit
@@ -131,4 +131,4 @@ public enum DebugSeeder {
         }
     }
 }
-#endif
+#endif // os(iOS) && DEBUG

@@ -42,7 +42,7 @@ public actor SSHSession {
         let hostKeyValidator = TOFUHostKeyValidator(hostID: host.id, store: hostKeyStore)
 
         do {
-            client = try await withThrowingTimeout(connectTimeout) {
+            client = try await withThrowingTimeout(Self.connectTimeout) {
                 try await Citadel.SSHClient.connect(
                     host: self.host.hostname,
                     port: self.host.port,
@@ -151,44 +151,57 @@ public actor SSHSession {
 
     // MARK: - Shell (interactive PTY)
 
-    /// Opens a PTY shell channel on this SSH connection. Data arriving from the
-    /// remote PTY is fed into `dataContinuation`. The returned NIO `Channel` is
-    /// used for sending input and resize events.
+    /// Opens a PTY shell channel and returns the writer + the background task
+    /// that keeps the channel alive. Call `task.cancel()` to close the shell.
     ///
-    /// The data pump runs in a detached Task for the lifetime of the shell;
-    /// when the remote closes the channel, `dataContinuation` is finished.
-    ///
-    /// Requires iOS 18+ (Citadel's shell API). Since we target iOS 26, this is
-    /// always available.
+    /// Data arriving from the remote PTY is fed into `dataContinuation`.
+    /// Uses Citadel's `withPTY` API (requires macOS 15 / iOS 18+; our target is 26).
     public func requestShellChannel(
         width: Int,
         height: Int,
         dataContinuation: AsyncStream<[UInt8]>.Continuation
-    ) async throws -> any Channel {
+    ) async throws -> (writer: TTYStdinWriter, task: Task<Void, Never>) {
         guard let client else { throw ConduitError.notConnected }
 
-        let channel: any Channel = try await withCheckedThrowingContinuation { continuation in
-            Task { [client] in
-                do {
-                    try await client.withTerminal(
-                        term: "xterm-256color",
-                        width: width,
-                        height: height
-                    ) { channel, inbound in
-                        continuation.resume(returning: channel)
-                        for try await var buffer in inbound {
-                            if let bytes = buffer.readBytes(length: buffer.readableBytes), !bytes.isEmpty {
-                                dataContinuation.yield(bytes)
-                            }
+        let ptyRequest = SSHChannelRequestEvent.PseudoTerminalRequest(
+            wantReply: true,
+            term: "xterm-256color",
+            terminalCharacterWidth: width,
+            terminalRowHeight: height,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0,
+            terminalModes: .init([:])
+        )
+
+        // Pass the writer out of the withPTY closure via an AsyncStream signal.
+        let (writerStream, writerCont) = AsyncStream<TTYStdinWriter>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+
+        let task = Task { [client] in
+            do {
+                try await client.withPTY(ptyRequest) { inbound, outbound in
+                    writerCont.yield(outbound)
+                    writerCont.finish()
+                    for try await output in inbound {
+                        if case .stdout(let buf) = output {
+                            let bytes = Array(buf.readableBytesView)
+                            if !bytes.isEmpty { dataContinuation.yield(bytes) }
                         }
-                        dataContinuation.finish()
                     }
-                } catch {
-                    continuation.resume(throwing: Self.map(error: error, host: ""))
+                    dataContinuation.finish()
                 }
+            } catch {
+                writerCont.finish()
+                dataContinuation.finish()
             }
         }
-        return channel
+
+        guard let writer = await writerStream.first(where: { _ in true }) else {
+            task.cancel()
+            throw ConduitError.channelClosed
+        }
+        return (writer, task)
     }
 
     // MARK: - SFTP
