@@ -3,6 +3,7 @@ import SwiftUI
 import ConduitCore
 import TerminalEngine
 import DesignSystem
+import PersistenceKit
 
 public struct SessionView: View {
     @State private var vm: SessionViewModel
@@ -10,6 +11,8 @@ public struct SessionView: View {
     @State private var explainText: String = ""
     @State private var isExplaining = false
     @FocusState private var composerFocused: Bool
+    @State private var showingSnippetPalette = false
+    @State private var availableSnippets: [Snippet] = []
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -19,16 +22,67 @@ public struct SessionView: View {
         VStack(spacing: 0) {
             statusBar
             Divider()
-            blockScroll
-            Divider()
-            composer
+            if vm.isRaw {
+                rawTerminalContent
+            } else {
+                blockScroll
+                Divider()
+                composer
+            }
         }
         .navigationTitle(vm.host.name)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { await vm.connect() }
+        .task {
+            await vm.connect()
+            if let db = try? AppDatabase.openShared(),
+               let snippets = try? await SnippetRepository(db: db).all() {
+                availableSnippets = snippets
+            }
+        }
         .sheet(item: $explainTarget) { block in explainSheet(block: block) }
+        .sheet(isPresented: $showingSnippetPalette) {
+            SnippetPaletteSheet(
+                snippets: availableSnippets,
+                onInsert: { snippet in
+                    vm.inputText += snippet.body
+                    showingSnippetPalette = false
+                },
+                onDismiss: { showingSnippetPalette = false }
+            )
+        }
+        .focusable()
+    }
+
+    // MARK: - Raw terminal content (M2)
+
+    @ViewBuilder
+    private var rawTerminalContent: some View {
+        if let handle = vm.rawFeedHandle {
+            RawTerminalView(
+                feedHandle: handle,
+                onUserBytes: { _ in
+                    // User bytes from SwiftTerm's own keyboard handling are
+                    // forwarded to the shell directly. The keyboard rail
+                    // goes via onBytes below.
+                },
+                onResize: { cols, rows in
+                    Task { try? await vm.activeShell?.resize(cols: cols, rows: rows) }
+                }
+            )
+            .ignoresSafeArea()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                KeyboardAccessoryRail { bytes in
+                    Task { try? await vm.activeShell?.send(bytes) }
+                }
+                .frame(height: 44)
+            }
+        } else {
+            // Handle not yet available — show a loading indicator.
+            ProgressView("Opening terminal…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     // MARK: - Status bar
@@ -121,6 +175,10 @@ public struct SessionView: View {
             .disabled(vm.isTranslating)
             .onSubmit { Task { await vm.submit() } }
 
+            Button { showingSnippetPalette = true } label: {
+                Image(systemName: "chevron.up.square")
+                    .font(.title2)
+            }
             Button {
                 Task { await vm.submit() }
             } label: {

@@ -43,6 +43,22 @@ public actor Notifications {
         catch { /* notification dropped; UI still surfaces it */ }
     }
 
+    /// Posts a local notification informing the user that automatic reconnection
+    /// to `hostName` failed after all retry attempts were exhausted.
+    public func notifyReconnectFailed(hostName: String) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Connection lost"
+        content.body = "Could not reconnect to \(hostName)"
+        content.sound = .default
+        let req = UNNotificationRequest(
+            identifier: "reconnect-failed-\(hostName)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil  // deliver immediately
+        )
+        do { try await UNUserNotificationCenter.current().add(req) }
+        catch { /* notification dropped; status bar already shows disconnected */ }
+    }
+
     public func registerCategories() {
         let approve = UNNotificationAction(
             identifier: "approval.approve",

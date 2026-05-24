@@ -81,6 +81,19 @@ public struct AppRoot: View {
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @AppStorage("onboardingSeen") private var onboardingSeen = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    // M3 — ScenePhaseObserver wiring.
+    // `onBecomeActive` calls `sessionViewModel?.handleSceneActive()` once
+    // SessionViewModel.handleSceneActive() is merged from the M3 VM patch.
+    @State private var scenePhaseObserver = ScenePhaseObserver(
+        onBecomeActive: {
+            // TODO: call sessionViewModel?.handleSceneActive() once M3 VM patch is merged.
+        },
+        onBackground: {
+            // TODO: suspend / detach from tmux when needed.
+        }
+    )
 
     public enum Tab: Hashable { case workspaces, session, inbox, settings }
 
@@ -112,13 +125,31 @@ public struct AppRoot: View {
             }
         }
         .task { _ = await Notifications.shared.requestAuthorization() }
+        // M3 — propagate scene-phase changes to the observer.
+        .onChange(of: scenePhase) { _, newPhase in
+            Task { await scenePhaseObserver.scenePhaseChanged(to: newPhase) }
+        }
     }
 
     @ViewBuilder
     private func readyRoot(env: AppEnvironment) -> some View {
         Group {
             if onboardingSeen {
-                rootTabs(env: env)
+                AdaptiveRoot {
+                    rootTabs(env: env)
+                } detail: {
+                    NavigationStack {
+                        if let vm = sessionViewModel {
+                            SessionView(viewModel: vm)
+                        } else {
+                            ContentUnavailableView(
+                                "No active session",
+                                systemImage: "terminal",
+                                description: Text("Pick a host from Workspaces to begin.")
+                            )
+                        }
+                    }
+                }
             } else {
                 OnboardingView {
                     onboardingSeen = true
@@ -208,6 +239,11 @@ public struct AppRoot: View {
             NavigationStack {
                 SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore))
                     .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            NavigationLink {
+                                SnippetEditorView()
+                            } label: { Label("Snippets", systemImage: "text.quote") }
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             NavigationLink {
                                 KeysView(viewModel: KeysViewModel(store: env.keyStore))

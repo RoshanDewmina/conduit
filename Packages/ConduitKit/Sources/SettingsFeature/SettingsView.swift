@@ -13,6 +13,8 @@ public final class SettingsViewModel {
     public var hasOpenAIKey: Bool = false
     public var defaultProvider: AIProvider = .anthropic
     public var saveMessage: String?
+    public var testKeyResult: String? = nil
+    public var isTestingKey = false
 
     private let keyStore: any AIKeyStoring
 
@@ -46,6 +48,36 @@ public final class SettingsViewModel {
         try? await keyStore.deleteAPIKey(provider: provider)
         await load()
     }
+
+    public func testKey(provider: AIProvider) async {
+        guard !isTestingKey else { return }
+        isTestingKey = true
+        defer { isTestingKey = false }
+
+        do {
+            let key = try await keyStore.loadAPIKey(provider: provider)
+            let client: any AIClient
+            switch provider {
+            case .anthropic:
+                client = AnthropicClient(apiKey: key)
+            case .openai:
+                client = OpenAIClient(apiKey: key)
+            case .xai:
+                testKeyResult = "xAI key test not yet supported."
+                return
+            }
+            let start = Date()
+            let response = try await client.complete(
+                messages: [.user("Say hello in 5 words")],
+                system: nil,
+                maxTokens: 20
+            )
+            let latencyMs = Int(Date().timeIntervalSince(start) * 1000)
+            testKeyResult = "OK · \(latencyMs) ms · model: \(client.modelID)\n\"\(response)\""
+        } catch {
+            testKeyResult = "Error: \(error.localizedDescription)"
+        }
+    }
 }
 
 public struct SettingsView: View {
@@ -78,6 +110,9 @@ public struct SettingsView: View {
         .alert("Settings", isPresented: .constant(vm.saveMessage != nil), actions: {
             Button("OK") { vm.saveMessage = nil }
         }, message: { Text(vm.saveMessage ?? "") })
+        .alert("Key test", isPresented: .constant(vm.testKeyResult != nil), actions: {
+            Button("OK") { vm.testKeyResult = nil }
+        }, message: { Text(vm.testKeyResult ?? "") })
     }
 
     private func providerSection(_ provider: AIProvider, _ binding: Binding<String>, _ hasKey: Bool) -> some View {
@@ -93,6 +128,21 @@ public struct SettingsView: View {
                 } else {
                     Label("Not configured", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                 }
+            }
+            if hasKey {
+                Button {
+                    Task { await vm.testKey(provider: provider) }
+                } label: {
+                    HStack {
+                        if vm.isTestingKey {
+                            ProgressView().scaleEffect(0.8)
+                            Text("Testing…")
+                        } else {
+                            Label("Test key", systemImage: "bolt.fill")
+                        }
+                    }
+                }
+                .disabled(vm.isTestingKey)
             }
         }
     }

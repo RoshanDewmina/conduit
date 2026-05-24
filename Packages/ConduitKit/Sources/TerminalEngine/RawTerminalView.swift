@@ -4,9 +4,45 @@ import UIKit
 import SwiftTerm
 import ConduitCore
 
+/// A shareable handle that lets external code feed bytes into a
+/// `RawTerminalView` without knowing about UIKit / SwiftTerm.
+///
+/// Create one handle per terminal session, pass it to
+/// `RawTerminalView.init(feedHandle:...)` **and** keep a reference in
+/// `PTYBridge` so the bridge can yield bytes via `handle.yield(_:)`.
+public final class TerminalFeedHandle: @unchecked Sendable {
+    private let (stream, continuation): (AsyncStream<[UInt8]>, AsyncStream<[UInt8]>.Continuation)
+
+    /// The async stream consumed internally by `RawTerminalView`.
+    var feedStream: AsyncStream<[UInt8]> { stream }
+
+    public init() {
+        (stream, continuation) = AsyncStream<[UInt8]>.makeStream()
+    }
+
+    /// Push a byte chunk into the terminal from any context.
+    public func yield(_ bytes: [UInt8]) {
+        continuation.yield(bytes)
+    }
+
+    /// Signal end-of-stream (PTY closed).
+    public func finish() {
+        continuation.finish()
+    }
+}
+
 /// `UIViewRepresentable` host for SwiftTerm. Used in Raw mode (TUI programs
-/// like vim, htop, tmux). The PTY byte stream is fed in via
-/// `feedBytes(_:)`; user input flows back out via `onBytes(_:)`.
+/// like vim, htop, tmux).
+///
+/// ## Feeding bytes
+/// There are two feeding modes:
+/// 1. **Handle mode** (preferred for `PTYBridge`): pass a `TerminalFeedHandle`
+///    to `init(feedHandle:onUserBytes:onResize:)`. Call `handle.yield(_:)` to
+///    push bytes from any isolation context.
+/// 2. **Stream mode** (legacy): pass an `AsyncStream<[UInt8]>` directly via
+///    `init(feed:onUserBytes:onResize:)`.
+///
+/// User input flows back out via `onUserBytes`.
 public struct RawTerminalView: UIViewRepresentable {
     public final class Coordinator: NSObject, TerminalViewDelegate {
         public var onUserBytes: (ArraySlice<UInt8>) -> Void
@@ -46,12 +82,32 @@ public struct RawTerminalView: UIViewRepresentable {
     public let onResize:    (Int, Int) -> Void
     public let feed:        AsyncStream<[UInt8]>
 
+    /// Shared feed handle; non-nil when constructed via `init(feedHandle:...)`.
+    let feedHandle: TerminalFeedHandle?
+
+    // MARK: - Initialisers
+
+    /// Legacy initialiser: caller owns the `AsyncStream` and its continuation.
     public init(
         feed: AsyncStream<[UInt8]>,
         onUserBytes: @escaping (ArraySlice<UInt8>) -> Void,
         onResize: @escaping (Int, Int) -> Void
     ) {
         self.feed = feed
+        self.feedHandle = nil
+        self.onUserBytes = onUserBytes
+        self.onResize = onResize
+    }
+
+    /// Preferred initialiser for `PTYBridge` usage. The `feedHandle` becomes
+    /// the source of bytes for the underlying SwiftTerm view.
+    public init(
+        feedHandle: TerminalFeedHandle,
+        onUserBytes: @escaping (ArraySlice<UInt8>) -> Void,
+        onResize: @escaping (Int, Int) -> Void
+    ) {
+        self.feed = feedHandle.feedStream
+        self.feedHandle = feedHandle
         self.onUserBytes = onUserBytes
         self.onResize = onResize
     }
@@ -86,5 +142,31 @@ public struct RawTerminalView: UIViewRepresentable {
     public func updateUIView(_ view: TerminalView, context: Context) {
         context.coordinator.view = view
     }
+
+    // MARK: - Imperative feed (used by PTYBridge)
+
+    /// Push bytes into the terminal from `PTYBridge` (or any other actor).
+    ///
+    /// If a `TerminalFeedHandle` is available it routes through the handle;
+    /// otherwise the call is a no-op (legacy stream mode pumps itself).
+    @MainActor
+    public func feed(_ bytes: [UInt8]) {
+        feedHandle?.yield(bytes)
+    }
 }
+
+#else
+
+// MARK: - Stub for non-iOS platforms (macOS test host / CLI)
+
+/// No-op stub so `PTYBridge` and `TerminalEngine` compile on macOS.
+public struct RawTerminalView: Sendable {
+
+    public init() {}
+
+    /// No-op on non-iOS platforms.
+    @MainActor
+    public func feed(_ bytes: [UInt8]) {}
+}
+
 #endif

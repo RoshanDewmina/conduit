@@ -17,6 +17,11 @@ public actor SSHSession {
 
     private var client: Citadel.SSHClient?
 
+    /// The most-recently-used credential, cached for automatic reconnection.
+    /// Set on every successful `connect(credential:hostKeyStore:)` call.
+    private var cachedCredential: SSHCredential?
+    private var cachedHostKeyStore: HostKeyStore?
+
     public init(host: ConduitCore.Host) {
         self.host = host
     }
@@ -43,11 +48,33 @@ public actor SSHSession {
             )
             isConnected = true
             lastError = nil
+            // Cache credentials for automatic reconnection (M3).
+            cachedCredential = credential
+            cachedHostKeyStore = hostKeyStore
         } catch {
             let mapped = Self.map(error: error, host: host.hostname)
             lastError = mapped
             throw mapped
         }
+    }
+
+    /// Re-establishes the SSH connection using the credentials from the most
+    /// recent successful `connect(credential:hostKeyStore:)` call.
+    ///
+    /// - Throws: `ConduitError.unsupportedPlatform` when no cached credential
+    ///   is available (e.g. the session was never successfully connected).
+    public func attemptReconnect() async throws {
+        // Guard: we must have previously connected successfully.
+        guard let credential = cachedCredential,
+              let hostKeyStore = cachedHostKeyStore else {
+            // No cached credential — cannot reconnect automatically.
+            // Callers should present the credential UI instead.
+            throw ConduitError.unsupportedPlatform
+        }
+        // Reset state so connect() doesn't early-return.
+        isConnected = false
+        client = nil
+        try await connect(credential: credential, hostKeyStore: hostKeyStore)
     }
 
     public func disconnect() async {

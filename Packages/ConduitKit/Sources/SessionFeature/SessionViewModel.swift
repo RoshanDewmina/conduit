@@ -37,6 +37,29 @@ public final class SessionViewModel {
     // Host-key TOFU state: non-nil while awaiting user confirmation
     public private(set) var pendingHostKeyFingerprint: String?
 
+    // MARK: - M2: Raw PTY mode
+
+    /// `true` while a raw PTY shell channel is active (TUI mode).
+    public private(set) var isRaw: Bool = false
+
+    /// The live shell channel when in raw mode; `nil` in block mode.
+    public private(set) var activeShell: SSHShell? = nil
+
+    /// The bridge pumping bytes between `activeShell` and `RawTerminalView`.
+    private var activeBridge: PTYBridge? = nil
+
+    /// The feed handle shared between `PTYBridge` and the `RawTerminalView`
+    /// displayed in raw mode.
+    public private(set) var rawFeedHandle: TerminalFeedHandle? = nil
+
+    // MARK: - M3 stubs (filled in when M3 branch is merged)
+
+    /// Name of the attached tmux session (M3).
+    public private(set) var tmuxSessionName: String? = nil
+
+    /// Called when the app scene becomes active (M3 reconnect logic).
+    public func handleSceneActive() async { }
+
     // MARK: - Dependencies
 
     private let sshSession: SSHSession
@@ -100,8 +123,77 @@ public final class SessionViewModel {
     }
 
     public func disconnect() async {
+        await deescalate()
         await sshSession.disconnect()
         status = .disconnected
+    }
+
+    // MARK: - M2: Raw PTY escalation / de-escalation
+
+    /// Switch to raw PTY mode: open an `SSHShell`, create a `PTYBridge`, and
+    /// start pumping bytes into the `RawTerminalView`.
+    ///
+    /// Does nothing if already in raw mode or not connected.
+    public func escalateToRaw() async {
+        guard !isRaw, status == .connected else { return }
+
+        do {
+            let shell = try await SSHShell.open(session: sshSession, width: 80, height: 24)
+            let handle = TerminalFeedHandle()
+            let terminal = RawTerminalView(
+                feedHandle: handle,
+                onUserBytes: { _ in },  // input comes from KeyboardAccessoryRail
+                onResize: { [weak self] cols, rows in
+                    guard let self else { return }
+                    Task { try? await self.activeShell?.resize(cols: cols, rows: rows) }
+                }
+            )
+
+            let bridge = PTYBridge(shell: shell, terminal: terminal)
+
+            activeShell = shell
+            activeBridge = bridge
+            rawFeedHandle = handle
+            isRaw = true
+            // pendingTUIEscalation resets automatically in BlockRenderer.clear()
+            // or when the next command begins via begin(). We leave it to drain
+            // naturally; the `!isRaw` guard above prevents re-triggering.
+
+            // Start the pump in a detached task; watch for de-escalation.
+            Task {
+                await bridge.start()
+                // Stream finished — check for de-escalation flag.
+                if await bridge.deescalationDetected {
+                    await deescalate()
+                }
+            }
+
+            // Monitor the bridge for de-escalation while raw mode is active.
+            Task {
+                while isRaw {
+                    if await bridge.deescalationDetected {
+                        await deescalate()
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000)  // 100 ms poll
+                }
+            }
+        } catch {
+            // Shell open failed (e.g. iOS 17 unsupportedPlatform stub).
+            // Silently stay in block mode.
+        }
+    }
+
+    /// Return from raw PTY mode to block mode.
+    ///
+    /// Closes the active shell channel and clears raw-mode state.
+    public func deescalate() async {
+        guard isRaw else { return }
+        await activeShell?.close()
+        activeShell = nil
+        activeBridge = nil
+        rawFeedHandle = nil
+        isRaw = false
     }
 
     // MARK: - Submit
@@ -144,7 +236,13 @@ public final class SessionViewModel {
             }
         }
         blocks.finalize(id: blockID, exitCode: exitCode)
-        await refreshCWD()
+
+        // M2: auto-escalate to raw PTY if a TUI program was detected.
+        if blocks.pendingTUIEscalation, !isRaw {
+            await escalateToRaw()
+        } else {
+            await refreshCWD()
+        }
 
         if let repo = blockRepo,
            let finalized = blocks.blocks.first(where: { $0.id == blockID }) {

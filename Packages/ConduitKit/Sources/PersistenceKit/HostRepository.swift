@@ -63,6 +63,17 @@ public actor HostRepository {
         }
     }
 
+    /// Updates the `tmuxSessionName` column for the given host.
+    /// Pass `nil` to clear any stored session name.
+    public func updateTmuxName(id: HostID, _ name: String?) async throws {
+        _ = try await db.dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE hosts SET tmuxSessionName = ? WHERE id = ?",
+                arguments: [name, id.uuidString]
+            )
+        }
+    }
+
     // MARK: - Row decoding
 
     private static func decode(_ row: Row) throws -> ConduitCore.Host {

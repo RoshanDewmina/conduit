@@ -13,6 +13,12 @@ public actor AnthropicClient: AIClient {
     private let session: URLSession
     private static let baseURL = URL(string: "https://api.anthropic.com/v1/messages")!
 
+    /// Accumulated token usage across all calls made on this actor instance.
+    /// `nonisolated(unsafe)` lets `latestTokenUsage()` read it without actor hop.
+    /// It is only ever mutated from within the actor (inside `complete`), so
+    /// there are no concurrent writes.
+    nonisolated(unsafe) private var sessionTokens: TokenUsage = .zero
+
     public init(
         apiKey: String,
         modelID: String = "claude-sonnet-4-6",
@@ -81,9 +87,29 @@ public actor AnthropicClient: AIClient {
             let code = (response as? HTTPURLResponse)?.statusCode
             throw ConduitError.providerUnavailable(name: "Anthropic", status: code)
         }
-        struct Resp: Decodable { let content: [Block]; struct Block: Decodable { let type: String; let text: String? } }
+        struct Resp: Decodable {
+            let content: [Block]
+            let usage: Usage?
+            struct Block: Decodable { let type: String; let text: String? }
+            struct Usage: Decodable {
+                let input_tokens: Int
+                let output_tokens: Int
+            }
+        }
         let resp = try JSONDecoder().decode(Resp.self, from: data)
+        if let usage = resp.usage {
+            let callUsage = TokenUsage(inputTokens: usage.input_tokens, outputTokens: usage.output_tokens)
+            sessionTokens = sessionTokens.adding(callUsage)
+        }
         return resp.content.compactMap(\.text).joined()
+    }
+
+    /// Returns the cumulative token usage for this client session.
+    /// `nonisolated` so it satisfies the protocol requirement without an actor hop.
+    /// `sessionTokens` is `nonisolated(unsafe)` and only mutated inside the actor,
+    /// so reading it here is safe in practice.
+    public nonisolated func latestTokenUsage() -> TokenUsage {
+        return sessionTokens
     }
 
     // MARK: - Helpers
