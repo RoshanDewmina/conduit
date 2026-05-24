@@ -98,4 +98,76 @@ public struct FilesView: View {
     }
 }
 
+// MARK: - SFTPFilesView
+
+public struct SFTPFilesView: View {
+    @State private var vm: SFTPFilesViewModel
+
+    public init(viewModel: SFTPFilesViewModel) {
+        _vm = State(initialValue: viewModel)
+    }
+
+    public var body: some View {
+        List {
+            Section {
+                HStack {
+                    Image(systemName: "folder.fill")
+                    Text(vm.currentPath)
+                        .font(.system(.callout, design: .monospaced))
+                }
+            }
+            if vm.currentPath != "/" && vm.currentPath != "~" {
+                Button("..") { Task { await vm.navigateUp() } }
+            }
+            ForEach(vm.entries) { entry in
+                Button {
+                    Task { await vm.navigate(to: entry) }
+                } label: {
+                    HStack {
+                        Image(systemName: entry.isDirectory ? "folder" : "doc.text")
+                            .foregroundStyle(.tint)
+                        Text(entry.name)
+                            .font(.system(.callout, design: .monospaced))
+                        Spacer()
+                        if let size = entry.sizeBytes, !entry.isDirectory {
+                            Text(
+                                ByteCountFormatter.string(
+                                    fromByteCount: Int64(size),
+                                    countStyle: .file
+                                )
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("Files")
+        .overlay { if vm.isLoading { ProgressView() } }
+        .task { await vm.reload() }
+        .refreshable { await vm.reload() }
+        .sheet(isPresented: $vm.isShowingTextPreview) {
+            if let data = vm.selectedFileData, let name = vm.selectedFileName {
+                NavigationStack {
+                    TextPreview(filename: name, data: data)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { vm.isShowingTextPreview = false }
+                            }
+                        }
+                }
+                .presentationDetents([.large])
+            }
+        }
+        .alert("Error", isPresented: .constant(vm.error != nil), actions: {
+            Button("OK") { vm.error = nil }
+        }, message: {
+            Text(vm.error ?? "")
+        })
+    }
+}
+
 #endif

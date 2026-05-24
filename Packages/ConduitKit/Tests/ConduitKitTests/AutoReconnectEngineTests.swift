@@ -78,7 +78,7 @@ struct AutoReconnectEngineTests {
         )
 
         await engine.start()
-        engine.stop()
+        await engine.stop()
 
         // After stop() the engine should be halted; the monitorTask is
         // cancelled.  We verify that a subsequent reportReconnectOutcome has no

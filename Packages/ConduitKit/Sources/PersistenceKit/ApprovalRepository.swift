@@ -1,5 +1,5 @@
 import Foundation
-import GRDB
+@preconcurrency import GRDB
 import ConduitCore
 
 // MARK: - GRDB conformance for Approval
@@ -90,14 +90,16 @@ public actor ApprovalRepository {
 
     // Returns a stream that emits the full approvals list whenever the DB changes.
     // Uses GRDB ValueObservation via callback API.
-    public func observe() -> AsyncThrowingStream<[Approval], Error> {
+    public func observe() -> AsyncThrowingStream<[Approval], any Error> {
         let writer = db.dbWriter
-        let (stream, cont) = AsyncThrowingStream<[Approval], Error>.makeStream()
+        let (stream, cont) = AsyncThrowingStream<[Approval], any Error>.makeStream()
         let observation = ValueObservation.tracking { db -> [Approval] in
             let rows = try Row.fetchAll(db, sql: "SELECT * FROM approvals ORDER BY createdAt DESC")
             return try rows.map { try Approval(row: $0) }
         }
-        let cancellable = observation.start(in: writer,
+        // Use nonisolated(unsafe) to satisfy @Sendable closure capture for
+        // AnyDatabaseCancellable which predates Sendable conformance in GRDB.
+        nonisolated(unsafe) let cancellable = observation.start(in: writer,
             onError: { cont.finish(throwing: $0) },
             onChange: { cont.yield($0) }
         )

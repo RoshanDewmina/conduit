@@ -96,6 +96,19 @@ public final class AppDatabase: Sendable {
                 t.column("decision",   .text)
             }
         }
+
+        m.registerMigration("v2") { db in
+            try db.create(table: "patches") { t in
+                t.column("id",          .text).primaryKey()
+                t.column("sessionId",   .text).notNull().indexed()
+                t.column("agent",       .text).notNull()
+                t.column("unifiedDiff", .text).notNull()
+                t.column("createdAt",   .datetime).notNull()
+                t.column("decidedAt",   .datetime)
+                t.column("decision",    .text)
+            }
+        }
+
         return m
     }
 }
