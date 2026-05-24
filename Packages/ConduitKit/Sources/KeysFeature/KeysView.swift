@@ -85,6 +85,8 @@ public struct KeysView: View {
             }
         }
         .navigationTitle("SSH Keys")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .task { await vm.reload() }
     }
 }

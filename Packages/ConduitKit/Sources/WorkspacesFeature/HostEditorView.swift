@@ -58,7 +58,10 @@ public final class HostEditorViewModel {
                 selectedKeyTag = keyTags.first
             }
         } catch {
-            saveError = error.localizedDescription
+            keyTags = []
+            if authChoice == .ed25519 {
+                saveError = error.localizedDescription
+            }
         }
     }
 

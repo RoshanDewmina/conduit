@@ -31,6 +31,8 @@ targets:
       - path: Conduit/Resources
     info:
       path: Conduit/Info.plist
+      properties:
+        UILaunchStoryboardName: LaunchScreen
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile

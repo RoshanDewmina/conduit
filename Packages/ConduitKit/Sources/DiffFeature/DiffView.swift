@@ -41,6 +41,8 @@ public struct DiffView: View {
         }
         .listStyle(.plain)
         .navigationTitle("Diff")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

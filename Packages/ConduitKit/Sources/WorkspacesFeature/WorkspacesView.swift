@@ -73,6 +73,10 @@ public struct WorkspacesView: View {
             }
         }
         .navigationTitle("Workspaces")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { onAddHost() } label: {
@@ -92,7 +96,17 @@ public struct WorkspacesView: View {
 
 private struct HostRow: View {
     let host: Host
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            accessibilityLayout
+        } else {
+            standardLayout
+        }
+    }
+
+    private var standardLayout: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "terminal")
                 .font(.body)
@@ -131,6 +145,45 @@ private struct HostRow: View {
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private var accessibilityLayout: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "terminal")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, alignment: .leading)
+                Text(host.name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Text(host.displayAddress)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(authLabel)
+                if let tmuxSessionName = host.tmuxSessionName {
+                    Text(tmuxSessionName)
+                }
+                if let last = host.lastConnectedAt {
+                    Text(last.formatted(.relative(presentation: .numeric)))
+                        .lineLimit(2)
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 8)
     }
 
     private var authLabel: String {

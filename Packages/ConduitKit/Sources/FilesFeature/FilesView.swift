@@ -93,6 +93,10 @@ public struct FilesView: View {
         }
         .listStyle(.plain)
         .navigationTitle("Files")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .task { await vm.reload() }
         .refreshable { await vm.reload() }
     }
@@ -146,6 +150,10 @@ public struct SFTPFilesView: View {
         }
         .listStyle(.plain)
         .navigationTitle("Files")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .overlay { if vm.isLoading { ProgressView() } }
         .task { await vm.reload() }
         .refreshable { await vm.reload() }

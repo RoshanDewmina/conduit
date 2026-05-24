@@ -20,41 +20,95 @@ public struct PreviewToolbar: View {
     }
 
     public var body: some View {
+        ViewThatFits(in: .horizontal) {
+            horizontalControls
+            compactControls
+        }
+        .padding(.horizontal, 12)
+        .sheet(isPresented: $showManualPortEntry) {
+            ManualPortSheet(selectedPort: $vm.selectedPort)
+        }
+    }
+
+    private var horizontalControls: some View {
         HStack(spacing: 12) {
             portPicker
 
             Divider().frame(height: 20)
-
-            Picker("Viewport", selection: $vm.viewportPreset) {
-                ForEach(PreviewViewModel.ViewportPreset.allCases, id: \.self) { preset in
-                    Text(preset.rawValue).tag(preset)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 200)
+            viewportPicker
+                .frame(maxWidth: 220)
 
             Divider().frame(height: 20)
+            reloadButton
+            detectButton
+        }
+    }
 
-            Button {
-                vm.reload()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-
-            Button {
-                Task { await vm.detectPorts(session: session) }
-            } label: {
-                if vm.isDetecting {
-                    ProgressView().scaleEffect(0.8)
-                } else {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
+    private var compactControls: some View {
+        HStack(spacing: 12) {
+            portPicker
+            Spacer(minLength: 8)
+            Menu {
+                Picker("Viewport", selection: $vm.viewportPreset) {
+                    ForEach(PreviewViewModel.ViewportPreset.allCases, id: \.self) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
                 }
+                Divider()
+                Button {
+                    vm.reload()
+                } label: {
+                    Label("Reload", systemImage: "arrow.clockwise")
+                }
+                Button {
+                    Task { await vm.detectPorts(session: session) }
+                } label: {
+                    Label(vm.isDetecting ? "Detecting" : "Detect Ports",
+                          systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .disabled(vm.isDetecting)
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .imageScale(.large)
+                    .frame(width: 36, height: 36)
             }
         }
-        .padding(.horizontal)
-        .sheet(isPresented: $showManualPortEntry) {
-            ManualPortSheet(selectedPort: $vm.selectedPort)
+    }
+
+    private var viewportPicker: some View {
+        Picker("Viewport", selection: $vm.viewportPreset) {
+            ForEach(PreviewViewModel.ViewportPreset.allCases, id: \.self) { preset in
+                Text(preset.rawValue).tag(preset)
+            }
         }
+        .pickerStyle(.segmented)
+    }
+
+    private var reloadButton: some View {
+        Button {
+            vm.reload()
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .frame(width: 32, height: 32)
+        }
+        .accessibilityLabel("Reload preview")
+    }
+
+    private var detectButton: some View {
+        Button {
+            Task { await vm.detectPorts(session: session) }
+        } label: {
+            if vm.isDetecting {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(width: 32, height: 32)
+            } else {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .frame(width: 32, height: 32)
+            }
+        }
+        .accessibilityLabel("Detect ports")
+        .disabled(vm.isDetecting)
     }
 
     private var portPicker: some View {
@@ -71,6 +125,7 @@ public struct PreviewToolbar: View {
                 Image(systemName: "network")
                 Text(vm.activePort.map { ":\($0)" } ?? "No port")
                     .font(.system(.callout, design: .monospaced))
+                    .lineLimit(1)
             }
         }
     }

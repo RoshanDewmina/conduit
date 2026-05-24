@@ -53,6 +53,10 @@ public struct InboxView: View {
         }
         .listStyle(.plain)
         .navigationTitle(title)
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
     }
 
     private var visibleApprovals: [Approval] {

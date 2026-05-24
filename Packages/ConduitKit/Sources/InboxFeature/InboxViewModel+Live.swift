@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import Observation
 import ConduitCore
 import PersistenceKit
 
@@ -7,7 +8,7 @@ import PersistenceKit
 public final class LiveInboxViewModel: InboxViewModel {
     private let repository: ApprovalRepository
     private let onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)?
-    nonisolated(unsafe) private var observationTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,

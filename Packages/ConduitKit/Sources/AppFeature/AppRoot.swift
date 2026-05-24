@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import Observation
 import ConduitCore
 import PersistenceKit
@@ -104,7 +105,7 @@ public struct AppRoot: View {
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
 
-    public enum Tab: Hashable {
+    public enum Tab: Hashable, Sendable {
         case workspaces
         case session
         case inbox
@@ -298,6 +299,8 @@ public struct AppRoot: View {
             .tabItem { Label(Tab.settings.title, systemImage: Tab.settings.systemImage) }
             .tag(Tab.settings)
         }
+        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 
     private func regularRoot(env: AppEnvironment) -> some View {

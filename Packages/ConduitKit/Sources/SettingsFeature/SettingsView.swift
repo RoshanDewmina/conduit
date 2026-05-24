@@ -102,6 +102,10 @@ public struct SettingsView: View {
             providerSection(.anthropic, $vm.anthropicKey, vm.hasAnthropicKey)
             providerSection(.openai,    $vm.openaiKey,    vm.hasOpenAIKey)
 
+            if let engine = syncEngine {
+                SyncStatusView(engine: engine)
+            }
+
             Section {
                 Button("Save") { Task { await vm.save() } }
             }
@@ -112,16 +116,16 @@ public struct SettingsView: View {
                 }
             }
 
-            if let engine = syncEngine {
-                SyncStatusView(engine: engine)
-            }
-
             Section {
                 Text("Keys are stored on this device only (Keychain, when-unlocked, device-only). They are sent directly to the provider over TLS — never to Conduit.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Settings")
+        .contentMargins(.bottom, 72, for: .scrollContent)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .task { await vm.load() }
         .alert("Settings", isPresented: .constant(vm.saveMessage != nil), actions: {
             Button("OK") { vm.saveMessage = nil }
@@ -137,12 +141,9 @@ public struct SettingsView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             HStack {
-                if hasKey {
-                    Label("Configured", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
-                    Spacer()
-                    Button("Remove", role: .destructive) { Task { await vm.remove(provider) } }
-                } else {
-                    Label("Not configured", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                ViewThatFits(in: .horizontal) {
+                    providerStatus(provider, hasKey: hasKey, vertical: false)
+                    providerStatus(provider, hasKey: hasKey, vertical: true)
                 }
             }
             if hasKey {
@@ -159,6 +160,24 @@ public struct SettingsView: View {
                     }
                 }
                 .disabled(vm.isTestingKey)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func providerStatus(_ provider: AIProvider, hasKey: Bool, vertical: Bool) -> some View {
+        let layout = vertical ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        layout {
+            if hasKey {
+                Label("Configured", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                if !vertical { Spacer() }
+                Button("Remove", role: .destructive) {
+                    Task { await vm.remove(provider) }
+                }
+            } else {
+                Label("Not configured", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
             }
         }
     }
