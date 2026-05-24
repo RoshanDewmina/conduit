@@ -24,3 +24,10 @@ Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
 *.trace
 *.instrumentscli
 .dmux/
+
+# conduitd compiled binaries (distributed via GitHub Releases, not git)
+daemon/conduitd/conduitd
+daemon/conduitd/conduitd-macos
+daemon/conduitd/conduitd-linux-amd64
+daemon/conduitd/conduitd-linux-arm64
+daemon/conduitd/conduitd-darwin-arm64

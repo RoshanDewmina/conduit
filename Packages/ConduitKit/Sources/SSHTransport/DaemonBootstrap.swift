@@ -58,16 +58,27 @@ public actor DaemonBootstrap {
         return binPath
     }
 
-    // Load manifest from app bundle (Info.plist ConduitDaemonManifest key)
+    private static let releaseBase = "https://github.com/RoshanDewmina/conduit/releases/download/v0.1.0"
+
     public static func loadManifest() -> DaemonManifest {
-        // Stub for M5: returns a placeholder manifest.
-        // In production this is populated from ConduitDaemonManifest.plist by CI.
-        return DaemonManifest(
+        DaemonManifest(
             version: "0.1.0",
             assets: [
-                DaemonManifestAsset(os: "linux", arch: "arm64", url: "https://releases.conduit.dev/d/0.1.0/conduitd-linux-arm64", sha256: "placeholder"),
-                DaemonManifestAsset(os: "linux", arch: "amd64", url: "https://releases.conduit.dev/d/0.1.0/conduitd-linux-amd64", sha256: "placeholder"),
-                DaemonManifestAsset(os: "darwin", arch: "arm64", url: "https://releases.conduit.dev/d/0.1.0/conduitd-darwin-arm64", sha256: "placeholder"),
+                DaemonManifestAsset(
+                    os: "linux", arch: "arm64",
+                    url: "\(releaseBase)/conduitd-linux-arm64",
+                    sha256: "f23e734be4cec4ab00649a8f466e3ec8587e71b90c2cc0f889a7fab301cfb274"
+                ),
+                DaemonManifestAsset(
+                    os: "linux", arch: "amd64",
+                    url: "\(releaseBase)/conduitd-linux-amd64",
+                    sha256: "60cc93f76e40b58b7da16a4aa0f033faa145ce32e1d597fad9caffd33e39769e"
+                ),
+                DaemonManifestAsset(
+                    os: "darwin", arch: "arm64",
+                    url: "\(releaseBase)/conduitd-darwin-arm64",
+                    sha256: "188876095a0d4ddeb1bc22ac269b3b64f40fd6a575b43e37e4f9bbeb49876958"
+                ),
             ]
         )
     }

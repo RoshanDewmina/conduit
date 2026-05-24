@@ -40,3 +40,20 @@ public struct StatusDot: View {
         Circle().fill(isOk ? Color.green : Color.gray).frame(width: 7, height: 7)
     }
 }
+
+#if os(iOS)
+public extension View {
+    @ViewBuilder
+    func conduitGlassChrome(cornerRadius: CGFloat = 18, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            if interactive {
+                self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+            } else {
+                self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+        }
+    }
+}
+#endif

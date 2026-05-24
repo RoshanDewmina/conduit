@@ -1,0 +1,154 @@
+#if os(iOS)
+import SwiftUI
+import ConduitCore
+import DesignSystem
+import SessionFeature
+import InboxFeature
+import PreviewFeature
+import FilesFeature
+import DiffFeature
+import DiffKit
+
+enum SessionSurface: Hashable, CaseIterable {
+    case terminal
+    case preview
+    case files
+    case diff
+    case inbox
+
+    var title: String {
+        switch self {
+        case .terminal: "Terminal"
+        case .preview: "Preview"
+        case .files: "Files"
+        case .diff: "Diff"
+        case .inbox: "Inbox"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .terminal: "terminal"
+        case .preview: "safari"
+        case .files: "folder"
+        case .diff: "plusminus"
+        case .inbox: "tray"
+        }
+    }
+}
+
+struct SessionShellView: View {
+    let viewModel: SessionViewModel?
+    let inboxViewModel: InboxViewModel
+
+    @State private var surface: SessionSurface = .terminal
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    var body: some View {
+        if let viewModel {
+            VStack(spacing: 0) {
+                surfaceSwitcher
+                Divider()
+                surfaceContent(for: viewModel)
+                    .id("\(viewModel.sessionID.uuidString)-\(surface.title)")
+            }
+            .navigationTitle(viewModel.host.name)
+            .navigationBarTitleDisplayMode(.inline)
+        } else {
+            ContentUnavailableView(
+                "No active session",
+                systemImage: "terminal",
+                description: Text("Pick a host from Workspaces to begin.")
+            )
+            .navigationTitle("Session")
+        }
+    }
+
+    @ViewBuilder
+    private var surfaceSwitcher: some View {
+        HStack {
+            if horizontalSizeClass == .compact {
+                compactSurfaceMenu
+                Spacer()
+            } else {
+                regularSurfacePicker
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private var compactSurfaceMenu: some View {
+        Menu {
+            ForEach(SessionSurface.allCases, id: \.self) { item in
+                Button {
+                    surface = item
+                } label: {
+                    Label(item.title, systemImage: item.systemImage)
+                }
+            }
+        } label: {
+            Label(surface.title, systemImage: surface.systemImage)
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(minWidth: 132, alignment: .leading)
+        }
+        .conduitGlassChrome(cornerRadius: 18, interactive: true)
+    }
+
+    private var regularSurfacePicker: some View {
+        Picker("Session surface", selection: $surface) {
+            ForEach(SessionSurface.allCases, id: \.self) { item in
+                Label(item.title, systemImage: item.systemImage).tag(item)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(6)
+        .conduitGlassChrome(cornerRadius: 18, interactive: true)
+    }
+
+    @ViewBuilder
+    private func surfaceContent(for viewModel: SessionViewModel) -> some View {
+        switch surface {
+        case .terminal:
+            SessionView(viewModel: viewModel)
+        case .preview:
+            SmartPreviewView(session: viewModel.session)
+        case .files:
+            FilesView(viewModel: FilesViewModel(session: viewModel.session))
+        case .diff:
+            diffSurface(for: viewModel)
+        case .inbox:
+            InboxView(
+                viewModel: inboxViewModel,
+                sessionID: viewModel.sessionID,
+                title: "Session Inbox"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func diffSurface(for viewModel: SessionViewModel) -> some View {
+        if let patch = latestPatch(for: viewModel) {
+            DiffView(diff: UnifiedDiffParser.parse(patch))
+        } else {
+            ContentUnavailableView(
+                "No patch pending",
+                systemImage: "plusminus",
+                description: Text("Patch approvals for this session appear here.")
+            )
+            .navigationTitle("Diff")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func latestPatch(for viewModel: SessionViewModel) -> String? {
+        inboxViewModel.approvals.first {
+            $0.sessionID == viewModel.sessionID && $0.kind == .patch && $0.patch != nil
+        }?.patch
+    }
+}
+#endif

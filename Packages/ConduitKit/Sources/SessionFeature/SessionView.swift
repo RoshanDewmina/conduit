@@ -29,14 +29,13 @@ public struct SessionView: View {
                 rawTerminalContent
             } else {
                 blockScroll
-                Divider()
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !vm.isRaw {
                 composer
             }
         }
-        .navigationTitle(vm.host.name)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if vm.status == .connected && !vm.isRaw {
@@ -55,7 +54,6 @@ public struct SessionView: View {
             }
         }
         .task {
-            await vm.connect()
             if let db = try? AppDatabase.openShared(),
                let snippets = try? await SnippetRepository(db: db).all() {
                 availableSnippets = snippets
@@ -91,12 +89,15 @@ public struct SessionView: View {
                     Task { try? await vm.activeShell?.resize(cols: cols, rows: rows) }
                 }
             )
-            .ignoresSafeArea()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 KeyboardAccessoryRail { bytes in
                     Task { try? await vm.activeShell?.send(bytes) }
                 }
                 .frame(height: 44)
+                .conduitGlassChrome(cornerRadius: 16, interactive: true)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(.bar)
             }
         } else {
             // Handle not yet available — show a loading indicator.
@@ -228,6 +229,9 @@ public struct SessionView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .conduitGlassChrome(cornerRadius: 18, interactive: true)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(.bar)
     }
 
@@ -349,7 +353,7 @@ private struct BlockRow: View {
         }
         .background(isFailed ? Color.red.opacity(0.05) : Color.clear)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .contextMenu {
             Button { onRerun() } label: { Label("Re-run", systemImage: "arrow.clockwise") }
             Button { onStar() } label: {

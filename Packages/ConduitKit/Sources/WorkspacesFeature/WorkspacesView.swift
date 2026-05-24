@@ -62,6 +62,8 @@ public struct WorkspacesView: View {
                     Button { onSelect(host) } label: {
                         HostRow(host: host)
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .swipeActions {
                         Button(role: .destructive) {
                             Task { await vm.remove(host) }
@@ -91,21 +93,60 @@ public struct WorkspacesView: View {
 private struct HostRow: View {
     let host: Host
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: "terminal").font(.body).foregroundStyle(.tint)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "terminal")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(host.name).font(.body.weight(.medium))
+                Text(host.name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Text(host.displayAddress)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                HStack(spacing: 8) {
+                    Label(authLabel, systemImage: authImage)
+                    if let tmuxSessionName = host.tmuxSessionName {
+                        Label(tmuxSessionName, systemImage: "rectangle.connected.to.line.below")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
             }
             Spacer()
-            if let last = host.lastConnectedAt {
-                Text(last.formatted(.relative(presentation: .numeric)))
-                    .font(.caption2).foregroundStyle(.tertiary)
+            VStack(alignment: .trailing, spacing: 4) {
+                if let last = host.lastConnectedAt {
+                    Text(last.formatted(.relative(presentation: .numeric)))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    private var authLabel: String {
+        switch host.authMethod {
+        case .password: "password"
+        case .ed25519: "key"
+        case .agent: "agent"
+        }
+    }
+
+    private var authImage: String {
+        switch host.authMethod {
+        case .password: "lock"
+        case .ed25519: "key"
+        case .agent: "person.badge.key"
+        }
     }
 }
 

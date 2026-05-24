@@ -15,6 +15,8 @@ import SettingsFeature
 import KeysFeature
 import DesignSystem
 import PreviewFeature
+import FilesFeature
+import DiffFeature
 import SyncKit
 
 /// The single composition root. The whole app graph is wired in `init`.
@@ -98,10 +100,36 @@ public struct AppRoot: View {
     @State private var showingProvisioningWizard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
 
-    public enum Tab: Hashable { case workspaces, session, inbox, preview, settings }
+    public enum Tab: Hashable {
+        case workspaces
+        case session
+        case inbox
+        case settings
+
+        static let rootTabs: [Tab] = [.workspaces, .session, .inbox, .settings]
+
+        var title: String {
+            switch self {
+            case .workspaces: "Workspaces"
+            case .session: "Session"
+            case .inbox: "Inbox"
+            case .settings: "Settings"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .workspaces: "server.rack"
+            case .session: "terminal"
+            case .inbox: "tray"
+            case .settings: "gear"
+            }
+        }
+    }
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -142,21 +170,7 @@ public struct AppRoot: View {
     private func readyRoot(env: AppEnvironment) -> some View {
         Group {
             if onboardingSeen {
-                AdaptiveRoot {
-                    rootTabs(env: env)
-                } detail: {
-                    NavigationStack {
-                        if let vm = sessionViewModel {
-                            SessionView(viewModel: vm)
-                        } else {
-                            ContentUnavailableView(
-                                "No active session",
-                                systemImage: "terminal",
-                                description: Text("Pick a host from Workspaces to begin.")
-                            )
-                        }
-                    }
-                }
+                rootContainer(env: env)
             } else {
                 OnboardingView(
                     onContinue: {
@@ -238,70 +252,106 @@ public struct AppRoot: View {
     }
 
     @ViewBuilder
-    private func rootTabs(env: AppEnvironment) -> some View {
+    private func rootContainer(env: AppEnvironment) -> some View {
+        if horizontalSizeClass == .regular {
+            regularRoot(env: env)
+        } else {
+            compactRoot(env: env)
+        }
+    }
+
+    private var splitSelection: Binding<Tab?> {
+        Binding(
+            get: { selectedTab },
+            set: { selectedTab = $0 ?? .workspaces }
+        )
+    }
+
+    private var activeInboxViewModel: InboxViewModel {
+        liveInboxVM ?? inboxVM
+    }
+
+    private func compactRoot(env: AppEnvironment) -> some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                WorkspacesView(
-                    viewModel: WorkspacesViewModel(repository: env.hostRepo),
-                    onSelect: { host in openSession(host: host, env: env) },
-                    onAddHost: { addHostPresented = true }
-                )
+                rootDestination(.workspaces, env: env)
             }
-            .tabItem { Label("Workspaces", systemImage: "server.rack") }
+            .tabItem { Label(Tab.workspaces.title, systemImage: Tab.workspaces.systemImage) }
             .tag(Tab.workspaces)
 
             NavigationStack {
-                if let vm = sessionViewModel {
-                    SessionView(viewModel: vm)
-                } else {
-                    ContentUnavailableView(
-                        "No active session",
-                        systemImage: "terminal",
-                        description: Text("Pick a host from Workspaces to begin.")
-                    )
-                }
+                rootDestination(.session, env: env)
             }
-            .tabItem { Label("Session", systemImage: "terminal") }
+            .tabItem { Label(Tab.session.title, systemImage: Tab.session.systemImage) }
             .tag(Tab.session)
 
             NavigationStack {
-                InboxView(viewModel: liveInboxVM ?? inboxVM)
+                rootDestination(.inbox, env: env)
             }
-            .tabItem { Label("Inbox", systemImage: "tray") }
-            .badge((liveInboxVM ?? inboxVM).approvals.filter(\.isPending).count)
+            .tabItem { Label(Tab.inbox.title, systemImage: Tab.inbox.systemImage) }
+            .badge(activeInboxViewModel.approvals.filter(\.isPending).count)
             .tag(Tab.inbox)
 
             NavigationStack {
-                if let vm = sessionViewModel {
-                    SmartPreviewView(session: vm.session)
-                } else {
-                    ContentUnavailableView(
-                        "No active session",
-                        systemImage: "safari",
-                        description: Text("Connect to a host to preview its dev server.")
-                    )
+                rootDestination(.settings, env: env)
+            }
+            .tabItem { Label(Tab.settings.title, systemImage: Tab.settings.systemImage) }
+            .tag(Tab.settings)
+        }
+    }
+
+    private func regularRoot(env: AppEnvironment) -> some View {
+        NavigationSplitView {
+            List(selection: splitSelection) {
+                ForEach(Tab.rootTabs, id: \.self) { tab in
+                    Label(tab.title, systemImage: tab.systemImage)
+                        .tag(tab)
                 }
             }
-            .tabItem { Label("Preview", systemImage: "safari") }
-            .tag(Tab.preview)
-
+            .navigationTitle("Conduit")
+        } detail: {
             NavigationStack {
-                SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                rootDestination(selectedTab, env: env)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
+        switch tab {
+        case .workspaces:
+            WorkspacesView(
+                viewModel: WorkspacesViewModel(repository: env.hostRepo),
+                onSelect: { host in openSession(host: host, env: env) },
+                onAddHost: { addHostPresented = true }
+            )
+        case .session:
+            SessionShellView(
+                viewModel: sessionViewModel,
+                inboxViewModel: activeInboxViewModel
+            )
+        case .inbox:
+            InboxView(viewModel: activeInboxViewModel)
+        case .settings:
+            SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
                             NavigationLink {
                                 SnippetEditorView()
-                            } label: { Label("Snippets", systemImage: "text.quote") }
-                        }
-                        ToolbarItem(placement: .topBarTrailing) {
+                            } label: {
+                                Label("Snippets", systemImage: "text.quote")
+                            }
                             NavigationLink {
                                 KeysView(viewModel: KeysViewModel(store: env.keyStore))
-                            } label: { Label("SSH Keys", systemImage: "key") }
+                            } label: {
+                                Label("SSH Keys", systemImage: "key")
+                            }
+                        } label: {
+                            Label("Manage", systemImage: "ellipsis.circle")
                         }
                     }
-            }
-            .tabItem { Label("Settings", systemImage: "gear") }
-            .tag(Tab.settings)
+                }
         }
     }
 

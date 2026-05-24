@@ -24,21 +24,26 @@ public class InboxViewModel {
 
 public struct InboxView: View {
     @State private var vm: InboxViewModel
-    public init(viewModel: InboxViewModel) {
+    private let sessionID: SessionID?
+    private let title: String
+
+    public init(viewModel: InboxViewModel, sessionID: SessionID? = nil, title: String = "Inbox") {
         _vm = State(initialValue: viewModel)
+        self.sessionID = sessionID
+        self.title = title
     }
 
     public var body: some View {
         List {
-            if vm.approvals.isEmpty {
+            if visibleApprovals.isEmpty {
                 ContentUnavailableView(
-                    "Inbox is empty",
+                    title == "Inbox" ? "Inbox is empty" : "Session inbox is empty",
                     systemImage: "tray",
                     description: Text("Agent approvals and run results land here.")
                 )
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(vm.approvals) { approval in
+                ForEach(visibleApprovals) { approval in
                     ApprovalCard(approval: approval) { decision in
                         vm.decide(approval.id, decision: decision)
                     }
@@ -47,7 +52,12 @@ public struct InboxView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Inbox")
+        .navigationTitle(title)
+    }
+
+    private var visibleApprovals: [Approval] {
+        guard let sessionID else { return vm.approvals }
+        return vm.approvals.filter { $0.sessionID == sessionID }
     }
 }
 
@@ -76,15 +86,9 @@ private struct ApprovalCard: View {
             Text("cwd: \(approval.cwd)").font(.caption.monospaced()).foregroundStyle(.tertiary)
 
             if approval.isPending {
-                HStack(spacing: 8) {
-                    Button {
-                        onDecide(.approved)
-                    } label: { Label("Allow once", systemImage: "checkmark.circle") }
-                        .buttonStyle(.borderedProminent)
-                    Button(role: .destructive) {
-                        onDecide(.rejected)
-                    } label: { Label("Reject", systemImage: "xmark.circle") }
-                    .buttonStyle(.bordered)
+                ViewThatFits(in: .horizontal) {
+                    decisionButtons(axis: .horizontal)
+                    decisionButtons(axis: .vertical)
                 }
             } else if let d = approval.decision {
                 Label(d.rawValue.capitalized, systemImage: d == .approved ? "checkmark.seal.fill" : "xmark.seal.fill")
@@ -92,8 +96,27 @@ private struct ApprovalCard: View {
             }
         }
         .padding(12)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func decisionButtons(axis: Axis) -> some View {
+        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 8)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+        layout {
+            Button {
+                onDecide(.approved)
+            } label: {
+                Label("Allow once", systemImage: "checkmark.circle")
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button(role: .destructive) {
+                onDecide(.rejected)
+            } label: {
+                Label("Reject", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
     private var riskBadge: some View {

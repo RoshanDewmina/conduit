@@ -83,8 +83,8 @@ public final class HostEditorViewModel {
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
             authMethod: authMethod,
-            tmuxSessionName: tmux.isEmpty ? nil : tmux,
-            tags: []
+            tags: [],
+            tmuxSessionName: tmux.isEmpty ? nil : tmux
         )
         do {
             try await repo.upsert(host)
