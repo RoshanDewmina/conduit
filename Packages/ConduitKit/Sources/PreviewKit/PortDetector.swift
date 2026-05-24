@@ -64,7 +64,7 @@ public actor PortDetector {
 
         // Match local address column: "ADDR:PORT  PEER"
         // Scan for `:PORT` followed by whitespace or end
-        let pattern = #"[\s\[][\d\:\*\[\]]+:(\d+)\s"#
+        let pattern = #"[\s\[][\d\.\:\*\[\]]+:(\d+)\s"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let range = NSRange(line.startIndex..., in: line)
         let matches = regex.matches(in: line, range: range)
