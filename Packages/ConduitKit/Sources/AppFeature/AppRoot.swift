@@ -80,6 +80,10 @@ public struct AppRoot: View {
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
+    @State private var liveInboxVM: LiveInboxViewModel?
+    @State private var approvalRepository: ApprovalRepository?
+    @State private var daemonChannel: DaemonChannel?
+    @State private var approvalIngest: ApprovalIngest?
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -230,10 +234,10 @@ public struct AppRoot: View {
             .tag(Tab.session)
 
             NavigationStack {
-                InboxView(viewModel: inboxVM)
+                InboxView(viewModel: liveInboxVM ?? inboxVM)
             }
             .tabItem { Label("Inbox", systemImage: "tray") }
-            .badge(inboxVM.approvals.filter(\.isPending).count)
+            .badge((liveInboxVM ?? inboxVM).approvals.filter(\.isPending).count)
             .tag(Tab.inbox)
 
             NavigationStack {
@@ -288,10 +292,25 @@ public struct AppRoot: View {
                 aiClient: aiClient,
                 blockRepo: env.blockRepo
             )
+            let approvalRepo = ApprovalRepository(env.database)
+            let channel = DaemonChannel(session: sshSession)
+            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name)
+            let liveVM = LiveInboxViewModel(
+                repository: approvalRepo,
+                onDecision: { [channel] id, decision in
+                    try? await channel.respond(approvalId: id.uuidString, decision: decision)
+                }
+            )
             await MainActor.run {
                 self.sessionViewModel = vm
+                self.approvalRepository = approvalRepo
+                self.daemonChannel = channel
+                self.approvalIngest = ingest
+                self.liveInboxVM = liveVM
+                self.inboxVM = liveVM  // replace static InboxViewModel
                 self.selectedTab = .session
             }
+            await ingest.start()
         }
     }
 }

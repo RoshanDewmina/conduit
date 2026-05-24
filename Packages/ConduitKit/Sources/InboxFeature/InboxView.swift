@@ -6,14 +6,14 @@ import AgentKit
 import DesignSystem
 
 @MainActor @Observable
-public final class InboxViewModel {
+public class InboxViewModel {
     public var approvals: [Approval] = []
 
     public init(approvals: [Approval] = []) {
         self.approvals = approvals
     }
 
-    public func decide(_ id: ApprovalID, decision: Approval.Decision) {
+    open func decide(_ id: ApprovalID, decision: Approval.Decision) {
         if let idx = approvals.firstIndex(where: { $0.id == id }) {
             approvals[idx].decision = decision
             approvals[idx].decidedAt = .now
