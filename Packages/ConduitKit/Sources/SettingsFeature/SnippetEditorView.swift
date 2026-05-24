@@ -67,7 +67,7 @@ public struct SnippetEditorView: View {
 
 private struct SnippetEditSheet: View {
     @State private var name: String
-    @State private var body: String
+    @State private var commandBody: String
 
     let originalID: SnippetID
     let originalCreatedAt: Date
@@ -76,7 +76,7 @@ private struct SnippetEditSheet: View {
 
     init(snippet: Snippet, onSave: @escaping (Snippet) -> Void, onCancel: @escaping () -> Void) {
         _name = State(initialValue: snippet.name)
-        _body = State(initialValue: snippet.body)
+        _commandBody = State(initialValue: snippet.body)
         originalID = snippet.id
         originalCreatedAt = snippet.createdAt
         self.onSave = onSave
@@ -92,7 +92,7 @@ private struct SnippetEditSheet: View {
                         .textInputAutocapitalization(.never)
                 }
                 Section("Command body") {
-                    TextEditor(text: $body)
+                    TextEditor(text: $commandBody)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 120)
                         .autocorrectionDisabled()
@@ -110,12 +110,12 @@ private struct SnippetEditSheet: View {
                         onSave(Snippet(
                             id: originalID,
                             name: name,
-                            body: body,
+                            body: commandBody,
                             createdAt: originalCreatedAt
                         ))
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
-                              || body.trimmingCharacters(in: .whitespaces).isEmpty)
+                              || commandBody.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }

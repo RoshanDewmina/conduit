@@ -277,7 +277,7 @@ public final class RailViewController: UIViewController {
 // MARK: - Associated object key storage
 
 private enum AssociatedKeys {
-    static var bytes: UInt8 = 0
+    nonisolated(unsafe) static var bytes: UInt8 = 0
 }
 
 #endif

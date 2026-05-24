@@ -7,7 +7,7 @@ import PersistenceKit
 public final class LiveInboxViewModel: InboxViewModel {
     private let repository: ApprovalRepository
     private let onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)?
-    private var observationTask: Task<Void, Never>?
+    nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,
@@ -20,12 +20,12 @@ public final class LiveInboxViewModel: InboxViewModel {
     }
 
     private func startObserving() {
-        observationTask = Task { [weak self] in
+        observationTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                for try await approvals in self.repository.observe() {
+                for try await approvals in await self.repository.observe() {
                     guard !Task.isCancelled else { break }
-                    await MainActor.run { self.approvals = approvals }
+                    self.approvals = approvals
                 }
             } catch { /* observation ended */ }
         }

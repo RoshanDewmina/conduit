@@ -6,23 +6,30 @@ import PersistenceKit
 import CloudKit
 #endif
 
+// CKOperation callbacks are called serially by CloudKit, so this accumulator
+// is safe even though Swift 6 can't prove it statically.
+private final class CKAccumulator: @unchecked Sendable {
+    var results: [CKRecordWrapper] = []
+    var deletedIDs: [String] = []
+}
+
 /// Low-level wrapper around CloudKit private database operations.
-/// All methods are no-ops on macOS (returns empty / throws nothing).
+/// All methods are no-ops on macOS or when CloudKit is unavailable (simulator without entitlement).
 public actor CloudSync {
-    #if os(iOS)
+    #if os(iOS) && !targetEnvironment(simulator)
     private let container: CKContainer
     private var db: CKDatabase { container.privateCloudDatabase }
     #endif
 
     public init(containerIdentifier: String = "iCloud.dev.conduit.mobile") {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(simulator)
         self.container = CKContainer(identifier: containerIdentifier)
         #endif
     }
 
     /// Returns the current CloudKit account status.
     public func accountStatus() async throws -> CloudAccountStatus {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(simulator)
         let status = try await container.accountStatus()
         switch status {
         case .available: return .available
@@ -40,24 +47,22 @@ public actor CloudSync {
     /// Fetches records of a given type modified after a server change token.
     /// Returns new/updated records and deleted record IDs.
     public func fetchChanges(recordType: String) async throws -> ([CKRecordWrapper], [String]) {
-        #if os(iOS)
-        var results: [CKRecordWrapper] = []
-        var deletedIDs: [String] = []
-
+        #if os(iOS) && !targetEnvironment(simulator)
         let operation = CKFetchRecordZoneChangesOperation()
         let zoneID = CKRecordZone.default().zoneID
         let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
         operation.recordZoneIDs = [zoneID]
         operation.configurationsByRecordZoneID = [zoneID: config]
 
+        let acc = CKAccumulator()
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
             operation.recordWasChangedBlock = { _, result in
                 if case .success(let record) = result, record.recordType == recordType {
-                    results.append(CKRecordWrapper(record: record))
+                    acc.results.append(CKRecordWrapper(record: record))
                 }
             }
             operation.recordWithIDWasDeletedBlock = { recordID, _ in
-                deletedIDs.append(recordID.recordName)
+                acc.deletedIDs.append(recordID.recordName)
             }
             operation.fetchRecordZoneChangesResultBlock = { result in
                 switch result {
@@ -67,7 +72,7 @@ public actor CloudSync {
             }
             self.db.add(operation)
         }
-        return (results, deletedIDs)
+        return (acc.results, acc.deletedIDs)
         #else
         return ([], [])
         #endif
@@ -75,7 +80,7 @@ public actor CloudSync {
 
     /// Saves or updates records in the private database.
     public func save(records: [CKRecordWrapper]) async throws {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(simulator)
         guard !records.isEmpty else { return }
         let ckRecords = records.map(\.record)
         let operation = CKModifyRecordsOperation(recordsToSave: ckRecords, recordIDsToDelete: nil)

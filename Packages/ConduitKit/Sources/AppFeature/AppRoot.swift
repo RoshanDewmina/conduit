@@ -239,6 +239,11 @@ public struct AppRoot: View {
         .task {
             await env.syncEngine.start()
         }
+        .task {
+#if DEBUG
+            await DebugSeeder.seedIfNeeded(env: env)
+#endif
+        }
     }
 
     @ViewBuilder
