@@ -25,6 +25,7 @@ let package = Package(
         .library(name: "NotificationsKit", targets: ["NotificationsKit"]),
         .library(name: "PersistenceKit",   targets: ["PersistenceKit"]),
         .library(name: "DiffKit",          targets: ["DiffKit"]),
+        .library(name: "SyncKit",          targets: ["SyncKit"]),
 
         // ── UI-bearing modules ───────────────────────────────────────────
         .library(name: "DesignSystem",      targets: ["DesignSystem"]),
@@ -102,6 +103,11 @@ let package = Package(
             dependencies: ["ConduitCore"],
             swiftSettings: swiftSettings
         ),
+        .target(
+            name: "SyncKit",
+            dependencies: ["ConduitCore", "PersistenceKit"],
+            swiftSettings: swiftSettings
+        ),
 
         // ── UI-bearing ───────────────────────────────────────────────────
         .target(
@@ -118,7 +124,7 @@ let package = Package(
         // Features (UI). Each feature is one-screen-deep + view models.
         .target(
             name: "OnboardingFeature",
-            dependencies: ["DesignSystem", "SecurityKit", "PersistenceKit", "SSHTransport"],
+            dependencies: ["DesignSystem", "SecurityKit", "PersistenceKit", "SSHTransport", "AgentKit"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -146,7 +152,7 @@ let package = Package(
         ),
         .target(
             name: "PreviewFeature",
-            dependencies: ["DesignSystem", "PreviewKit"],
+            dependencies: ["DesignSystem", "PreviewKit", "SSHTransport", "ConduitCore"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -161,7 +167,7 @@ let package = Package(
         ),
         .target(
             name: "SettingsFeature",
-            dependencies: ["DesignSystem", "PersistenceKit", "AgentKit", "SecurityKit"],
+            dependencies: ["DesignSystem", "PersistenceKit", "AgentKit", "SecurityKit", "SyncKit"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -179,6 +185,7 @@ let package = Package(
                 "PreviewFeature",
                 "FilesFeature",
                 "KeysFeature",
+                "SyncKit",
             ],
             swiftSettings: swiftSettings
         ),
@@ -194,6 +201,8 @@ let package = Package(
                 "AgentKit",
                 "DiffKit",
                 "PersistenceKit",
+                "SyncKit",
+                "PreviewKit",
             ],
             swiftSettings: swiftSettings
         ),

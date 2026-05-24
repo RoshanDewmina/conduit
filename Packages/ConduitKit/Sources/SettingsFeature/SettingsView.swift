@@ -4,6 +4,7 @@ import Observation
 import ConduitCore
 import AgentKit
 import DesignSystem
+import SyncKit
 
 @MainActor @Observable
 public final class SettingsViewModel {
@@ -82,7 +83,12 @@ public final class SettingsViewModel {
 
 public struct SettingsView: View {
     @State private var vm: SettingsViewModel
-    public init(viewModel: SettingsViewModel) { _vm = State(initialValue: viewModel) }
+    let syncEngine: SyncEngine?
+
+    public init(viewModel: SettingsViewModel, syncEngine: SyncEngine? = nil) {
+        _vm = State(initialValue: viewModel)
+        self.syncEngine = syncEngine
+    }
 
     public var body: some View {
         Form {
@@ -98,6 +104,10 @@ public struct SettingsView: View {
 
             Section {
                 Button("Save") { Task { await vm.save() } }
+            }
+
+            if let engine = syncEngine {
+                SyncStatusView(engine: engine)
             }
 
             Section {

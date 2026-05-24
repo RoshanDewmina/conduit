@@ -14,6 +14,8 @@ import OnboardingFeature
 import SettingsFeature
 import KeysFeature
 import DesignSystem
+import PreviewFeature
+import SyncKit
 
 /// The single composition root. The whole app graph is wired in `init`.
 /// One source of truth for environment, navigation, and dependencies.
@@ -21,18 +23,27 @@ import DesignSystem
 public final class AppEnvironment {
     public let database: AppDatabase
     public let hostRepo: HostRepository
+    public let snippetRepo: SnippetRepository
     public let blockRepo: BlockRepository
     public let keyStore: KeyStore
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
+    public let syncEngine: SyncEngine
 
     public init() throws {
         self.database = try AppDatabase.openShared()
         self.hostRepo = HostRepository(database)
+        self.snippetRepo = SnippetRepository(db: database)
         self.blockRepo = BlockRepository(database)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
+        let cloudSync = CloudSync()
+        self.syncEngine = SyncEngine(
+            cloudSync: cloudSync,
+            hostRepo: HostRepository(database),
+            snippetRepo: SnippetRepository(db: database)
+        )
     }
 
     public func aiClient(provider: AIProvider = .anthropic) async -> (any AIClient)? {
@@ -99,7 +110,7 @@ public struct AppRoot: View {
         }
     )
 
-    public enum Tab: Hashable { case workspaces, session, inbox, settings }
+    public enum Tab: Hashable { case workspaces, session, inbox, preview, settings }
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -204,6 +215,9 @@ public struct AppRoot: View {
         }, message: {
             Text(connectionError ?? "")
         })
+        .task {
+            await env.syncEngine.start()
+        }
     }
 
     @ViewBuilder
@@ -241,7 +255,21 @@ public struct AppRoot: View {
             .tag(Tab.inbox)
 
             NavigationStack {
-                SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore))
+                if let vm = sessionViewModel {
+                    SmartPreviewView(session: vm.session)
+                } else {
+                    ContentUnavailableView(
+                        "No active session",
+                        systemImage: "safari",
+                        description: Text("Connect to a host to preview its dev server.")
+                    )
+                }
+            }
+            .tabItem { Label("Preview", systemImage: "safari") }
+            .tag(Tab.preview)
+
+            NavigationStack {
+                SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             NavigationLink {
