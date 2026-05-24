@@ -59,6 +59,22 @@ public actor Notifications {
         catch { /* notification dropped; status bar already shows disconnected */ }
     }
 
+    /// Posts a local notification when the SSH session is suspended due to
+    /// iOS background task expiration.
+    public func postSessionSuspended(hostName: String) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Session suspended"
+        content.body = "Connection to \(hostName) was suspended. Tap to reconnect."
+        content.sound = .default
+        let req = UNNotificationRequest(
+            identifier: "session-suspended-\(hostName)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        do { try await UNUserNotificationCenter.current().add(req) }
+        catch { }
+    }
+
     public func registerCategories() {
         let approve = UNNotificationAction(
             identifier: "approval.approve",

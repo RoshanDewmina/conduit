@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import Citadel
 @preconcurrency import NIOCore
+@preconcurrency import NIOSSH
 import ConduitCore
 import SecurityKit
 
@@ -28,6 +29,8 @@ public actor SSHSession {
 
     // MARK: - Connect / disconnect
 
+    private static let connectTimeout: Duration = .seconds(15)
+
     public func connect(credential: SSHCredential, hostKeyStore: HostKeyStore) async throws {
         if isConnected { return }
         let method: SSHAuthenticationMethod = switch credential {
@@ -39,22 +42,43 @@ public actor SSHSession {
         let hostKeyValidator = TOFUHostKeyValidator(hostID: host.id, store: hostKeyStore)
 
         do {
-            client = try await Citadel.SSHClient.connect(
-                host: host.hostname,
-                port: host.port,
-                authenticationMethod: method,
-                hostKeyValidator: .custom(hostKeyValidator),
-                reconnect: .never
-            )
+            client = try await withThrowingTimeout(connectTimeout) {
+                try await Citadel.SSHClient.connect(
+                    host: self.host.hostname,
+                    port: self.host.port,
+                    authenticationMethod: method,
+                    hostKeyValidator: .custom(hostKeyValidator),
+                    reconnect: .never
+                )
+            }
             isConnected = true
             lastError = nil
-            // Cache credentials for automatic reconnection (M3).
             cachedCredential = credential
             cachedHostKeyStore = hostKeyStore
         } catch {
             let mapped = Self.map(error: error, host: host.hostname)
             lastError = mapped
             throw mapped
+        }
+    }
+
+    /// Runs `operation` with a deadline. Throws `ConduitError.timeout` if it
+    /// does not complete within `duration`.
+    private func withThrowingTimeout<T: Sendable>(
+        _ duration: Duration,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: duration)
+                throw ConduitError.timeout
+            }
+            guard let result = try await group.next() else {
+                throw ConduitError.timeout
+            }
+            group.cancelAll()
+            return result
         }
     }
 
@@ -123,6 +147,48 @@ public actor SSHSession {
         } catch {
             throw Self.map(error: error, host: host.hostname)
         }
+    }
+
+    // MARK: - Shell (interactive PTY)
+
+    /// Opens a PTY shell channel on this SSH connection. Data arriving from the
+    /// remote PTY is fed into `dataContinuation`. The returned NIO `Channel` is
+    /// used for sending input and resize events.
+    ///
+    /// The data pump runs in a detached Task for the lifetime of the shell;
+    /// when the remote closes the channel, `dataContinuation` is finished.
+    ///
+    /// Requires iOS 18+ (Citadel's shell API). Since we target iOS 26, this is
+    /// always available.
+    public func requestShellChannel(
+        width: Int,
+        height: Int,
+        dataContinuation: AsyncStream<[UInt8]>.Continuation
+    ) async throws -> any Channel {
+        guard let client else { throw ConduitError.notConnected }
+
+        let channel: any Channel = try await withCheckedThrowingContinuation { continuation in
+            Task { [client] in
+                do {
+                    try await client.withTerminal(
+                        term: "xterm-256color",
+                        width: width,
+                        height: height
+                    ) { channel, inbound in
+                        continuation.resume(returning: channel)
+                        for try await var buffer in inbound {
+                            if let bytes = buffer.readBytes(length: buffer.readableBytes), !bytes.isEmpty {
+                                dataContinuation.yield(bytes)
+                            }
+                        }
+                        dataContinuation.finish()
+                    }
+                } catch {
+                    continuation.resume(throwing: Self.map(error: error, host: ""))
+                }
+            }
+        }
+        return channel
     }
 
     // MARK: - SFTP

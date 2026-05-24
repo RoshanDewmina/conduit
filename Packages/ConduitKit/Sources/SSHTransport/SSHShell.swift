@@ -14,15 +14,13 @@ import ConduitCore
 /// ```
 ///
 /// ## Platform note
-/// The underlying Citadel PTY API (`withPTY`) requires iOS 18 / macOS 15.
-/// On earlier targets `open` throws `ConduitError.unsupportedPlatform`.
-///
-/// TODO: wire Citadel shell channel for iOS 17 via NIOSSH directly.
+/// The underlying Citadel PTY API requires iOS 18+ / macOS 15+.
+/// Since Conduit targets iOS 26, this is always available.
 public actor SSHShell {
 
     // MARK: - Stream plumbing
 
-    private let (byteStream, byteContinuation): (AsyncStream<[UInt8]>, AsyncStream<[UInt8]>.Continuation)
+    internal let (byteStream, byteContinuation): (AsyncStream<[UInt8]>, AsyncStream<[UInt8]>.Continuation)
 
     /// Async sequence of raw byte chunks arriving from the remote PTY.
     public var bytes: AsyncStream<[UInt8]> { byteStream }
@@ -49,9 +47,6 @@ public actor SSHShell {
     /// channel or `close()` is called.
     ///
     /// - Throws: `ConduitError.notConnected` if the session is not live.
-    /// - Throws: `ConduitError.unsupportedPlatform` on iOS 17 / macOS 14
-    ///   (Citadel's `withPTY` requires iOS 18+).
-    ///   TODO: wire Citadel shell channel for iOS 17 via NIOSSH directly.
     public static func open(
         session: SSHSession,
         width: Int,
@@ -61,10 +56,16 @@ public actor SSHShell {
             throw ConduitError.notConnected
         }
 
-        // TODO: wire Citadel shell channel for iOS 17 via NIOSSH directly.
-        // Citadel's withPTY / withTTY require macOS 15.0+ / iOS 18+.
-        // For now we gate and surface a clear error so callers can handle it.
-        throw ConduitError.unsupportedPlatform
+        let shell = SSHShell()
+        let continuation = shell.byteContinuation
+
+        let channel = try await session.requestShellChannel(
+            width: width,
+            height: height,
+            dataContinuation: continuation
+        )
+        await shell.storeChannel(channel)
+        return shell
     }
 
     // MARK: - Internal factory (for tests and future wiring)

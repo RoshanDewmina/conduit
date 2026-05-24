@@ -99,17 +99,7 @@ public struct AppRoot: View {
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @Environment(\.scenePhase) private var scenePhase
 
-    // M3 — ScenePhaseObserver wiring.
-    // `onBecomeActive` calls `sessionViewModel?.handleSceneActive()` once
-    // SessionViewModel.handleSceneActive() is merged from the M3 VM patch.
-    @State private var scenePhaseObserver = ScenePhaseObserver(
-        onBecomeActive: {
-            // TODO: call sessionViewModel?.handleSceneActive() once M3 VM patch is merged.
-        },
-        onBackground: {
-            // TODO: suspend / detach from tmux when needed.
-        }
-    )
+    @State private var scenePhaseObserver: ScenePhaseObserver?
 
     public enum Tab: Hashable { case workspaces, session, inbox, preview, settings }
 
@@ -141,9 +131,10 @@ public struct AppRoot: View {
             }
         }
         .task { _ = await Notifications.shared.requestAuthorization() }
-        // M3 — propagate scene-phase changes to the observer.
         .onChange(of: scenePhase) { _, newPhase in
-            Task { await scenePhaseObserver.scenePhaseChanged(to: newPhase) }
+            if let observer = scenePhaseObserver {
+                Task { await observer.scenePhaseChanged(to: newPhase) }
+            }
         }
     }
 
@@ -358,7 +349,22 @@ public struct AppRoot: View {
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
                 self.selectedTab = .session
+                self.scenePhaseObserver = ScenePhaseObserver(
+                    onBecomeActive: { [weak vm] in
+                        guard let vm else { return }
+                        await vm.handleSceneActive()
+                    },
+                    onBackground: { [weak vm] in
+                        guard let vm else { return }
+                        if vm.status == .connected {
+                            await Notifications.shared.postSessionSuspended(
+                                hostName: vm.host.name
+                            )
+                        }
+                    }
+                )
             }
+            await vm.connect()
             await ingest.start()
         }
     }
