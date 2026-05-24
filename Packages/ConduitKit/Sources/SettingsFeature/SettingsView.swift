@@ -106,6 +106,12 @@ public struct SettingsView: View {
                 Button("Save") { Task { await vm.save() } }
             }
 
+            Section("Providers") {
+                NavigationLink("Billing & Usage") {
+                    BillingView()
+                }
+            }
+
             if let engine = syncEngine {
                 SyncStatusView(engine: engine)
             }

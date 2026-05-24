@@ -95,6 +95,7 @@ public struct AppRoot: View {
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
+    @State private var showingProvisioningWizard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -166,12 +167,32 @@ public struct AppRoot: View {
                     }
                 }
             } else {
-                OnboardingView {
-                    onboardingSeen = true
-                    addHostPresented = true
-                    selectedTab = .workspaces
-                }
+                OnboardingView(
+                    onContinue: {
+                        onboardingSeen = true
+                        addHostPresented = true
+                        selectedTab = .workspaces
+                    },
+                    onSetupWorkspace: {
+                        showingProvisioningWizard = true
+                    }
+                )
             }
+        }
+        .sheet(isPresented: $showingProvisioningWizard) {
+            ProvisioningWizard(
+                hostRepo: env.hostRepo,
+                onComplete: { host in
+                    showingProvisioningWizard = false
+                    onboardingSeen = true
+                    selectedTab = .workspaces
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(250))
+                        openSession(host: host, env: env)
+                    }
+                },
+                onCancel: { showingProvisioningWizard = false }
+            )
         }
         .sheet(isPresented: $addHostPresented) {
             NavigationStack {

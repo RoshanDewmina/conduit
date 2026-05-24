@@ -4,9 +4,11 @@ import DesignSystem
 
 public struct OnboardingView: View {
     public var onContinue: () -> Void
+    public var onSetupWorkspace: () -> Void
 
-    public init(onContinue: @escaping () -> Void) {
+    public init(onContinue: @escaping () -> Void, onSetupWorkspace: @escaping () -> Void = {}) {
         self.onContinue = onContinue
+        self.onSetupWorkspace = onSetupWorkspace
     }
 
     public var body: some View {
@@ -31,6 +33,12 @@ public struct OnboardingView: View {
                     .font(.body.weight(.semibold)).padding(.horizontal, 24)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            Button(action: onSetupWorkspace) {
+                Text("Set up a workspace for me")
+                    .font(.body).padding(.horizontal, 24)
+            }
+            .buttonStyle(.bordered)
             .controlSize(.large)
             Text("BYO host. BYO API key. No subscription required.")
                 .font(.caption).foregroundStyle(.tertiary)
