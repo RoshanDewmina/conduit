@@ -1,0 +1,120 @@
+import Foundation
+import GRDB
+import ConduitCore
+
+// Both Foundation (NetService) and some GRDB symbols collide with the
+// shorthand name `Host`. We standardize on the ConduitCore value type by
+// fully qualifying every reference.
+
+public actor HostRepository {
+    private let db: AppDatabase
+    public init(_ db: AppDatabase) { self.db = db }
+
+    public func all() async throws -> [ConduitCore.Host] {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT * FROM hosts ORDER BY name COLLATE NOCASE")
+            return try rows.map(Self.decode)
+        }
+    }
+
+    public func upsert(_ host: ConduitCore.Host) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                INSERT INTO hosts (id, name, hostname, port, username, authMethodType, authMethodKeyTag,
+                                   tags, hostKeyFingerprint, preferredShell, tmuxSessionName, createdAt, lastConnectedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  name=excluded.name, hostname=excluded.hostname, port=excluded.port,
+                  username=excluded.username, authMethodType=excluded.authMethodType,
+                  authMethodKeyTag=excluded.authMethodKeyTag, tags=excluded.tags,
+                  hostKeyFingerprint=excluded.hostKeyFingerprint,
+                  preferredShell=excluded.preferredShell, tmuxSessionName=excluded.tmuxSessionName,
+                  lastConnectedAt=excluded.lastConnectedAt
+            """, arguments: [
+                host.id.uuidString,
+                host.name,
+                host.hostname,
+                host.port,
+                host.username,
+                Self.authType(host.authMethod),
+                Self.authKeyTag(host.authMethod),
+                (try? String(data: JSONEncoder().encode(host.tags), encoding: .utf8)) ?? "[]",
+                host.hostKeyFingerprint,
+                host.preferredShell,
+                host.tmuxSessionName,
+                host.createdAt,
+                host.lastConnectedAt,
+            ])
+        }
+    }
+
+    public func delete(id: HostID) async throws {
+        _ = try await db.dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM hosts WHERE id = ?", arguments: [id.uuidString])
+        }
+    }
+
+    public func touch(id: HostID, at time: Date = .now) async throws {
+        _ = try await db.dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE hosts SET lastConnectedAt = ? WHERE id = ?",
+                arguments: [time, id.uuidString]
+            )
+        }
+    }
+
+    // MARK: - Row decoding
+
+    private static func decode(_ row: Row) throws -> ConduitCore.Host {
+        guard
+            let uuidString: String = row["id"],
+            let uuid = UUID(uuidString: uuidString)
+        else { throw ConduitError.databaseFailure(detail: "bad host id") }
+
+        let tagsJSON: String = row["tags"] ?? "[]"
+        let tags = (try? JSONDecoder().decode([String].self, from: Data(tagsJSON.utf8))) ?? []
+        let auth = try decodeAuth(typeStr: row["authMethodType"] ?? "password",
+                                   keyTag: row["authMethodKeyTag"])
+
+        return ConduitCore.Host(
+            id: HostID(uuid),
+            name: row["name"] ?? "",
+            hostname: row["hostname"] ?? "",
+            port: row["port"] ?? 22,
+            username: row["username"] ?? "",
+            authMethod: auth,
+            tags: tags,
+            hostKeyFingerprint: row["hostKeyFingerprint"],
+            preferredShell: row["preferredShell"],
+            tmuxSessionName: row["tmuxSessionName"],
+            createdAt: row["createdAt"] ?? .now,
+            lastConnectedAt: row["lastConnectedAt"]
+        )
+    }
+
+    private static func decodeAuth(typeStr: String, keyTag: String?) throws -> ConduitCore.Host.AuthMethod {
+        switch typeStr {
+        case "password": return .password
+        case "agent":    return .agent
+        case "ed25519":
+            guard let keyTag, let uuid = UUID(uuidString: keyTag) else {
+                throw ConduitError.databaseFailure(detail: "ed25519 missing key tag")
+            }
+            return .ed25519(keyID: KeyID(uuid))
+        default: return .password
+        }
+    }
+
+    private static func authType(_ m: ConduitCore.Host.AuthMethod) -> String {
+        switch m {
+        case .password:   "password"
+        case .ed25519:    "ed25519"
+        case .agent:      "agent"
+        }
+    }
+
+    private static func authKeyTag(_ m: ConduitCore.Host.AuthMethod) -> String? {
+        if case let .ed25519(keyID) = m { return keyID.uuidString }
+        return nil
+    }
+}

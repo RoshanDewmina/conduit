@@ -1,0 +1,68 @@
+import Foundation
+
+/// An approval request raised by a remote agent (Claude Code, Codex, etc.)
+/// and surfaced to the user in the Inbox.
+public struct Approval: Identifiable, Sendable, Hashable {
+    public let id: ApprovalID
+    public let sessionID: SessionID
+    public let agent: AgentSource
+    public let kind: Kind
+    public let command: String?           // present for `.command` / `.patch`
+    public let patch: String?             // unified diff for `.patch`
+    public let cwd: String
+    public let risk: Risk
+    public let createdAt: Date
+    public var decidedAt: Date?
+    public var decision: Decision?
+
+    public enum AgentSource: String, Sendable, Hashable, Codable {
+        case claudeCode, codex, opencode, cursor, devin, unknown
+    }
+
+    public enum Kind: String, Sendable, Hashable, Codable {
+        case command         // wants to run a shell command
+        case patch           // wants to apply a code change
+        case fileWrite       // wants to overwrite a file
+        case fileDelete
+        case network         // wants to make a network call
+        case credential      // wants a secret / API key
+        case browser         // wants to perform a browser action
+    }
+
+    public enum Risk: Int, Sendable, Hashable, Codable, Comparable {
+        case low = 0, medium = 1, high = 2, critical = 3
+        public static func < (a: Risk, b: Risk) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    public enum Decision: String, Sendable, Hashable, Codable {
+        case approved, approvedAlways, rejected, expired
+    }
+
+    public init(
+        id: ApprovalID = .init(),
+        sessionID: SessionID,
+        agent: AgentSource,
+        kind: Kind,
+        command: String? = nil,
+        patch: String? = nil,
+        cwd: String,
+        risk: Risk,
+        createdAt: Date = .now,
+        decidedAt: Date? = nil,
+        decision: Decision? = nil
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.agent = agent
+        self.kind = kind
+        self.command = command
+        self.patch = patch
+        self.cwd = cwd
+        self.risk = risk
+        self.createdAt = createdAt
+        self.decidedAt = decidedAt
+        self.decision = decision
+    }
+
+    public var isPending: Bool { decision == nil }
+}

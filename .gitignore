@@ -1,0 +1,25 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+
+# SwiftPM
+.build/
+Package.resolved
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Local secrets
+*.env
+secrets.plist
+
+# Generated launch screen color
+Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
+
+# Profiling
+*.trace
+*.instrumentscli
