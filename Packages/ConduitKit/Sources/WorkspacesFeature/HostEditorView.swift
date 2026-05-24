@@ -27,6 +27,7 @@ public final class HostEditorViewModel {
     public var authChoice: AuthChoice = .password
     public var keyTags: [String] = []
     public var selectedKeyTag: String?
+    public var tmuxSessionName: String = ""
     public var saveError: String?
 
     private let repo: HostRepository
@@ -75,12 +76,14 @@ public final class HostEditorViewModel {
             authMethod = .ed25519(keyID: keyID)
         }
 
+        let tmux = tmuxSessionName.trimmingCharacters(in: .whitespaces)
         let host = Host(
             name: name.trimmingCharacters(in: .whitespaces),
             hostname: hostname.trimmingCharacters(in: .whitespaces),
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
             authMethod: authMethod,
+            tmuxSessionName: tmux.isEmpty ? nil : tmux,
             tags: []
         )
         do {
@@ -121,6 +124,14 @@ public struct HostEditorView: View {
                 TextField("Username", text: $vm.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            }
+            Section("Session") {
+                TextField("tmux session name", text: $vm.tmuxSessionName)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Text("Optional. If set, Conduit attaches to this tmux session on connect, keeping your work alive across disconnects.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("Authentication") {
                 Picker("Method", selection: $vm.authChoice) {

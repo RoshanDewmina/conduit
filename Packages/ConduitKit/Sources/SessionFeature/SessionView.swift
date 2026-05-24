@@ -21,6 +21,9 @@ public struct SessionView: View {
     public var body: some View {
         VStack(spacing: 0) {
             statusBar
+            if case .reconnecting = vm.status {
+                reconnectBanner
+            }
             Divider()
             if vm.isRaw {
                 rawTerminalContent
@@ -34,6 +37,23 @@ public struct SessionView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if vm.status == .connected && !vm.isRaw {
+                    Button {
+                        Task { await vm.escalateToRaw() }
+                    } label: {
+                        Label("Terminal", systemImage: "rectangle.bottomthird.inset.filled")
+                    }
+                } else if vm.isRaw {
+                    Button {
+                        Task { await vm.deescalate() }
+                    } label: {
+                        Label("Blocks", systemImage: "list.bullet.rectangle")
+                    }
+                }
+            }
+        }
         .task {
             await vm.connect()
             if let db = try? AppDatabase.openShared(),
@@ -117,6 +137,25 @@ public struct SessionView: View {
         case .reconnecting(let n): "reconnecting (\(n))"
         case .failed(let r):      "failed: \(r)"
         }
+    }
+
+    // MARK: - Reconnect banner
+
+    private var reconnectBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(0.7)
+            Text("Reconnecting…")
+                .font(.caption.weight(.medium))
+            Spacer()
+            Button("Cancel") { Task { await vm.disconnect() } }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.yellow.opacity(0.1))
     }
 
     // MARK: - Block scroll
@@ -267,37 +306,48 @@ private struct BlockRow: View {
     let onCollapse: () -> Void
     let onStar: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 8) {
-                PromptLine(hostName: block.prompt.hostName, cwd: block.prompt.cwd)
-                if let status = block.exitStatus { ExitChip(code: status.code) }
-                if let d = block.duration {
-                    Text(String(format: "%.2fs", d))
-                        .font(.caption2.monospaced()).foregroundStyle(.tertiary)
-                }
-                Spacer()
-                if block.isStarred {
-                    Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
-                }
-                Button(action: onCollapse) {
-                    Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            Text(block.command)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
+    private var isFailed: Bool { block.exitStatus?.isSuccess == false }
 
-            if !block.isCollapsed, block.hasOutput {
-                Text(render)
+    var body: some View {
+        HStack(spacing: 0) {
+            if isFailed {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(.red)
+                    .frame(width: 3)
+                    .padding(.vertical, 4)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
+                    PromptLine(hostName: block.prompt.hostName, cwd: block.prompt.cwd)
+                    if let status = block.exitStatus { ExitChip(code: status.code) }
+                    if let d = block.duration {
+                        Text(String(format: "%.2fs", d))
+                            .font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    if block.isStarred {
+                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
+                    }
+                    Button(action: onCollapse) {
+                        Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text(block.command)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !block.isCollapsed, block.hasOutput {
+                    Text(render)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .padding(12)
         }
-        .padding(12)
+        .background(isFailed ? Color.red.opacity(0.05) : Color.clear)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .contextMenu {

@@ -52,13 +52,43 @@ public final class SessionViewModel {
     /// displayed in raw mode.
     public private(set) var rawFeedHandle: TerminalFeedHandle? = nil
 
-    // MARK: - M3 stubs (filled in when M3 branch is merged)
+    // MARK: - M3: Session survival
 
-    /// Name of the attached tmux session (M3).
+    /// Name of the attached tmux session. When set, the session uses tmux
+    /// attach-or-create on connect and reattach on reconnect.
     public private(set) var tmuxSessionName: String? = nil
 
-    /// Called when the app scene becomes active (M3 reconnect logic).
-    public func handleSceneActive() async { }
+    /// Reconnection engine that monitors network state.
+    private var reconnectEngine: AutoReconnectEngine?
+
+    /// Called when the app scene becomes active after backgrounding.
+    /// Triggers reconnection if the SSH session was lost.
+    public func handleSceneActive() async {
+        let connected = await sshSession.isConnected
+        if !connected && status != .connecting {
+            await attemptReconnect()
+        }
+    }
+
+    /// Configures tmux session name for auto-attach.
+    public func enableTmux(sessionName: String) {
+        tmuxSessionName = sessionName
+    }
+
+    private func attemptReconnect() async {
+        status = .reconnecting(attempt: 1)
+        do {
+            try await sshSession.attemptReconnect()
+            if let name = tmuxSessionName {
+                let tmux = TmuxClient(session: sshSession)
+                try await tmux.attachOrCreate(name: name)
+            }
+            status = .connected
+            await refreshCWD()
+        } catch {
+            status = .failed(reason: "Reconnect failed: \(error.localizedDescription)")
+        }
+    }
 
     // MARK: - Dependencies
 
@@ -97,6 +127,12 @@ public final class SessionViewModel {
             let cred = try await credentialProvider()
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
             status = .connected
+            // If host has a tmux session configured, attach or create it.
+            if let name = host.tmuxSessionName, !name.isEmpty {
+                tmuxSessionName = name
+                let tmux = TmuxClient(session: sshSession)
+                try? await tmux.attachOrCreate(name: name)
+            }
             await refreshCWD()
         } catch ConduitError.hostKeyUnknown(let fp) {
             pendingHostKeyFingerprint = fp

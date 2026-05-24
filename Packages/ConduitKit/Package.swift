@@ -1,19 +1,17 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // ConduitKit — modular engines + features for the Conduit iOS app.
 // Engines are platform-agnostic (no UIKit/SwiftUI). Features depend on engines.
 
 import PackageDescription
 
 let swiftSettings: [SwiftSetting] = [
-    .enableUpcomingFeature("StrictConcurrency"),
-    .enableUpcomingFeature("ExistentialAny"),
 ]
 
 let package = Package(
     name: "ConduitKit",
     platforms: [
-        .iOS(.v17),     // dependency minimum; runtime verified on current iOS simulators
-        .macOS(.v14),   // engines compile on macOS for CLI testability
+        .iOS(.v26),
+        .macOS(.v15),
     ],
     products: [
         // ── Engines (no UIKit) ───────────────────────────────────────────
