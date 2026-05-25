@@ -1,0 +1,94 @@
+default_platform(:ios)
+
+# Required environment variables (set these before running):
+#   APPLE_ID        — your Apple ID email (the paid developer account)
+#   APP_STORE_CONNECT_TEAM_ID — your paid team ID
+#   MATCH_GIT_URL   — private git repo for match certificates (optional, can use --readonly false)
+#
+# Quickstart:
+#   export APPLE_ID=you@example.com
+#   export APP_STORE_CONNECT_TEAM_ID=YOUR_TEAM_ID
+#   fastlane beta       # archive + TestFlight
+#   fastlane release    # archive + App Store submission
+
+APP_ID = "dev.conduit.mobile"
+APP_NAME = "Conduit"
+
+platform :ios do
+
+  # ── Setup ──────────────────────────────────────────────────────────────────
+
+  desc "Download/refresh App Store Connect provisioning profiles"
+  lane :certificates do
+    sync_code_signing(
+      type: "appstore",
+      app_identifier: APP_ID,
+      readonly: false
+    )
+  end
+
+  # ── Build ──────────────────────────────────────────────────────────────────
+
+  desc "Build a release archive"
+  lane :build do
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1,
+      xcodeproj: "Conduit.xcodeproj"
+    )
+    build_app(
+      project: "Conduit.xcodeproj",
+      scheme: "Conduit",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Conduit.ipa"
+    )
+  end
+
+  # ── TestFlight ──────────────────────────────────────────────────────────────
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    certificates
+    build
+    upload_to_testflight(
+      app_identifier: APP_ID,
+      skip_waiting_for_build_processing: false,
+      changelog: "New build — SSH connect, block terminal, AI approval inbox."
+    )
+    puts "✅ TestFlight build uploaded. Check App Store Connect."
+  end
+
+  # ── App Store ───────────────────────────────────────────────────────────────
+
+  desc "Submit to App Store"
+  lane :release do
+    certificates
+    build
+    upload_to_app_store(
+      app_identifier: APP_ID,
+      skip_screenshots: false,
+      screenshots_path: "./docs/screenshots",
+      metadata_path: "./fastlane/metadata",
+      submit_for_review: false,   # set true when ready for review
+      force: true
+    )
+    puts "✅ Uploaded to App Store Connect. Go to appstoreconnect.apple.com to submit for review."
+  end
+
+  # ── Metadata ────────────────────────────────────────────────────────────────
+
+  desc "Download existing App Store metadata"
+  lane :pull_metadata do
+    download_metadata(
+      app_identifier: APP_ID,
+      metadata_path: "./fastlane/metadata"
+    )
+  end
+
+  # ── Error handling ──────────────────────────────────────────────────────────
+
+  error do |lane, exception|
+    puts "❌ Lane #{lane} failed: #{exception.message}"
+  end
+end

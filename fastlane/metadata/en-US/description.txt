@@ -1,0 +1,28 @@
+Conduit is a phone-native control plane for remote AI coding. Not just another SSH client — it is the missing mobile layer between you and the AI agents running on your servers.
+
+SUPERVISE AI AGENTS FROM ANYWHERE
+When Claude Code or another AI agent wants to run a command on your server, Conduit delivers the request to your phone instantly. See exactly what it wants to do, the risk level, and the working directory. Tap Allow or Reject. No laptop required.
+
+BLOCK-MODE TERMINAL
+Commands and their output appear as discrete, collapsible blocks — the way a modern terminal should work. Swipe to collapse. Long-press to copy, re-run, or ask AI to explain.
+
+RAW PTY FOR TUI APPS
+vim, htop, tmux — anything that needs a real terminal is one tap away. Conduit switches automatically when it detects a TUI program and switches back when you exit.
+
+AI IN THE COMPOSER
+Type # before any message and Conduit translates natural language into a shell command. When a command fails, long-press the block and tap "Explain with AI" to get a clear, actionable explanation.
+
+SESSION SURVIVAL
+tmux integration means your sessions stay alive when you walk away. Come back hours later, reconnect in seconds, and pick up exactly where you left off — even on a different network.
+
+DEV SERVER PREVIEW
+Port-forward your running app through the SSH connection and browse it in the built-in browser, all without opening a laptop or punching holes in a firewall.
+
+SFTP FILE BROWSER
+Browse, read, and inspect files on your remote server without leaving the app.
+
+PRIVACY BY DESIGN
+Your SSH credentials and API keys never leave your device. All keys are stored in the iOS Keychain. AI requests go directly from your device to your AI provider — Conduit servers never see your prompts.
+
+BRING YOUR OWN EVERYTHING
+Your server. Your API keys. Your agents. Conduit is the control surface, not the cloud.

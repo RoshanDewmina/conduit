@@ -1,0 +1,1 @@
+First release. Connect to remote SSH servers, supervise AI agents, review diffs, and browse files — all from your phone.
