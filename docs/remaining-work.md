@@ -11,7 +11,7 @@ Last updated: 2026-05-25
 - APNs token wiring: `AppDelegate` added to ConduitApp.swift, calls `Notifications.shared.registerDeviceToken()` on launch ✅
 - Team ID 39HM2X8GS6 set in project.yml + xcodeproj ✅
 - APNs entitlement updated to `production` (correct for App Store) ✅
-- 87/87 tests passing, BUILD SUCCEEDED ✅
+- 97/97 tests passing, BUILD SUCCEEDED ✅
 
 ---
 

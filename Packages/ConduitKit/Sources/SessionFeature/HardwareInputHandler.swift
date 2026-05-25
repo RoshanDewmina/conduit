@@ -20,7 +20,7 @@ public enum HardwareInputHandler {
     /// Maps a `UIKey` to the byte sequence that should be written to the PTY.
     /// Returns `nil` when the key press should not be forwarded (e.g. pure
     /// modifier keys, or keys handled entirely at the app / navigation level).
-    public static func bytes(for key: UIKey) -> [UInt8]? {
+    @MainActor public static func bytes(for key: UIKey) -> [UInt8]? {
         let chars = key.charactersIgnoringModifiers
         let mods  = key.modifierFlags
 
@@ -83,7 +83,7 @@ public enum HardwareInputHandler {
     }
 
     /// Arrow key → VT100 / xterm extended sequences.
-    private static func arrowBytes(for key: UIKey) -> [UInt8]? {
+    @MainActor private static func arrowBytes(for key: UIKey) -> [UInt8]? {
         let mods = key.modifierFlags
         let hasOption  = mods.contains(.alternate)
         let hasControl = mods.contains(.control)

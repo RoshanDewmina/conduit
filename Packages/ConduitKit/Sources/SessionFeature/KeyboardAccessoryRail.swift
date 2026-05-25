@@ -228,7 +228,7 @@ public final class RailViewController: UIViewController {
             repeatBytes = bytes
             repeatTimer?.invalidate()
             repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { [weak self] _ in
-                self?.onBytes?(self?.repeatBytes ?? [])
+                MainActor.assumeIsolated { self?.onBytes?(self?.repeatBytes ?? []) }
             }
         case .ended, .cancelled, .failed:
             repeatTimer?.invalidate()
