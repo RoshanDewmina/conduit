@@ -23,6 +23,7 @@
             </array>
         </dict>
     </array>
+    <!-- No data collected: API keys, SSH credentials, and host configs stay on-device -->
     <key>NSPrivacyCollectedDataTypes</key>
     <array/>
     <key>NSPrivacyTracking</key>

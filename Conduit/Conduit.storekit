@@ -1,0 +1,25 @@
+{
+  "identifier" : "dev.conduit.mobile.storekit",
+  "nonConsumableProducts" : [
+    {
+      "displayPrice" : "14.99",
+      "familyShareable" : false,
+      "internalID" : "dev.conduit.mobile.pro",
+      "localizations" : [
+        {
+          "description" : "Full access to all Conduit features: AI agent approval inbox, SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH hosts.",
+          "displayName" : "Conduit Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "dev.conduit.mobile.pro",
+      "referenceName" : "Conduit Pro",
+      "type" : "NonConsumable"
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0,
+    "patch" : 0
+  }
+}

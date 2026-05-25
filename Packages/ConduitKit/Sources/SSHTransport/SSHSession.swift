@@ -204,6 +204,47 @@ public actor SSHSession {
         return (writer, task)
     }
 
+    // MARK: - Exec channel (bidirectional, no PTY — used by conduitd)
+
+    /// Opens a raw exec channel for `command` and returns the stdin writer + the
+    /// background task keeping it alive. Similar to `requestShellChannel` but
+    /// without a PTY allocation, which is correct for daemon stdio protocols.
+    public func requestExecChannel(
+        command: String,
+        dataContinuation: AsyncStream<[UInt8]>.Continuation
+    ) async throws -> (writer: TTYStdinWriter, task: Task<Void, Never>) {
+        guard let client else { throw ConduitError.notConnected }
+
+        let (writerStream, writerCont) = AsyncStream<TTYStdinWriter>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+
+        let task = Task { [client] in
+            do {
+                try await client.withExec(command) { inbound, outbound in
+                    writerCont.yield(outbound)
+                    writerCont.finish()
+                    for try await output in inbound {
+                        if case .stdout(let buf) = output {
+                            let bytes = Array(buf.readableBytesView)
+                            if !bytes.isEmpty { dataContinuation.yield(bytes) }
+                        }
+                    }
+                    dataContinuation.finish()
+                }
+            } catch {
+                writerCont.finish()
+                dataContinuation.finish()
+            }
+        }
+
+        guard let writer = await writerStream.first(where: { _ in true }) else {
+            task.cancel()
+            throw ConduitError.channelClosed
+        }
+        return (writer, task)
+    }
+
     // MARK: - SFTP
 
     /// Opens an SFTP subsystem on the underlying SSH connection, executes `body`,

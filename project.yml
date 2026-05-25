@@ -33,6 +33,22 @@ targets:
       path: Conduit/Info.plist
       properties:
         UILaunchStoryboardName: LaunchScreen
+        NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
+        UIBackgroundModes:
+          - remote-notification
+          - fetch
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    entitlements:
+      path: Conduit/Conduit.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.dev.conduit.mobile
+        com.apple.developer.icloud-containers-environment: Development
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)dev.conduit.mobile
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)dev.conduit.mobile
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile
@@ -40,6 +56,9 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_EMIT_LOC_STRINGS: "YES"
         DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_BITCODE: "NO"
+        CODE_SIGN_STYLE: Automatic
     dependencies:
       - package: ConduitKit
         product: AppFeature

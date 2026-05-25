@@ -6,6 +6,7 @@ import SessionFeature
 import InboxFeature
 import PreviewFeature
 import FilesFeature
+import SSHTransport
 import DiffFeature
 import DiffKit
 
@@ -118,7 +119,7 @@ struct SessionShellView: View {
         case .preview:
             SmartPreviewView(session: viewModel.session)
         case .files:
-            FilesView(viewModel: FilesViewModel(session: viewModel.session))
+            SFTPFilesView(viewModel: SFTPFilesViewModel(sftp: SFTPClient(session: viewModel.session)))
         case .diff:
             diffSurface(for: viewModel)
         case .inbox:

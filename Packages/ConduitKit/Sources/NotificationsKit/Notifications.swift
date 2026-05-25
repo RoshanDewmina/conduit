@@ -75,6 +75,23 @@ public actor Notifications {
         catch { }
     }
 
+    /// Registers the device token with the push backend so remote approvals
+    /// (when the app is killed) reach the device. Call from AppDelegate /
+    /// UIApplicationDelegate after UIApplication.registerForRemoteNotifications().
+    ///
+    /// backendURL: the base URL of your push-backend deployment, e.g.
+    ///   "https://conduit-push.fly.dev"
+    public func registerDeviceToken(_ token: Data, sessionID: String, backendURL: String) async {
+        let hexToken = token.map { String(format: "%02x", $0) }.joined()
+        guard let url = URL(string: "\(backendURL)/register") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["sessionId": sessionID, "deviceToken": hexToken]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
     public func registerCategories() {
         let approve = UNNotificationAction(
             identifier: "approval.approve",

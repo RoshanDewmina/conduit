@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Conduit</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 700px; margin: 60px auto; padding: 0 24px;
+           color: #1a202c; line-height: 1.7; }
+    h1 { font-size: 2rem; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; color: #2d3748; }
+    p, li { color: #4a5568; }
+    time { color: #718096; font-size: 0.9rem; }
+    a { color: #3182ce; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <time>Last updated: May 25, 2026</time>
+
+  <h2>Summary</h2>
+  <p>Conduit collects <strong>no personal data</strong>. Your SSH credentials, API keys, and host configurations stay on your device and are never transmitted to Conduit's servers.</p>
+
+  <h2>What Conduit stores on your device</h2>
+  <ul>
+    <li>SSH host configurations (hostname, port, username)</li>
+    <li>Ed25519 private keys — stored in the iOS Keychain, never exported</li>
+    <li>AI provider API keys (Anthropic, OpenAI) — stored in the iOS Keychain, sent only to the respective AI provider over HTTPS when you use AI features</li>
+    <li>Terminal session history (command blocks) — stored locally in an encrypted SQLite database</li>
+    <li>Snippet library — stored locally</li>
+  </ul>
+
+  <h2>What Conduit transmits</h2>
+  <ul>
+    <li><strong>To your SSH server:</strong> SSH traffic (credentials, commands, output) travels directly from your device to your host server over an encrypted SSH connection. Conduit acts as a client — no traffic passes through Conduit's infrastructure.</li>
+    <li><strong>To AI providers:</strong> When you use "Explain" or NL→command features, the relevant command output is sent to Anthropic or OpenAI using your own API key. Conduit does not proxy or log these requests.</li>
+    <li><strong>To Apple iCloud:</strong> If CloudKit sync is enabled, your host list and snippets are synced via Apple's CloudKit infrastructure under your Apple ID. Conduit does not access your CloudKit data.</li>
+    <li><strong>To Conduit's push backend (optional):</strong> If you enable remote approval alerts, your APNs device token is sent to Conduit's push relay. This token is used only to deliver approval notifications and is not linked to any personal identity.</li>
+  </ul>
+
+  <h2>Analytics and tracking</h2>
+  <p>Conduit does not use any analytics SDKs, tracking pixels, advertising identifiers, or third-party telemetry. The app's <code>PrivacyInfo.xcprivacy</code> declares zero collected data types and disables tracking.</p>
+
+  <h2>Data retention</h2>
+  <p>All data is stored locally on your device. Deleting the app removes all local data. If you used CloudKit sync, data in iCloud can be removed via Settings → Apple ID → iCloud → Manage Storage.</p>
+
+  <h2>Children</h2>
+  <p>Conduit is not directed at children under 13 and does not knowingly collect information from them.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? Email <a href="mailto:privacy@conduit.dev">privacy@conduit.dev</a>.</p>
+</body>
+</html>

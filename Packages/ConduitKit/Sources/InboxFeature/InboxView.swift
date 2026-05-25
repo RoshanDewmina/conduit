@@ -23,12 +23,15 @@ public class InboxViewModel {
 }
 
 public struct InboxView: View {
-    @State private var vm: InboxViewModel
+    // Using a plain var (not @State) so SwiftUI's @Observable machinery tracks
+    // the *current* viewModel instance. @State would pin the initial instance
+    // and ignore subsequent replacements (e.g. when liveInboxVM is set after seeding).
+    private var vm: InboxViewModel
     private let sessionID: SessionID?
     private let title: String
 
     public init(viewModel: InboxViewModel, sessionID: SessionID? = nil, title: String = "Inbox") {
-        _vm = State(initialValue: viewModel)
+        self.vm = viewModel
         self.sessionID = sessionID
         self.title = title
     }

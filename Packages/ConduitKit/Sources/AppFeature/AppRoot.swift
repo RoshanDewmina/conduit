@@ -32,6 +32,7 @@ public final class AppEnvironment {
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
+    public let approvalRepo: ApprovalRepository
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -47,6 +48,7 @@ public final class AppEnvironment {
             hostRepo: HostRepository(database),
             snippetRepo: SnippetRepository(db: database)
         )
+        self.approvalRepo = ApprovalRepository(database)
     }
 
     public func aiClient(provider: AIProvider = .anthropic) async -> (any AIClient)? {
@@ -93,7 +95,7 @@ public struct AppRoot: View {
     @State private var addHostPresented = false
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
-    @State private var inboxVM = InboxViewModel()
+    @State private var inboxVM = InboxViewModel(approvals: AppRoot.sampleApprovals)
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -104,6 +106,7 @@ public struct AppRoot: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
+    @State private var isUnlocked: Bool = false
 
     public enum Tab: Hashable, Sendable {
         case workspaces
@@ -132,6 +135,26 @@ public struct AppRoot: View {
         }
     }
 
+    private static let sampleApprovals: [Approval] = {
+        let session = SessionID()
+        return [
+            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
+                     command: "rm -rf ./dist && npm run build:prod", patch: nil,
+                     cwd: "/home/ubuntu/myapp", risk: .high,
+                     createdAt: Date(timeIntervalSinceNow: -30)),
+            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
+                     command: "git push origin main --force-with-lease", patch: nil,
+                     cwd: "/home/ubuntu/myapp", risk: .medium,
+                     createdAt: Date(timeIntervalSinceNow: -120)),
+            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
+                     command: "systemctl restart app.service", patch: nil,
+                     cwd: "/home/ubuntu/myapp", risk: .low,
+                     createdAt: Date(timeIntervalSinceNow: -300),
+                     decidedAt: Date(timeIntervalSinceNow: -295),
+                     decision: .approved),
+        ]
+    }()
+
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
         case failure(String)
@@ -148,22 +171,39 @@ public struct AppRoot: View {
 
     public var body: some View {
         Group {
-            switch environment {
-            case .failure(let msg):
-                ContentUnavailableView(
-                    "Failed to start",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(msg)
-                )
-            case .ready(let env):
-                readyRoot(env: env)
+            if !isUnlocked {
+                LaunchLockView(onUnlock: { await attemptUnlock() })
+            } else {
+                switch environment {
+                case .failure(let msg):
+                    ContentUnavailableView(
+                        "Failed to start",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(msg)
+                    )
+                case .ready(let env):
+                    readyRoot(env: env)
+                }
             }
         }
-        .task { _ = await Notifications.shared.requestAuthorization() }
+        .task { await attemptUnlock() }
+        .task {
+            await Notifications.shared.registerCategories()
+            _ = await Notifications.shared.requestAuthorization()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
+        }
+    }
+
+    private func attemptUnlock() async {
+        do {
+            try await BiometricGate.shared.unlock(reason: "Authenticate to open Conduit")
+            isUnlocked = true
+        } catch {
+            // User cancelled or biometrics failed — lock screen stays visible.
         }
     }
 
@@ -423,8 +463,27 @@ public struct AppRoot: View {
                 )
             }
             await vm.connect()
+            try? await channel.start()  // launch conduitd serve on remote host
             await ingest.start()
         }
+    }
+}
+
+private struct LaunchLockView: View {
+    let onUnlock: () async -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+            Text("Conduit is locked")
+                .font(.title2.weight(.semibold))
+            Button("Unlock") { Task { await onUnlock() } }
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemBackground))
     }
 }
 
