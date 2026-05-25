@@ -43,7 +43,8 @@
   - `03-inbox-6.9.png` — Inbox with HIGH RISK + medium risk approval cards, Allow/Reject buttons ← hero differentiator
   - `03-provisioning-6.9.png` — Cloud provisioning wizard
   - `04-session-empty-6.9.png` — Session tab (no active session)
-- [ ] Replace `04-session-empty` with a real block-mode session screenshot (requires live SSH connection)
+  - `04-session-live-6.9.png` — Live SSH session to GCP server, block-mode terminal with uptime output ✅
+- [x] Replaced empty-session with live block-mode session screenshot
 - [ ] iPhone 6.5" (1242 × 2688 px) — optional but recommended
 
 ### App Store Connect setup
@@ -59,7 +60,10 @@
 - [x] `docs/website/subscribe.html` — Stripe Checkout page ($9/mo, $79/yr) — deploy to conduit.dev/subscribe
 - [x] `docs/website/privacy.html` — Privacy policy — deploy to conduit.dev/privacy
 - [x] `docs/website/terms.html` — Terms of service — deploy to conduit.dev/terms
-- [ ] **DEPLOY**: upload these HTML files to conduit.dev (e.g. Netlify, Vercel, Cloudflare Pages)
+- [x] **DEPLOYED**: Vercel project `conduit-website` created, all 3 HTML files live
+  - Preview URL: `conduit-website-roshandewminas-projects.vercel.app`
+  - conduit.dev added to project (verified). DNS missing: add A record `conduit.dev → 76.76.21.21` in Route53
+- [ ] **DNS**: In AWS Route53, add A record: `conduit.dev` → `76.76.21.21` (Vercel anycast IP)
 - [ ] Replace `YOUR_STRIPE_LINK` placeholder in subscribe.html with real Stripe payment link
 
 ### APNs remote push (approval alerts when app is killed)
