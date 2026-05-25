@@ -74,8 +74,5 @@ schemes:
         Conduit: all
     run:
       config: Debug
-    test:
-      config: Debug
-      gatherCoverageData: true
     archive:
       config: Release

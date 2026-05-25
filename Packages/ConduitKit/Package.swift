@@ -201,6 +201,7 @@ let package = Package(
                 "PersistenceKit",
                 "SyncKit",
                 "PreviewKit",
+                "SessionFeature",
             ],
             swiftSettings: swiftSettings
         ),

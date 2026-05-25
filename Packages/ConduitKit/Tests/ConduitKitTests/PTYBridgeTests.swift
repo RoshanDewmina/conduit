@@ -28,6 +28,20 @@ struct MockShellHandle: Sendable {
     }
 }
 
+// MARK: - Terminal factory
+
+/// Creates a no-op RawTerminalView suitable for unit tests.
+/// On iOS the UIViewRepresentable version needs explicit streams;
+/// on macOS the stub's no-arg init is used.
+private func makeMockTerminal() -> RawTerminalView {
+#if canImport(UIKit) && canImport(SwiftTerm)
+    let (stream, _) = AsyncStream<[UInt8]>.makeStream()
+    return RawTerminalView(feed: stream, onUserBytes: { _ in }, onResize: { _, _ in })
+#else
+    return RawTerminalView()
+#endif
+}
+
 // MARK: - Tests
 
 @Suite("PTYBridge")
@@ -38,7 +52,7 @@ struct PTYBridgeTests {
     @Test("alt-screen enter sets escalationDetected")
     func escalationOnAltScreen() async throws {
         let mock = MockShellHandle()
-        let terminal = RawTerminalView()
+        let terminal = makeMockTerminal()
         let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
 
         // Start pump in a background task.
@@ -62,7 +76,7 @@ struct PTYBridgeTests {
     @Test("alt-screen exit sets deescalationDetected")
     func deescalationOnAltScreenExit() async throws {
         let mock = MockShellHandle()
-        let terminal = RawTerminalView()
+        let terminal = makeMockTerminal()
         let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
 
         let pumpTask = Task { await bridge.start() }
@@ -84,7 +98,7 @@ struct PTYBridgeTests {
     @Test("unrelated bytes do not trigger escalation flags")
     func noFalsePositives() async throws {
         let mock = MockShellHandle()
-        let terminal = RawTerminalView()
+        let terminal = makeMockTerminal()
         let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
 
         let pumpTask = Task { await bridge.start() }
@@ -108,7 +122,7 @@ struct PTYBridgeTests {
     @Test("escalation sequence detected when embedded in larger chunk")
     func embeddedSequence() async throws {
         let mock = MockShellHandle()
-        let terminal = RawTerminalView()
+        let terminal = makeMockTerminal()
         let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
 
         let pumpTask = Task { await bridge.start() }

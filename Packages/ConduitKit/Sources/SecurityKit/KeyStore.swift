@@ -19,8 +19,8 @@ public actor KeyStore {
 
     public let keychain: Keychain
 
-    public init(service: String = "dev.conduit.mobile.sshkeys") {
-        self.keychain = Keychain(service: service)
+    public init(service: String = "dev.conduit.mobile.sshkeys", inMemory: Bool = false) {
+        self.keychain = Keychain(service: service, inMemory: inMemory)
     }
 
     // MARK: - Ed25519

@@ -6,9 +6,10 @@ import ConduitCore
 @Suite("HostKeyStore TOFU logic")
 struct HostKeyStoreTests {
 
-    // Use a unique Keychain service per test run to avoid cross-test pollution.
+    // Use a unique in-memory store per test run to avoid cross-test pollution
+    // and to work around keychain entitlement restrictions in standalone test bundles.
     private func freshStore() -> HostKeyStore {
-        HostKeyStore(service: "dev.conduit.test.hostkeys.\(UUID().uuidString)")
+        HostKeyStore(service: "dev.conduit.test.hostkeys.\(UUID().uuidString)", inMemory: true)
     }
 
     @Test("First connect returns unknown with the presented fingerprint")

@@ -15,8 +15,7 @@ struct CredentialResolverTests {
 
     @Test("Password auth method returns password credential immediately")
     func passwordPath() async throws {
-        let keyStore = KeyStore(service: "dev.conduit.test.keys.\(UUID().uuidString)")
-
+        let keyStore = KeyStore(service: "dev.conduit.test.keys.\(UUID().uuidString)", inMemory: true)
         let credential = try await CredentialResolver.resolve(
             authMethod: .password,
             passwordProvider: { "s3cr3t" },
@@ -32,7 +31,7 @@ struct CredentialResolverTests {
 
     @Test("Agent auth method throws unsupportedPlatform")
     func agentThrows() async throws {
-        let keyStore = KeyStore(service: "dev.conduit.test.keys.\(UUID().uuidString)")
+        let keyStore = KeyStore(service: "dev.conduit.test.keys.\(UUID().uuidString)", inMemory: true)
 
         await #expect(throws: ConduitError.unsupportedPlatform) {
             try await CredentialResolver.resolve(
@@ -46,7 +45,7 @@ struct CredentialResolverTests {
     @Test("Ed25519 path unlocks biometrics and loads key from store")
     func ed25519Path() async throws {
         let service = "dev.conduit.test.keys.\(UUID().uuidString)"
-        let keyStore = KeyStore(service: service)
+        let keyStore = KeyStore(service: service, inMemory: true)
         let privateKey = Curve25519.Signing.PrivateKey()
         let keyID = KeyID()
         _ = try await keyStore.importEd25519(tag: keyID.uuidString, rawPrivate: privateKey.rawRepresentation)

@@ -14,8 +14,8 @@ public actor HostKeyStore {
 
     private let keychain: Keychain
 
-    public init(service: String = "dev.conduit.mobile.hostkeys") {
-        self.keychain = Keychain(service: service)
+    public init(service: String = "dev.conduit.mobile.hostkeys", inMemory: Bool = false) {
+        self.keychain = Keychain(service: service, inMemory: inMemory)
     }
 
     public func recorded(for hostID: HostID) async -> String? {
