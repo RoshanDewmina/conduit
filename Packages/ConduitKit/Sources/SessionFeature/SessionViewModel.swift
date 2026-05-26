@@ -63,6 +63,9 @@ public final class SessionViewModel {
     /// Reconnection engine that monitors network state.
     private var reconnectEngine: AutoReconnectEngine?
 
+    /// Background task that sends a no-op SSH command at the keep-alive interval.
+    private var keepAliveTask: Task<Void, Never>?
+
     /// Called when the app scene becomes active after backgrounding.
     /// Triggers reconnection if the SSH session was lost.
     public func handleSceneActive() async {
@@ -130,6 +133,7 @@ public final class SessionViewModel {
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
             status = .connected
             applyScreenSleepPolicy(connected: true)
+            startKeepAlive()
             // If host has a tmux session configured, attach or create it.
             if let name = host.tmuxSessionName, !name.isEmpty {
                 tmuxSessionName = name
@@ -165,10 +169,29 @@ public final class SessionViewModel {
     }
 
     public func disconnect() async {
+        stopKeepAlive()
         await deescalate()
         await sshSession.disconnect()
         status = .disconnected
         applyScreenSleepPolicy(connected: false)
+    }
+
+    private func startKeepAlive() {
+        let interval = UserDefaults.standard.integer(forKey: "terminalKeepAlive")
+        guard interval > 0 else { return }
+        keepAliveTask?.cancel()
+        keepAliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self else { break }
+                _ = try? await self.sshSession.executeCollected(":")
+            }
+        }
+    }
+
+    private func stopKeepAlive() {
+        keepAliveTask?.cancel()
+        keepAliveTask = nil
     }
 
     private func applyScreenSleepPolicy(connected: Bool) {
