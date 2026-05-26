@@ -16,7 +16,7 @@ public actor SSHSession {
     public private(set) var isConnected: Bool = false
     public private(set) var lastError: ConduitError?
 
-    private var client: Citadel.SSHClient?
+    var client: Citadel.SSHClient?
 
     /// The most-recently-used credential, cached for automatic reconnection.
     /// Set on every successful `connect(credential:hostKeyStore:)` call.

@@ -14,6 +14,7 @@ public struct SessionView: View {
     @State private var showingSnippetPalette = false
     @State private var availableSnippets: [Snippet] = []
     @State private var rawCtrlLatched = false
+    @State private var showingPortForward = false
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -53,6 +54,21 @@ public struct SessionView: View {
                     }
                 }
             }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    showingPortForward = true
+                } label: {
+                    Label("Port Forwarding", systemImage: "arrow.left.arrow.right")
+                }
+                .disabled(vm.status != .connected)
+            }
+        }
+        .sheet(isPresented: $showingPortForward) {
+            PortForwardView(viewModel: PortForwardViewModel(
+                session: vm.session,
+                hostID: vm.host.id
+            ))
+            .presentationDetents([.medium, .large])
         }
         .task {
             if let db = try? AppDatabase.openShared(),
