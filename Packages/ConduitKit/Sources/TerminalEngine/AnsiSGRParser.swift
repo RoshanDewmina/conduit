@@ -138,28 +138,8 @@ public struct SGRState: Sendable, Equatable {
     }
 
     private static func ansi16(_ index: Int, bright: Bool) -> Color {
-        // Dark-themed default palette tuned for terminal readability.
-        let normal: [Color] = [
-            Color(red: 0.110, green: 0.110, blue: 0.129),     // black
-            Color(red: 1.000, green: 0.302, blue: 0.427),     // red
-            Color(red: 0.239, green: 0.839, blue: 0.549),     // green
-            Color(red: 0.961, green: 0.651, blue: 0.137),     // yellow
-            Color(red: 0.302, green: 0.686, blue: 1.000),     // blue
-            Color(red: 0.608, green: 0.365, blue: 0.898),     // magenta
-            Color(red: 0.000, green: 0.961, blue: 0.831),     // cyan
-            Color(red: 0.941, green: 0.941, blue: 0.961),     // white
-        ]
-        let brightP: [Color] = [
-            .gray,
-            Color(red: 1.000, green: 0.522, blue: 0.580),
-            Color(red: 0.408, green: 0.918, blue: 0.659),
-            Color(red: 1.000, green: 0.804, blue: 0.341),
-            Color(red: 0.541, green: 0.808, blue: 1.000),
-            Color(red: 0.776, green: 0.578, blue: 0.965),
-            Color(red: 0.341, green: 1.000, blue: 0.957),
-            .white,
-        ]
-        let table = bright ? brightP : normal
+        let theme = TerminalTheme.current
+        let table = bright ? theme.ansiBright : theme.ansiNormal
         return table[max(0, min(index, table.count - 1))]
     }
 
@@ -179,6 +159,131 @@ public struct SGRState: Sendable, Equatable {
         default: return .white
         }
     }
+}
+
+// MARK: - Terminal theme
+
+/// A named 16-color ANSI palette for block-mode rendering.
+public struct TerminalTheme: Sendable {
+    public let name: String
+    public let background: Color
+    public let foreground: Color
+    public let ansiNormal: [Color]   // indices 0-7
+    public let ansiBright: [Color]   // indices 8-15 (bold / bright)
+
+    /// Currently selected theme, read from UserDefaults.
+    public static var current: TerminalTheme {
+        let name = UserDefaults.standard.string(forKey: "terminalTheme") ?? "Dark"
+        return all.first { $0.name == name } ?? .dark
+    }
+
+    public static let all: [TerminalTheme] = [.dark, .light, .solarizedDark, .dracula]
+
+    // MARK: Presets
+
+    public static let dark = TerminalTheme(
+        name: "Dark",
+        background: Color(red: 0.071, green: 0.071, blue: 0.090),
+        foreground: Color(red: 0.941, green: 0.941, blue: 0.961),
+        ansiNormal: [
+            Color(red: 0.110, green: 0.110, blue: 0.129),
+            Color(red: 1.000, green: 0.302, blue: 0.427),
+            Color(red: 0.239, green: 0.839, blue: 0.549),
+            Color(red: 0.961, green: 0.651, blue: 0.137),
+            Color(red: 0.302, green: 0.686, blue: 1.000),
+            Color(red: 0.608, green: 0.365, blue: 0.898),
+            Color(red: 0.000, green: 0.961, blue: 0.831),
+            Color(red: 0.941, green: 0.941, blue: 0.961),
+        ],
+        ansiBright: [
+            .gray,
+            Color(red: 1.000, green: 0.522, blue: 0.580),
+            Color(red: 0.408, green: 0.918, blue: 0.659),
+            Color(red: 1.000, green: 0.804, blue: 0.341),
+            Color(red: 0.541, green: 0.808, blue: 1.000),
+            Color(red: 0.776, green: 0.578, blue: 0.965),
+            Color(red: 0.341, green: 1.000, blue: 0.957),
+            .white,
+        ]
+    )
+
+    public static let light = TerminalTheme(
+        name: "Light",
+        background: Color(red: 0.980, green: 0.980, blue: 0.980),
+        foreground: Color(red: 0.133, green: 0.133, blue: 0.133),
+        ansiNormal: [
+            Color(red: 0.200, green: 0.200, blue: 0.200),
+            Color(red: 0.820, green: 0.098, blue: 0.216),
+            Color(red: 0.110, green: 0.620, blue: 0.282),
+            Color(red: 0.690, green: 0.490, blue: 0.000),
+            Color(red: 0.149, green: 0.420, blue: 0.827),
+            Color(red: 0.580, green: 0.200, blue: 0.710),
+            Color(red: 0.000, green: 0.565, blue: 0.565),
+            Color(red: 0.800, green: 0.800, blue: 0.800),
+        ],
+        ansiBright: [
+            Color(red: 0.400, green: 0.400, blue: 0.400),
+            Color(red: 0.937, green: 0.227, blue: 0.255),
+            Color(red: 0.200, green: 0.780, blue: 0.349),
+            Color(red: 0.851, green: 0.620, blue: 0.000),
+            Color(red: 0.290, green: 0.565, blue: 0.886),
+            Color(red: 0.773, green: 0.357, blue: 0.929),
+            Color(red: 0.098, green: 0.729, blue: 0.729),
+            Color(red: 0.133, green: 0.133, blue: 0.133),
+        ]
+    )
+
+    public static let solarizedDark = TerminalTheme(
+        name: "Solarized Dark",
+        background: Color(red: 0.000, green: 0.169, blue: 0.212),
+        foreground: Color(red: 0.514, green: 0.580, blue: 0.588),
+        ansiNormal: [
+            Color(red: 0.027, green: 0.212, blue: 0.259),
+            Color(red: 0.863, green: 0.196, blue: 0.184),
+            Color(red: 0.522, green: 0.600, blue: 0.000),
+            Color(red: 0.710, green: 0.537, blue: 0.000),
+            Color(red: 0.149, green: 0.545, blue: 0.824),
+            Color(red: 0.424, green: 0.443, blue: 0.769),
+            Color(red: 0.165, green: 0.631, blue: 0.596),
+            Color(red: 0.933, green: 0.910, blue: 0.835),
+        ],
+        ansiBright: [
+            Color(red: 0.000, green: 0.169, blue: 0.212),
+            Color(red: 0.796, green: 0.294, blue: 0.086),
+            Color(red: 0.345, green: 0.431, blue: 0.459),
+            Color(red: 0.396, green: 0.482, blue: 0.514),
+            Color(red: 0.514, green: 0.580, blue: 0.588),
+            Color(red: 0.576, green: 0.631, blue: 0.631),
+            Color(red: 0.933, green: 0.910, blue: 0.835),
+            Color(red: 0.992, green: 0.965, blue: 0.890),
+        ]
+    )
+
+    public static let dracula = TerminalTheme(
+        name: "Dracula",
+        background: Color(red: 0.157, green: 0.165, blue: 0.212),
+        foreground: Color(red: 0.973, green: 0.973, blue: 0.949),
+        ansiNormal: [
+            Color(red: 0.298, green: 0.306, blue: 0.424),
+            Color(red: 1.000, green: 0.333, blue: 0.333),
+            Color(red: 0.314, green: 0.980, blue: 0.482),
+            Color(red: 0.949, green: 0.980, blue: 0.404),
+            Color(red: 0.741, green: 0.576, blue: 0.976),
+            Color(red: 1.000, green: 0.475, blue: 0.776),
+            Color(red: 0.545, green: 0.914, blue: 0.992),
+            Color(red: 0.973, green: 0.973, blue: 0.949),
+        ],
+        ansiBright: [
+            Color(red: 0.420, green: 0.443, blue: 0.592),
+            Color(red: 1.000, green: 0.573, blue: 0.573),
+            Color(red: 0.573, green: 0.988, blue: 0.639),
+            Color(red: 0.988, green: 1.000, blue: 0.651),
+            Color(red: 0.843, green: 0.722, blue: 0.988),
+            Color(red: 1.000, green: 0.647, blue: 0.843),
+            Color(red: 0.722, green: 0.953, blue: 0.996),
+            .white,
+        ]
+    )
 }
 
 // MARK: - TUI heuristic

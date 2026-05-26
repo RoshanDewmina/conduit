@@ -58,6 +58,7 @@ public struct RawTerminalView: UIViewRepresentable {
         // Gesture cursor drag state
         var cursorDragAccumX: CGFloat = 0
         var cursorDragAccumY: CGFloat = 0
+        var cursorDragLastLocation: CGPoint = .zero
         var isCursorDragging = false
         var cursorDragOnBytes: (([UInt8]) -> Void)?
 
@@ -101,14 +102,14 @@ public struct RawTerminalView: UIViewRepresentable {
                 isCursorDragging = true
                 cursorDragAccumX = 0
                 cursorDragAccumY = 0
+                cursorDragLastLocation = gr.location(in: gr.view)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             case .changed:
                 guard isCursorDragging else { return }
                 let loc = gr.location(in: gr.view)
-                let prev = gr.location(ofTouch: 0, in: gr.view)
-                // Approximate delta: location changes as finger moves
-                let deltaX = loc.x - prev.x
-                let deltaY = loc.y - prev.y
+                let deltaX = loc.x - cursorDragLastLocation.x
+                let deltaY = loc.y - cursorDragLastLocation.y
+                cursorDragLastLocation = loc
                 cursorDragAccumX += deltaX
                 cursorDragAccumY += deltaY
                 let threshold: CGFloat = 10
@@ -214,6 +215,9 @@ public struct RawTerminalView: UIViewRepresentable {
         term.smartInsertDeleteType = .no
         let fontSize = CGFloat(UserDefaults.standard.double(forKey: "terminalFontSize").nonZeroOr(13))
         term.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let theme = TerminalTheme.current
+        term.nativeBackgroundColor = UIColor(theme.background)
+        term.nativeForegroundColor = UIColor(theme.foreground)
         context.coordinator.view = term
         context.coordinator.baseFontSize = fontSize
 
