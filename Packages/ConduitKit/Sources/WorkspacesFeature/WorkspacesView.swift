@@ -9,6 +9,7 @@ import DesignSystem
 @MainActor @Observable
 public final class WorkspacesViewModel {
     public private(set) var hosts: [Host] = []
+    public private(set) var connectedHostIDs: Set<HostID> = []
     public var loadError: String?
 
     private let repo: HostRepository
@@ -20,6 +21,7 @@ public final class WorkspacesViewModel {
     public func load() async {
         do { hosts = try await repo.all() }
         catch { loadError = error.localizedDescription }
+        connectedHostIDs = await SessionPool.shared.connectedHostIDs()
     }
 
     public func remove(_ host: Host) async {
@@ -114,7 +116,7 @@ public struct WorkspacesView: View {
             } else {
                 ForEach(filteredHosts) { host in
                     Button { onSelect(host) } label: {
-                        HostRow(host: host)
+                        HostRow(host: host, isConnected: vm.connectedHostIDs.contains(host.id))
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
@@ -185,6 +187,7 @@ private func parseSSHCommand(_ text: String) -> Host? {
 
 private struct HostRow: View {
     let host: Host
+    var isConnected: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -197,10 +200,18 @@ private struct HostRow: View {
 
     private var standardLayout: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "terminal")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "terminal")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                if isConnected {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                        .offset(x: 2, y: 2)
+                }
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(host.name)
                     .font(.body.weight(.medium))

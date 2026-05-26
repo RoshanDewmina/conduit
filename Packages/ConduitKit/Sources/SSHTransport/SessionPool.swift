@@ -36,4 +36,13 @@ public actor SessionPool {
     }
 
     public var activeCount: Int { sessions.count }
+
+    /// Returns the set of host IDs whose sessions are currently connected.
+    public func connectedHostIDs() async -> Set<HostID> {
+        var result = Set<HostID>()
+        for (id, session) in sessions {
+            if await session.isConnected { result.insert(id) }
+        }
+        return result
+    }
 }
