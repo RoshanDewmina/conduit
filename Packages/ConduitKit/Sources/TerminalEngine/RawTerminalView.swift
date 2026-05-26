@@ -44,10 +44,22 @@ public final class TerminalFeedHandle: @unchecked Sendable {
 ///
 /// User input flows back out via `onUserBytes`.
 public struct RawTerminalView: UIViewRepresentable {
-    public final class Coordinator: NSObject, TerminalViewDelegate {
+    public final class Coordinator: NSObject, @preconcurrency TerminalViewDelegate, UIGestureRecognizerDelegate {
         public var onUserBytes: (ArraySlice<UInt8>) -> Void
         public var onResize: (Int, Int) -> Void
         public weak var view: TerminalView?
+
+        // Pinch-to-zoom state
+        var baseFontSize: CGFloat = {
+            let stored = UserDefaults.standard.double(forKey: "terminalFontSize")
+            return CGFloat(stored > 0 ? stored : 13)
+        }()
+
+        // Gesture cursor drag state
+        var cursorDragAccumX: CGFloat = 0
+        var cursorDragAccumY: CGFloat = 0
+        var isCursorDragging = false
+        var cursorDragOnBytes: (([UInt8]) -> Void)?
 
         public init(
             onUserBytes: @escaping (ArraySlice<UInt8>) -> Void,
@@ -60,6 +72,80 @@ public struct RawTerminalView: UIViewRepresentable {
         public func send(source: TerminalView, data: ArraySlice<UInt8>) {
             onUserBytes(data)
         }
+
+        // MARK: - Pinch to zoom
+
+        @objc func handlePinch(_ gr: UIPinchGestureRecognizer) {
+            guard let term = view else { return }
+            switch gr.state {
+            case .changed:
+                let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
+                term.font = UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+            case .ended:
+                let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
+                baseFontSize = newSize
+                UserDefaults.standard.set(Double(newSize), forKey: "terminalFontSize")
+                term.font = UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+            case .cancelled, .failed:
+                term.font = UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
+            default:
+                break
+            }
+        }
+
+        // MARK: - Gesture cursor movement (long-press + drag)
+
+        @objc func handleCursorLongPress(_ gr: UILongPressGestureRecognizer) {
+            switch gr.state {
+            case .began:
+                isCursorDragging = true
+                cursorDragAccumX = 0
+                cursorDragAccumY = 0
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            case .changed:
+                guard isCursorDragging else { return }
+                let loc = gr.location(in: gr.view)
+                let prev = gr.location(ofTouch: 0, in: gr.view)
+                // Approximate delta: location changes as finger moves
+                let deltaX = loc.x - prev.x
+                let deltaY = loc.y - prev.y
+                cursorDragAccumX += deltaX
+                cursorDragAccumY += deltaY
+                let threshold: CGFloat = 10
+                while cursorDragAccumX > threshold {
+                    sendArrowKey([0x1b, 0x5b, 0x43]) // right
+                    cursorDragAccumX -= threshold
+                }
+                while cursorDragAccumX < -threshold {
+                    sendArrowKey([0x1b, 0x5b, 0x44]) // left
+                    cursorDragAccumX += threshold
+                }
+                while cursorDragAccumY < -threshold {
+                    sendArrowKey([0x1b, 0x5b, 0x41]) // up
+                    cursorDragAccumY += threshold
+                }
+                while cursorDragAccumY > threshold {
+                    sendArrowKey([0x1b, 0x5b, 0x42]) // down
+                    cursorDragAccumY -= threshold
+                }
+            case .ended, .cancelled, .failed:
+                isCursorDragging = false
+            default:
+                break
+            }
+        }
+
+        private func sendArrowKey(_ bytes: [UInt8]) {
+            cursorDragOnBytes?(bytes)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        // MARK: - UIGestureRecognizerDelegate
+
+        public func gestureRecognizer(
+            _ gr: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+        ) -> Bool { true }
 
         public func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
             guard newCols > 0, newRows > 0 else { return }
@@ -113,7 +199,9 @@ public struct RawTerminalView: UIViewRepresentable {
     }
 
     public func makeCoordinator() -> Coordinator {
-        Coordinator(onUserBytes: onUserBytes, onResize: onResize)
+        let c = Coordinator(onUserBytes: onUserBytes, onResize: onResize)
+        c.cursorDragOnBytes = { bytes in self.onUserBytes(bytes[...]) }
+        return c
     }
 
     public func makeUIView(context: Context) -> TerminalView {
@@ -124,8 +212,23 @@ public struct RawTerminalView: UIViewRepresentable {
         term.smartDashesType = .no
         term.smartQuotesType = .no
         term.smartInsertDeleteType = .no
-        term.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let fontSize = CGFloat(UserDefaults.standard.double(forKey: "terminalFontSize").nonZeroOr(13))
+        term.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         context.coordinator.view = term
+        context.coordinator.baseFontSize = fontSize
+
+        // Pinch to zoom
+        let pinch = UIPinchGestureRecognizer(target: context.coordinator,
+                                             action: #selector(Coordinator.handlePinch(_:)))
+        pinch.delegate = context.coordinator
+        term.addGestureRecognizer(pinch)
+
+        // Long-press + drag for cursor movement (hold to activate, then drag)
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator,
+                                                     action: #selector(Coordinator.handleCursorLongPress(_:)))
+        longPress.minimumPressDuration = 0.35
+        longPress.delegate = context.coordinator
+        term.addGestureRecognizer(longPress)
 
         // Pump PTY bytes into the terminal view from a background task.
         let stream = feed
@@ -152,6 +255,18 @@ public struct RawTerminalView: UIViewRepresentable {
     @MainActor
     public func feed(_ bytes: [UInt8]) {
         feedHandle?.yield(bytes)
+    }
+}
+
+// MARK: - Helpers
+
+private extension Double {
+    func nonZeroOr(_ fallback: Double) -> Double { self > 0 ? self : fallback }
+}
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
 

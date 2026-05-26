@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const stripeAPIVersion = "2026-02-25.clover"
+const stripeAPIVersion = "2026-04-22.dahlia"
 
 var billingEntitlements = struct {
 	sync.RWMutex

@@ -35,6 +35,7 @@ public final class WorkspacesViewModel {
 
 public struct WorkspacesView: View {
     @State private var vm: WorkspacesViewModel
+    @State private var searchText = ""
     public var onSelect: (Host) -> Void
     public var onEdit: (Host) -> Void
     public var onAddHost: () -> Void
@@ -51,17 +52,67 @@ public struct WorkspacesView: View {
         self.onAddHost = onAddHost
     }
 
+    // MARK: - Filtered list
+
+    private var filteredHosts: [Host] {
+        guard !searchText.isEmpty else { return vm.hosts }
+        let q = searchText.lowercased()
+        return vm.hosts.filter {
+            $0.name.lowercased().contains(q) ||
+            $0.hostname.lowercased().contains(q) ||
+            $0.username.lowercased().contains(q)
+        }
+    }
+
+    /// Parse `ssh user@host` or `ssh user@host -p port` from search text.
+    private var quickConnectHost: Host? {
+        parseSSHCommand(searchText)
+    }
+
     public var body: some View {
         List {
-            if vm.hosts.isEmpty {
+            // Quick-connect row when search matches ssh syntax
+            if let qc = quickConnectHost {
+                Section {
+                    Button {
+                        onSelect(qc)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bolt.fill")
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Connect to \(qc.username)@\(qc.hostname)")
+                                    .font(.body.weight(.medium))
+                                Text("Port \(qc.port) · one-time")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.right.circle.fill")
+                                .foregroundStyle(.blue)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("Quick Connect")
+                }
+            }
+
+            // Saved hosts
+            if filteredHosts.isEmpty && searchText.isEmpty {
                 ContentUnavailableView(
                     "No hosts yet",
                     systemImage: "server.rack",
                     description: Text("Add your first remote host to begin.")
                 )
                 .listRowBackground(Color.clear)
+            } else if filteredHosts.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+                    .listRowBackground(Color.clear)
             } else {
-                ForEach(vm.hosts) { host in
+                ForEach(filteredHosts) { host in
                     Button { onSelect(host) } label: {
                         HostRow(host: host)
                     }
@@ -81,6 +132,7 @@ public struct WorkspacesView: View {
                 }
             }
         }
+        .searchable(text: $searchText, prompt: "Search or \"ssh user@host -p port\"")
         .navigationTitle("Workspaces")
         .contentMargins(.bottom, 72, for: .scrollContent)
         .safeAreaInset(edge: .bottom) {
@@ -101,6 +153,34 @@ public struct WorkspacesView: View {
             Text(vm.loadError ?? "")
         })
     }
+}
+
+// MARK: - SSH quick-connect parser
+
+private func parseSSHCommand(_ text: String) -> Host? {
+    // Matches: ssh user@host, ssh user@host -p 2222, user@host
+    let pattern = #"^(?:ssh\s+)?([a-zA-Z0-9_.-]+)@([\w.-]+)(?:\s+-p\s*(\d+))?$"#
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+    let t = text.trimmingCharacters(in: .whitespaces)
+    guard let match = regex.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) else { return nil }
+
+    func group(_ i: Int) -> String? {
+        guard let r = Range(match.range(at: i), in: t) else { return nil }
+        return String(t[r])
+    }
+
+    guard let user = group(1), let host = group(2) else { return nil }
+    let port = group(3).flatMap(Int.init) ?? 22
+    return Host(
+        id: HostID(),
+        name: "\(user)@\(host)",
+        hostname: host,
+        port: port,
+        username: user,
+        authMethod: .password,
+        tmuxSessionName: nil,
+        lastConnectedAt: nil
+    )
 }
 
 private struct HostRow: View {

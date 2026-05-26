@@ -2,6 +2,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 import ConduitCore
 import TerminalEngine
 import SSHTransport
@@ -128,6 +129,7 @@ public final class SessionViewModel {
             let cred = try await credentialProvider()
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
             status = .connected
+            applyScreenSleepPolicy(connected: true)
             // If host has a tmux session configured, attach or create it.
             if let name = host.tmuxSessionName, !name.isEmpty {
                 tmuxSessionName = name
@@ -166,6 +168,14 @@ public final class SessionViewModel {
         await deescalate()
         await sshSession.disconnect()
         status = .disconnected
+        applyScreenSleepPolicy(connected: false)
+    }
+
+    private func applyScreenSleepPolicy(connected: Bool) {
+        let prevent = UserDefaults.standard.object(forKey: "terminalPreventSleep") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "terminalPreventSleep")
+        UIApplication.shared.isIdleTimerDisabled = connected && prevent
     }
 
     // MARK: - M2: Raw PTY escalation / de-escalation

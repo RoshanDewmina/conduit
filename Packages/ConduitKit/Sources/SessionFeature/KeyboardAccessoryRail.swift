@@ -277,6 +277,11 @@ public final class RailViewController: UIViewController {
     // MARK: - Byte delivery
 
     private func deliver(_ bytes: [UInt8], from sender: UIButton) {
+        if UserDefaults.standard.object(forKey: "terminalHapticFeedback") == nil ||
+           UserDefaults.standard.bool(forKey: "terminalHapticFeedback") {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
         if ctrlHeld {
             // Map first byte to Ctrl equivalent if it's a printable ASCII letter.
             if let first = bytes.first, first >= 0x61 && first <= 0x7a {

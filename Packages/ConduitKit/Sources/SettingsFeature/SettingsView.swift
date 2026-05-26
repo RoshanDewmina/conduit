@@ -123,6 +123,12 @@ public struct SettingsView: View {
                 Button("Save") { Task { await vm.save() } }
             }
 
+            Section("Terminal") {
+                NavigationLink("Terminal Settings") {
+                    TerminalSettingsView()
+                }
+            }
+
             Section("Providers") {
                 NavigationLink("Billing & Usage") {
                     BillingView()
