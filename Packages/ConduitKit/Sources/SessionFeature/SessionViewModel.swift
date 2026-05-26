@@ -254,6 +254,10 @@ public final class SessionViewModel {
         inputText = block.command
     }
 
+    public func runCommand(_ command: String) async {
+        await run(command: command)
+    }
+
     private func run(command: String) async {
         commandHistory.append(command)
         let prompt = Block.PromptInfo(cwd: cwd, hostName: host.name)

@@ -453,14 +453,21 @@ public struct AppRoot: View {
                 }
             )
             await MainActor.run {
+                self.watchConnector.onEmergencyStop = { [weak vm] in
+                    await vm?.disconnect()
+                }
+                self.watchConnector.onRunSnippet = { [weak vm] body in
+                    await vm?.runCommand(body)
+                }
                 self.watchConnector.startSyncing(
-                    repository: approvalRepo,
-                    onDecision: { [weak liveVM] id, decision in
-                        await liveVM?.decide(id, decision: decision)
+                    approvalRepo: approvalRepo,
+                    blockRepo: env.blockRepo,
+                    snippetRepo: env.snippetRepo,
+                    sessionViewModel: vm,
+                    onDecision: { [channel] id, decision in
+                        try? await channel.respond(approvalId: id.uuidString, decision: decision)
                     }
                 )
-            }
-            await MainActor.run {
                 self.sessionViewModel = vm
                 self.approvalRepository = approvalRepo
                 self.daemonChannel = channel

@@ -2,26 +2,24 @@ import SwiftUI
 import ConduitCore
 
 struct InboxListView: View {
-    @Environment(WatchInboxViewModel.self) private var vm
+    @Environment(WatchStore.self) private var store
 
     var body: some View {
-        NavigationStack {
-            List {
-                if vm.approvals.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(vm.approvals) { item in
-                        NavigationLink(value: item) {
-                            ApprovalRowView(item: item)
-                        }
+        List {
+            if store.approvals.isEmpty {
+                emptyState
+            } else {
+                ForEach(store.approvals) { item in
+                    NavigationLink(value: item) {
+                        ApprovalRowView(item: item)
                     }
                 }
             }
-            .listStyle(.carousel)
-            .navigationTitle("Inbox")
-            .navigationDestination(for: WatchApprovalTransfer.self) { item in
-                ApprovalDetailView(item: item)
-            }
+        }
+        .listStyle(.carousel)
+        .navigationTitle("Inbox")
+        .navigationDestination(for: WatchApprovalTransfer.self) { item in
+            ApprovalDetailView(item: item)
         }
     }
 

@@ -40,6 +40,10 @@ targets:
           - fetch
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.conduit.mobile
+            CFBundleURLSchemes:
+              - conduit
     entitlements:
       path: Conduit/Conduit.entitlements
       properties:
@@ -84,6 +88,9 @@ targets:
         WKCompanionAppBundleIdentifier: dev.conduit.mobile
     entitlements:
       path: ConduitWatch/ConduitWatch.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.conduit.mobile
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchkitapp
@@ -105,6 +112,42 @@ targets:
     dependencies:
       - package: ConduitKit
         product: ConduitCore
+      - target: ConduitWatchWidget
+        embed: true
+
+  ConduitWatchWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: ConduitWatchWidget
+    info:
+      path: ConduitWatchWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: ConduitWatchWidget/ConduitWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.conduit.mobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchkitapp.widget
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        WATCHOS_DEPLOYMENT_TARGET: "26.0"
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
 
 schemes:
   Conduit:
@@ -122,6 +165,7 @@ schemes:
     build:
       targets:
         ConduitWatch: all
+        ConduitWatchWidget: all
     run:
       config: Debug
     archive:

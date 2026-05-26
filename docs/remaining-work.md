@@ -1,6 +1,6 @@
 # Conduit — Remaining Work Before Production
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## What's confirmed done (code complete, tested)
 
@@ -26,6 +26,15 @@ Last updated: 2026-05-25
 - DaemonChannel (conduitd JSON-RPC over SSH) wired ✅
 - ApprovalIngest (ingest daemon events into ApprovalRepository) wired ✅
 - LiveInboxViewModel with real Allow/Reject → conduitd response ✅
+- Codex hook: `docs/codex-conduit-hook.sh` + `docs/codex-hooks.json` ✅
+- conduitd `agent-hook` command with risk mapping, patch support, auto-approve fallback ✅
+
+### Watch app
+- Multi-tab Watch app (Inbox, Activity, Session, Snippets) ✅
+- WatchConnector phone↔watch communication ✅
+- WatchApprovalTransfer (approval sync to Watch) ✅
+- ConduitWatchWidget (inbox count widget) ✅
+- App group entitlement (`group.dev.conduit.mobile`) ✅
 
 ### Session surfaces
 - SFTP file browser (SFTPFilesView / SFTPFilesViewModel / SFTPClient) ✅
@@ -36,18 +45,25 @@ Last updated: 2026-05-25
 
 ### Payment + App Store prep
 - StoreKit 2 one-time purchase (PurchaseManager + BillingView) ✅
-- External link to conduit.dev/subscribe (Stripe) ✅
+- External link to conduit.dev/subscribe (Stripe) — US storefront only (BillingEligibility) ✅
 - Privacy manifest (Conduit/PrivacyInfo.xcprivacy) ✅ — declares optional APNs device identifier, no tracking
 - App Store metadata (fastlane/metadata/en-US/) ✅
 - Screenshots (docs/screenshots/, 6 images at 1320×2868) ✅
 - Fastlane automation (fastlane/Fastfile) ✅
 - APNs entitlement updated to `production` ✅
+- `conduit://` URL scheme registered in Info.plist + project.yml ✅
+- Stripe billing backend: checkout, portal, subscription-status, webhook, return endpoints ✅
+- `daemon/push-backend/.env.example` documenting all required env vars ✅
 
 ### Quality
-- 97/97 tests passing ✅
+- 89/89 tests passing ✅
 - Zero Swift 6 concurrency warnings ✅
-- BUILD SUCCEEDED ✅
-- Verified against real GCP server (35.201.3.231) ✅
+- BUILD SUCCEEDED (full scheme: iOS + watchOS + widget, simulator iOS 26.4.1) ✅
+- App launches on iPhone 17 Pro simulator ✅
+- Dark mode: no crashes ✅
+- `conduit://billing/complete` deep link fires URL handler ✅
+- conduitd v0.1.0 installed on GCP (35.201.3.231), hook wired ✅
+- conduitd auto-approve fallback verified (exits 0 when socket absent) ✅
 - conduit.dev website deployed to Vercel ✅
 
 ---
@@ -117,12 +133,30 @@ Alternatively via Xcode:
 
 ## Non-blocking (do after TestFlight)
 
+### Codex approval loop: interactive hook trust (requires iPhone connected)
+
+The mechanical setup is complete (hook installed on server, auto-approve fallback verified).
+The interactive trust step must be done manually:
+
+1. SSH to `35.201.3.231`
+2. Run `codex`, then `/hooks` → trust `~/.codex/hooks/conduit-hook.sh`
+3. Open Conduit iOS → connect to `35.201.3.231` → stay on Inbox tab
+4. Give Codex a file-write task: `create /tmp/conduit-test.txt with "hello"`
+5. **Reject once** → verify `/tmp/conduit-test.txt` not created
+6. **Allow once** → verify `/tmp/conduit-test.txt` contains `"hello"`
+7. Check `~/.conduit/codex-hook-events.jsonl` for the two event records
+
+See `docs/SERVER.md` for full instructions.
+
 ### Stripe billing backend
+
 1. Create recurring Stripe Prices for monthly and annual Conduit Pro.
-2. Configure `daemon/push-backend` with `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `PUBLIC_BASE_URL`, and `WEBSITE_BASE_URL`.
+2. Configure `daemon/push-backend` using `daemon/push-backend/.env.example` as a guide.
 3. Point `docs/website/subscribe.html` at the deployed billing backend or serve it from the same origin.
-4. Register the Stripe webhook endpoint at `/billing/webhook`.
-3. Redeploy: `vercel --prod` from `docs/website/`
+4. Register the Stripe webhook endpoint at `/billing/webhook` in the Stripe dashboard.
+5. Redeploy: `vercel --prod` from `docs/website/`
+
+> **Note:** `billingEntitlements` is in-memory only. Back it with Redis or a database before production (see `billing.go`).
 
 ### Push backend (30 min, requires APNs .p8 key from paid account)
 1. developer.apple.com → Keys → Create → Enable APNs → Download `AuthKey_KEYID.p8`
@@ -133,6 +167,3 @@ Alternatively via Xcode:
 ### CloudKit sync (needs paid account for container activation)
 SyncKit architecture is implemented. The container `iCloud.dev.conduit.mobile` needs to be
 activated in App Store Connect → CloudKit Dashboard before it works.
-
-### conduitd end-to-end test (optional)
-conduitd binary is at `~/conduitd` on GCP (35.201.3.231). See `docs/SERVER.md`.

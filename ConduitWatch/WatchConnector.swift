@@ -2,12 +2,9 @@ import WatchConnectivity
 import Foundation
 import ConduitCore
 
-/// Watch-side WatchConnectivity bridge. Receives pending-approval syncs from the iPhone
-/// and sends user decisions back. Uses AsyncStream so callers stay on MainActor cleanly.
-///
-/// Marked @unchecked Sendable because NSObject is not Sendable. The stored properties
-/// (messageStream, continuation) are set once in init and never mutated. AsyncStream.Continuation
-/// is itself Sendable, so calling .yield() from WCSession's serial background queue is safe.
+/// Watch-side WatchConnectivity bridge.
+/// @unchecked Sendable: NSObject is not Sendable. Stored properties are let-constants;
+/// AsyncStream.Continuation is Sendable — calling .yield() from WCSession's serial queue is safe.
 final class WatchConnector: NSObject, WCSessionDelegate, @unchecked Sendable {
     private let messageStream: AsyncStream<WatchSyncMessage>
     private let continuation: AsyncStream<WatchSyncMessage>.Continuation
@@ -27,13 +24,25 @@ final class WatchConnector: NSObject, WCSessionDelegate, @unchecked Sendable {
         WCSession.default.activate()
     }
 
+    // MARK: - Sending (Watch → iPhone)
+
     func sendDecision(approvalID: String, result: String) {
-        let msg = WatchSyncMessage.decision(approvalID: approvalID, result: result).encode()
+        send(WatchSyncMessage.decision(approvalID: approvalID, result: result).encode())
+    }
+
+    func sendEmergencyStop() {
+        send(WatchSyncMessage.emergencyStop.encode())
+    }
+
+    func sendRunSnippet(body: String) {
+        send(WatchSyncMessage.runSnippet(body: body).encode())
+    }
+
+    private func send(_ dict: [String: Any]) {
         guard WCSession.default.activationState == .activated else { return }
         if WCSession.default.isReachable {
-            WCSession.default.sendMessage(msg, replyHandler: nil, errorHandler: nil)
+            WCSession.default.sendMessage(dict, replyHandler: nil, errorHandler: nil)
         }
-        // If unreachable (phone locked/away), silently drop — stale approvals expire on conduitd side.
     }
 
     // MARK: - WCSessionDelegate

@@ -3,7 +3,7 @@ import ConduitCore
 
 struct ApprovalDetailView: View {
     let item: WatchApprovalTransfer
-    @Environment(WatchInboxViewModel.self) private var vm
+    @Environment(WatchStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -46,7 +46,7 @@ struct ApprovalDetailView: View {
                 // Decision buttons
                 VStack(spacing: 6) {
                     Button {
-                        vm.decide(item, approved: true)
+                        store.decideApproval(item, approved: true)
                         dismiss()
                     } label: {
                         Label("Allow", systemImage: "checkmark.circle.fill")
@@ -56,7 +56,7 @@ struct ApprovalDetailView: View {
                     .tint(.green)
 
                     Button(role: .destructive) {
-                        vm.decide(item, approved: false)
+                        store.decideApproval(item, approved: false)
                         dismiss()
                     } label: {
                         Label("Reject", systemImage: "xmark.circle.fill")
@@ -74,7 +74,7 @@ struct ApprovalDetailView: View {
     }
 }
 
-// MARK: - Helpers (file-private, shared with InboxListView via same module)
+// MARK: - Shared helpers (package-internal)
 
 func riskColor(_ risk: Int) -> Color {
     switch risk {
@@ -96,7 +96,7 @@ func riskLabel(_ risk: Int) -> String {
 
 func timeAgo(from date: Date) -> String {
     let secs = Int(-date.timeIntervalSinceNow)
-    if secs < 60 { return "\(secs)s" }
+    if secs < 60 { return "\(max(secs, 0))s" }
     let mins = secs / 60
     if mins < 60 { return "\(mins)m" }
     return "\(mins / 60)h"
