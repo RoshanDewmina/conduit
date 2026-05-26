@@ -32,12 +32,33 @@ public final class HostEditorViewModel {
 
     private let repo: HostRepository
     private let keyStore: KeyStore
+    private let existingHost: Host?
     private let onSaved: (Host) -> Void
 
-    public init(repository: HostRepository, keyStore: KeyStore, onSaved: @escaping (Host) -> Void) {
+    public init(
+        repository: HostRepository,
+        keyStore: KeyStore,
+        existingHost: Host? = nil,
+        onSaved: @escaping (Host) -> Void
+    ) {
         self.repo = repository
         self.keyStore = keyStore
+        self.existingHost = existingHost
         self.onSaved = onSaved
+        if let existingHost {
+            name = existingHost.name
+            hostname = existingHost.hostname
+            port = String(existingHost.port)
+            username = existingHost.username
+            tmuxSessionName = existingHost.tmuxSessionName ?? ""
+            switch existingHost.authMethod {
+            case .password, .agent:
+                authChoice = .password
+            case .ed25519(let keyID):
+                authChoice = .ed25519
+                selectedKeyTag = keyID.uuidString
+            }
+        }
     }
 
     public var isValid: Bool {
@@ -81,13 +102,18 @@ public final class HostEditorViewModel {
 
         let tmux = tmuxSessionName.trimmingCharacters(in: .whitespaces)
         let host = Host(
+            id: existingHost?.id ?? .init(),
             name: name.trimmingCharacters(in: .whitespaces),
             hostname: hostname.trimmingCharacters(in: .whitespaces),
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
             authMethod: authMethod,
-            tags: [],
-            tmuxSessionName: tmux.isEmpty ? nil : tmux
+            tags: existingHost?.tags ?? [],
+            hostKeyFingerprint: existingHost?.hostKeyFingerprint,
+            preferredShell: existingHost?.preferredShell,
+            tmuxSessionName: tmux.isEmpty ? nil : tmux,
+            createdAt: existingHost?.createdAt ?? .now,
+            lastConnectedAt: existingHost?.lastConnectedAt
         )
         do {
             try await repo.upsert(host)
@@ -162,7 +188,7 @@ public struct HostEditorView: View {
                 }
             }
         }
-        .navigationTitle("Add Host")
+        .navigationTitle(vm.isEditing ? "Edit Host" : "Add Host")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
@@ -184,6 +210,10 @@ public struct HostEditorView: View {
         let prefix = tag.prefix(8)
         return "\(prefix)..."
     }
+}
+
+private extension HostEditorViewModel {
+    var isEditing: Bool { existingHost != nil }
 }
 
 #endif

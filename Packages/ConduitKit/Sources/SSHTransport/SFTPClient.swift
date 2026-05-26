@@ -52,6 +52,15 @@ public actor SFTPClient {
     /// - Parameter path: Absolute or relative remote path. Tilde expansion is
     ///   performed by the server (via SFTP realpath).
     public func list(path: String) async throws -> [SFTPEntry] {
+        do {
+            return try await listUsingSFTP(path: path)
+        } catch {
+            guard Self.isDirectoryEOF(error) else { throw error }
+            return try await listUsingShellFallback(path: path)
+        }
+    }
+
+    private func listUsingSFTP(path: String) async throws -> [SFTPEntry] {
         try await session.withSFTP { sftp in
             let names = try await sftp.listDirectory(atPath: path)
             // `listDirectory` returns a `[SFTPMessage.Name]`. Each Name contains
@@ -69,17 +78,9 @@ public actor SFTPClient {
                     let permStr = attrs.permissions.map { Self.permissionsString(from: $0) }
                     let modifiedAt = attrs.accessModificationTime?.modificationTime
 
-                    // Build the full path by joining parent and filename
-                    let fullPath: String
-                    if path.hasSuffix("/") {
-                        fullPath = path + filename
-                    } else {
-                        fullPath = path + "/" + filename
-                    }
-
                     entries.append(SFTPEntry(
                         name: filename,
-                        path: fullPath,
+                        path: Self.join(parent: path, child: filename),
                         isDirectory: isDir,
                         sizeBytes: sizeBytes,
                         permissions: permStr,
@@ -93,6 +94,11 @@ public actor SFTPClient {
                 return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
         }
+    }
+
+    private func listUsingShellFallback(path: String) async throws -> [SFTPEntry] {
+        let out = try await session.executeCollected("ls -la --time-style=long-iso \(Self.shellQuote(Self.shellPath(path)))")
+        return Self.parseLongListing(out, parent: path)
     }
 
     // MARK: - File reading
@@ -163,5 +169,59 @@ public actor SFTPClient {
         let group = rwx(mode, r: 0o040, w: 0o020, x: 0o010)
         let other = rwx(mode, r: 0o004, w: 0o002, x: 0o001)
         return "\(fileType)\(user)\(group)\(other)"
+    }
+
+    nonisolated static func parseLongListing(_ output: String, parent: String) -> [SFTPEntry] {
+        output.split(separator: "\n").compactMap { line -> SFTPEntry? in
+            guard !line.hasPrefix("total ") else { return nil }
+            let parts = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard parts.count >= 8 else { return nil }
+
+            let permissions = String(parts[0])
+            var name = String(parts[7..<parts.count].joined(separator: " "))
+            if let symlinkSeparator = name.range(of: " -> ") {
+                name = String(name[..<symlinkSeparator.lowerBound])
+            }
+            guard name != "." && name != ".." else { return nil }
+
+            return SFTPEntry(
+                name: name,
+                path: join(parent: parent, child: name),
+                isDirectory: permissions.hasPrefix("d"),
+                sizeBytes: Int(parts[4]),
+                permissions: permissions
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    nonisolated private static func isDirectoryEOF(_ error: any Error) -> Bool {
+        if let status = error as? SFTPMessage.Status {
+            return status.errorCode == .eof
+        }
+        if case let SFTPError.errorStatus(status) = error {
+            return status.errorCode == .eof
+        }
+        let description = String(describing: error).lowercased()
+        return description.contains("sftpmessage.status error 1")
+            || description.contains("ssh_fx_eof")
+    }
+
+    nonisolated private static func shellPath(_ path: String) -> String {
+        path == "~" ? "." : path
+    }
+
+    nonisolated private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    nonisolated private static func join(parent: String, child: String) -> String {
+        if parent.isEmpty || parent == "." { return "./\(child)" }
+        if parent == "/" { return "/\(child)" }
+        if parent.hasSuffix("/") { return "\(parent)\(child)" }
+        return "\(parent)/\(child)"
     }
 }

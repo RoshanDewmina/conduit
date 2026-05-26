@@ -100,18 +100,23 @@ public struct BillingView: View {
     @ViewBuilder
     private var subscriptionSection: some View {
         Section {
-            Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
-                HStack {
-                    Label("Manage Pro subscription", systemImage: "safari")
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.caption).foregroundStyle(.secondary)
+            if pm.externalStripeEligible {
+                Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
+                    HStack {
+                        Label("Manage Pro subscription", systemImage: "safari")
+                        Spacer()
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
+            } else {
+                Label("Cloud subscription management unavailable", systemImage: "globe")
+                    .foregroundStyle(.secondary)
             }
         } header: {
             Text("Subscription")
         } footer: {
-            Text("AI credits and cloud compute subscriptions are managed at conduit.dev.")
+            Text("App access remains available through App Store purchase and restore.")
                 .font(.caption2)
         }
     }

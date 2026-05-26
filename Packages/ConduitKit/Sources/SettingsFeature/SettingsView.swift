@@ -12,15 +12,28 @@ public final class SettingsViewModel {
     public var openaiKey: String = ""
     public var hasAnthropicKey: Bool = false
     public var hasOpenAIKey: Bool = false
-    public var defaultProvider: AIProvider = .anthropic
+    public var defaultProvider: AIProvider {
+        didSet {
+            UserDefaults.standard.set(defaultProvider.rawValue, forKey: Self.defaultProviderKey)
+        }
+    }
     public var saveMessage: String?
     public var testKeyResult: String? = nil
     public var isTestingKey = false
 
     private let keyStore: any AIKeyStoring
+    private static let defaultProviderKey = "dev.conduit.defaultAIProvider"
 
     public init(keyStore: any AIKeyStoring) {
         self.keyStore = keyStore
+        self.defaultProvider = Self.persistedDefaultProvider()
+    }
+
+    public static func persistedDefaultProvider(defaults: UserDefaults = .standard) -> AIProvider {
+        guard let raw = defaults.string(forKey: defaultProviderKey),
+              let provider = AIProvider(rawValue: raw)
+        else { return .anthropic }
+        return provider
     }
 
     public func load() async {

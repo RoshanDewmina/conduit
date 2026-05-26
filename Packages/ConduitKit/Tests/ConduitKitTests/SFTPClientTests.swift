@@ -16,8 +16,19 @@ struct SFTPClientTests {
     }
 
     @Test func parseLsOutput() {
-        // SFTPClient now uses Citadel's native SFTP API rather than parsing ls
-        // output, so this is intentionally a no-op placeholder that documents
-        // the fact that a parser is no longer needed.
+        let output = """
+        total 16
+        drwxr-xr-x 2 roshan staff 4096 2026-05-25 10:00 projects
+        -rw-r--r-- 1 roshan staff  220 2026-05-25 10:01 .bashrc
+        lrwxrwxrwx 1 roshan staff   11 2026-05-25 10:02 current -> projects/app
+        """
+
+        let entries = SFTPClient.parseLongListing(output, parent: "/home/roshan")
+
+        #expect(entries.map(\.name) == ["projects", ".bashrc", "current"])
+        #expect(entries[0].isDirectory)
+        #expect(entries[0].path == "/home/roshan/projects")
+        #expect(entries[1].sizeBytes == 220)
+        #expect(entries[2].path == "/home/roshan/current")
     }
 }

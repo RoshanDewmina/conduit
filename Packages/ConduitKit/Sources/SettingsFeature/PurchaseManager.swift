@@ -21,6 +21,10 @@ public final class PurchaseManager {
 
     public var purchaseState: PurchaseState = .unknown
     public var product: Product?
+    public var storefrontCountryCode: String?
+    public var externalStripeEligible: Bool {
+        BillingEligibility.isExternalStripeEligible(storefrontCountryCode: storefrontCountryCode)
+    }
 
     @ObservationIgnored nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
 
@@ -30,8 +34,14 @@ public final class PurchaseManager {
 
     public func load() async {
         do {
+            storefrontCountryCode = await Storefront.current?.countryCode
             let products = try await Product.products(for: [Self.proProductID])
-            product = products.first
+            guard let loadedProduct = products.first else {
+                product = nil
+                purchaseState = .error("Product not found. Check that Conduit.storekit is selected in the Run scheme for StoreKit testing.")
+                return
+            }
+            product = loadedProduct
             await refreshPurchaseState()
         } catch {
             purchaseState = .error(error.localizedDescription)

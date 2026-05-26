@@ -62,8 +62,7 @@ public struct SmartPreviewView: View {
             Divider()
 
             if let port = vm.activePort {
-                PreviewSurface(session: session, remotePort: port)
-                    .id(vm.reloadToken)  // force full reload on token change
+                previewContent(port: port)
             } else {
                 ContentUnavailableView(
                     "No dev server detected",
@@ -77,6 +76,19 @@ public struct SmartPreviewView: View {
         .navigationTitle("Preview")
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.detectPorts(session: session) }
+    }
+
+    @ViewBuilder
+    private func previewContent(port: Int) -> some View {
+        GeometryReader { proxy in
+            let width = max(proxy.size.width, vm.viewportPreset.size.width)
+            ScrollView(.horizontal) {
+                PreviewSurface(session: session, remotePort: port)
+                    .id("\(port)-\(vm.reloadToken)")  // force full reload on port or reload token change
+                    .frame(width: width, height: proxy.size.height)
+            }
+            .scrollIndicators(.visible, axes: .horizontal)
+        }
     }
 }
 #endif

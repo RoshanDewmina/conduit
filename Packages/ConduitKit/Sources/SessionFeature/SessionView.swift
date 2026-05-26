@@ -13,6 +13,7 @@ public struct SessionView: View {
     @FocusState private var composerFocused: Bool
     @State private var showingSnippetPalette = false
     @State private var availableSnippets: [Snippet] = []
+    @State private var rawCtrlLatched = false
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -60,6 +61,17 @@ public struct SessionView: View {
             }
         }
         .sheet(item: $explainTarget) { block in explainSheet(block: block) }
+        .alert(
+            "Command Assistant",
+            isPresented: Binding(
+                get: { vm.commandAssistantError != nil },
+                set: { if !$0 { vm.commandAssistantError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { vm.commandAssistantError = nil }
+        } message: {
+            Text(vm.commandAssistantError ?? "")
+        }
         .sheet(isPresented: $showingSnippetPalette) {
             SnippetPaletteSheet(
                 snippets: availableSnippets,
@@ -80,17 +92,19 @@ public struct SessionView: View {
         if let handle = vm.rawFeedHandle {
             RawTerminalView(
                 feedHandle: handle,
-                onUserBytes: { _ in
-                    // User bytes from SwiftTerm's own keyboard handling are
-                    // forwarded to the shell directly. The keyboard rail
-                    // goes via onBytes below.
+                onUserBytes: { bytes in
+                    let typedBytes = Array(bytes)
+                    Task { @MainActor in
+                        let outgoing = consumeRawCtrlLatch(typedBytes)
+                        try? await vm.activeShell?.send(outgoing)
+                    }
                 },
                 onResize: { cols, rows in
                     Task { try? await vm.activeShell?.resize(cols: cols, rows: rows) }
                 }
             )
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                KeyboardAccessoryRail { bytes in
+                KeyboardAccessoryRail(ctrlLatched: $rawCtrlLatched) { bytes in
                     Task { try? await vm.activeShell?.send(bytes) }
                 }
                 .frame(height: 44)
@@ -297,6 +311,17 @@ public struct SessionView: View {
         } catch {
             explainText = error.localizedDescription
         }
+    }
+
+    private func consumeRawCtrlLatch(_ bytes: [UInt8]) -> [UInt8] {
+        guard rawCtrlLatched, let first = bytes.first else { return bytes }
+        rawCtrlLatched = false
+
+        var outgoing = bytes
+        if (0x41...0x5a).contains(first) || (0x61...0x7a).contains(first) {
+            outgoing[0] = first & 0x1f
+        }
+        return outgoing
     }
 }
 

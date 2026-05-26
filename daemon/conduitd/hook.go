@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// runAgentHook is called by `conduitd agent-hook` from a Claude Code pre-tool hook.
+// runAgentHook is called by `conduitd agent-hook` from an agent pre-tool hook.
 // It sends an approval event to the running conduitd serve process and waits for
 // the user's decision on their phone.
 //
@@ -23,11 +23,11 @@ import (
 //	1 = denied / error — the tool call must be blocked
 func runAgentHook(args []string) error {
 	fs := flag.NewFlagSet("agent-hook", flag.ContinueOnError)
-	agent   := fs.String("agent",   "",      "agent name (e.g. claude-code)")
-	kind    := fs.String("kind",    "bash",  "tool kind (bash|write|read|…)")
-	command := fs.String("command", "",      "command or path being executed")
-	cwd     := fs.String("cwd",     "",      "current working directory")
-	risk    := fs.String("risk",    "low",   "risk band: low|medium|high")
+	agent := fs.String("agent", "", "agent name (e.g. claudeCode|codex)")
+	kind := fs.String("kind", "command", "tool kind (command|patch|fileWrite|...)")
+	command := fs.String("command", "", "command or path being executed")
+	cwd := fs.String("cwd", "", "current working directory")
+	risk := fs.String("risk", "low", "risk band: low|medium|high")
 	timeout := fs.Duration("timeout", 120*time.Second, "max wait for decision")
 
 	if err := fs.Parse(args); err != nil {
@@ -36,14 +36,26 @@ func runAgentHook(args []string) error {
 	if *command == "" {
 		return errors.New("--command is required")
 	}
+	if *cwd == "" {
+		if wd, err := os.Getwd(); err == nil {
+			*cwd = wd
+		}
+	}
+
+	normalizedKind := normalizeKind(*kind)
+	patch := ""
+	if normalizedKind == "patch" {
+		patch = *command
+	}
 
 	event := ApprovalEvent{
 		ApprovalID: newUUID(),
-		Agent:      *agent,
-		Kind:       *kind,
+		Agent:      normalizeAgent(*agent),
+		Kind:       normalizedKind,
 		Command:    *command,
+		Patch:      patch,
 		CWD:        *cwd,
-		Risk:       *risk,
+		Risk:       riskToInt(*risk),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -88,6 +100,55 @@ func newUUID() string {
 		hex.EncodeToString(b[6:8]) + "-" +
 		hex.EncodeToString(b[8:10]) + "-" +
 		hex.EncodeToString(b[10:])
+}
+
+func riskToInt(r string) int {
+	switch r {
+	case "medium", "1":
+		return 1
+	case "high", "2":
+		return 2
+	case "critical", "3":
+		return 3
+	default:
+		return 0
+	}
+}
+
+func normalizeAgent(agent string) string {
+	switch agent {
+	case "claude-code", "claude_code", "claude", "Claude Code":
+		return "claudeCode"
+	case "codex", "openai-codex", "OpenAI Codex":
+		return "codex"
+	case "opencode":
+		return "opencode"
+	case "":
+		return "unknown"
+	default:
+		return agent
+	}
+}
+
+func normalizeKind(kind string) string {
+	switch kind {
+	case "bash", "Bash", "shell", "command":
+		return "command"
+	case "apply_patch", "Patch", "patch", "Edit", "Write", "MultiEdit":
+		return "patch"
+	case "write", "file-write", "file_write", "fileWrite":
+		return "fileWrite"
+	case "delete", "file-delete", "file_delete", "fileDelete":
+		return "fileDelete"
+	case "network":
+		return "network"
+	case "credential":
+		return "credential"
+	case "browser":
+		return "browser"
+	default:
+		return kind
+	}
 }
 
 func init() {

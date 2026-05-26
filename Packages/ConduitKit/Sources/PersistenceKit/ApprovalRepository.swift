@@ -24,7 +24,7 @@ extension Approval: FetchableRecord {
             command: row["command"],
             patch: row["patch"],
             cwd: row["cwd"] ?? "",
-            risk: Risk(rawValue: (row["risk"] as? Int) ?? 0) ?? .low,
+            risk: Risk(rawValue: row["risk"] ?? 0) ?? .low,
             createdAt: row["createdAt"] ?? .now,
             decidedAt: row["decidedAt"],
             decision: decisionStr.flatMap(Decision.init(rawValue:))

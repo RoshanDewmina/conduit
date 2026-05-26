@@ -7,13 +7,15 @@ import (
 )
 
 // ApprovalEvent mirrors the JSON sent from the iOS DaemonChannel.
+// Field names match ApprovalPendingParams on the iOS side exactly.
 type ApprovalEvent struct {
-	ApprovalID string `json:"approvalId"`
+	ApprovalID string `json:"id"` // iOS expects "id" not "approvalId"
 	Agent      string `json:"agent"`
 	Kind       string `json:"kind"`
 	Command    string `json:"command"`
+	Patch      string `json:"patch,omitempty"`
 	CWD        string `json:"cwd"`
-	Risk       string `json:"risk"`
+	Risk       int    `json:"risk"` // iOS expects int: 0=low 1=medium 2=high 3=critical
 	Timestamp  string `json:"timestamp"`
 }
 

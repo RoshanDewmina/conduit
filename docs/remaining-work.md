@@ -37,7 +37,7 @@ Last updated: 2026-05-25
 ### Payment + App Store prep
 - StoreKit 2 one-time purchase (PurchaseManager + BillingView) ✅
 - External link to conduit.dev/subscribe (Stripe) ✅
-- Privacy manifest (Conduit/PrivacyInfo.xcprivacy) ✅
+- Privacy manifest (Conduit/PrivacyInfo.xcprivacy) ✅ — declares optional APNs device identifier, no tracking
 - App Store metadata (fastlane/metadata/en-US/) ✅
 - Screenshots (docs/screenshots/, 6 images at 1320×2868) ✅
 - Fastlane automation (fastlane/Fastfile) ✅
@@ -88,7 +88,7 @@ After enrolling in the paid program:
 - [ ] Add IAP: `dev.conduit.mobile.pro` | Non-Consumable | $14.99 | "Conduit Pro"
 - [ ] Enable CloudKit container: `iCloud.dev.conduit.mobile`
 - [ ] Enable Push Notifications capability
-- [ ] Fill Privacy Nutrition Label → "No data collected"
+- [ ] Fill Privacy Nutrition Label → no tracking; declare optional device identifier for APNs approval alerts and subscription data if Stripe billing is enabled
 - [ ] Age rating → 4+
 - [ ] Upload screenshots from `docs/screenshots/`
 - [ ] App description is in `fastlane/metadata/en-US/description.txt`
@@ -117,9 +117,11 @@ Alternatively via Xcode:
 
 ## Non-blocking (do after TestFlight)
 
-### Stripe payment link (5 min)
-1. dashboard.stripe.com → Payment Links → "Conduit Pro" $9/mo
-2. Edit `docs/website/subscribe.html` → replace `YOUR_STRIPE_LINK`
+### Stripe billing backend
+1. Create recurring Stripe Prices for monthly and annual Conduit Pro.
+2. Configure `daemon/push-backend` with `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `PUBLIC_BASE_URL`, and `WEBSITE_BASE_URL`.
+3. Point `docs/website/subscribe.html` at the deployed billing backend or serve it from the same origin.
+4. Register the Stripe webhook endpoint at `/billing/webhook`.
 3. Redeploy: `vercel --prod` from `docs/website/`
 
 ### Push backend (30 min, requires APNs .p8 key from paid account)

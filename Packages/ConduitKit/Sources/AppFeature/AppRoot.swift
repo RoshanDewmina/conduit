@@ -51,8 +51,9 @@ public final class AppEnvironment {
         self.approvalRepo = ApprovalRepository(database)
     }
 
-    public func aiClient(provider: AIProvider = .anthropic) async -> (any AIClient)? {
-        switch provider {
+    public func aiClient(provider: AIProvider? = nil) async -> (any AIClient)? {
+        let selectedProvider = provider ?? SettingsViewModel.persistedDefaultProvider()
+        switch selectedProvider {
         case .anthropic:
             guard let key = try? await aiKeyStore.loadAPIKey(provider: .anthropic) else { return nil }
             return AnthropicClient(apiKey: key)
@@ -93,9 +94,11 @@ public struct AppRoot: View {
     @State private var selectedTab: Tab = .workspaces
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
+    @State private var editingHost: Host?
+    @State private var workspacesRevision = UUID()
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
-    @State private var inboxVM = InboxViewModel(approvals: AppRoot.sampleApprovals)
+    @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -107,6 +110,7 @@ public struct AppRoot: View {
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
     @State private var isUnlocked: Bool = false
+    @State private var watchConnector = PhoneWatchConnector()
 
     public enum Tab: Hashable, Sendable {
         case workspaces
@@ -134,26 +138,6 @@ public struct AppRoot: View {
             }
         }
     }
-
-    private static let sampleApprovals: [Approval] = {
-        let session = SessionID()
-        return [
-            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
-                     command: "rm -rf ./dist && npm run build:prod", patch: nil,
-                     cwd: "/home/ubuntu/myapp", risk: .high,
-                     createdAt: Date(timeIntervalSinceNow: -30)),
-            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
-                     command: "git push origin main --force-with-lease", patch: nil,
-                     cwd: "/home/ubuntu/myapp", risk: .medium,
-                     createdAt: Date(timeIntervalSinceNow: -120)),
-            Approval(id: .init(), sessionID: session, agent: .claudeCode, kind: .command,
-                     command: "systemctl restart app.service", patch: nil,
-                     cwd: "/home/ubuntu/myapp", risk: .low,
-                     createdAt: Date(timeIntervalSinceNow: -300),
-                     decidedAt: Date(timeIntervalSinceNow: -295),
-                     decision: .approved),
-        ]
-    }()
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -187,6 +171,7 @@ public struct AppRoot: View {
             }
         }
         .task { await attemptUnlock() }
+        .task { watchConnector.activate() }
         .task {
             await Notifications.shared.registerCategories()
             _ = await Notifications.shared.requestAuthorization()
@@ -245,10 +230,25 @@ public struct AppRoot: View {
                 HostEditorView(
                     viewModel: HostEditorViewModel(repository: env.hostRepo, keyStore: env.keyStore) { host in
                         addHostPresented = false
+                        workspacesRevision = UUID()
                         Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(250))
                             openSession(host: host, env: env)
                         }
+                    }
+                )
+            }
+        }
+        .sheet(item: $editingHost) { host in
+            NavigationStack {
+                HostEditorView(
+                    viewModel: HostEditorViewModel(
+                        repository: env.hostRepo,
+                        keyStore: env.keyStore,
+                        existingHost: host
+                    ) { _ in
+                        editingHost = nil
+                        workspacesRevision = UUID()
                     }
                 )
             }
@@ -283,6 +283,7 @@ public struct AppRoot: View {
             Text(connectionError ?? "")
         })
         .task {
+            configureGlobalInbox(env: env)
             await env.syncEngine.start()
         }
         .task {
@@ -310,6 +311,16 @@ public struct AppRoot: View {
 
     private var activeInboxViewModel: InboxViewModel {
         liveInboxVM ?? inboxVM
+    }
+
+    @MainActor
+    private func configureGlobalInbox(env: AppEnvironment) {
+        guard liveInboxVM == nil else { return }
+        let approvalRepo = ApprovalRepository(env.database)
+        let liveVM = LiveInboxViewModel(repository: approvalRepo)
+        approvalRepository = approvalRepo
+        liveInboxVM = liveVM
+        inboxVM = liveVM
     }
 
     private func compactRoot(env: AppEnvironment) -> some View {
@@ -366,8 +377,10 @@ public struct AppRoot: View {
             WorkspacesView(
                 viewModel: WorkspacesViewModel(repository: env.hostRepo),
                 onSelect: { host in openSession(host: host, env: env) },
+                onEdit: { host in editingHost = host },
                 onAddHost: { addHostPresented = true }
             )
+            .id(workspacesRevision)
         case .session:
             SessionShellView(
                 viewModel: sessionViewModel,
@@ -381,7 +394,7 @@ public struct AppRoot: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             NavigationLink {
-                                SnippetEditorView()
+                                SnippetEditorView(repository: env.snippetRepo)
                             } label: {
                                 Label("Snippets", systemImage: "text.quote")
                             }
@@ -421,7 +434,7 @@ public struct AppRoot: View {
     ) {
         let sshSession = SSHSession(host: host)
         Task {
-            let aiClient = await env.aiClient(provider: .anthropic)
+            let aiClient = await env.aiClient()
             let vm = SessionViewModel(
                 host: host,
                 sshSession: sshSession,
@@ -439,6 +452,14 @@ public struct AppRoot: View {
                     try? await channel.respond(approvalId: id.uuidString, decision: decision)
                 }
             )
+            await MainActor.run {
+                self.watchConnector.startSyncing(
+                    repository: approvalRepo,
+                    onDecision: { [weak liveVM] id, decision in
+                        await liveVM?.decide(id, decision: decision)
+                    }
+                )
+            }
             await MainActor.run {
                 self.sessionViewModel = vm
                 self.approvalRepository = approvalRepo

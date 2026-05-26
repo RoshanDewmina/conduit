@@ -1,14 +1,18 @@
 #if os(iOS)
 import SwiftUI
 import ConduitCore
+import PersistenceKit
 
 public struct SnippetEditorView: View {
 
     @State private var snippets: [Snippet] = []
     @State private var editingSnippet: Snippet? = nil
     @State private var isAddingNew = false
+    private let repository: SnippetRepository?
 
-    public init() {}
+    public init(repository: SnippetRepository? = nil) {
+        self.repository = repository
+    }
 
     public var body: some View {
         List {
@@ -28,7 +32,7 @@ public struct SnippetEditorView: View {
                 .buttonStyle(.plain)
             }
             .onDelete { offsets in
-                snippets.remove(atOffsets: offsets)
+                delete(at: offsets)
             }
         }
         .navigationTitle("Snippets")
@@ -45,12 +49,7 @@ public struct SnippetEditorView: View {
         }
         .sheet(item: $editingSnippet) { snippet in
             SnippetEditSheet(snippet: snippet) { updated in
-                if let idx = snippets.firstIndex(where: { $0.id == updated.id }) {
-                    snippets[idx] = updated
-                } else {
-                    snippets.append(updated)
-                }
-                editingSnippet = nil
+                save(updated)
             } onCancel: {
                 // If this was a brand-new snippet (empty name/body), remove it
                 if let idx = snippets.firstIndex(where: { $0.id == snippet.id }),
@@ -58,6 +57,42 @@ public struct SnippetEditorView: View {
                     snippets.remove(at: idx)
                 }
                 editingSnippet = nil
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let repository else { return }
+        if let loaded = try? await repository.all() {
+            snippets = loaded
+        }
+    }
+
+    private func save(_ updated: Snippet) {
+        if let idx = snippets.firstIndex(where: { $0.id == updated.id }) {
+            snippets[idx] = updated
+        } else {
+            snippets.append(updated)
+        }
+        editingSnippet = nil
+
+        guard let repository else { return }
+        Task {
+            try? await repository.upsert(updated)
+        }
+    }
+
+    private func delete(at offsets: IndexSet) {
+        let deleted = offsets.compactMap { index in
+            snippets.indices.contains(index) ? snippets[index] : nil
+        }
+        snippets.remove(atOffsets: offsets)
+
+        guard let repository else { return }
+        Task {
+            for snippet in deleted {
+                try? await repository.delete(id: snippet.id)
             }
         }
     }

@@ -22,6 +22,7 @@ public final class SessionViewModel {
 
     // Composer
     public var inputText: String = ""
+    public var commandAssistantError: String?
     public private(set) var isTranslating: Bool = false
 
     // Block render state
@@ -250,7 +251,7 @@ public final class SessionViewModel {
     }
 
     public func rerun(_ block: Block) async {
-        await run(command: block.command)
+        inputText = block.command
     }
 
     private func run(command: String) async {
@@ -299,8 +300,16 @@ public final class SessionViewModel {
     // MARK: - AI
 
     private func translateAndInsert(query: String) async {
+        let intent = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !intent.isEmpty else {
+            inputText = "# "
+            commandAssistantError = "Describe the command after #."
+            return
+        }
+
         guard let ai = aiClient else {
-            inputText = query  // best-effort fallback
+            inputText = "#\(query)"
+            commandAssistantError = "No AI provider configured. Add an API key in Settings."
             return
         }
         isTranslating = true
@@ -312,10 +321,12 @@ public final class SessionViewModel {
         backticks. Prefer safe, common, idiomatic POSIX/bash commands. If the
         request is ambiguous, pick the safest reasonable interpretation.
         """
-        if let text = try? await ai.complete(messages: [.user(query)], system: system, maxTokens: 256) {
+        do {
+            let text = try await ai.complete(messages: [.user(intent)], system: system, maxTokens: 256)
             inputText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        } else {
-            inputText = query
+        } catch {
+            inputText = "#\(query)"
+            commandAssistantError = "AI command translation failed: \(error.localizedDescription)"
         }
     }
 

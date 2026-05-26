@@ -16,6 +16,10 @@ struct ConduitApp: App {
     var body: some Scene {
         WindowGroup {
             AppRoot()
+                .onOpenURL { url in
+                    guard url.scheme == "conduit", url.host == "billing" else { return }
+                    UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
+                }
         }
     }
 }

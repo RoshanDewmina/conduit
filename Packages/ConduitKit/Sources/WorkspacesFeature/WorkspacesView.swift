@@ -36,15 +36,18 @@ public final class WorkspacesViewModel {
 public struct WorkspacesView: View {
     @State private var vm: WorkspacesViewModel
     public var onSelect: (Host) -> Void
+    public var onEdit: (Host) -> Void
     public var onAddHost: () -> Void
 
     public init(
         viewModel: WorkspacesViewModel,
         onSelect: @escaping (Host) -> Void,
+        onEdit: @escaping (Host) -> Void,
         onAddHost: @escaping () -> Void
     ) {
         _vm = State(initialValue: viewModel)
         self.onSelect = onSelect
+        self.onEdit = onEdit
         self.onAddHost = onAddHost
     }
 
@@ -68,6 +71,12 @@ public struct WorkspacesView: View {
                         Button(role: .destructive) {
                             Task { await vm.remove(host) }
                         } label: { Label("Delete", systemImage: "trash") }
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            onEdit(host)
+                        } label: { Label("Edit", systemImage: "pencil") }
+                        .tint(.blue)
                     }
                 }
             }

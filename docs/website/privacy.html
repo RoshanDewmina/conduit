@@ -20,7 +20,7 @@
   <time>Last updated: May 25, 2026</time>
 
   <h2>Summary</h2>
-  <p>Conduit collects <strong>no personal data</strong>. Your SSH credentials, API keys, and host configurations stay on your device and are never transmitted to Conduit's servers.</p>
+  <p>Conduit does not use analytics, advertising SDKs, or tracking. Your SSH credentials, API keys, and host configurations stay on your device and are never transmitted to Conduit's servers. Optional push alerts and web subscriptions require limited service data described below.</p>
 
   <h2>What Conduit stores on your device</h2>
   <ul>
@@ -36,14 +36,15 @@
     <li><strong>To your SSH server:</strong> SSH traffic (credentials, commands, output) travels directly from your device to your host server over an encrypted SSH connection. Conduit acts as a client — no traffic passes through Conduit's infrastructure.</li>
     <li><strong>To AI providers:</strong> When you use "Explain" or NL→command features, the relevant command output is sent to Anthropic or OpenAI using your own API key. Conduit does not proxy or log these requests.</li>
     <li><strong>To Apple iCloud:</strong> If CloudKit sync is enabled, your host list and snippets are synced via Apple's CloudKit infrastructure under your Apple ID. Conduit does not access your CloudKit data.</li>
-    <li><strong>To Conduit's push backend (optional):</strong> If you enable remote approval alerts, your APNs device token is sent to Conduit's push relay. This token is used only to deliver approval notifications and is not linked to any personal identity.</li>
+    <li><strong>To Conduit's push backend (optional):</strong> If you enable remote approval alerts, your APNs device token and app-generated session identifier are sent to Conduit's push relay. These values are used only to deliver approval notifications.</li>
+    <li><strong>To Stripe:</strong> If you subscribe on conduit.dev, Stripe processes your payment details, email address, customer ID, and subscription status. Conduit stores only the Stripe customer/subscription identifiers needed to restore access and open the customer portal.</li>
   </ul>
 
   <h2>Analytics and tracking</h2>
-  <p>Conduit does not use any analytics SDKs, tracking pixels, advertising identifiers, or third-party telemetry. The app's <code>PrivacyInfo.xcprivacy</code> declares zero collected data types and disables tracking.</p>
+  <p>Conduit does not use any analytics SDKs, tracking pixels, advertising identifiers, or third-party telemetry. The app's <code>PrivacyInfo.xcprivacy</code> disables tracking and declares the device identifier used for optional push alert delivery.</p>
 
   <h2>Data retention</h2>
-  <p>All data is stored locally on your device. Deleting the app removes all local data. If you used CloudKit sync, data in iCloud can be removed via Settings → Apple ID → iCloud → Manage Storage.</p>
+  <p>Local app data is stored on your device. Deleting the app removes local data. If you used CloudKit sync, data in iCloud can be removed via Settings → Apple ID → iCloud → Manage Storage. Push tokens are retained while a session is registered and may be replaced when Apple rotates the device token. Subscription records are retained while your Stripe subscription or customer portal access remains active.</p>
 
   <h2>Children</h2>
   <p>Conduit is not directed at children under 13 and does not knowingly collect information from them.</p>

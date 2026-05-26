@@ -8,12 +8,12 @@
 - [x] **Face ID usage description** — `NSFaceIDUsageDescription` in Info.plist
 - [x] **Background modes** — `remote-notification`, `fetch` in Info.plist
 - [x] **Entitlements** — push (`aps-environment`), CloudKit, Keychain in `Conduit.entitlements`
-- [x] **PrivacyInfo.xcprivacy** — no tracking, no collected data declared
+- [x] **PrivacyInfo.xcprivacy** — no tracking; device identifier declared for optional APNs approval alerts
 - [x] **Privacy policy link** — `https://conduit.dev/privacy` in BillingView
 - [x] **Terms of service link** — `https://conduit.dev/terms` in BillingView
 - [x] **StoreKit** — `PurchaseManager` + `Conduit.storekit` config for local testing
 - [x] **Restore purchases** button in BillingView
-- [x] **External subscription link** — conduit.dev/subscribe (Stripe) in BillingView
+- [x] **US storefront subscription link** — conduit.dev/subscribe (Stripe Checkout Sessions) in BillingView
 - [x] **AppIcon asset catalog** — skeleton at `Conduit/Resources/Assets.xcassets/AppIcon.appiconset/`
 - [x] **App Transport Security** — `NSAllowsLocalNetworking` for dev server preview
 - [x] **Biometric gate** — `LaunchLockView` + `BiometricGate.shared.unlock()` at app root
@@ -52,19 +52,19 @@
 - [ ] Add the product `dev.conduit.mobile.pro` as a Non-Consumable IAP at $14.99
 - [ ] Enable CloudKit capability in the Dev portal (container `iCloud.dev.conduit.mobile`)
 - [ ] Enable Push Notifications capability in the Dev portal
-- [ ] Fill in Privacy Nutrition Label (no data collected, no tracking)
+- [ ] Fill in Privacy Nutrition Label (no tracking; declare device identifier for optional push alerts, and subscription data if web billing is enabled)
 - [ ] Set age rating to **4+**
 - [ ] Write App Store description and keywords
 
 ### conduit.dev website (for payment redirect)
-- [x] `docs/website/subscribe.html` — Stripe Checkout page ($9/mo, $79/yr) — deploy to conduit.dev/subscribe
+- [x] `docs/website/subscribe.html` — Stripe Checkout Sessions page ($9/mo, $79/yr) — deploy to conduit.dev/subscribe
 - [x] `docs/website/privacy.html` — Privacy policy — deploy to conduit.dev/privacy
 - [x] `docs/website/terms.html` — Terms of service — deploy to conduit.dev/terms
 - [x] **DEPLOYED**: Vercel project `conduit-website` created, all 3 HTML files live
   - Preview URL: `conduit-website-roshandewminas-projects.vercel.app`
   - conduit.dev added to project (verified). DNS missing: add A record `conduit.dev → 76.76.21.21` in Route53
 - [ ] **DNS**: In AWS Route53, add A record: `conduit.dev` → `76.76.21.21` (Vercel anycast IP)
-- [ ] Replace `YOUR_STRIPE_LINK` placeholder in subscribe.html with real Stripe payment link
+- [ ] Configure backend env: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `PUBLIC_BASE_URL`, `WEBSITE_BASE_URL`
 
 ### APNs remote push (approval alerts when app is killed)
 - [x] `daemon/push-backend/main.go` — Go HTTP server for APNs delivery (register token, send push)
@@ -93,13 +93,13 @@
 
 ---
 
-## Payment architecture reminder
+## Payment Architecture Reminder
 
-| Revenue stream | Method | Apple cut |
+| Revenue stream | Method | Review note |
 |---|---|---|
-| One-time app purchase | Apple IAP (StoreKit, `dev.conduit.mobile.pro`) | 30% (15% after year 1) |
-| AI credits / Pro subscription | Stripe via `conduit.dev/subscribe` | 0% (external link allowed in US post-2025) |
-| Fly.io / Lightsail compute | Billed directly by provider | 0% |
+| One-time app purchase | Apple IAP (StoreKit, `dev.conduit.mobile.pro`) | App Store-safe access path |
+| AI credits / Pro subscription | Stripe Checkout Sessions via `conduit.dev/subscribe` | Show the CTA only for United States storefronts |
+| Fly.io / Lightsail compute | Billed directly by provider | Provider account management |
 
 **Do not** mention pricing differences between IAP and web purchase in the app (App Review will reject).
 

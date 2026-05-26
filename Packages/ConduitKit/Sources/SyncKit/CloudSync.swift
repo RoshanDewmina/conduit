@@ -4,6 +4,7 @@ import PersistenceKit
 
 #if os(iOS)
 import CloudKit
+import Security
 #endif
 
 // CKOperation callbacks are called serially by CloudKit, so this accumulator
@@ -14,22 +15,25 @@ private final class CKAccumulator: @unchecked Sendable {
 }
 
 /// Low-level wrapper around CloudKit private database operations.
-/// All methods are no-ops on macOS or when CloudKit is unavailable (simulator without entitlement).
+/// All methods are no-ops on macOS, simulator, or when the CloudKit entitlement is absent.
 public actor CloudSync {
     #if os(iOS) && !targetEnvironment(simulator)
-    private let container: CKContainer
-    private var db: CKDatabase { container.privateCloudDatabase }
+    private let container: CKContainer?
+    private var db: CKDatabase? { container?.privateCloudDatabase }
     #endif
 
     public init(containerIdentifier: String = "iCloud.dev.conduit.mobile") {
         #if os(iOS) && !targetEnvironment(simulator)
-        self.container = CKContainer(identifier: containerIdentifier)
+        self.container = CloudSync.hasCloudKitEntitlement()
+            ? CKContainer(identifier: containerIdentifier)
+            : nil
         #endif
     }
 
     /// Returns the current CloudKit account status.
     public func accountStatus() async throws -> CloudAccountStatus {
         #if os(iOS) && !targetEnvironment(simulator)
+        guard let container else { return .unavailable }
         let status = try await container.accountStatus()
         switch status {
         case .available: return .available
@@ -48,6 +52,7 @@ public actor CloudSync {
     /// Returns new/updated records and deleted record IDs.
     public func fetchChanges(recordType: String) async throws -> ([CKRecordWrapper], [String]) {
         #if os(iOS) && !targetEnvironment(simulator)
+        guard let db else { return ([], []) }
         let operation = CKFetchRecordZoneChangesOperation()
         let zoneID = CKRecordZone.default().zoneID
         let config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
@@ -70,7 +75,7 @@ public actor CloudSync {
                 case .failure(let err): cont.resume(throwing: err)
                 }
             }
-            self.db.add(operation)
+            db.add(operation)
         }
         return (acc.results, acc.deletedIDs)
         #else
@@ -81,7 +86,7 @@ public actor CloudSync {
     /// Saves or updates records in the private database.
     public func save(records: [CKRecordWrapper]) async throws {
         #if os(iOS) && !targetEnvironment(simulator)
-        guard !records.isEmpty else { return }
+        guard let db, !records.isEmpty else { return }
         let ckRecords = records.map(\.record)
         let operation = CKModifyRecordsOperation(recordsToSave: ckRecords, recordIDsToDelete: nil)
         operation.savePolicy = .ifServerRecordUnchanged
@@ -93,10 +98,19 @@ public actor CloudSync {
                 case .failure(let err): cont.resume(throwing: err)
                 }
             }
-            self.db.add(operation)
+            db.add(operation)
         }
         #endif
     }
+
+    #if os(iOS) && !targetEnvironment(simulator)
+    private static func hasCloudKitEntitlement() -> Bool {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let key = "com.apple.developer.icloud-services" as CFString
+        guard let value = SecTaskCopyValueForEntitlement(task, key, nil) as? [String] else { return false }
+        return value.contains("CloudKit")
+    }
+    #endif
 }
 
 /// Platform-agnostic account status.

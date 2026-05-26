@@ -5,12 +5,13 @@ import Foundation
 @Suite("KeyStore")
 struct KeyStoreTests {
 
-    @Test("public key format is well-formed", .disabled("requires Keychain entitlement"))
+    @Test("public key format is well-formed")
     func generate() async throws {
-        let store = KeyStore(service: "test.conduit.keystore")
-        let info = try await store.generateEd25519(tag: "test-key")
+        let tag = "test-key-\(UUID().uuidString)"
+        let store = KeyStore(service: "test.conduit.keystore.\(UUID().uuidString)", inMemory: true)
+        let info = try await store.generateEd25519(tag: tag)
         #expect(info.openSSH.hasPrefix("ssh-ed25519 "))
         #expect(info.sha256Fingerprint.hasPrefix("SHA256:"))
-        try await store.delete(tag: "test-key")
+        try await store.delete(tag: tag)
     }
 }

@@ -5,8 +5,9 @@
 // a local notification to the registered iOS device.
 //
 // Build: CGO_ENABLED=0 GOOS=linux go build -o push-backend .
-// Run:   APNS_KEY_ID=... APNS_TEAM_ID=... APNS_KEY_PATH=AuthKey_XXX.p8 \
-//        APNS_BUNDLE_ID=dev.conduit.mobile ./push-backend
+//
+//	Run:   APNS_KEY_ID=... APNS_TEAM_ID=... APNS_KEY_PATH=AuthKey_XXX.p8 \
+//	       APNS_BUNDLE_ID=dev.conduit.mobile ./push-backend
 package main
 
 import (
@@ -52,13 +53,31 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	registerBillingRoutes(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	log.Printf("push-backend listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(mux)))
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := os.Getenv("CORS_ALLOW_ORIGIN")
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {

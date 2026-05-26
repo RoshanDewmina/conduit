@@ -33,6 +33,7 @@ struct MockShellHandle: Sendable {
 /// Creates a no-op RawTerminalView suitable for unit tests.
 /// On iOS the UIViewRepresentable version needs explicit streams;
 /// on macOS the stub's no-arg init is used.
+@MainActor
 private func makeMockTerminal() -> RawTerminalView {
 #if canImport(UIKit) && canImport(SwiftTerm)
     let (stream, _) = AsyncStream<[UInt8]>.makeStream()
@@ -44,6 +45,7 @@ private func makeMockTerminal() -> RawTerminalView {
 
 // MARK: - Tests
 
+@MainActor
 @Suite("PTYBridge")
 struct PTYBridgeTests {
 

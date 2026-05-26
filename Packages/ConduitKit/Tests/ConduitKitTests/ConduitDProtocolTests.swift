@@ -57,7 +57,7 @@ struct ConduitDProtocolTests {
         var buf = DaemonFraming.frame(msg1)
         buf.append(DaemonFraming.frame(msg2))
 
-        var (m1, rest1) = DaemonFraming.unframe(buf)!
+        let (m1, rest1) = DaemonFraming.unframe(buf)!
         #expect(m1 == msg1)
         let (m2, rest2) = DaemonFraming.unframe(rest1)!
         #expect(m2 == msg2)

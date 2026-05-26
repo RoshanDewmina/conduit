@@ -114,7 +114,11 @@ public struct PreviewToolbar: View {
     private var portPicker: some View {
         Menu {
             ForEach(vm.detectedPorts, id: \.self) { port in
-                Button(":\(port)") { vm.selectedPort = port }
+                Button {
+                    vm.selectedPort = port
+                } label: {
+                    Text(verbatim: ":\(port)")
+                }
             }
             if !vm.detectedPorts.isEmpty {
                 Divider()
@@ -123,7 +127,7 @@ public struct PreviewToolbar: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "network")
-                Text(vm.activePort.map { ":\($0)" } ?? "No port")
+                Text(verbatim: vm.activePort.map { ":\($0)" } ?? "No port")
                     .font(.system(.callout, design: .monospaced))
                     .lineLimit(1)
             }

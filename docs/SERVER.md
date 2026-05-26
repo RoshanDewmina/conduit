@@ -60,8 +60,27 @@ The Conduit remote daemon is installed at `~/conduitd` (v0.1.0, linux-amd64).
 ```
 
 The Claude Code pre-tool hook is wired at `~/.claude/hooks/pre-tool.sh`.
-When `conduitd serve` is running, all Claude Code tool calls route an approval
-request to the connected iOS app before executing.
+Codex uses `~/.codex/hooks/conduit-hook.sh` with `~/.codex/hooks.json`.
+When `conduitd serve` is running, matching Claude Code and Codex tool calls
+route an approval request to the connected iOS app before executing.
+If `conduitd serve` is not connected, `conduitd agent-hook` intentionally
+auto-approves so a disconnected phone does not strand the remote agent.
+
+Codex hook install on the server:
+
+```bash
+mkdir -p ~/.codex/hooks ~/.conduit/bin
+cp ~/conduitd ~/.conduit/bin/conduitd
+chmod 700 ~/.codex/hooks
+chmod 755 ~/.conduit/bin/conduitd
+cp docs/codex-conduit-hook.sh ~/.codex/hooks/conduit-hook.sh
+cp docs/codex-hooks.json ~/.codex/hooks.json
+chmod 700 ~/.codex/hooks/conduit-hook.sh
+codex --version
+```
+
+Run `/hooks` inside Codex to trust the hook. For disposable smoke tests only,
+Codex can be launched with `--dangerously-bypass-hook-trust`.
 
 ## Manage the instance
 

@@ -25,6 +25,9 @@ Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
 *.instrumentscli
 .dmux/
 
+# Local agent scratch worktrees
+.claude/worktrees/
+
 # conduitd compiled binaries (distributed via GitHub Releases, not git)
 daemon/conduitd/conduitd
 daemon/conduitd/conduitd-macos

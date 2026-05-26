@@ -7,7 +7,15 @@ import DesignSystem
 
 @MainActor @Observable
 public final class KeysViewModel {
-    public var keys: [String] = []
+    public struct StoredKey: Identifiable, Hashable {
+        public let tag: String
+        public let openSSH: String
+        public let fingerprint: String
+
+        public var id: String { tag }
+    }
+
+    public var keys: [StoredKey] = []
     public var lastGeneratedPublic: String?
     public var error: String?
 
@@ -15,8 +23,21 @@ public final class KeysViewModel {
     public init(store: KeyStore) { self.store = store }
 
     public func reload() async {
-        do { keys = try await store.allTags() }
-        catch let err { self.error = err.localizedDescription }
+        do {
+            let tags = try await store.allTags()
+            var loaded: [StoredKey] = []
+            for tag in tags {
+                let info = try await store.publicKey(tag: tag)
+                loaded.append(StoredKey(
+                    tag: tag,
+                    openSSH: info.openSSH,
+                    fingerprint: info.sha256Fingerprint
+                ))
+            }
+            keys = loaded.sorted { $0.tag.localizedStandardCompare($1.tag) == .orderedAscending }
+        } catch let err {
+            self.error = err.localizedDescription
+        }
     }
 
     public func generate() async {
@@ -70,14 +91,33 @@ public struct KeysView: View {
                 if vm.keys.isEmpty {
                     Text("No keys yet").foregroundStyle(.secondary)
                 } else {
-                    ForEach(vm.keys, id: \.self) { tag in
-                        HStack {
-                            Image(systemName: "key").foregroundStyle(.tint)
-                            Text(tag).font(.system(.callout, design: .monospaced))
+                    ForEach(vm.keys) { key in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "key")
+                                .foregroundStyle(.tint)
+                                .padding(.top, 2)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(key.tag)
+                                    .font(.system(.callout, design: .monospaced))
+                                    .textSelection(.enabled)
+                                Text(key.fingerprint)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                Button("Copy public key") {
+                                    #if os(iOS)
+                                    UIPasteboard.general.string = key.openSSH
+                                    #endif
+                                    Haptics.selection()
+                                }
+                                .font(.caption)
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
                         }
                         .swipeActions {
                             Button(role: .destructive) {
-                                Task { await vm.delete(tag) }
+                                Task { await vm.delete(key.tag) }
                             } label: { Label("Delete", systemImage: "trash") }
                         }
                     }

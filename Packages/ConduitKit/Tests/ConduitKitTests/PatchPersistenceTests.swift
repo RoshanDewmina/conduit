@@ -31,5 +31,21 @@ struct PatchPersistenceTests {
         }
         #expect(row != nil)
         #expect((row?["agent"] as String?) == "claude-code")
+
+        let repo = ApprovalRepository(db)
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "rm -rf /",
+            cwd: "/",
+            risk: .critical
+        )
+
+        try await repo.upsert(approval)
+        let stored = try await repo.pending()
+
+        #expect(stored.count == 1)
+        #expect(stored[0].risk == .critical)
     }
 }

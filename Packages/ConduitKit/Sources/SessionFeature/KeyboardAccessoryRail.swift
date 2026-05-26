@@ -49,8 +49,13 @@ public struct KeyboardAccessoryRail: UIViewControllerRepresentable {
 
     /// Called with raw bytes whenever a key is tapped (or a repeat fires).
     public let onBytes: ([UInt8]) -> Void
+    @Binding private var ctrlLatched: Bool
 
-    public init(onBytes: @escaping ([UInt8]) -> Void) {
+    public init(
+        ctrlLatched: Binding<Bool> = .constant(false),
+        onBytes: @escaping ([UInt8]) -> Void
+    ) {
+        self._ctrlLatched = ctrlLatched
         self.onBytes = onBytes
     }
 
@@ -60,16 +65,25 @@ public struct KeyboardAccessoryRail: UIViewControllerRepresentable {
 
     public func makeUIViewController(context: Context) -> RailViewController {
         let vc = RailViewController()
+        let ctrlBinding = $ctrlLatched
         vc.onBytes = { [coordinator = context.coordinator] bytes in
             coordinator.send(bytes)
+        }
+        vc.onCtrlLatchChanged = { isLatched in
+            ctrlBinding.wrappedValue = isLatched
         }
         return vc
     }
 
     public func updateUIViewController(_ vc: RailViewController, context: Context) {
+        let ctrlBinding = $ctrlLatched
         vc.onBytes = { [coordinator = context.coordinator] bytes in
             coordinator.send(bytes)
         }
+        vc.onCtrlLatchChanged = { isLatched in
+            ctrlBinding.wrappedValue = isLatched
+        }
+        vc.setCtrlHeld(ctrlLatched)
     }
 
     // MARK: Coordinator
@@ -95,8 +109,12 @@ public final class RailViewController: UIViewController {
     // MARK: State
 
     var onBytes: (([UInt8]) -> Void)?
+    var onCtrlLatchChanged: ((Bool) -> Void)?
     private var ctrlHeld: Bool = false {
-        didSet { updateCtrlAppearance() }
+        didSet {
+            updateCtrlAppearance()
+            onCtrlLatchChanged?(ctrlHeld)
+        }
     }
 
     // MARK: Repeat timer (for arrow long-press)
@@ -106,7 +124,7 @@ public final class RailViewController: UIViewController {
 
     // MARK: Buttons
 
-    private var ctrlButton: UIButton!
+    private var ctrlButton: UIButton?
 
     // MARK: - Lifecycle
 
@@ -153,11 +171,12 @@ public final class RailViewController: UIViewController {
         stack.addArrangedSubview(makeKey("Tab",  bytes: KeyCode.tab))
 
         // Ctrl (sticky)
-        ctrlButton = makeKey("Ctrl", bytes: [])
-        ctrlButton.addTarget(self, action: #selector(ctrlTapped), for: .touchUpInside)
+        let ctrl = makeKey("Ctrl", bytes: [])
+        ctrl.addTarget(self, action: #selector(ctrlTapped), for: .touchUpInside)
         // Remove the default sendBytes action added by makeKey
-        ctrlButton.removeTarget(nil, action: #selector(sendBytes(_:)), for: .touchUpInside)
-        stack.addArrangedSubview(ctrlButton)
+        ctrl.removeTarget(nil, action: #selector(sendBytes(_:)), for: .touchUpInside)
+        stack.addArrangedSubview(ctrl)
+        ctrlButton = ctrl
 
         // Arrow keys (long-press repeat)
         for (label, bytes) in [("↑", KeyCode.up), ("↓", KeyCode.down),
@@ -227,9 +246,13 @@ public final class RailViewController: UIViewController {
         case .began:
             repeatBytes = bytes
             repeatTimer?.invalidate()
-            repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.onBytes?(self?.repeatBytes ?? []) }
-            }
+            repeatTimer = Timer.scheduledTimer(
+                timeInterval: 0.04,
+                target: self,
+                selector: #selector(repeatTimerFired(_:)),
+                userInfo: nil,
+                repeats: true
+            )
         case .ended, .cancelled, .failed:
             repeatTimer?.invalidate()
             repeatTimer = nil
@@ -238,8 +261,17 @@ public final class RailViewController: UIViewController {
         }
     }
 
+    @objc private func repeatTimerFired(_ timer: Timer) {
+        onBytes?(repeatBytes)
+    }
+
     @objc private func ctrlTapped() {
         ctrlHeld.toggle()
+    }
+
+    func setCtrlHeld(_ isHeld: Bool) {
+        guard ctrlHeld != isHeld, ctrlButton != nil else { return }
+        ctrlHeld = isHeld
     }
 
     // MARK: - Byte delivery
@@ -265,6 +297,7 @@ public final class RailViewController: UIViewController {
     // MARK: - Ctrl button appearance
 
     private func updateCtrlAppearance() {
+        guard let ctrlButton else { return }
         var config = ctrlButton.configuration ?? UIButton.Configuration.filled()
         config.baseBackgroundColor = ctrlHeld
             ? UIColor.systemBlue

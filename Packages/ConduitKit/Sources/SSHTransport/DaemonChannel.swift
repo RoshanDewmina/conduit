@@ -18,10 +18,12 @@ public actor DaemonChannel {
 
     /// Start the conduitd daemon on the remote host. Uses a bidirectional exec
     /// channel (no PTY) so we can both read approval events and write decisions.
-    public func start(daemonPath: String = "conduitd") async throws {
+    /// daemonPath may contain $HOME-relative components; it is launched via bash -c
+    /// so that $HOME is expanded correctly in non-interactive SSH exec channels.
+    public func start(daemonPath: String = "$HOME/.conduit/bin/conduitd") async throws {
         let (byteStream, byteCont) = AsyncStream<[UInt8]>.makeStream()
         let (writer, task) = try await session.requestExecChannel(
-            command: "\(daemonPath) serve",
+            command: "bash -c '\(daemonPath) serve'",
             dataContinuation: byteCont
         )
         stdinWriter = writer
@@ -47,7 +49,7 @@ public actor DaemonChannel {
     /// Send an approval decision back to conduitd via JSON-RPC over the daemon's stdin.
     public func respond(approvalId: String, decision: Approval.Decision) async throws {
         guard let writer = stdinWriter else { return }
-        let decisionStr = (decision == .approved || decision == .approvedAlways) ? "approved" : "rejected"
+        let decisionStr = (decision == .approved || decision == .approvedAlways) ? "approve" : "deny"
         let params: [String: Any] = ["approvalId": approvalId, "decision": decisionStr]
         let envelope: [String: Any] = [
             "jsonrpc": "2.0",

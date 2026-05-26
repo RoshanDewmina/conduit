@@ -34,6 +34,11 @@
            cursor: pointer; margin-top: 24px; text-align: center;
            text-decoration: none; transition: background 0.15s; }
     .btn:hover { background: #2ea043; }
+    .btn[aria-disabled="true"] { cursor: wait; opacity: 0.72; }
+    .email { width: 100%; padding: 12px; margin: 8px 0 4px;
+             background: #0d1117; border: 1px solid #30363d;
+             border-radius: 8px; color: #e6edf3; font-size: 1rem; }
+    .error { color: #ff7b72; font-size: 0.85rem; min-height: 1.2rem; margin-top: 10px; }
     .note { color: #6e7681; font-size: 0.8rem; text-align: center;
             margin-top: 16px; }
     a.note-link { color: #388bfd; }
@@ -42,10 +47,9 @@
 <body>
   <div class="card">
     <h1>Conduit Pro</h1>
-    <p class="sub">AI agent supervision and cloud compute, billed directly — no Apple cut.</p>
+    <p class="sub">AI agent supervision and cloud compute, billed securely through Stripe.</p>
 
-    <!-- Replace data-price-id values with your real Stripe Price IDs -->
-    <div class="plan selected" data-price-id="price_MONTHLY_PLACEHOLDER" onclick="select(this)">
+    <div class="plan selected" data-plan="monthly" onclick="select(this)">
       <div class="plan-header">
         <span class="plan-name">Monthly</span>
         <span class="plan-price">$9 / mo</span>
@@ -59,24 +63,27 @@
       </ul>
     </div>
 
-    <div class="plan" data-price-id="price_ANNUAL_PLACEHOLDER" onclick="select(this)">
+    <div class="plan" data-plan="annual" onclick="select(this)">
       <div class="plan-header">
         <span class="plan-name">Annual</span>
         <span class="plan-price">$79 / yr</span>
       </div>
-      <p class="plan-desc">Save 27% vs monthly.</p>
+      <p class="plan-desc">Annual billing.</p>
       <ul class="features">
         <li>Everything in Monthly</li>
         <li>Early access to new features</li>
       </ul>
     </div>
 
-    <!-- Replace YOUR_STRIPE_LINK with the actual Stripe Checkout payment link URL -->
-    <a id="checkout-btn" class="btn"
-       href="https://buy.stripe.com/YOUR_STRIPE_LINK"
-       target="_blank" rel="noopener">
-      Subscribe with Stripe →
-    </a>
+    <label>
+      <span class="note">Email for receipts</span>
+      <input id="email" class="email" type="email" autocomplete="email" placeholder="you@example.com" />
+    </label>
+
+    <button id="checkout-btn" class="btn" type="button" onclick="checkout()">
+      Continue to Stripe
+    </button>
+    <div id="error" class="error" role="alert"></div>
 
     <p class="note">
       Payments handled by <a class="note-link" href="https://stripe.com" target="_blank">Stripe</a>.
@@ -86,15 +93,43 @@
   </div>
 
   <script>
-    let selectedPriceId = document.querySelector('.plan.selected')?.dataset?.priceId ?? '';
+    const apiBase = (window.CONDUIT_BILLING_API_BASE_URL || window.location.origin).replace(/\/$/, '');
+    let selectedPlan = document.querySelector('.plan.selected')?.dataset?.plan ?? 'monthly';
 
     function select(el) {
       document.querySelectorAll('.plan').forEach(p => p.classList.remove('selected'));
       el.classList.add('selected');
-      selectedPriceId = el.dataset.priceId;
-      // If you use Stripe Checkout Sessions (server-side), POST the priceId to your backend.
-      // For a simple payment link, just update the href:
-      // document.getElementById('checkout-btn').href = `https://checkout.stripe.com/...?price=${selectedPriceId}`;
+      selectedPlan = el.dataset.plan;
+    }
+
+    async function checkout() {
+      const button = document.getElementById('checkout-btn');
+      const error = document.getElementById('error');
+      const email = document.getElementById('email').value.trim();
+      button.setAttribute('aria-disabled', 'true');
+      button.textContent = 'Opening Stripe...';
+      error.textContent = '';
+
+      try {
+        const response = await fetch(`${apiBase}/billing/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: selectedPlan, email })
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const session = await response.json();
+        if (!session.url) {
+          throw new Error('Checkout session did not include a redirect URL.');
+        }
+        window.location.href = session.url;
+      } catch (err) {
+        error.textContent = 'Unable to start checkout. Please try again later.';
+        console.error(err);
+        button.removeAttribute('aria-disabled');
+        button.textContent = 'Continue to Stripe';
+      }
     }
   </script>
 </body>

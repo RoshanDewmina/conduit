@@ -16,7 +16,7 @@ public final class SFTPFilesViewModel {
 
     private let sftp: SFTPClient
 
-    public init(sftp: SFTPClient, initialPath: String = "~") {
+    public init(sftp: SFTPClient, initialPath: String = ".") {
         self.sftp = sftp
         self.currentPath = initialPath
     }
@@ -48,6 +48,7 @@ public final class SFTPFilesViewModel {
     }
 
     public func navigateUp() async {
+        guard currentPath != "/" && currentPath != "." && currentPath != "~" else { return }
         let parent = (currentPath as NSString).deletingLastPathComponent
         currentPath = parent.isEmpty ? "/" : parent
         await reload()

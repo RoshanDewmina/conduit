@@ -119,7 +119,12 @@ struct SessionShellView: View {
         case .preview:
             SmartPreviewView(session: viewModel.session)
         case .files:
-            SFTPFilesView(viewModel: SFTPFilesViewModel(sftp: SFTPClient(session: viewModel.session)))
+            SFTPFilesView(
+                viewModel: SFTPFilesViewModel(
+                    sftp: SFTPClient(session: viewModel.session),
+                    initialPath: viewModel.cwd
+                )
+            )
         case .diff:
             diffSurface(for: viewModel)
         case .inbox:

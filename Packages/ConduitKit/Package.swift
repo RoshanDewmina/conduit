@@ -12,6 +12,7 @@ let package = Package(
     platforms: [
         .iOS(.v26),
         .macOS(.v15),
+        .watchOS(.v26),
     ],
     products: [
         // ── Engines (no UIKit) ───────────────────────────────────────────
@@ -185,7 +186,10 @@ let package = Package(
                 "KeysFeature",
                 "SyncKit",
             ],
-            swiftSettings: swiftSettings
+            swiftSettings: swiftSettings,
+            linkerSettings: [
+                .linkedFramework("WatchConnectivity", .when(platforms: [.iOS])),
+            ]
         ),
 
         // ── Tests ────────────────────────────────────────────────────────
@@ -202,6 +206,7 @@ let package = Package(
                 "SyncKit",
                 "PreviewKit",
                 "SessionFeature",
+                "SettingsFeature",
             ],
             swiftSettings: swiftSettings
         ),

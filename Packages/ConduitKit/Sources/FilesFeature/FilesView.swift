@@ -120,7 +120,7 @@ public struct SFTPFilesView: View {
                         .font(.system(.callout, design: .monospaced))
                 }
             }
-            if vm.currentPath != "/" && vm.currentPath != "~" {
+            if vm.currentPath != "/" && vm.currentPath != "~" && vm.currentPath != "." {
                 Button("..") { Task { await vm.navigateUp() } }
             }
             ForEach(vm.entries) { entry in
