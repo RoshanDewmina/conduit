@@ -210,8 +210,19 @@ public final class SessionViewModel {
     public func escalateToRaw() async {
         guard !isRaw, status == .connected else { return }
 
+        // Estimate terminal dimensions from screen size + current font.
+        // Far better than hardcoding 80×24; SwiftTerm will send an accurate
+        // resize once it lays out, but this ensures the first screen paint is sane.
+        let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
+        let fontSize = CGFloat(storedSize > 0 ? storedSize : 13.0)
+        let screen = UIScreen.main.bounds
+        let charWidth  = fontSize * 0.601   // UIFont.monospacedSystemFont aspect ratio
+        let lineHeight = fontSize * 1.35
+        let estCols = max(80, Int(screen.width  / charWidth))
+        let estRows = max(24, Int(screen.height / lineHeight) - 6)  // minus nav/keyboard chrome
+
         do {
-            let shell = try await SSHShell.open(session: sshSession, width: 80, height: 24)
+            let shell = try await SSHShell.open(session: sshSession, width: estCols, height: estRows)
             let handle = TerminalFeedHandle()
             let terminal = RawTerminalView(
                 feedHandle: handle,
@@ -291,8 +302,56 @@ public final class SessionViewModel {
         await run(command: command)
     }
 
+    // MARK: - TUI command detection
+
+    /// Programs that need a real PTY (ncurses / alt-screen). Running them
+    /// through the exec channel in block mode produces garbled output because
+    /// there is no PTY — they either fall back to batch text or error out.
+    private static let tuiCommands: Set<String> = [
+        // system monitors
+        "top", "htop", "btop", "bpytop", "glances", "nmon", "iotop",
+        "iftop", "nethogs", "bmon", "atop", "ctop",
+        // editors
+        "vim", "vi", "nvim", "nano", "emacs", "micro", "helix", "hx", "pico",
+        // pagers
+        "less", "more", "man",
+        // multiplexers
+        "tmux", "screen", "byobu", "zellij",
+        // file managers
+        "ranger", "mc", "nnn", "vifm", "ncdu",
+        // mail
+        "mutt", "alpine", "aerc",
+        // misc interactive
+        "watch", "cmatrix", "sl", "tty-clock",
+    ]
+
+    private func isTUICommand(_ command: String) -> Bool {
+        guard let first = command.trimmingCharacters(in: .whitespaces)
+            .components(separatedBy: .whitespaces).first,
+              !first.isEmpty else { return false }
+        let name = (first as NSString).lastPathComponent.lowercased()
+        return Self.tuiCommands.contains(name)
+    }
+
     private func run(command: String) async {
         commandHistory.append(command)
+
+        // Proactively escalate to raw PTY for known TUI programs.
+        // Running them via exec (no PTY) produces garbled output; escalate
+        // first, wait for SwiftTerm to lay out + send the real resize, then
+        // type the command into the live shell.
+        if isTUICommand(command), !isRaw {
+            await escalateToRaw()
+            // 250 ms is enough for SwiftUI to render RawTerminalView and for
+            // SwiftTerm to fire sizeChanged so the server gets the real dimensions
+            // before the TUI program starts painting.
+            try? await Task.sleep(for: .milliseconds(250))
+            if let shell = activeShell {
+                try? await shell.send(Array((command + "\n").utf8))
+            }
+            return
+        }
+
         let prompt = Block.PromptInfo(cwd: cwd, hostName: host.name)
         let blockID = blocks.begin(sessionID: sessionID, command: command, prompt: prompt)
 
