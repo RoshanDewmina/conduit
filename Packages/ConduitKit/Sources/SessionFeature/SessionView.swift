@@ -15,6 +15,7 @@ public struct SessionView: View {
     @State private var availableSnippets: [Snippet] = []
     @State private var rawCtrlLatched = false
     @State private var showingPortForward = false
+    @State private var dictation = DictationEngine()
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -245,6 +246,21 @@ public struct SessionView: View {
             .disabled(vm.isTranslating)
             .onSubmit { Task { await vm.submit() } }
 
+            Button {
+                Task {
+                    if dictation.isListening {
+                        dictation.stop()
+                    } else {
+                        await dictation.start { text in
+                            vm.inputText = text
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: dictation.isListening ? "mic.fill" : "mic")
+                    .font(.title2)
+                    .foregroundStyle(dictation.isListening ? .red : .secondary)
+            }
             Button { showingSnippetPalette = true } label: {
                 Image(systemName: "chevron.up.square")
                     .font(.title2)

@@ -111,6 +111,16 @@ public struct AppRoot: View {
     @State private var scenePhaseObserver: ScenePhaseObserver?
     @State private var isUnlocked: Bool = false
     @State private var watchConnector = PhoneWatchConnector()
+    @State private var pm = PurchaseManager.shared
+    @State private var showingPaywall = false
+    @State private var paywallFeatureName = ""
+
+    private var isPro: Bool {
+        switch pm.purchaseState {
+        case .purchased, .unknown: return true
+        default: return false
+        }
+    }
 
     public enum Tab: Hashable, Sendable {
         case workspaces
@@ -172,9 +182,13 @@ public struct AppRoot: View {
         }
         .task { await attemptUnlock() }
         .task { watchConnector.activate() }
+        .task { await pm.load() }
         .task {
             await Notifications.shared.registerCategories()
             _ = await Notifications.shared.requestAuthorization()
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if let observer = scenePhaseObserver {
@@ -378,7 +392,11 @@ public struct AppRoot: View {
                 viewModel: WorkspacesViewModel(repository: env.hostRepo),
                 onSelect: { host in openSession(host: host, env: env) },
                 onEdit: { host in editingHost = host },
-                onAddHost: { addHostPresented = true }
+                onAddHost: { addHostPresented = true },
+                onAddHostGated: isPro ? nil : {
+                    paywallFeatureName = "Unlimited SSH Hosts"
+                    showingPaywall = true
+                }
             )
             .id(workspacesRevision)
         case .session:
@@ -387,7 +405,14 @@ public struct AppRoot: View {
                 inboxViewModel: activeInboxViewModel
             )
         case .inbox:
-            InboxView(viewModel: activeInboxViewModel)
+            if isPro {
+                InboxView(viewModel: activeInboxViewModel)
+            } else {
+                GlobalInboxGateView {
+                    paywallFeatureName = "AI Agent Inbox"
+                    showingPaywall = true
+                }
+            }
         case .settings:
             SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
                 .toolbar {
@@ -512,6 +537,31 @@ private struct LaunchLockView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .systemBackground))
+    }
+}
+
+private struct GlobalInboxGateView: View {
+    let onUpgrade: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "tray.and.arrow.down")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("AI Agent Inbox · Pro")
+                .font(.title3.weight(.semibold))
+            Text("Review and approve AI agent actions from your Codex sessions.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Upgrade to Pro") { onUpgrade() }
+                .buttonStyle(.borderedProminent)
+            Spacer()
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Inbox")
     }
 }
 

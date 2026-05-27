@@ -33,7 +33,19 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>35.201.3.231</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Conduit uses the microphone to let you dictate commands and AI prompts hands-free in the terminal composer.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Conduit uses speech recognition to transcribe dictated commands and AI prompts into the terminal composer.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers.</string>
 	<key>UIBackgroundModes</key>

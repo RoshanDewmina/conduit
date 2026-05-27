@@ -9,6 +9,7 @@ import FilesFeature
 import SSHTransport
 import DiffFeature
 import DiffKit
+import SettingsFeature
 
 enum SessionSurface: Hashable, CaseIterable {
     case terminal
@@ -43,7 +44,17 @@ struct SessionShellView: View {
     let inboxViewModel: InboxViewModel
 
     @State private var surface: SessionSurface = .terminal
+    @State private var pm = PurchaseManager.shared
+    @State private var showingPaywall = false
+    @State private var paywallFeature = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isPro: Bool {
+        switch pm.purchaseState {
+        case .purchased, .unknown: return true
+        default: return false
+        }
+    }
 
     var body: some View {
         if let viewModel {
@@ -55,6 +66,9 @@ struct SessionShellView: View {
             }
             .navigationTitle(viewModel.host.name)
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showingPaywall) {
+                PaywallSheet(featureName: paywallFeature)
+            }
         } else {
             ContentUnavailableView(
                 "No active session",
@@ -117,22 +131,50 @@ struct SessionShellView: View {
         case .terminal:
             SessionView(viewModel: viewModel)
         case .preview:
-            SmartPreviewView(session: viewModel.session)
+            if isPro {
+                SmartPreviewView(session: viewModel.session)
+            } else {
+                ProGateView(featureName: "Dev Server Preview") {
+                    paywallFeature = "Dev Server Preview"
+                    showingPaywall = true
+                }
+            }
         case .files:
-            SFTPFilesView(
-                viewModel: SFTPFilesViewModel(
-                    sftp: SFTPClient(session: viewModel.session),
-                    initialPath: viewModel.cwd
+            if isPro {
+                SFTPFilesView(
+                    viewModel: SFTPFilesViewModel(
+                        sftp: SFTPClient(session: viewModel.session),
+                        initialPath: viewModel.cwd
+                    )
                 )
-            )
+            } else {
+                ProGateView(featureName: "SFTP File Browser") {
+                    paywallFeature = "SFTP File Browser"
+                    showingPaywall = true
+                }
+            }
         case .diff:
-            diffSurface(for: viewModel)
+            if isPro {
+                diffSurface(for: viewModel)
+            } else {
+                ProGateView(featureName: "Diff Review") {
+                    paywallFeature = "Diff Review"
+                    showingPaywall = true
+                }
+            }
         case .inbox:
-            InboxView(
-                viewModel: inboxViewModel,
-                sessionID: viewModel.sessionID,
-                title: "Session Inbox"
-            )
+            if isPro {
+                InboxView(
+                    viewModel: inboxViewModel,
+                    sessionID: viewModel.sessionID,
+                    title: "Session Inbox"
+                )
+            } else {
+                ProGateView(featureName: "AI Agent Inbox") {
+                    paywallFeature = "AI Agent Inbox"
+                    showingPaywall = true
+                }
+            }
         }
     }
 
@@ -155,6 +197,31 @@ struct SessionShellView: View {
         inboxViewModel.approvals.first {
             $0.sessionID == viewModel.sessionID && $0.kind == .patch && $0.patch != nil
         }?.patch
+    }
+}
+
+private struct ProGateView: View {
+    let featureName: String
+    let onUpgrade: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "lock.shield")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("\(featureName) · Pro")
+                .font(.title3.weight(.semibold))
+            Text("Upgrade to Conduit Pro to unlock this feature.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Upgrade to Pro") { onUpgrade() }
+                .buttonStyle(.borderedProminent)
+            Spacer()
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 #endif

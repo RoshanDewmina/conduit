@@ -3,7 +3,7 @@ import Foundation
 import StoreKit
 import Observation
 
-public enum PurchaseState: Sendable {
+public enum PurchaseState: Sendable, Equatable {
     case unknown
     case notPurchased
     case purchased

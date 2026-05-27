@@ -5,9 +5,8 @@ import NotificationsKit
 import UIKit
 #endif
 
-/// Fill this in after deploying daemon/push-backend/ to Fly.io (or Railway/Render).
-/// Example: "https://conduit-push.fly.dev"
-private let pushBackendURL = ""
+/// GCP VM push backend. Switch to HTTPS before public App Store release.
+private let pushBackendURL = "http://35.201.3.231:8080"
 
 @main
 struct ConduitApp: App {

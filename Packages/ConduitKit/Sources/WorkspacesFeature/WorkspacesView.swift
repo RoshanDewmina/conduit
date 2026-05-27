@@ -41,18 +41,25 @@ public struct WorkspacesView: View {
     public var onSelect: (Host) -> Void
     public var onEdit: (Host) -> Void
     public var onAddHost: () -> Void
+    /// Called instead of `onAddHost` when the free-tier host limit (2) is hit.
+    /// Pass `nil` to allow unlimited hosts (Pro users).
+    public var onAddHostGated: (() -> Void)?
 
     public init(
         viewModel: WorkspacesViewModel,
         onSelect: @escaping (Host) -> Void,
         onEdit: @escaping (Host) -> Void,
-        onAddHost: @escaping () -> Void
+        onAddHost: @escaping () -> Void,
+        onAddHostGated: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.onSelect = onSelect
         self.onEdit = onEdit
         self.onAddHost = onAddHost
+        self.onAddHostGated = onAddHostGated
     }
+
+    private static let freeHostLimit = 2
 
     // MARK: - Filtered list
 
@@ -142,7 +149,13 @@ public struct WorkspacesView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { onAddHost() } label: {
+                Button {
+                    if let gated = onAddHostGated, vm.hosts.count >= Self.freeHostLimit {
+                        gated()
+                    } else {
+                        onAddHost()
+                    }
+                } label: {
                     Label("Add Host", systemImage: "plus")
                 }
             }
