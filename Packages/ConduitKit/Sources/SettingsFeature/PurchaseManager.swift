@@ -26,6 +26,28 @@ public final class PurchaseManager {
         BillingEligibility.isExternalStripeEligible(storefrontCountryCode: storefrontCountryCode)
     }
 
+    /// DEBUG ONLY — all Pro features are unlocked in debug builds so the
+    /// paywall never blocks simulator/device testing. The `conduitDebugProBypass`
+    /// flag is honoured as a kill-switch (set it to `false` in UserDefaults to
+    /// re-engage the paywall during debug). Production builds (#if !DEBUG)
+    /// always require a real purchase.
+    public var isPro: Bool {
+        #if DEBUG
+        // Default: unlocked. Explicit `false` overrides back to paywall.
+        if UserDefaults.standard.object(forKey: "conduitDebugProBypass") == nil { return true }
+        if UserDefaults.standard.bool(forKey: "conduitDebugProBypass") { return true }
+        #endif
+        return purchaseState == .purchased
+    }
+
+#if DEBUG
+    /// Toggle the debug pro-bypass flag from the Settings UI.
+    public var debugProBypass: Bool {
+        get { UserDefaults.standard.bool(forKey: "conduitDebugProBypass") }
+        set { UserDefaults.standard.set(newValue, forKey: "conduitDebugProBypass") }
+    }
+#endif
+
     @ObservationIgnored nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
 
     private init() {
