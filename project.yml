@@ -35,6 +35,7 @@ targets:
       properties:
         UILaunchStoryboardName: LaunchScreen
         NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
+        NSSupportsLiveActivities: true
         UIBackgroundModes:
           - fetch
         NSAppTransportSecurity:
@@ -71,6 +72,8 @@ targets:
       - package: ConduitKit
         product: AppFeature
       - target: ConduitWatch
+        embed: true
+      - target: ConduitLiveActivityWidget
         embed: true
 
   ConduitWatch:
@@ -147,6 +150,38 @@ targets:
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
+
+  ConduitLiveActivityWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: ConduitLiveActivityWidget
+    info:
+      path: ConduitLiveActivityWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.liveactivity
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+    dependencies:
+      - package: ConduitKit
+        product: SessionFeature
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
 
 schemes:
   Conduit:

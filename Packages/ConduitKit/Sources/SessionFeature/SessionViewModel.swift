@@ -204,6 +204,16 @@ public final class SessionViewModel {
             if let repo = snapshotRepo {
                 try? await repo.touch(hostID: host.id)
             }
+            // Tier 1.5.1: surface "session active on <host>" on the lock
+            // screen + Dynamic Island via a Live Activity. No-ops in iOS
+            // versions / settings where Live Activities are unavailable.
+            if #available(iOS 16.2, *) {
+                await ConduitLiveActivityManager.shared.start(
+                    hostID: host.id.uuidString,
+                    hostName: host.name,
+                    status: "connected"
+                )
+            }
         } catch ConduitError.hostKeyUnknown(let fp) {
             pendingHostKeyFingerprint = fp
             status = .disconnected
@@ -240,6 +250,10 @@ public final class SessionViewModel {
         await sshSession.disconnect()
         status = .disconnected
         applyScreenSleepPolicy(connected: false)
+        // Tier 1.5.1: dismiss the lock-screen Live Activity for this host.
+        if #available(iOS 16.2, *) {
+            await ConduitLiveActivityManager.shared.end(hostID: host.id.uuidString)
+        }
     }
 
     private func startKeepAlive() {
