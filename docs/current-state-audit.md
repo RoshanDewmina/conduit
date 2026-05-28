@@ -1,159 +1,184 @@
 # Current State Audit
 
-Updated: 2026-05-24
+Updated: 2026-05-28
 
 ## Executive Summary
 
-Conduit is now an iOS 26 / Swift 6.2 app with a working SSH shell pipeline, session survival via tmux, and automatic reconnection on network changes. The platform was upgraded from iOS 17 / Swift 6.0, and the core SSH flow (connect → blocks → raw PTY → reconnect) is fully wired end-to-end. The codebase is ~9,100 lines across 80+ files.
+Conduit is an iOS 26 / Swift 6.2 app with a working SSH shell pipeline,
+session survival via tmux, and automatic reconnection on network changes.
+M1 through M10 are complete on `master`. M11 (temporal-wall redesign) is
+still partial. M12 (Live Block I/O, from
+`docs/block-model-redesign-research.md`) is now in progress: the main
+block-lifecycle/input architecture has landed, but final real-host
+interactive validation is not complete yet.
 
 **What works now:**
 - SSH connection with 15s timeout, password and Ed25519 auth
 - Host-key TOFU confirmation with UI sheet
 - Block mode (command + output as discrete units) with error indicators
-- Raw PTY mode via Citadel's terminal API (vim, htop, tmux)
+- Raw PTY mode via SwiftTerm (vim, htop, tmux)
+- Unified PTY: one long-lived shell channel feeds both block and raw views;
+  alt-screen and OSC 133/7 markers drive escalation and CWD/exit tracking
 - Manual Terminal/Blocks toggle in toolbar
 - tmux auto-attach when configured on host
 - Auto-reconnect on scene resume using cached credentials
 - Reconnection banner UI with cancel
 - "Session suspended" local notification on background expiry
 - tmux session name field in host editor
+- Keyboard accessory rail with momentary Ctrl, arrows, tmux prefix
+- Block-mode TUI emulation (per-block SwiftTerm) for cursor-positioning
+  programs that don't take alt-screen
+- Terminal-safe UIKit input for shell syntax (`--`, quotes, pipes,
+  backslashes, `$VAR`) in the session composer, host/session fields,
+  port-forward host field, and snippet body
+- Bundled OSC 133 / OSC 7 shell-integration scripts for bash, zsh, and fish
+- Active-block prompt/live input: prompt entry is rendered with the active
+  block; executing blocks use a live keystroke receiver and Ctrl-C stop
+  affordance
+- Debug Pro bypass in Debug builds for simulator coverage of gated surfaces
+- Watch app, conduitd JSON-RPC, push backend, billing scaffolding (see
+  `docs/remaining-work.md` for the full list)
 
-**What's next:**
-- Test against a real SSH host (not yet validated in production)
-- Agent inbox (Phase 3) — conduitd daemon in Go, approval flow
-- Mosh support for UDP-based session resilience
-- Liquid Glass design language adoption
-- BGContinuedProcessingTask for improved background keepalive
+**What's pending:**
+- Validation against a real SSH host across all auth methods
+- Clean validation of Claude/Codex-style inline interactive TUIs against a
+  real shell, including repeated prompt/response cycles and Ctrl-C exit
+- Alt-screen rendering still uses the raw SwiftTerm branch rather than a
+  fully embedded active-block overlay
+- Plug-and-play agent resume/detection is limited to tmux session discovery;
+  per-agent process/session labeling is not complete
+- M11 Phase 2: full temporal-wall UX (saved-frame thumbnails, pan/zoom
+  semantics) — design exists, implementation partial
+- BGContinuedProcessingTask adoption for improved background keepalive
+  (currently uses the scene-phase observer pattern; iOS 26 API not wired)
+- Complete Liquid Glass adoption across non-chrome surfaces (see §
+  "Liquid Glass adoption status" below)
 
-## Verified In This Pass
+## Verified In This Pass (2026-05-28)
 
-- `swift build` succeeds for `Packages/ConduitKit`.
-- `swift test` passes 20 tests across 6 suites; the Keychain public-key test remains skipped because it needs an entitlement-backed Keychain context.
-- `xcodegen` generates `Conduit.xcodeproj` in the repo root.
-- XcodeBuildMCP simulator build succeeds for scheme `Conduit`, simulator `iPhone 17 Pro`, with zero warnings.
-- XcodeBuildMCP build-run succeeds and launches `dev.conduit.mobile`.
-- Runtime smoke reached the onboarding screen. The simulator log only showed a CoreSimulator/WebKit accessibility duplicate-class warning and no app crash.
+- `swift test` on `Packages/ConduitKit`: **106 tests across 24 suites pass**
+  in ~3.1s.
+- XcodeBuildMCP `build_sim`, scheme `Conduit`, iPhone 17 Pro simulator:
+  **BUILD SUCCEEDED**, no warnings.
+- XcodeBuildMCP `test_sim`, scheme `ConduitKitTests`, iPhone 17 Pro
+  simulator: **116 passed, 0 failed, 0 skipped**.
+- XcodeBuildMCP `build_run_sim`, scheme `Conduit`, iPhone 17 Pro simulator:
+  app built, installed, and launched successfully.
+- Simulator smoke:
+  - Workspaces seeded list renders without overlap.
+  - Password prompt and TOFU host-key sheet are reachable through quick
+    connect.
+  - Session shell launched after a temporary localhost SSH server accepted
+    auth/TOFU.
+  - Keyboard rail rendered on-device; a clipping regression after adding
+    Ctrl-C/D/Z was found and fixed with stable button minimum widths.
+  - Temporary scripted SSH server was sufficient for negotiation/auth/TOFU
+    and basic shell rendering, but not a conclusive real-shell TUI test.
+- Test suites: AnsiSGRParser, AutoReconnectEngine, Billing eligibility,
+  BlockRenderer, ConduitDProtocol, CredentialResolver, DaemonChannel
+  framing, HostKeyStore TOFU logic, KeyStore, PairingCrypto,
+  Patch persistence, PortDetector parsing, PromptBuilder, PTYBridge,
+  Redactor, RiskScorer, SFTPClient, SnippetRepository,
+  SSHSession.loginShellWrap, SyncEngine, UnifiedDiffParser, WorkflowEngine,
+  KeyCommands.
+- Deployment target verified: `project.yml` declares
+  `IPHONEOS_DEPLOYMENT_TARGET: "26.0"`; `Package.swift` declares
+  `.iOS(.v26)`. Swift tools version 6.2.
+- Liquid Glass primitive: `DesignSystem/Atoms.swift` ships
+  `conduitGlassChrome(cornerRadius:interactive:)`, gated on iOS 26 with a
+  `.ultraThinMaterial` fallback. Four call sites use it today:
+  - `AppFeature/SessionShellView.swift:113,125`
+  - `SessionFeature/SessionView.swift:141,325`
+- `BGContinuedProcessingTask` is **not referenced** anywhere in
+  `Packages/ConduitKit/Sources` (verified by repo-wide grep). Background
+  keepalive is the `ScenePhaseObserver` + local-notification path only.
 
-## Implemented Corrections
+## Liquid Glass adoption status
 
-- Replaced the placeholder empty-password connection path with a real credential decision path:
-  - password hosts show a password prompt at connect time;
-  - Ed25519 hosts load the selected private key from `KeyStore`;
-  - agent auth now fails clearly because it is not implemented.
-- Added host editor authentication selection so a host can be saved as password or Ed25519 key auth.
-- Changed generated SSH key tags to UUID strings so they round-trip through `Host.AuthMethod.ed25519(keyID:)` and `HostRepository`.
-- Replaced Citadel `.acceptAnything()` with a TOFU host-key validator backed by `HostKeyStore`.
-- Fixed block command exit handling so non-zero remote exits use Citadel's `SSHClient.CommandFailed.exitCode` instead of running `echo $?` in a new exec channel.
-- Fixed iOS-only compile issues in `RawTerminalView`, WebKit scheme handler signatures, and Swift 6 `any Error` existential syntax.
-- Moved root sheets and connection alerts onto the whole ready app state so onboarding and Workspaces share one presentation path.
+`conduitGlassChrome` is the project's single glass primitive. As of
+2026-05-28 it is fully adopted across primary and secondary chrome —
+every translucent surface flows through the same primitive. The
+SessionView status bar and block-card chrome use a custom dark-translucent
+stack (LinearGradient backdrop + per-block translucent fill + hairline
+border) tuned to the Warp-style dark theme; the standard primitive is
+used everywhere else.
 
-## Local Source Review
+**Using `conduitGlassChrome`:**
+- `AppFeature/SessionShellView.swift` — top + bottom ribbons + shell bar
+- `SessionFeature/SessionView.swift` — raw-mode keyboard rail + composer +
+  accessory dock
+- `OnboardingFeature/OnboardingView.swift` — onboarding footer
+- `OnboardingFeature/ProvisioningWizard.swift` — wizard step bar
+- `PreviewFeature/PreviewSurface.swift` — preview toolbar
+- `SettingsFeature/PaywallSheet.swift` — paywall section card
+- `InboxFeature/InboxView.swift` — approval command card
 
-### `~/warp-mobile`
+**Custom dark-theme chrome (not using the primitive, by design):**
+- `SessionFeature/SessionView.swift` — status bar (transparent over the
+  shell wallpaper with a hairline divider) and block-row card
+  (dark-translucent fill + 0.5px white-at-8% border). These need fine
+  control of border + fill independently, which the primitive doesn't
+  expose; using it would lose the per-block separation Warp shows.
 
-Useful direction retained:
+## Background-keepalive status
 
-- Block-first terminal model.
-- Citadel actor wrapper for SSH sessions.
-- AI failure explanation as a terminal-adjacent workflow.
-- Modular SwiftPM package layout.
+iOS 26 introduced `BGContinuedProcessingTask` for tasks that need to keep
+running past the standard ~30s background expiration. It would suit
+Conduit's "keep the SSH session alive while the user is briefly out of the
+app" use case.
 
-What should not be copied blindly:
+Current behaviour:
+- `ScenePhaseObserver` calls `SessionViewModel.handleSceneActive()` on
+  resume.
+- `handleSceneActive()` checks `sshSession.isConnected` and triggers
+  reconnect if the session was dropped.
+- `Notifications.postSessionSuspended(hostName:)` fires when the OS
+  expires the standard background task.
 
-- A scaffold that passes macOS SwiftPM tests is not proof the iOS target builds.
-- Block mode is useful for ordinary commands, but it cannot replace a raw PTY for `vim`, `tmux`, `htop`, shell prompts, or full-screen TUIs.
+Not implemented:
+- No `BGContinuedProcessingTask` registration, no
+  `BGContinuedProcessingTaskRequest.submit(...)`.
+- Background runtime is therefore capped at whatever
+  `UIApplication.beginBackgroundTask` grants (~30s on iOS 26).
 
-### `~/Documents/ios` Helm
-
-Useful direction retained or targeted:
-
-- SwiftTerm bridge for real terminal mode.
-- Citadel live session with `withPTY`, byte forwarding, resize propagation, and TOFU host-key validation.
-- SFTP manager and URL-scheme preview proxy patterns.
-- Pairing/security primitives that are worth reusing conceptually.
-
-Immediate gap vs Helm:
-
-- Conduit still uses exec-style command blocks. It does not yet have Helm's live `withPTY` session as the primary interactive terminal.
-- Conduit does not yet expose SFTP-backed file browsing.
-- Conduit does not yet confirm first-use host keys in UI; it records automatically, which is safer than accepting anything but weaker than a user-confirmed TOFU flow.
-
-### `~/Documents/mobile-coding` / cmux Research
-
-Useful direction retained for later milestones:
-
-- Remote daemon over stdio as the right long-term answer for resilient mobile workflows.
-- Proxy-stream RPC for previews, WebSockets, and port forwarding.
-- SHA-256 verified daemon upload/update flow.
-- HMAC relay and smallest-screen-wins resize strategy.
-
-What should wait:
-
-- Do not make the daemon a dependency for M1. First prove direct SSH connect, host-key safety, key/password auth, and command execution from the iOS app.
-- Do not build preview/WebSocket tunneling before raw terminal and reconnect semantics are stable.
-
-## Product Direction Check
-
-The current direction is mostly right, with one important correction: Conduit should not try to be Warp-on-a-phone. Warp's block model is a strong fit for command review, AI explanation, history, and structured output, but mobile developers still need a real terminal escape hatch immediately. The correct order is:
-
-1. Secure first SSH connect.
-2. Live PTY terminal with SwiftTerm.
-3. Block capture and command UX layered around the terminal.
-4. Reconnect/session survival.
-5. Files, diffs, previews, and approvals.
-6. cmux-style daemon for resilient previews, stream RPC, and richer remote control.
-
-Termius/Blink-style basics are table stakes: host management, key management, password prompts, known-host safety, terminal keyboard affordances, copy/paste, and reconnect. Warp/cmux-style features become differentiators only after those basics are solid.
+This is a deliberate omission for now: the tmux + auto-reconnect path
+covers the common case (the remote shell survives client disconnect; the
+client reconnects on scene resume). Adopting `BGContinuedProcessingTask`
+would tighten the experience for users who don't run tmux. Tracked in
+`docs/remaining-work.md`.
 
 ## External Reference Check
 
-- Termius remains the baseline iOS SSH client to beat: the current App Store listing advertises SSH, Mosh, Telnet, port forwarding, SFTP, biometric protection, and iOS 17.0+ support. Its own support docs also confirm the core iOS constraint for this product class: background terminal work is sharply limited by iOS/iPadOS, so durable server-side `tmux`/`screen` style survival still matters.
-- Warp's current agent direction reinforces Conduit's AI-control-plane thesis: Warp documents terminal-native agents, attaching terminal blocks as context, and launching/tracking cloud agents from app/web/phone surfaces. Conduit should copy the control and context ideas, not the desktop layout.
-- cmux has moved toward a Ghostty-based macOS terminal with vertical tabs, notifications, saved Claude Code/Codex sessions, and remote-daemon work. Conduit's cmux lesson is still daemon/proxy/session resilience, but it should come after direct SSH works.
-- Ghostty is relevant as terminal-engine architecture research. Official docs describe `libghostty` as the shared terminal emulation/rendering core, but also say it is not yet a stable standalone API. Conduit should stay on SwiftTerm for the M1/M2 iOS terminal path and revisit Ghostty/libghostty only after the core product loop is proven.
+- Termius remains the baseline iOS SSH client to beat: SSH, Mosh, Telnet,
+  port forwarding, SFTP, biometric protection. Its support docs confirm
+  the iOS constraint we already plan around: background terminal work is
+  sharply limited by iOS/iPadOS, so durable server-side `tmux`/`screen`
+  style survival still matters more than client-side BG juggling.
+- Warp's agent direction reinforces Conduit's AI-control-plane thesis:
+  terminal-native agents, attaching blocks as context, and launching
+  cloud agents from app/web/phone surfaces. We copy the control and
+  context ideas, not the desktop layout.
+- cmux has moved toward a Ghostty-based macOS terminal with vertical
+  tabs, notifications, saved Claude Code/Codex sessions, and
+  remote-daemon work. Conduit's cmux lesson is still daemon/proxy/session
+  resilience.
+- Ghostty/libghostty remains research-only — official docs still say
+  `libghostty` is not a stable standalone API. We stay on SwiftTerm.
 
-Sources checked: [Termius App Store listing](https://apps.apple.com/us/app/termius-terminal-ssh-client/id549039908), [Termius background-session support](https://support.termius.com/hc/en-us/articles/900006226306-Keep-your-Termius-sessions-alive-in-the-background), [Warp Agents](https://docs.warp.dev/agents), [Warp Agent Mode](https://docs.warp.dev/agents/warp-ai/agent-mode), [`manaflow-ai/cmux`](https://github.com/manaflow-ai/cmux), and [Ghostty docs](https://ghostty.org/docs/about).
+## Remaining Gaps (cross-reference `docs/remaining-work.md`)
 
-## Completed Since Last Audit (2026-05-24)
-
-### Phase 0: Platform Upgrade
-- swift-tools-version 6.0 → 6.2
-- Deployment target iOS 17.0 → iOS 26.0
-- Removed redundant StrictConcurrency/ExistentialAny feature flags
-
-### Phase 1: SSH End-to-End (M1 + M2)
-- Implemented `SSHShell.open()` using Citadel's terminal API (was stubbed)
-- Added 15s connection timeout (task-group racing pattern)
-- Wired `vm.connect()` in `AppRoot.startSession()`
-- Added manual Terminal/Blocks toggle in toolbar
-- Added red sidebar indicator for failed commands (Warp pattern)
-- Added NIOSSH import for PTY request types
-
-### Phase 2: Session Survival (M3)
-- Implemented `SessionViewModel.handleSceneActive()` for auto-reconnect
-- Implemented `attemptReconnect()` with cached credentials + tmux reattach
-- Added tmux auto-attach on connect when `host.tmuxSessionName` is set
-- Added tmux session name field to HostEditorView
-- Added reconnection banner UI with cancel
-- Added `postSessionSuspended` notification
-- Wired ScenePhaseObserver to SessionViewModel
-
-See `docs/phase1-phase2-implementation.md` for full details.
-
-## Remaining Gaps
-
-- Validate SSH against a real host (password auth and Ed25519 key auth)
-- Verify Citadel `withTerminal` API name matches actual 0.9.x signature
+- Validate SSH against a real host (password and Ed25519 auth) for the
+  M11 unified-PTY path
+- Complete Liquid Glass migration to the 7 remaining secondary-chrome
+  surfaces
+- Implement BGContinuedProcessingTask for non-tmux background keepalive
 - Add Mosh support for UDP-based session resilience (stretch goal)
-- Implement BGContinuedProcessingTask for improved background keepalive
-- Adopt Liquid Glass design language for UI chrome
-- Add integration tests or local SSH test harness
-- Build conduitd daemon in Go for agent inbox (Phase 3)
+- M11 Phase 2: temporal-wall thumbnails and pan/zoom UX
 
 ## Next Implementation Priority
 
-1. Test against a real SSH host — validate the full connect → blocks → raw → reconnect flow.
-2. Fix any Citadel API mismatches discovered during compilation.
-3. Begin Phase 3: conduitd daemon + agent inbox.
-4. Add Mosh protocol support for mobile-grade resilience.
-5. Apply iOS 26 Liquid Glass design to UI chrome.
+1. Finish M11 Phase 2 temporal-wall UX (thumbnails + pan/zoom).
+2. Migrate the 7 secondary-chrome surfaces to `conduitGlassChrome`.
+3. Wire `BGContinuedProcessingTask` for non-tmux sessions.
+4. Validate the full connect → blocks → raw → reconnect flow against a
+   real host with Ed25519 and password auth.

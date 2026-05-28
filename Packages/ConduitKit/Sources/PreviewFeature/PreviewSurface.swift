@@ -57,7 +57,7 @@ public struct SmartPreviewView: View {
         VStack(spacing: 0) {
             PreviewToolbar(vm: $vm, session: session)
                 .padding(.vertical, 8)
-                .background(.bar)
+                .conduitGlassChrome(cornerRadius: 0)
 
             Divider()
 

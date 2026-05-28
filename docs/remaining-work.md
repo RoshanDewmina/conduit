@@ -1,6 +1,26 @@
 # Conduit — Remaining Work Before Production
 
-Last updated: 2026-05-26
+Last updated: 2026-05-28 (rev — block-model redesign complete)
+
+## Block-model redesign — status (block-model-redesign-research.md §7)
+
+Phases 0–7 are now landed:
+
+- ✅ Phase 0 — terminal-safe input field, bundled shell scripts, debug
+  paywall bypass, dup keyboard-rail audit, status-bar overlap fix
+- ✅ Phase 1 — failing tests for OSC 133 state machine
+- ✅ Phase 2 — OSC 133 A/B/C/D wiring in `PTYBridge`
+- ✅ Phase 3 — `BlockState` enum + lifecycle owned by OSC 133 markers
+- ✅ Phase 4 — `sendKeystrokes`, `LivePromptInputView`, direct PTY input
+- ✅ Phase 5 — Mode toggle retired. **Both** inline TUIs (Claude/Codex)
+  **and** alt-screen TUIs (htop/vim/tmux) now render via an embedded
+  SwiftTerm `TerminalView` inside the active block. No more full-screen
+  `isRaw` swap — one path serves all live programs.
+- ✅ Phase 6 — `tmux ls` detection on connect + attach sheet UI
+- ✅ Phase 7 — OSC 133 missing-marker fallback, byte-pattern interactive-
+  CLI hint, os.signpost telemetry, full `conduitGlassChrome` adoption,
+  Warp-style dark theme cascaded at AppRoot
+
 
 ## What's confirmed done (code complete, tested)
 
@@ -10,7 +30,7 @@ Last updated: 2026-05-26
 - Block-mode terminal (command + output as units) ✅
 - Raw PTY mode via SwiftTerm (vim, htop, tmux) ✅
 - Auto mode-switch (block ↔ PTY) ✅
-- Keyboard accessory rail (Ctrl, arrows, presets) ✅
+- Keyboard accessory rail (Ctrl-C/D/Z, Ctrl latch, arrows, presets) ✅
 - tmux auto-attach on connect ✅
 - Auto-reconnect on network change ✅
 - ANSI SGR parser (colors, bold, italic) ✅
@@ -56,7 +76,8 @@ Last updated: 2026-05-26
 - `daemon/push-backend/.env.example` documenting all required env vars ✅
 
 ### Quality
-- 89/89 tests passing ✅
+- 106/106 SwiftPM tests passing in 24 suites (verified 2026-05-28 via `swift test` on `Packages/ConduitKit`) ✅
+- 116/116 iOS simulator tests passing on iPhone 17 Pro (verified 2026-05-28 via XcodeBuildMCP `test_sim`, scheme `ConduitKitTests`) ✅
 - Zero Swift 6 concurrency warnings ✅
 - BUILD SUCCEEDED (full scheme: iOS + watchOS + widget, simulator iOS 26.4.1) ✅
 - App launches on iPhone 17 Pro simulator ✅
@@ -132,6 +153,20 @@ Alternatively via Xcode:
 ---
 
 ## Non-blocking (do after TestFlight)
+
+### Live Block I/O validation
+
+The M12 core implementation is in progress, but before calling it production
+ready, validate against a real SSH host and real shells:
+
+- [ ] `claude --version` stays as `--` and runs one-shot on iOS.
+- [ ] `claude` / `codex` inline TUI accepts repeated messages without
+      creating garbled follow-up blocks.
+- [ ] Ctrl-C exits the foreground inline TUI and returns to a fresh prompt.
+- [ ] `htop`, `top`, `vim`, and `tmux` exercise the alt-screen path.
+- [ ] tmux attach/resume works after disconnect/reconnect.
+- [ ] bash, zsh, and fish bundled shell-integration scripts emit OSC 133
+      A/C/D plus OSC 7 on real shells.
 
 ### Codex approval loop: interactive hook trust (requires iPhone connected)
 

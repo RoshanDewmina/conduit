@@ -87,8 +87,7 @@ private struct ApprovalCard: View {
                     .font(.system(.body, design: .monospaced))
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .conduitGlassChrome(cornerRadius: 6)
             }
             Text("cwd: \(approval.cwd)").font(.caption.monospaced()).foregroundStyle(.tertiary)
 

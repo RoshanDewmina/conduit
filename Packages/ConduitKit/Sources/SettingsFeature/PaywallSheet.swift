@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import StoreKit
+import DesignSystem
 
 /// Reusable paywall modal. Present when a user accesses a Pro-gated surface.
 /// Automatically dismisses on successful purchase.
@@ -41,8 +42,7 @@ public struct PaywallSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .conduitGlassChrome(cornerRadius: 12)
 
                     Group {
                         if let product = pm.product {

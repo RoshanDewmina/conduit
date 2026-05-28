@@ -60,7 +60,7 @@ public struct OnboardingView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(.bar)
+            .conduitGlassChrome(cornerRadius: 0)
         }
     }
 

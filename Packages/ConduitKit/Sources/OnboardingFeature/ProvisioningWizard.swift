@@ -4,6 +4,7 @@ import Observation
 import ConduitCore
 import AgentKit
 import PersistenceKit
+import DesignSystem
 
 @MainActor @Observable
 public final class ProvisioningWizardViewModel {
@@ -196,8 +197,7 @@ public struct ProvisioningWizard: View {
                 .padding()
             }
             .frame(maxHeight: 300)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .conduitGlassChrome(cornerRadius: 12)
             .padding()
         }
     }

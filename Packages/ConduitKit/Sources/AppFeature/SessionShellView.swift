@@ -91,7 +91,7 @@ struct SessionShellView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .conduitGlassChrome(cornerRadius: 0)
     }
 
     private var compactSurfaceMenu: some View {
