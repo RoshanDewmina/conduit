@@ -55,11 +55,10 @@ public struct RawTerminalView: UIViewRepresentable {
             return CGFloat(stored > 0 ? stored : 13)
         }()
 
-        // Gesture cursor drag state
+        // Cursor drag state — driven by a UIPanGestureRecognizer (no long-press delay).
         var cursorDragAccumX: CGFloat = 0
         var cursorDragAccumY: CGFloat = 0
         var cursorDragLastLocation: CGPoint = .zero
-        var isCursorDragging = false
         var cursorDragOnBytes: (([UInt8]) -> Void)?
 
         public init(
@@ -94,43 +93,41 @@ public struct RawTerminalView: UIViewRepresentable {
             }
         }
 
-        // MARK: - Gesture cursor movement (long-press + drag)
+        // MARK: - Gesture cursor movement (immediate pan — no long-press delay)
 
-        @objc func handleCursorLongPress(_ gr: UILongPressGestureRecognizer) {
+        /// Pan recognizer replaces the 350 ms long-press. Movement sends arrow
+        /// keys once the accumulated translation exceeds a 12 pt dead-zone,
+        /// preventing accidental triggers on short taps.
+        @objc func handleCursorPan(_ gr: UIPanGestureRecognizer) {
             switch gr.state {
             case .began:
-                isCursorDragging = true
                 cursorDragAccumX = 0
                 cursorDragAccumY = 0
                 cursorDragLastLocation = gr.location(in: gr.view)
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             case .changed:
-                guard isCursorDragging else { return }
                 let loc = gr.location(in: gr.view)
                 let deltaX = loc.x - cursorDragLastLocation.x
                 let deltaY = loc.y - cursorDragLastLocation.y
                 cursorDragLastLocation = loc
                 cursorDragAccumX += deltaX
                 cursorDragAccumY += deltaY
-                let threshold: CGFloat = 10
+                let threshold: CGFloat = 12
                 while cursorDragAccumX > threshold {
-                    sendArrowKey([0x1b, 0x5b, 0x43]) // right
+                    sendArrowKey([0x1b, 0x5b, 0x43])  // right
                     cursorDragAccumX -= threshold
                 }
                 while cursorDragAccumX < -threshold {
-                    sendArrowKey([0x1b, 0x5b, 0x44]) // left
+                    sendArrowKey([0x1b, 0x5b, 0x44])  // left
                     cursorDragAccumX += threshold
                 }
                 while cursorDragAccumY < -threshold {
-                    sendArrowKey([0x1b, 0x5b, 0x41]) // up
+                    sendArrowKey([0x1b, 0x5b, 0x41])  // up
                     cursorDragAccumY += threshold
                 }
                 while cursorDragAccumY > threshold {
-                    sendArrowKey([0x1b, 0x5b, 0x42]) // down
+                    sendArrowKey([0x1b, 0x5b, 0x42])  // down
                     cursorDragAccumY -= threshold
                 }
-            case .ended, .cancelled, .failed:
-                isCursorDragging = false
             default:
                 break
             }
@@ -172,18 +169,26 @@ public struct RawTerminalView: UIViewRepresentable {
     /// Shared feed handle; non-nil when constructed via `init(feedHandle:...)`.
     let feedHandle: TerminalFeedHandle?
 
+    /// When `true`, the inner `TerminalView` disables its own scrolling and
+    /// does NOT auto-become first responder. Used for Warp-style block-embedded
+    /// terminals where the outer SwiftUI ScrollView handles vertical motion
+    /// and only the focused block should claim the keyboard.
+    public let inlineEmbedded: Bool
+
     // MARK: - Initialisers
 
     /// Legacy initialiser: caller owns the `AsyncStream` and its continuation.
     public init(
         feed: AsyncStream<[UInt8]>,
         onUserBytes: @escaping (ArraySlice<UInt8>) -> Void,
-        onResize: @escaping (Int, Int) -> Void
+        onResize: @escaping (Int, Int) -> Void,
+        inlineEmbedded: Bool = false
     ) {
         self.feed = feed
         self.feedHandle = nil
         self.onUserBytes = onUserBytes
         self.onResize = onResize
+        self.inlineEmbedded = inlineEmbedded
     }
 
     /// Preferred initialiser for `PTYBridge` usage. The `feedHandle` becomes
@@ -191,12 +196,14 @@ public struct RawTerminalView: UIViewRepresentable {
     public init(
         feedHandle: TerminalFeedHandle,
         onUserBytes: @escaping (ArraySlice<UInt8>) -> Void,
-        onResize: @escaping (Int, Int) -> Void
+        onResize: @escaping (Int, Int) -> Void,
+        inlineEmbedded: Bool = false
     ) {
         self.feed = feedHandle.feedStream
         self.feedHandle = feedHandle
         self.onUserBytes = onUserBytes
         self.onResize = onResize
+        self.inlineEmbedded = inlineEmbedded
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -227,12 +234,12 @@ public struct RawTerminalView: UIViewRepresentable {
         pinch.delegate = context.coordinator
         term.addGestureRecognizer(pinch)
 
-        // Long-press + drag for cursor movement (hold to activate, then drag)
-        let longPress = UILongPressGestureRecognizer(target: context.coordinator,
-                                                     action: #selector(Coordinator.handleCursorLongPress(_:)))
-        longPress.minimumPressDuration = 0.35
-        longPress.delegate = context.coordinator
-        term.addGestureRecognizer(longPress)
+        // Pan gesture for cursor movement — fires immediately (no hold required).
+        // A 12 pt dead-zone in the handler prevents accidental cursor moves.
+        let pan = UIPanGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.handleCursorPan(_:)))
+        pan.delegate = context.coordinator
+        term.addGestureRecognizer(pan)
 
         // Pump PTY bytes into the terminal view from a background task.
         let stream = feed
@@ -242,7 +249,14 @@ public struct RawTerminalView: UIViewRepresentable {
             }
         }
 
-        DispatchQueue.main.async { _ = term.becomeFirstResponder() }
+        if inlineEmbedded {
+            // Outer SwiftUI ScrollView owns scrolling; this terminal is a fixed
+            // surface inside a block. Don't auto-claim first responder either —
+            // multiple block-embedded terminals would fight for the keyboard.
+            term.isScrollEnabled = false
+        } else {
+            DispatchQueue.main.async { _ = term.becomeFirstResponder() }
+        }
         return term
     }
 

@@ -3,12 +3,15 @@ import Foundation
 import Observation
 import SwiftUI
 import UIKit
+import os.signpost
 import ConduitCore
 import TerminalEngine
 import SSHTransport
 import SecurityKit
 import AgentKit
 import PersistenceKit
+
+private let blockLog = OSLog(subsystem: "com.conduit.terminal", category: "BlockLifecycle")
 
 @MainActor @Observable
 public final class SessionViewModel {
@@ -21,7 +24,7 @@ public final class SessionViewModel {
     public private(set) var status: Session.Status = .disconnected
     public private(set) var cwd: String = "~"
 
-    // Composer
+    // Composer / prompt draft
     public var inputText: String = ""
     public var commandAssistantError: String?
     public private(set) var isTranslating: Bool = false
@@ -39,35 +42,68 @@ public final class SessionViewModel {
     // Host-key TOFU state: non-nil while awaiting user confirmation
     public private(set) var pendingHostKeyFingerprint: String?
 
-    // MARK: - M2: Raw PTY mode
+    // MARK: - Raw PTY mode
+    //
+    // `isRaw` is now set ONLY by alt-screen detection (Phase 5 — no manual toggle).
+    // When false: block scroll is shown. When true: RawTerminalView fills the screen.
 
-    /// `true` while a raw PTY shell channel is active (TUI mode).
+    /// `true` while an alt-screen TUI program (vim, htop, tmux) is running.
     public private(set) var isRaw: Bool = false
 
-    /// The live shell channel when in raw mode; `nil` in block mode.
+    /// The live shell channel when in raw mode; `nil` otherwise.
     public private(set) var activeShell: SSHShell? = nil
 
-    /// The bridge pumping bytes between `activeShell` and `RawTerminalView`.
-    private var activeBridge: PTYBridge? = nil
-
-    /// The feed handle shared between `PTYBridge` and the `RawTerminalView`
-    /// displayed in raw mode.
+    /// Feed handle shared between `PTYBridge` and `RawTerminalView`.
     public private(set) var rawFeedHandle: TerminalFeedHandle? = nil
 
-    // MARK: - M3: Session survival
+    // MARK: - Unified PTY
 
-    /// Name of the attached tmux session. When set, the session uses tmux
-    /// attach-or-create on connect and reattach on reconnect.
+    /// The persistent PTY shell. Open for the entire connected session.
+    private var unifiedShell: SSHShell? = nil
+
+    /// Bridge for the unified shell.
+    private var unifiedBridge: PTYBridge? = nil
+
+    /// Block currently receiving PTY output.
+    private var unifiedBlockID: BlockID? = nil
+
+    /// `true` between OSC 133 C (preexec) and OSC 133 D (postcmd).
+    /// Bytes are routed to the active block only in this window.
+    public private(set) var isExecutingUnified: Bool = false
+
+    // MARK: - Phase 7: OSC 133 fallback
+    //
+    // If the shell never emits an OSC 133 A marker within `integrationProbeTimeout`
+    // after the integration script is injected, we fall back to "blockless live PTY"
+    // mode (isRaw = true) so the terminal still works.  Block mode re-engages the
+    // moment any OSC 133 marker arrives.
+
+    private var integrationFallbackTask: Task<Void, Never>?
+    private static let integrationProbeTimeout: Duration = .seconds(6)
+
+    // MARK: - Phase 7: Belt-and-suspenders interactive-CLI hint
+    //
+    // If cursor-positioning sequences arrive while the active block is still in
+    // `.promptEditing` state (i.e. 133;C never fired — maybe a broken .bashrc),
+    // we optimistically flip the block to `.executing` so direct-keystroke input
+    // activates.  This is byte-pattern based, not name-based.
+
+    // (Implemented in onBlockBytes via BlockRenderer.pendingTUIEscalation)
+
+    // MARK: - Phase 6: Plug-and-play UX
+
+    /// Tmux sessions found on connect, offered to the user.
+    public private(set) var availableTmuxSessions: [String] = []
+
+    // MARK: - UX: raw-mode history palette
+    public var showRawHistory: Bool = false
+
+    // MARK: - Session survival
+
     public private(set) var tmuxSessionName: String? = nil
-
-    /// Reconnection engine that monitors network state.
     private var reconnectEngine: AutoReconnectEngine?
-
-    /// Background task that sends a no-op SSH command at the keep-alive interval.
     private var keepAliveTask: Task<Void, Never>?
 
-    /// Called when the app scene becomes active after backgrounding.
-    /// Triggers reconnection if the SSH session was lost.
     public func handleSceneActive() async {
         let connected = await sshSession.isConnected
         if !connected && status != .connecting {
@@ -75,7 +111,6 @@ public final class SessionViewModel {
         }
     }
 
-    /// Configures tmux session name for auto-attach.
     public func enableTmux(sessionName: String) {
         tmuxSessionName = sessionName
     }
@@ -89,6 +124,7 @@ public final class SessionViewModel {
                 try await tmux.attachOrCreate(name: name)
             }
             status = .connected
+            await openUnifiedShell()
             await refreshCWD()
         } catch {
             status = .failed(reason: "Reconnect failed: \(error.localizedDescription)")
@@ -98,8 +134,6 @@ public final class SessionViewModel {
     // MARK: - Dependencies
 
     private let sshSession: SSHSession
-    /// The underlying SSH session (exposed for features like Preview that need
-    /// direct session access without going through the block execution path).
     public var session: SSHSession { sshSession }
     private let credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
@@ -141,6 +175,9 @@ public final class SessionViewModel {
                 try? await tmux.attachOrCreate(name: name)
             }
             await refreshCWD()
+            await openUnifiedShell()
+            // Phase 6: detect tmux sessions and running agents on connect.
+            await detectTmuxSessions()
         } catch ConduitError.hostKeyUnknown(let fp) {
             pendingHostKeyFingerprint = fp
             status = .disconnected
@@ -170,7 +207,10 @@ public final class SessionViewModel {
 
     public func disconnect() async {
         stopKeepAlive()
+        integrationFallbackTask?.cancel()
+        integrationFallbackTask = nil
         await deescalate()
+        await closeUnifiedShell()
         await sshSession.disconnect()
         status = .disconnected
         applyScreenSleepPolicy(connected: false)
@@ -201,190 +241,397 @@ public final class SessionViewModel {
         UIApplication.shared.isIdleTimerDisabled = connected && prevent
     }
 
-    // MARK: - M2: Raw PTY escalation / de-escalation
+    // MARK: - Phase 6: Tmux session detection
 
-    /// Switch to raw PTY mode: open an `SSHShell`, create a `PTYBridge`, and
-    /// start pumping bytes into the `RawTerminalView`.
-    ///
-    /// Does nothing if already in raw mode or not connected.
-    public func escalateToRaw() async {
-        guard !isRaw, status == .connected else { return }
-
-        // Estimate terminal dimensions from screen size + current font.
-        // Far better than hardcoding 80×24; SwiftTerm will send an accurate
-        // resize once it lays out, but this ensures the first screen paint is sane.
-        let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
-        let fontSize = CGFloat(storedSize > 0 ? storedSize : 13.0)
-        let screen = UIScreen.main.bounds
-        let charWidth  = fontSize * 0.601   // UIFont.monospacedSystemFont aspect ratio
-        let lineHeight = fontSize * 1.35
-        let estCols = max(80, Int(screen.width  / charWidth))
-        let estRows = max(24, Int(screen.height / lineHeight) - 6)  // minus nav/keyboard chrome
-
-        do {
-            let shell = try await SSHShell.open(session: sshSession, width: estCols, height: estRows)
-            let handle = TerminalFeedHandle()
-            let terminal = RawTerminalView(
-                feedHandle: handle,
-                onUserBytes: { _ in },  // input comes from KeyboardAccessoryRail
-                onResize: { [weak self] cols, rows in
-                    guard let self else { return }
-                    Task { try? await self.activeShell?.resize(cols: cols, rows: rows) }
-                }
-            )
-
-            let bridge = PTYBridge(shell: shell, terminal: terminal)
-
-            activeShell = shell
-            activeBridge = bridge
-            rawFeedHandle = handle
-            isRaw = true
-            // pendingTUIEscalation resets automatically in BlockRenderer.clear()
-            // or when the next command begins via begin(). We leave it to drain
-            // naturally; the `!isRaw` guard above prevents re-triggering.
-
-            // Start the pump in a detached task; watch for de-escalation.
-            Task {
-                await bridge.start()
-                // Stream finished — check for de-escalation flag.
-                if await bridge.deescalationDetected {
-                    await deescalate()
-                }
+    /// Runs `tmux ls` on connect and populates `availableTmuxSessions`.
+    /// Also scans for running agent processes in each session.
+    private func detectTmuxSessions() async {
+        guard let result = try? await sshSession.executeCollected("tmux ls 2>/dev/null"),
+              !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            availableTmuxSessions = []
+            return
+        }
+        // Each line is "sessionname: N windows (created ...) [flags]"
+        let sessions = result
+            .components(separatedBy: "\n")
+            .compactMap { line -> String? in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty,
+                      let colonIdx = trimmed.firstIndex(of: ":") else { return nil }
+                return String(trimmed[..<colonIdx])
             }
+        availableTmuxSessions = sessions
 
-            // Monitor the bridge for de-escalation while raw mode is active.
-            Task {
-                while isRaw {
-                    if await bridge.deescalationDetected {
-                        await deescalate()
-                        break
-                    }
-                    try? await Task.sleep(nanoseconds: 100_000_000)  // 100 ms poll
-                }
-            }
-        } catch {
-            // Shell open failed (e.g. iOS 17 unsupportedPlatform stub).
-            // Silently stay in block mode.
+        // Persist the last-used session name for this host so the next
+        // connect goes straight there.
+        if tmuxSessionName == nil, let first = sessions.first {
+            // Only auto-select if user hasn't configured one explicitly.
+            // (User can tap "Attach" in the UI to confirm.)
+            _ = first // available for Phase 6 UI sheet
         }
     }
 
-    /// Return from raw PTY mode to block mode.
-    ///
-    /// Closes the active shell channel and clears raw-mode state.
-    public func deescalate() async {
-        guard isRaw else { return }
-        await activeShell?.close()
-        activeShell = nil
-        activeBridge = nil
-        rawFeedHandle = nil
-        isRaw = false
+    /// Attach to the given tmux session name.
+    public func attachToTmuxSession(_ name: String) {
+        tmuxSessionName = name
+        Task {
+            let tmux = TmuxClient(session: sshSession)
+            try? await tmux.attachOrCreate(name: name)
+            UserDefaults.standard.set(name, forKey: "conduitLastTmuxSession_\(host.id)")
+        }
     }
 
-    // MARK: - Submit
+    // MARK: - Unified PTY lifecycle
+
+    /// Open a long-lived PTY shell.  Called on connect and after reconnect.
+    private func openUnifiedShell() async {
+        guard status == .connected, unifiedShell == nil else { return }
+
+        let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
+        let fontSize = CGFloat(storedSize > 0 ? storedSize : 13.0)
+        // Use the key window's scene screen to avoid UIScreen.main deprecation.
+        let screenBounds = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.screen.bounds
+            ?? CGRect(x: 0, y: 0, width: 390, height: 844)   // iPhone 17 Pro fallback
+        let charWidth  = fontSize * 0.601
+        let lineHeight = fontSize * 1.35
+        // Block content width: subtract LazyVStack padding (12+12), block inner
+        // padding (12+12), and the green 3pt left border. This is what Claude Code
+        // and other TUI programs will actually use when drawing their UI — using
+        // the full screen width (former max(80,...)) made them draw 80-col layouts
+        // into a ~44-col block, causing wrapping/garbling.
+        let blockContentWidth = screenBounds.width - 24 - 24 - 3
+        let estCols = max(40, Int(blockContentWidth / charWidth))
+        let estRows = max(24, Int(screenBounds.height / lineHeight) - 6)
+
+        // Sync to BlockRenderer so per-block terminals match PTY-reported size.
+        blocks.terminalCols = estCols
+
+        do {
+            let shell = try await SSHShell.open(
+                session: sshSession,
+                width: estCols,
+                height: estRows
+            )
+            let handle = TerminalFeedHandle()
+            let dummyTerminal = RawTerminalView(
+                feedHandle: handle,
+                onUserBytes: { _ in },
+                onResize: { [weak self] cols, rows in
+                    guard let self else { return }
+                    Task { try? await self.unifiedShell?.resize(cols: cols, rows: rows) }
+                }
+            )
+            let bridge = PTYBridge(shell: shell, terminal: dummyTerminal)
+
+            // ── Phase 2+3: Wire all OSC 133 A/B/C/D callbacks ──────────────
+            await bridge.configure(
+                onBlockBytes: { [weak self] bytes in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self, let blockID = self.unifiedBlockID else { return }
+                        if self.status == .disconnected {
+                            self.status = .connected
+                        }
+                        let data = Data(bytes)
+                        let interactiveHint = TUIDetector.shouldEscalate(to: data)
+
+                        // Phase 7 belt-and-suspenders: if cursor-positioning
+                        // bytes arrive while the block is still in promptEditing
+                        // (133;C didn't fire — broken shell integration), flip
+                        // optimistically to executing so interactive input works.
+                        if let block = self.blocks.blocks.first(where: { $0.id == blockID }),
+                           block.state == .promptEditing || block.state == .submitted {
+                            if interactiveHint || self.blocks.pendingTUIEscalation {
+                                self.blocks.setState(.executing, for: blockID)
+                                self.isExecutingUnified = true
+                                self.blocks.pendingTUIEscalation = false
+                            }
+                        }
+
+                        guard self.isExecutingUnified else { return }
+                        self.blocks.append(data, stream: .stdout, to: blockID)
+
+                        // Warp-style: once cursor-movement is detected for the
+                        // active block, route bytes to a live feed handle so
+                        // an in-block `RawTerminalView` can render them with
+                        // SwiftTerm's full VT semantics (cursor, redraw, etc.).
+                        if self.blocks.hasCursorMovement.contains(blockID) {
+                            let handle = self.blocks.ensureLiveHandle(for: blockID)
+                            handle.yield(bytes)
+                        }
+                    }
+                },
+                onPromptStart: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        if self.status == .disconnected {
+                            self.status = .connected
+                        }
+                        // Phase 7 fallback: cancel the "no-markers fallback" timer
+                        // once we know shell integration is working.
+                        self.integrationFallbackTask?.cancel()
+                        self.integrationFallbackTask = nil
+                        if self.isRaw {
+                            // Integration just came alive after fallback.
+                            self.isRaw = false
+                            self.activeShell = nil
+                        }
+
+                        // Finalize any lingering block that didn't get a 133;D
+                        // (interrupted command, shell restart, etc.).
+                        if let prevID = self.unifiedBlockID,
+                           let prevBlock = self.blocks.blocks.first(where: { $0.id == prevID }),
+                           prevBlock.state == .executing || prevBlock.state == .submitted {
+                            self.blocks.finalize(id: prevID, exitCode: -1)
+                            if let repo = self.blockRepo,
+                               let b = self.blocks.blocks.first(where: { $0.id == prevID }) {
+                                try? await repo.persist(b)
+                            }
+                        }
+
+                        self.isExecutingUnified = false
+                        // Create new block in promptEditing state.
+                        let prompt = Block.PromptInfo(cwd: self.cwd, hostName: self.host.name)
+                        let blockID = self.blocks.beginPrompt(
+                            sessionID: self.sessionID,
+                            prompt: prompt
+                        )
+                        self.unifiedBlockID = blockID
+                        os_signpost(.event, log: blockLog, name: "blockPromptStart",
+                                    "%{public}s", blockID.uuidString)
+                    }
+                },
+                onPromptEnd: { [weak self] in
+                    // 133;B — prompt_end.  Most shells don't emit this; it's a
+                    // no-op for now but the callback is wired for completeness.
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self, let blockID = self.unifiedBlockID else { return }
+                        self.blocks.setState(.submitted, for: blockID)
+                    }
+                },
+                onCommandStart: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        if self.status == .disconnected {
+                            self.status = .connected
+                        }
+                        self.isExecutingUnified = true
+                        if let blockID = self.unifiedBlockID {
+                            os_signpost(.begin, log: blockLog, name: "blockExecuting",
+                                        "%{public}s", blockID.uuidString)
+                            self.blocks.setState(.executing, for: blockID)
+                        }
+                    }
+                },
+                onCommandDone: { [weak self] exitCode in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.isExecutingUnified = false
+                        if let blockID = self.unifiedBlockID {
+                            os_signpost(.end, log: blockLog, name: "blockExecuting",
+                                        "exit=%d", exitCode)
+                            self.blocks.finalize(id: blockID, exitCode: exitCode)
+                            if let repo = self.blockRepo,
+                               let b = self.blocks.blocks.first(where: { $0.id == blockID }) {
+                                try? await repo.persist(b)
+                            }
+                            // Don't nil out unifiedBlockID here — onPromptStart will
+                            // create the next block and replace it.
+                        }
+                    }
+                },
+                onCWDUpdate: { [weak self] path in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self, !path.isEmpty else { return }
+                        self.cwd = path
+                        // Keep the active block's prompt CWD in sync.
+                        if let blockID = self.unifiedBlockID {
+                            self.blocks.updatePromptCWD(path, for: blockID)
+                        }
+                    }
+                },
+                onAltScreenEnter: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        if let id = self.unifiedBlockID {
+                            self.blocks.clearChunks(id: id)
+                        }
+                        self.activeShell = self.unifiedShell
+                        self.isRaw = true
+                    }
+                },
+                onAltScreenExit: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.isRaw = false
+                        self.activeShell = nil
+                        await self.unifiedBridge?.resetEscalationFlags()
+                    }
+                }
+            )
+
+            unifiedShell = shell
+            unifiedBridge = bridge
+            rawFeedHandle = handle
+
+            Task { await bridge.start() }
+
+            // Two-phase shell integration injection (same as before).
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                let probe = Array("printf '\\033]133;Z;%s\\007' \"$FISH_VERSION\"\n".utf8)
+                try? await shell.send(probe)
+
+                try? await Task.sleep(for: .milliseconds(500))
+                let probeResult = await bridge.shellProbeResult
+                let isFish = !(probeResult?.isEmpty ?? true)
+
+                if isFish {
+                    UserDefaults.standard.set("fish", forKey: "conduitShellDetected")
+                    let bytes = Array((ShellIntegrationScript.script(for: .fish) + "\n").utf8)
+                    try? await shell.send(bytes)
+                    try? await Task.sleep(for: .milliseconds(300))
+                    try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
+                    await MainActor.run { self.startIntegrationFallback() }
+                } else {
+                    UserDefaults.standard.set("posix", forKey: "conduitShellDetected")
+                    let bytes = Array((ShellIntegrationScript.bootstrapForPOSIXShells() + "\n").utf8)
+                    try? await shell.send(bytes)
+                    try? await Task.sleep(for: .milliseconds(300))
+                    try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
+                    // Start fallback timer — if 133;A doesn't arrive within
+                    // timeout, degrade to blockless live PTY (Phase 7).
+                    await MainActor.run { self.startIntegrationFallback() }
+                }
+            }
+        } catch {
+            // Shell open failed — unified PTY unavailable, fall back silently.
+        }
+    }
+
+    // MARK: - Phase 7: Integration fallback timer
+
+    private func startIntegrationFallback() {
+        integrationFallbackTask?.cancel()
+        integrationFallbackTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.integrationProbeTimeout)
+            guard !Task.isCancelled, let self else { return }
+            await MainActor.run {
+                // If we haven't seen any OSC 133 A, fall back to raw PTY.
+                guard self.unifiedBlockID == nil else { return }
+                self.activeShell = self.unifiedShell
+                self.isRaw = true
+            }
+        }
+    }
+
+    private func closeUnifiedShell() async {
+        integrationFallbackTask?.cancel()
+        integrationFallbackTask = nil
+        await unifiedShell?.close()
+        unifiedShell = nil
+        unifiedBridge = nil
+        unifiedBlockID = nil
+        isExecutingUnified = false
+        rawFeedHandle = nil
+    }
+
+    // MARK: - Alt-screen: de-escalation (Phase 5 — no user-facing escalation)
+
+    /// Returns to block mode after alt-screen exits. Called automatically.
+    public func deescalate() async {
+        guard isRaw else { return }
+        activeShell = nil
+        isRaw = false
+        await unifiedBridge?.resetEscalationFlags()
+    }
+
+    // MARK: - Submit (Phase 3 — no block creation here)
 
     public func submit() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        inputText = ""
 
+        // AI command translation (# prefix)
         if text.hasPrefix("#") {
+            inputText = ""
             await translateAndInsert(query: String(text.dropFirst()))
             return
         }
-        await run(command: text)
+
+        inputText = ""
+        commandHistory.append(text)
+
+        guard let shell = unifiedShell else { return }
+
+        // Phase 3: determine path based on block state.
+        if isExecutingUnified {
+            // Executing state: send directly to PTY, no new block.
+            try? await shell.send(Array((text + "\n").utf8))
+        } else if let blockID = unifiedBlockID,
+                  let block = blocks.blocks.first(where: { $0.id == blockID }),
+                  block.state == .promptEditing {
+            // OSC 133 A lifecycle: update the block's command then send.
+            blocks.setCommand(text, for: blockID)
+            blocks.setState(.submitted, for: blockID)
+            try? await shell.send(Array((text + "\n").utf8))
+        } else {
+            // Fallback (no active block / fish shell / fallback mode):
+            // Create a block the old-fashioned way and send.
+            let prompt = Block.PromptInfo(cwd: cwd, hostName: host.name)
+            let blockID = blocks.begin(sessionID: sessionID, command: text, prompt: prompt)
+            unifiedBlockID = blockID
+            try? await shell.send(Array((text + "\n").utf8))
+        }
     }
+
+    // MARK: - Phase 4: Direct keystroke forwarding
+
+    /// Forward raw PTY bytes from the `LivePromptInputView` or
+    /// `KeyboardAccessoryRail` during the `.executing` state.
+    public func sendKeystrokes(_ bytes: [UInt8]) async {
+        guard let shell = unifiedShell else { return }
+        try? await shell.send(bytes)
+    }
+
+    /// Resize the unified PTY to the supplied cols/rows. Called by the
+    /// in-block `RawTerminalView` so the remote program (Claude Code,
+    /// htop, …) redraws to the visible block size.
+    public func resizeUnifiedPTY(cols: Int, rows: Int) async {
+        try? await unifiedShell?.resize(cols: cols, rows: rows)
+    }
+
+    // MARK: - Public helpers
 
     public func rerun(_ block: Block) async {
         inputText = block.command
     }
 
     public func runCommand(_ command: String) async {
-        await run(command: command)
+        inputText = command
+        await submit()
     }
 
-    // MARK: - TUI command detection
-
-    /// Programs that need a real PTY (ncurses / alt-screen). Running them
-    /// through the exec channel in block mode produces garbled output because
-    /// there is no PTY — they either fall back to batch text or error out.
-    private static let tuiCommands: Set<String> = [
-        // system monitors
-        "top", "htop", "btop", "bpytop", "glances", "nmon", "iotop",
-        "iftop", "nethogs", "bmon", "atop", "ctop",
-        // editors
-        "vim", "vi", "nvim", "nano", "emacs", "micro", "helix", "hx", "pico",
-        // pagers
-        "less", "more", "man",
-        // multiplexers
-        "tmux", "screen", "byobu", "zellij",
-        // file managers
-        "ranger", "mc", "nnn", "vifm", "ncdu",
-        // mail
-        "mutt", "alpine", "aerc",
-        // misc interactive
-        "watch", "cmatrix", "sl", "tty-clock",
-    ]
-
-    private func isTUICommand(_ command: String) -> Bool {
-        guard let first = command.trimmingCharacters(in: .whitespaces)
-            .components(separatedBy: .whitespaces).first,
-              !first.isEmpty else { return false }
-        let name = (first as NSString).lastPathComponent.lowercased()
-        return Self.tuiCommands.contains(name)
+    /// Send `text` to the active shell with optional bracketed-paste markers.
+    public func sendToShell(_ text: String) async {
+        var usesBrackets = false
+        if text.contains("\n"), let bridge = unifiedBridge {
+            usesBrackets = await bridge.bracketedPasteActive
+        }
+        let payload = usesBrackets ? "\u{1B}[200~\(text)\u{1B}[201~\n" : text + "\n"
+        try? await activeShell?.send(Array(payload.utf8))
     }
 
-    private func run(command: String) async {
-        commandHistory.append(command)
-
-        // Proactively escalate to raw PTY for known TUI programs.
-        // Running them via exec (no PTY) produces garbled output; escalate
-        // first, wait for SwiftTerm to lay out + send the real resize, then
-        // type the command into the live shell.
-        if isTUICommand(command), !isRaw {
-            await escalateToRaw()
-            // 250 ms is enough for SwiftUI to render RawTerminalView and for
-            // SwiftTerm to fire sizeChanged so the server gets the real dimensions
-            // before the TUI program starts painting.
-            try? await Task.sleep(for: .milliseconds(250))
-            if let shell = activeShell {
-                try? await shell.send(Array((command + "\n").utf8))
-            }
-            return
-        }
-
-        let prompt = Block.PromptInfo(cwd: cwd, hostName: host.name)
-        let blockID = blocks.begin(sessionID: sessionID, command: command, prompt: prompt)
-
-        var exitCode = 0
-        do {
-            let stream = try await sshSession.execute(command)
-            for try await (data, kind) in stream {
-                blocks.append(data, stream: kind, to: blockID)
-            }
-        } catch let err as ConduitError where err == .cancelled {
-            exitCode = 130
-        } catch {
-            if let remoteExit = SSHSession.commandExitCode(from: error) {
-                exitCode = remoteExit
-            } else {
-                exitCode = 1
-                blocks.append(Data("\n[error] \(error.localizedDescription)\n".utf8), stream: .stderr, to: blockID)
-            }
-        }
-        blocks.finalize(id: blockID, exitCode: exitCode)
-
-        // M2: auto-escalate to raw PTY if a TUI program was detected.
-        if blocks.pendingTUIEscalation, !isRaw {
-            await escalateToRaw()
-        } else {
-            await refreshCWD()
-        }
-
-        if let repo = blockRepo,
-           let finalized = blocks.blocks.first(where: { $0.id == blockID }) {
-            try? await repo.persist(finalized)
-        }
-    }
+    // MARK: - CWD refresh
 
     private func refreshCWD() async {
         let result = try? await sshSession.executeCollected("echo $PWD")
@@ -402,7 +649,6 @@ public final class SessionViewModel {
             commandAssistantError = "Describe the command after #."
             return
         }
-
         guard let ai = aiClient else {
             inputText = "#\(query)"
             commandAssistantError = "No AI provider configured. Add an API key in Settings."
@@ -418,7 +664,9 @@ public final class SessionViewModel {
         request is ambiguous, pick the safest reasonable interpretation.
         """
         do {
-            let text = try await ai.complete(messages: [.user(intent)], system: system, maxTokens: 256)
+            let text = try await ai.complete(
+                messages: [.user(intent)], system: system, maxTokens: 256
+            )
             inputText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             inputText = "#\(query)"
@@ -447,7 +695,9 @@ public final class SessionViewModel {
 
             let task = Task {
                 do {
-                    let stream = ai.streamCompletion(messages: [.user(userPrompt)], system: system, maxTokens: 400)
+                    let stream = ai.streamCompletion(
+                        messages: [.user(userPrompt)], system: system, maxTokens: 400
+                    )
                     for try await delta in stream {
                         if case let .text(t) = delta { continuation.yield(t) }
                     }
