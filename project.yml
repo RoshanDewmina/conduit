@@ -36,7 +36,6 @@ targets:
         UILaunchStoryboardName: LaunchScreen
         NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
         UIBackgroundModes:
-          - remote-notification
           - fetch
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
@@ -44,14 +43,14 @@ targets:
           - CFBundleURLName: dev.conduit.mobile
             CFBundleURLSchemes:
               - conduit
+    # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
+    # account. While on a free personal team, point at the stripped
+    # `Conduit-DeviceTesting.entitlements` file (Keychain only). Swap back
+    # to `Conduit.entitlements` + restore the properties block below once
+    # enrolled in the paid program.
     entitlements:
-      path: Conduit/Conduit.entitlements
+      path: Conduit/Conduit-DeviceTesting.entitlements
       properties:
-        aps-environment: production
-        com.apple.developer.icloud-container-identifiers:
-          - iCloud.dev.conduit.mobile
-        com.apple.developer.icloud-containers-environment: Development
-        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)dev.conduit.mobile
         keychain-access-groups:
           - $(AppIdentifierPrefix)dev.conduit.mobile
     settings:
