@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import DesignSystem
 
 public struct TerminalSettingsView: View {
     @AppStorage("terminalFontSize")    private var fontSize: Double = 13
@@ -38,10 +39,30 @@ public struct TerminalSettingsView: View {
                 Toggle("Haptic Feedback on Keys", isOn: $hapticFeedback)
             }
 
+            Section("Shortcut Bar") {
+                NavigationLink {
+                    ShortcutBarEditor()
+                } label: {
+                    Label("Customize keyboard rail", systemImage: "keyboard")
+                }
+                Text("Reorder or hide the keys that appear above the keyboard during a session.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+
+            Section("Shell Integration") {
+                ShellIntegrationDiagnosticsRow()
+            }
+
             Section {
                 Text("Font size and theme changes take effect in the next session.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+
+            #if DEBUG
+            Section("Debug") {
+                DebugProBypassToggle()
+            }
+            #endif
         }
         .navigationTitle("Terminal")
     }
@@ -80,6 +101,72 @@ public struct TerminalSettingsView: View {
         }
     }
 }
+
+// MARK: - Shell integration diagnostics row (Phase 1)
+
+/// Reads diagnostics written by PTYBridge into UserDefaults so the
+/// TerminalSettingsView can show live shell-integration status without
+/// needing a reference to SessionViewModel.
+private struct ShellIntegrationDiagnosticsRow: View {
+    @AppStorage("conduitShellDetected")   private var shellDetected: String = ""
+    @AppStorage("conduitMarkersActive")   private var markersActive: Bool = false
+    @AppStorage("conduitLastMarkerTime")  private var lastMarkerTime: Double = 0
+
+    private var isFish: Bool { shellDetected == "fish" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+                Text(statusLabel)
+                    .font(.caption)
+                    .foregroundStyle(markersActive ? .primary : .secondary)
+            }
+            if !shellDetected.isEmpty {
+                Text("Shell: \(shellDetected)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if isFish {
+                Text("Fish shell detected — structured blocks unavailable. Terminal view works normally.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if lastMarkerTime > 0 {
+                let d = Date(timeIntervalSince1970: lastMarkerTime)
+                Text("Last marker: \(d.formatted(date: .omitted, time: .standard))")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusColor: Color {
+        if isFish { return .orange }
+        return markersActive ? .green : Color.secondary.opacity(0.5)
+    }
+
+    private var statusLabel: String {
+        if isFish { return "Shell integration unavailable" }
+        return markersActive ? "Shell integration active" : "Awaiting first prompt"
+    }
+}
+
+// MARK: - Phase 0.4: Debug pro-bypass toggle (DEBUG builds only)
+
+#if DEBUG
+private struct DebugProBypassToggle: View {
+    @State private var isOn: Bool = UserDefaults.standard.bool(forKey: "conduitDebugProBypass")
+
+    var body: some View {
+        Toggle("Unlock all features (debug)", isOn: $isOn)
+            .onChange(of: isOn) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: "conduitDebugProBypass")
+            }
+        Text("Bypasses the StoreKit paywall. Only visible in Debug builds.")
+            .font(.caption2).foregroundStyle(.secondary)
+    }
+}
+#endif
 
 // MARK: - Shared terminal preference helpers
 

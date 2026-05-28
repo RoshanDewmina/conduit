@@ -12,6 +12,12 @@ public final class WorkspacesViewModel {
     public private(set) var connectedHostIDs: Set<HostID> = []
     public var loadError: String?
 
+    /// Per-host attention counters. Each value bumps when the host receives a
+    /// new approval / reconnect / debug event; SwiftUI's `.onChange` then
+    /// fires `AttentionFlashRing.pulse()` over that host's card.
+    public private(set) var attentionCounters: [HostID: Int] = [:]
+    public private(set) var attentionReasons: [HostID: AttentionFlashReason] = [:]
+
     private let repo: HostRepository
 
     public init(repository: HostRepository) {
@@ -32,6 +38,14 @@ public final class WorkspacesViewModel {
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// Bump the attention counter for a host — drives one `AttentionFlashRing`
+    /// pulse on that host's card. Called from approval-arrival,
+    /// reconnect-success, and debug-event paths.
+    public func flashAttention(hostID: HostID, reason: AttentionFlashReason = .generic) {
+        attentionCounters[hostID, default: 0] += 1
+        attentionReasons[hostID] = reason
     }
 }
 
@@ -78,6 +92,58 @@ public struct WorkspacesView: View {
         parseSSHCommand(searchText)
     }
 
+    /// Hosts split into groups by their first tag, with an "Untagged" group
+    /// (title `""`) at the top. Within each group, sort by name.
+    private var hostGroups: [(title: String, hosts: [Host])] {
+        var untagged: [Host] = []
+        var byTag: [String: [Host]] = [:]
+        for host in filteredHosts {
+            if let tag = host.tags.first, !tag.isEmpty {
+                byTag[tag, default: []].append(host)
+            } else {
+                untagged.append(host)
+            }
+        }
+        var result: [(String, [Host])] = []
+        if !untagged.isEmpty {
+            result.append(("", untagged.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }))
+        }
+        for tag in byTag.keys.sorted() {
+            let group = byTag[tag] ?? []
+            result.append((tag, group.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }))
+        }
+        return result
+    }
+
+    /// Single host row with attention flash overlay + swipe actions. Hoisted
+    /// out so the tag-grouped + flat code paths can share it.
+    @ViewBuilder
+    private func hostRow(_ host: Host) -> some View {
+        Button { onSelect(host) } label: {
+            HostRow(host: host, isConnected: vm.connectedHostIDs.contains(host.id))
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .overlay(
+            AttentionFlashRing(
+                trigger: vm.attentionCounters[host.id] ?? 0,
+                reason: vm.attentionReasons[host.id] ?? .generic,
+                cornerRadius: 12
+            )
+        )
+        .swipeActions {
+            Button(role: .destructive) {
+                Task { await vm.remove(host) }
+            } label: { Label("Delete", systemImage: "trash") }
+        }
+        .swipeActions(edge: .leading) {
+            Button {
+                onEdit(host)
+            } label: { Label("Edit", systemImage: "pencil") }
+            .tint(.blue)
+        }
+    }
+
     public var body: some View {
         List {
             // Quick-connect row when search matches ssh syntax
@@ -121,22 +187,14 @@ public struct WorkspacesView: View {
                 ContentUnavailableView.search(text: searchText)
                     .listRowBackground(Color.clear)
             } else {
-                ForEach(filteredHosts) { host in
-                    Button { onSelect(host) } label: {
-                        HostRow(host: host, isConnected: vm.connectedHostIDs.contains(host.id))
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .swipeActions {
-                        Button(role: .destructive) {
-                            Task { await vm.remove(host) }
-                        } label: { Label("Delete", systemImage: "trash") }
-                    }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            onEdit(host)
-                        } label: { Label("Edit", systemImage: "pencil") }
-                        .tint(.blue)
+                ForEach(hostGroups, id: \.title) { group in
+                    if group.title.isEmpty {
+                        // Untagged hosts shown without a header.
+                        ForEach(group.hosts) { host in hostRow(host) }
+                    } else {
+                        Section(group.title) {
+                            ForEach(group.hosts) { host in hostRow(host) }
+                        }
                     }
                 }
             }

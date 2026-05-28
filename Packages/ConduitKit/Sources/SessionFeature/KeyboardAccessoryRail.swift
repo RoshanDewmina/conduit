@@ -1,21 +1,27 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import DesignSystem
 
 // MARK: - Constants
 
 private enum KeyCode {
-    static let esc:   [UInt8] = [0x1b]
-    static let tab:   [UInt8] = [0x09]
-    static let up:    [UInt8] = [0x1b, 0x5b, 0x41]   // ESC [ A
-    static let down:  [UInt8] = [0x1b, 0x5b, 0x42]   // ESC [ B
-    static let right: [UInt8] = [0x1b, 0x5b, 0x43]   // ESC [ C
-    static let left:  [UInt8] = [0x1b, 0x5b, 0x44]   // ESC [ D
-    static let pipe:  [UInt8] = [UInt8(ascii: "|")]
-    static let semi:  [UInt8] = [UInt8(ascii: ";")]
-    static let slash: [UInt8] = [UInt8(ascii: "/")]
-    static let dollar:[UInt8] = [UInt8(ascii: "$")]
-    static let and2:  [UInt8] = Array("&&".utf8)
+    static let esc:      [UInt8] = [0x1b]
+    static let tab:      [UInt8] = [0x09]
+    static let up:       [UInt8] = [0x1b, 0x5b, 0x41]   // ESC [ A
+    static let down:     [UInt8] = [0x1b, 0x5b, 0x42]   // ESC [ B
+    static let right:    [UInt8] = [0x1b, 0x5b, 0x43]   // ESC [ C
+    static let left:     [UInt8] = [0x1b, 0x5b, 0x44]   // ESC [ D
+    static let pipe:     [UInt8] = [UInt8(ascii: "|")]
+    static let semi:     [UInt8] = [UInt8(ascii: ";")]
+    static let slash:    [UInt8] = [UInt8(ascii: "/")]
+    static let dollar:   [UInt8] = [UInt8(ascii: "$")]
+    static let and2:     [UInt8] = Array("&&".utf8)
+    static let c:        [UInt8] = [UInt8(ascii: "c")]
+    static let d:        [UInt8] = [UInt8(ascii: "d")]
+    static let z:        [UInt8] = [UInt8(ascii: "z")]
+    /// Ctrl-B (tmux default prefix).
+    static let tmuxPrefix: [UInt8] = [0x02]
 
     /// Convert a printable ASCII character byte to its Ctrl equivalent.
     /// e.g. `ctrl(UInt8(ascii: "c"))` → `0x03` (ETX / Ctrl+C).
@@ -117,6 +123,13 @@ public final class RailViewController: UIViewController {
         }
     }
 
+    /// `true` while the user's finger is physically holding the Ctrl button.
+    /// Any key pressed during this window is sent as Ctrl+key; on lift the
+    /// sticky latch is NOT toggled (momentary wins over sticky).
+    private var ctrlMomentaryActive: Bool = false
+    /// Tracks whether at least one key was consumed during the momentary hold.
+    private var ctrlMomentaryUsed: Bool = false
+
     // MARK: Repeat timer (for arrow long-press)
 
     private var repeatTimer: Timer?
@@ -136,7 +149,7 @@ public final class RailViewController: UIViewController {
     // MARK: - Bar construction
 
     private func buildBar() {
-        view.backgroundColor = UIColor.secondarySystemBackground
+        view.backgroundColor = .clear
 
         let scroll = UIScrollView()
         scroll.showsHorizontalScrollIndicator = false
@@ -166,29 +179,46 @@ public final class RailViewController: UIViewController {
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
 
-        // Esc, Tab
-        stack.addArrangedSubview(makeKey("Esc",  bytes: KeyCode.esc))
-        stack.addArrangedSubview(makeKey("Tab",  bytes: KeyCode.tab))
-
-        // Ctrl (sticky)
-        let ctrl = makeKey("Ctrl", bytes: [])
-        ctrl.addTarget(self, action: #selector(ctrlTapped), for: .touchUpInside)
-        // Remove the default sendBytes action added by makeKey
-        ctrl.removeTarget(nil, action: #selector(sendBytes(_:)), for: .touchUpInside)
-        stack.addArrangedSubview(ctrl)
-        ctrlButton = ctrl
-
-        // Arrow keys (long-press repeat)
-        for (label, bytes) in [("↑", KeyCode.up), ("↓", KeyCode.down),
-                                ("←", KeyCode.left), ("→", KeyCode.right)] {
-            stack.addArrangedSubview(makeArrowKey(label, bytes: bytes))
+        // Tier 1.5.3: render keys in the user-configured order. Settings UI
+        // writes the order to UserDefaults via `ShortcutKeyOrder.save(_:)`;
+        // we read it here. Order is rebuilt on every viewDidLoad so toggling
+        // the keyboard picks up the latest order automatically.
+        for key in ShortcutKeyOrder.load() {
+            stack.addArrangedSubview(makeButton(for: key))
         }
+    }
 
-        // Symbol keys
-        for (label, bytes) in [("|", KeyCode.pipe), (";", KeyCode.semi),
-                                ("/", KeyCode.slash), ("$", KeyCode.dollar),
-                                ("&&", KeyCode.and2)] {
-            stack.addArrangedSubview(makeKey(label, bytes: bytes))
+    /// Single source of truth mapping `ShortcutKey` → `UIButton`. Special
+    /// behaviours (sticky-Ctrl, arrow long-press) live here.
+    private func makeButton(for key: ShortcutKey) -> UIButton {
+        switch key {
+        case .esc: return makeKey(key.label, bytes: KeyCode.esc)
+        case .tab: return makeKey(key.label, bytes: KeyCode.tab)
+        case .ctrl:
+            let ctrl = makeKey(key.label, bytes: [])
+            ctrl.removeTarget(nil, action: #selector(sendBytes(_:)), for: .touchUpInside)
+            ctrl.addTarget(self, action: #selector(ctrlTouchDown), for: .touchDown)
+            ctrl.addTarget(self, action: #selector(ctrlTouchUp),
+                           for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            ctrlButton = ctrl
+            return ctrl
+        case .tmuxPrefix:
+            return makeKey(key.label, bytes: KeyCode.tmuxPrefix)
+        case .ctrlC:
+            return makeCtrlKey(key.label, bytes: KeyCode.ctrl(UInt8(ascii: "c")))
+        case .ctrlD:
+            return makeCtrlKey(key.label, bytes: KeyCode.ctrl(UInt8(ascii: "d")))
+        case .ctrlZ:
+            return makeCtrlKey(key.label, bytes: KeyCode.ctrl(UInt8(ascii: "z")))
+        case .up:    return makeArrowKey(key.label, bytes: KeyCode.up)
+        case .down:  return makeArrowKey(key.label, bytes: KeyCode.down)
+        case .left:  return makeArrowKey(key.label, bytes: KeyCode.left)
+        case .right: return makeArrowKey(key.label, bytes: KeyCode.right)
+        case .pipe:   return makeKey(key.label, bytes: KeyCode.pipe)
+        case .semi:   return makeKey(key.label, bytes: KeyCode.semi)
+        case .slash:  return makeKey(key.label, bytes: KeyCode.slash)
+        case .dollar: return makeKey(key.label, bytes: KeyCode.dollar)
+        case .andAnd: return makeKey(key.label, bytes: KeyCode.and2)
         }
     }
 
@@ -204,8 +234,15 @@ public final class RailViewController: UIViewController {
 
         let btn = UIButton(configuration: config)
         btn.setContentHuggingPriority(.required, for: .horizontal)
+        btn.setContentCompressionResistancePriority(.required, for: .horizontal)
         btn.tag = 0
         btn.accessibilityLabel = title
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        let minWidth = max(CGFloat(40), CGFloat(title.count * 10 + 24))
+        NSLayoutConstraint.activate([
+            btn.widthAnchor.constraint(greaterThanOrEqualToConstant: minWidth),
+            btn.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
+        ])
 
         // Encode bytes into tag via indirect storage (use associated object)
         objc_setAssociatedObject(btn, &AssociatedKeys.bytes, bytes, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -222,6 +259,12 @@ public final class RailViewController: UIViewController {
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(arrowLongPress(_:)))
         lp.minimumPressDuration = 0.4
         btn.addGestureRecognizer(lp)
+        return btn
+    }
+
+    private func makeCtrlKey(_ title: String, bytes: [UInt8]) -> UIButton {
+        let btn = makeKey(title, bytes: bytes)
+        btn.accessibilityLabel = "Ctrl-\(title)"
         return btn
     }
 
@@ -265,8 +308,22 @@ public final class RailViewController: UIViewController {
         onBytes?(repeatBytes)
     }
 
-    @objc private func ctrlTapped() {
-        ctrlHeld.toggle()
+    /// Called when the Ctrl button is first touched (finger down).
+    @objc private func ctrlTouchDown() {
+        ctrlMomentaryActive = true
+        ctrlMomentaryUsed = false
+    }
+
+    /// Called when the Ctrl button touch ends (finger up or cancelled).
+    ///
+    /// - If no other key was pressed while held → toggle the sticky latch.
+    /// - If a key was already consumed momentarily → release without toggling.
+    @objc private func ctrlTouchUp() {
+        ctrlMomentaryActive = false
+        if !ctrlMomentaryUsed {
+            ctrlHeld.toggle()
+        }
+        ctrlMomentaryUsed = false
     }
 
     func setCtrlHeld(_ isHeld: Bool) {
@@ -282,18 +339,23 @@ public final class RailViewController: UIViewController {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
 
-        if ctrlHeld {
-            // Map first byte to Ctrl equivalent if it's a printable ASCII letter.
+        let useCtrl = ctrlHeld || ctrlMomentaryActive
+
+        if useCtrl {
             if let first = bytes.first, first >= 0x61 && first <= 0x7a {
-                // lowercase a-z → 0x01-0x1a
-                onBytes?(KeyCode.ctrl(first))
+                onBytes?(KeyCode.ctrl(first))      // lowercase a-z → Ctrl+a…z
             } else if let first = bytes.first, first >= 0x41 && first <= 0x5a {
-                // uppercase A-Z → 0x01-0x1a
-                onBytes?(KeyCode.ctrl(first))
+                onBytes?(KeyCode.ctrl(first))      // uppercase A-Z → Ctrl+A…Z
             } else {
                 onBytes?(bytes)
             }
-            ctrlHeld = false
+            if ctrlMomentaryActive {
+                // Mark that the momentary hold was consumed; ctrlTouchUp will
+                // see this and skip the sticky toggle.
+                ctrlMomentaryUsed = true
+            } else {
+                ctrlHeld = false
+            }
         } else {
             onBytes?(bytes)
         }
