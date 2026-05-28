@@ -28,6 +28,8 @@ public final class SessionViewModel {
     public var inputText: String = ""
     public var commandAssistantError: String?
     public private(set) var isTranslating: Bool = false
+    /// Tier 2.3: set by SnippetPaletteSheet before submit; cleared after the block is created.
+    public var pendingSnippetID: SnippetID? = nil
 
     // Block render state
     public let blocks: BlockRenderer
@@ -666,6 +668,10 @@ public final class SessionViewModel {
         inputText = ""
         commandHistory.append(text)
 
+        // Capture and clear pendingSnippetID before any async boundary.
+        let snippetID = pendingSnippetID
+        pendingSnippetID = nil
+
         guard let shell = unifiedShell else { return }
 
         // Phase 3: determine path based on block state.
@@ -677,6 +683,7 @@ public final class SessionViewModel {
                   block.state == .promptEditing {
             // OSC 133 A lifecycle: update the block's command then send.
             blocks.setCommand(text, for: blockID)
+            if let sid = snippetID { blocks.setOriginatingSnippet(sid, for: blockID) }
             blocks.setState(.submitted, for: blockID)
             try? await shell.send(Array((text + "\n").utf8))
         } else {
@@ -684,6 +691,7 @@ public final class SessionViewModel {
             // Create a block the old-fashioned way and send.
             let prompt = Block.PromptInfo(cwd: cwd, hostName: host.name)
             let blockID = blocks.begin(sessionID: sessionID, command: text, prompt: prompt)
+            if let sid = snippetID { blocks.setOriginatingSnippet(sid, for: blockID) }
             unifiedBlockID = blockID
             try? await shell.send(Array((text + "\n").utf8))
         }

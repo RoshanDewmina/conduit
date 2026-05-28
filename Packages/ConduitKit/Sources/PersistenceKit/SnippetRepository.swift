@@ -13,8 +13,10 @@ extension Snippet: FetchableRecord {
 
         let hostTagsJSON: String = row["hostTags"] ?? "[]"
         let tagsJSON: String = row["tags"] ?? "[]"
+        let argumentsJSON: String = row["arguments"] ?? "[]"
         let hostTags = (try? JSONDecoder().decode([String].self, from: Data(hostTagsJSON.utf8))) ?? []
         let tags = (try? JSONDecoder().decode([String].self, from: Data(tagsJSON.utf8))) ?? []
+        let arguments = (try? JSONDecoder().decode([SnippetArgument].self, from: Data(argumentsJSON.utf8))) ?? []
 
         self.init(
             id: SnippetID(idUUID),
@@ -22,6 +24,8 @@ extension Snippet: FetchableRecord {
             body: row["body"] ?? "",
             hostTags: hostTags,
             tags: tags,
+            arguments: arguments,
+            useCount: row["useCount"] ?? 0,
             createdAt: row["createdAt"] ?? .now,
             lastUsedAt: row["lastUsedAt"]
         )
@@ -63,15 +67,18 @@ public actor SnippetRepository {
     public func upsert(_ snippet: Snippet) async throws {
         let hostTagsJSON = (try? String(data: JSONEncoder().encode(snippet.hostTags), encoding: .utf8)) ?? "[]"
         let tagsJSON = (try? String(data: JSONEncoder().encode(snippet.tags), encoding: .utf8)) ?? "[]"
+        let argumentsJSON = (try? String(data: JSONEncoder().encode(snippet.arguments), encoding: .utf8)) ?? "[]"
         try await db.dbWriter.write { db in
             try db.execute(sql: """
-                INSERT INTO snippets (id, name, body, hostTags, tags, createdAt, lastUsedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO snippets (id, name, body, hostTags, tags, arguments, useCount, createdAt, lastUsedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   name=excluded.name,
                   body=excluded.body,
                   hostTags=excluded.hostTags,
                   tags=excluded.tags,
+                  arguments=excluded.arguments,
+                  useCount=excluded.useCount,
                   lastUsedAt=excluded.lastUsedAt
             """, arguments: [
                 snippet.id.uuidString,
@@ -79,6 +86,8 @@ public actor SnippetRepository {
                 snippet.body,
                 hostTagsJSON,
                 tagsJSON,
+                argumentsJSON,
+                snippet.useCount,
                 snippet.createdAt,
                 snippet.lastUsedAt,
             ])
@@ -92,16 +101,34 @@ public actor SnippetRepository {
         }
     }
 
-    /// Bumps the lastUsedAt timestamp for the given snippet.
-    /// Note: the `snippets` table does not have a `useCount` column in the v1 migration.
-    /// Once the migration is updated to add `useCount` (see m8-existing-file-patches.md),
-    /// this method will also increment that column.
+    /// Bumps the lastUsedAt timestamp + increments useCount. Tier 2.4 uses
+    /// `useCount * recencyDecay` for palette ranking.
     public func markUsed(id: SnippetID, at time: Date = .now) async throws {
         _ = try await db.dbWriter.write { db in
             try db.execute(
-                sql: "UPDATE snippets SET lastUsedAt = ? WHERE id = ?",
+                sql: "UPDATE snippets SET lastUsedAt = ?, useCount = useCount + 1 WHERE id = ?",
                 arguments: [time, id.uuidString]
             )
         }
+    }
+
+    /// Tier 2.4: snippets sorted by `recency × frequency` — the higher the
+    /// useCount and the more recently used, the higher in the list.
+    public func rankedForPalette() async throws -> [Snippet] {
+        let all = try await self.all()
+        let now = Date.timeIntervalSinceReferenceDate
+        return all.sorted { a, b in
+            score(a, now: now) > score(b, now: now)
+        }
+    }
+
+    /// Recency × frequency score. Decays roughly e-fold per week of disuse.
+    private func score(_ s: Snippet, now: TimeInterval) -> Double {
+        let lastUsed = s.lastUsedAt?.timeIntervalSinceReferenceDate ?? s.createdAt.timeIntervalSinceReferenceDate
+        let ageSeconds = max(0, now - lastUsed)
+        let oneWeek: Double = 7 * 24 * 60 * 60
+        let recency = exp(-ageSeconds / oneWeek)
+        let frequency = log1p(Double(s.useCount))
+        return recency * (1.0 + frequency)
     }
 }

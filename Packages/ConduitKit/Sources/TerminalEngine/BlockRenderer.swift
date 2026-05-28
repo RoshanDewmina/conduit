@@ -105,6 +105,12 @@ public final class BlockRenderer {
         blocks[idx].state = state
     }
 
+    /// Tier 2.3: record which snippet produced this block.
+    public func setOriginatingSnippet(_ snippetID: SnippetID, for id: BlockID) {
+        guard let idx = blocks.firstIndex(where: { $0.id == id }) else { return }
+        blocks[idx].originatingSnippetID = snippetID
+    }
+
     /// Update the CWD on the prompt info of an existing block.
     /// Called when OSC 7 fires so the active block's prompt header stays current.
     public func updatePromptCWD(_ cwd: String, for id: BlockID) {

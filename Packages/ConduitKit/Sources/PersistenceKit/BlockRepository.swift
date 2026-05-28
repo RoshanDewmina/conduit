@@ -10,13 +10,14 @@ public actor BlockRepository {
         try await db.dbWriter.write { db in
             try db.execute(sql: """
                 INSERT INTO blocks (id, sessionId, hostName, cwd, command, output, exitCode,
-                                    startedAt, finishedAt, isStarred)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    startedAt, finishedAt, isStarred, originatingSnippetID)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   output = excluded.output,
                   exitCode = excluded.exitCode,
                   finishedAt = excluded.finishedAt,
-                  isStarred = excluded.isStarred
+                  isStarred = excluded.isStarred,
+                  originatingSnippetID = excluded.originatingSnippetID
             """, arguments: [
                 block.id.uuidString,
                 block.sessionID.uuidString,
@@ -28,6 +29,7 @@ public actor BlockRepository {
                 block.startedAt,
                 block.finishedAt,
                 block.isStarred,
+                block.originatingSnippetID?.uuidString,
             ])
 
             try db.execute(sql: """
@@ -77,6 +79,9 @@ public actor BlockRepository {
             [BlockChunk(text: $0, stream: .stdout)]
         } ?? []
         let exit = (row["exitCode"] as Int?).map(ExitStatus.init)
+        // Blocks loaded from the database are always finished (state = .done).
+        let exitCode = (row["exitCode"] as Int?) ?? 0
+        let snippetID = (row["originatingSnippetID"] as String?).flatMap(UUID.init).map(SnippetID.init)
         return Block(
             id: BlockID(id),
             sessionID: SessionID(sid),
@@ -86,7 +91,9 @@ public actor BlockRepository {
             exitStatus: exit,
             startedAt: row["startedAt"] ?? .now,
             finishedAt: row["finishedAt"],
-            isStarred: row["isStarred"] ?? false
+            isStarred: row["isStarred"] ?? false,
+            originatingSnippetID: snippetID,
+            state: .done(exitCode: exitCode)
         )
     }
 }

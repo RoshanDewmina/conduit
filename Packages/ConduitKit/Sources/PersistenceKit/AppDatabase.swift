@@ -126,6 +126,18 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Tier 2.1 + 2.3 + 2.4 (parameterized snippets + history back-link +
+        // palette ranking).
+        m.registerMigration("v4") { db in
+            try db.alter(table: "snippets") { t in
+                t.add(column: "arguments", .text).notNull().defaults(to: "[]")
+                t.add(column: "useCount",  .integer).notNull().defaults(to: 0)
+            }
+            try db.alter(table: "blocks") { t in
+                t.add(column: "originatingSnippetID", .text)
+            }
+        }
+
         return m
     }
 }

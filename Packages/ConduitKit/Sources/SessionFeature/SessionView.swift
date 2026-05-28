@@ -81,7 +81,7 @@ public struct SessionView: View {
         }
         .task {
             if let db = try? AppDatabase.openShared(),
-               let snippets = try? await SnippetRepository(db: db).all() {
+               let snippets = try? await SnippetRepository(db: db).rankedForPalette() {
                 availableSnippets = snippets
             }
         }
@@ -114,11 +114,15 @@ public struct SessionView: View {
         .sheet(isPresented: $showingSnippetPalette) {
             SnippetPaletteSheet(
                 snippets: availableSnippets,
-                onInsert: { snippet in
-                    vm.inputText += snippet.body
+                onInsert: { snippet, filledBody in
+                    vm.pendingSnippetID = snippet.id
+                    vm.inputText += filledBody
                     showingSnippetPalette = false
                 },
-                onDismiss: { showingSnippetPalette = false }
+                onDismiss: { showingSnippetPalette = false },
+                executeShellCommand: { cmd in
+                    (try? await vm.activeShell?.executeCollected(cmd)) ?? ""
+                }
             )
         }
         .focusable()
@@ -579,7 +583,26 @@ private struct BlockRow<Footer: View>: View {
     let onStar: () -> Void
     let footer: Footer
 
+    @State private var searchActive = false
+    @State private var searchQuery = ""
+
     private var isFailed: Bool { block.exitStatus?.isSuccess == false }
+
+    /// Re-applies highlight markers for search matches on top of the base render.
+    private var highlightedRender: AttributedString {
+        guard !searchQuery.isEmpty,
+              let result = BlockSearch.search(query: searchQuery, in: block),
+              !result.ranges.isEmpty
+        else { return render }
+        var attr = AttributedString(block.joinedOutput)
+        for range in result.ranges {
+            if let attrRange = Range(range, in: attr) {
+                attr[attrRange].backgroundColor = .init(.systemYellow.withAlphaComponent(0.35))
+                attr[attrRange].foregroundColor = .init(.label)
+            }
+        }
+        return attr
+    }
 
     // Visually distinguish executing blocks with a subtle shimmer/border.
     private var isExecuting: Bool {
@@ -644,8 +667,45 @@ private struct BlockRow<Footer: View>: View {
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                 }
+                // Tier 2.3: snippet back-link badge
+                if block.originatingSnippetID != nil {
+                    Label("From snippet", systemImage: "curlybraces.square.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                }
 
                 if !block.isCollapsed {
+                    if searchActive {
+                        HStack(spacing: 6) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                            TextField("Search output…", text: $searchQuery)
+                                .font(.caption.monospaced())
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                            if let result = BlockSearch.search(query: searchQuery, in: block) {
+                                Text("\(result.matchCount) match\(result.matchCount == 1 ? "" : "es")")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tint)
+                            } else if !searchQuery.isEmpty {
+                                Text("No matches")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                searchActive = false
+                                searchQuery = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.06).cornerRadius(6))
+                    }
                     if hasLiveTerminal, let handle = liveHandle {
                         // Warp-style: the active executing block hosts the
                         // live SwiftTerm grid in place of static text. Bytes
@@ -661,7 +721,7 @@ private struct BlockRow<Footer: View>: View {
                         .frame(height: inlineTerminalHeight)
                         .frame(maxWidth: .infinity)
                     } else if block.hasOutput {
-                        Text(render)
+                        Text(searchQuery.isEmpty ? render : highlightedRender)
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -705,6 +765,14 @@ private struct BlockRow<Footer: View>: View {
                     UIPasteboard.general.string = block.joinedOutput
                     #endif
                 } label: { Label("Copy output", systemImage: "doc.on.clipboard") }
+                Divider()
+                Button {
+                    withAnimation { searchActive.toggle() }
+                    if !searchActive { searchQuery = "" }
+                } label: {
+                    Label(searchActive ? "Hide search" : "Search output",
+                          systemImage: searchActive ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                }
             }
             if !isExecuting, block.exitStatus?.isSuccess == false {
                 Divider()
