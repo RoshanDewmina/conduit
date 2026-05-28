@@ -91,7 +91,7 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
-    @State private var selectedTab: Tab = .workspaces
+    @State private var selectedTab: Tab = .sessions
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
     @State private var editingHost: Host?
@@ -105,8 +105,24 @@ public struct AppRoot: View {
     @State private var approvalIngest: ApprovalIngest?
     @State private var showingProvisioningWizard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
+    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.colorScheme) private var systemScheme
+
+    private var preferredScheme: ColorScheme? {
+        switch colorSchemePref {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
+    }
+
+    /// The scheme actually in effect: the Settings override if set, else the system.
+    /// Drives the token palette so it always matches `preferredScheme`.
+    private var effectiveScheme: ColorScheme {
+        preferredScheme ?? systemScheme
+    }
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
     @State private var isUnlocked: Bool = false
@@ -116,6 +132,9 @@ public struct AppRoot: View {
     @State private var paywallFeatureName = ""
 
     private var isPro: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["CONDUIT_FORCE_PRO"] == "1" { return true }
+        #endif
         switch pm.purchaseState {
         case .purchased, .unknown: return true
         default: return false
@@ -123,28 +142,28 @@ public struct AppRoot: View {
     }
 
     public enum Tab: Hashable, Sendable {
-        case workspaces
-        case session
+        case sessions    // Sessions Home (was: session)
+        case hosts       // Host list (was: workspaces)
         case inbox
         case settings
 
-        static let rootTabs: [Tab] = [.workspaces, .session, .inbox, .settings]
+        static let rootTabs: [Tab] = [.sessions, .hosts, .inbox, .settings]
 
         var title: String {
             switch self {
-            case .workspaces: "Workspaces"
-            case .session: "Session"
-            case .inbox: "Inbox"
-            case .settings: "Settings"
+            case .sessions:  "Sessions"
+            case .hosts:     "Hosts"
+            case .inbox:     "Inbox"
+            case .settings:  "Settings"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .workspaces: "server.rack"
-            case .session: "terminal"
-            case .inbox: "tray"
-            case .settings: "gear"
+            case .sessions:  "bubble.left.and.text.bubble.right"
+            case .hosts:     "server.rack"
+            case .inbox:     "tray"
+            case .settings:  "gear"
             }
         }
     }
@@ -161,12 +180,33 @@ public struct AppRoot: View {
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
         }
+        #if DEBUG
+        // UI-audit hook: launch straight into a tab via SIMCTL_CHILD_CONDUIT_TAB.
+        if let tab = ProcessInfo.processInfo.environment["CONDUIT_TAB"] {
+            switch tab {
+            case "hosts":    _selectedTab = State(initialValue: .hosts)
+            case "inbox":    _selectedTab = State(initialValue: .inbox)
+            case "settings": _selectedTab = State(initialValue: .settings)
+            default:         _selectedTab = State(initialValue: .sessions)
+            }
+        }
+        #endif
     }
 
     public var body: some View {
+        #if DEBUG
+        if let gallery = ProcessInfo.processInfo.environment["CONDUIT_GALLERY"] {
+            return AnyView(DebugGalleryView(route: gallery).conduitTokens())
+        }
+        #endif
+        return AnyView(mainBody.environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light))
+    }
+
+    private var mainBody: some View {
         Group {
             if !isUnlocked {
                 LaunchLockView(onUnlock: { await attemptUnlock() })
+                    .preferredColorScheme(preferredScheme)
             } else {
                 switch environment {
                 case .failure(let msg):
@@ -177,6 +217,7 @@ public struct AppRoot: View {
                     )
                 case .ready(let env):
                     readyRoot(env: env)
+                        .preferredColorScheme(preferredScheme)
                 }
             }
         }
@@ -216,7 +257,7 @@ public struct AppRoot: View {
                     onContinue: {
                         onboardingSeen = true
                         addHostPresented = true
-                        selectedTab = .workspaces
+                        selectedTab = .hosts
                     },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
@@ -230,7 +271,7 @@ public struct AppRoot: View {
                 onComplete: { host in
                     showingProvisioningWizard = false
                     onboardingSeen = true
-                    selectedTab = .workspaces
+                    selectedTab = .hosts
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         openSession(host: host, env: env)
@@ -319,7 +360,7 @@ public struct AppRoot: View {
     private var splitSelection: Binding<Tab?> {
         Binding(
             get: { selectedTab },
-            set: { selectedTab = $0 ?? .workspaces }
+            set: { selectedTab = $0 ?? .hosts }
         )
     }
 
@@ -339,17 +380,15 @@ public struct AppRoot: View {
 
     private func compactRoot(env: AppEnvironment) -> some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                rootDestination(.workspaces, env: env)
-            }
-            .tabItem { Label(Tab.workspaces.title, systemImage: Tab.workspaces.systemImage) }
-            .tag(Tab.workspaces)
+            rootDestination(.sessions, env: env)
+                .tabItem { Label(Tab.sessions.title, systemImage: Tab.sessions.systemImage) }
+                .tag(Tab.sessions)
 
             NavigationStack {
-                rootDestination(.session, env: env)
+                rootDestination(.hosts, env: env)
             }
-            .tabItem { Label(Tab.session.title, systemImage: Tab.session.systemImage) }
-            .tag(Tab.session)
+            .tabItem { Label(Tab.hosts.title, systemImage: Tab.hosts.systemImage) }
+            .tag(Tab.hosts)
 
             NavigationStack {
                 rootDestination(.inbox, env: env)
@@ -372,22 +411,37 @@ public struct AppRoot: View {
         NavigationSplitView {
             List(selection: splitSelection) {
                 ForEach(Tab.rootTabs, id: \.self) { tab in
-                    Label(tab.title, systemImage: tab.systemImage)
-                        .tag(tab)
+                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
                 }
             }
             .navigationTitle("Conduit")
         } detail: {
-            NavigationStack {
-                rootDestination(selectedTab, env: env)
-            }
+            rootDestination(selectedTab, env: env)
         }
+    }
+
+    @ViewBuilder
+    private func sessionsHome(env: AppEnvironment) -> some View {
+        SessionsHomeView(
+            liveSession: sessionViewModel,
+            liveInboxVM: liveInboxVM,
+            hostRepo: env.hostRepo,
+            blockRepo: env.blockRepo,
+            onTapLiveSession: { selectedTab = .sessions },
+            onAddSession: {
+                addHostPresented = true
+                selectedTab = .hosts
+            }
+        )
     }
 
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
         switch tab {
-        case .workspaces:
+        case .sessions:
+            sessionsHome(env: env)
+
+        case .hosts:
             WorkspacesView(
                 viewModel: WorkspacesViewModel(repository: env.hostRepo),
                 onSelect: { host in openSession(host: host, env: env) },
@@ -399,11 +453,7 @@ public struct AppRoot: View {
                 }
             )
             .id(workspacesRevision)
-        case .session:
-            SessionShellView(
-                viewModel: sessionViewModel,
-                inboxViewModel: activeInboxViewModel
-            )
+
         case .inbox:
             if isPro {
                 InboxView(viewModel: activeInboxViewModel)
@@ -499,7 +549,7 @@ public struct AppRoot: View {
                 self.approvalIngest = ingest
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
-                self.selectedTab = .session
+                self.selectedTab = .sessions
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
                         guard let vm else { return }
@@ -524,43 +574,53 @@ public struct AppRoot: View {
 
 private struct LaunchLockView: View {
     let onUnlock: () async -> Void
+    @Environment(\.conduitTokens) private var t
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.secondary)
-            Text("Conduit is locked")
-                .font(.title2.weight(.semibold))
+        VStack(spacing: 28) {
+            Spacer()
+            PixelAvatar(seed: "conduit-lock", size: 64)
+                .opacity(0.7)
+            VStack(spacing: 8) {
+                Text("Conduit")
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(t.text1)
+                Text("Authenticate to continue")
+                    .font(.subheadline)
+                    .foregroundStyle(t.text3)
+            }
             Button("Unlock") { Task { await onUnlock() } }
                 .buttonStyle(.borderedProminent)
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
+        .background(t.surf0)
     }
 }
 
 private struct GlobalInboxGateView: View {
     let onUpgrade: () -> Void
+    @Environment(\.conduitTokens) private var t
 
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "tray.and.arrow.down")
                 .font(.system(size: 48))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(t.accent)
             Text("AI Agent Inbox · Pro")
                 .font(.title3.weight(.semibold))
-            Text("Review and approve AI agent actions from your Codex sessions.")
+                .foregroundStyle(t.text1)
+            Text("Review and approve AI agent actions from your sessions.")
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(t.text3)
                 .multilineTextAlignment(.center)
-            Button("Upgrade to Pro") { onUpgrade() }
-                .buttonStyle(.borderedProminent)
+            DSButton("Upgrade to Pro", systemImage: "sparkles", variant: .primary, action: onUpgrade)
             Spacer()
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(t.surf0)
         .navigationTitle("Inbox")
     }
 }

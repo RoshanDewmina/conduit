@@ -200,7 +200,7 @@ public struct WorkspacesView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search or \"ssh user@host -p port\"")
-        .navigationTitle("Workspaces")
+        .navigationTitle("Hosts")
         .contentMargins(.bottom, 72, for: .scrollContent)
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 72)
@@ -260,6 +260,7 @@ private struct HostRow: View {
     let host: Host
     var isConnected: Bool = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.conduitTokens) private var t
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
@@ -272,25 +273,22 @@ private struct HostRow: View {
     private var standardLayout: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "terminal")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                PixelAvatar(seed: host.name, size: 36)
                 if isConnected {
                     Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
+                        .fill(t.ok)
+                        .frame(width: 9, height: 9)
                         .offset(x: 2, y: 2)
                 }
             }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(host.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(t.text1)
                     .lineLimit(1)
                 Text(host.displayAddress)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(t.text3)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 HStack(spacing: 8) {
@@ -300,7 +298,7 @@ private struct HostRow: View {
                     }
                 }
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(t.text4)
                 .lineLimit(1)
             }
             Spacer()
@@ -308,11 +306,11 @@ private struct HostRow: View {
                 if let last = host.lastConnectedAt {
                     Text(last.formatted(.relative(presentation: .numeric)))
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(t.text4)
                 }
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(t.text4)
             }
         }
         .padding(.vertical, 6)
@@ -321,23 +319,20 @@ private struct HostRow: View {
     private var accessibilityLayout: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "terminal")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, alignment: .leading)
+                PixelAvatar(seed: host.name, size: 24)
                 Text(host.name)
                     .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(t.text1)
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(t.text4)
             }
 
             Text(host.displayAddress)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(t.text3)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -352,7 +347,7 @@ private struct HostRow: View {
                 }
             }
             .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(t.text4)
         }
         .padding(.vertical, 8)
     }

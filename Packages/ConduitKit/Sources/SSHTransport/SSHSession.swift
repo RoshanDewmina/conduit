@@ -109,6 +109,18 @@ public actor SSHSession {
 
     // MARK: - Exec channel (one-shot command)
 
+    /// Wrap a user command in a login shell invocation so that PATH, env, and
+    /// shell profiles (`.zprofile`, `.bash_profile`) are sourced.
+    ///
+    /// Uses POSIX single-quote escaping so `$`, backticks, and `\` in the
+    /// command are not interpreted by the outer shell.
+    static func loginShellWrap(_ command: String) -> String {
+        // POSIX single-quote escape: ' → '\''
+        // Ends the current SQ string, inserts a backslash-quoted ', reopens SQ.
+        let escaped = command.replacingOccurrences(of: "'", with: #"'\''"#)
+        return "${SHELL:-/bin/sh} -lc '\(escaped)'"
+    }
+
     /// Stream stdout/stderr chunks from a remote command. Stream finishes
     /// when the remote process closes its channels.
     public func execute(_ command: String) async throws -> AsyncThrowingStream<(Data, BlockChunk.Stream), any Error> {

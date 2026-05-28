@@ -18,6 +18,11 @@
 import Foundation
 #if os(iOS)
 import ActivityKit
+
+// Activity<T> predates Swift 6 concurrency and lacks Sendable annotation in the
+// iOS SDK headers. We own all access through @MainActor so this is safe.
+@available(iOS 16.2, *)
+extension Activity: @retroactive @unchecked Sendable {}
 #endif
 
 #if os(iOS)

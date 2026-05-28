@@ -50,6 +50,12 @@ struct AnsiSGRParserTests {
         #expect(TUIDetector.shouldEscalate(to: data))
     }
 
+    @Test("cursor-positioning escalates inline TUI mode")
+    func cursorPositioningDetector() {
+        let data = Data("\u{1B}[2J\u{1B}[H\u{1B}[?25lClaude".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data))
+    }
+
     @Test("plain output does not escalate")
     func tuiNegative() {
         let data = Data("hello\n".utf8)

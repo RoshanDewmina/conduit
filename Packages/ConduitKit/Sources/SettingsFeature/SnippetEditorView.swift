@@ -11,6 +11,7 @@ public struct SnippetEditorView: View {
     @State private var editingSnippet: Snippet? = nil
     @State private var isAddingNew = false
     private let repository: SnippetRepository?
+    @Environment(\.conduitTokens) private var t
 
     public init(repository: SnippetRepository? = nil) {
         self.repository = repository
@@ -23,20 +24,26 @@ public struct SnippetEditorView: View {
                     editingSnippet = snippet
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(snippet.name).bold().foregroundStyle(.primary)
+                        Text(snippet.name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(t.text1)
                         Text(snippet.body)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(t.text3)
                             .lineLimit(2)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(t.surf1)
             }
             .onDelete { offsets in
                 delete(at: offsets)
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(t.surf0)
         .navigationTitle("Snippets")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -28,6 +28,23 @@ struct BlockRendererTests {
         #expect(r.pendingTUIEscalation)
     }
 
+    @Test("line editor backspaces are normalized")
+    func lineEditorBackspaces() {
+        let r = BlockRenderer()
+        let id = r.begin(sessionID: SessionID(), command: "echo", prompt: .init(cwd: "~", hostName: "h"))
+        r.append(Data("e\u{8}echo block-ok\n".utf8), stream: .stdout, to: id)
+        #expect(r.blocks[0].joinedOutput == "echo block-ok\n")
+    }
+
+    @Test("line editor backspaces normalize across chunks")
+    func lineEditorBackspacesAcrossChunks() {
+        let r = BlockRenderer()
+        let id = r.begin(sessionID: SessionID(), command: "echo", prompt: .init(cwd: "~", hostName: "h"))
+        r.append(Data("e".utf8), stream: .stdout, to: id)
+        r.append(Data("\u{8}echo block-ok\n".utf8), stream: .stdout, to: id)
+        #expect(r.blocks[0].joinedOutput == "echo block-ok\n")
+    }
+
     @Test("collapse and star toggle")
     func toggles() {
         let r = BlockRenderer()

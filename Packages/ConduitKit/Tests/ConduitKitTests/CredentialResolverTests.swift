@@ -5,11 +5,6 @@ import CryptoKit
 @testable import SecurityKit
 import ConduitCore
 
-// Minimal BiometricGate subtype that always succeeds without prompting hardware.
-// We can't subclass an actor, so we test CredentialResolver indirectly for paths
-// that don't touch biometrics (password, agent-error). The ed25519 path is covered
-// by the KeyStore integration tests.
-
 @Suite("CredentialResolver")
 struct CredentialResolverTests {
 
@@ -54,7 +49,8 @@ struct CredentialResolverTests {
         let credential = try await CredentialResolver.resolve(
             authMethod: .ed25519(keyID: keyID),
             passwordProvider: { "" },
-            keyStore: keyStore
+            keyStore: keyStore,
+            biometricUnlock: {}
         )
 
         try await keyStore.delete(tag: keyID.uuidString)

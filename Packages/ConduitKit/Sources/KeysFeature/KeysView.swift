@@ -63,6 +63,8 @@ public final class KeysViewModel {
 
 public struct KeysView: View {
     @State private var vm: KeysViewModel
+    @Environment(\.conduitTokens) private var t
+
     public init(viewModel: KeysViewModel) { _vm = State(initialValue: viewModel) }
 
     public var body: some View {
@@ -70,13 +72,18 @@ public struct KeysView: View {
             Section {
                 Button {
                     Task { await vm.generate() }
-                } label: { Label("Generate Ed25519 keypair", systemImage: "key.fill") }
+                } label: {
+                    Label("Generate Ed25519 keypair", systemImage: "key.fill")
+                        .foregroundStyle(t.accent)
+                }
             }
+            .listRowBackground(t.surf1)
 
             if let publicKey = vm.lastGeneratedPublic {
                 Section("Last generated public key") {
                     Text(publicKey)
                         .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(t.text2)
                         .textSelection(.enabled)
                     Button("Copy") {
                         #if os(iOS)
@@ -84,25 +91,30 @@ public struct KeysView: View {
                         #endif
                         Haptics.selection()
                     }
+                    .foregroundStyle(t.accent)
                 }
+                .listRowBackground(t.surf1)
             }
 
             Section("Keys") {
                 if vm.keys.isEmpty {
-                    Text("No keys yet").foregroundStyle(.secondary)
+                    Text("No keys yet")
+                        .foregroundStyle(t.text3)
+                        .listRowBackground(t.surf1)
                 } else {
                     ForEach(vm.keys) { key in
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "key")
-                                .foregroundStyle(.tint)
+                                .foregroundStyle(t.accent)
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(key.tag)
                                     .font(.system(.callout, design: .monospaced))
+                                    .foregroundStyle(t.text1)
                                     .textSelection(.enabled)
                                 Text(key.fingerprint)
                                     .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(t.text3)
                                     .textSelection(.enabled)
                                 Button("Copy public key") {
                                     #if os(iOS)
@@ -113,6 +125,7 @@ public struct KeysView: View {
                                 .font(.caption)
                                 .buttonStyle(.bordered)
                                 .controlSize(.mini)
+                                .tint(t.accent)
                             }
                         }
                         .swipeActions {
@@ -121,13 +134,20 @@ public struct KeysView: View {
                             } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
+                    .listRowBackground(t.surf1)
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(t.surf0)
         .navigationTitle("SSH Keys")
         .contentMargins(.bottom, 72, for: .scrollContent)
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .task { await vm.reload() }
+        .alert("Error", isPresented: .constant(vm.error != nil)) {
+            Button("OK") { vm.error = nil }
+        } message: { Text(vm.error ?? "") }
     }
 }
 

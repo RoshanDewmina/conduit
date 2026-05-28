@@ -48,6 +48,7 @@ struct SessionShellView: View {
     @State private var showingPaywall = false
     @State private var paywallFeature = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.conduitTokens) private var t
 
     private var isPro: Bool {
         switch pm.purchaseState {

@@ -5,6 +5,12 @@
 import PackageDescription
 
 let swiftSettings: [SwiftSetting] = [
+    // Emit warnings for expressions/functions that take too long to type-check.
+    // Fix the flagged sites with explicit type annotations to improve incremental build times.
+    .unsafeFlags([
+        "-Xfrontend", "-warn-long-function-bodies=300",
+        "-Xfrontend", "-warn-long-expression-type-checking=300",
+    ], .when(configuration: .debug)),
 ]
 
 let package = Package(
@@ -76,6 +82,9 @@ let package = Package(
                 "ConduitCore",
                 "SSHTransport",
                 .product(name: "SwiftTerm", package: "SwiftTerm", condition: .when(platforms: [.iOS])),
+            ],
+            resources: [
+                .process("Resources"),
             ],
             swiftSettings: swiftSettings
         ),

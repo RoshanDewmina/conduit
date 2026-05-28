@@ -290,8 +290,9 @@ public struct TerminalTheme: Sendable {
 
 public enum TUIDetector {
     /// Returns true if the data fragment looks like a TUI / alt-screen
-    /// program took over the terminal. Used to escalate from Block to Raw
-    /// mode. Heuristic, intentionally conservative.
+    /// program took over the terminal. Alt-screen sequences drive the raw
+    /// overlay, while cursor-positioning hints keep inline TUIs interactive
+    /// when shell integration fails to emit OSC 133 C.
     public static func shouldEscalate(to data: Data) -> Bool {
         guard let s = String(data: data, encoding: .utf8) else { return false }
         // \x1b[?1049h = enter alternate screen buffer (xterm)
@@ -300,5 +301,8 @@ public enum TUIDetector {
         return s.contains("\u{1B}[?1049h")
             || s.contains("\u{1B}[?47h")
             || s.contains("\u{1B}[?1h")
+            || s.contains("\u{1B}[H")
+            || s.contains("\u{1B}[2J")
+            || s.contains("\u{1B}[?25l")
     }
 }

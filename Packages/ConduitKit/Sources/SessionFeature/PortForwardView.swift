@@ -1,6 +1,8 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import ConduitCore
+import DesignSystem
 import SSHTransport
 
 // MARK: - View model
@@ -81,6 +83,7 @@ public final class PortForwardViewModel {
 public struct PortForwardView: View {
     @State private var vm: PortForwardViewModel
     @State private var showAddForm = false
+    @Environment(\.conduitTokens) private var t
 
     public init(viewModel: PortForwardViewModel) {
         _vm = State(initialValue: viewModel)
@@ -153,9 +156,11 @@ public struct PortForwardView: View {
                     .keyboardType(.numberPad)
                 Image(systemName: "arrow.right")
                     .foregroundStyle(.secondary)
-                TextField("Remote host", text: $vm.addRemoteHost)
-                    .autocapitalization(.none)
-                    .autocorrectionDisabled()
+                TerminalSafeTextField(
+                    "Remote host",
+                    text: $vm.addRemoteHost,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
                 Text(":")
                     .foregroundStyle(.secondary)
                 TextField("Port", text: $vm.addRemotePort)

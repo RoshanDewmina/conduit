@@ -97,6 +97,7 @@ public final class SettingsViewModel {
 public struct SettingsView: View {
     @State private var vm: SettingsViewModel
     let syncEngine: SyncEngine?
+    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
 
     public init(viewModel: SettingsViewModel, syncEngine: SyncEngine? = nil) {
         _vm = State(initialValue: viewModel)
@@ -121,6 +122,15 @@ public struct SettingsView: View {
 
             Section {
                 Button("Save") { Task { await vm.save() } }
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $colorSchemePref) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
+                .pickerStyle(.segmented)
             }
 
             Section("Terminal") {

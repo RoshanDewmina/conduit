@@ -111,6 +111,7 @@ private struct ShellIntegrationDiagnosticsRow: View {
     @AppStorage("conduitShellDetected")   private var shellDetected: String = ""
     @AppStorage("conduitMarkersActive")   private var markersActive: Bool = false
     @AppStorage("conduitLastMarkerTime")  private var lastMarkerTime: Double = 0
+    @Environment(\.conduitTokens) private var t
 
     private var isFish: Bool { shellDetected == "fish" }
 
@@ -122,27 +123,27 @@ private struct ShellIntegrationDiagnosticsRow: View {
                     .frame(width: 8, height: 8)
                 Text(statusLabel)
                     .font(.caption)
-                    .foregroundStyle(markersActive ? .primary : .secondary)
+                    .foregroundStyle(markersActive ? t.text1 : t.text3)
             }
             if !shellDetected.isEmpty {
                 Text("Shell: \(shellDetected)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(t.text3)
             }
             if isFish {
                 Text("Fish shell detected — structured blocks unavailable. Terminal view works normally.")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption2).foregroundStyle(t.text3)
             } else if lastMarkerTime > 0 {
                 let d = Date(timeIntervalSince1970: lastMarkerTime)
                 Text("Last marker: \(d.formatted(date: .omitted, time: .standard))")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(t.text4)
             }
         }
         .padding(.vertical, 4)
     }
 
     private var statusColor: Color {
-        if isFish { return .orange }
-        return markersActive ? .green : Color.secondary.opacity(0.5)
+        if isFish { return t.warn }
+        return markersActive ? t.ok : t.text4
     }
 
     private var statusLabel: String {
