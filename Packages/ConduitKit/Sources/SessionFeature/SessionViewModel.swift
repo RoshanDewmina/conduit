@@ -460,20 +460,18 @@ public final class SessionViewModel {
                 onAltScreenEnter: { [weak self] in
                     guard let self else { return }
                     Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        if let id = self.unifiedBlockID {
-                            self.blocks.clearChunks(id: id)
-                        }
-                        self.activeShell = self.unifiedShell
-                        self.isRaw = true
+                        guard let self, let id = self.unifiedBlockID else { return }
+                        // Clear the text-snapshot chunks so the alt-screen TUI
+                        // starts on a clean canvas. The block-embedded SwiftTerm
+                        // handles `\e[?1049h` natively from here — no full-screen
+                        // mode swap needed.
+                        self.blocks.clearChunks(id: id)
                     }
                 },
                 onAltScreenExit: { [weak self] in
                     guard let self else { return }
                     Task { @MainActor [weak self] in
                         guard let self else { return }
-                        self.isRaw = false
-                        self.activeShell = nil
                         await self.unifiedBridge?.resetEscalationFlags()
                     }
                 }

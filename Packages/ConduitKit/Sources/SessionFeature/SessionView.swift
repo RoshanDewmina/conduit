@@ -25,18 +25,31 @@ public struct SessionView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            statusBar
-            if case .reconnecting = vm.status {
-                reconnectBanner
-            }
-            Divider()
-            if vm.isRaw {
-                rawTerminalContent
-            } else {
-                blockScroll
+        ZStack {
+            // Warp-style dark wallpaper underneath the block stack.
+            LinearGradient(
+                colors: [
+                    Color(red: 0.06, green: 0.07, blue: 0.09),
+                    Color(red: 0.10, green: 0.11, blue: 0.13)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                statusBar
+                if case .reconnecting = vm.status {
+                    reconnectBanner
+                }
+                if vm.isRaw {
+                    rawTerminalContent
+                } else {
+                    blockScroll
+                }
             }
         }
+        .preferredColorScheme(.dark)
         // Phase 0.5: composer / live-input shown in safeAreaInset so it
         // sits flush at the bottom edge and keyboard-avoidance is automatic.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -209,8 +222,14 @@ public struct SessionView: View {
                 .controlSize(.small)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(.thinMaterial)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.clear)
+        .overlay(
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 0.5),
+            alignment: .bottom
+        )
     }
 
     private var statusLabel: String {
@@ -339,7 +358,10 @@ public struct SessionView: View {
         .conduitGlassChrome(cornerRadius: 16, interactive: true)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.bar)
+        .background(
+            Color.black.opacity(0.35)
+                .background(.ultraThinMaterial)
+        )
         .sheet(isPresented: $showRawHistory) {
             rawHistorySheet
         }
@@ -569,6 +591,22 @@ private struct BlockRow<Footer: View>: View {
         liveHandle != nil && block.state == .executing
     }
 
+    /// Height for the embedded SwiftTerm view inside a live block.
+    /// Scales with screen height (≈55%, clamped 360–720) so phones, large
+    /// phones, and iPads each get a sensible window into the running TUI.
+    /// SwiftTerm's `sizeChanged` then fires `onLiveResize` to SIGWINCH the
+    /// remote process to match this height in rows.
+    private var inlineTerminalHeight: CGFloat {
+        #if os(iOS)
+        let screenHeight = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.screen.bounds.height ?? 844
+        return min(720, max(360, screenHeight * 0.55))
+        #else
+        return 420
+        #endif
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if isFailed {
@@ -620,7 +658,7 @@ private struct BlockRow<Footer: View>: View {
                             onResize: { cols, rows in onLiveResize?(cols, rows) },
                             inlineEmbedded: true
                         )
-                        .frame(height: 420)
+                        .frame(height: inlineTerminalHeight)
                         .frame(maxWidth: .infinity)
                     } else if block.hasOutput {
                         Text(render)
@@ -633,9 +671,20 @@ private struct BlockRow<Footer: View>: View {
             }
             .padding(12)
         }
-        .background(isFailed ? Color.red.opacity(0.05) : Color.clear)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(
+            ZStack {
+                // Dark translucent card — Warp-style.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                if isFailed {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.red.opacity(0.06))
+                }
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contextMenu {
             // Phase Q3: rerun + explain disabled while executing
             if !isExecuting {
