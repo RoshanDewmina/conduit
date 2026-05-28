@@ -140,13 +140,25 @@ public final class SessionViewModel {
     private let aiClient: (any AIClient)?
     private let blockRepo: BlockRepository?
 
+    /// Optional snapshot repository — when injected, `connect()` will read the
+    /// last `SessionSnapshot` for this host and, if `host.autoResume` is on
+    /// and the snapshot `isResumable`, send the appropriate
+    /// `AgentResumeBuilder` command to the unified shell after tmux attach.
+    private let snapshotRepo: SessionSnapshotRepository?
+
+    /// The agent registry used when materializing a resume command. Defaults
+    /// to the built-in set; tests inject custom registries.
+    private let agentRegistry: AgentRegistry
+
     public init(
         host: Host,
         sshSession: SSHSession,
         credentialProvider: @escaping @Sendable () async throws -> SSHCredential,
         hostKeyStore: HostKeyStore,
         aiClient: (any AIClient)? = nil,
-        blockRepo: BlockRepository? = nil
+        blockRepo: BlockRepository? = nil,
+        snapshotRepo: SessionSnapshotRepository? = nil,
+        agentRegistry: AgentRegistry = .defaults
     ) {
         self.host = host
         self.sshSession = sshSession
@@ -154,6 +166,8 @@ public final class SessionViewModel {
         self.hostKeyStore = hostKeyStore
         self.aiClient = aiClient
         self.blockRepo = blockRepo
+        self.snapshotRepo = snapshotRepo
+        self.agentRegistry = agentRegistry
         self.blocks = BlockRenderer()
     }
 
@@ -176,8 +190,20 @@ public final class SessionViewModel {
             }
             await refreshCWD()
             await openUnifiedShell()
+            // Tier 1.4 + 1.5.2: after the unified shell is up, fire the
+            // per-host startup command (if any), then attempt agent session
+            // resume (if a snapshot exists and the host opts in). Both feed
+            // through the unified shell so the user sees the result inline
+            // as a normal block.
+            await runStartupCommandIfAny()
+            await attemptAgentResume()
             // Phase 6: detect tmux sessions and running agents on connect.
             await detectTmuxSessions()
+            // Tier 1.4: stamp lastUsedTime in the snapshot store so the
+            // Workspaces list can sort recents.
+            if let repo = snapshotRepo {
+                try? await repo.touch(hostID: host.id)
+            }
         } catch ConduitError.hostKeyUnknown(let fp) {
             pendingHostKeyFingerprint = fp
             status = .disconnected
@@ -239,6 +265,63 @@ public final class SessionViewModel {
             ? true
             : UserDefaults.standard.bool(forKey: "terminalPreventSleep")
         UIApplication.shared.isIdleTimerDisabled = connected && prevent
+    }
+
+    // MARK: - Tier 1.4 + 1.5.2: Startup command + agent resume
+
+    /// If `host.startupCommand` is non-empty, send it to the unified shell
+    /// after `openUnifiedShell()` so the remote shell echoes the result as
+    /// a normal block (with OSC 133 markers if shell integration is active).
+    /// Failures are silent — startup is best-effort.
+    private func runStartupCommandIfAny() async {
+        guard let raw = host.startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let shell = unifiedShell else { return }
+        try? await shell.send(Array((raw + "\n").utf8))
+    }
+
+    /// If the host opts in (`host.autoResume`) and a `SessionSnapshot` exists
+    /// with `isResumable == true`, look up the agent in `agentRegistry` and
+    /// send the matching `AgentResumeBuilder` command. Called after
+    /// `runStartupCommandIfAny()` so an explicit startup command can override
+    /// the resume command if needed.
+    private func attemptAgentResume() async {
+        guard host.autoResume,
+              let repo = snapshotRepo,
+              let snapshot = try? await repo.snapshot(for: host.id),
+              snapshot.isResumable,
+              let agentID = snapshot.agentID,
+              let agent = agentRegistry.registration(id: agentID),
+              let sessionID = snapshot.agentSessionID,
+              let command = AgentResumeBuilder.resumeShellCommand(
+                  agent: agent,
+                  sessionId: sessionID,
+                  workingDirectory: snapshot.agentWorkingDirectory
+              ),
+              let shell = unifiedShell
+        else { return }
+        try? await shell.send(Array((command + "\n").utf8))
+    }
+
+    /// Records the currently-running agent's session details to the snapshot
+    /// store so the next connect can resume. Called externally from the
+    /// hook-integration path (`ApprovalIngest` / `DaemonChannel`) once the
+    /// agent reports its session ID via the conduitd protocol.
+    public func recordAgentSession(
+        agentID: String,
+        sessionID: String,
+        workingDirectory: String? = nil
+    ) async {
+        guard let repo = snapshotRepo else { return }
+        let snapshot = SessionSnapshot(
+            hostID: host.id,
+            lastUsedTime: .now,
+            agentID: agentID,
+            agentSessionID: sessionID,
+            agentWorkingDirectory: workingDirectory,
+            tmuxSessionName: tmuxSessionName
+        )
+        try? await repo.upsert(snapshot)
     }
 
     // MARK: - Phase 6: Tmux session detection

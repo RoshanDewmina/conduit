@@ -11,6 +11,8 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
     public var hostKeyFingerprint: String?  // SHA256 of host's public key, set on first connect
     public var preferredShell: String?
     public var tmuxSessionName: String?     // server-side tmux session to attach
+    public var startupCommand: String?      // shell command run after connect (and tmux attach)
+    public var autoResume: Bool             // attempt agent session resume on reconnect (Tier 1.4)
     public var createdAt: Date
     public var lastConnectedAt: Date?
 
@@ -31,6 +33,8 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
         hostKeyFingerprint: String? = nil,
         preferredShell: String? = nil,
         tmuxSessionName: String? = nil,
+        startupCommand: String? = nil,
+        autoResume: Bool = true,
         createdAt: Date = .now,
         lastConnectedAt: Date? = nil
     ) {
@@ -44,6 +48,8 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
         self.hostKeyFingerprint = hostKeyFingerprint
         self.preferredShell = preferredShell
         self.tmuxSessionName = tmuxSessionName
+        self.startupCommand = startupCommand
+        self.autoResume = autoResume
         self.createdAt = createdAt
         self.lastConnectedAt = lastConnectedAt
     }

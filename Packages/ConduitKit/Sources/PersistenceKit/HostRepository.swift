@@ -21,14 +21,17 @@ public actor HostRepository {
         try await db.dbWriter.write { db in
             try db.execute(sql: """
                 INSERT INTO hosts (id, name, hostname, port, username, authMethodType, authMethodKeyTag,
-                                   tags, hostKeyFingerprint, preferredShell, tmuxSessionName, createdAt, lastConnectedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   tags, hostKeyFingerprint, preferredShell, tmuxSessionName,
+                                   startupCommand, autoResume,
+                                   createdAt, lastConnectedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   name=excluded.name, hostname=excluded.hostname, port=excluded.port,
                   username=excluded.username, authMethodType=excluded.authMethodType,
                   authMethodKeyTag=excluded.authMethodKeyTag, tags=excluded.tags,
                   hostKeyFingerprint=excluded.hostKeyFingerprint,
                   preferredShell=excluded.preferredShell, tmuxSessionName=excluded.tmuxSessionName,
+                  startupCommand=excluded.startupCommand, autoResume=excluded.autoResume,
                   lastConnectedAt=excluded.lastConnectedAt
             """, arguments: [
                 host.id.uuidString,
@@ -42,6 +45,8 @@ public actor HostRepository {
                 host.hostKeyFingerprint,
                 host.preferredShell,
                 host.tmuxSessionName,
+                host.startupCommand,
+                host.autoResume,
                 host.createdAt,
                 host.lastConnectedAt,
             ])
@@ -98,6 +103,8 @@ public actor HostRepository {
             hostKeyFingerprint: row["hostKeyFingerprint"],
             preferredShell: row["preferredShell"],
             tmuxSessionName: row["tmuxSessionName"],
+            startupCommand: row["startupCommand"],
+            autoResume: row["autoResume"] ?? true,
             createdAt: row["createdAt"] ?? .now,
             lastConnectedAt: row["lastConnectedAt"]
         )

@@ -1,7 +1,9 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import Observation
 import ConduitCore
+import DesignSystem
 import PersistenceKit
 import SecurityKit
 
@@ -28,6 +30,8 @@ public final class HostEditorViewModel {
     public var keyTags: [String] = []
     public var selectedKeyTag: String?
     public var tmuxSessionName: String = ""
+    public var startupCommand: String = ""
+    public var autoResume: Bool = true
     public var saveError: String?
 
     private let repo: HostRepository
@@ -51,6 +55,8 @@ public final class HostEditorViewModel {
             port = String(existingHost.port)
             username = existingHost.username
             tmuxSessionName = existingHost.tmuxSessionName ?? ""
+            startupCommand = existingHost.startupCommand ?? ""
+            autoResume = existingHost.autoResume
             switch existingHost.authMethod {
             case .password, .agent:
                 authChoice = .password
@@ -101,6 +107,7 @@ public final class HostEditorViewModel {
         }
 
         let tmux = tmuxSessionName.trimmingCharacters(in: .whitespaces)
+        let startup = startupCommand.trimmingCharacters(in: .whitespaces)
         let host = Host(
             id: existingHost?.id ?? .init(),
             name: name.trimmingCharacters(in: .whitespaces),
@@ -112,6 +119,8 @@ public final class HostEditorViewModel {
             hostKeyFingerprint: existingHost?.hostKeyFingerprint,
             preferredShell: existingHost?.preferredShell,
             tmuxSessionName: tmux.isEmpty ? nil : tmux,
+            startupCommand: startup.isEmpty ? nil : startup,
+            autoResume: autoResume,
             createdAt: existingHost?.createdAt ?? .now,
             lastConnectedAt: existingHost?.lastConnectedAt
         )
@@ -144,21 +153,41 @@ public struct HostEditorView: View {
                     .textInputAutocapitalization(.never)
             }
             Section("Connection") {
-                TextField("Hostname or IP", text: $vm.hostname)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
+                TerminalSafeTextField(
+                    "Hostname or IP",
+                    text: $vm.hostname,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
+                .keyboardType(.URL)
                 TextField("Port", text: $vm.port)
                     .keyboardType(.numberPad)
-                TextField("Username", text: $vm.username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                TerminalSafeTextField(
+                    "Username",
+                    text: $vm.username,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
             }
             Section("Session") {
-                TextField("tmux session name", text: $vm.tmuxSessionName)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                TerminalSafeTextField(
+                    "tmux session name",
+                    text: $vm.tmuxSessionName,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
                 Text("Optional. If set, Conduit attaches to this tmux session on connect, keeping your work alive across disconnects.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                TerminalSafeTextField(
+                    "startup command",
+                    text: $vm.startupCommand,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
+                Text("Optional. Runs after connect (and any tmux attach). Example: cd ~/proj && claude.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Auto-resume agent session", isOn: $vm.autoResume)
+                Text("When on, Conduit reattaches to the last Claude Code / Codex / Cursor / Grok / Gemini session running on this host.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

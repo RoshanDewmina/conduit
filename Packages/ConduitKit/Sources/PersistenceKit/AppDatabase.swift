@@ -109,6 +109,23 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Tier 1.4 + 1.5.2 (agent session resume + per-host startup command).
+        m.registerMigration("v3") { db in
+            try db.alter(table: "hosts") { t in
+                t.add(column: "startupCommand", .text)
+                t.add(column: "autoResume", .boolean).notNull().defaults(to: true)
+            }
+            try db.create(table: "session_snapshots") { t in
+                t.column("hostID",                .text).primaryKey()
+                t.column("lastUsedTime",          .datetime).notNull()
+                t.column("agentID",               .text)
+                t.column("agentSessionID",        .text)
+                t.column("agentWorkingDirectory", .text)
+                t.column("tmuxSessionName",       .text)
+                t.foreignKey(["hostID"], references: "hosts", onDelete: .cascade)
+            }
+        }
+
         return m
     }
 }
