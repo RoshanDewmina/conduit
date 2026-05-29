@@ -31,6 +31,10 @@ public enum ShellIntegrationScript {
           add-zsh-hook -d preexec __conduit_preexec 2>/dev/null
           add-zsh-hook precmd __conduit_prompt_command
           add-zsh-hook preexec __conduit_preexec
+          # Suppress the partial-line marker ("%") zsh prints before a prompt
+          # when the last command's output lacked a trailing newline — it would
+          # otherwise leak into block output.
+          PROMPT_EOL_MARK=''
         elif [ -n "${BASH_VERSION-}" ]; then
           __conduit_prompt_command() { local __conduit_status="$?"; trap '__conduit_preexec' DEBUG; printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$__conduit_status" "${HOSTNAME:-${HOST:-localhost}}" "$PWD"; }
           __conduit_preexec() { printf '\\033]133;C\\007'; trap - DEBUG; }
@@ -54,6 +58,7 @@ public enum ShellIntegrationScript {
             __conduit_precmd() { local s="$?"; printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$s" "${HOST:-${HOSTNAME:-localhost}}" "$PWD"; }
             __conduit_preexec() { printf '\\033]133;C\\007'; }
             add-zsh-hook precmd __conduit_precmd; add-zsh-hook preexec __conduit_preexec
+            PROMPT_EOL_MARK=''
             """
         case .fish:
             return """

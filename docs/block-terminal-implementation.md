@@ -215,18 +215,35 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 
 ## 6. Verified working (2026-05-29)
 - `ls`, idle prompts → clean blocks, correct `✓ exit 0` / `✗ exit 1`, no `~ %`
-  noise, correct "Done"/idle state, compact composer.
+  noise, **no echoed command in output**, ANSI colours intact, "Done"/idle state,
+  compact composer.
 - `claude` → renders inside its own block (live grid), command labeled `$ claude`,
   no leaked integration bytes.
 
+### Round 2 fixes (post test-report, 2026-05-29)
+- **Command echo / `%` leak (Bug #1):** `PTYBridge` now flushes OSC-stripped clean
+  bytes to `onBlockBytes` *interleaved* with the 133 callbacks (`emitCleanBytes`),
+  so prompt + echo bytes ahead of `133;C` reach the VM in the prompt phase and are
+  dropped. (The test report's "move onBlockBytes before await" fix was a no-op —
+  the `onCommandStart` task is enqueued during parse, so ordering was unchanged;
+  the real fix is interleaved flushing.) Plus `PROMPT_EOL_MARK=''` in the zsh
+  integration suppresses the partial-line `%`.
+- **tmux CSI `\e[…t` leak (Bug #2):** `emitCleanBytes` now buffers CSI sequences
+  and drops only `t`-terminated window-manipulation reports, re-emitting all other
+  CSI (SGR `m`, cursor, erase) verbatim so colours/positioning survive. Verified
+  colours still render (ANSI-coloured `ls` output).
+
 ## 7. Open / not-yet-done
-- **Codex** not visually verified end-to-end (account was near its weekly quota);
-  same Ink/inline path as claude, expected identical.
-- A setup block for the integration **clear** command (empty command, `exit 0`)
-  appears at the top of a fresh session. Harmless and Warp shows `clear` blocks
-  too, but could be suppressed.
-- **Alt-screen apps** (vim/htop/tmux) escalate→raw→de-escalate per the contract,
-  but were not re-screenshotted in this pass — retest.
+- **Bug #3 — font glyphs (low severity):** vim/tmux status-bar box-drawing /
+  powerline glyphs render as `?` in the AttributedString text path (the SwiftUI
+  monospaced system font lacks them). Fix = register a glyph-complete mono font or
+  route those blocks through the live `RawTerminalView` handle. Not yet done.
+- **Codex** not visually verified end-to-end (account near weekly quota); same
+  Ink/inline path as claude, expected identical.
+- The integration **clear** setup block (empty command, `exit 0`) at the top of a
+  fresh session is harmless (Warp shows `clear` blocks too) but could be suppressed.
+- **Resize / block interactions** (collapse, star, search, long-press) verified by
+  code review only — need manual simulator interaction to confirm visually.
 - **Agent approval cards** (conduitd `patch`/Approve/Deny, `RiskScorer`, Inbox) —
   the structured Phase 3 layer — not started.
 

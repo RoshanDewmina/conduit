@@ -13,3 +13,6 @@ add-zsh-hook -d precmd __conduit_precmd 2>/dev/null
 add-zsh-hook -d preexec __conduit_preexec 2>/dev/null
 add-zsh-hook precmd __conduit_precmd
 add-zsh-hook preexec __conduit_preexec
+
+# Suppress zsh's partial-line marker ("%") so it doesn't leak into block output.
+PROMPT_EOL_MARK=''
