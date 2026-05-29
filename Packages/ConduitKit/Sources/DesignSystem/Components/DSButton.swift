@@ -1,83 +1,157 @@
 import SwiftUI
 
-public enum DSButtonVariant { case primary, secondary, ghost, destructive }
-public enum DSButtonSize    { case sm, md }
+// MARK: - DSButton
+// Spec: primitives.css:55-110, primitives.jsx:43-74
+// PRIMARY = bg `text` (near-black), fg `bg` — NOT accent.
+// ACCENT  = bg `accent` (warm orange), fg white.
+
+public enum DSButtonVariant {
+    case primary      // bg=text (dark), fg=bg (light) — the design's default CTA
+    case accent       // bg=accent (warm orange), fg=white
+    case secondary    // bg=surface, border=borderStrong, fg=text
+    case ghost        // transparent, fg=text2, hover=surfaceSunk
+    case destructive  // bg=surface, border=danger, fg=danger
+}
+
+public enum DSButtonSize { case sm, md, lg }
 
 public struct DSButton: View {
     let title: String
+    let icon: DSIcon?
     let systemImage: String?
+    let trailingImage: String?
     let variant: DSButtonVariant
     let size: DSButtonSize
+    let mono: Bool
+    let kbd: String?
+    let iconOnly: Bool
     let isLoading: Bool
     let action: () -> Void
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.isEnabled) private var isEnabled
 
+    // MARK: Full init
     public init(
         _ title: String,
+        icon: DSIcon? = nil,
         systemImage: String? = nil,
+        trailingImage: String? = nil,
         variant: DSButtonVariant = .primary,
         size: DSButtonSize = .md,
+        mono: Bool = false,
+        kbd: String? = nil,
+        iconOnly: Bool = false,
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
+        self.icon = icon
         self.systemImage = systemImage
+        self.trailingImage = trailingImage
         self.variant = variant
         self.size = size
+        self.mono = mono
+        self.kbd = kbd
+        self.iconOnly = iconOnly
         self.isLoading = isLoading
         self.action = action
     }
+
+    // NOTE: no separate "backward-compat" init — the full init above already accepts every
+    // legacy call site (icon/trailingImage/mono/kbd/iconOnly all default), so a second
+    // overload with the same effective signature would be ambiguous AND recurse into itself.
 
     public var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 if isLoading {
-                    ProgressView().scaleEffect(0.7)
-                } else if let img = systemImage {
-                    Image(systemName: img).font(iconFont)
+                    ProgressView().scaleEffect(0.75)
+                } else {
+                    if let icon {
+                        DSIconView(icon, size: iconSize, color: fgColor)
+                    } else if let img = systemImage {
+                        Image(systemName: img).font(.system(size: iconSize))
+                    }
                 }
-                Text(title).font(labelFont).fontWeight(.medium)
+                if !iconOnly || isLoading {
+                    labelText
+                }
+                if let trailing = trailingImage {
+                    Image(systemName: trailing).font(.system(size: iconSize))
+                }
+                if let k = kbd {
+                    Text(k)
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
             }
-            .padding(.horizontal, hPad)
+            .padding(.horizontal, iconOnly ? vPad : hPad)
             .padding(.vertical, vPad)
             .frame(minHeight: minH)
+            .frame(minWidth: iconOnly ? minH : nil)
         }
-        .background(bg)
-        .foregroundStyle(fg)
-        .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(bgColor)
+        .foregroundStyle(fgColor)
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                .strokeBorder(border, lineWidth: variant == .secondary ? 1 : 0)
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: hasBorder ? 1 : 0)
         )
+        .opacity(isEnabled ? 1 : 0.45)
+        .animation(.easeInOut(duration: 0.12), value: isEnabled)
         .disabled(isLoading)
     }
 
-    // MARK: Computed style values
+    // MARK: Label
+    private var labelText: some View {
+        Group {
+            if mono {
+                Text(title)
+                    .font(.dsMonoPt(labelSize, weight: .medium))
+                    .tracking(title.count > 0 ? labelSize * 0.08 : 0)
+                    .textCase(.uppercase)
+            } else {
+                Text(title).font(.dsSansPt(labelSize, weight: .medium))
+            }
+        }
+    }
 
-    private var hPad: CGFloat { size == .sm ? 10 : 14 }
-    private var vPad: CGFloat { size == .sm ? 6  : 9  }
-    private var minH: CGFloat { size == .sm ? 30 : 38 }
-    private var labelFont: Font { size == .sm ? .caption : .subheadline }
-    private var iconFont:  Font { size == .sm ? .caption : .subheadline }
+    // MARK: Sizes
+    private var hPad: CGFloat { switch size { case .sm: 10; case .md: 12; case .lg: 16 } }
+    private var vPad: CGFloat { switch size { case .sm: 4; case .md: 6; case .lg: 10 } }
+    private var minH: CGFloat { switch size { case .sm: 26; case .md: 32; case .lg: 40 } }
+    private var labelSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
+    private var iconSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
 
-    private var bg: Color {
+    // MARK: Colors
+    private var bgColor: Color {
         switch variant {
-        case .primary:     return t.accent
-        case .secondary:   return t.surf2
+        case .primary:     return t.text          // near-black
+        case .accent:      return t.accent         // warm orange
+        case .secondary:   return t.surface
         case .ghost:       return .clear
+        case .destructive: return t.surface
+        }
+    }
+
+    private var fgColor: Color {
+        switch variant {
+        case .primary:     return t.bg             // light page bg
+        case .accent:      return t.accentFg       // white
+        case .secondary:   return t.text
+        case .ghost:       return t.text2
         case .destructive: return t.danger
         }
     }
 
-    private var fg: Color {
+    private var borderColor: Color {
         switch variant {
-        case .primary, .destructive: return .white
-        case .secondary, .ghost:     return t.text1
+        case .secondary:   return t.borderStrong
+        case .destructive: return t.danger
+        default:           return .clear
         }
     }
 
-    private var border: Color {
-        variant == .secondary ? t.surf3 : .clear
-    }
+    private var hasBorder: Bool { variant == .secondary || variant == .destructive }
 }

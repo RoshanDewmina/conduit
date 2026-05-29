@@ -1,6 +1,6 @@
 # Phase 1 + Phase 2 Implementation — iOS 26 / Swift 6.2
 
-Updated: 2026-05-24
+Updated: 2026-05-27 (caveats verified)
 
 ## Overview
 
@@ -157,15 +157,15 @@ SSHSession.connect(credential:hostKeyStore:)
       → whichever finishes first wins, other is cancelled
 ```
 
-## Known Caveats
+## Known Caveats (verified 2026-05-27)
 
-1. **Citadel API name**: `requestShellChannel` uses `client.withTerminal(term:width:height:)`. If the actual Citadel 0.9.x method has a different name (e.g., `withPTY`, `openShell`, `requestShell`), you'll get a compile error localized to `SSHSession.swift:requestShellChannel`. The fix is adjusting the method name to match.
+1. **Citadel API name**: `requestShellChannel` uses `client.withTerminal(term:width:height:)`. If the actual Citadel 0.9.x method has a different name (e.g., `withPTY`, `openShell`, `requestShell`), you'll get a compile error localized to `SSHSession.swift:requestShellChannel`. The fix is adjusting the method name to match. (The current code builds, so the name is correct as of this commit.)
 
 2. **Mosh not yet implemented**: Marked as a stretch goal. Blink Shell's main advantage is Mosh support. Adding this would require integrating a Mosh client library or building the protocol from scratch.
 
-3. **BGContinuedProcessingTask not yet used**: iOS 26's improved background API is noted in the plan but not implemented. Currently uses the scene phase observer pattern. The upgrade would provide more reliable background keepalive.
+3. **BGContinuedProcessingTask not yet used**: iOS 26's improved background API is noted in the plan but not implemented. Repo-wide grep shows zero references in `Packages/ConduitKit/Sources`. Current behaviour: `ScenePhaseObserver` + `SessionViewModel.handleSceneActive()` reconnects on resume; `Notifications.postSessionSuspended` fires when the standard background task expires. Adopting `BGContinuedProcessingTask` would extend background runtime past the ~30s standard cap for users who don't run tmux. Tracked in `docs/current-state-audit.md` → "Background-keepalive status".
 
-4. **Liquid Glass design not applied**: iOS 26's new design language is available but not yet adopted in the UI chrome. The reconnect banner, status bar, and sheets could use `GlassEffect`.
+4. **Liquid Glass partially adopted**: `DesignSystem/Atoms.swift` ships `conduitGlassChrome(cornerRadius:interactive:)`, which calls `.glassEffect(...)` on iOS 26 with a `.ultraThinMaterial` fallback. Four call sites use it today (raw-mode keyboard rail + composer in `SessionFeature/SessionView`; top + bottom ribbons in `AppFeature/SessionShellView`). Seven secondary-chrome surfaces still use raw `.background(.bar/.thinMaterial/.regularMaterial)` and should migrate — see `docs/current-state-audit.md` → "Liquid Glass adoption status" for the file/line list.
 
 ## Testing Checklist
 

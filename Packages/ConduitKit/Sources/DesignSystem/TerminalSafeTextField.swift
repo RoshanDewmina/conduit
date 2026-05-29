@@ -59,6 +59,13 @@ public struct TerminalSafeTextField: UIViewRepresentable {
         let tf = UITextField()
         tf.delegate = context.coordinator
 
+        // Hug content vertically so SwiftUI sizes the field to its single-line
+        // intrinsic height. Without this the representable stretches to fill any
+        // slack vertical space (e.g. an empty chat transcript), ballooning the
+        // input pill to fill the screen.
+        tf.setContentHuggingPriority(.required, for: .vertical)
+        tf.setContentCompressionResistancePriority(.required, for: .vertical)
+
         // Disable every smart-text feature
         tf.smartDashesType        = .no
         tf.smartQuotesType        = .no

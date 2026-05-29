@@ -4,146 +4,225 @@ import UIKit
 import DesignSystem
 
 public struct TerminalSettingsView: View {
-    @AppStorage("terminalFontSize")    private var fontSize: Double = 13
-    @AppStorage("terminalKeepAlive")   private var keepAlive: Int = 60
-    @AppStorage("terminalPreventSleep") private var preventSleep: Bool = true
+    @AppStorage("terminalFontSize")       private var fontSize: Double = 13
+    @AppStorage("terminalKeepAlive")      private var keepAlive: Int = 60
+    @AppStorage("terminalPreventSleep")   private var preventSleep: Bool = true
     @AppStorage("terminalHapticFeedback") private var hapticFeedback: Bool = true
-    @AppStorage("terminalScrollback")  private var scrollback: Int = 1000
-    @AppStorage("terminalTheme")       private var themeName: String = "Dark"
+    @AppStorage("terminalScrollback")     private var scrollback: Int = 1000
+    @AppStorage("terminalTheme")          private var themeName: String = "Dark"
 
     private let fontSizes: [(label: String, value: Double)] = [
-        ("Small",  10), ("Medium", 12), ("Default", 13),
-        ("Large",  15), ("XLarge", 18),
+        ("Small", 10), ("Medium", 12), ("Default", 13), ("Large", 15), ("XLarge", 18),
     ]
     private let keepAliveOptions: [(label: String, value: Int)] = [
         ("Off", 0), ("30 sec", 30), ("60 sec", 60), ("2 min", 120),
     ]
     private let scrollbackOptions: [(label: String, value: Int)] = [
-        ("500",    500), ("1 000", 1000), ("5 000", 5000), ("Unlimited", 0),
+        ("500", 500), ("1 000", 1000), ("5 000", 5000), ("Unlimited", 0),
     ]
     private let themes = ["Dark", "Light", "Solarized Dark", "Dracula"]
 
     public init() {}
 
+    @Environment(\.conduitTokens) private var t
+
     public var body: some View {
-        Form {
-            Section("Display") {
-                fontPicker
-                themePicker
-                scrollbackPicker
-            }
+        ZStack {
+            t.bg.ignoresSafeArea()
 
-            Section("Behaviour") {
-                keepAlivePicker
-                Toggle("Prevent Screen Sleep", isOn: $preventSleep)
-                Toggle("Haptic Feedback on Keys", isOn: $hapticFeedback)
-            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // ── Display
+                    sectionHead("Display")
+                    settingsCard {
+                        pickerRow(label: "Font Size", options: fontSizes.map { ($0.label, $0.value) }, value: $fontSize)
+                        cardDivider
+                        stringPickerRow(label: "Theme", options: themes, value: $themeName)
+                        cardDivider
+                        pickerRow(label: "Scrollback", options: scrollbackOptions.map { ($0.label, $0.value) }, value: $scrollback)
+                    }
+                    .padding(.bottom, 16)
 
-            Section("Shortcut Bar") {
-                NavigationLink {
-                    ShortcutBarEditor()
-                } label: {
-                    Label("Customize keyboard rail", systemImage: "keyboard")
+                    // ── Behaviour
+                    sectionHead("Behaviour")
+                    settingsCard {
+                        pickerRow(label: "Keep-Alive", options: keepAliveOptions.map { ($0.label, $0.value) }, value: $keepAlive)
+                        cardDivider
+                        toggleRow(label: "Prevent Screen Sleep", isOn: $preventSleep)
+                        cardDivider
+                        toggleRow(label: "Haptic Feedback on Keys", isOn: $hapticFeedback)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Shortcut Bar
+                    sectionHead("Shortcut Bar")
+                    settingsCard {
+                        NavigationLink {
+                            ShortcutBarEditor()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Customize keyboard rail")
+                                        .font(.dsSansPt(15))
+                                        .foregroundStyle(t.text)
+                                    Text("Reorder or hide keys above the keyboard.")
+                                        .font(.dsSansPt(12))
+                                        .foregroundStyle(t.text3)
+                                }
+                                Spacer()
+                                DSIconView(.chevronRight, size: 14, color: t.text3)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Shell Integration
+                    sectionHead("Shell Integration")
+                    settingsCard {
+                        ShellIntegrationDiagnosticsRow()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+
+                    Text("Font size and theme changes take effect in the next session.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
+
+                    #if DEBUG
+                    sectionHead("Debug")
+                    settingsCard {
+                        DebugProBypassToggle()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+                    #endif
+
+                    Spacer(minLength: 40)
                 }
-                Text("Reorder or hide the keys that appear above the keyboard during a session.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                .padding(.top, 8)
             }
-
-            Section("Shell Integration") {
-                ShellIntegrationDiagnosticsRow()
-            }
-
-            Section {
-                Text("Font size and theme changes take effect in the next session.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-
-            #if DEBUG
-            Section("Debug") {
-                DebugProBypassToggle()
-            }
-            #endif
         }
         .navigationTitle("Terminal")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Sub-pickers
+    // MARK: - Layout helpers
 
-    private var fontPicker: some View {
-        Picker("Font Size", selection: $fontSize) {
-            ForEach(fontSizes, id: \.value) { item in
-                Text(item.label).tag(item.value)
-            }
-        }
+    private func sectionHead(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.dsSansPt(11, weight: .semibold))
+            .foregroundStyle(t.text3)
+            .tracking(0.5)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
     }
 
-    private var themePicker: some View {
-        Picker("Theme", selection: $themeName) {
-            ForEach(themes, id: \.self) { name in
-                Text(name).tag(name)
-            }
-        }
+    private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
     }
 
-    private var keepAlivePicker: some View {
-        Picker("Keep-Alive Interval", selection: $keepAlive) {
-            ForEach(keepAliveOptions, id: \.value) { item in
-                Text(item.label).tag(item.value)
-            }
-        }
+    private var cardDivider: some View {
+        t.border.frame(height: 0.5).padding(.horizontal, 16)
     }
 
-    private var scrollbackPicker: some View {
-        Picker("Scrollback Lines", selection: $scrollback) {
-            ForEach(scrollbackOptions, id: \.value) { item in
-                Text(item.label).tag(item.value)
-            }
+    private func toggleRow(label: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(label)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(t.accent)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func pickerRow<V: Hashable>(label: String, options: [(String, V)], value: Binding<V>) -> some View {
+        HStack {
+            Text(label)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+            Spacer()
+            Picker("", selection: value) {
+                ForEach(options, id: \.0) { item in
+                    Text(item.0).tag(item.1)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(t.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func stringPickerRow(label: String, options: [String], value: Binding<String>) -> some View {
+        HStack {
+            Text(label)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+            Spacer()
+            Picker("", selection: value) {
+                ForEach(options, id: \.self) { opt in
+                    Text(opt).tag(opt)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(t.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 
-// MARK: - Shell integration diagnostics row (Phase 1)
+// MARK: - Shell integration diagnostics row
 
-/// Reads diagnostics written by PTYBridge into UserDefaults so the
-/// TerminalSettingsView can show live shell-integration status without
-/// needing a reference to SessionViewModel.
 private struct ShellIntegrationDiagnosticsRow: View {
-    @AppStorage("conduitShellDetected")   private var shellDetected: String = ""
-    @AppStorage("conduitMarkersActive")   private var markersActive: Bool = false
-    @AppStorage("conduitLastMarkerTime")  private var lastMarkerTime: Double = 0
+    @AppStorage("conduitShellDetected")  private var shellDetected: String = ""
+    @AppStorage("conduitMarkersActive")  private var markersActive: Bool = false
+    @AppStorage("conduitLastMarkerTime") private var lastMarkerTime: Double = 0
     @Environment(\.conduitTokens) private var t
 
     private var isFish: Bool { shellDetected == "fish" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 8, height: 8)
+            HStack(spacing: 6) {
+                DSStatusDot(tone: isFish ? .warn : (markersActive ? .ok : .off))
                 Text(statusLabel)
-                    .font(.caption)
-                    .foregroundStyle(markersActive ? t.text1 : t.text3)
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(markersActive && !isFish ? t.text : t.text3)
             }
             if !shellDetected.isEmpty {
                 Text("Shell: \(shellDetected)")
-                    .font(.caption).foregroundStyle(t.text3)
+                    .font(.dsSansPt(12))
+                    .foregroundStyle(t.text3)
             }
             if isFish {
                 Text("Fish shell detected — structured blocks unavailable. Terminal view works normally.")
-                    .font(.caption2).foregroundStyle(t.text3)
+                    .font(.dsSansPt(12))
+                    .foregroundStyle(t.text3)
             } else if lastMarkerTime > 0 {
                 let d = Date(timeIntervalSince1970: lastMarkerTime)
                 Text("Last marker: \(d.formatted(date: .omitted, time: .standard))")
-                    .font(.caption2).foregroundStyle(t.text4)
+                    .font(.dsSansPt(11))
+                    .foregroundStyle(t.text4)
             }
         }
-        .padding(.vertical, 4)
-    }
-
-    private var statusColor: Color {
-        if isFish { return t.warn }
-        return markersActive ? t.ok : t.text4
     }
 
     private var statusLabel: String {
@@ -152,19 +231,26 @@ private struct ShellIntegrationDiagnosticsRow: View {
     }
 }
 
-// MARK: - Phase 0.4: Debug pro-bypass toggle (DEBUG builds only)
+// MARK: - Debug pro-bypass toggle
 
 #if DEBUG
 private struct DebugProBypassToggle: View {
     @State private var isOn: Bool = UserDefaults.standard.bool(forKey: "conduitDebugProBypass")
+    @Environment(\.conduitTokens) private var t
 
     var body: some View {
-        Toggle("Unlock all features (debug)", isOn: $isOn)
-            .onChange(of: isOn) { _, newValue in
-                UserDefaults.standard.set(newValue, forKey: "conduitDebugProBypass")
-            }
-        Text("Bypasses the StoreKit paywall. Only visible in Debug builds.")
-            .font(.caption2).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Unlock all features (debug)", isOn: $isOn)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+                .tint(t.accent)
+                .onChange(of: isOn) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: "conduitDebugProBypass")
+                }
+            Text("Bypasses the StoreKit paywall. Only visible in Debug builds.")
+                .font(.dsSansPt(12))
+                .foregroundStyle(t.text3)
+        }
     }
 }
 #endif

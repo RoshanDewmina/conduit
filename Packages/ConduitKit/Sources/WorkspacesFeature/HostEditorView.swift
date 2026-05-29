@@ -138,106 +138,226 @@ public final class HostEditorViewModel {
     }
 }
 
+// MARK: - HostEditorView
+
 public struct HostEditorView: View {
     @State private var vm: HostEditorViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
 
     public init(viewModel: HostEditorViewModel) {
         _vm = State(initialValue: viewModel)
     }
 
     public var body: some View {
-        Form {
-            Section("Identity") {
-                TextField("Display name", text: $vm.name)
-                    .textInputAutocapitalization(.never)
-            }
-            Section("Connection") {
-                TerminalSafeTextField(
-                    "Hostname or IP",
-                    text: $vm.hostname,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                .keyboardType(.URL)
-                TextField("Port", text: $vm.port)
-                    .keyboardType(.numberPad)
-                TerminalSafeTextField(
-                    "Username",
-                    text: $vm.username,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-            }
-            Section("Session") {
-                TerminalSafeTextField(
-                    "tmux session name",
-                    text: $vm.tmuxSessionName,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text("Optional. If set, Conduit attaches to this tmux session on connect, keeping your work alive across disconnects.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        ZStack {
+            t.bg.ignoresSafeArea()
 
-                TerminalSafeTextField(
-                    "startup command",
-                    text: $vm.startupCommand,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text("Optional. Runs after connect (and any tmux attach). Example: cd ~/proj && claude.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Toggle("Auto-resume agent session", isOn: $vm.autoResume)
-                Text("When on, Conduit reattaches to the last Claude Code / Codex / Cursor / Grok / Gemini session running on this host.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Authentication") {
-                Picker("Method", selection: $vm.authChoice) {
-                    ForEach(HostEditorViewModel.AuthChoice.allCases) { choice in
-                        Text(choice.label).tag(choice)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // ── Identity
+                    sectionHead("Identity")
+                    editorCard {
+                        inputRow(label: "Display name", placeholder: "e.g. prod-server", text: $vm.name)
                     }
-                }
+                    .padding(.bottom, 16)
 
-                if vm.authChoice == .ed25519 {
-                    if vm.keyTags.isEmpty {
-                        Text("Generate an Ed25519 key in Settings > SSH Keys, then return here to assign it to this host.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Key", selection: $vm.selectedKeyTag) {
-                            ForEach(vm.keyTags, id: \.self) { tag in
-                                Text(shortKeyLabel(tag)).tag(Optional(tag))
+                    // ── Connection
+                    sectionHead("Connection")
+                    editorCard {
+                        monoInputRow(label: "Hostname or IP", placeholder: "192.168.1.1", text: $vm.hostname, keyboard: .URL)
+                        cardDivider
+                        monoInputRow(label: "Port", placeholder: "22", text: $vm.port, keyboard: .numberPad)
+                        cardDivider
+                        monoInputRow(label: "Username", placeholder: "ubuntu", text: $vm.username, keyboard: .default)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Authentication
+                    sectionHead("Authentication")
+                    editorCard {
+                        HStack(spacing: 8) {
+                            ForEach(HostEditorViewModel.AuthChoice.allCases) { choice in
+                                let selected = vm.authChoice == choice
+                                Text(choice.label)
+                                    .font(.dsSansPt(13, weight: selected ? .semibold : .regular))
+                                    .foregroundStyle(selected ? t.accentFg : t.text2)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(selected ? t.accent : t.surfaceSunk, in: Capsule())
+                                    .contentShape(Capsule())
+                                    .onTapGesture { vm.authChoice = choice }
+                                    .animation(.easeInOut(duration: 0.15), value: vm.authChoice)
                             }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+
+                        if vm.authChoice == .ed25519 {
+                            cardDivider
+                            if vm.keyTags.isEmpty {
+                                Text("Generate an Ed25519 key in Settings > SSH Keys, then return here to assign it to this host.")
+                                    .font(.dsSansPt(13))
+                                    .foregroundStyle(t.text3)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                            } else {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Key")
+                                        .font(.dsSansPt(11, weight: .medium))
+                                        .foregroundStyle(t.text3)
+                                    ForEach(vm.keyTags, id: \.self) { tag in
+                                        let selected = vm.selectedKeyTag == tag
+                                        HStack {
+                                            Text(shortKeyLabel(tag))
+                                                .font(.dsMonoPt(13))
+                                                .foregroundStyle(t.text)
+                                            Spacer()
+                                            if selected {
+                                                DSIconView(.check, size: 14, color: t.accent)
+                                            }
+                                        }
+                                        .padding(.vertical, 8)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { vm.selectedKeyTag = tag }
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                        } else {
+                            cardDivider
+                            Text("Password is requested at connect time and is not stored.")
+                                .font(.dsSansPt(13))
+                                .foregroundStyle(t.text3)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                         }
                     }
-                } else {
-                    Text("The password is requested at connect time and is not stored by this scaffold.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    .padding(.bottom, 16)
+
+                    // ── Session
+                    sectionHead("Session")
+                    editorCard {
+                        monoInputRow(label: "Tmux session", placeholder: "optional", text: $vm.tmuxSessionName, keyboard: .default)
+                        cardDivider
+                        monoInputRow(label: "Startup command", placeholder: "cd ~/proj && claude", text: $vm.startupCommand, keyboard: .default)
+                        cardDivider
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Auto-resume agent")
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Text("Reattach to the last running agent session on connect.")
+                                    .font(.dsSansPt(12))
+                                    .foregroundStyle(t.text3)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $vm.autoResume)
+                                .labelsHidden()
+                                .tint(t.accent)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Error
+                    if let err = vm.saveError {
+                        HStack(spacing: 8) {
+                            DSIconView(.alert, size: 14, color: t.danger)
+                            Text(err).font(.dsSansPt(13)).foregroundStyle(t.danger)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                    }
+
+                    // ── Save button
+                    HStack {
+                        Spacer()
+                        DSButton("Save host", variant: .primary, action: {
+                            Task { await vm.save() }
+                        })
+                        .disabled(!vm.isValid)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
+                .padding(.top, 8)
             }
         }
         .navigationTitle(vm.isEditing ? "Edit Host" : "Add Host")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    Task { await vm.save() }
-                }
-                .disabled(!vm.isValid)
-            }
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
+                    .foregroundStyle(t.accent)
             }
         }
-        .alert("Error", isPresented: .constant(vm.saveError != nil), actions: {
-            Button("OK") { vm.saveError = nil }
-        }, message: { Text(vm.saveError ?? "") })
         .task { await vm.loadKeys() }
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHead(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.dsSansPt(11, weight: .semibold))
+            .foregroundStyle(t.text3)
+            .tracking(0.5)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func editorCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
+    }
+
+    private var cardDivider: some View {
+        t.border.frame(height: 0.5).padding(.horizontal, 16)
+    }
+
+    private func inputRow(label: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.dsSansPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+            TextField(placeholder, text: text)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func monoInputRow(label: String, placeholder: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.dsSansPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+            TextField(placeholder, text: text)
+                .font(.dsMonoPt(15))
+                .foregroundStyle(t.text)
+                .keyboardType(keyboard)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func shortKeyLabel(_ tag: String) -> String {
         let prefix = tag.prefix(8)
-        return "\(prefix)..."
+        return "\(prefix)…"
     }
 }
 

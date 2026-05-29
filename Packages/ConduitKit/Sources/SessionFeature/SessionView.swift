@@ -295,10 +295,10 @@ public struct SessionView: View {
                     }
                     .disabled(vm.commandHistory.isEmpty)
                 }
-                .conduitGlassChrome(cornerRadius: 16, interactive: true)
+                .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(.bar)
+                .background(t.termBg)
             }
             .sheet(isPresented: $showRawHistory) { rawHistorySheet }
         } else {

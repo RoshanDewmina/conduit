@@ -1,43 +1,146 @@
 import SwiftUI
 
-public enum DSChipTone { case accent, ok, warn, danger, info, neutral }
-public enum DSChipStyle { case solid, soft }
+// MARK: - DSChip
+// Fully spec-matched to primitives.css:14-49 + primitives.jsx:10-36.
+
+public enum DSChipVariant {
+    case `default`   // tinted soft bg (same as old .soft)
+    case soft        // alias for .default — backward compat
+    case solid       // neutralSoft bg, no border
+    case outlined    // transparent, toned border
+    case mono        // mono uppercase, surfaceSunk bg
+    case monoInverse // mono uppercase, accentSoft bg
+    case dashed      // transparent, dashed border
+}
+public enum DSChipSize    { case sm, md, lg }
+public enum DSChipTone    { case accent, ok, warn, danger, info, neutral }
+
+// Keep old API names for backward compat
+public typealias DSChipStyle = DSChipVariant
 
 public struct DSChip: View {
     let label: String
+    let icon: DSIcon?
     let systemImage: String?
     let tone: DSChipTone
-    let style: DSChipStyle
+    let variant: DSChipVariant
+    let size: DSChipSize
+    let leadingDot: Color?
 
     @Environment(\.conduitTokens) private var t
 
+    // MARK: Legacy init (backward compat — old .solid/.soft style enum)
     public init(
         _ label: String,
         systemImage: String? = nil,
         tone: DSChipTone = .neutral,
-        style: DSChipStyle = .soft
+        style: DSChipVariant = .default
     ) {
         self.label = label
+        self.icon = nil
         self.systemImage = systemImage
         self.tone = tone
-        self.style = style
+        self.variant = style
+        self.size = .md
+        self.leadingDot = nil
+    }
+
+    // MARK: Full init
+    public init(
+        _ label: String,
+        icon: DSIcon? = nil,
+        systemImage: String? = nil,
+        tone: DSChipTone = .neutral,
+        variant: DSChipVariant = .default,
+        size: DSChipSize = .md,
+        leadingDot: Color? = nil
+    ) {
+        self.label = label
+        self.icon = icon
+        self.systemImage = systemImage
+        self.tone = tone
+        self.variant = variant
+        self.size = size
+        self.leadingDot = leadingDot
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
-            if let img = systemImage {
-                Image(systemName: img).font(.caption2)
+        HStack(spacing: size == .sm ? 4 : 6) {
+            // Leading dot
+            if let dot = leadingDot {
+                Circle().fill(dot).frame(width: 6, height: 6)
             }
-            Text(label).font(.caption2.weight(.semibold)).lineLimit(1).fixedSize()
+            // Leading icon (prefer DSIcon, fall back to SF Symbol)
+            if let icon {
+                DSIconView(icon, size: iconSize, color: fgColor)
+            } else if let img = systemImage {
+                Image(systemName: img).font(.system(size: iconSize))
+            }
+            // Label
+            Text(label)
+                .font(labelFont)
+                .lineLimit(1)
+                .fixedSize()
+                .if(variant == .mono || variant == .monoInverse || false) {
+                    $0.tracking(label.count > 0 ? 11 * 0.08 : 0)
+                      .textCase(.uppercase)
+                }
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(bg)
-        .foregroundStyle(fg)
+        .padding(.horizontal, hPad)
+        .padding(.vertical, vPad)
+        .background(bgColor)
+        .foregroundStyle(fgColor)
         .clipShape(Capsule())
+        .overlay(
+            Capsule().strokeBorder(borderColor, lineWidth: variant == .outlined ? 1 : variant == .dashed ? 0 : 0)
+        )
+        .overlay(
+            Group {
+                if variant == .dashed {
+                    Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .foregroundStyle(borderColor)
+                }
+            }
+        )
     }
 
-    private var baseColor: Color {
+    // MARK: Size
+    private var hPad: CGFloat {
+        switch size {
+        case .sm: return 6
+        case .md: return 8
+        case .lg: return 10
+        }
+    }
+    private var vPad: CGFloat {
+        switch size {
+        case .sm: return 2
+        case .md: return 3
+        case .lg: return 5
+        }
+    }
+    private var iconSize: CGFloat {
+        switch size {
+        case .sm: return 11
+        case .md: return 12
+        case .lg: return 13
+        }
+    }
+    private var labelFont: Font {
+        switch (variant, size) {
+        case (.mono, _), (.monoInverse, _):
+            return .dsMonoPt(11, weight: .medium)
+        default:
+            switch size {
+            case .sm: return .dsSansPt(11, weight: .medium)
+            case .md: return .dsSansPt(12, weight: .medium)
+            case .lg: return .dsSansPt(13, weight: .medium)
+            }
+        }
+    }
+
+    // MARK: Colors from tone
+    private var toneColor: Color {
         switch tone {
         case .accent:  return t.accent
         case .ok:      return t.ok
@@ -47,48 +150,133 @@ public struct DSChip: View {
         case .neutral: return t.text3
         }
     }
-
-    private var bg: Color {
-        style == .solid ? baseColor : baseColor.opacity(0.15)
+    private var toneSoft: Color {
+        switch tone {
+        case .accent:  return t.accentSoft
+        case .ok:      return t.okSoft
+        case .warn:    return t.warnSoft
+        case .danger:  return t.dangerSoft
+        case .info:    return t.infoSoft
+        case .neutral: return t.neutralSoft
+        }
+    }
+    private var toneInk: Color {
+        switch tone {
+        case .accent:  return t.accentInk
+        case .ok:      return t.ok
+        case .warn:    return t.warn
+        case .danger:  return t.danger
+        case .info:    return t.info
+        case .neutral: return t.text2
+        }
     }
 
-    private var fg: Color {
-        style == .solid ? .white : baseColor
+    private var bgColor: Color {
+        switch variant {
+        case .default, .soft: return toneSoft
+        case .solid:          return t.neutralSoft
+        case .outlined:       return .clear
+        case .mono:           return t.surfaceSunk
+        case .monoInverse:    return t.accentSoft
+        case .dashed:         return .clear
+        }
+    }
+
+    private var fgColor: Color {
+        switch variant {
+        case .default, .soft: return toneInk
+        case .solid:          return t.text
+        case .outlined:       return toneColor
+        case .mono:           return t.text2
+        case .monoInverse:    return t.accentInk
+        case .dashed:         return toneColor
+        }
+    }
+
+    private var borderColor: Color {
+        switch variant {
+        case .outlined, .dashed: return toneColor
+        default: return .clear
+        }
     }
 }
 
-// MARK: - Risk badge
+// MARK: - View helper
+private extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition { transform(self) } else { self }
+    }
+}
+
+// MARK: - RiskBadge — 3-bar chart pill (spec: primitives.css:209-232)
 
 public struct RiskBadge: View {
-    let risk: Int  // 0–3 (low/medium/high/critical)
+    let risk: Int  // 0=low, 1=medium, 2=high, 3=critical
     @Environment(\.conduitTokens) private var t
 
     public init(risk: Int) { self.risk = risk }
 
     public var body: some View {
-        DSChip(label, tone: tone, style: .soft)
+        HStack(spacing: 5) {
+            // 3 bars
+            HStack(alignment: .bottom, spacing: 1) {
+                ForEach(0..<3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(i <= activeBars ? barColor : barColor.opacity(0.35))
+                        .frame(width: 2, height: [3, 6, 9][i])
+                }
+            }
+            Text(riskLabel)
+                .font(.dsMonoPt(11, weight: .medium))
+                .tracking(11 * 0.06)
+                .textCase(.uppercase)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 7)
+        .padding(.vertical, 2)
+        .background(softColor)
+        .clipShape(Capsule())
     }
 
-    private var label: String {
+    private var activeBars: Int {
         switch risk {
-        case 0:  "low"
-        case 1:  "medium"
-        case 2:  "high"
-        default: "critical"
+        case 0:  return 0
+        case 1:  return 1
+        case 2:  return 2
+        default: return 2
         }
     }
 
-    private var tone: DSChipTone {
+    private var barColor: Color {
         switch risk {
-        case 0:  .ok
-        case 1:  .warn
-        case 2:  .danger
-        default: .danger
+        case 0:  return t.ok
+        case 1:  return t.warn
+        case 2:  return t.accentInk
+        default: return t.danger
+        }
+    }
+
+    private var softColor: Color {
+        switch risk {
+        case 0:  return t.okSoft
+        case 1:  return t.warnSoft
+        case 2:  return t.accentSoft
+        default: return t.dangerSoft
+        }
+    }
+
+    private var riskLabel: String {
+        switch risk {
+        case 0:  return "LOW"
+        case 1:  return "MED"
+        case 2:  return "HIGH"
+        default: return "CRIT"
         }
     }
 }
 
-// MARK: - AgentBadge
+// MARK: - AgentBadge (AgentState status pill — keep existing API)
 
 public struct AgentBadge: View {
     let state: AgentState
@@ -103,7 +291,10 @@ public struct AgentBadge: View {
             } else {
                 Image(systemName: state.systemImage).font(.caption2)
             }
-            Text(state.label).font(.caption2.weight(.medium)).lineLimit(1).fixedSize()
+            Text(state.label)
+                .font(.dsSansPt(12, weight: .medium))
+                .lineLimit(1)
+                .fixedSize()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -118,8 +309,8 @@ public struct AgentBadge: View {
                 Circle()
                     .fill(state.color(tokens: t))
                     .frame(width: 4, height: 4)
-                    .phaseAnimator([0.3, 1.0, 0.3], trigger: state) { view, phase in
-                        view.opacity(phase)
+                    .phaseAnimator([0.3, 1.0, 0.3], trigger: state) { v, p in
+                        v.opacity(p)
                     } animation: { _ in
                         .easeInOut(duration: 0.5).delay(Double(i) * 0.15).repeatForever(autoreverses: false)
                     }
@@ -128,7 +319,7 @@ public struct AgentBadge: View {
     }
 }
 
-// MARK: - StatusIcon
+// MARK: - StatusIcon (simple dot, backward compat)
 
 public struct StatusIcon: View {
     let state: AgentState
@@ -144,17 +335,5 @@ public struct StatusIcon: View {
         Circle()
             .fill(state.color(tokens: t))
             .frame(width: size, height: size)
-            .overlay {
-                if state == .streaming || state == .thinking {
-                    Circle()
-                        .stroke(state.color(tokens: t).opacity(0.4), lineWidth: 2)
-                        .scaleEffect(pulseScale)
-                        .opacity(pulseOpacity)
-                        .animation(.easeOut(duration: 1.2).repeatForever(autoreverses: false), value: pulseScale)
-                }
-            }
     }
-
-    @State private var pulseScale: CGFloat = 1
-    @State private var pulseOpacity: Double = 0.8
 }

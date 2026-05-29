@@ -63,6 +63,7 @@ public struct ProvisioningWizard: View {
     @State private var vm: ProvisioningWizardViewModel
     public var onComplete: (ConduitCore.Host) -> Void
     public var onCancel: () -> Void
+    @Environment(\.conduitTokens) private var t
 
     public init(hostRepo: HostRepository, onComplete: @escaping (ConduitCore.Host) -> Void, onCancel: @escaping () -> Void) {
         _vm = State(initialValue: ProvisioningWizardViewModel(hostRepo: hostRepo))
@@ -72,13 +73,17 @@ public struct ProvisioningWizard: View {
 
     public var body: some View {
         NavigationStack {
-            Group {
-                switch vm.step {
-                case .provider:     providerStep
-                case .configure:    configureStep
-                case .agent:        agentStep
-                case .provisioning: progressStep
-                case .done:         doneStep
+            ZStack {
+                t.bg.ignoresSafeArea()
+
+                Group {
+                    switch vm.step {
+                    case .provider:     providerStep
+                    case .configure:    configureStep
+                    case .agent:        agentStep
+                    case .provisioning: progressStep
+                    case .done:         doneStep
+                    }
                 }
             }
             .navigationTitle("Set up workspace")
@@ -86,136 +91,281 @@ public struct ProvisioningWizard: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
+                        .foregroundStyle(t.accent)
                 }
             }
         }
     }
+
+    // MARK: - Provider step
 
     private var providerStep: some View {
-        Form {
-            Section("Cloud Provider") {
-                ForEach(ProvisioningPlan.Provider.allCases, id: \.rawValue) { provider in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(provider.displayName).font(.body.weight(.semibold))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHead("Cloud Provider")
+                settingsCard {
+                    ForEach(ProvisioningPlan.Provider.allCases, id: \.rawValue) { provider in
+                        HStack {
+                            Text(provider.displayName)
+                                .font(.dsSansPt(15))
+                                .foregroundStyle(t.text)
+                            Spacer()
+                            if vm.plan.provider == provider {
+                                DSIconView(.check, size: 14, color: t.accent)
+                            }
                         }
-                        Spacer()
-                        if vm.plan.provider == provider {
-                            Image(systemName: "checkmark").foregroundStyle(.tint)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .contentShape(Rectangle())
+                        .onTapGesture { vm.plan.provider = provider }
+                        if provider != ProvisioningPlan.Provider.allCases.last {
+                            cardDivider
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.plan.provider = provider }
                 }
+                .padding(.bottom, 24)
+
+                HStack {
+                    Spacer()
+                    DSButton("Next", variant: .primary, action: { vm.step = .configure })
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
-            Section {
-                Button("Next") { vm.step = .configure }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-            }
-            .listRowBackground(Color.clear)
+            .padding(.top, 12)
         }
     }
+
+    // MARK: - Configure step
 
     private var configureStep: some View {
-        Form {
-            Section("Workspace Name") {
-                TextField("Name", text: $vm.plan.name)
-            }
-            if vm.plan.provider == .fly {
-                Section("Fly.io API Token") {
-                    SecureField("Token (fly tokens create)", text: $vm.flyAPIToken)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHead("Workspace Name")
+                settingsCard {
+                    TextField("My Workspace", text: $vm.plan.name)
+                        .font(.dsSansPt(15))
+                        .foregroundStyle(t.text)
                         .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                 }
-                Section("Region") {
-                    Picker("Region", selection: $vm.plan.region) {
-                        Text("Singapore (sin)").tag("sin")
-                        Text("US East (iad)").tag("iad")
-                        Text("US West (sjc)").tag("sjc")
-                        Text("Europe (ams)").tag("ams")
-                        Text("Sydney (syd)").tag("syd")
+                .padding(.bottom, 16)
+
+                if vm.plan.provider == .fly {
+                    sectionHead("Fly.io API Token")
+                    settingsCard {
+                        SecureField("fly tokens create", text: $vm.flyAPIToken)
+                            .font(.dsMonoPt(14))
+                            .foregroundStyle(t.text)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                     }
-                }
-                Section("Machine Size") {
-                    Picker("Size", selection: $vm.plan.size) {
-                        ForEach(ProvisioningPlan.MachineSize.allCases, id: \.rawValue) { size in
-                            Text(size.displayName).tag(size)
+                    .padding(.bottom, 16)
+
+                    sectionHead("Region")
+                    settingsCard {
+                        let regions: [(String, String)] = [
+                            ("Singapore", "sin"), ("US East", "iad"),
+                            ("US West", "sjc"), ("Europe", "ams"), ("Sydney", "syd")
+                        ]
+                        ForEach(regions, id: \.1) { region in
+                            HStack {
+                                Text(region.0)
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Spacer()
+                                Text(region.1)
+                                    .font(.dsMonoPt(12))
+                                    .foregroundStyle(t.text3)
+                                if vm.plan.region == region.1 {
+                                    DSIconView(.check, size: 14, color: t.accent)
+                                        .padding(.leading, 4)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                            .onTapGesture { vm.plan.region = region.1 }
+                            if region.1 != "syd" { cardDivider }
                         }
                     }
-                    .pickerStyle(.inline)
+                    .padding(.bottom, 16)
+
+                    sectionHead("Machine Size")
+                    settingsCard {
+                        ForEach(ProvisioningPlan.MachineSize.allCases, id: \.rawValue) { size in
+                            HStack {
+                                Text(size.displayName)
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Spacer()
+                                if vm.plan.size == size {
+                                    DSIconView(.check, size: 14, color: t.accent)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                            .onTapGesture { vm.plan.size = size }
+                            if size != ProvisioningPlan.MachineSize.allCases.last {
+                                cardDivider
+                            }
+                        }
+                    }
+                    .padding(.bottom, 16)
                 }
-            }
-            if let err = vm.error {
-                Section {
-                    Text(err).foregroundStyle(.red).font(.caption)
+
+                if let err = vm.error {
+                    HStack(spacing: 6) {
+                        DSIconView(.alert, size: 14, color: t.danger)
+                        Text(err).font(.dsSansPt(13)).foregroundStyle(t.danger)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
                 }
+
+                HStack {
+                    Spacer()
+                    DSButton("Next: Choose agent", variant: .primary, action: { vm.step = .agent })
+                        .disabled(vm.plan.name.isEmpty)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
-            Section {
-                Button("Next: Choose agent") { vm.step = .agent }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                    .disabled(vm.plan.name.isEmpty)
-            }
-            .listRowBackground(Color.clear)
+            .padding(.top, 12)
         }
     }
 
+    // MARK: - Agent step
+
     private var agentStep: some View {
-        Form {
-            Section("Agent CLI") {
-                Picker("Agent", selection: $vm.plan.agentCLI) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHead("Agent CLI")
+                settingsCard {
                     ForEach(ProvisioningPlan.AgentCLI.allCases, id: \.rawValue) { agent in
-                        Text(agent.displayName).tag(agent)
+                        HStack {
+                            Text(agent.displayName)
+                                .font(.dsSansPt(15))
+                                .foregroundStyle(t.text)
+                            Spacer()
+                            if vm.plan.agentCLI == agent {
+                                DSIconView(.check, size: 14, color: t.accent)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .onTapGesture { vm.plan.agentCLI = agent }
+                        if agent != ProvisioningPlan.AgentCLI.allCases.last {
+                            cardDivider
+                        }
                     }
                 }
-                .pickerStyle(.inline)
-            }
-            Section {
-                Button("Provision workspace") {
-                    Task { await vm.provision() }
+                .padding(.bottom, 24)
+
+                HStack {
+                    Spacer()
+                    DSButton("Provision workspace", variant: .primary, action: {
+                        Task { await vm.provision() }
+                    })
+                    Spacer()
                 }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
-            .listRowBackground(Color.clear)
+            .padding(.top, 12)
         }
     }
+
+    // MARK: - Progress step
 
     private var progressStep: some View {
         VStack(spacing: 20) {
             ProgressView()
-            Text("Provisioning...").font(.headline)
+                .scaleEffect(1.2)
+            Text("Provisioning…")
+                .font(.dsSansPt(16, weight: .semibold))
+                .foregroundStyle(t.text)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(vm.logLines.enumerated()), id: \.offset) { _, line in
                         Text("> \(line)")
-                            .font(.system(.caption, design: .monospaced))
+                            .font(.dsMonoPt(12))
+                            .foregroundStyle(t.termText)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding()
+                .padding(12)
             }
             .frame(maxHeight: 300)
-            .conduitGlassChrome(cornerRadius: 12)
-            .padding()
+            .background(t.termBg, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.termBorder, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 20)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 40)
     }
+
+    // MARK: - Done step
 
     private var doneStep: some View {
         VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 60)).foregroundStyle(.green)
-            Text("Workspace ready!").font(.title2.weight(.semibold))
+            ZStack {
+                Circle().fill(t.okSoft).frame(width: 80, height: 80)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(t.ok)
+            }
+            Text("Workspace ready!")
+                .font(.dsDisplayPt(22, weight: .bold))
+                .foregroundStyle(t.text)
             if let host = vm.provisionedHost {
-                Text("'\(host.name)' at \(host.hostname)").foregroundStyle(.secondary)
+                Text("'\(host.name)' at \(host.hostname)")
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text3)
             }
-            Button("Open session") {
+            DSButton("Open session", variant: .primary, action: {
                 if let host = vm.provisionedHost { onComplete(host) }
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            })
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 40)
+    }
+
+    // MARK: - Layout helpers
+
+    private func sectionHead(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.dsSansPt(11, weight: .semibold))
+            .foregroundStyle(t.text3)
+            .tracking(0.5)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
+    }
+
+    private var cardDivider: some View {
+        t.border.frame(height: 0.5).padding(.horizontal, 16)
     }
 }
 #endif

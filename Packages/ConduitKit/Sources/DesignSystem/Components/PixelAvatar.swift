@@ -1,64 +1,76 @@
 import SwiftUI
 
-// Deterministic seeded 8×8 symmetric pixel-art avatar.
-// Port of the JS seededRng / makePixelData approach from mother-duck-2.
-// Same seed always produces the same avatar — stable across launches.
+// MARK: - PixelAvatar
+// Rebuilt as two-tone seeded symmetric 8×8 grid.
+// Design: low-sat palette — hue from seed, sat 14-26%, bg lightness 20-26%, fg lightness 60-78%.
+// Symmetric: fills left 4 columns, mirrors to right 4.
+
 public struct PixelAvatar: View {
     let seed: String
     let size: CGFloat
+    let rounded: Bool
 
-    public init(seed: String, size: CGFloat = 32) {
+    public init(seed: String, size: CGFloat = 32, rounded: Bool = true) {
         self.seed = seed
         self.size = size
+        self.rounded = rounded
     }
 
     public var body: some View {
-        let data = makePixelData(seed: seed)
-        let cols = 8
-        let rows = 8
-        let cellSize = size / CGFloat(cols)
+        let (pixels, bgColor, fgColor) = makePixelData(seed: seed)
+        let cellSize = size / 8
+
         Canvas { ctx, _ in
-            for row in 0..<rows {
-                for col in 0..<cols {
-                    let on = data[row * cols + col]
-                    guard on else { continue }
-                    let rect = CGRect(
-                        x: CGFloat(col) * cellSize,
-                        y: CGFloat(row) * cellSize,
-                        width: cellSize,
-                        height: cellSize
-                    )
-                    ctx.fill(Path(rect), with: .color(avatarColor(seed: seed)))
+            // Fill entire canvas with bg
+            ctx.fill(Path(CGRect(origin: .zero, size: CGSize(width: size, height: size))),
+                     with: .color(bgColor))
+            // Draw fg cells
+            for row in 0..<8 {
+                for col in 0..<8 {
+                    guard pixels[row * 8 + col] else { continue }
+                    let rect = CGRect(x: CGFloat(col) * cellSize, y: CGFloat(row) * cellSize,
+                                     width: cellSize, height: cellSize)
+                    ctx.fill(Path(rect), with: .color(fgColor))
                 }
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+        .clipShape(rounded
+            ? AnyShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+            : AnyShape(Rectangle()))
     }
 
-    // MARK: - Helpers
+    private func makePixelData(seed: String) -> (pixels: [Bool], bg: Color, fg: Color) {
+        var rng = SeededRng(seed: seed)
 
-    private func makePixelData(seed: String) -> [Bool] {
-        var rng = seededRng(seed: seed)
-        var data = [Bool](repeating: false, count: 64)
-        // Fill left half, mirror to right (symmetric design)
+        // Derive hue from seed hash (0–360°)
+        let hash = seed.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) }
+        let hue = Double(abs(hash) % 360) / 360.0
+
+        // Low-sat palette (design spec)
+        let bgSat = 0.14 + rng.next() * 0.12  // 14–26%
+        let bgLight = 0.20 + rng.next() * 0.06 // 20–26%
+        let fgLight = 0.60 + rng.next() * 0.18 // 60–78%
+        let fgSat = bgSat * 0.8
+
+        let bgColor = Color(hue: hue, saturation: bgSat, brightness: bgLight)
+        let fgColor = Color(hue: hue, saturation: fgSat, brightness: fgLight)
+
+        // Symmetric fill: left 4 columns, mirror to right
+        var pixels = [Bool](repeating: false, count: 64)
         for row in 0..<8 {
             for col in 0..<4 {
-                let on = rng.next() > 0.35
-                data[row * 8 + col] = on
-                data[row * 8 + (7 - col)] = on   // mirror
+                let on = rng.next() > 0.38
+                pixels[row * 8 + col] = on
+                pixels[row * 8 + (7 - col)] = on
             }
         }
-        return data
-    }
 
-    private func avatarColor(seed: String) -> Color {
-        let hue = Double(abs(seed.hashValue) % 360) / 360.0
-        return Color(hue: hue, saturation: 0.62, brightness: 0.78)
+        return (pixels, bgColor, fgColor)
     }
 }
 
-// MARK: - Simple seeded LCG RNG (matches JS Math.sin-based seeder semantics)
+// MARK: - Seeded LCG RNG (stable, deterministic)
 
 private struct SeededRng {
     private var state: UInt64
@@ -72,7 +84,6 @@ private struct SeededRng {
     }
 
     mutating func next() -> Double {
-        // xorshift64
         state ^= state << 13
         state ^= state >> 7
         state ^= state << 17
@@ -80,4 +91,9 @@ private struct SeededRng {
     }
 }
 
-private func seededRng(seed: String) -> SeededRng { SeededRng(seed: seed) }
+// Type-erased shape for clipShape
+private struct AnyShape: Shape, @unchecked Sendable {
+    private let pathBuilder: (CGRect) -> Path
+    init<S: Shape>(_ shape: S) { pathBuilder = shape.path(in:) }
+    func path(in rect: CGRect) -> Path { pathBuilder(rect) }
+}

@@ -2,9 +2,9 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-05-23
-Target platform: iOS 17.0+ deployment; verified locally on iOS 26.4 simulator (Swift 6, strict concurrency)
-Status: design + verified scaffold (M0), first-connect implementation in progress (M1)
+Last updated: 2026-05-27
+Target platform: iOS 26.0+ deployment (project.yml and Package.swift); verified on iOS 26.4 simulator (Swift 6.2, strict concurrency on)
+Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
 ---
 
@@ -70,8 +70,8 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Conduit
 - **Bundle ID:** `dev.conduit.mobile` (app), `dev.conduit.kit` (frameworks)
-- **Platforms:** iOS 17.0+ / iPadOS 17.0+ deployment target, tested against current iOS simulator runtimes. macOS Catalyst deferred.
-- **Toolchain:** Xcode 26.x, Swift 6.0, SwiftPM-first.
+- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 26.4 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Toolchain:** Xcode 26.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
 
@@ -197,9 +197,7 @@ side-by-side panes on phone. Top to bottom:
 ├────────────────────────────────────────┤
 │  [tab strip — terminal | diff | files | preview | inbox]
 ├────────────────────────────────────────┤
-│  ⎌  preset row  ⌃ ⎋ Tab ↑ ↓ ← → ...   │  ← KeyboardAccessoryView
-├────────────────────────────────────────┤
-│  $  command input              ⌫ ↩    │
+│  ⎌  preset row  ⌃ Ctrl-C/D/Z ↑↓←→ ... │  ← KeyboardAccessoryView
 └────────────────────────────────────────┘
 ```
 
@@ -210,16 +208,19 @@ server port), inbox (filtered to this session).
 
 ### 4.3 Input model
 
-The composer is mode-aware:
+The active block owns input:
 
-- **Shell mode** (default): typing produces a command. `↩` submits.
-- **Prompt mode** (`#` prefix): typing produces NL prompt; submit calls AI →
-  inserts shell command back. Shown with violet underline.
-- **Paste mode** (long-press `↩`): multiline editor with explicit Send button
-  to prevent accidental command execution from long pastes.
-- **Raw mode** (TUI app detected via OSC 1337 + heuristic): the composer
-  collapses; PTY claims the whole screen and the keyboard rail becomes
-  vim-friendly (Esc, `:`, `/`, hjkl).
+- **Prompt state** (after OSC 133 A, before OSC 133 C): typing edits the
+  active block prompt. `↩` sends the buffered command to the PTY. `#` prefix
+  still invokes NL→command synthesis and inserts the generated shell command
+  back into the prompt.
+- **Executing state** (after OSC 133 C, before OSC 133 D): the prompt becomes
+  a live input receiver. Keystrokes go straight to the PTY, so inline TUIs
+  and REPLs can accept repeated input without creating new blocks.
+- **Alt-screen state** (`\e[?1049h/l`): SwiftTerm renders the full-screen TUI
+  path, with the same PTY and keyboard rail. The desired end state is an
+  embedded active-block overlay; current implementation still uses the raw
+  SwiftTerm branch.
 
 ### 4.4 Keyboard accessory rail
 
@@ -229,7 +230,7 @@ stays glued to the keyboard during scroll and focus changes.
 Preset row (horizontal scroll, customizable, persisted per host):
 
 ```
-[Bash] [Vim] [Git] [Custom...]    ⌃ ⎋ Tab ↑ ↓ ← → | ; / - _ $ &&
+[Bash] [Vim] [Git] [Custom...]    ⌃ ⎋ Tab Ctrl-C Ctrl-D Ctrl-Z ↑ ↓ ← → | ; / $ &&
 ```
 
 Sticky `Ctrl` modifier (single-tap arms; arms-and-fires next keystroke as

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppFeature
+import DesignSystem
 import NotificationsKit
 #if canImport(UIKit)
 import UIKit
@@ -12,14 +13,36 @@ private let pushBackendURL = "http://35.201.3.231:8080"
 struct ConduitApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        DesignSystemFonts.register()
+    }
+
     var body: some Scene {
         WindowGroup {
-            AppRoot()
-                .onOpenURL { url in
-                    guard url.scheme == "conduit", url.host == "billing" else { return }
-                    UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
-                }
+            rootView
         }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["CONDUIT_TERMINAL_TEST"] == "1" {
+            // New SwiftTerm-based terminal harness (live SSH). See DebugTerminalHarness.
+            DebugTerminalHarness()
+        } else {
+            appRoot
+        }
+        #else
+        appRoot
+        #endif
+    }
+
+    private var appRoot: some View {
+        AppRoot()
+            .onOpenURL { url in
+                guard url.scheme == "conduit", url.host == "billing" else { return }
+                UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
+            }
     }
 }
 

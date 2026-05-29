@@ -1,6 +1,6 @@
 # App Store Submission Checklist — Conduit
 
-## Done (code complete, 87/87 tests pass, BUILD SUCCEEDED)
+## Done (code complete, 98/98 tests pass in 23 suites as of 2026-05-27, BUILD SUCCEEDED)
 
 - [x] **Build** — Xcode 26 / iOS 26 SDK, Swift 6.2 strict concurrency
 - [x] **Bundle ID** — `dev.conduit.mobile`

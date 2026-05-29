@@ -121,6 +121,7 @@ let package = Package(
         .target(
             name: "DesignSystem",
             dependencies: ["ConduitCore"],
+            resources: [.process("Resources")],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -175,7 +176,7 @@ let package = Package(
         ),
         .target(
             name: "SettingsFeature",
-            dependencies: ["DesignSystem", "PersistenceKit", "AgentKit", "SecurityKit", "SyncKit"],
+            dependencies: ["DesignSystem", "PersistenceKit", "AgentKit", "SecurityKit", "SyncKit", "KeysFeature"],
             swiftSettings: swiftSettings
         ),
         .target(

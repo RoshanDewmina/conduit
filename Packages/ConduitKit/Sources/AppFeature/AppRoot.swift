@@ -28,6 +28,7 @@ public final class AppEnvironment {
     public let hostRepo: HostRepository
     public let snippetRepo: SnippetRepository
     public let blockRepo: BlockRepository
+    public let snapshotRepo: SessionSnapshotRepository
     public let keyStore: KeyStore
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
@@ -39,6 +40,7 @@ public final class AppEnvironment {
         self.hostRepo = HostRepository(database)
         self.snippetRepo = SnippetRepository(db: database)
         self.blockRepo = BlockRepository(database)
+        self.snapshotRepo = SessionSnapshotRepository(database)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
@@ -130,15 +132,20 @@ public struct AppRoot: View {
     @State private var pm = PurchaseManager.shared
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
+    @State private var isShowingLiveSession = false
+    #if DEBUG
+    @State private var showDesignReview = false
+    #endif
 
     private var isPro: Bool {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["CONDUIT_FORCE_PRO"] == "1" { return true }
-        #endif
+        return true // DEV: Pro unlocked for UX eval — restore before release
+        #else
         switch pm.purchaseState {
         case .purchased, .unknown: return true
         default: return false
         }
+        #endif
     }
 
     public enum Tab: Hashable, Sendable {
@@ -236,6 +243,39 @@ public struct AppRoot: View {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
         }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            if isUnlocked {
+                Button { showDesignReview = true } label: {
+                    Text("REVIEW")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(Color.black)
+                        .foregroundStyle(Color.white)
+                        .clipShape(Capsule())
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                }
+                .padding(.trailing, 14)
+                .padding(.bottom, 96)
+            }
+        }
+        .fullScreenCover(isPresented: $showDesignReview) {
+            ZStack(alignment: .topTrailing) {
+                DebugGalleryView(route: "review").conduitTokens()
+                Button { showDesignReview = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.gray)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .padding(.top, 8)
+                .padding(.trailing, 12)
+            }
+        }
+        #endif
     }
 
     private func attemptUnlock() async {
@@ -378,33 +418,82 @@ public struct AppRoot: View {
         inboxVM = liveVM
     }
 
-    private func compactRoot(env: AppEnvironment) -> some View {
-        TabView(selection: $selectedTab) {
-            rootDestination(.sessions, env: env)
-                .tabItem { Label(Tab.sessions.title, systemImage: Tab.sessions.systemImage) }
-                .tag(Tab.sessions)
+    @Environment(\.conduitTokens) private var t
 
+    private func compactRoot(env: AppEnvironment) -> some View {
+        let inboxBadge = activeInboxViewModel.approvals.filter(\.isPending).count > 0
+        let tabItems: [DSTabItem] = [
+            DSTabItem(id: "sessions", icon: .terminal, label: "Sessions"),
+            DSTabItem(id: "hosts",    icon: .server,   label: "Hosts"),
+            DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
+            DSTabItem(id: "settings", icon: .settings, label: "Settings"),
+        ]
+
+        let tabID = Binding<String>(
+            get: {
+                switch selectedTab {
+                case .sessions: "sessions"
+                case .hosts:    "hosts"
+                case .inbox:    "inbox"
+                case .settings: "settings"
+                }
+            },
+            set: { id in
+                switch id {
+                case "hosts":    selectedTab = .hosts
+                case "inbox":    selectedTab = .inbox
+                case "settings": selectedTab = .settings
+                default:         selectedTab = .sessions
+                }
+            }
+        )
+
+        return ZStack {
+            t.bg.ignoresSafeArea()
+            tabContent(env: env, tabItems: tabItems, tabID: tabID)
+        }
+        .fullScreenCover(isPresented: $isShowingLiveSession) {
+            if let vm = sessionViewModel {
+                SessionView(viewModel: vm)
+                    .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            }
+        }
+    }
+
+    // Tab bar is placed INSIDE each tab's root view so NavigationStack push
+    // naturally hides it — pushed detail views don't inherit the safeAreaInset.
+    @ViewBuilder
+    private func tabContent(env: AppEnvironment, tabItems: [DSTabItem], tabID: Binding<String>) -> some View {
+        let bar = DSTabBar(items: tabItems, selectedID: tabID)
+
+        switch selectedTab {
+        case .sessions:
+            sessionsHome(env: env)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bar.safeAreaPadding(.bottom)
+                }
+        case .hosts:
             NavigationStack {
                 rootDestination(.hosts, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        bar.safeAreaPadding(.bottom)
+                    }
             }
-            .tabItem { Label(Tab.hosts.title, systemImage: Tab.hosts.systemImage) }
-            .tag(Tab.hosts)
-
+        case .inbox:
             NavigationStack {
                 rootDestination(.inbox, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        bar.safeAreaPadding(.bottom)
+                    }
             }
-            .tabItem { Label(Tab.inbox.title, systemImage: Tab.inbox.systemImage) }
-            .badge(activeInboxViewModel.approvals.filter(\.isPending).count)
-            .tag(Tab.inbox)
-
+        case .settings:
             NavigationStack {
                 rootDestination(.settings, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        bar.safeAreaPadding(.bottom)
+                    }
             }
-            .tabItem { Label(Tab.settings.title, systemImage: Tab.settings.systemImage) }
-            .tag(Tab.settings)
         }
-        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
     }
 
     private func regularRoot(env: AppEnvironment) -> some View {
@@ -427,7 +516,8 @@ public struct AppRoot: View {
             liveInboxVM: liveInboxVM,
             hostRepo: env.hostRepo,
             blockRepo: env.blockRepo,
-            onTapLiveSession: { selectedTab = .sessions },
+            snapshotRepo: env.snapshotRepo,
+            onTapLiveSession: { isShowingLiveSession = true },
             onAddSession: {
                 addHostPresented = true
                 selectedTab = .hosts
@@ -464,25 +554,12 @@ public struct AppRoot: View {
                 }
             }
         case .settings:
-            SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            NavigationLink {
-                                SnippetEditorView(repository: env.snippetRepo)
-                            } label: {
-                                Label("Snippets", systemImage: "text.quote")
-                            }
-                            NavigationLink {
-                                KeysView(viewModel: KeysViewModel(store: env.keyStore))
-                            } label: {
-                                Label("SSH Keys", systemImage: "key")
-                            }
-                        } label: {
-                            Label("Manage", systemImage: "ellipsis.circle")
-                        }
-                    }
-                }
+            SettingsView(
+                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+                syncEngine: env.syncEngine,
+                snippetRepo: env.snippetRepo,
+                keyStore: env.keyStore
+            )
         }
     }
 
@@ -550,6 +627,7 @@ public struct AppRoot: View {
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
                 self.selectedTab = .sessions
+                self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
                         guard let vm else { return }

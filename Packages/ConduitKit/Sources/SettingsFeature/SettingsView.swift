@@ -4,6 +4,9 @@ import Observation
 import ConduitCore
 import AgentKit
 import DesignSystem
+import KeysFeature
+import PersistenceKit
+import SecurityKit
 import SyncKit
 
 @MainActor @Observable
@@ -67,7 +70,6 @@ public final class SettingsViewModel {
         guard !isTestingKey else { return }
         isTestingKey = true
         defer { isTestingKey = false }
-
         do {
             let key = try await keyStore.loadAPIKey(provider: provider)
             let client: any AIClient
@@ -94,66 +96,151 @@ public final class SettingsViewModel {
     }
 }
 
+// MARK: - SettingsView
+
 public struct SettingsView: View {
     @State private var vm: SettingsViewModel
     let syncEngine: SyncEngine?
-    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    let snippetRepo: SnippetRepository?
+    let keyStore: KeyStore?
 
-    public init(viewModel: SettingsViewModel, syncEngine: SyncEngine? = nil) {
+    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @Environment(\.conduitTokens) private var t
+
+    public init(
+        viewModel: SettingsViewModel,
+        syncEngine: SyncEngine? = nil,
+        snippetRepo: SnippetRepository? = nil,
+        keyStore: KeyStore? = nil
+    ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
+        self.snippetRepo = snippetRepo
+        self.keyStore = keyStore
     }
 
     public var body: some View {
-        Form {
-            Section("Default AI Provider") {
-                Picker("Provider", selection: $vm.defaultProvider) {
-                    ForEach(AIProvider.allCases, id: \.self) { p in
-                        Text(p.displayName).tag(p)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // ── Title row
+                    HStack {
+                        Text("Settings")
+                            .font(.dsDisplayPt(30, weight: .bold))
+                            .foregroundStyle(t.text)
+                        Spacer()
+                        // Manage menu — Snippets + Keys
+                        HStack(spacing: 8) {
+                            if let repo = snippetRepo {
+                                NavigationLink {
+                                    SnippetEditorView(repository: repo)
+                                } label: {
+                                    DSButton("Snippets", icon: .plus, variant: .secondary, size: .sm, action: {})
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                            if let store = keyStore {
+                                NavigationLink {
+                                    KeysView(viewModel: KeysViewModel(store: store))
+                                } label: {
+                                    DSButton("SSH Keys", icon: .key, variant: .secondary, size: .sm, action: {})
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 20)
+
+                    // ── AI Provider
+                    sectionHead("AI Provider")
+                    settingsCard {
+                        ForEach(AIProvider.allCases, id: \.self) { provider in
+                            HStack {
+                                Text(provider.displayName)
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Spacer()
+                                if vm.defaultProvider == provider {
+                                    DSIconView(.check, size: 14, color: t.accent)
+                                }
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .contentShape(Rectangle())
+                            .onTapGesture { vm.defaultProvider = provider }
+                            if provider != AIProvider.allCases.last {
+                                divider
+                            }
+                        }
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── API Keys
+                    sectionHead("API Keys")
+                    settingsCard {
+                        providerRow(.anthropic, binding: $vm.anthropicKey, hasKey: vm.hasAnthropicKey)
+                        divider
+                        providerRow(.openai, binding: $vm.openaiKey, hasKey: vm.hasOpenAIKey)
+                    }
+                    .padding(.bottom, 4)
+
+                    HStack {
+                        Spacer()
+                        DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
+                            .padding(.trailing, 16)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Appearance
+                    sectionHead("Appearance")
+                    settingsCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Theme")
+                                .font(.dsSansPt(13))
+                                .foregroundStyle(t.text3)
+                            Picker("Theme", selection: $colorSchemePref) {
+                                Text("System").tag("system")
+                                Text("Light").tag("light")
+                                Text("Dark").tag("dark")
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Integrations
+                    sectionHead("Integrations")
+                    settingsCard {
+                        NavigationLink { TerminalSettingsView() } label: {
+                            settingsNavRow("Terminal settings", icon: "terminal")
+                        }
+                        divider
+                        NavigationLink { BillingView() } label: {
+                            settingsNavRow("Billing & usage", icon: "creditcard")
+                        }
+                        if let engine = syncEngine {
+                            divider
+                            SyncStatusView(engine: engine)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                        }
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Privacy note
+                    Text("Keys are stored on-device (Keychain, when-unlocked, device-only) and sent directly to the provider over TLS — never to Conduit servers.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 32)
                 }
             }
-            providerSection(.anthropic, $vm.anthropicKey, vm.hasAnthropicKey)
-            providerSection(.openai,    $vm.openaiKey,    vm.hasOpenAIKey)
-
-            if let engine = syncEngine {
-                SyncStatusView(engine: engine)
-            }
-
-            Section {
-                Button("Save") { Task { await vm.save() } }
-            }
-
-            Section("Appearance") {
-                Picker("Theme", selection: $colorSchemePref) {
-                    Text("System").tag("system")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                }
-                .pickerStyle(.segmented)
-            }
-
-            Section("Terminal") {
-                NavigationLink("Terminal Settings") {
-                    TerminalSettingsView()
-                }
-            }
-
-            Section("Providers") {
-                NavigationLink("Billing & Usage") {
-                    BillingView()
-                }
-            }
-
-            Section {
-                Text("Keys are stored on this device only (Keychain, when-unlocked, device-only). They are sent directly to the provider over TLS — never to Conduit.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Settings")
-        .contentMargins(.bottom, 72, for: .scrollContent)
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 72)
         }
         .task { await vm.load() }
         .alert("Settings", isPresented: .constant(vm.saveMessage != nil), actions: {
@@ -164,51 +251,102 @@ public struct SettingsView: View {
         }, message: { Text(vm.testKeyResult ?? "") })
     }
 
-    private func providerSection(_ provider: AIProvider, _ binding: Binding<String>, _ hasKey: Bool) -> some View {
-        Section(provider.displayName) {
-            SecureField("API key", text: binding)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+    // MARK: - Provider row
+
+    @ViewBuilder
+    private func providerRow(_ provider: AIProvider, binding: Binding<String>, hasKey: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                ViewThatFits(in: .horizontal) {
-                    providerStatus(provider, hasKey: hasKey, vertical: false)
-                    providerStatus(provider, hasKey: hasKey, vertical: true)
+                Text(provider.displayName)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Spacer()
+                if hasKey {
+                    DSChip("configured", tone: .ok, variant: .soft, size: .sm)
+                    Button("Remove", role: .destructive) {
+                        Task { await vm.remove(provider) }
+                    }
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.danger)
+                } else {
+                    DSChip("not set", tone: .neutral, variant: .soft, size: .sm)
                 }
             }
+            SecureField(hasKey ? "Replace API key" : "Paste API key", text: binding)
+                .font(.dsMonoPt(13))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(10)
+                .background(t.surfaceSunk)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
             if hasKey {
                 Button {
                     Task { await vm.testKey(provider: provider) }
                 } label: {
-                    HStack {
+                    HStack(spacing: 6) {
                         if vm.isTestingKey {
-                            ProgressView().scaleEffect(0.8)
+                            ProgressView().scaleEffect(0.75)
                             Text("Testing…")
                         } else {
-                            Label("Test key", systemImage: "bolt.fill")
+                            Image(systemName: "bolt.fill").font(.system(size: 12))
+                            Text("Test key")
                         }
                     }
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.accent)
                 }
                 .disabled(vm.isTestingKey)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
-    @ViewBuilder
-    private func providerStatus(_ provider: AIProvider, hasKey: Bool, vertical: Bool) -> some View {
-        let layout = vertical ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-        layout {
-            if hasKey {
-                Label("Configured", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                if !vertical { Spacer() }
-                Button("Remove", role: .destructive) {
-                    Task { await vm.remove(provider) }
-                }
-            } else {
-                Label("Not configured", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            }
+    // MARK: - Layout helpers
+
+    private func sectionHead(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.dsMonoPt(11))
+            .tracking(0.8)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
         }
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+
+    private func settingsNavRow(_ label: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.text2)
+                .frame(width: 20)
+            Text(label)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+
+    private var divider: some View {
+        Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 16)
     }
 }
 

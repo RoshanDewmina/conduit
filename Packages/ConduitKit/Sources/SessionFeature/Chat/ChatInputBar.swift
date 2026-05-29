@@ -60,7 +60,7 @@ public struct ChatInputBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(t.surf1)
         .overlay(
             Rectangle().fill(t.surf3.opacity(0.5)).frame(height: 0.5),
             alignment: .top

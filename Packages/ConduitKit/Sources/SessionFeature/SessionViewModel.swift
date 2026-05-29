@@ -82,6 +82,11 @@ public final class SessionViewModel {
 
     private var integrationFallbackTask: Task<Void, Never>?
     private static let integrationProbeTimeout: Duration = .seconds(6)
+    /// Set true once the shell-integration injection (probe → bootstrap →
+    /// screen-clear → settle) has fully completed. Connect-time commands wait on
+    /// this so they run at the clean post-clear prompt rather than racing the
+    /// injection (which would paste the clear/bootstrap into a launched app).
+    private var unifiedIntegrationReady = false
 
     // MARK: - Phase 7: Belt-and-suspenders interactive-CLI hint
     //
@@ -173,6 +178,34 @@ public final class SessionViewModel {
         self.blocks = BlockRenderer()
     }
 
+    #if DEBUG
+    /// Convenience for debug harnesses: a password-auth session with an
+    /// in-memory host-key store. Pair with `connect()` then `trustHostKey()`
+    /// for a plug-and-play localhost test (auto-trusts the first host key).
+    public static func debugPasswordSession(
+        name: String,
+        hostname: String,
+        port: Int,
+        username: String,
+        password: String,
+        startupCommand: String? = nil
+    ) -> SessionViewModel {
+        let host = Host(
+            name: name,
+            hostname: hostname,
+            port: port,
+            username: username,
+            startupCommand: startupCommand
+        )
+        return SessionViewModel(
+            host: host,
+            sshSession: SSHSession(host: host),
+            credentialProvider: { .password(password) },
+            hostKeyStore: HostKeyStore(inMemory: true)
+        )
+    }
+    #endif
+
     // MARK: - Connection lifecycle
 
     public func connect() async {
@@ -192,6 +225,13 @@ public final class SessionViewModel {
             }
             await refreshCWD()
             await openUnifiedShell()
+            // Phase 1: wait until shell integration is confirmed live (the first
+            // OSC 133 A created a prompt block) before sending any connect-time
+            // command. Otherwise the command launches *before* the async
+            // integration injection lands, and the injected bootstrap gets pasted
+            // into the launched app's stdin (e.g. claude/codex) instead of being
+            // sourced by the shell.
+            await awaitUnifiedShellReady()
             // Tier 1.4 + 1.5.2: after the unified shell is up, fire the
             // per-host startup command (if any), then attempt agent session
             // resume (if a snapshot exists and the host opts in). Both feed
@@ -293,7 +333,30 @@ public final class SessionViewModel {
         guard let raw = host.startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty,
               let shell = unifiedShell else { return }
+        // The auto-run path bypasses `submit()`, so mirror it: label the active
+        // prompt block with the command and mark it `.submitted` so the TUI
+        // escalation can engage for agent commands (claude/codex).
+        if let blockID = unifiedBlockID {
+            blocks.setCommand(raw, for: blockID)
+            blocks.setState(.submitted, for: blockID)
+        }
         try? await shell.send(Array((raw + "\n").utf8))
+    }
+
+    /// Wait until the shell-integration injection has fully completed (probe →
+    /// bootstrap → screen-clear → settle, signalled by `unifiedIntegrationReady`)
+    /// or `timeoutMs` elapses. Gates connect-time commands so they run at the
+    /// clean post-clear prompt rather than racing the injection — otherwise the
+    /// trailing clear/bootstrap bytes get pasted into a launched app's stdin.
+    /// Falls through on timeout so a shell with broken integration still proceeds
+    /// (Phase 7 raw fallback then takes over).
+    private func awaitUnifiedShellReady(timeoutMs: Int = 5000) async {
+        var waited = 0
+        let step = 50
+        while !unifiedIntegrationReady, waited < timeoutMs {
+            try? await Task.sleep(for: .milliseconds(step))
+            waited += step
+        }
     }
 
     /// If the host opts in (`host.autoResume`) and a `SessionSnapshot` exists
@@ -437,11 +500,18 @@ public final class SessionViewModel {
                         let interactiveHint = TUIDetector.shouldEscalate(to: data)
 
                         // Phase 7 belt-and-suspenders: if cursor-positioning
-                        // bytes arrive while the block is still in promptEditing
-                        // (133;C didn't fire — broken shell integration), flip
-                        // optimistically to executing so interactive input works.
+                        // bytes arrive after a command was *submitted* but 133;C
+                        // didn't fire (broken shell integration), flip optimistically
+                        // to executing so interactive input works.
+                        //
+                        // Only `.submitted` blocks escalate — never an idle
+                        // `.promptEditing` prompt. zsh's ZLE emits app-cursor-key
+                        // (`\e[?1h`) and the integration's own screen-clear emits
+                        // `\e[2J`/`\e[H` at every prompt; those trip the TUI
+                        // heuristic, and escalating on them would capture the bare
+                        // prompt (`~ %`) as block output.
                         if let block = self.blocks.blocks.first(where: { $0.id == blockID }),
-                           block.state == .promptEditing || block.state == .submitted {
+                           block.state == .submitted {
                             if interactiveHint || self.blocks.pendingTUIEscalation {
                                 self.blocks.setState(.executing, for: blockID)
                                 self.isExecutingUnified = true
@@ -592,22 +662,25 @@ public final class SessionViewModel {
                 let probeResult = await bridge.shellProbeResult
                 let isFish = !(probeResult?.isEmpty ?? true)
 
+                let integrationScript: String
                 if isFish {
                     UserDefaults.standard.set("fish", forKey: "conduitShellDetected")
-                    let bytes = Array((ShellIntegrationScript.script(for: .fish) + "\n").utf8)
-                    try? await shell.send(bytes)
-                    try? await Task.sleep(for: .milliseconds(300))
-                    try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
-                    await MainActor.run { self.startIntegrationFallback() }
+                    integrationScript = ShellIntegrationScript.script(for: .fish)
                 } else {
                     UserDefaults.standard.set("posix", forKey: "conduitShellDetected")
-                    let bytes = Array((ShellIntegrationScript.bootstrapForPOSIXShells() + "\n").utf8)
-                    try? await shell.send(bytes)
-                    try? await Task.sleep(for: .milliseconds(300))
-                    try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
-                    // Start fallback timer — if 133;A doesn't arrive within
-                    // timeout, degrade to blockless live PTY (Phase 7).
-                    await MainActor.run { self.startIntegrationFallback() }
+                    integrationScript = ShellIntegrationScript.bootstrapForPOSIXShells()
+                }
+                try? await shell.send(Array((integrationScript + "\n").utf8))
+                try? await Task.sleep(for: .milliseconds(300))
+                // Clear the bootstrap chatter, then settle so the fresh post-clear
+                // prompt (its 133;A) lands before any connect-time command runs.
+                try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
+                try? await Task.sleep(for: .milliseconds(500))
+                await MainActor.run {
+                    self.unifiedIntegrationReady = true
+                    // Start fallback timer — if 133;A never arrived, degrade to
+                    // blockless live PTY (Phase 7).
+                    self.startIntegrationFallback()
                 }
             }
         } catch {
@@ -639,6 +712,7 @@ public final class SessionViewModel {
         unifiedBridge = nil
         unifiedBlockID = nil
         isExecutingUnified = false
+        unifiedIntegrationReady = false
         rawFeedHandle = nil
     }
 
