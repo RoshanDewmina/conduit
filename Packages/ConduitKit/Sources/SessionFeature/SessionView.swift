@@ -131,18 +131,9 @@ public struct SessionView: View {
                     }
             }
         }
-        // Agent Island — replaces the old AgentStatusBar strip, merging with the
-        // hardware island. Primary = this live session; roster/stats are demo.
-        .overlay(alignment: .top) {
-            GeometryReader { geo in
-                AgentIsland(
-                    agents: islandAgents,
-                    screenWidth: geo.size.width,
-                    onResolve: { _, _ in }
-                )
-            }
-            .ignoresSafeArea(edges: .top)
-        }
+        // No agent HUD overlay here: the session's own ChatHeaderView already
+        // shows host · status, and an island here would overlap the camera
+        // cutout. The slim app-wide AgentStatusHeader covers the tab screens.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !vm.isRaw {
                 chatBottomBar
@@ -215,23 +206,6 @@ public struct SessionView: View {
         case .reconnecting:       return .thinking
         case .failed:             return .error
         }
-    }
-
-    /// Island roster for this screen: the real live session as primary, plus the
-    /// mock roster/stats (`AgentDemoData`) until real multi-agent telemetry exists.
-    private var islandAgents: [AgentInfo] {
-        let primary = AgentInfo(
-            id: vm.host.id.raw,
-            name: vm.host.name,
-            agentKey: .claudeCode,
-            host: vm.host.name,
-            cwd: vm.cwd,
-            state: agentState,
-            tool: AgentDemoData.toolLine(for: agentState),
-            pendingApprovals: 0,
-            progress: AgentDemoData.progress
-        )
-        return [primary] + AgentDemoData.roster.filter { $0.name != primary.name }
     }
 
     // MARK: - Bottom bar (ChatInputBar + keyboard accessory)

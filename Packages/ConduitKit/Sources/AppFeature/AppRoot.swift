@@ -391,15 +391,22 @@ public struct AppRoot: View {
         }
     }
 
-    /// The in-app agent banner shows whenever there's a roster to surface and
-    /// we're not inside the live session cover (which mounts its own island).
+    /// The agent status header shows only when there's a live session to surface
+    /// and we're not inside the full-screen live session cover.
     private var isAgentBannerVisible: Bool {
         !hudStore.agents.isEmpty && !isShowingLiveSession
     }
 
-    /// Height of the reserved top strip the agent banner occupies: the collapsed
-    /// pill (38) + its top gap (4) + breathing room below it before nav content.
-    private let agentBannerStripHeight: CGFloat = 50
+    /// The slim status header, gated by visibility. Mounted below the nav bar on
+    /// the non-sessions tabs (Sessions injects it into its own custom header).
+    @ViewBuilder
+    private var agentHeaderInset: some View {
+        if isAgentBannerVisible {
+            AgentStatusHeader(agents: hudStore.agents) {
+                if sessionViewModel != nil { isShowingLiveSession = true }
+            }
+        }
+    }
 
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
@@ -410,33 +417,13 @@ public struct AppRoot: View {
                 compactRoot(env: env)
             }
         }
-        // Agent Island — the app-wide in-app agent HUD, shown across every tab
-        // while Conduit is foregrounded (the real hardware Dynamic Island only
-        // renders when backgrounded — see ConduitLiveActivityWidget).
-        //
-        // It lives in a RESERVED top strip: `safeAreaInset` pushes each screen's
-        // nav title / content down by the collapsed pill height so the banner
-        // never overlaps navigation chrome. The pill itself is a floating
-        // `.overlay` so its tap-to-expand panel can drop over content with a
-        // scrim without shoving the layout. Hidden behind the live SessionView
-        // cover (which mounts its own island).
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if isAgentBannerVisible {
-                Color.clear.frame(height: agentBannerStripHeight)
-            }
-        }
-        .overlay(alignment: .top) {
-            if isAgentBannerVisible {
-                GeometryReader { geo in
-                    AgentIsland(
-                        agents: hudStore.agents,
-                        screenWidth: geo.size.width,
-                        onJump: { _ in if sessionViewModel != nil { isShowingLiveSession = true } },
-                        onResolve: { _, _ in } // island approvals are demo; real ones live in Inbox
-                    )
-                }
-            }
-        }
+        // Agent status header — a slim, in-layout strip shown only while a live
+        // session exists (the store returns no agents when idle). It's mounted
+        // per-tab BELOW each screen's title — injected into SessionsHomeView for
+        // the Sessions tab, and via a top `safeAreaInset` on the other tabs in
+        // `rootDestination` — so it never floats over the cutout or nav chrome.
+        // Hidden behind the live SessionView cover, which shows its own header.
+        // (The expressive expandable island now lives only in the debug gallery.)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
         .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
             hudStore.pendingApprovals = count
@@ -568,6 +555,8 @@ public struct AppRoot: View {
             hostRepo: env.hostRepo,
             blockRepo: env.blockRepo,
             snapshotRepo: env.snapshotRepo,
+            statusHeaderAgents: isAgentBannerVisible ? hudStore.agents : [],
+            onTapStatusHeader: { isShowingLiveSession = true },
             onTapLiveSession: { isShowingLiveSession = true },
             onAddSession: {
                 addHostPresented = true
@@ -592,39 +581,46 @@ public struct AppRoot: View {
 
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
-        switch tab {
-        case .sessions:
-            sessionsHome(env: env)
+        Group {
+            switch tab {
+            case .sessions:
+                sessionsHome(env: env)
 
-        case .hosts:
-            WorkspacesView(
-                viewModel: WorkspacesViewModel(repository: env.hostRepo),
-                onSelect: { host in openSession(host: host, env: env) },
-                onEdit: { host in editingHost = host },
-                onAddHost: { addHostPresented = true },
-                onAddHostGated: isPro ? nil : {
-                    paywallFeatureName = "Unlimited SSH Hosts"
-                    showingPaywall = true
-                }
-            )
-            .id(workspacesRevision)
+            case .hosts:
+                WorkspacesView(
+                    viewModel: WorkspacesViewModel(repository: env.hostRepo),
+                    onSelect: { host in openSession(host: host, env: env) },
+                    onEdit: { host in editingHost = host },
+                    onAddHost: { addHostPresented = true },
+                    onAddHostGated: isPro ? nil : {
+                        paywallFeatureName = "Unlimited SSH Hosts"
+                        showingPaywall = true
+                    }
+                )
+                .id(workspacesRevision)
 
-        case .inbox:
-            if isPro {
-                InboxView(viewModel: activeInboxViewModel)
-            } else {
-                GlobalInboxGateView {
-                    paywallFeatureName = "AI Agent Inbox"
-                    showingPaywall = true
+            case .inbox:
+                if isPro {
+                    InboxView(viewModel: activeInboxViewModel)
+                } else {
+                    GlobalInboxGateView {
+                        paywallFeatureName = "AI Agent Inbox"
+                        showingPaywall = true
+                    }
                 }
+            case .settings:
+                SettingsView(
+                    viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+                    syncEngine: env.syncEngine,
+                    snippetRepo: env.snippetRepo,
+                    keyStore: env.keyStore
+                )
             }
-        case .settings:
-            SettingsView(
-                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
-                syncEngine: env.syncEngine,
-                snippetRepo: env.snippetRepo,
-                keyStore: env.keyStore
-            )
+        }
+        // Sessions injects the header into its own custom title block; the other
+        // tabs get it pinned below their system nav bar here.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if tab != .sessions { agentHeaderInset }
         }
     }
 

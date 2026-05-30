@@ -46,6 +46,8 @@ struct SessionsHomeView: View {
     let hostRepo: HostRepository
     let blockRepo: BlockRepository
     let snapshotRepo: SessionSnapshotRepository
+    var statusHeaderAgents: [AgentInfo] = []
+    var onTapStatusHeader: () -> Void = {}
     let onTapLiveSession: () -> Void
     let onAddSession: () -> Void
     var onDisconnectLiveSession: (() -> Void)? = nil
@@ -79,6 +81,12 @@ struct SessionsHomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+
+                // ── Agent status header (only while a live session exists)
+                if !statusHeaderAgents.isEmpty {
+                    AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                        .padding(.top, 10)
+                }
 
                 // ── Search pill
                 DSSearchField(text: $searchText, placeholder: "Search sessions")

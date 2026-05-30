@@ -27,26 +27,24 @@ public final class AgentHUDStore {
 
     public init() {}
 
-    /// Agents shown in the island: real live session first (when connected),
-    /// then the mock roster. Falls back to the full demo set when nothing is
-    /// live so the island is always present (it's the app-wide HUD).
+    /// Agents shown in the status header: just the real live session. Returns
+    /// empty when nothing is live so the header is contextual — it appears only
+    /// when there's a real session to surface, never as always-on mock data.
+    /// (The expandable multi-agent island with its demo roster lives only in the
+    /// debug gallery now.)
     public var agents: [AgentInfo] {
-        guard let vm = session, !Self.isDisconnected(vm) else {
-            return AgentDemoData.roster
-        }
+        guard let vm = session, !Self.isDisconnected(vm) else { return [] }
+        let state = Self.state(for: vm)
         let primary = AgentInfo(
             id: vm.host.id.raw,                       // stable id across re-renders
             name: vm.host.name,
             agentKey: .claudeCode,
             host: vm.host.name,
             cwd: vm.cwd,
-            state: Self.state(for: vm),
-            tool: AgentDemoData.toolLine(for: Self.state(for: vm)),
-            pendingApprovals: pendingApprovals,
-            progress: AgentDemoData.progress                 // mock until real telemetry
+            state: state,
+            pendingApprovals: pendingApprovals
         )
-        // Append mock "other agents", skipping any demo with the same name.
-        return [primary] + AgentDemoData.roster.filter { $0.name != primary.name }
+        return [primary]
     }
 
     static func isDisconnected(_ vm: SessionViewModel) -> Bool {

@@ -34,6 +34,7 @@ struct DebugGalleryView: View {
         case "blocks":         BlocksReviewScreen()
         case "session":        DebugSessionHarness()
         case "hud":            AgentHUDGalleryScreen()
+        case "statusheader":   AgentStatusHeaderGalleryScreen()
         case "keyboard":       KeyboardGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
@@ -914,6 +915,58 @@ private struct AgentHUDGalleryScreen: View {
         ZStack(alignment: .top) { content() }
             .frame(maxWidth: .infinity, alignment: .top)
             .background(Color.black.opacity(0.001)) // hit area, keeps layout
+    }
+}
+
+// MARK: - Agent status header gallery (CONDUIT_GALLERY=statusheader)
+// Renders the slim AgentStatusHeader in the REAL placement it ships in on the
+// Sessions tab: in-layout, BELOW a custom large title (as in SessionsHomeView),
+// over the app's dark surface — the way to verify it reads cleanly and never
+// overlaps the cutout or title.
+
+private struct AgentStatusHeaderGalleryScreen: View {
+    private let streaming = AgentInfo(
+        name: "Mac", agentKey: .claudeCode, host: "Mac",
+        cwd: "~/code", state: .streaming
+    )
+    private let approval = AgentInfo(
+        name: "GPU Box", agentKey: .claudeCode, host: "GPU Box",
+        cwd: "~/training", state: .approval, pendingApprovals: 1
+    )
+
+    private var t: ConduitTokens { .dark }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Sessions")
+                        .font(.dsDisplayPt(30, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                }
+                .padding(.horizontal, 20).padding(.top, 8)
+
+                // Streaming state (in real placement: below the title).
+                AgentStatusHeader(agents: [streaming]) {}
+                    .padding(.top, 10)
+
+                DSSearchField(text: .constant(""), placeholder: "Search sessions")
+                    .padding(.horizontal, 16).padding(.top, 12)
+
+                // Approval state shown below for comparison (amber tint + badge).
+                Text("APPROVAL STATE")
+                    .font(.dsMonoPt(10, weight: .medium)).tracking(1.2)
+                    .foregroundStyle(t.termText3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.top, 36).padding(.bottom, 6)
+                AgentStatusHeader(agents: [approval]) {}
+
+                Spacer()
+            }
+        }
+        .environment(\.conduitTokens, t)
     }
 }
 
