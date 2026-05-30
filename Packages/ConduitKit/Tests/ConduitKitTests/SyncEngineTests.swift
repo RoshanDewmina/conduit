@@ -68,13 +68,16 @@ struct SyncEngineTests {
     @Test func hostRepositoryUpsertSetsModifiedAt() async throws {
         let db = try AppDatabase.inMemory()
         let repo = HostRepository(db)
-        let before = Date()
+        let now = Date()
         var host = ConduitCore.Host(name: "Box", hostname: "h.example.com", username: "user")
-        host.modifiedAt = before - 100   // stale timestamp should be overwritten
+        host.modifiedAt = now - 100   // stale timestamp should be overwritten
         try await repo.upsert(host)
         let loaded = try await repo.all().first!
-        // upsert() always bumps modifiedAt to .now
-        #expect(loaded.modifiedAt >= before)
+        // upsert() bumps modifiedAt to ~now. Assert with slack rather than a strict
+        // `>= now`: GRDB's Date round-trip can truncate sub-second precision below a
+        // full-precision `now` captured in the same clock tick, which flaked under
+        // parallel test load. A 5s window still proves the stale value was overwritten.
+        #expect(loaded.modifiedAt > now - 5)
     }
 
     @Test func hostRepositoryUpsertSyncPreservesModifiedAt() async throws {

@@ -114,6 +114,10 @@ public struct InboxView: View {
                                 }
                             }
                         }
+                        // BUG-4: constrain scroll content to the viewport width so wide
+                        // rows at large Dynamic Type wrap instead of overflowing and being
+                        // centre-clipped on the leading edge by the ScrollView.
+                        .frame(maxWidth: .infinity)
                         .padding(.top, 4)
                         .padding(.bottom, 16)
                     }
