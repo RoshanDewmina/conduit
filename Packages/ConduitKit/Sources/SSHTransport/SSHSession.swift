@@ -264,6 +264,35 @@ public actor SSHSession {
         (error as? Citadel.SSHClient.CommandFailed)?.exitCode
     }
 
+    /// Classifies whether an error thrown by an exec/shell channel means the
+    /// underlying SSH connection went away (vs. a normal non-zero command
+    /// failure). Server restarts, `kill -HUP sshd`, and dropped channels all
+    /// surface as one of these — even while the device network stays up — and
+    /// must be routed to the auto-reconnect path rather than treated as a
+    /// terminal error.
+    ///
+    /// A `CommandFailed` (non-zero remote exit status) is explicitly NOT a
+    /// connection loss.
+    public nonisolated static func isConnectionLoss(_ error: any Error) -> Bool {
+        if error is Citadel.SSHClient.CommandFailed { return false }
+        if let err = error as? ConduitError {
+            switch err {
+            case .channelClosed, .notConnected, .networkUnavailable, .timeout:
+                return true
+            default:
+                return false
+            }
+        }
+        // Citadel/NIO channel-level errors surface as opaque types; match on the
+        // same substrings `map(error:)` uses to detect a dead channel.
+        let msg = String(describing: error).lowercased()
+        return msg.contains("channel")
+            || msg.contains("connection reset")
+            || msg.contains("eof")
+            || msg.contains("closed")
+            || msg.contains("not connected")
+    }
+
     private static func map(error: any Error, host: String) -> ConduitError {
         if let error = error as? ConduitError { return error }
         let msg = String(describing: error).lowercased()

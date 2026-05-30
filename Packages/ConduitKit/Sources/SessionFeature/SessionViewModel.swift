@@ -63,12 +63,23 @@ public final class SessionViewModel {
     /// Reconnection engine that monitors network state.
     private var reconnectEngine: AutoReconnectEngine?
 
+    /// Background task driving the exponential-backoff reconnect loop after an
+    /// unexpected (non-user-initiated) connection drop.
+    private var reconnectTask: Task<Void, Never>?
+
+    /// Set by `disconnect()` so a subsequent channel/stream close is recognized
+    /// as deliberate and does NOT trigger the auto-reconnect loop.
+    private var userInitiatedDisconnect = false
+
     /// Background task that sends a no-op SSH command at the keep-alive interval.
     private var keepAliveTask: Task<Void, Never>?
 
     /// Called when the app scene becomes active after backgrounding.
     /// Triggers reconnection if the SSH session was lost.
     public func handleSceneActive() async {
+        // Don't interfere with an in-flight backoff loop or a deliberate
+        // disconnect.
+        guard reconnectTask == nil, !userInitiatedDisconnect else { return }
         let connected = await sshSession.isConnected
         if !connected && status != .connecting {
             await attemptReconnect()
@@ -94,6 +105,96 @@ public final class SessionViewModel {
             status = .failed(reason: "Reconnect failed: \(error.localizedDescription)")
         }
     }
+
+    // MARK: - Unexpected drop → auto-reconnect
+
+    /// Entry point for a *non-user-initiated* connection loss (server HUP, sshd
+    /// restart, dropped channel) detected while the device network is healthy.
+    ///
+    /// Routes through the same recovery path as a network transition: marks the
+    /// status `.reconnecting` and starts the exponential-backoff retry loop.
+    /// Only surfaces `.failed` after `AutoReconnectEngine.maxAttempts` is
+    /// exhausted; an auth failure stops the loop immediately and surfaces the
+    /// password-retry path instead of looping forever.
+    public func onUnexpectedShellDrop() async {
+        // A deliberate disconnect is not a drop — never reconnect.
+        guard !userInitiatedDisconnect else { return }
+        // Already recovering — don't stack loops.
+        if case .reconnecting = status { return }
+        guard reconnectTask == nil else { return }
+
+        // Tear down the dead client so attemptReconnect() rebuilds it cleanly.
+        await sshSession.disconnect()
+        startReconnectLoop()
+    }
+
+    /// Runs `attemptReconnect()` with exponential backoff, up to
+    /// `AutoReconnectEngine.maxAttempts`. Surfaces `.connected` on success,
+    /// `.failed` after the attempts are exhausted, and stops early (also
+    /// `.failed`) on an auth failure so bad credentials don't loop forever.
+    private func startReconnectLoop() {
+        cancelReconnectLoop()
+        reconnectTask = Task { [weak self] in
+            guard let self else { return }
+            for attempt in 1...AutoReconnectEngine.maxAttempts {
+                if Task.isCancelled { return }
+                await self.setStatus(.reconnecting(attempt: attempt))
+
+                // Backoff before every attempt after the first.
+                if attempt > 1 {
+                    try? await Task.sleep(for: ReconnectController.backoff(attempt: attempt - 1))
+                    if Task.isCancelled { return }
+                }
+
+                do {
+                    try await self.session.attemptReconnect()
+                    if let name = await self.tmuxName {
+                        let tmux = TmuxClient(session: self.session)
+                        try? await tmux.attachOrCreate(name: name)
+                    }
+                    await self.setStatus(.connected)
+                    await self.refreshCWDPublic()
+                    await self.clearReconnectTask()
+                    return
+                } catch let err as ConduitError {
+                    // Bad credentials: do not loop — surface the password-retry
+                    // path immediately.
+                    if case .authFailed = err {
+                        await self.setStatus(.failed(reason: err.errorDescription ?? "authentication failed"))
+                        await self.clearReconnectTask()
+                        return
+                    }
+                    // Otherwise keep retrying until attempts are exhausted.
+                } catch {
+                    // Transient error — keep retrying.
+                }
+            }
+            // Exhausted all attempts.
+            if !Task.isCancelled {
+                await self.setStatus(.failed(reason: "Reconnect failed after \(AutoReconnectEngine.maxAttempts) attempts"))
+            }
+            await self.clearReconnectTask()
+        }
+    }
+
+    private func cancelReconnectLoop() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+    }
+
+    private func clearReconnectTask() {
+        reconnectTask = nil
+    }
+
+    private func setStatus(_ newStatus: Session.Status) {
+        status = newStatus
+    }
+
+    /// Internal accessor so the detached reconnect task can read the tmux name.
+    private var tmuxName: String? { tmuxSessionName }
+
+    /// `refreshCWD` exposed for the reconnect loop (same actor, kept explicit).
+    private func refreshCWDPublic() async { await refreshCWD() }
 
     // MARK: - Dependencies
 
@@ -127,6 +228,7 @@ public final class SessionViewModel {
 
     public func connect() async {
         guard status != .connected else { return }
+        userInitiatedDisconnect = false
         status = .connecting
         do {
             let cred = try await credentialProvider()
@@ -169,6 +271,11 @@ public final class SessionViewModel {
     }
 
     public func disconnect() async {
+        // Mark this as deliberate so any in-flight stream close that fires as a
+        // consequence of tearing down the session is not mistaken for a server
+        // drop and does not kick off the auto-reconnect loop.
+        userInitiatedDisconnect = true
+        cancelReconnectLoop()
         stopKeepAlive()
         await deescalate()
         await sshSession.disconnect()
@@ -306,7 +413,18 @@ public final class SessionViewModel {
             exitCode = 130
         } catch {
             if let remoteExit = SSHSession.commandExitCode(from: error) {
+                // A non-zero remote exit status is a normal command failure, not
+                // a transport drop — keep the block, do not reconnect.
                 exitCode = remoteExit
+            } else if SSHSession.isConnectionLoss(error) {
+                // The exec channel died because the underlying connection went
+                // away (server HUP, sshd restart, dropped channel) — not a
+                // per-command failure. Route through the same path as a network
+                // drop: surface .reconnecting and run the backoff loop.
+                exitCode = 1
+                blocks.finalize(id: blockID, exitCode: exitCode)
+                await onUnexpectedShellDrop()
+                return
             } else {
                 exitCode = 1
                 blocks.append(Data("\n[error] \(error.localizedDescription)\n".utf8), stream: .stderr, to: blockID)
