@@ -15,19 +15,27 @@ public struct PixelBox: View {
     private let mode: Mode
     let size: CGFloat
     let gap: CGFloat
+    /// When > 1, each of the 9 cells is itself rendered as a `subdivisions ×
+    /// subdivisions` grid of micro-cells that shimmer on smooth, desynced waves
+    /// — a self-similar "pixels made of pixels" effect. Sub-cells animate even
+    /// in otherwise-still states, so the grid is always gently alive. Default 1
+    /// keeps the original flat behaviour for existing call sites.
+    let subdivisions: Int
 
-    public init(state: AgentState = .offline, size: CGFloat = 5, gap: CGFloat = 1) {
+    public init(state: AgentState = .offline, size: CGFloat = 5, gap: CGFloat = 1, subdivisions: Int = 1) {
         self.mode = .state(state)
         self.size = size
         self.gap = gap
+        self.subdivisions = max(1, subdivisions)
     }
 
     /// Explicit-color glowing grid — used by the onboarding logo
     /// (`PixelBox(color: t.accent, size: 64)` → a breathing accent logo).
-    public init(color: Color, size: CGFloat = 5, gap: CGFloat = 1.5) {
+    public init(color: Color, size: CGFloat = 5, gap: CGFloat = 1.5, subdivisions: Int = 1) {
         self.mode = .color(color)
         self.size = size
         self.gap = gap
+        self.subdivisions = max(1, subdivisions)
     }
 
     private var behavior: CellBehavior {
@@ -47,7 +55,9 @@ public struct PixelBox: View {
 
     public var body: some View {
         let beh = behavior
-        if beh.isAnimated {
+        // Subdivided grids always animate (the micro-cells shimmer even when the
+        // macro state is still), so drive a TimelineView whenever either applies.
+        if beh.isAnimated || subdivisions > 1 {
             TimelineView(.animation) { tl in
                 grid(behavior: beh, now: tl.date.timeIntervalSinceReferenceDate)
             }
@@ -65,6 +75,7 @@ public struct PixelBox: View {
                             behavior: behavior,
                             cellIndex: row * 3 + col,
                             cellSize: size,
+                            subdivisions: subdivisions,
                             now: now
                         )
                     }
@@ -159,6 +170,7 @@ private struct PixelCell: View {
     let behavior: CellBehavior
     let cellIndex: Int
     let cellSize: CGFloat
+    var subdivisions: Int = 1
     let now: TimeInterval
 
     private var row: Int { cellIndex / 3 }
@@ -174,12 +186,56 @@ private struct PixelCell: View {
     }
 
     var body: some View {
+        if subdivisions <= 1 {
+            soloCell
+        } else {
+            subdividedCell
+        }
+    }
+
+    private var soloCell: some View {
         let look = computeLook()
-        RoundedRectangle(cornerRadius: max(0.5, cellSize * 0.08), style: .continuous)
+        return RoundedRectangle(cornerRadius: max(0.5, cellSize * 0.08), style: .continuous)
             .fill(look.rgb.color(look.opacity))
             .frame(width: cellSize, height: cellSize)
             .shadow(color: look.glow > 0 ? look.rgb.color(0.85) : .clear, radius: look.glow)
             .offset(x: look.dx, y: look.dy)
+    }
+
+    // Each cell becomes a sub-grid whose micro-cells shimmer around the cell's
+    // base look on two desynced sine waves — continuous, never strobing.
+    private var subdividedCell: some View {
+        let base = computeLook()
+        let n = subdivisions
+        let subGap = max(0.4, cellSize * 0.06)
+        let subSize = (cellSize - subGap * CGFloat(n - 1)) / CGFloat(n)
+        return Grid(horizontalSpacing: subGap, verticalSpacing: subGap) {
+            ForEach(0..<n, id: \.self) { sr in
+                GridRow {
+                    ForEach(0..<n, id: \.self) { sc in
+                        let look = subLook(base: base, sr: sr, sc: sc, n: n)
+                        RoundedRectangle(cornerRadius: max(0.4, subSize * 0.18), style: .continuous)
+                            .fill(look.rgb.color(look.opacity))
+                            .frame(width: subSize, height: subSize)
+                            .shadow(color: look.glow > 0 ? look.rgb.color(0.7) : .clear, radius: look.glow)
+                    }
+                }
+            }
+        }
+        .frame(width: cellSize, height: cellSize)
+        .offset(x: base.dx, y: base.dy)
+    }
+
+    private func subLook(base: Look, sr: Int, sc: Int, n: Int) -> Look {
+        let subIdx = Double(sr * n + sc)
+        let subDiag = Double(sr + sc)
+        // Two slow, mutually-prime-ish waves → organic, non-repeating shimmer.
+        let w1 = sin(now * 2.1 + Double(cellIndex) * 0.8 + subDiag * 1.15)
+        let w2 = sin(now * 1.3 + subIdx * 0.55 + Double(cellIndex) * 0.31)
+        let s = 0.5 + 0.25 * w1 + 0.25 * w2                       // 0…1, smooth
+        let opacity = min(1.0, max(0.10, base.opacity * (0.5 + 0.7 * s)))
+        let rgb = lerp(base.rgb, lerp(base.rgb, RGB.corrupt, 0.16), s) // gentle brighten at peak
+        return Look(rgb: rgb, opacity: opacity, glow: base.glow * 0.5 * s)
     }
 
     private func computeLook() -> Look {

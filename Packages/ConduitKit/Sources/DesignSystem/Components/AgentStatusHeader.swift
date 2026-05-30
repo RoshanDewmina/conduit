@@ -32,7 +32,7 @@ public struct AgentStatusHeader: View {
         if let primary {
             Button(action: onTap) {
                 HStack(spacing: 10) {
-                    PixelBox(state: primary.state, size: 9, gap: 1.4)
+                    PixelBox(state: primary.state, size: 9, gap: 1.6, subdivisions: 3)
 
                     Text(primary.host)
                         .font(.system(size: 13, weight: .semibold))

@@ -925,6 +925,10 @@ private struct AgentHUDGalleryScreen: View {
 // overlaps the cutout or title.
 
 private struct AgentStatusHeaderGalleryScreen: View {
+    private let connected = AgentInfo(
+        name: "Mac", agentKey: .claudeCode, host: "Mac",
+        cwd: "~/code", state: .done
+    )
     private let streaming = AgentInfo(
         name: "Mac", agentKey: .claudeCode, host: "Mac",
         cwd: "~/code", state: .streaming
@@ -948,25 +952,41 @@ private struct AgentStatusHeaderGalleryScreen: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 8)
 
-                // Streaming state (in real placement: below the title).
-                AgentStatusHeader(agents: [streaming]) {}
+                // Connected/idle (green Done) — the common state, now with the
+                // nested sub-pixels gently shimmering instead of sitting still.
+                AgentStatusHeader(agents: [connected]) {}
                     .padding(.top, 10)
 
                 DSSearchField(text: .constant(""), placeholder: "Search sessions")
                     .padding(.horizontal, 16).padding(.top, 12)
 
-                // Approval state shown below for comparison (amber tint + badge).
-                Text("APPROVAL STATE")
-                    .font(.dsMonoPt(10, weight: .medium)).tracking(1.2)
-                    .foregroundStyle(t.termText3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20).padding(.top, 36).padding(.bottom, 6)
+                galleryLabel("STREAMING STATE")
+                AgentStatusHeader(agents: [streaming]) {}
+
+                galleryLabel("APPROVAL STATE")
                 AgentStatusHeader(agents: [approval]) {}
+
+                // Big nested glyphs so the sub-pixel detail is easy to inspect.
+                galleryLabel("NESTED GLYPH · 64pt")
+                HStack(spacing: 22) {
+                    PixelBox(state: .streaming, size: 18, gap: 3, subdivisions: 3)
+                    PixelBox(state: .approval, size: 18, gap: 3, subdivisions: 3)
+                    PixelBox(state: .done, size: 18, gap: 3, subdivisions: 3)
+                }
+                .padding(.top, 6)
 
                 Spacer()
             }
         }
         .environment(\.conduitTokens, t)
+    }
+
+    private func galleryLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(10, weight: .medium)).tracking(1.2)
+            .foregroundStyle(t.termText3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20).padding(.top, 30).padding(.bottom, 6)
     }
 }
 
