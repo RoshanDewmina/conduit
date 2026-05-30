@@ -75,6 +75,7 @@ public struct PixelBox: View {
                             behavior: behavior,
                             cellIndex: row * 3 + col,
                             cellSize: size,
+                            gap: gap,
                             subdivisions: subdivisions,
                             now: now
                         )
@@ -170,6 +171,7 @@ private struct PixelCell: View {
     let behavior: CellBehavior
     let cellIndex: Int
     let cellSize: CGFloat
+    var gap: CGFloat = 1
     var subdivisions: Int = 1
     let now: TimeInterval
 
@@ -207,7 +209,9 @@ private struct PixelCell: View {
     private var subdividedCell: some View {
         let base = computeLook()
         let n = subdivisions
-        let subGap = max(0.4, cellSize * 0.06)
+        // Sub-cells are tighter than the macro gap, so the 3×3 structure always
+        // reads first and the sub-pixels stay a subtle inner texture.
+        let subGap = max(0.5, gap * 0.34)
         let subSize = (cellSize - subGap * CGFloat(n - 1)) / CGFloat(n)
         return Grid(horizontalSpacing: subGap, verticalSpacing: subGap) {
             ForEach(0..<n, id: \.self) { sr in
@@ -233,9 +237,11 @@ private struct PixelCell: View {
         let w1 = sin(now * 2.1 + Double(cellIndex) * 0.8 + subDiag * 1.15)
         let w2 = sin(now * 1.3 + subIdx * 0.55 + Double(cellIndex) * 0.31)
         let s = 0.5 + 0.25 * w1 + 0.25 * w2                       // 0…1, smooth
-        let opacity = min(1.0, max(0.10, base.opacity * (0.5 + 0.7 * s)))
-        let rgb = lerp(base.rgb, lerp(base.rgb, RGB.corrupt, 0.16), s) // gentle brighten at peak
-        return Look(rgb: rgb, opacity: opacity, glow: base.glow * 0.5 * s)
+        // Subtle: sub-cells only breathe within ~80–100% of the cell's opacity
+        // and barely shift hue, so the inner texture is gentle, not busy.
+        let opacity = min(1.0, max(0.30, base.opacity * (0.80 + 0.20 * s)))
+        let rgb = lerp(base.rgb, lerp(base.rgb, RGB.corrupt, 0.08), s)
+        return Look(rgb: rgb, opacity: opacity, glow: base.glow * 0.35 * s)
     }
 
     private func computeLook() -> Look {

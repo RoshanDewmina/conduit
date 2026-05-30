@@ -26,6 +26,7 @@ public struct DSButton: View {
     let kbd: String?
     let iconOnly: Bool
     let isLoading: Bool
+    let fullWidth: Bool
     let action: () -> Void
 
     @Environment(\.conduitTokens) private var t
@@ -43,6 +44,7 @@ public struct DSButton: View {
         kbd: String? = nil,
         iconOnly: Bool = false,
         isLoading: Bool = false,
+        fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -55,6 +57,7 @@ public struct DSButton: View {
         self.kbd = kbd
         self.iconOnly = iconOnly
         self.isLoading = isLoading
+        self.fullWidth = fullWidth
         self.action = action
     }
 
@@ -90,6 +93,7 @@ public struct DSButton: View {
             .padding(.vertical, vPad)
             .frame(minHeight: minH)
             .frame(minWidth: iconOnly ? minH : nil)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
         }
         .background(bgColor)
         .foregroundStyle(fgColor)

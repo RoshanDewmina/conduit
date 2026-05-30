@@ -18,14 +18,14 @@ public struct OnboardingView: View {
             t.surf0.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 28) {
-                    PixelBox(color: t.accent, size: 64, subdivisions: 3)
+                    PixelBox(color: t.accent, size: 60, gap: 6, subdivisions: 3)
                         .padding(.top, 56)
                     VStack(spacing: 6) {
                         Text("Conduit")
-                            .font(.largeTitle.weight(.semibold))
+                            .font(.dsDisplayPt(34, weight: .bold))
                             .foregroundStyle(t.text1)
                         Text("A phone-native cockpit for remote AI coding.")
-                            .font(.callout)
+                            .font(.dsSansPt(15))
                             .foregroundStyle(t.text3)
                             .multilineTextAlignment(.center)
                     }
@@ -36,7 +36,7 @@ public struct OnboardingView: View {
                         featureRow("Review", "Diffs, logs, and tests on a phone-sized screen.", icon: "doc.text.magnifyingglass")
                     }
                     Text("BYO host. BYO API key. No subscription required.")
-                        .font(.caption)
+                        .font(.dsSansPt(12))
                         .foregroundStyle(t.text4)
                         .multilineTextAlignment(.center)
                 }
@@ -48,21 +48,13 @@ public struct OnboardingView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 10) {
-                Button(action: onContinue) {
-                    Label("Add your first host", systemImage: "plus")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(t.accent)
+                DSButton("Add your first host", icon: .plus,
+                         variant: .accent, size: .lg, fullWidth: true,
+                         action: onContinue)
 
-                Button(action: onSetupWorkspace) {
-                    Label("Set up a workspace for me", systemImage: "wand.and.stars")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                DSButton("Set up a workspace for me", systemImage: "wand.and.stars",
+                         variant: .secondary, size: .lg, fullWidth: true,
+                         action: onSetupWorkspace)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
@@ -78,10 +70,10 @@ public struct OnboardingView: View {
                 .foregroundStyle(t.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(.dsSansPt(16, weight: .semibold))
                     .foregroundStyle(t.text1)
                 Text(subtitle)
-                    .font(.footnote)
+                    .font(.dsSansPt(13))
                     .foregroundStyle(t.text3)
             }
             .fixedSize(horizontal: false, vertical: true)
