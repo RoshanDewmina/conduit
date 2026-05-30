@@ -18,7 +18,7 @@ public struct OnboardingView: View {
             t.surf0.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 28) {
-                    PixelBox(color: t.accent, size: 64)
+                    PixelBox(color: t.accent, size: 64, subdivisions: 3)
                         .padding(.top, 56)
                     VStack(spacing: 6) {
                         Text("Conduit")

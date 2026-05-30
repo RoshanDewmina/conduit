@@ -84,7 +84,7 @@ public struct PixelBox: View {
         }
     }
 
-    static func stateColor(_ state: AgentState) -> Color {
+    public static func stateColor(_ state: AgentState) -> Color {
         switch state {
         case .thinking:  return Color(.sRGB, red: 0.820, green: 0.439, blue: 0.184, opacity: 1) // orange
         case .streaming: return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue
