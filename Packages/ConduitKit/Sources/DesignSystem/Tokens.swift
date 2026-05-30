@@ -270,3 +270,25 @@ private struct ConduitTokensModifier: ViewModifier {
             .environment(\.conduitTokens, colorScheme == .dark ? .dark : .light)
     }
 }
+
+// MARK: - DI — always-dark Island palette
+// Shared by AgentIsland and AgentStatusHeader. Never scheme-adaptive — the island is always dark.
+
+#if os(iOS)
+enum DI {
+    static let ink  = Color(.sRGB, red: 0.957, green: 0.949, blue: 0.933, opacity: 1) // #f4f2ee
+    static let ink2 = Color(.sRGB, red: 0.608, green: 0.588, blue: 0.553, opacity: 1) // #9b968d
+    static let ink3 = Color(.sRGB, red: 0.400, green: 0.384, blue: 0.357, opacity: 1) // #66625b
+    static let approval  = Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1)
+    static let streaming = Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1)
+
+    static func bg(approval: Bool) -> Color {
+        approval ? Color(.sRGB, red: 0.110, green: 0.075, blue: 0.020, opacity: 1) // #1c1305
+                 : .black
+    }
+    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .dsMonoPt(size, weight: weight)
+    }
+}
+#endif
+

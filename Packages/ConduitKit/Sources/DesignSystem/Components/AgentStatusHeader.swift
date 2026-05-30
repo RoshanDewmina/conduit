@@ -35,13 +35,13 @@ public struct AgentStatusHeader: View {
                     PixelBox(state: primary.state, size: 9, gap: 1.6, subdivisions: 3)
 
                     Text(primary.host)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.dsSansPt(13, weight: .semibold))
                         .foregroundStyle(DI.ink)
                         .lineLimit(1)
                     Text("·")
                         .font(DI.mono(12))
                         .foregroundStyle(DI.ink3)
-                    Text(primary.state.islandLabel)
+                    Text(primary.state == .done ? "Connected" : primary.state.islandLabel)
                         .font(DI.mono(12))
                         .foregroundStyle(hasApproval ? DI.approval : PixelBox.stateColor(primary.state))
                         .lineLimit(1)
@@ -59,7 +59,7 @@ public struct AgentStatusHeader: View {
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.dsSansPt(11, weight: .semibold))
                         .foregroundStyle(DI.ink3)
                 }
                 .padding(.horizontal, 16)

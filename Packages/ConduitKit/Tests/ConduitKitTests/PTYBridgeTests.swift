@@ -366,4 +366,61 @@ struct PTYBridgeTests {
         #expect(startFired.value == false,
                 "OSC 133;A (prompt_start) must not fire onCommandStart")
     }
+
+    // MARK: - Phase-7 re-engagement: onPromptStart fires on every 133;A
+
+    // The Phase-7 raw fallback (isRaw = true) is managed by SessionViewModel, not
+    // PTYBridge.  PTYBridge's responsibility: fire onPromptStart on every 133;A
+    // without any single-fire gating.  If the bridge ever stopped firing after the
+    // first 133;A, SessionViewModel.onPromptStart (which does `isRaw = false`) would
+    // never be reached and the terminal would stay stuck in raw mode indefinitely.
+
+    @Test("Phase-7 re-engagement: onPromptStart fires on every 133;A, not just the first")
+    func phase7ReengagementPromptStartFiresRepeatedly() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let count = Box(0)
+        await bridge.configure(onPromptStart: { count.value += 1 })
+
+        let pumpTask = Task { await bridge.start() }
+
+        // Feed two separate 133;A markers separated by plain output.
+        // This models: (1) integration-script precmd fires 133;A (ghost block),
+        //              (2) clear command's precmd fires 133;A (real idle block),
+        // or in Phase-7 terms: raw fallback is active, then 133;A arrives and
+        // re-engages block mode — the callback must fire to let the VM flip isRaw.
+        let osc133a: [UInt8] = [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        var sequence: [UInt8] = []
+        sequence += osc133a
+        sequence += Array("$ ".utf8)    // simulated prompt text between the two markers
+        sequence += osc133a
+        await mock.feed(sequence)
+        await mock.finish()
+        await pumpTask.value
+
+        #expect(count.value == 2,
+                "onPromptStart must fire once per 133;A — no single-fire gating in PTYBridge")
+    }
+
+    // MARK: - Phase-7 re-engagement: 133;A fires integrationActive
+
+    @Test("Phase-7 re-engagement: first 133;A sets integrationActive on the bridge")
+    func phase7FirstOSC133ASetsIntegrationActive() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let pumpTask = Task { await bridge.start() }
+
+        let osc133a: [UInt8] = [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        await mock.feed(osc133a)
+        await mock.finish()
+        await pumpTask.value
+
+        let active = await bridge.integrationActive
+        #expect(active == true,
+                "integrationActive should be true once any OSC 133 marker is received")
+    }
 }

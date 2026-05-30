@@ -49,6 +49,11 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
         .package(url: "https://github.com/orlandos-nl/Citadel.git", from: "0.9.0"),
+        // Community fork of apple/swift-nio-ssh used transitively by Citadel.
+        // Key patches absent from upstream: Mac Catalyst NIO product dependency fix,
+        // SSH certificate authentication, visionOS/Musl compiler directives.
+        // Switch back to apple/swift-nio-ssh once Citadel migrates and upstream
+        // absorbs the Mac Catalyst fix. Tracked in ARCHITECTURE.md §19.
         .package(url: "https://github.com/Wellz26/swift-nio-ssh.git", "0.3.4" ..< "0.4.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
         // SwiftTerm — iOS-only UI dep, isolated to TerminalEngine
@@ -113,7 +118,7 @@ let package = Package(
         ),
         .target(
             name: "SyncKit",
-            dependencies: ["ConduitCore", "PersistenceKit"],
+            dependencies: ["ConduitCore", "PersistenceKit", "SecurityKit"],
             swiftSettings: swiftSettings
         ),
 

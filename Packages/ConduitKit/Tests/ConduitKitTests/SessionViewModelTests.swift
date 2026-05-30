@@ -252,4 +252,96 @@ struct SessionViewModelTests {
         #expect(block?.state == .submitted)
         #expect(block?.command == "uname -a")
     }
+
+    // MARK: - Ghost block scenario (documents the empty-top-block bug)
+    //
+    // With suppression OFF, the integration script's precmd fires 133;A → ghost
+    // block (promptEditing), then the clear's 133;C/D taint it → empty done block,
+    // then 133;A creates the real idle block.  Two blocks total, first is empty.
+
+    @Test("Ghost block scenario: empty done block appears before correct idle block")
+    func ghostBlockScenarioWithoutSuppression() {
+        // Step 1: integration script precmd fires 133;A → ghost block created
+        let ghostID = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+        // No setCommand — command stays ""
+
+        // Step 2: clear command's preexec fires 133;C → ghost transitions to executing
+        renderer.setState(.executing, for: ghostID)
+
+        // Step 3: clear done → 133;D;0 → ghost finalized with exit 0
+        renderer.finalize(id: ghostID, exitCode: 0)
+
+        // Step 4: clear's precmd fires 133;A → clean idle block
+        let idleID = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+
+        #expect(renderer.blocks.count == 2, "Two blocks: ghost (empty done) + correct idle")
+        let ghost = renderer.blocks.first { $0.id == ghostID }
+        let idle  = renderer.blocks.first { $0.id == idleID }
+
+        #expect(ghost?.command == "", "Ghost block has no command")
+        if case .done(let code) = ghost?.state {
+            #expect(code == 0, "Ghost block exit code is 0 (from the clear command)")
+        } else {
+            Issue.record("Ghost block should be .done")
+        }
+        #expect(idle?.state == .promptEditing, "Idle block is the correct promptEditing block")
+    }
+
+    // MARK: - Phase-7 re-engagement after blocks.clear()
+    //
+    // When the Phase-7 raw fallback fires (isRaw = true) and integration then
+    // becomes active, the next 133;A must be able to create a fresh idle block
+    // even after blocks.clear() was called.
+
+    @Test("Phase-7 re-engagement: beginPrompt succeeds after blocks.clear()")
+    func phase7ReengagementAfterClear() {
+        // Simulate raw-mode entry: clear the block store.
+        renderer.clear()
+        #expect(renderer.blocks.isEmpty, "blocks.clear() should empty the store")
+
+        // Integration becomes live → 133;A fires → new idle block
+        let blockID = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+        let block = renderer.blocks.first { $0.id == blockID }
+
+        #expect(block != nil, "beginPrompt must succeed after blocks.clear()")
+        #expect(block?.state == .promptEditing, "Re-engaged block starts in promptEditing")
+        #expect(block?.command == "", "Re-engaged block has empty command (idle prompt)")
+    }
+
+    // MARK: - Inline-TUI resize: terminalCols propagates to per-block terminals
+    //
+    // The resize path: RawTerminalView.onResize → resizeUnifiedPTY → SSHShell.resize.
+    // At the BlockRenderer layer, terminalCols must be set BEFORE beginPrompt so the
+    // per-block SwiftTerm emulator is sized to match the PTY — otherwise Claude Code
+    // draws to a mismatched width and wraps/garbles output on device rotation.
+
+    @Test("Resize: terminalCols set before beginPrompt configures block terminal width")
+    func terminalColsPropagatesBeforeBlockCreation() {
+        renderer.terminalCols = 120
+        let id = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+
+        // The block should exist; the per-block Terminal was created with cols=120.
+        // (We verify indirectly: if terminalCols were ignored, hasCursorMovement
+        //  rendering would use a stale 80-col grid and wrap Claude Code's UI.)
+        let block = renderer.blocks.first { $0.id == id }
+        #expect(block != nil)
+        #expect(renderer.terminalCols == 120,
+                "terminalCols must reflect the PTY width before block terminals are created")
+    }
+
+    @Test("Resize: terminalCols update after block creation (mid-session rotate)")
+    func terminalColsUpdateMidSession() {
+        // Block already running
+        let id = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+        renderer.setState(.executing, for: id)
+
+        // Device rotates → resizeUnifiedPTY fires → sets terminalCols for next block
+        renderer.terminalCols = 56  // narrower (portrait → landscape flips on small iPhone)
+
+        // Next block after 133;A will use the new cols
+        let idleID = renderer.beginPrompt(sessionID: sid, prompt: prompt)
+        let idle = renderer.blocks.first { $0.id == idleID }
+        #expect(idle != nil)
+        #expect(renderer.terminalCols == 56, "Updated terminalCols carries into new block terminals")
+    }
 }

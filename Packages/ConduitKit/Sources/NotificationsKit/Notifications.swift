@@ -2,6 +2,17 @@ import Foundation
 import UserNotifications
 import ConduitCore
 
+// MARK: - NSNotification names for in-process routing of push action responses.
+
+public extension Notification.Name {
+    /// Posted when the user taps Approve/Reject on an approval push notification.
+    /// userInfo: ["approvalId": String, "sessionId": String, "action": "approve"|"reject"]
+    static let conduitApprovalAction    = Notification.Name("dev.conduit.approvalAction")
+    /// Posted when the user taps View on a run-complete push notification.
+    /// userInfo: ["sessionId": String]
+    static let conduitRunCompleteAction = Notification.Name("dev.conduit.runCompleteAction")
+}
+
 /// Local + remote notification orchestration. For M3 we use only local
 /// notifications driven by the side-channel WebSocket; APNs registration is
 /// added in M4 alongside the control plane.
@@ -92,6 +103,34 @@ public actor Notifications {
         _ = try? await URLSession.shared.data(for: req)
     }
 
+    /// Posts a local notification when a run or agent task completes.
+    public func notifyRunComplete(
+        hostName: String,
+        command: String,
+        exitCode: Int,
+        sessionID: String
+    ) async {
+        let ok = exitCode == 0
+        let content = UNMutableNotificationContent()
+        content.title = ok ? "Run complete · \(hostName)" : "Run failed · \(hostName)"
+        content.body = "\(command) — exit \(exitCode)"
+        content.sound = ok ? .default : .defaultCritical
+        content.threadIdentifier = sessionID
+        content.categoryIdentifier = "run-complete"
+        content.userInfo = [
+            "kind": "runComplete",
+            "sessionId": sessionID,
+            "exitCode": exitCode,
+        ]
+        let req = UNNotificationRequest(
+            identifier: "run-\(sessionID)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        do { try await UNUserNotificationCenter.current().add(req) }
+        catch { }
+    }
+
     public func registerCategories() {
         let approve = UNNotificationAction(
             identifier: "approval.approve",
@@ -103,12 +142,25 @@ public actor Notifications {
             title: "Reject",
             options: [.destructive]
         )
-        let category = UNNotificationCategory(
+        let approvalCategory = UNNotificationCategory(
             identifier: "approval",
             actions: [approve, reject],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+
+        let viewRun = UNNotificationAction(
+            identifier: "run.view",
+            title: "View",
+            options: [.foreground]
+        )
+        let runCategory = UNNotificationCategory(
+            identifier: "run-complete",
+            actions: [viewRun],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([approvalCategory, runCategory])
     }
 }

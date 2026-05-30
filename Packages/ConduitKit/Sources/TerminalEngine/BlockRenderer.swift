@@ -232,6 +232,14 @@ public final class BlockRenderer {
         blocks[idx].isStarred.toggle()
     }
 
+    /// Prepend finished blocks from persistent storage so the transcript is
+    /// non-empty after a reconnect or app relaunch. Called after the unified
+    /// shell re-opens; de-duplication is the caller's responsibility.
+    public func prepend(contentsOf restored: [Block]) {
+        guard !restored.isEmpty else { return }
+        blocks.insert(contentsOf: restored, at: 0)
+    }
+
     public func clear() {
         blocks.removeAll()
         openState.removeAll()

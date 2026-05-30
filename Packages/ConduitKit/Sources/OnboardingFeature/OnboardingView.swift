@@ -17,9 +17,9 @@ public struct OnboardingView: View {
         ZStack {
             t.surf0.ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 28) {
-                    PixelBox(color: t.accent, size: 60, gap: 6, subdivisions: 3)
-                        .padding(.top, 56)
+                VStack(spacing: 24) {
+                    PixelBox(color: t.accent, size: 56, gap: 6, subdivisions: 3)
+                        .padding(.top, 44)
                     VStack(spacing: 6) {
                         Text("Conduit")
                             .font(.dsDisplayPt(34, weight: .bold))
@@ -29,16 +29,13 @@ public struct OnboardingView: View {
                             .foregroundStyle(t.text3)
                             .multilineTextAlignment(.center)
                     }
-                    VStack(alignment: .leading, spacing: 16) {
+                    modelCallout
+                    VStack(alignment: .leading, spacing: 14) {
                         featureRow("Attach", "Connect to your remote workspace in seconds.", icon: "bolt")
                         featureRow("Survive", "Sessions stay alive across Wi-Fi / cellular.", icon: "antenna.radiowaves.left.and.right")
                         featureRow("Approve", "See and approve agent actions from your phone.", icon: "checkmark.seal")
                         featureRow("Review", "Diffs, logs, and tests on a phone-sized screen.", icon: "doc.text.magnifyingglass")
                     }
-                    Text("BYO host. BYO API key. No subscription required.")
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(t.text4)
-                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: 520)
                 .padding(.horizontal, 24)
@@ -52,14 +49,55 @@ public struct OnboardingView: View {
                          variant: .accent, size: .lg, fullWidth: true,
                          action: onContinue)
 
-                DSButton("Set up a workspace for me", systemImage: "wand.and.stars",
-                         variant: .secondary, size: .lg, fullWidth: true,
-                         action: onSetupWorkspace)
+                VStack(spacing: 4) {
+                    DSButton("Set up a workspace for me", systemImage: "wand.and.stars",
+                             variant: .secondary, size: .lg, fullWidth: true,
+                             action: onSetupWorkspace)
+                    Text("Provision a new Fly.io VM · Beta")
+                        .font(.dsSansPt(11))
+                        .foregroundStyle(t.text4)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
             .background(t.surf0)
             .overlay(Rectangle().fill(t.surf3.opacity(0.5)).frame(height: 0.5), alignment: .top)
+        }
+    }
+
+    private var modelCallout: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("How Conduit works", systemImage: "info.circle.fill")
+                .font(.dsSansPt(13, weight: .semibold))
+                .foregroundStyle(t.text2)
+            VStack(alignment: .leading, spacing: 7) {
+                modelPoint(icon: "server.rack", title: "Your server",
+                           detail: "Any SSH host — a VPS, cloud VM, or local machine.")
+                modelPoint(icon: "key.fill", title: "Your API key",
+                           detail: "Paste your Anthropic or OpenAI key. It goes directly to the provider, never to Conduit.")
+                modelPoint(icon: "person.badge.minus", title: "No account needed",
+                           detail: "No Conduit login. No subscription. Data stays on your device.")
+            }
+        }
+        .padding(14)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 0.5)
+        )
+    }
+
+    private func modelPoint(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(t.accent)
+                .frame(width: 16, alignment: .center)
+                .padding(.top, 1)
+            (Text(title).fontWeight(.semibold) + Text(" \(detail)"))
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

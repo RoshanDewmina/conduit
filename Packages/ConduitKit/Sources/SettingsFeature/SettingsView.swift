@@ -21,11 +21,21 @@ public final class SettingsViewModel {
         }
     }
     public var saveMessage: String?
+    public var saveIsError = false
     public var testKeyResult: String? = nil
+    public var testKeyProvider: AIProvider? = nil
     public var isTestingKey = false
 
     private let keyStore: any AIKeyStoring
+    private var lastTestDate: Date? = nil
     private static let defaultProviderKey = "dev.conduit.defaultAIProvider"
+    private static let testCooldown: TimeInterval = 10
+
+    public var canTestKey: Bool {
+        guard !isTestingKey else { return false }
+        guard let last = lastTestDate else { return true }
+        return Date().timeIntervalSince(last) >= Self.testCooldown
+    }
 
     public init(keyStore: any AIKeyStoring) {
         self.keyStore = keyStore
@@ -45,6 +55,13 @@ public final class SettingsViewModel {
     }
 
     public func save() async {
+        saveIsError = false
+        if !anthropicKey.isEmpty, let err = validateKey(anthropicKey, provider: .anthropic) {
+            saveMessage = err; saveIsError = true; return
+        }
+        if !openaiKey.isEmpty, let err = validateKey(openaiKey, provider: .openai) {
+            saveMessage = err; saveIsError = true; return
+        }
         do {
             if !anthropicKey.isEmpty {
                 try await keyStore.storeAPIKey(anthropicKey, provider: .anthropic)
@@ -55,20 +72,28 @@ public final class SettingsViewModel {
                 openaiKey = ""
             }
             await load()
-            saveMessage = "Saved."
+            saveMessage = "Keys saved."
+            Task { try? await Task.sleep(for: .seconds(3)); saveMessage = nil }
         } catch {
             saveMessage = error.localizedDescription
+            saveIsError = true
         }
     }
 
     public func remove(_ provider: AIProvider) async {
         try? await keyStore.deleteAPIKey(provider: provider)
         await load()
+        saveMessage = "\(provider.displayName) key removed."
+        saveIsError = false
+        Task { try? await Task.sleep(for: .seconds(3)); saveMessage = nil }
     }
 
     public func testKey(provider: AIProvider) async {
-        guard !isTestingKey else { return }
+        guard canTestKey else { return }
         isTestingKey = true
+        testKeyProvider = provider
+        lastTestDate = Date()
+        testKeyResult = nil
         defer { isTestingKey = false }
         do {
             let key = try await keyStore.loadAPIKey(provider: provider)
@@ -83,15 +108,33 @@ public final class SettingsViewModel {
                 return
             }
             let start = Date()
-            let response = try await client.complete(
+            _ = try await client.complete(
                 messages: [.user("Say hello in 5 words")],
                 system: nil,
                 maxTokens: 20
             )
             let latencyMs = Int(Date().timeIntervalSince(start) * 1000)
-            testKeyResult = "OK · \(latencyMs) ms · model: \(client.modelID)\n\"\(response)\""
+            testKeyResult = "OK · \(latencyMs) ms · \(client.modelID)"
         } catch {
             testKeyResult = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func validateKey(_ key: String, provider: AIProvider) -> String? {
+        switch provider {
+        case .anthropic:
+            guard key.hasPrefix("sk-ant-"), key.count >= 40 else {
+                return "Anthropic keys must start with \"sk-ant-\" and be at least 40 characters."
+            }
+            return nil
+        case .openai:
+            let validPrefix = key.hasPrefix("sk-proj-") || (key.hasPrefix("sk-") && !key.hasPrefix("sk-ant-"))
+            guard validPrefix, key.count >= 40 else {
+                return "OpenAI keys must start with \"sk-\" and be at least 40 characters."
+            }
+            return nil
+        case .xai:
+            return nil
         }
     }
 }
@@ -103,6 +146,8 @@ public struct SettingsView: View {
     let syncEngine: SyncEngine?
     let snippetRepo: SnippetRepository?
     let keyStore: KeyStore?
+    public var statusHeaderAgents: [AgentInfo] = []
+    public var onTapStatusHeader: () -> Void = {}
 
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @Environment(\.conduitTokens) private var t
@@ -111,16 +156,24 @@ public struct SettingsView: View {
     /// API Keys list in sync. Add `.xai` here once its client is implemented.
     private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
 
+    /// Gate for paid/stub surfaces not ready for the free TestFlight beta.
+    /// Flip to `true` when iCloud sync and billing are production-ready.
+    private static let showPaidSurfaces = false
+
     public init(
         viewModel: SettingsViewModel,
         syncEngine: SyncEngine? = nil,
         snippetRepo: SnippetRepository? = nil,
-        keyStore: KeyStore? = nil
+        keyStore: KeyStore? = nil,
+        statusHeaderAgents: [AgentInfo] = [],
+        onTapStatusHeader: @escaping () -> Void = {}
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
         self.snippetRepo = snippetRepo
         self.keyStore = keyStore
+        self.statusHeaderAgents = statusHeaderAgents
+        self.onTapStatusHeader = onTapStatusHeader
     }
 
     public var body: some View {
@@ -138,7 +191,12 @@ public struct SettingsView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, statusHeaderAgents.isEmpty ? 20 : 0)
+
+                    if !statusHeaderAgents.isEmpty {
+                        AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                            .padding(.bottom, 20)
+                    }
 
                     // ── AI Provider
                     // Only providers with a working client are listed, so this
@@ -176,11 +234,22 @@ public struct SettingsView: View {
                     }
                     .padding(.bottom, 4)
 
-                    HStack {
-                        Spacer()
-                        DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
-                            .padding(.trailing, 16)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let msg = vm.saveMessage {
+                            Text(msg)
+                                .font(.dsSansPt(13))
+                                .foregroundStyle(vm.saveIsError ? t.danger : t.accent)
+                                .padding(.horizontal, 20)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .transition(.opacity)
+                        }
+                        HStack {
+                            Spacer()
+                            DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
+                                .padding(.trailing, 16)
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: vm.saveMessage)
                     .padding(.bottom, 16)
 
                     // ── Appearance
@@ -190,12 +259,14 @@ public struct SettingsView: View {
                             Text("Theme")
                                 .font(.dsSansPt(13))
                                 .foregroundStyle(t.text3)
-                            Picker("Theme", selection: $colorSchemePref) {
-                                Text("System").tag("system")
-                                Text("Light").tag("light")
-                                Text("Dark").tag("dark")
-                            }
-                            .pickerStyle(.segmented)
+                            DSSegmentedPicker(
+                                options: [
+                                    (label: "System", value: "system"),
+                                    (label: "Light",  value: "light"),
+                                    (label: "Dark",   value: "dark"),
+                                ],
+                                selection: $colorSchemePref
+                            )
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
@@ -227,15 +298,35 @@ public struct SettingsView: View {
                         NavigationLink { TerminalSettingsView() } label: {
                             settingsNavRow("Terminal settings", icon: "terminal")
                         }
-                        divider
-                        NavigationLink { BillingView() } label: {
-                            settingsNavRow("Billing & usage", icon: "creditcard")
-                        }
-                        if let engine = syncEngine {
+                        // Billing and iCloud sync are not ready for the free beta.
+                        // showPaidSurfaces gates them back in when production-ready.
+                        if Self.showPaidSurfaces {
                             divider
-                            SyncStatusView(engine: engine)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                            NavigationLink { BillingView() } label: {
+                                settingsNavRow("Billing & usage", icon: "creditcard")
+                            }
+                            if let engine = syncEngine {
+                                divider
+                                SyncStatusView(engine: engine)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── About Conduit
+                    sectionHead("About Conduit")
+                    settingsCard {
+                        VStack(alignment: .leading, spacing: 0) {
+                            aboutRow(icon: "server.rack", title: "BYO host",
+                                     detail: "Connect to any SSH server you own or rent. Conduit does not provision or manage your infrastructure.")
+                            divider
+                            aboutRow(icon: "key", title: "BYO API key",
+                                     detail: "Your Anthropic or OpenAI key is stored in the device Keychain and sent directly to the provider.")
+                            divider
+                            aboutRow(icon: "person.badge.minus", title: "No account required",
+                                     detail: "No Conduit login. No subscription. All session data stays on-device.")
                         }
                     }
                     .padding(.bottom, 16)
@@ -250,12 +341,6 @@ public struct SettingsView: View {
             }
         }
         .task { await vm.load() }
-        .alert("Settings", isPresented: .constant(vm.saveMessage != nil), actions: {
-            Button("OK") { vm.saveMessage = nil }
-        }, message: { Text(vm.saveMessage ?? "") })
-        .alert("Key test", isPresented: .constant(vm.testKeyResult != nil), actions: {
-            Button("OK") { vm.testKeyResult = nil }
-        }, message: { Text(vm.testKeyResult ?? "") })
     }
 
     // MARK: - Provider row
@@ -287,22 +372,30 @@ public struct SettingsView: View {
                 .background(t.surfaceSunk)
                 .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
             if hasKey {
-                Button {
-                    Task { await vm.testKey(provider: provider) }
-                } label: {
-                    HStack(spacing: 6) {
-                        if vm.isTestingKey {
-                            ProgressView().scaleEffect(0.75)
-                            Text("Testing…")
-                        } else {
-                            Image(systemName: "bolt.fill").font(.system(size: 12))
-                            Text("Test key")
+                HStack(alignment: .top, spacing: 8) {
+                    Button {
+                        Task { await vm.testKey(provider: provider) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if vm.isTestingKey && vm.testKeyProvider == provider {
+                                ProgressView().scaleEffect(0.75)
+                                Text("Testing…")
+                            } else {
+                                Image(systemName: "bolt.fill").font(.system(size: 12))
+                                Text("Test key")
+                            }
                         }
+                        .font(.dsSansPt(13, weight: .medium))
+                        .foregroundStyle(vm.canTestKey ? t.accent : t.text3)
                     }
-                    .font(.dsSansPt(13, weight: .medium))
-                    .foregroundStyle(t.accent)
+                    .disabled(!vm.canTestKey)
+                    if let result = vm.testKeyResult, vm.testKeyProvider == provider {
+                        Text(result)
+                            .font(.dsMonoPt(12))
+                            .foregroundStyle(result.hasPrefix("Error") ? t.danger : t.accent)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .disabled(vm.isTestingKey)
             }
         }
         .padding(.horizontal, 16)
@@ -354,6 +447,28 @@ public struct SettingsView: View {
 
     private var divider: some View {
         Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 16)
+    }
+
+    private func aboutRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.accent)
+                .frame(width: 20, alignment: .center)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 

@@ -50,6 +50,8 @@ public struct WorkspacesView: View {
     public var onEdit: (Host) -> Void
     public var onAddHost: () -> Void
     public var onAddHostGated: (() -> Void)?
+    public var statusHeaderAgents: [AgentInfo] = []
+    public var onTapStatusHeader: () -> Void = {}
 
     #if DEBUG
     private static let freeHostLimit = Int.max // DEV: Pro unlocked for UX eval — restore before release
@@ -64,13 +66,17 @@ public struct WorkspacesView: View {
         onSelect: @escaping (Host) -> Void,
         onEdit: @escaping (Host) -> Void,
         onAddHost: @escaping () -> Void,
-        onAddHostGated: (() -> Void)? = nil
+        onAddHostGated: (() -> Void)? = nil,
+        statusHeaderAgents: [AgentInfo] = [],
+        onTapStatusHeader: @escaping () -> Void = {}
     ) {
         _vm = State(initialValue: viewModel)
         self.onSelect = onSelect
         self.onEdit = onEdit
         self.onAddHost = onAddHost
         self.onAddHostGated = onAddHostGated
+        self.statusHeaderAgents = statusHeaderAgents
+        self.onTapStatusHeader = onTapStatusHeader
     }
 
     public var body: some View {
@@ -96,6 +102,11 @@ public struct WorkspacesView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+
+                if !statusHeaderAgents.isEmpty {
+                    AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                        .padding(.top, 10)
+                }
 
                 DSSearchField(text: $searchText, placeholder: "Search or \"ssh user@host\"")
                     .padding(.horizontal, 16)
@@ -235,12 +246,12 @@ public struct WorkspacesView: View {
     // MARK: - Empty states
 
     private var emptyState: some View {
-        VStack {
+        VStack(spacing: 0) {
             Spacer()
             DSEmptyState(
                 icon: .server,
                 title: "No hosts yet",
-                subtitle: "Add your first remote host to get started.",
+                subtitle: "Add any SSH-accessible server — a VPS, cloud VM, or local machine. You'll need a hostname, username, and a password or Ed25519 key.",
                 action: ("Add host", handleAdd)
             )
             .padding(.horizontal, 24)

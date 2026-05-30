@@ -32,8 +32,8 @@ public final class LiveInboxViewModel: InboxViewModel {
         }
     }
 
-    override public func decide(_ id: ApprovalID, decision: Approval.Decision) {
-        super.decide(id, decision: decision)  // updates in-memory immediately
+    override public func decide(_ id: ApprovalID, decision: Approval.Decision, choiceIndex: Int? = nil) {
+        super.decide(id, decision: decision, choiceIndex: choiceIndex)  // updates in-memory immediately
         Task {
             try? await repository.decide(id: id, decision: decision)
             await onDecision?(id, decision)

@@ -139,7 +139,7 @@ public struct AgentIsland: View {
             HStack(spacing: 8) {
                 PixelBox(state: primary.state, size: 14)
                 Text(primary.state.islandLabel)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSansPt(15, weight: .semibold))
                     .foregroundStyle(PixelBox.stateColor(primary.state))
                     .lineLimit(1)
             }
@@ -173,7 +173,7 @@ public struct AgentIsland: View {
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(primary.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.dsSansPt(16, weight: .semibold))
                         .foregroundStyle(DI.ink).lineLimit(1)
                     (Text(primary.host + " · ").foregroundStyle(DI.ink3)
                      + Text(primary.cwd).foregroundStyle(DI.streaming))
@@ -229,7 +229,7 @@ private struct StateBadge: View {
         HStack(spacing: 6) {
             PixelBox(state: state, size: 11)
             Text(state.islandLabel)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.dsSansPt(12.5, weight: .semibold))
         }
         .foregroundStyle(PixelBox.stateColor(state))
         .padding(.init(top: 4, leading: 8, bottom: 4, trailing: 10))
@@ -280,8 +280,8 @@ private struct ProgressStats: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(k).font(DI.mono(9.5)).tracking(1.2).foregroundStyle(DI.ink3)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(v).font(.system(size: 15, weight: .semibold)).foregroundStyle(DI.ink)
-                if let sub { Text(sub).font(.system(size: 10)).foregroundStyle(DI.ink3) }
+                Text(v).font(.dsSansPt(15, weight: .semibold)).foregroundStyle(DI.ink)
+                if let sub { Text(sub).font(.dsSansPt(10)).foregroundStyle(DI.ink3) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -299,7 +299,7 @@ private struct InlineApproval: View {
             HStack(spacing: 8) {
                 PixelBox(state: .approval, size: 12)
                 Text("\(agent.name) wants to run")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.dsSansPt(12.5, weight: .semibold))
                     .foregroundStyle(DI.approval)
                 Spacer(minLength: 0)
                 if let risk = ap?.risk {
@@ -317,13 +317,13 @@ private struct InlineApproval: View {
                 .padding(.vertical, 9)
             HStack(spacing: 7) {
                 Button { onResolve(agent.id, .deny) } label: {
-                    Text("Deny").font(.system(size: 13, weight: .semibold))
+                    Text("Deny").font(.dsSansPt(13, weight: .semibold))
                         .foregroundStyle(DI.ink)
                         .frame(maxWidth: .infinity, minHeight: 34)
                         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 Button { onResolve(agent.id, .approve) } label: {
-                    Text("Approve").font(.system(size: 13, weight: .semibold))
+                    Text("Approve").font(.dsSansPt(13, weight: .semibold))
                         .foregroundStyle(Color(.sRGB, red: 0.10, green: 0.07, blue: 0, opacity: 1))
                         .frame(maxWidth: .infinity, minHeight: 34)
                         .background(DI.approval, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -358,7 +358,7 @@ private struct AgentRow: View {
                     .opacity(agent.state == .offline ? 0.55 : 1)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 7) {
-                        Text(agent.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(DI.ink)
+                        Text(agent.name).font(.dsSansPt(13.5, weight: .medium)).foregroundStyle(DI.ink)
                         Text(agent.host).font(DI.mono(10.5)).foregroundStyle(DI.ink3)
                     }
                     Text(agent.tool ?? agent.cwd).font(DI.mono(10.5)).foregroundStyle(DI.ink3)
@@ -366,11 +366,11 @@ private struct AgentRow: View {
                 }
                 Spacer(minLength: 0)
                 Text(agent.state.islandLabel)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.dsSansPt(11.5, weight: .semibold))
                     .foregroundStyle(PixelBox.stateColor(agent.state))
                 PixelBox(state: agent.state, size: 11)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.dsSansPt(10, weight: .bold))
                     .foregroundStyle(Color(.sRGB, red: 0.27, green: 0.255, blue: 0.235, opacity: 1))
             }
             .padding(.horizontal, 8).padding(.vertical, 9)
@@ -380,27 +380,6 @@ private struct AgentRow: View {
     }
 }
 
-// ============================================================
-// Always-dark Island palette (from island.css; oklch state colors reuse
-// the existing per-state sRGB approximations in PixelBox so glyph + island agree).
-// ============================================================
-
-enum DI {
-    static let ink  = Color(.sRGB, red: 0.957, green: 0.949, blue: 0.933, opacity: 1) // #f4f2ee
-    static let ink2 = Color(.sRGB, red: 0.608, green: 0.588, blue: 0.553, opacity: 1) // #9b968d
-    static let ink3 = Color(.sRGB, red: 0.400, green: 0.384, blue: 0.357, opacity: 1) // #66625b
-    // Match PixelBox.stateColor (kept as literals so DI stays nonisolated).
-    static let approval  = Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1)
-    static let streaming = Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1)
-
-    static func bg(approval: Bool) -> Color {
-        approval ? Color(.sRGB, red: 0.110, green: 0.075, blue: 0.020, opacity: 1) // #1c1305
-                 : .black
-    }
-    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
-}
 
 // ── height measurement (mirrors the design's ResizeObserver) ──
 private struct HeightKey: PreferenceKey {

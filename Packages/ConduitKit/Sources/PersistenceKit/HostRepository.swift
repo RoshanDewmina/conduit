@@ -18,13 +18,28 @@ public actor HostRepository {
     }
 
     public func upsert(_ host: ConduitCore.Host) async throws {
+        try await upsertInternal(host, modifiedAt: .now)
+    }
+
+    /// Called by SyncEngine to apply a remote record, preserving its modifiedAt timestamp.
+    /// Also clears any pending tombstone for this ID (remote re-creation wins over local deletion).
+    public func upsertSync(_ host: ConduitCore.Host) async throws {
+        try await upsertInternal(host, modifiedAt: host.modifiedAt, clearTombstone: true)
+    }
+
+    private func upsertInternal(
+        _ host: ConduitCore.Host,
+        modifiedAt: Date,
+        clearTombstone: Bool = false
+    ) async throws {
+        let tagsJSON = (try? String(data: JSONEncoder().encode(host.tags), encoding: .utf8)) ?? "[]"
         try await db.dbWriter.write { db in
             try db.execute(sql: """
                 INSERT INTO hosts (id, name, hostname, port, username, authMethodType, authMethodKeyTag,
                                    tags, hostKeyFingerprint, preferredShell, tmuxSessionName,
                                    startupCommand, autoResume,
-                                   createdAt, lastConnectedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   createdAt, lastConnectedAt, modifiedAt, syncedKeyHint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   name=excluded.name, hostname=excluded.hostname, port=excluded.port,
                   username=excluded.username, authMethodType=excluded.authMethodType,
@@ -32,7 +47,8 @@ public actor HostRepository {
                   hostKeyFingerprint=excluded.hostKeyFingerprint,
                   preferredShell=excluded.preferredShell, tmuxSessionName=excluded.tmuxSessionName,
                   startupCommand=excluded.startupCommand, autoResume=excluded.autoResume,
-                  lastConnectedAt=excluded.lastConnectedAt
+                  lastConnectedAt=excluded.lastConnectedAt,
+                  modifiedAt=excluded.modifiedAt, syncedKeyHint=excluded.syncedKeyHint
             """, arguments: [
                 host.id.uuidString,
                 host.name,
@@ -41,7 +57,7 @@ public actor HostRepository {
                 host.username,
                 Self.authType(host.authMethod),
                 Self.authKeyTag(host.authMethod),
-                (try? String(data: JSONEncoder().encode(host.tags), encoding: .utf8)) ?? "[]",
+                tagsJSON,
                 host.hostKeyFingerprint,
                 host.preferredShell,
                 host.tmuxSessionName,
@@ -49,12 +65,32 @@ public actor HostRepository {
                 host.autoResume,
                 host.createdAt,
                 host.lastConnectedAt,
+                modifiedAt,
+                host.syncedKeyHint,
             ])
+            if clearTombstone {
+                try db.execute(
+                    sql: "DELETE FROM sync_tombstones WHERE id = ? AND recordType = 'Host'",
+                    arguments: [host.id.uuidString]
+                )
+            }
         }
     }
 
+    /// User-initiated delete: removes the record and records a tombstone for sync propagation.
     public func delete(id: HostID) async throws {
-        _ = try await db.dbWriter.write { db in
+        try await db.dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM hosts WHERE id = ?", arguments: [id.uuidString])
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO sync_tombstones(id, recordType, deletedAt) VALUES (?, 'Host', ?)",
+                arguments: [id.uuidString, Date.now]
+            )
+        }
+    }
+
+    /// Sync-driven delete: removes the record without adding a tombstone (remote already deleted it).
+    public func deleteFromSync(id: HostID) async throws {
+        try await db.dbWriter.write { db in
             try db.execute(sql: "DELETE FROM hosts WHERE id = ?", arguments: [id.uuidString])
         }
     }
@@ -92,6 +128,7 @@ public actor HostRepository {
         let auth = try decodeAuth(typeStr: row["authMethodType"] ?? "password",
                                    keyTag: row["authMethodKeyTag"])
 
+        let createdAt: Date = row["createdAt"] ?? .now
         return ConduitCore.Host(
             id: HostID(uuid),
             name: row["name"] ?? "",
@@ -105,8 +142,10 @@ public actor HostRepository {
             tmuxSessionName: row["tmuxSessionName"],
             startupCommand: row["startupCommand"],
             autoResume: row["autoResume"] ?? true,
-            createdAt: row["createdAt"] ?? .now,
-            lastConnectedAt: row["lastConnectedAt"]
+            createdAt: createdAt,
+            lastConnectedAt: row["lastConnectedAt"],
+            modifiedAt: row["modifiedAt"] ?? createdAt,
+            syncedKeyHint: row["syncedKeyHint"]
         )
     }
 

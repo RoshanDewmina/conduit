@@ -99,6 +99,14 @@ public final class SessionViewModel {
     /// injection (which would paste the clear/bootstrap into a launched app).
     private var unifiedIntegrationReady = false
 
+    /// When `true`, the next OSC 133 A callback is silently skipped.
+    /// The integration script's `precmd` fires a `133;A` before the
+    /// screen-clear runs, producing an empty ghost block (RUN › COMMAND exit 0).
+    /// Setting this flag before injecting the script swallows that `133;A`;
+    /// the subsequent clear's own `133;A` then forms the correct idle block.
+    /// Gated by "suppressEmptySetupBlock" UserDefaults key (default: on).
+    private var suppressNextPromptBlock: Bool = false
+
     // MARK: - Phase 7: Belt-and-suspenders interactive-CLI hint
     //
     // If cursor-positioning sequences arrive while the active block is still in
@@ -122,10 +130,29 @@ public final class SessionViewModel {
     private var reconnectEngine: AutoReconnectEngine?
     private var keepAliveTask: Task<Void, Never>?
 
+    /// Set `true` before an intentional `closeUnifiedShell()` so the bridge-task
+    /// completion handler does not trigger a reconnect loop.
+    private var isIntentionalClose = false
+
+    /// Background task pumping `PTYBridge.start()`. Stored so we can cancel it
+    /// on intentional close before the bridge task reads `isIntentionalClose`.
+    private var bridgeTask: Task<Void, Never>?
+
+    /// Consecutive auth failures since last successful connect. Resets on success.
+    public private(set) var consecutiveAuthFailures = 0
+
+    /// Raised after `consecutiveAuthFailures >= 2`. The UI should re-present
+    /// `PasswordPromptView` and call `retryWithNewPassword(_:)`.
+    public private(set) var awaitingPasswordRetry = false
+
     public func handleSceneActive() async {
-        let connected = await sshSession.isConnected
-        if !connected && status != .connecting {
-            await attemptReconnect()
+        switch status {
+        case .connecting, .reconnecting: return
+        case .connected:
+            let alive = await sshSession.isConnected
+            if !alive { await startReconnectLoop() }
+        default:
+            break
         }
     }
 
@@ -133,27 +160,72 @@ public final class SessionViewModel {
         tmuxSessionName = sessionName
     }
 
-    private func attemptReconnect() async {
+    // MARK: - Reconnect orchestration
+
+    /// Central reconnect entry point. Guards against concurrent loops.
+    private func startReconnectLoop() async {
+        guard case .connected = status else { return }  // already reconnecting / failed / disconnected
+        await closeUnifiedShell()
         status = .reconnecting(attempt: 1)
+        await reconnectEngine?.triggerWithRetry()
+        // After triggerWithRetry returns: status is .connected (success) or .failed (maxAttempts hit)
+    }
+
+    /// Called by the engine's `onReconnect` closure — one attempt per invocation.
+    @MainActor
+    private func engineReconnectCallback() async {
+        // Status will be reconnecting(attempt:N) already set by the engine/loop
         do {
             try await sshSession.attemptReconnect()
             if let name = tmuxSessionName {
                 let tmux = TmuxClient(session: sshSession)
-                try await tmux.attachOrCreate(name: name)
+                try? await tmux.attachOrCreate(name: name)
             }
             status = .connected
             await openUnifiedShell()
+            await loadPersistedBlocks()
             await refreshCWD()
+            await reconnectEngine?.reportReconnectOutcome(succeeded: true)
         } catch {
-            status = .failed(reason: "Reconnect failed: \(error.localizedDescription)")
+            await reconnectEngine?.reportReconnectOutcome(succeeded: false)
         }
+    }
+
+    /// Called by the engine's `onFailed` closure — all attempts exhausted.
+    @MainActor
+    private func onReconnectPermanentlyFailed(hostName: String) {
+        if case .reconnecting = status {
+            status = .failed(reason: "Could not reconnect to \(hostName) after \(AutoReconnectEngine.maxAttempts) attempts.")
+        }
+    }
+
+    /// Retry connecting with a new password after auth failures.
+    public func retryWithNewPassword(_ password: String) async {
+        awaitingPasswordRetry = false
+        consecutiveAuthFailures = 0
+        await sshSession.clearCachedCredential()
+        credentialProvider = { .password(password) }
+        await connect()
+    }
+
+    /// Cancel a pending password-retry prompt (dismiss without re-authenticating).
+    public func cancelPasswordRetry() {
+        awaitingPasswordRetry = false
+        consecutiveAuthFailures = 0
+        if case .reconnecting = status { status = .failed(reason: "Authentication cancelled.") }
+    }
+
+    // Legacy entry point — kept for `reconnect()` and external callers.
+    private func attemptReconnect() async {
+        await engineReconnectCallback()
     }
 
     // MARK: - Dependencies
 
     private let sshSession: SSHSession
     public var session: SSHSession { sshSession }
-    private let credentialProvider: @Sendable () async throws -> SSHCredential
+    // `var` so `retryWithNewPassword(_:)` can update it for a password-retry flow.
+    private var credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
     private let aiClient: (any AIClient)?
     private let blockRepo: BlockRepository?
@@ -222,9 +294,23 @@ public final class SessionViewModel {
     public func connect() async {
         guard status != .connected else { return }
         status = .connecting
+        // Spin up a fresh reconnect engine each explicit connect so prior
+        // failure counts and stopped state don't carry over.
+        await reconnectEngine?.stop()
+        reconnectEngine = AutoReconnectEngine(
+            hostName: host.name,
+            onReconnect: { [weak self] in
+                await self?.engineReconnectCallback()
+            },
+            onFailed: { [weak self] name in
+                await self?.onReconnectPermanentlyFailed(hostName: name)
+            }
+        )
+        await reconnectEngine?.start()
         do {
             let cred = try await credentialProvider()
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
+            consecutiveAuthFailures = 0
             status = .connected
             applyScreenSleepPolicy(connected: true)
             startKeepAlive()
@@ -236,6 +322,7 @@ public final class SessionViewModel {
             }
             await refreshCWD()
             await openUnifiedShell()
+            await loadPersistedBlocks()
             // Phase 1: wait until shell integration is confirmed live (the first
             // OSC 133 A created a prompt block) before sending any connect-time
             // command. Otherwise the command launches *before* the async
@@ -271,8 +358,21 @@ public final class SessionViewModel {
             pendingHostKeyFingerprint = fp
             status = .disconnected
         } catch let err as ConduitError {
+            if case .authFailed = err {
+                consecutiveAuthFailures += 1
+                // After 2 consecutive auth failures, prompt for a new password
+                // rather than leaving the session in a dead .failed state.
+                if consecutiveAuthFailures >= 2 {
+                    awaitingPasswordRetry = true
+                    status = .failed(reason: err.errorDescription ?? "authentication failed")
+                    return
+                }
+            } else {
+                consecutiveAuthFailures = 0
+            }
             status = .failed(reason: err.errorDescription ?? "connection failed")
         } catch {
+            consecutiveAuthFailures = 0
             status = .failed(reason: error.localizedDescription)
         }
     }
@@ -295,11 +395,12 @@ public final class SessionViewModel {
     }
 
     public func disconnect() async {
+        await reconnectEngine?.stop()  // halt any in-progress reconnect loop
         stopKeepAlive()
         integrationFallbackTask?.cancel()
         integrationFallbackTask = nil
         await deescalate()
-        await closeUnifiedShell()
+        await closeUnifiedShell()  // sets isIntentionalClose = true internally
         await sshSession.disconnect()
         status = .disconnected
         applyScreenSleepPolicy(connected: false)
@@ -317,7 +418,17 @@ public final class SessionViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { break }
-                _ = try? await self.sshSession.executeCollected(":")
+                // Probe the connection with a timeout. If the probe fails, the
+                // TCP link is silently dead — mark disconnected and trigger reconnect.
+                let alive = await self.sshSession.ping(timeout: .seconds(10))
+                if !alive, !Task.isCancelled {
+                    await MainActor.run { [weak self] in
+                        guard let self, case .connected = self.status else { return }
+                        self.status = .reconnecting(attempt: 1)
+                    }
+                    await self.startReconnectLoop()
+                    break  // reconnect loop owns the state from here
+                }
             }
         }
     }
@@ -454,11 +565,28 @@ public final class SessionViewModel {
         }
     }
 
+    // MARK: - History restore (A3)
+
+    /// Load the most recent finished blocks for this session from persistent
+    /// storage and prepend them to the transcript. De-dupes by block ID so
+    /// reconnects don't show duplicate rows.
+    private func loadPersistedBlocks() async {
+        guard let repo = blockRepo else { return }
+        guard let history = try? await repo.recent(for: sessionID, limit: 50) else { return }
+        let existingIDs = Set(blocks.blocks.map(\.id))
+        // `recent` returns newest-first; reverse for chronological order in transcript.
+        let toInsert = history.reversed().filter { !existingIDs.contains($0.id) }
+        guard !toInsert.isEmpty else { return }
+        blocks.prepend(contentsOf: Array(toInsert))
+    }
+
     // MARK: - Unified PTY lifecycle
 
     /// Open a long-lived PTY shell.  Called on connect and after reconnect.
     private func openUnifiedShell() async {
         guard status == .connected, unifiedShell == nil else { return }
+        // Mark as intentional=false so any unexpected drop triggers reconnect.
+        isIntentionalClose = false
 
         let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
         let fontSize = CGFloat(storedSize > 0 ? storedSize : 11.0)
@@ -558,6 +686,16 @@ public final class SessionViewModel {
                             // Integration just came alive after fallback.
                             self.isRaw = false
                             self.activeShell = nil
+                        }
+
+                        // Ghost-block suppression (see suppressNextPromptBlock).
+                        // The integration script's precmd fires 133;A before the
+                        // screen-clear runs. Swallowing it here prevents an empty
+                        // block from appearing; the clear's own 133;A creates the
+                        // correct idle promptEditing block immediately after.
+                        if self.suppressNextPromptBlock {
+                            self.suppressNextPromptBlock = false
+                            return
                         }
 
                         // Finalize any lingering block that didn't get a 133;D
@@ -661,7 +799,14 @@ public final class SessionViewModel {
             unifiedBridge = bridge
             rawFeedHandle = handle
 
-            Task { await bridge.start() }
+            // Pump bytes. When bridge.start() returns, the remote PTY closed.
+            // If this wasn't user-initiated, trigger the reconnect engine.
+            bridgeTask = Task { [weak self] in
+                await bridge.start()
+                guard let self, !self.isIntentionalClose else { return }
+                // Unexpected drop (network loss, server restart, etc.)
+                await self.onUnexpectedShellDrop()
+            }
 
             // Two-phase shell integration injection (same as before).
             Task {
@@ -680,6 +825,14 @@ public final class SessionViewModel {
                 } else {
                     UserDefaults.standard.set("posix", forKey: "conduitShellDetected")
                     integrationScript = ShellIntegrationScript.bootstrapForPOSIXShells()
+                }
+                // Arm the ghost-block suppressor before the script lands.
+                // Default: on. Toggle with "suppressEmptySetupBlock" UserDefaults key.
+                let shouldSuppress = UserDefaults.standard.object(forKey: "suppressEmptySetupBlock") == nil
+                    ? true
+                    : UserDefaults.standard.bool(forKey: "suppressEmptySetupBlock")
+                if shouldSuppress {
+                    await MainActor.run { self.suppressNextPromptBlock = true }
                 }
                 try? await shell.send(Array((integrationScript + "\n").utf8))
                 try? await Task.sleep(for: .milliseconds(300))
@@ -716,6 +869,11 @@ public final class SessionViewModel {
     }
 
     private func closeUnifiedShell() async {
+        // Signal the bridge task that this close is intentional before the
+        // channel actually closes (the task checks this flag on completion).
+        isIntentionalClose = true
+        bridgeTask?.cancel()
+        bridgeTask = nil
         integrationFallbackTask?.cancel()
         integrationFallbackTask = nil
         await unifiedShell?.close()
@@ -725,6 +883,16 @@ public final class SessionViewModel {
         isExecutingUnified = false
         unifiedIntegrationReady = false
         rawFeedHandle = nil
+    }
+
+    /// Called when the bridge's byte stream ends unexpectedly (not via disconnect()).
+    private func onUnexpectedShellDrop() async {
+        guard case .connected = status else { return }
+        await closeUnifiedShell()
+        status = .reconnecting(attempt: 1)
+        // Start the backoff-aware retry loop via the reconnect engine.
+        await reconnectEngine?.triggerWithRetry()
+        // After triggerWithRetry returns: .connected (success) or .failed (maxAttempts)
     }
 
     // MARK: - Alt-screen: de-escalation (Phase 5 — no user-facing escalation)

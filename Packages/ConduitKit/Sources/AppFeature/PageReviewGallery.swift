@@ -318,9 +318,42 @@ private struct SettingsReviewContent: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
             }
+
+            settingsSection("ABOUT CONDUIT") {
+                aboutSettingsRow(icon: "server.rack", title: "BYO host",
+                    detail: "Connect to any SSH server you own or rent. Conduit does not provision or manage your infrastructure.")
+                settingsDivider
+                aboutSettingsRow(icon: "key", title: "BYO API key",
+                    detail: "Your Anthropic or OpenAI key is stored in the device Keychain and sent directly to the provider.")
+                settingsDivider
+                aboutSettingsRow(icon: "person.badge.minus", title: "No account required",
+                    detail: "No Conduit login. No subscription. All session data stays on-device.")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
+    }
+
+    private func aboutSettingsRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.accent)
+                .frame(width: 20, alignment: .center)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func settingsSection<C: View>(_ head: String, @ViewBuilder content: () -> C) -> some View {
@@ -364,6 +397,72 @@ private struct SettingsReviewContent: View {
 
     private var settingsDivider: some View {
         Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 16)
+    }
+}
+
+// MARK: - Isolated About section gallery (CONDUIT_GALLERY=settings-about)
+
+struct SettingsAboutGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        ZStack {
+            t.bg.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                Text("ABOUT CONDUIT")
+                    .font(.dsMonoPt(11))
+                    .tracking(0.8)
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 60)
+                    .padding(.bottom, 8)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    aboutRow(icon: "server.rack", title: "BYO host",
+                        detail: "Connect to any SSH server you own or rent. Conduit does not provision or manage your infrastructure.")
+                    Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 52)
+                    aboutRow(icon: "key", title: "BYO API key",
+                        detail: "Your Anthropic or OpenAI key is stored in the device Keychain and sent directly to the provider.")
+                    Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 52)
+                    aboutRow(icon: "person.badge.minus", title: "No account required",
+                        detail: "No Conduit login. No subscription. All session data stays on-device.")
+                }
+                .background(t.surface)
+                .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: t.r4, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                .padding(.horizontal, 16)
+
+                Text("Keys are stored on-device (Keychain) and sent directly to the provider over TLS — never to Conduit servers.")
+                    .font(.dsSansPt(12))
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                Spacer()
+            }
+        }
+    }
+
+    private func aboutRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.accent)
+                .frame(width: 20, alignment: .center)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 #endif

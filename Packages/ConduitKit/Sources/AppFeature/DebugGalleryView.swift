@@ -3,6 +3,7 @@ import SwiftUI
 import ConduitCore
 import DesignSystem
 import SessionFeature
+import InboxFeature
 import TerminalEngine
 import OnboardingFeature
 import DiffFeature
@@ -17,6 +18,8 @@ struct DebugGalleryView: View {
     @State private var showBlocks = false
     @State private var showLiveSession = false
     @State private var showAgentHUD = false
+    @State private var showTypedInbox = false
+    @State private var showFeatures = false
 
     var body: some View {
         switch route {
@@ -31,11 +34,14 @@ struct DebugGalleryView: View {
         case "hosts":          HostsReviewScreen()
         case "inbox":          InboxReviewScreen()
         case "settings":       SettingsReviewScreen()
+        case "settings-about": SettingsAboutGalleryScreen()
         case "blocks":         BlocksReviewScreen()
         case "session":        DebugSessionHarness()
         case "hud":            AgentHUDGalleryScreen()
         case "statusheader":   AgentStatusHeaderGalleryScreen()
         case "keyboard":       KeyboardGalleryScreen()
+        case "inbox-typed":    TypedInboxGalleryScreen()
+        case "features":       FeaturesGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
         }
@@ -110,6 +116,28 @@ struct DebugGalleryView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showTypedInbox) {
+            ZStack(alignment: .topTrailing) {
+                TypedInboxGalleryScreen()
+                Button { showTypedInbox = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(12)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showFeatures) {
+            ZStack(alignment: .topTrailing) {
+                FeaturesGalleryScreen()
+                Button { showFeatures = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(12)
+                }
+            }
+        }
     }
 
     private var reviewHeader: some View {
@@ -121,7 +149,8 @@ struct DebugGalleryView: View {
                 .font(.dsMonoPt(11))
                 .foregroundStyle(t.text3)
 
-            HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+              HStack(spacing: 8) {
                 DSButton(
                     "Live SSH Terminal",
                     systemImage: "terminal",
@@ -153,6 +182,23 @@ struct DebugGalleryView: View {
                     size: .sm,
                     mono: true
                 ) { showAgentHUD = true }
+
+                DSButton(
+                    "Typed Inbox",
+                    systemImage: "tray.2",
+                    variant: .secondary,
+                    size: .sm,
+                    mono: true
+                ) { showTypedInbox = true }
+
+                DSButton(
+                    "Features",
+                    systemImage: "sparkles",
+                    variant: .accent,
+                    size: .sm,
+                    mono: true
+                ) { showFeatures = true }
+              }
             }
             .padding(.top, 6)
         }
@@ -987,6 +1033,300 @@ private struct AgentStatusHeaderGalleryScreen: View {
             .foregroundStyle(t.termText3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20).padding(.top, 30).padding(.bottom, 6)
+    }
+}
+
+// MARK: - Typed Inbox gallery (CONDUIT_GALLERY=inbox-typed)
+//
+// Renders all three new inbox card types (standard command, MCP call, AskQuestion)
+// plus the DSAutonomyPresetBar in both light and dark, without any SSH connection.
+
+private struct TypedInboxGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+    @State private var preset: AutonomyPreset = .alwaysAsk
+    @State private var vm = InboxViewModel(approvals: TypedInboxGalleryScreen.mockApprovals())
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Typed Inbox")
+                        .font(.dsDisplayPt(28, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                }
+                .padding(.horizontal, 20).padding(.top, 14)
+
+                DSAutonomyPresetBar(preset: $preset)
+                    .padding(.top, 8)
+
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(vm.approvals.filter { $0.isPending }) { approval in
+                            pendingCard(approval)
+                                .padding(.horizontal, 16)
+                        }
+                    }
+                    .padding(.top, 12).padding(.bottom, 24)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pendingCard(_ approval: Approval) -> some View {
+        switch approval.kind {
+        case .askQuestion:
+            DSAskQuestionCard(
+                agentKey: .claudeCode,
+                agentName: "Claude Code",
+                timeLabel: "just now",
+                question: approval.question ?? "",
+                choices: approval.choices ?? [],
+                onAnswer: { idx in vm.decide(approval.id, decision: .approved, choiceIndex: idx) }
+            )
+        case .callMCP:
+            DSMCPCallCard(
+                agentKey: .claudeCode,
+                agentName: "Claude Code",
+                timeLabel: "1m",
+                toolName: approval.command ?? "read_file",
+                args: approval.patch,
+                risk: approval.risk.rawValue,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
+            )
+        default:
+            DSApprovalCard(
+                agentKey: .claudeCode,
+                risk: approval.risk.rawValue,
+                timeLabel: "2m",
+                agentName: "Claude Code",
+                action: actionLabel(approval.kind),
+                hostLabel: approval.cwd,
+                command: approval.command,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
+            )
+        }
+    }
+
+    private func actionLabel(_ kind: Approval.Kind) -> String {
+        switch kind {
+        case .command:   "run a command"
+        case .fileWrite: "write a file"
+        case .fileDelete:"delete a file"
+        case .callMCP:   "call an MCP tool"
+        default:         "perform an action"
+        }
+    }
+
+    private static func mockApprovals() -> [Approval] {
+        let sid = SessionID()
+        return [
+            Approval(
+                sessionID: sid, agent: .claudeCode, kind: .askQuestion,
+                cwd: "~/repo/api", risk: .low,
+                question: "Which branch should I target for this PR?",
+                choices: ["main", "develop", "staging", "hotfix/auth"]
+            ),
+            Approval(
+                sessionID: sid, agent: .claudeCode, kind: .callMCP,
+                command: "read_file",
+                patch: "path: /etc/nginx/nginx.conf",
+                cwd: "~/infra", risk: .low
+            ),
+            Approval(
+                sessionID: sid, agent: .claudeCode, kind: .command,
+                command: "rm -rf ./dist && npm run build",
+                cwd: "~/repo/web", risk: .medium
+            ),
+            Approval(
+                sessionID: sid, agent: .codex, kind: .fileWrite,
+                command: "src/auth/middleware.ts",
+                cwd: "~/repo/api", risk: .high
+            ),
+        ]
+    }
+}
+
+// MARK: - Features gallery (CONDUIT_GALLERY=features)
+//
+// Comprehensive overview of all four prototyped features: approval bar, media
+// attachment, typed inbox, and APNs push notifications.
+
+private struct FeaturesGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+
+                featureBlock("(a) SHORTCUT BAR — approve/reject banner") {
+                    approvalBannerPreview
+                }
+
+                featureBlock("(b) MEDIA ATTACHMENT — composer paperclip") {
+                    attachmentPreview
+                }
+
+                featureBlock("(c) TYPED APPROVALS — AskQuestion card") {
+                    askQuestionPreview
+                }
+
+                featureBlock("(c) TYPED APPROVALS — MCP call card") {
+                    mcpCardPreview
+                }
+
+                featureBlock("(c) AUTONOMY PRESETS") {
+                    autonomyPresetPreview
+                }
+
+                featureBlock("(d) APNs — notification categories") {
+                    apnsPreview
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(t.bg.ignoresSafeArea())
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Agent Features").font(.dsDisplayPt(28, weight: .bold)).foregroundStyle(t.text)
+            Text("Prototype — flagged · verified in gallery light+dark")
+                .font(.dsMonoPt(11)).foregroundStyle(t.text3)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 16)
+    }
+
+    private func featureBlock<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.dsMonoPt(10, weight: .medium)).tracking(1.2)
+                .foregroundStyle(t.text3)
+                .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 10)
+            content()
+            Rectangle().fill(t.border).frame(height: 1).padding(.top, 16)
+        }
+    }
+
+    // (a) Approval banner mockup
+    private var approvalBannerPreview: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.warn)
+                Text("1 pending approval")
+                    .font(.dsMonoPt(12, weight: .semibold))
+                    .foregroundStyle(t.text2)
+                Spacer()
+                DSButton("DENY",    variant: .destructive, size: .sm, mono: true, action: {})
+                DSButton("APPROVE", variant: .primary,     size: .sm, mono: true, action: {})
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(t.warnSoft)
+            .overlay(Rectangle().fill(t.warn.opacity(0.25)).frame(height: 1), alignment: .bottom)
+
+            HStack(spacing: 6) {
+                Image(systemName: "terminal")
+                    .font(.system(size: 11))
+                    .foregroundStyle(t.text3)
+                Text("$ git push origin main")
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(t.accent)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(t.surface)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .padding(.horizontal, 16)
+    }
+
+    // (b) Attachment button mockup
+    private var attachmentPreview: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "paperclip")
+                .font(.title3).foregroundStyle(t.accent)
+                .padding(8)
+                .background(t.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Photo Library / Files / Camera")
+                    .font(.dsSansPt(13, weight: .medium)).foregroundStyle(t.text)
+                Text("Tap paperclip → menu → selected media attached inline")
+                    .font(.dsMonoPt(11)).foregroundStyle(t.text3)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // (c) AskQuestion preview
+    private var askQuestionPreview: some View {
+        DSAskQuestionCard(
+            agentKey: .claudeCode,
+            agentName: "Claude Code",
+            timeLabel: "just now",
+            question: "Which branch should I open the pull request against?",
+            choices: ["main", "develop", "staging"],
+            onAnswer: { _ in }
+        )
+        .padding(.horizontal, 16)
+    }
+
+    // (c) MCP call preview
+    private var mcpCardPreview: some View {
+        DSMCPCallCard(
+            agentKey: .claudeCode,
+            agentName: "Claude Code",
+            timeLabel: "30s",
+            toolName: "execute_command",
+            args: "cmd: \"docker ps -a\"",
+            risk: 1,
+            onDeny: {},
+            onApprove: {}
+        )
+        .padding(.horizontal, 16)
+    }
+
+    // (c) Autonomy preset
+    @State private var preset: AutonomyPreset = .autoReads
+    private var autonomyPresetPreview: some View {
+        DSAutonomyPresetBar(preset: $preset)
+    }
+
+    // (d) APNs status
+    private var apnsPreview: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            apnsRow("registerForRemoteNotifications()", done: true)
+            apnsRow("registerCategories() — approval + run-complete", done: true)
+            apnsRow("UNUserNotificationCenterDelegate — foreground banners", done: true)
+            apnsRow("Push backend POST /run-complete endpoint", done: true)
+            apnsRow("Notification action routing via NotificationCenter", done: true)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func apnsRow(_ title: String, done: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(done ? t.ok : t.text4)
+                .font(.system(size: 15))
+            Text(title)
+                .font(.dsMonoPt(12))
+                .foregroundStyle(done ? t.text : t.text4)
+            Spacer()
+        }
     }
 }
 

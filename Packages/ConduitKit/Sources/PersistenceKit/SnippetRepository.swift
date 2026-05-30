@@ -17,6 +17,7 @@ extension Snippet: FetchableRecord {
         let hostTags = (try? JSONDecoder().decode([String].self, from: Data(hostTagsJSON.utf8))) ?? []
         let tags = (try? JSONDecoder().decode([String].self, from: Data(tagsJSON.utf8))) ?? []
         let arguments = (try? JSONDecoder().decode([SnippetArgument].self, from: Data(argumentsJSON.utf8))) ?? []
+        let createdAt: Date = row["createdAt"] ?? .now
 
         self.init(
             id: SnippetID(idUUID),
@@ -26,8 +27,9 @@ extension Snippet: FetchableRecord {
             tags: tags,
             arguments: arguments,
             useCount: row["useCount"] ?? 0,
-            createdAt: row["createdAt"] ?? .now,
-            lastUsedAt: row["lastUsedAt"]
+            createdAt: createdAt,
+            lastUsedAt: row["lastUsedAt"],
+            modifiedAt: row["modifiedAt"] ?? createdAt
         )
     }
 }
@@ -63,15 +65,28 @@ public actor SnippetRepository {
         }
     }
 
-    /// Inserts or updates a snippet.
+    /// Inserts or updates a snippet, bumping modifiedAt to now.
     public func upsert(_ snippet: Snippet) async throws {
+        try await upsertInternal(snippet, modifiedAt: .now)
+    }
+
+    /// Called by SyncEngine to apply a remote record, preserving its modifiedAt timestamp.
+    public func upsertSync(_ snippet: Snippet) async throws {
+        try await upsertInternal(snippet, modifiedAt: snippet.modifiedAt, clearTombstone: true)
+    }
+
+    private func upsertInternal(
+        _ snippet: Snippet,
+        modifiedAt: Date,
+        clearTombstone: Bool = false
+    ) async throws {
         let hostTagsJSON = (try? String(data: JSONEncoder().encode(snippet.hostTags), encoding: .utf8)) ?? "[]"
         let tagsJSON = (try? String(data: JSONEncoder().encode(snippet.tags), encoding: .utf8)) ?? "[]"
         let argumentsJSON = (try? String(data: JSONEncoder().encode(snippet.arguments), encoding: .utf8)) ?? "[]"
         try await db.dbWriter.write { db in
             try db.execute(sql: """
-                INSERT INTO snippets (id, name, body, hostTags, tags, arguments, useCount, createdAt, lastUsedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO snippets (id, name, body, hostTags, tags, arguments, useCount, createdAt, lastUsedAt, modifiedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   name=excluded.name,
                   body=excluded.body,
@@ -79,7 +94,8 @@ public actor SnippetRepository {
                   tags=excluded.tags,
                   arguments=excluded.arguments,
                   useCount=excluded.useCount,
-                  lastUsedAt=excluded.lastUsedAt
+                  lastUsedAt=excluded.lastUsedAt,
+                  modifiedAt=excluded.modifiedAt
             """, arguments: [
                 snippet.id.uuidString,
                 snippet.name,
@@ -90,13 +106,31 @@ public actor SnippetRepository {
                 snippet.useCount,
                 snippet.createdAt,
                 snippet.lastUsedAt,
+                modifiedAt,
             ])
+            if clearTombstone {
+                try db.execute(
+                    sql: "DELETE FROM sync_tombstones WHERE id = ? AND recordType = 'Snippet'",
+                    arguments: [snippet.id.uuidString]
+                )
+            }
         }
     }
 
-    /// Deletes the snippet with the given id.
+    /// User-initiated delete: removes the record and records a tombstone for sync propagation.
     public func delete(id: SnippetID) async throws {
-        _ = try await db.dbWriter.write { db in
+        try await db.dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM snippets WHERE id = ?", arguments: [id.uuidString])
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO sync_tombstones(id, recordType, deletedAt) VALUES (?, 'Snippet', ?)",
+                arguments: [id.uuidString, Date.now]
+            )
+        }
+    }
+
+    /// Sync-driven delete: removes the record without adding a tombstone.
+    public func deleteFromSync(id: SnippetID) async throws {
+        try await db.dbWriter.write { db in
             try db.execute(sql: "DELETE FROM snippets WHERE id = ?", arguments: [id.uuidString])
         }
     }

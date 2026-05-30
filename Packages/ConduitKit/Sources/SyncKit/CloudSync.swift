@@ -84,12 +84,32 @@ public actor CloudSync {
     }
 
     /// Saves or updates records in the private database.
+    /// Uses .changedKeys so the last writer wins regardless of server state.
     public func save(records: [CKRecordWrapper]) async throws {
         #if os(iOS) && !targetEnvironment(simulator)
         guard let db, !records.isEmpty else { return }
         let ckRecords = records.map(\.record)
         let operation = CKModifyRecordsOperation(recordsToSave: ckRecords, recordIDsToDelete: nil)
-        operation.savePolicy = .ifServerRecordUnchanged
+        operation.savePolicy = .changedKeys
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
+    /// Deletes records from the private database by record name.
+    public func delete(recordIDs: [String]) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db, !recordIDs.isEmpty else { return }
+        let ckIDs = recordIDs.map { CKRecord.ID(recordName: $0) }
+        let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: ckIDs)
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
             operation.modifyRecordsResultBlock = { result in
@@ -124,9 +144,13 @@ public struct CKRecordWrapper: @unchecked Sendable {
     public let record: CKRecord
     public init(record: CKRecord) { self.record = record }
     public var recordName: String { record.recordID.recordName }
+    /// Server-set timestamp of when this record was last saved to CloudKit.
+    /// Used as the authoritative LWW timestamp on pull.
+    public var modificationDate: Date? { record.modificationDate }
     public subscript(key: String) -> (any CKRecordValueProtocol)? { record[key] }
     #else
     public var recordName: String { "" }
+    public var modificationDate: Date? { nil }
     public init() {}
     #endif
 }

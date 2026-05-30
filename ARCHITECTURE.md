@@ -898,4 +898,63 @@ Research basis:
 
 ---
 
+## 19. Third-party dependency notes
+
+### 19.1 Forked swift-nio-ssh (Wellz26/swift-nio-ssh)
+
+**Status:** active — currently pinned at `0.3.4..<0.4.0`
+
+**What it is:** `Package.swift` pins `github.com/Wellz26/swift-nio-ssh` rather than the canonical
+`apple/swift-nio-ssh`. This is the community-maintained fork that the `Citadel` SSH library
+(`orlandos-nl/Citadel`) depends on internally. We do not fork it independently; we follow
+Citadel's transitive requirement.
+
+**Why the fork exists over upstream:**
+
+| Patch | Status in apple/swift-nio-ssh |
+|---|---|
+| Mac Catalyst: add NIO product dependency to NIOSSH target | Not merged upstream |
+| SSH certificate authentication (`AuthenticationMethod.certificate`) | Not in upstream |
+| visionOS / Musl / Bionic conditional-import directives | Not in upstream |
+| Multiple MACs per transport | Not in upstream |
+
+The Mac Catalyst patch is the immediate blocker — without it the NIOSSH product fails to link
+under Catalyst. The certificate auth patches are used by Citadel for advanced server-side auth
+flows.
+
+**Upstream tracking plan:**
+
+1. Watch `apple/swift-nio-ssh` releases; the Mac Catalyst fix is the primary switch-back trigger.
+2. Watch `orlandos-nl/Citadel` — when Citadel itself migrates its own `Package.swift` to
+   `apple/swift-nio-ssh`, update our pin to match.
+3. Consider filing a PR against `apple/swift-nio-ssh` for the Mac Catalyst fix if it remains
+   unmerged after the next minor release of NIO.
+
+**Switch-back trigger:** `apple/swift-nio-ssh` incorporates the Mac Catalyst product-dependency
+fix **AND** Citadel updates its resolved dependency to the upstream package. Both conditions
+must hold before this repo can switch back — one without the other would break the Citadel
+integration.
+
+**Follow-up:** Review this decision at the next Citadel version bump or when
+`apple/swift-nio-ssh` > 0.4.0 lands.
+
+---
+
+### 19.2 Crash reporting (Sentry)
+
+Sentry is wired in `Conduit/ConduitApp.swift` via `SentrySDK.start`. Configuration notes:
+
+- **DSN:** Set the `sentryDSN` constant in `ConduitApp.swift` before App Store release.
+  Create a project at your Sentry instance (cloud or self-hosted) to obtain the DSN.
+- **Opt-out:** Set `UserDefaults` key `dev.conduit.crashReportingOptedOut = true` to disable at
+  runtime. No PII is collected (`sendDefaultPii = false`). No performance tracing
+  (`tracesSampleRate = 0`). No advertising or tracking.
+- **Privacy manifest:** `Conduit/PrivacyInfo.xcprivacy` declares `NSPrivacyAccessedAPICategorySystemBootTime`
+  (reason `35F9.1` — crash reporting) and `NSPrivacyCollectedDataTypeCrashData` (no linking, no tracking).
+- **Verifying symbolication:** In `configureSentry()` there is a commented-out `SentrySDK.crash()`
+  line under `#if DEBUG`. Temporarily un-comment, run on a real device, recomment, and check your
+  Sentry dashboard for a symbolicated report.
+
+---
+
 *End of ARCHITECTURE.md. Changes require a PR labeled `architecture`.*

@@ -433,34 +433,93 @@ public struct SessionView: View {
     // MARK: - Tmux sheet
 
     private var tmuxSessionSheet: some View {
-        NavigationStack {
-            List {
-                Section("Available Sessions") {
-                    ForEach(vm.availableTmuxSessions, id: \.self) { name in
-                        Button {
-                            vm.attachToTmuxSession(name)
-                            showTmuxSheet = false
-                        } label: {
-                            HStack {
-                                Image(systemName: "rectangle.3.group").foregroundStyle(.tint)
-                                Text(name).font(.system(.body, design: .monospaced)).foregroundStyle(.primary)
-                                Spacer()
-                                Text("Attach").font(.caption).foregroundStyle(.secondary)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Header
+                HStack(alignment: .top, spacing: t.s4) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tmux Sessions")
+                            .font(.dsDisplayPt(22, weight: .bold))
+                            .foregroundStyle(t.text)
+                        Text("Reattach to a session still running on this host to restore its programs and scrollback.")
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    DSButton("Skip", variant: .ghost, size: .sm) { showTmuxSheet = false }
+                }
+                .padding(.horizontal, t.s6)
+                .padding(.top, t.s7)
+                .padding(.bottom, t.s5)
+
+                // ── Section head
+                Text("AVAILABLE SESSIONS")
+                    .font(.dsMonoPt(11))
+                    .tracking(0.8)
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, t.s6)
+                    .padding(.bottom, t.s2)
+
+                // ── Session cards
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(vm.availableTmuxSessions, id: \.self) { name in
+                            Button {
+                                vm.attachToTmuxSession(name)
+                                showTmuxSheet = false
+                            } label: {
+                                HStack(spacing: t.s4) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                            .fill(t.accentSoft)
+                                            .frame(width: 34, height: 34)
+                                        DSIconView(.terminal, size: 16, color: t.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(name)
+                                            .font(.dsMonoPt(15, weight: .medium))
+                                            .foregroundStyle(t.text)
+                                        Text("tmux session")
+                                            .font(.dsSansPt(12))
+                                            .foregroundStyle(t.text3)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Text("ATTACH")
+                                        .font(.dsMonoPt(11, weight: .medium))
+                                        .tracking(0.6)
+                                        .foregroundStyle(t.accent)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(t.text4)
+                                }
+                                .padding(.horizontal, t.s5)
+                                .padding(.vertical, t.s4)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if name != vm.availableTmuxSessions.last {
+                                Rectangle().fill(t.divider).frame(height: 1)
+                                    .padding(.leading, t.s5 + 34 + t.s4)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
-                }
-            }
-            .navigationTitle("Tmux Sessions")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Skip") { showTmuxSheet = false }
+                    .background(t.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+                    .padding(.horizontal, t.s5)
+                    .padding(.bottom, t.s6)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Explain sheet

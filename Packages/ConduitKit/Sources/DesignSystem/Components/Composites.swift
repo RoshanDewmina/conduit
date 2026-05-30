@@ -469,6 +469,47 @@ public struct DSPaletteItem: View {
     }
 }
 
+// MARK: - DSSegmentedPicker
+// A design-system–styled segmented control for small option sets (2–4 items).
+// Replaces stock Picker(.segmented) so the control picks up DS surface/text tokens.
+
+public struct DSSegmentedPicker<V: Hashable & Sendable>: View {
+    public let options: [(label: String, value: V)]
+    @Binding public var selection: V
+    @Environment(\.conduitTokens) private var t
+
+    public init(options: [(label: String, value: V)], selection: Binding<V>) {
+        self.options = options
+        self._selection = selection
+    }
+
+    public var body: some View {
+        HStack(spacing: 3) {
+            ForEach(options, id: \.value) { opt in
+                let selected = selection == opt.value
+                Button { selection = opt.value } label: {
+                    Text(opt.label)
+                        .font(.dsSansPt(13, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? t.text : t.text3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(
+                            selected
+                                ? RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                                    .fill(t.surface)
+                                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                                : nil
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .animation(.easeInOut(duration: 0.15), value: selection)
+    }
+}
+
 // MARK: - SectionHead (list variant with dashed bottom border)
 
 public struct DSListSectionHead: View {
@@ -496,8 +537,8 @@ public struct DSListSectionHead: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, t.s5)
+        .padding(.vertical, t.s3)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(t.divider)

@@ -212,8 +212,8 @@ struct SessionsHomeView: View {
             DSEmptyState(
                 icon: .terminal,
                 title: "No sessions yet",
-                subtitle: "Connect to a host from the Hosts tab to begin.",
-                action: ("Add host", onAddSession)
+                subtitle: "Add your SSH host on the Hosts tab, then tap it to start a session. No Conduit account needed — just your own server and API key.",
+                action: ("Go to Hosts", onAddSession)
             )
             .padding(.horizontal, 24)
             Spacer()
@@ -317,8 +317,8 @@ private struct SessionRowView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, t.s5)
+        .padding(.vertical, t.s4)
         .contentShape(Rectangle())
     }
 

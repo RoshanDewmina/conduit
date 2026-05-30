@@ -14,6 +14,10 @@ public struct Approval: Identifiable, Sendable, Hashable {
     public let createdAt: Date
     public var decidedAt: Date?
     public var decision: Decision?
+    // askQuestion fields
+    public let question: String?          // prompt text for .askQuestion
+    public let choices: [String]?         // answer options for .askQuestion
+    public var answeredChoice: Int?       // user-selected index (0-based)
 
     public enum AgentSource: String, Sendable, Hashable, Codable {
         case claudeCode, codex, opencode, cursor, devin, unknown
@@ -27,6 +31,8 @@ public struct Approval: Identifiable, Sendable, Hashable {
         case network         // wants to make a network call
         case credential      // wants a secret / API key
         case browser         // wants to perform a browser action
+        case callMCP         // wants to invoke an MCP tool
+        case askQuestion     // agent needs user to pick from multiple choices
     }
 
     public enum Risk: Int, Sendable, Hashable, Codable, Comparable {
@@ -49,7 +55,10 @@ public struct Approval: Identifiable, Sendable, Hashable {
         risk: Risk,
         createdAt: Date = .now,
         decidedAt: Date? = nil,
-        decision: Decision? = nil
+        decision: Decision? = nil,
+        question: String? = nil,
+        choices: [String]? = nil,
+        answeredChoice: Int? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -62,6 +71,9 @@ public struct Approval: Identifiable, Sendable, Hashable {
         self.createdAt = createdAt
         self.decidedAt = decidedAt
         self.decision = decision
+        self.question = question
+        self.choices = choices
+        self.answeredChoice = answeredChoice
     }
 
     public var isPending: Bool { decision == nil }

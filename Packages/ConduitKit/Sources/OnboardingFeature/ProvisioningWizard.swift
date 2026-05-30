@@ -102,22 +102,39 @@ public struct ProvisioningWizard: View {
     private var providerStep: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("This wizard provisions a fresh cloud VM with your chosen agent pre-installed.")
+                        .font(.dsSansPt(14))
+                        .foregroundStyle(t.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("You'll need a Fly.io account and API token. The VM is billed directly by Fly — Conduit never charges you.")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+
                 sectionHead("Cloud Provider")
                 settingsCard {
                     ForEach(ProvisioningPlan.Provider.allCases, id: \.rawValue) { provider in
+                        let isAvailable = provider == .fly
                         HStack {
                             Text(provider.displayName)
                                 .font(.dsSansPt(15))
-                                .foregroundStyle(t.text)
+                                .foregroundStyle(isAvailable ? t.text : t.text3)
                             Spacer()
-                            if vm.plan.provider == provider {
+                            if !isAvailable {
+                                DSChip("Coming soon", tone: .neutral, variant: .soft, size: .sm)
+                            } else if vm.plan.provider == provider {
                                 DSIconView(.check, size: 14, color: t.accent)
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 13)
                         .contentShape(Rectangle())
-                        .onTapGesture { vm.plan.provider = provider }
+                        .onTapGesture { if isAvailable { vm.plan.provider = provider } }
                         if provider != ProvisioningPlan.Provider.allCases.last {
                             cardDivider
                         }

@@ -138,6 +138,28 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Bidirectional iCloud sync — LWW timestamps, key hints, deletion tombstones.
+        m.registerMigration("v5") { db in
+            try db.alter(table: "hosts") { t in
+                t.add(column: "modifiedAt",    .datetime)
+                t.add(column: "syncedKeyHint", .text)
+            }
+            try db.alter(table: "snippets") { t in
+                t.add(column: "modifiedAt", .datetime)
+            }
+            // Tombstones track locally-deleted records so SyncEngine can
+            // propagate deletions to CloudKit on the next push cycle.
+            try db.create(table: "sync_tombstones") { t in
+                t.column("id",          .text).notNull()
+                t.column("recordType",  .text).notNull()
+                t.column("deletedAt",   .datetime).notNull()
+                t.primaryKey(["id", "recordType"])
+            }
+            // Back-fill: use best available proxy timestamp.
+            try db.execute(sql: "UPDATE hosts SET modifiedAt = COALESCE(lastConnectedAt, createdAt)")
+            try db.execute(sql: "UPDATE snippets SET modifiedAt = COALESCE(lastUsedAt, createdAt)")
+        }
+
         return m
     }
 }

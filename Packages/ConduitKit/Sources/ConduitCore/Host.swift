@@ -15,6 +15,12 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
     public var autoResume: Bool             // attempt agent session resume on reconnect (Tier 1.4)
     public var createdAt: Date
     public var lastConnectedAt: Date?
+    /// LWW clock — bumped on every local edit, used by SyncEngine to resolve conflicts.
+    public var modifiedAt: Date
+    /// SHA256 fingerprint of the client auth key pushed during sync (informational, never private bytes).
+    /// Nil for password/agent hosts. On a new device where the key isn't locally available,
+    /// authMethod falls back to .password and this field tells the user which key to import.
+    public var syncedKeyHint: String?
 
     public enum AuthMethod: Codable, Hashable, Sendable {
         case password
@@ -36,7 +42,9 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
         startupCommand: String? = nil,
         autoResume: Bool = true,
         createdAt: Date = .now,
-        lastConnectedAt: Date? = nil
+        lastConnectedAt: Date? = nil,
+        modifiedAt: Date = .now,
+        syncedKeyHint: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -52,6 +60,8 @@ public struct Host: Identifiable, Codable, Hashable, Sendable {
         self.autoResume = autoResume
         self.createdAt = createdAt
         self.lastConnectedAt = lastConnectedAt
+        self.modifiedAt = modifiedAt
+        self.syncedKeyHint = syncedKeyHint
     }
 
     public var displayAddress: String { "\(username)@\(hostname):\(port)" }

@@ -33,6 +33,7 @@ public final class AppEnvironment {
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
+    public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
 
     public init() throws {
@@ -44,11 +45,15 @@ public final class AppEnvironment {
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
+        self.tombstoneRepo = SyncTombstoneRepository(database)
         let cloudSync = CloudSync()
+        let ks = self.keyStore
         self.syncEngine = SyncEngine(
             cloudSync: cloudSync,
             hostRepo: HostRepository(database),
-            snippetRepo: SnippetRepository(db: database)
+            snippetRepo: SnippetRepository(db: database),
+            tombstoneRepo: SyncTombstoneRepository(database),
+            keyStore: ks
         )
         self.approvalRepo = ApprovalRepository(database)
     }
@@ -134,16 +139,17 @@ public struct AppRoot: View {
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
-    #if DEBUG
-    @State private var showDesignReview = false
-    #endif
 
     private var isPro: Bool {
         #if DEBUG
-        return true // DEV: Pro unlocked for UX eval — restore before release
+        // RELEASE GATE: Pro is force-unlocked in all debug builds for UX evaluation.
+        // Delete this block entirely before submitting to App Store.
+        #warning("isPro always returns true in DEBUG — remove before App Store release")
+        return true
         #else
         switch pm.purchaseState {
-        case .purchased, .unknown: return true
+        case .purchased: return true
+        // .unknown = purchase state not yet loaded; keep locked rather than granting free Pro.
         default: return false
         }
         #endif
@@ -244,39 +250,6 @@ public struct AppRoot: View {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
         }
-        #if DEBUG
-        .overlay(alignment: .bottomTrailing) {
-            if isUnlocked {
-                Button { showDesignReview = true } label: {
-                    Text("REVIEW")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(Color.black)
-                        .foregroundStyle(Color.white)
-                        .clipShape(Capsule())
-                        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-                }
-                .padding(.trailing, 14)
-                .padding(.bottom, 96)
-            }
-        }
-        .fullScreenCover(isPresented: $showDesignReview) {
-            ZStack(alignment: .topTrailing) {
-                DebugGalleryView(route: "review").conduitTokens()
-                Button { showDesignReview = false } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.gray)
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .padding(.top, 8)
-                .padding(.trailing, 12)
-            }
-        }
-        #endif
     }
 
     private func attemptUnlock() async {
@@ -361,6 +334,20 @@ public struct AppRoot: View {
             .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             .preferredColorScheme(preferredScheme)
         }
+        // Re-prompt after consecutive auth failures on an existing session,
+        // reusing the same SessionViewModel rather than creating a new one.
+        .sheet(isPresented: Binding(
+            get: { sessionViewModel?.awaitingPasswordRetry == true },
+            set: { if !$0 { sessionViewModel?.cancelPasswordRetry() } }
+        )) {
+            if let vm = sessionViewModel {
+                PasswordPromptView(host: vm.host) { password in
+                    Task { await vm.retryWithNewPassword(password) }
+                }
+                .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+                .preferredColorScheme(preferredScheme)
+            }
+        }
         .sheet(isPresented: Binding(
             get: { sessionViewModel?.pendingHostKeyFingerprint != nil },
             set: { if !$0 { sessionViewModel?.rejectHostKey() } }
@@ -418,12 +405,9 @@ public struct AppRoot: View {
             }
         }
         // Agent status header — a slim, in-layout strip shown only while a live
-        // session exists (the store returns no agents when idle). It's mounted
-        // per-tab BELOW each screen's title — injected into SessionsHomeView for
-        // the Sessions tab, and via a top `safeAreaInset` on the other tabs in
-        // `rootDestination` — so it never floats over the cutout or nav chrome.
-        // Hidden behind the live SessionView cover, which shows its own header.
-        // (The expressive expandable island now lives only in the debug gallery.)
+        // session exists (the store returns no agents when idle). Each tab renders
+        // it below its own title row — passed as statusHeaderAgents to every tab
+        // view so placement is consistent. Hidden behind the live SessionView cover.
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
         .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
             hudStore.pendingApprovals = count
@@ -581,46 +565,53 @@ public struct AppRoot: View {
 
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
-        Group {
-            switch tab {
-            case .sessions:
-                sessionsHome(env: env)
+        // Each view renders the agent header below its own title row — no
+        // safeAreaInset needed (that placed it above the title on non-sessions tabs).
+        let headerAgents = isAgentBannerVisible ? hudStore.agents : []
+        let headerTap: () -> Void = { if sessionViewModel != nil { isShowingLiveSession = true } }
 
-            case .hosts:
-                WorkspacesView(
-                    viewModel: WorkspacesViewModel(repository: env.hostRepo),
-                    onSelect: { host in openSession(host: host, env: env) },
-                    onEdit: { host in editingHost = host },
-                    onAddHost: { addHostPresented = true },
-                    onAddHostGated: isPro ? nil : {
-                        paywallFeatureName = "Unlimited SSH Hosts"
-                        showingPaywall = true
-                    }
+        switch tab {
+        case .sessions:
+            sessionsHome(env: env)
+
+        case .hosts:
+            WorkspacesView(
+                viewModel: WorkspacesViewModel(repository: env.hostRepo),
+                onSelect: { host in openSession(host: host, env: env) },
+                onEdit: { host in editingHost = host },
+                onAddHost: { addHostPresented = true },
+                onAddHostGated: isPro ? nil : {
+                    paywallFeatureName = "Unlimited SSH Hosts"
+                    showingPaywall = true
+                },
+                statusHeaderAgents: headerAgents,
+                onTapStatusHeader: headerTap
+            )
+            .id(workspacesRevision)
+
+        case .inbox:
+            if isPro {
+                InboxView(
+                    viewModel: activeInboxViewModel,
+                    statusHeaderAgents: headerAgents,
+                    onTapStatusHeader: headerTap
                 )
-                .id(workspacesRevision)
-
-            case .inbox:
-                if isPro {
-                    InboxView(viewModel: activeInboxViewModel)
-                } else {
-                    GlobalInboxGateView {
-                        paywallFeatureName = "AI Agent Inbox"
-                        showingPaywall = true
-                    }
+            } else {
+                GlobalInboxGateView {
+                    paywallFeatureName = "AI Agent Inbox"
+                    showingPaywall = true
                 }
-            case .settings:
-                SettingsView(
-                    viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
-                    syncEngine: env.syncEngine,
-                    snippetRepo: env.snippetRepo,
-                    keyStore: env.keyStore
-                )
             }
-        }
-        // Sessions injects the header into its own custom title block; the other
-        // tabs get it pinned below their system nav bar here.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if tab != .sessions { agentHeaderInset }
+
+        case .settings:
+            SettingsView(
+                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+                syncEngine: env.syncEngine,
+                snippetRepo: env.snippetRepo,
+                keyStore: env.keyStore,
+                statusHeaderAgents: headerAgents,
+                onTapStatusHeader: headerTap
+            )
         }
     }
 

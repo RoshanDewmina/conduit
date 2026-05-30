@@ -74,6 +74,7 @@ public actor AutoReconnectEngine {
     /// increments.  When the count reaches `maxAttempts` the engine calls
     /// `onFailed` and stops.
     public func reportReconnectOutcome(succeeded: Bool) async {
+        lastAttemptSucceeded = succeeded
         if succeeded {
             failureCount = 0
         } else {
@@ -88,6 +89,8 @@ public actor AutoReconnectEngine {
     }
 
     // MARK: - Private
+
+    private var lastAttemptSucceeded = false
 
     private func runLoop() async {
         let stream = await reconnectController.states()
@@ -111,6 +114,22 @@ public actor AutoReconnectEngine {
         }
     }
 
+    /// Trigger one reconnect attempt (with backoff if prior failures exist).
+    /// Callers that need a retry loop should use `triggerWithRetry()` instead.
+    public func trigger() async {
+        await triggerReconnect()
+    }
+
+    /// Trigger reconnect attempts with exponential backoff, retrying until
+    /// success or `maxAttempts` consecutive failures. Used for PTY drops where
+    /// no network-state change fires the monitor loop.
+    public func triggerWithRetry() async {
+        while !stopped {
+            await triggerReconnect()
+            if lastAttemptSucceeded { break }
+        }
+    }
+
     private func triggerReconnect() async {
         guard !stopped else { return }
         let backoff = ReconnectController.backoff(attempt: failureCount)
@@ -120,4 +139,9 @@ public actor AutoReconnectEngine {
         guard !stopped else { return }
         await onReconnect()
     }
+}
+
+// MARK: - Internal (visible for testing)
+extension AutoReconnectEngine {
+    var currentFailureCount: Int { failureCount }
 }

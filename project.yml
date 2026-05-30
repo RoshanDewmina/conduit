@@ -20,6 +20,11 @@ settings:
 packages:
   ConduitKit:
     path: Packages/ConduitKit
+  # Crash reporting — privacy-friendly, self-hostable. No ad/tracking data collected.
+  # Set sentryDSN in Conduit/ConduitApp.swift before release. See ARCHITECTURE.md §19.
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 8.0.0
 
 targets:
   Conduit:
@@ -71,6 +76,8 @@ targets:
     dependencies:
       - package: ConduitKit
         product: AppFeature
+      - package: Sentry
+        product: Sentry
       - target: ConduitWatch
         embed: true
       - target: ConduitLiveActivityWidget
