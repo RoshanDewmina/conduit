@@ -52,10 +52,14 @@ public struct RawTerminalView: UIViewRepresentable {
         // Pinch-to-zoom state
         var baseFontSize: CGFloat = {
             let stored = UserDefaults.standard.double(forKey: "terminalFontSize")
-            return CGFloat(stored > 0 ? stored : 13)
+            return CGFloat(stored > 0 ? stored : 11)
         }()
 
-        // Cursor drag state — driven by a UIPanGestureRecognizer (no long-press delay).
+        // Cursor drag state — armed by a 150 ms UILongPressGestureRecognizer, then
+        // driven by a UIPanGestureRecognizer. A plain single-finger drag (no arm)
+        // leaves cursorPanArmed=false so it never emits arrows — SwiftTerm scroll /
+        // text-selection handles it instead.
+        var cursorPanArmed: Bool = false
         var cursorDragAccumX: CGFloat = 0
         var cursorDragAccumY: CGFloat = 0
         var cursorDragLastLocation: CGPoint = .zero
@@ -80,24 +84,40 @@ public struct RawTerminalView: UIViewRepresentable {
             switch gr.state {
             case .changed:
                 let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
-                term.font = UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+                term.font = UIFont(name: "FragmentMono-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
             case .ended:
                 let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
                 baseFontSize = newSize
                 UserDefaults.standard.set(Double(newSize), forKey: "terminalFontSize")
-                term.font = UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+                term.font = UIFont(name: "FragmentMono-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
             case .cancelled, .failed:
-                term.font = UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
+                term.font = UIFont(name: "FragmentMono-Regular", size: baseFontSize) ?? UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
             default:
                 break
             }
         }
 
-        // MARK: - Gesture cursor movement (immediate pan — no long-press delay)
+        // MARK: - Trackpad cursor — long-press arm (Gesture #1)
 
-        /// Pan recognizer replaces the 350 ms long-press. Movement sends arrow
-        /// keys once the accumulated translation exceeds a 12 pt dead-zone,
-        /// preventing accidental triggers on short taps.
+        /// Arms the cursor-pan mode. A plain single-finger drag never fires arrows;
+        /// the user must hold for ~150 ms before dragging to enter trackpad mode.
+        @objc func handleLongPressArm(_ gr: UILongPressGestureRecognizer) {
+            switch gr.state {
+            case .began:
+                guard gestureTrackpadEnabled else { return }
+                cursorPanArmed = true
+                cursorDragAccumX = 0
+                cursorDragAccumY = 0
+                cursorDragLastLocation = gr.location(in: gr.view)
+            case .ended, .cancelled, .failed:
+                cursorPanArmed = false
+            default:
+                break
+            }
+        }
+
+        // MARK: - Cursor pan (fires only when armed by long press, Gesture #1)
+
         @objc func handleCursorPan(_ gr: UIPanGestureRecognizer) {
             switch gr.state {
             case .began:
@@ -105,13 +125,15 @@ public struct RawTerminalView: UIViewRepresentable {
                 cursorDragAccumY = 0
                 cursorDragLastLocation = gr.location(in: gr.view)
             case .changed:
+                guard cursorPanArmed else { return }
                 let loc = gr.location(in: gr.view)
                 let deltaX = loc.x - cursorDragLastLocation.x
                 let deltaY = loc.y - cursorDragLastLocation.y
                 cursorDragLastLocation = loc
                 cursorDragAccumX += deltaX
                 cursorDragAccumY += deltaY
-                let threshold: CGFloat = 12
+                let sens = UserDefaults.standard.double(forKey: "gestureCursorSensitivity")
+                let threshold: CGFloat = CGFloat(sens > 0 ? sens : 12)
                 while cursorDragAccumX > threshold {
                     sendArrowKey([0x1b, 0x5b, 0x43])  // right
                     cursorDragAccumX -= threshold
@@ -128,6 +150,8 @@ public struct RawTerminalView: UIViewRepresentable {
                     sendArrowKey([0x1b, 0x5b, 0x42])  // down
                     cursorDragAccumY -= threshold
                 }
+            case .ended, .cancelled:
+                cursorPanArmed = false
             default:
                 break
             }
@@ -135,7 +159,29 @@ public struct RawTerminalView: UIViewRepresentable {
 
         private func sendArrowKey(_ bytes: [UInt8]) {
             cursorDragOnBytes?(bytes)
+            // Gate haptic on terminalHapticFeedback (mirrors KeyboardAccessoryRail pattern).
+            guard UserDefaults.standard.object(forKey: "terminalHapticFeedback") == nil ||
+                  UserDefaults.standard.bool(forKey: "terminalHapticFeedback") else { return }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        // MARK: - Double-tap for Tab (Gesture #2)
+
+        @objc func handleDoubleTap(_ gr: UITapGestureRecognizer) {
+            guard UserDefaults.standard.object(forKey: "gestureDoubleTapTab") == nil ||
+                  UserDefaults.standard.bool(forKey: "gestureDoubleTapTab") else { return }
+            let tab: [UInt8] = [0x09]
+            onUserBytes(tab[...])
+            guard UserDefaults.standard.object(forKey: "terminalHapticFeedback") == nil ||
+                  UserDefaults.standard.bool(forKey: "terminalHapticFeedback") else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        // MARK: - Settings helpers
+
+        private var gestureTrackpadEnabled: Bool {
+            UserDefaults.standard.object(forKey: "gestureTrackpadEnabled") == nil ||
+            UserDefaults.standard.bool(forKey: "gestureTrackpadEnabled")
         }
 
         // MARK: - UIGestureRecognizerDelegate
@@ -220,8 +266,8 @@ public struct RawTerminalView: UIViewRepresentable {
         term.smartDashesType = .no
         term.smartQuotesType = .no
         term.smartInsertDeleteType = .no
-        let fontSize = CGFloat(UserDefaults.standard.double(forKey: "terminalFontSize").nonZeroOr(13))
-        term.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let fontSize = CGFloat(UserDefaults.standard.double(forKey: "terminalFontSize").nonZeroOr(11))
+        term.font = UIFont(name: "FragmentMono-Regular", size: fontSize) ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let theme = TerminalTheme.current
         term.nativeBackgroundColor = UIColor(theme.background)
         term.nativeForegroundColor = UIColor(theme.foreground)
@@ -234,12 +280,31 @@ public struct RawTerminalView: UIViewRepresentable {
         pinch.delegate = context.coordinator
         term.addGestureRecognizer(pinch)
 
-        // Pan gesture for cursor movement — fires immediately (no hold required).
-        // A 12 pt dead-zone in the handler prevents accidental cursor moves.
+        // Long-press (150 ms) to arm the trackpad cursor pan (Gesture #1).
+        // Without this, a plain single-finger drag falls through to SwiftTerm
+        // scroll / text-selection — no arrows sent.
+        let longPress = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleLongPressArm(_:))
+        )
+        longPress.minimumPressDuration = 0.15
+        longPress.delegate = context.coordinator
+        term.addGestureRecognizer(longPress)
+
+        // Pan recognizer for cursor movement — only emits arrows when armed.
         let pan = UIPanGestureRecognizer(target: context.coordinator,
                                          action: #selector(Coordinator.handleCursorPan(_:)))
         pan.delegate = context.coordinator
         term.addGestureRecognizer(pan)
+
+        // Double-tap → Tab (Gesture #2)
+        let doubleTap = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleDoubleTap(_:))
+        )
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = context.coordinator
+        term.addGestureRecognizer(doubleTap)
 
         // Pump PTY bytes into the terminal view from a background task.
         let stream = feed

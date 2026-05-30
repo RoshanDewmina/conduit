@@ -33,17 +33,20 @@ public struct ConduitSessionAttributes: ActivityAttributes {
         public var status: String           // "connected" / "reconnecting" / "suspended"
         public var pendingApprovals: Int
         public var agentName: String?       // "Claude Code" when an agent is running
+        public var isStreaming: Bool        // agent is actively executing (drives the blue glyph)
         public var lastUpdate: Date
 
         public init(
             status: String,
             pendingApprovals: Int = 0,
             agentName: String? = nil,
+            isStreaming: Bool = false,
             lastUpdate: Date = .now
         ) {
             self.status = status
             self.pendingApprovals = pendingApprovals
             self.agentName = agentName
+            self.isStreaming = isStreaming
             self.lastUpdate = lastUpdate
         }
     }
@@ -66,6 +69,9 @@ public final class ConduitLiveActivityManager {
     public static let shared = ConduitLiveActivityManager()
 
     private var activities: [String: Activity<ConduitSessionAttributes>] = [:]
+    // Last content pushed per host, so partial updates (e.g. approval count
+    // only) can preserve the other fields instead of resetting them.
+    private var lastContent: [String: ConduitSessionAttributes.ContentState] = [:]
 
     private init() {}
 
@@ -94,6 +100,7 @@ public final class ConduitLiveActivityManager {
 
         if let existing = activities[hostID] {
             await existing.update(.init(state: content, staleDate: nil))
+            lastContent[hostID] = content
             return
         }
 
@@ -105,6 +112,7 @@ public final class ConduitLiveActivityManager {
                 pushType: nil
             )
             activities[hostID] = activity
+            lastContent[hostID] = content
         } catch {
             // ActivityKit refuses (off in Settings, system busy, etc.) —
             // silent failure is correct; the in-app inbox still works.
@@ -126,6 +134,43 @@ public final class ConduitLiveActivityManager {
             agentName: agentName
         )
         await activity.update(.init(state: content, staleDate: nil))
+        lastContent[hostID] = content
+    }
+
+    /// Update the pending-approval count on every running activity, preserving
+    /// each one's other fields. This is the glanceable signal the Dynamic Island
+    /// exists for, so it must stay live while the app is backgrounded. No-ops
+    /// when no activities are running.
+    public func updatePendingApprovals(_ count: Int) async {
+        for (hostID, activity) in activities {
+            guard let base = lastContent[hostID] else { continue }
+            // Construct a fresh value (not a mutated copy of stored actor state)
+            // so it forms its own isolation region and is safe to send.
+            let content = ConduitSessionAttributes.ContentState(
+                status: base.status,
+                pendingApprovals: count,
+                agentName: base.agentName,
+                isStreaming: base.isStreaming
+            )
+            await activity.update(.init(state: content, staleDate: nil))
+            lastContent[hostID] = content
+        }
+    }
+
+    /// Reflect whether the agent is actively executing on a host, preserving the
+    /// activity's other fields. Drives the island glyph's blue "streaming" tint.
+    /// No-ops when no activity is running for the host.
+    public func updateStreaming(hostID: String, isStreaming: Bool) async {
+        guard let activity = activities[hostID], let base = lastContent[hostID] else { return }
+        guard base.isStreaming != isStreaming else { return }
+        let content = ConduitSessionAttributes.ContentState(
+            status: base.status,
+            pendingApprovals: base.pendingApprovals,
+            agentName: base.agentName,
+            isStreaming: isStreaming
+        )
+        await activity.update(.init(state: content, staleDate: nil))
+        lastContent[hostID] = content
     }
 
     /// End the activity for a single host (e.g. user disconnected).
@@ -133,6 +178,7 @@ public final class ConduitLiveActivityManager {
         guard let activity = activities[hostID] else { return }
         await activity.end(nil, dismissalPolicy: .immediate)
         activities.removeValue(forKey: hostID)
+        lastContent.removeValue(forKey: hostID)
     }
 
     /// End every activity (e.g. app entering termination).
@@ -141,6 +187,7 @@ public final class ConduitLiveActivityManager {
             await activity.end(nil, dismissalPolicy: .immediate)
             activities.removeValue(forKey: id)
         }
+        lastContent.removeAll()
     }
 }
 

@@ -71,7 +71,18 @@ public final class SessionViewModel {
 
     /// `true` between OSC 133 C (preexec) and OSC 133 D (postcmd).
     /// Bytes are routed to the active block only in this window.
-    public private(set) var isExecutingUnified: Bool = false
+    public private(set) var isExecutingUnified: Bool = false {
+        didSet {
+            guard oldValue != isExecutingUnified else { return }
+            // Mirror execution state to the Live Activity so the Dynamic Island
+            // glyph tints blue while the agent streams. No-ops if no activity.
+            if #available(iOS 16.2, *) {
+                let id = host.id.uuidString
+                let streaming = isExecutingUnified
+                Task { await ConduitLiveActivityManager.shared.updateStreaming(hostID: id, isStreaming: streaming) }
+            }
+        }
+    }
 
     // MARK: - Phase 7: OSC 133 fallback
     //
@@ -450,7 +461,7 @@ public final class SessionViewModel {
         guard status == .connected, unifiedShell == nil else { return }
 
         let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
-        let fontSize = CGFloat(storedSize > 0 ? storedSize : 13.0)
+        let fontSize = CGFloat(storedSize > 0 ? storedSize : 11.0)
         // Use the key window's scene screen to avoid UIScreen.main deprecation.
         let screenBounds = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }

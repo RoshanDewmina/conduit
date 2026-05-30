@@ -115,6 +115,10 @@ public struct DSButton: View {
                 Text(title).font(.dsSansPt(labelSize, weight: .medium))
             }
         }
+        // Buttons size to their label — never wrap onto a second line when
+        // horizontal space is tight (e.g. side-by-side header buttons).
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     // MARK: Sizes

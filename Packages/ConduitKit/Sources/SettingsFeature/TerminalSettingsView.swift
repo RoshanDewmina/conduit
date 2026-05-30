@@ -4,15 +4,20 @@ import UIKit
 import DesignSystem
 
 public struct TerminalSettingsView: View {
-    @AppStorage("terminalFontSize")       private var fontSize: Double = 13
-    @AppStorage("terminalKeepAlive")      private var keepAlive: Int = 60
-    @AppStorage("terminalPreventSleep")   private var preventSleep: Bool = true
-    @AppStorage("terminalHapticFeedback") private var hapticFeedback: Bool = true
-    @AppStorage("terminalScrollback")     private var scrollback: Int = 1000
-    @AppStorage("terminalTheme")          private var themeName: String = "Dark"
+    @AppStorage("terminalFontSize")         private var fontSize: Double = 11
+    @AppStorage("terminalKeepAlive")        private var keepAlive: Int = 60
+    @AppStorage("terminalPreventSleep")     private var preventSleep: Bool = true
+    @AppStorage("terminalHapticFeedback")   private var hapticFeedback: Bool = true
+    @AppStorage("terminalScrollback")       private var scrollback: Int = 1000
+    @AppStorage("terminalTheme")            private var themeName: String = "Dark"
+
+    @AppStorage("gestureTrackpadEnabled")   private var gestureTrackpadEnabled: Bool = true
+    @AppStorage("gestureDoubleTapTab")      private var gestureDoubleTapTab: Bool = true
+    @AppStorage("gestureSwipeAlternates")   private var gestureSwipeAlternates: Bool = true
+    @AppStorage("gestureCursorSensitivity") private var gestureCursorSensitivity: Double = 12
 
     private let fontSizes: [(label: String, value: Double)] = [
-        ("Small", 10), ("Medium", 12), ("Default", 13), ("Large", 15), ("XLarge", 18),
+        ("Small", 10), ("Default", 11), ("Medium", 13), ("Large", 15), ("XLarge", 18),
     ]
     private let keepAliveOptions: [(label: String, value: Int)] = [
         ("Off", 0), ("30 sec", 30), ("60 sec", 60), ("2 min", 120),
@@ -21,6 +26,10 @@ public struct TerminalSettingsView: View {
         ("500", 500), ("1 000", 1000), ("5 000", 5000), ("Unlimited", 0),
     ]
     private let themes = ["Dark", "Light", "Solarized Dark", "Dracula"]
+    // Low=18 pt dead-zone (least sensitive), Medium=12, High=8 (most sensitive).
+    private let sensitivityOptions: [(label: String, value: Double)] = [
+        ("Low", 18), ("Medium", 12), ("High", 8),
+    ]
 
     public init() {}
 
@@ -51,6 +60,23 @@ public struct TerminalSettingsView: View {
                         toggleRow(label: "Prevent Screen Sleep", isOn: $preventSleep)
                         cardDivider
                         toggleRow(label: "Haptic Feedback on Keys", isOn: $hapticFeedback)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Gestures
+                    sectionHead("Gestures")
+                    settingsCard {
+                        toggleRow(label: "Trackpad cursor (long-press + drag)", isOn: $gestureTrackpadEnabled)
+                        cardDivider
+                        toggleRow(label: "Double-tap for Tab", isOn: $gestureDoubleTapTab)
+                        cardDivider
+                        toggleRow(label: "Swipe up for alternate keys", isOn: $gestureSwipeAlternates)
+                        cardDivider
+                        pickerRow(
+                            label: "Cursor Sensitivity",
+                            options: sensitivityOptions.map { ($0.label, $0.value) },
+                            value: $gestureCursorSensitivity
+                        )
                     }
                     .padding(.bottom, 16)
 
@@ -88,7 +114,7 @@ public struct TerminalSettingsView: View {
                     }
                     .padding(.bottom, 16)
 
-                    Text("Font size and theme changes take effect in the next session.")
+                    Text("Theme changes take effect in the next session.")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
                         .padding(.horizontal, 20)
@@ -260,7 +286,7 @@ private struct DebugProBypassToggle: View {
 public enum TerminalPrefs {
     public static var fontSize: Double {
         let stored = UserDefaults.standard.double(forKey: "terminalFontSize")
-        return stored > 0 ? stored : 13
+        return stored > 0 ? stored : 11
     }
 
     public static var hapticFeedbackEnabled: Bool {

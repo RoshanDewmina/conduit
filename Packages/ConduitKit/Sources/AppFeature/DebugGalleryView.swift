@@ -16,6 +16,7 @@ struct DebugGalleryView: View {
     @State private var showLiveTerminal = false
     @State private var showBlocks = false
     @State private var showLiveSession = false
+    @State private var showAgentHUD = false
 
     var body: some View {
         switch route {
@@ -32,6 +33,8 @@ struct DebugGalleryView: View {
         case "settings":       SettingsReviewScreen()
         case "blocks":         BlocksReviewScreen()
         case "session":        DebugSessionHarness()
+        case "hud":            AgentHUDGalleryScreen()
+        case "keyboard":       KeyboardGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
         }
@@ -95,6 +98,17 @@ struct DebugGalleryView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showAgentHUD) {
+            ZStack(alignment: .topTrailing) {
+                AgentHUDGalleryScreen()
+                Button { showAgentHUD = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(12)
+                }
+            }
+        }
     }
 
     private var reviewHeader: some View {
@@ -130,6 +144,14 @@ struct DebugGalleryView: View {
                     size: .sm,
                     mono: true
                 ) { showLiveSession = true }
+
+                DSButton(
+                    "Agent HUD",
+                    systemImage: "square.grid.3x3",
+                    variant: .secondary,
+                    size: .sm,
+                    mono: true
+                ) { showAgentHUD = true }
             }
             .padding(.top, 6)
         }
@@ -833,6 +855,137 @@ private struct BlocksReviewScreen: View {
             out: "router.ts(42,7): error TS2322: Type 'string' not assignable to 'number'.\nBuild failed with 1 error.",
             code: 1
         )
+    }
+}
+
+// MARK: - Agent Island gallery (CONDUIT_GALLERY=hud)
+// Showcases the Agent Island: a live compact pill (tap/swipe to expand), a
+// statically-expanded panel, an approval (amber) variant, and all six glyphs.
+
+private struct AgentHUDGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    private var approvalFirst: [AgentInfo] {
+        AgentInfo.demoSeed.filter { $0.state == .approval } + AgentInfo.demoSeed.filter { $0.state != .approval }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                section("LIVE — tap or swipe down to expand")
+                islandStage { AgentIsland(agents: AgentInfo.demoSeed, screenWidth: 360) }
+                    .frame(height: 70)
+
+                section("EXPANDED PANEL")
+                islandStage { AgentIsland(agents: AgentInfo.demoSeed, screenWidth: 360, defaultExpanded: true) }
+                    .frame(height: 380)
+
+                section("APPROVAL — amber tint + nudge")
+                islandStage { AgentIsland(agents: approvalFirst, screenWidth: 360) }
+                    .frame(height: 70)
+
+                section("STATE GLYPHS")
+                HStack(spacing: 14) {
+                    ForEach(AgentState.allCases, id: \.self) { state in
+                        VStack(spacing: 6) {
+                            PixelBox(state: state, size: 16)
+                            Text(state.islandLabel)
+                                .font(.dsMonoPt(9))
+                                .foregroundStyle(t.termText2)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+            }
+            .padding(.vertical, 20)
+        }
+        .background(t.termBg.ignoresSafeArea())
+    }
+
+    private func section(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(10, weight: .medium)).tracking(1.2)
+            .foregroundStyle(t.termText3)
+            .padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 6)
+    }
+
+    private func islandStage<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        ZStack(alignment: .top) { content() }
+            .frame(maxWidth: .infinity, alignment: .top)
+            .background(Color.black.opacity(0.001)) // hit area, keeps layout
+    }
+}
+
+// MARK: - Keyboard gallery (CONDUIT_GALLERY=keyboard)
+
+/// Renders the restyled accessory rail and the expanded `TerminalKeyboardPanel`
+/// over a mock terminal backdrop so the keys can be inspected in light/dark
+/// without an SSH connection.
+private struct KeyboardGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+    @State private var tab: TerminalKeyboardPanel.Tab = .keys
+    @State private var ctrlLatched = false
+    @State private var lastSent: String = "—"
+
+    private let mockHistory = [
+        "git status", "swift build", "cd Packages/ConduitKit",
+        "ls -la", "vim Sources/SessionFeature/SessionView.swift",
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("KEYBOARD")
+                    .font(.dsMonoPt(11, weight: .medium))
+                    .tracking(2)
+                    .foregroundStyle(t.termText.opacity(0.5))
+                Text("last sent: \(lastSent)")
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.termAccent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+
+            Spacer()
+
+            // Collapsed rail (restyled UIKit accessory)
+            KeyboardAccessoryRail(ctrlLatched: $ctrlLatched) { bytes in
+                lastSent = describe(bytes)
+            }
+            .frame(height: 44)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(t.termSurface)
+
+            // Expanded panel
+            TerminalKeyboardPanel(
+                selectedTab: $tab,
+                ctrlLatched: $ctrlLatched,
+                commandHistory: mockHistory,
+                snippets: [],
+                onBytes: { bytes in lastSent = describe(bytes) },
+                onPaste: { lastSent = "paste" },
+                onRunHistory: { cmd in lastSent = cmd },
+                onInsertSnippet: { _ in },
+                onDismiss: { lastSent = "ABC (collapse)" }
+            )
+            .frame(height: 320)
+        }
+        .background(t.termBg)
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private func describe(_ bytes: [UInt8]) -> String {
+        bytes.map { b in
+            switch b {
+            case 0x1B: return "ESC"
+            case 0x09: return "TAB"
+            case 0x01...0x1A: return "^\(Character(UnicodeScalar(b + 0x40)))"
+            case 0x20...0x7E: return String(UnicodeScalar(b))
+            default: return String(format: "\\x%02x", b)
+            }
+        }.joined()
     }
 }
 #endif

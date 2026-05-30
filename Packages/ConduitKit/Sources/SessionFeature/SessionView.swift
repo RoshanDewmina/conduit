@@ -15,6 +15,8 @@ public struct SessionView: View {
     @State private var rawCtrlLatched = false
     @State private var showingPortForward = false
     @State private var showRawHistory = false
+    @State private var keyboardExpanded = false
+    @State private var expandedKeyboardTab: TerminalKeyboardPanel.Tab = .keys
     @State private var dictation = DictationEngine()
     @State private var showTmuxSheet = false
     @State private var liveInputActive = false
@@ -23,6 +25,7 @@ public struct SessionView: View {
     @State private var connectOverlayPhase: SSHConnectPhase = .connecting
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -66,19 +69,23 @@ public struct SessionView: View {
             t.surf0.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Always-dark HUD strip
-                AgentStatusBar(
-                    state: agentState,
-                    message: agentMessage,
-                    pendingApprovals: 0,
-                    tickValues: tickHistory
-                )
-
-                // Compact identity header below HUD
+                // Compact identity header (the Agent Island floats above it,
+                // merging with the hardware island — see .overlay below).
                 ChatHeaderView(
                     hostName: vm.host.name,
                     cwd: vm.cwd,
-                    state: agentState
+                    state: agentState,
+                    // Back is pure navigation — it must NOT disconnect. The session
+                    // (and its SSH connection) stays alive in the background so the
+                    // active-session list + global HUD keep working; re-opening the
+                    // row re-presents this same VM, still connected. Explicit
+                    // disconnect lives in the header overflow menu / row long-press.
+                    onBack: { dismiss() },
+                    onDisconnect: {
+                        Task { await vm.disconnect() }
+                        dismiss()
+                    },
+                    onPortForward: { showingPortForward = true }
                 )
 
                 if case .reconnecting = vm.status {
@@ -124,19 +131,21 @@ public struct SessionView: View {
                     }
             }
         }
+        // Agent Island — replaces the old AgentStatusBar strip, merging with the
+        // hardware island. Primary = this live session; roster/stats are demo.
+        .overlay(alignment: .top) {
+            GeometryReader { geo in
+                AgentIsland(
+                    agents: islandAgents,
+                    screenWidth: geo.size.width,
+                    onResolve: { _, _ in }
+                )
+            }
+            .ignoresSafeArea(edges: .top)
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !vm.isRaw {
                 chatBottomBar
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    showingPortForward = true
-                } label: {
-                    Label("Port Forwarding", systemImage: "arrow.left.arrow.right")
-                }
-                .disabled(vm.status != .connected)
             }
         }
         .sheet(isPresented: $showingPortForward) {
@@ -208,12 +217,21 @@ public struct SessionView: View {
         }
     }
 
-    private var agentMessage: String? {
-        switch vm.status {
-        case .failed(let reason): return reason
-        case .reconnecting(let n): return "attempt \(n)"
-        default: return nil
-        }
+    /// Island roster for this screen: the real live session as primary, plus the
+    /// mock roster/stats (`AgentDemoData`) until real multi-agent telemetry exists.
+    private var islandAgents: [AgentInfo] {
+        let primary = AgentInfo(
+            id: vm.host.id.raw,
+            name: vm.host.name,
+            agentKey: .claudeCode,
+            host: vm.host.name,
+            cwd: vm.cwd,
+            state: agentState,
+            tool: AgentDemoData.toolLine(for: agentState),
+            pendingApprovals: 0,
+            progress: AgentDemoData.progress
+        )
+        return [primary] + AgentDemoData.roster.filter { $0.name != primary.name }
     }
 
     // MARK: - Bottom bar (ChatInputBar + keyboard accessory)
@@ -226,6 +244,8 @@ public struct SessionView: View {
                     Task { await vm.sendKeystrokes(bytes) }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+
+                expandKeyboardButton
 
                 Button { showRawHistory = true } label: {
                     Image(systemName: "clock.arrow.circlepath")
@@ -241,26 +261,89 @@ public struct SessionView: View {
             .background(t.surf1)
             .overlay(Rectangle().fill(t.surf3.opacity(0.5)).frame(height: 0.5), alignment: .top)
 
-            // Chat input pill
-            ChatInputBar(
-                inputText: $vm.inputText,
-                isExecuting: vm.isExecutingUnified,
-                isTranslating: vm.isTranslating,
-                isDisconnected: vm.status != .connected,
-                onSubmit: { Task { await vm.submit() } },
-                onSnippet: { showingSnippetPalette = true },
-                onMic: {
-                    Task {
-                        if dictation.isListening { dictation.stop() }
-                        else { await dictation.start { text in vm.inputText = text } }
-                    }
-                },
-                isMicActive: dictation.isListening,
-                onSendLiveKey: { bytes in Task { await vm.sendKeystrokes(bytes) } },
-                liveInputActive: $liveInputActive
-            )
+            if keyboardExpanded {
+                TerminalKeyboardPanel(
+                    selectedTab: $expandedKeyboardTab,
+                    ctrlLatched: $rawCtrlLatched,
+                    commandHistory: vm.commandHistory,
+                    snippets: availableSnippets,
+                    onBytes: { bytes in Task { await vm.sendKeystrokes(bytes) } },
+                    onPaste: { if let b = pasteBytes() { Task { await vm.sendKeystrokes(b) } } },
+                    onRunHistory: { cmd in Task { await vm.sendToShell(cmd) } },
+                    onInsertSnippet: { snippet in vm.inputText += snippet.body },
+                    onDismiss: { collapseKeyboard() }
+                )
+                .frame(height: 300)
+                .transition(.move(edge: .bottom))
+            } else {
+                // Chat input pill
+                ChatInputBar(
+                    inputText: $vm.inputText,
+                    isExecuting: vm.isExecutingUnified,
+                    isTranslating: vm.isTranslating,
+                    isDisconnected: vm.status != .connected,
+                    onSubmit: { Task { await vm.submit() } },
+                    onSnippet: { showingSnippetPalette = true },
+                    onMic: {
+                        Task {
+                            if dictation.isListening { dictation.stop() }
+                            else { await dictation.start { text in vm.inputText = text } }
+                        }
+                    },
+                    isMicActive: dictation.isListening,
+                    onSendLiveKey: { bytes in Task { await vm.sendKeystrokes(bytes) } },
+                    liveInputActive: $liveInputActive
+                )
+            }
         }
         .sheet(isPresented: $showRawHistory) { rawHistorySheet }
+    }
+
+    // MARK: - Expandable keyboard helpers
+
+    /// Toggle between the system keyboard and the expanded key panel.
+    private var expandKeyboardButton: some View {
+        Button {
+            if keyboardExpanded { collapseKeyboard() } else { expandKeyboard() }
+        } label: {
+            Image(systemName: keyboardExpanded ? "keyboard.chevron.compact.down" : "keyboard.chevron.compact.up")
+                .font(.title3)
+                .foregroundStyle(keyboardExpanded ? t.accent : t.text3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(keyboardExpanded ? "Hide key panel" : "Show key panel")
+    }
+
+    private func expandKeyboard() {
+        dismissSystemKeyboard()
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            keyboardExpanded = true
+        }
+    }
+
+    private func collapseKeyboard() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            keyboardExpanded = false
+        }
+    }
+
+    private func dismissSystemKeyboard() {
+        liveInputActive = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+    }
+
+    /// Clipboard bytes for the panel's paste key. Wraps multi-line text in
+    /// bracketed-paste markers; single-line text is sent verbatim (no newline,
+    /// so it lands at the prompt without auto-executing).
+    private func pasteBytes() -> [UInt8]? {
+        guard let s = UIPasteboard.general.string, !s.isEmpty else { return nil }
+        if s.contains("\n") {
+            return Array(("\u{1B}[200~" + s + "\u{1B}[201~").utf8)
+        }
+        return Array(s.utf8)
     }
 
     // MARK: - Raw terminal content
@@ -282,22 +365,45 @@ public struct SessionView: View {
                 }
             )
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(spacing: 6) {
-                    KeyboardAccessoryRail(ctrlLatched: $rawCtrlLatched) { bytes in
-                        Task { try? await vm.activeShell?.send(bytes) }
+                VStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        KeyboardAccessoryRail(ctrlLatched: $rawCtrlLatched) { bytes in
+                            Task { try? await vm.activeShell?.send(bytes) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+
+                        expandKeyboardButton
+
+                        Button { showRawHistory = true } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.title3)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .disabled(vm.commandHistory.isEmpty)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
-                    Button { showRawHistory = true } label: {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                    .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                    if keyboardExpanded {
+                        TerminalKeyboardPanel(
+                            selectedTab: $expandedKeyboardTab,
+                            ctrlLatched: $rawCtrlLatched,
+                            commandHistory: vm.commandHistory,
+                            snippets: availableSnippets,
+                            onBytes: { bytes in Task { try? await vm.activeShell?.send(bytes) } },
+                            onPaste: { if let b = pasteBytes() { Task { try? await vm.activeShell?.send(b) } } },
+                            onRunHistory: { cmd in Task { await vm.sendToShell(cmd) } },
+                            onInsertSnippet: { snippet in
+                                Task { try? await vm.activeShell?.send(Array(snippet.body.utf8)) }
+                            },
+                            onDismiss: { collapseKeyboard() }
+                        )
+                        .frame(height: 300)
+                        .transition(.move(edge: .bottom))
                     }
-                    .disabled(vm.commandHistory.isEmpty)
                 }
-                .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
                 .background(t.termBg)
             }
             .sheet(isPresented: $showRawHistory) { rawHistorySheet }

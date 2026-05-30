@@ -72,9 +72,9 @@ public struct SGRState: Sendable, Equatable {
         var c = AttributeContainer()
         if let foreground { c.foregroundColor = foreground }
         if let background { c.backgroundColor = background }
-        var font: Font = .system(.body, design: .monospaced)
+        var font: Font = .custom("FragmentMono-Regular", size: 17)
         if bold { font = font.bold() }
-        if italic { font = font.italic() }
+        if italic { font = .custom("FragmentMono-Italic", size: 17) }
         c.font = font
         if underline { c.underlineStyle = .single }
         if dim { c.foregroundColor = (foreground ?? .primary).opacity(0.7) }

@@ -25,9 +25,12 @@ struct ConduitSessionLiveActivity: Widget {
         ActivityConfiguration(for: ConduitSessionAttributes.self) { context in
             // Lock-screen + banner appearance.
             HStack(spacing: 12) {
-                Image(systemName: statusIcon(context.state.status))
-                    .font(.title2)
-                    .foregroundStyle(.tint)
+                LiveActivityPixelGlyph(
+                    color: statusColor(context.state.status,
+                                       pendingApprovals: context.state.pendingApprovals,
+                                       isStreaming: context.state.isStreaming),
+                    cell: 7, gap: 2
+                )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.attributes.hostName)
                         .font(.headline)
@@ -56,8 +59,11 @@ struct ConduitSessionLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: statusIcon(context.state.status))
-                        .foregroundStyle(.tint)
+                    LiveActivityPixelGlyph(
+                        color: statusColor(context.state.status,
+                                           pendingApprovals: context.state.pendingApprovals),
+                        cell: 6, gap: 2
+                    )
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.pendingApprovals > 0 {
@@ -75,26 +81,74 @@ struct ConduitSessionLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) { EmptyView() }
             } compactLeading: {
-                Image(systemName: statusIcon(context.state.status))
-                    .foregroundStyle(.tint)
+                LiveActivityPixelGlyph(
+                    color: statusColor(context.state.status,
+                                       pendingApprovals: context.state.pendingApprovals,
+                                       isStreaming: context.state.isStreaming),
+                    cell: 4, gap: 1.4
+                )
             } compactTrailing: {
                 if context.state.pendingApprovals > 0 {
                     Text("\(context.state.pendingApprovals)")
                         .foregroundStyle(.orange)
                 }
             } minimal: {
-                Image(systemName: statusIcon(context.state.status))
-                    .foregroundStyle(.tint)
+                LiveActivityPixelGlyph(
+                    color: statusColor(context.state.status,
+                                       pendingApprovals: context.state.pendingApprovals,
+                                       isStreaming: context.state.isStreaming),
+                    cell: 3.4, gap: 1.1
+                )
             }
         }
     }
 
-    private func statusIcon(_ status: String) -> String {
-        switch status {
-        case "connected":    "circle.fill"
-        case "reconnecting": "arrow.triangle.2.circlepath"
-        case "suspended":    "pause.circle"
-        default:             "circle"
+    /// State tint for the pixel glyph — mirrors `PixelBox.stateColor`. A pending
+    /// approval is the most important signal, so it wins (amber) over connection
+    /// status, matching how the in-app island goes amber on approval.
+    private func statusColor(_ status: String, pendingApprovals: Int, isStreaming: Bool = false) -> Color {
+        if pendingApprovals > 0 {
+            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber
         }
+        if isStreaming {
+            return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue (streaming)
+        }
+        switch status {
+        case "connected":    return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green
+        case "reconnecting": return Color(.sRGB, red: 0.820, green: 0.439, blue: 0.184, opacity: 1) // orange
+        case "suspended":    return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1) // dim
+        default:             return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green
+        }
+    }
+}
+
+/// A static 3×3 "pixel block" that mirrors the in-app `PixelBox` motif for the
+/// Live Activity. Widget extensions render static snapshots — no `TimelineView`
+/// animation — so this is a still grid tinted by session state, with a fixed
+/// per-cell opacity pattern so it reads as pixels rather than a solid square.
+private struct LiveActivityPixelGlyph: View {
+    let color: Color
+    var cell: CGFloat = 4
+    var gap: CGFloat = 1.4
+
+    private static let opacities: [Double] = [
+        0.55, 0.95, 0.70,
+        0.90, 0.65, 0.95,
+        0.70, 0.92, 0.55,
+    ]
+
+    var body: some View {
+        VStack(spacing: gap) {
+            ForEach(0..<3, id: \.self) { row in
+                HStack(spacing: gap) {
+                    ForEach(0..<3, id: \.self) { col in
+                        RoundedRectangle(cornerRadius: max(0.5, cell * 0.18), style: .continuous)
+                            .fill(color.opacity(Self.opacities[row * 3 + col]))
+                            .frame(width: cell, height: cell)
+                    }
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

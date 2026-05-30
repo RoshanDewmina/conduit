@@ -31,6 +31,24 @@ private enum KeyCode {
     }
 }
 
+// MARK: - Design tokens (UIKit mirror)
+//
+// The terminal palette is identical in light & dark schemes (see Tokens.swift),
+// so these can be fixed sRGB UIColors that mirror the SwiftUI `conduitTokens`.
+
+private enum RailStyle {
+    static let surface2 = UIColor(red: 0.110, green: 0.122, blue: 0.145, alpha: 1) // #1c1f25 termSurface2
+    static let border   = UIColor(red: 0.149, green: 0.165, blue: 0.192, alpha: 1) // #262a31 termBorder
+    static let text     = UIColor(red: 0.839, green: 0.827, blue: 0.800, alpha: 1) // #d6d3cc termText
+    static let accent   = UIColor(red: 0.784, green: 0.604, blue: 0.290, alpha: 1) // #c89a4a termAccent
+    static let onAccent = UIColor(red: 0.055, green: 0.059, blue: 0.071, alpha: 1) // #0e0f12 termBg
+
+    static func mono(_ size: CGFloat) -> UIFont {
+        UIFont(name: "FragmentMono-Regular", size: size)
+            ?? .monospacedSystemFont(ofSize: size, weight: .medium)
+    }
+}
+
 // MARK: - View model
 
 /// Lightweight observable state for `KeyboardAccessoryRail`.
@@ -226,13 +244,23 @@ public final class RailViewController: UIViewController {
 
     private func makeKey(_ title: String, bytes: [UInt8]) -> UIButton {
         var config = UIButton.Configuration.filled()
-        config.title = title
-        config.baseForegroundColor = .label
-        config.baseBackgroundColor = UIColor.tertiarySystemBackground
+        var titleAttr = AttributedString(title)
+        titleAttr.font = RailStyle.mono(13)
+        config.attributedTitle = titleAttr
+        config.baseForegroundColor = RailStyle.text
+        config.baseBackgroundColor = RailStyle.surface2
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
-        config.cornerStyle = .medium
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = 6           // matches DSKey / token r2
+        config.background.strokeColor = RailStyle.border
+        config.background.strokeWidth = 1
 
         let btn = UIButton(configuration: config)
+        // Hard 2pt drop shadow, mirroring the DSKey keycap.
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowOpacity = 0.3
+        btn.layer.shadowRadius = 0
+        btn.layer.shadowOffset = CGSize(width: 0, height: 2)
         btn.setContentHuggingPriority(.required, for: .horizontal)
         btn.setContentCompressionResistancePriority(.required, for: .horizontal)
         btn.tag = 0
@@ -366,10 +394,10 @@ public final class RailViewController: UIViewController {
     private func updateCtrlAppearance() {
         guard let ctrlButton else { return }
         var config = ctrlButton.configuration ?? UIButton.Configuration.filled()
-        config.baseBackgroundColor = ctrlHeld
-            ? UIColor.systemBlue
-            : UIColor.tertiarySystemBackground
-        config.baseForegroundColor = ctrlHeld ? .white : .label
+        config.baseBackgroundColor = ctrlHeld ? RailStyle.accent : RailStyle.surface2
+        config.baseForegroundColor = ctrlHeld ? RailStyle.onAccent : RailStyle.text
+        config.background.strokeColor = ctrlHeld ? RailStyle.accent : RailStyle.border
+        config.background.strokeWidth = 1
         ctrlButton.configuration = config
     }
 }

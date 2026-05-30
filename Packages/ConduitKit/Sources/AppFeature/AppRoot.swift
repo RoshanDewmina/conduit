@@ -102,6 +102,7 @@ public struct AppRoot: View {
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
+    @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
@@ -357,6 +358,8 @@ public struct AppRoot: View {
                     credentialProvider: { .password(password) }
                 )
             }
+            .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            .preferredColorScheme(preferredScheme)
         }
         .sheet(isPresented: Binding(
             get: { sessionViewModel?.pendingHostKeyFingerprint != nil },
@@ -388,12 +391,60 @@ public struct AppRoot: View {
         }
     }
 
+    /// The in-app agent banner shows whenever there's a roster to surface and
+    /// we're not inside the live session cover (which mounts its own island).
+    private var isAgentBannerVisible: Bool {
+        !hudStore.agents.isEmpty && !isShowingLiveSession
+    }
+
+    /// Height of the reserved top strip the agent banner occupies: the collapsed
+    /// pill (38) + its top gap (4) + breathing room below it before nav content.
+    private let agentBannerStripHeight: CGFloat = 50
+
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
-        if horizontalSizeClass == .regular {
-            regularRoot(env: env)
-        } else {
-            compactRoot(env: env)
+        Group {
+            if horizontalSizeClass == .regular {
+                regularRoot(env: env)
+            } else {
+                compactRoot(env: env)
+            }
+        }
+        // Agent Island — the app-wide in-app agent HUD, shown across every tab
+        // while Conduit is foregrounded (the real hardware Dynamic Island only
+        // renders when backgrounded — see ConduitLiveActivityWidget).
+        //
+        // It lives in a RESERVED top strip: `safeAreaInset` pushes each screen's
+        // nav title / content down by the collapsed pill height so the banner
+        // never overlaps navigation chrome. The pill itself is a floating
+        // `.overlay` so its tap-to-expand panel can drop over content with a
+        // scrim without shoving the layout. Hidden behind the live SessionView
+        // cover (which mounts its own island).
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if isAgentBannerVisible {
+                Color.clear.frame(height: agentBannerStripHeight)
+            }
+        }
+        .overlay(alignment: .top) {
+            if isAgentBannerVisible {
+                GeometryReader { geo in
+                    AgentIsland(
+                        agents: hudStore.agents,
+                        screenWidth: geo.size.width,
+                        onJump: { _ in if sessionViewModel != nil { isShowingLiveSession = true } },
+                        onResolve: { _, _ in } // island approvals are demo; real ones live in Inbox
+                    )
+                }
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
+        .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
+            hudStore.pendingApprovals = count
+            // Keep the real Dynamic Island / lock-screen Live Activity badge
+            // live — this is the glanceable signal while Conduit is backgrounded.
+            if #available(iOS 16.2, *) {
+                Task { await ConduitLiveActivityManager.shared.updatePendingApprovals(count) }
+            }
         }
     }
 
@@ -521,8 +572,22 @@ public struct AppRoot: View {
             onAddSession: {
                 addHostPresented = true
                 selectedTab = .hosts
-            }
+            },
+            onDisconnectLiveSession: { disconnectLiveSession() }
         )
+    }
+
+    /// Tear down the live session and clear it from the UI. Used by the
+    /// active-row long-press menu and (indirectly) the in-session menu.
+    private func disconnectLiveSession() {
+        guard let vm = sessionViewModel else { return }
+        Task {
+            await vm.disconnect()
+            await MainActor.run {
+                sessionViewModel = nil
+                hudStore.session = nil
+            }
+        }
     }
 
     @ViewBuilder
@@ -621,6 +686,7 @@ public struct AppRoot: View {
                     }
                 )
                 self.sessionViewModel = vm
+                self.hudStore.session = vm
                 self.approvalRepository = approvalRepo
                 self.daemonChannel = channel
                 self.approvalIngest = ingest
@@ -709,33 +775,112 @@ private struct PasswordPromptView: View {
 
     @State private var password = ""
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+    @FocusState private var passwordFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Host") {
-                    LabeledContent("Address", value: host.displayAddress)
-                }
-                Section("Password") {
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                }
-            }
-            .navigationTitle("Connect")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") {
-                        let value = password
-                        dismiss()
-                        onConnect(value)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Title row + close
+                HStack {
+                    Text("Connect")
+                        .font(.dsDisplayPt(28, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(t.text3)
+                            .frame(width: 30, height: 30)
+                            .background(t.surfaceSunk, in: Circle())
                     }
-                    .disabled(password.isEmpty)
+                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 18)
+
+                // ── Host identity card
+                card {
+                    HStack(spacing: 12) {
+                        PixelAvatar(seed: host.name, size: 44)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(host.name)
+                                .font(.dsSansPt(16, weight: .semibold))
+                                .foregroundStyle(t.text)
+                                .lineLimit(1)
+                            Text(host.displayAddress)
+                                .font(.dsMonoPt(12))
+                                .foregroundStyle(t.text3)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+
+                // ── Password
+                Text("PASSWORD")
+                    .font(.dsMonoPt(11))
+                    .tracking(0.8)
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+                SecureField("Password", text: $password)
+                    .font(.dsMonoPt(14))
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($passwordFocused)
+                    .submitLabel(.go)
+                    .onSubmit(connect)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+                    .background(t.surfaceSunk)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+
+                Spacer()
+
+                // ── Connect CTA (content-width, centered — house style)
+                HStack {
+                    Spacer()
+                    DSButton("Connect", variant: .primary, size: .lg, action: connect)
+                        .disabled(password.isEmpty)
+                    Spacer()
+                }
+                .padding(.bottom, 28)
             }
         }
+        .presentationDetents([.medium])
+        .onAppear { passwordFocused = true }
+    }
+
+    private func connect() {
+        guard !password.isEmpty else { return }
+        let value = password
+        dismiss()
+        onConnect(value)
+    }
+
+    @ViewBuilder
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
     }
 }
 

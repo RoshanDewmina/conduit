@@ -48,6 +48,7 @@ struct SessionsHomeView: View {
     let snapshotRepo: SessionSnapshotRepository
     let onTapLiveSession: () -> Void
     let onAddSession: () -> Void
+    var onDisconnectLiveSession: (() -> Void)? = nil
 
     @State private var searchText = ""
     @State private var snapshots: [SessionSnapshot] = []
@@ -184,6 +185,15 @@ struct SessionsHomeView: View {
             SessionRowView(summary: s)
         }
         .buttonStyle(SessionRowButtonStyle(t: t))
+        .contextMenu {
+            if s.isLive, let onDisconnectLiveSession {
+                Button(role: .destructive) {
+                    onDisconnectLiveSession()
+                } label: {
+                    Label("Disconnect", systemImage: "bolt.slash")
+                }
+            }
+        }
     }
 
     // MARK: - Empty state

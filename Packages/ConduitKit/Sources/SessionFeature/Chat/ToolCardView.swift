@@ -24,6 +24,7 @@ public struct ToolCardView<Footer: View>: View {
     @State private var searchQuery = ""
     @State private var runningPhase = false
 
+    @AppStorage("terminalFontSize") private var termFontSize: Double = 11
     @Environment(\.conduitTokens) private var t
 
     public init(
@@ -206,7 +207,7 @@ public struct ToolCardView<Footer: View>: View {
                 .lineLimit(1)
             if !block.command.isEmpty {
                 Text(block.command)
-                    .font(.dsMonoPt(13))
+                    .font(.dsMonoPt(termFontSize))
                     .foregroundStyle(t.termText)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -246,7 +247,7 @@ public struct ToolCardView<Footer: View>: View {
             .frame(maxWidth: .infinity)
         } else if block.hasOutput {
             Text(searchQuery.isEmpty ? render : highlightedRender)
-                .font(.system(.footnote, design: .monospaced))
+                .font(.dsMonoPt(termFontSize))
                 .foregroundStyle(t.termText)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -259,7 +260,7 @@ public struct ToolCardView<Footer: View>: View {
                     .opacity(runningPhase ? 1 : 0)
                     .animation(.easeInOut(duration: 0.5).repeatForever(), value: runningPhase)
                 Text("Running…")
-                    .font(.caption.monospaced())
+                    .font(.dsMonoPt(12))
                     .foregroundStyle(t.termText3)
             }
         }
@@ -271,7 +272,7 @@ public struct ToolCardView<Footer: View>: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(t.termText3)
             TextField("Search output…", text: $searchQuery)
-                .font(.caption.monospaced())
+                .font(.dsMonoPt(termFontSize))
                 .foregroundStyle(t.termText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)

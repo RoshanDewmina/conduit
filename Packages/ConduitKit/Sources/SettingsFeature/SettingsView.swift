@@ -107,6 +107,10 @@ public struct SettingsView: View {
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @Environment(\.conduitTokens) private var t
 
+    /// Providers with a working AIClient — keeps the provider picker and the
+    /// API Keys list in sync. Add `.xai` here once its client is implemented.
+    private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
+
     public init(
         viewModel: SettingsViewModel,
         syncEngine: SyncEngine? = nil,
@@ -131,34 +135,18 @@ public struct SettingsView: View {
                             .font(.dsDisplayPt(30, weight: .bold))
                             .foregroundStyle(t.text)
                         Spacer()
-                        // Manage menu — Snippets + Keys
-                        HStack(spacing: 8) {
-                            if let repo = snippetRepo {
-                                NavigationLink {
-                                    SnippetEditorView(repository: repo)
-                                } label: {
-                                    DSButton("Snippets", icon: .plus, variant: .secondary, size: .sm, action: {})
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                            if let store = keyStore {
-                                NavigationLink {
-                                    KeysView(viewModel: KeysViewModel(store: store))
-                                } label: {
-                                    DSButton("SSH Keys", icon: .key, variant: .secondary, size: .sm, action: {})
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 20)
 
                     // ── AI Provider
+                    // Only providers with a working client are listed, so this
+                    // list stays in sync with the API Keys section below (xAI is
+                    // not wired yet — AppEnvironment.aiClient returns nil for it).
                     sectionHead("AI Provider")
                     settingsCard {
-                        ForEach(AIProvider.allCases, id: \.self) { provider in
+                        ForEach(Self.supportedProviders, id: \.self) { provider in
                             HStack {
                                 Text(provider.displayName)
                                     .font(.dsSansPt(15))
@@ -172,7 +160,7 @@ public struct SettingsView: View {
                             .padding(.horizontal, 16)
                             .contentShape(Rectangle())
                             .onTapGesture { vm.defaultProvider = provider }
-                            if provider != AIProvider.allCases.last {
+                            if provider != Self.supportedProviders.last {
                                 divider
                             }
                         }
@@ -213,6 +201,25 @@ public struct SettingsView: View {
                         .padding(.vertical, 12)
                     }
                     .padding(.bottom, 16)
+
+                    // ── Library (Snippets + SSH Keys)
+                    if snippetRepo != nil || keyStore != nil {
+                        sectionHead("Library")
+                        settingsCard {
+                            if let repo = snippetRepo {
+                                NavigationLink { SnippetEditorView(repository: repo) } label: {
+                                    settingsNavRow("Snippets", icon: "text.append")
+                                }
+                            }
+                            if let store = keyStore {
+                                if snippetRepo != nil { divider }
+                                NavigationLink { KeysView(viewModel: KeysViewModel(store: store)) } label: {
+                                    settingsNavRow("SSH Keys", icon: "key")
+                                }
+                            }
+                        }
+                        .padding(.bottom, 16)
+                    }
 
                     // ── Integrations
                     sectionHead("Integrations")
