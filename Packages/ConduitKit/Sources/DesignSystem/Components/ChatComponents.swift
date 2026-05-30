@@ -38,6 +38,7 @@ public struct DSMessageBubble: View {
                         .font(.dsSansPt(14))
                         .foregroundStyle(sender == .user ? t.bg : t.text)
                         .lineSpacing(14 * 0.5)
+                        .fixedSize(horizontal: false, vertical: true)
                     if isStreaming && sender == .agent {
                         // Blinking caret
                         Rectangle()
@@ -235,6 +236,7 @@ public struct DSApprovalCard: View {
         )
         .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
     private var riskTone: DSChipTone {

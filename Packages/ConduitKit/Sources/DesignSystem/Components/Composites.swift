@@ -27,6 +27,7 @@ public struct DSPromptLine: View {
                 .foregroundStyle(t.termText3)
         }
         .font(.dsMonoPt(12))
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 
@@ -87,6 +88,7 @@ public struct DSBlockCard<Header: View, Output: View>: View {
                     Text(dur)
                         .font(.dsMonoPt(11))
                         .foregroundStyle(t.termText3)
+                        .lineLimit(1)
                 }
                 if isStarred {
                     DSIconView(.starFilled, size: 13, color: t.termAccent)
@@ -159,6 +161,7 @@ public struct DSBlockCard<Header: View, Output: View>: View {
             RoundedRectangle(cornerRadius: t.r4, style: .continuous)
                 .strokeBorder(t.termBorder, lineWidth: 1)
         )
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
     private var gutterColor: Color {
@@ -586,6 +589,7 @@ public struct DSTabBar: View {
         .overlay(alignment: .top) {
             Rectangle().fill(t.border).frame(height: 1)
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
     private func tabButton(_ item: DSTabItem) -> some View {

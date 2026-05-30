@@ -138,6 +138,7 @@ public struct ToolCardView<Footer: View>: View {
             RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
                 .strokeBorder(cardBorder, lineWidth: 0.75)
         )
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .contextMenu { contextMenuItems }
         .onAppear {
             if cardState == .running {
@@ -170,6 +171,7 @@ public struct ToolCardView<Footer: View>: View {
             .font(.dsMonoPt(10))
             .tracking(10 * 0.12)
             .textCase(.uppercase)
+            .lineLimit(1)
 
             Spacer(minLength: 8)
 

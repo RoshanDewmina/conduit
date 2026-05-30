@@ -66,6 +66,7 @@ public struct InboxView: View {
                     Text(title)
                         .font(.dsDisplayPt(30, weight: .bold))
                         .foregroundStyle(t.text)
+                        .fixedSize(horizontal: false, vertical: true)
                     if pendingCount > 0 {
                         Text("\(pendingCount)")
                             .font(.dsMonoPt(12, weight: .semibold))

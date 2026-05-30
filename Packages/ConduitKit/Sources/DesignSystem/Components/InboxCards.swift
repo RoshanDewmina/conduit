@@ -103,6 +103,7 @@ public struct DSAskQuestionCard: View {
                 Text(label)
                     .font(.dsSansPt(14))
                     .foregroundStyle(isSelected ? t.text : t.text2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isSelected {
                     Image(systemName: "checkmark")
@@ -214,6 +215,7 @@ public struct DSMCPCallCard: View {
                 .strokeBorder(t.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 

@@ -10,9 +10,9 @@ public extension Font {
         .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Bricolage Grotesque at an exact point size.
+    /// Bricolage Grotesque at an exact point size, scaled relative to the nearest TextStyle.
     static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
-        .custom(displayFaceName(weight), size: size)
+        .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
     /// DM Sans at the given TextStyle with weight.
@@ -25,26 +25,32 @@ public extension Font {
         .custom(monoFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// DM Sans at an exact point size.
+    /// DM Sans at an exact point size, scaled relative to the nearest TextStyle.
     static func dsSansPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
-        .custom(sansFaceName(weight), size: size)
+        .custom(sansFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
-    /// Fragment Mono at an exact point size.
+    /// Fragment Mono at an exact point size, scaled relative to the nearest TextStyle.
     static func dsMonoPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
-        .custom(monoFaceName(weight), size: size)
+        .custom(monoFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 }
 
 // MARK: - Caps View modifier (uppercase + letter-spacing used by section labels)
 public struct DSCapsStyle: ViewModifier {
     let size: CGFloat
-    let tracking: CGFloat
+    // Use @ScaledMetric so letter-spacing grows with Dynamic Type.
+    @ScaledMetric private var scaledTracking: CGFloat
+
+    public init(size: CGFloat, tracking: CGFloat) {
+        self.size = size
+        self._scaledTracking = ScaledMetric(wrappedValue: tracking)
+    }
 
     public func body(content: Content) -> some View {
         content
             .font(.dsMonoPt(size))
-            .tracking(tracking)
+            .tracking(scaledTracking)
             .textCase(.uppercase)
     }
 }
@@ -52,6 +58,24 @@ public struct DSCapsStyle: ViewModifier {
 public extension View {
     func dsCapsStyle(size: CGFloat = 11, trackingMultiplier: CGFloat = 0.08) -> some View {
         modifier(DSCapsStyle(size: size, tracking: size * trackingMultiplier))
+    }
+}
+
+// MARK: - Point size → TextStyle mapping (for relativeTo: in Pt helpers)
+// Maps a raw point size to the nearest system TextStyle so .custom(face, size:, relativeTo:)
+// scales the font in proportion to the user's preferred content size.
+private func nearestTextStyle(_ size: CGFloat) -> Font.TextStyle {
+    switch size {
+    case ..<12: return .caption2
+    case ..<13: return .caption
+    case ..<14: return .footnote
+    case ..<15: return .callout
+    case ..<16: return .body
+    case ..<17: return .headline
+    case ..<19: return .title3
+    case ..<21: return .title2
+    case ..<25: return .title
+    default:    return .largeTitle
     }
 }
 

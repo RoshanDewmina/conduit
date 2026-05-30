@@ -89,6 +89,7 @@ public struct WorkspacesView: View {
                     Text("Hosts")
                         .font(.dsDisplayPt(30, weight: .bold))
                         .foregroundStyle(t.text)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button(action: handleAdd) {
                         ZStack {

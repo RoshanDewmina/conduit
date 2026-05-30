@@ -255,12 +255,14 @@ public struct DSExitChip: View {
                 .font(.dsMonoPt(11, weight: .semibold))
                 .tracking(11 * 0.04)
                 .opacity(0.75)
+                .lineLimit(1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
         .background(code == 0 ? t.okSoft : t.dangerSoft)
         .foregroundStyle(code == 0 ? t.ok : t.danger)
         .clipShape(Capsule())
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 
@@ -339,6 +341,7 @@ public struct AgentIdentityBadge: View {
         .clipShape(Capsule())
         .overlay(dark ? Capsule().strokeBorder(
             Color(.sRGB, red: 0.149, green: 0.165, blue: 0.192, opacity: 1), lineWidth: 1) : nil)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 
@@ -469,6 +472,7 @@ public struct DSEmptyState: View {
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let act = action {
                 Button(act.label, action: act.handler)
@@ -569,6 +573,7 @@ public struct DSKey: View {
                     .strokeBorder(t.termBorder, lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.3), radius: 0, y: 2)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 

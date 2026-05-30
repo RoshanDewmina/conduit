@@ -68,6 +68,7 @@ struct SessionsHomeView: View {
                     Text("Sessions")
                         .font(.dsDisplayPt(30, weight: .bold))
                         .foregroundStyle(t.text)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button(action: onAddSession) {
                         ZStack {
@@ -295,7 +296,8 @@ private struct SessionRowView: View {
 
             Spacer()
 
-            // Right column: time / PixelBox / unread — fixed geometry so PixelBox never shifts
+            // Right column: time / PixelBox / unread — fixed geometry so PixelBox never shifts.
+            // Capped at accessibility3 so the badge slot never expands and breaks alignment.
             VStack(alignment: .trailing, spacing: 4) {
                 Text(summary.relativeTime)
                     .font(.dsMonoPt(11))
@@ -316,6 +318,7 @@ private struct SessionRowView: View {
                     .frame(width: 20, alignment: .trailing)
                 }
             }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         }
         .padding(.horizontal, t.s5)
         .padding(.vertical, t.s4)

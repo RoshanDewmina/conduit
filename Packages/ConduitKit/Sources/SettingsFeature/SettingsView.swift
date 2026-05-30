@@ -187,6 +187,7 @@ public struct SettingsView: View {
                         Text("Settings")
                             .font(.dsDisplayPt(30, weight: .bold))
                             .foregroundStyle(t.text)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     }
                     .padding(.horizontal, 20)
@@ -335,6 +336,7 @@ public struct SettingsView: View {
                     Text("Keys are stored on-device (Keychain, when-unlocked, device-only) and sent directly to the provider over TLS — never to Conduit servers.")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                 }

@@ -28,6 +28,7 @@ public struct OnboardingView: View {
                             .font(.dsSansPt(15))
                             .foregroundStyle(t.text3)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     modelCallout
                     VStack(alignment: .leading, spacing: 14) {
