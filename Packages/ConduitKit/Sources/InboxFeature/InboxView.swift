@@ -188,6 +188,7 @@ public struct InboxView: View {
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
                     .lineLimit(1)
+                    .truncationMode(.head)
             }
             Spacer()
             if let d = approval.decision {

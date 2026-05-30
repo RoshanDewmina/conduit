@@ -76,9 +76,11 @@ public struct FilesView: View {
                     Text(vm.path)
                         .font(.dsMonoPt(14))
                         .foregroundStyle(t.text2)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.head)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .listRowBackground(t.surf1)
 
@@ -137,9 +139,11 @@ public struct SFTPFilesView: View {
                     Text(vm.currentPath)
                         .font(.dsMonoPt(14))
                         .foregroundStyle(t.text2)
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.head)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .listRowBackground(t.surf1)
 
