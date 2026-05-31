@@ -123,6 +123,32 @@ public struct PremiumComparisonView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(t.ok.opacity(0.12), in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+                        case .error(let msg):
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 6) {
+                                    DSIconView(.alert, size: 14, color: t.danger)
+                                    Text("Purchase unavailable")
+                                        .font(.dsSansPt(14, weight: .medium))
+                                        .foregroundStyle(t.danger)
+                                }
+                                Text(msg)
+                                    .font(.dsSansPt(13))
+                                    .foregroundStyle(t.text3)
+                                Button("Try again") { Task { await pm.load() } }
+                                    .font(.dsSansPt(13))
+                                    .foregroundStyle(t.accent)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 14)
+                        case .unknown:
+                            HStack(spacing: 10) {
+                                ProgressView().scaleEffect(0.85)
+                                Text("Loading…")
+                                    .font(.dsSansPt(14))
+                                    .foregroundStyle(t.text3)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
                         default:
                             Button {
                                 Task { await pm.purchase() }
