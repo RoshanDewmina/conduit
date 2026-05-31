@@ -15,10 +15,13 @@ public struct Redactor: Sendable {
 
     // Named patterns with their corresponding regex strings.
     private static let builtInPatterns: [(name: String, pattern: String)] = [
-        ("AWS key",        #"AKIA[0-9A-Z]{16}"#),
-        ("GitHub token",   #"gh[pousr]_[A-Za-z0-9_]+"#),
-        ("OpenAI key",     #"sk-[A-Za-z0-9\-]{20,}"#),
-        ("GitHub server",  #"ghs_[A-Za-z0-9]+"#),
+        ("AWS key",          #"AKIA[0-9A-Z]{16}"#),
+        ("GitHub token",     #"gh[pousr]_[A-Za-z0-9_]+"#),
+        // Anthropic keys start with sk-ant-; listed before the generic sk- pattern
+        // to ensure the more specific match is applied first and named distinctly.
+        ("Anthropic key",    #"sk-ant-[A-Za-z0-9\-_]{20,}"#),
+        ("OpenAI key",       #"sk-[A-Za-z0-9\-]{20,}"#),
+        ("GitHub server",    #"ghs_[A-Za-z0-9]+"#),
     ]
 
     public init() {}

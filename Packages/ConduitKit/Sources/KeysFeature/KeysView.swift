@@ -94,7 +94,7 @@ public struct KeysView: View {
             if let publicKey = vm.lastGeneratedPublic {
                 Section("Last generated public key") {
                     Text(publicKey)
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.dsMonoPt(11))
                         .foregroundStyle(t.text2)
                         .textSelection(.enabled)
                     Button("Copy") {
@@ -119,13 +119,14 @@ public struct KeysView: View {
                             Image(systemName: "key")
                                 .foregroundStyle(t.accent)
                                 .padding(.top, 2)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(key.tag)
-                                    .font(.system(.callout, design: .monospaced))
+                                    .font(.dsMonoPt(14))
                                     .foregroundStyle(t.text1)
                                     .textSelection(.enabled)
                                 Text(key.fingerprint)
-                                    .font(.system(.caption2, design: .monospaced))
+                                    .font(.dsMonoPt(11))
                                     .foregroundStyle(t.text3)
                                     .textSelection(.enabled)
                                 Button("Copy public key") {
@@ -140,6 +141,8 @@ public struct KeysView: View {
                                 .tint(t.accent)
                             }
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("SSH key \(key.tag), fingerprint \(key.fingerprint)")
                         .swipeActions {
                             Button(role: .destructive) {
                                 Task { await vm.delete(key.tag) }

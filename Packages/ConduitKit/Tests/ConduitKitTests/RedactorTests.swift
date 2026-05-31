@@ -76,4 +76,24 @@ struct RedactorTests {
         #expect(!redacted.contains("supersecret123"))
         #expect(report.redactedCount == 1)
     }
+
+    // MARK: - WS-8 regression: Anthropic key redaction
+
+    @Test("Anthropic key is redacted by specific pattern")
+    func anthropicKey() {
+        let key = "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh1234567890-ABCDEFGHIJ"
+        let (redacted, report) = Redactor.shared.redact("ANTHROPIC_API_KEY=\(key)")
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("sk-ant-"), "Anthropic key prefix must be redacted")
+        #expect(report.matchedPatterns.contains("Anthropic key"),
+                "Should be named 'Anthropic key', got: \(report.matchedPatterns)")
+    }
+
+    @Test("Anthropic key is still redacted by fallback sk- pattern if specific pattern changes")
+    func anthropicKeyFallback() {
+        // A simulated short-form sk-ant key — still caught by the sk- generic pattern
+        let (redacted, _) = Redactor.shared.redact("key=sk-ant-AAABBBCCCDDDEEEFFFGGG")
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("sk-ant-"))
+    }
 }

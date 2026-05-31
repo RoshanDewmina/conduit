@@ -62,8 +62,11 @@ final class KeyImportViewModel {
                 passphrase: effectivePassphrase,
                 comment: comment.isEmpty ? nil : comment
             )
-            // Passphrase is never stored — it goes out of scope here.
+            // Zero-out sensitive fields now that the key is safely in the Keychain.
+            // The passphrase was used transiently; the PEM contains the raw private key
+            // material — both must be cleared from ViewModel memory immediately.
             passphrase = ""
+            pemText = ""
             phase = .done(fingerprint: info.sha256Fingerprint)
         } catch let err as ConduitError {
             let msg = err.errorDescription ?? String(describing: err)
