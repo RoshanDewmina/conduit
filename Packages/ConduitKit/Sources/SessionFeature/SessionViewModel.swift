@@ -138,6 +138,10 @@ public final class SessionViewModel {
     /// on intentional close before the bridge task reads `isIntentionalClose`.
     private var bridgeTask: Task<Void, Never>?
 
+    /// Observer token for UIApplication memory-warning notifications.
+    /// Retained so we can remove the observer in `deinit`.
+    private var memoryWarningObserver: NSObjectProtocol?
+
     /// Consecutive auth failures since last successful connect. Resets on success.
     public private(set) var consecutiveAuthFailures = 0
 
@@ -260,6 +264,22 @@ public final class SessionViewModel {
         self.snapshotRepo = snapshotRepo
         self.agentRegistry = agentRegistry
         self.blocks = BlockRenderer()
+        // Phase 1: evict blocks under memory pressure.
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.blocks.trimForMemoryPressure(keep: 50)
+            }
+        }
+    }
+
+    deinit {
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     #if DEBUG
@@ -723,6 +743,7 @@ public final class SessionViewModel {
                             prompt: prompt
                         )
                         self.unifiedBlockID = blockID
+                        self.blocks.evictOldBlocksIfNeeded(protecting: blockID)
                         os_signpost(.event, log: blockLog, name: "blockPromptStart",
                                     "%{public}s", blockID.uuidString)
                     }
@@ -764,6 +785,7 @@ public final class SessionViewModel {
                                let b = self.blocks.blocks.first(where: { $0.id == blockID }) {
                                 try? await repo.persist(b)
                             }
+                            self.blocks.evictOldBlocksIfNeeded(protecting: self.unifiedBlockID)
                             // Don't nil out unifiedBlockID here — onPromptStart will
                             // create the next block and replace it.
                         }
@@ -823,13 +845,13 @@ public final class SessionViewModel {
                 let probeResult = await bridge.shellProbeResult
                 let isFish = !(probeResult?.isEmpty ?? true)
 
-                let integrationScript: String
+                let integrationLine: String
                 if isFish {
                     UserDefaults.standard.set("fish", forKey: "conduitShellDetected")
-                    integrationScript = ShellIntegrationScript.script(for: .fish)
+                    integrationLine = ShellIntegrationScript.bootstrapForFishOneLine()
                 } else {
                     UserDefaults.standard.set("posix", forKey: "conduitShellDetected")
-                    integrationScript = ShellIntegrationScript.bootstrapForPOSIXShells()
+                    integrationLine = ShellIntegrationScript.bootstrapForPOSIXShellsOneLine()
                 }
                 // Arm the ghost-block suppressor before the script lands.
                 // Default: on. Toggle with "suppressEmptySetupBlock" UserDefaults key.
@@ -839,7 +861,10 @@ public final class SessionViewModel {
                 if shouldSuppress {
                     await MainActor.run { self.suppressNextPromptBlock = true }
                 }
-                try? await shell.send(Array((integrationScript + "\n").utf8))
+                // Flush any partial ZLE buffer first, then inject the one-line eval.
+                try? await shell.send(Array("\r".utf8))
+                try? await Task.sleep(for: .milliseconds(120))
+                try? await shell.send(Array((integrationLine + "\n").utf8))
                 try? await Task.sleep(for: .milliseconds(300))
                 // Clear the bootstrap chatter, then settle so the fresh post-clear
                 // prompt (its 133;A) lands before any connect-time command runs.

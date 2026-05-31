@@ -56,6 +56,27 @@ public enum ShellIntegrationScript {
         """
     }
 
+    /// Encodes `script` as base64 and returns a single newline-free eval line.
+    /// Works on both BSD base64 (macOS/iOS) and GNU base64: `--decode` is the
+    /// portable flag; `-d`/`-D` diverge between implementations.
+    private static func singleLineEval(_ script: String) -> String {
+        let b64 = Data(script.utf8).base64EncodedString()
+        return #"eval "$(printf %s '\#(b64)' | base64 --decode)""#
+    }
+
+    /// Returns a single newline-free line that installs the POSIX integration
+    /// hooks into the running interactive shell via eval+base64.
+    public static func bootstrapForPOSIXShellsOneLine() -> String {
+        return singleLineEval(bootstrapForPOSIXShells())
+    }
+
+    /// Returns a single newline-free line for fish shell.
+    public static func bootstrapForFishOneLine() -> String {
+        let script = script(for: .fish)
+        let b64 = Data(script.utf8).base64EncodedString()
+        return "eval (printf %s '\(b64)' | base64 --decode)"
+    }
+
     private static func fallbackScript(for shell: Shell) -> String {
         switch shell {
         case .bash:

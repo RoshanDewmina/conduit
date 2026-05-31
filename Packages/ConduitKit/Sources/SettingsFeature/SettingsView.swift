@@ -158,7 +158,7 @@ public struct SettingsView: View {
 
     /// Gate for paid/stub surfaces not ready for the free TestFlight beta.
     /// Flip to `true` when iCloud sync and billing are production-ready.
-    private static let showPaidSurfaces = false
+    private static let showPaidSurfaces = true
 
     public init(
         viewModel: SettingsViewModel,
@@ -298,6 +298,10 @@ public struct SettingsView: View {
                     settingsCard {
                         NavigationLink { TerminalSettingsView() } label: {
                             settingsNavRow("Terminal settings", icon: "terminal")
+                        }
+                        divider
+                        NavigationLink { PremiumComparisonView() } label: {
+                            settingsNavRow("Compare Free vs Pro", icon: "star.circle")
                         }
                         // Billing and iCloud sync are not ready for the free beta.
                         // showPaidSurfaces gates them back in when production-ready.

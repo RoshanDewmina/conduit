@@ -3,8 +3,10 @@ import SwiftUI
 import DesignSystem
 
 public enum SSHConnectPhase: Equatable {
-    case connecting    // pixel grid cycles through "working" animations
-    case connected     // grid settles to the green "done" state
+    case connecting             // pixel grid cycles through "working" animations
+    case slow(message: String)  // still trying, but taking a while
+    case connected              // grid settles to the green "done" state
+    case failed(message: String) // terminal failure, show error
 }
 
 // Full-screen SSH connect overlay built around the nested PixelBox.
@@ -52,7 +54,7 @@ public struct SSHConnectOverlay: View {
                     .animation(.easeInOut(duration: 0.3), value: labelText)
 
                 if showDismissHint {
-                    Text("Tap anywhere to continue")
+                    Text(phase == .connected ? "Tap anywhere to continue" : "Tap anywhere to dismiss")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.4))
                         .transition(.opacity)
@@ -78,10 +80,17 @@ public struct SSHConnectOverlay: View {
                 i += 1
                 try? await Task.sleep(for: .seconds(2.0))
             }
+        case .slow(let message):
+            labelText = message
+            // Keep cycling the loading animation (don't change displayState)
         case .connected:
             withAnimation(.easeInOut(duration: 0.6)) { displayState = .done }
             labelText = "Connected"
             try? await Task.sleep(for: .seconds(0.9))
+            withAnimation { showDismissHint = true }
+        case .failed(let message):
+            withAnimation(.easeInOut(duration: 0.3)) { displayState = .error }
+            labelText = message
             withAnimation { showDismissHint = true }
         }
     }

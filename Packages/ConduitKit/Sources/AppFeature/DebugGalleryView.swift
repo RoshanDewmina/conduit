@@ -25,7 +25,11 @@ struct DebugGalleryView: View {
         switch route {
         case "orb-connecting": SSHConnectOverlay(phase: .connecting)
         case "orb-connected":  OrbConnectedDemo()
-        case "onboarding":     OnboardingView(onContinue: {}, onSetupWorkspace: {})
+        case "orb-slow":       SSHConnectOverlay(phase: .slow(message: "Still connecting…"))
+        case "orb-failed":     SSHConnectOverlay(phase: .failed(message: "Can't find host \"example.invalid\". Check the hostname."))
+        case "orb-phases":     OrbPhasesDemo()
+        case "onboarding":     OnboardingView(variant: .variantA, onContinue: {}, onSetupWorkspace: {})
+        case "onboarding-b":   OnboardingView(variant: .variantB, onContinue: {}, onSetupWorkspace: {})
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "chat":           chatGallery
@@ -648,6 +652,24 @@ private struct OrbConnectedDemo: View {
         SSHConnectOverlay(phase: phase)
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { phase = .connected }
+            }
+    }
+}
+
+/// Gallery demo that cycles through all four connect phases:
+/// connecting → slow → connected → failed.
+/// Launch with CONDUIT_GALLERY=orb-phases.
+private struct OrbPhasesDemo: View {
+    @State private var phase: SSHConnectPhase = .connecting
+    var body: some View {
+        SSHConnectOverlay(phase: phase)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    phase = .slow(message: "Still connecting…")
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                    phase = .connected
+                }
             }
     }
 }

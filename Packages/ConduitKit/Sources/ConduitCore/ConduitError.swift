@@ -7,6 +7,7 @@ public enum ConduitError: Error, LocalizedError, Sendable, Equatable {
     // Connectivity
     case notConnected
     case connectionRefused(host: String)
+    case dnsResolutionFailed(host: String)
     case authFailed(reason: String)
     case hostKeyMismatch(expected: String, actual: String)
     case hostKeyUnknown(fingerprint: String)
@@ -43,6 +44,7 @@ public enum ConduitError: Error, LocalizedError, Sendable, Equatable {
         switch self {
         case .notConnected:                       "Not connected."
         case .connectionRefused(let h):           "Connection refused by \(h)."
+        case .dnsResolutionFailed(let h):         "Can't find host \"\(h)\". Check the hostname and your network."
         case .authFailed(let r):                  "Authentication failed: \(r)"
         case .hostKeyMismatch(let e, let a):      "Host key changed (expected \(e), got \(a))."
         case .hostKeyUnknown(let fp):             "First-time host key. Verify fingerprint: \(fp)"

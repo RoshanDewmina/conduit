@@ -317,6 +317,78 @@ public final class BlockRenderer {
         #endif
     }
 
+    // MARK: - Block-count eviction
+
+    /// Maximum number of finalized blocks to retain in memory.
+    public static let maxRetainedBlocks = 300
+
+    /// Evict oldest finalized blocks, keeping at most `maxRetainedBlocks`.
+    /// Always protects the block identified by `protectedID` (the current
+    /// prompt-editing or live block).
+    public func evictOldBlocksIfNeeded(protecting protectedID: BlockID?) {
+        let finalized = blocks.filter { if case .done = $0.state { return true }; return false }
+        guard finalized.count > Self.maxRetainedBlocks else { return }
+        let excess = finalized.count - Self.maxRetainedBlocks
+        var evicted = 0
+        var i = 0
+        while evicted < excess && i < blocks.count {
+            let b = blocks[i]
+            if b.id == protectedID {
+                i += 1
+                continue
+            }
+            if case .done = b.state {
+                let id = b.id
+                blocks.remove(at: i)
+                renderCache[id] = nil
+                openState[id] = nil
+                linearLineCount[id] = nil
+                droppedLineCount[id] = nil
+                #if canImport(SwiftTerm)
+                terminals[id] = nil
+                hasCursorMovement.remove(id)
+                #endif
+                #if canImport(UIKit) && canImport(SwiftTerm)
+                liveBlockHandles[id] = nil
+                #endif
+                evicted += 1
+            } else {
+                i += 1
+            }
+        }
+    }
+
+    /// Aggressive eviction for memory pressure — keep only the most recent
+    /// `keep` finalized blocks plus any active/promptEditing blocks.
+    public func trimForMemoryPressure(keep: Int = 50) {
+        let finalized = blocks.filter { if case .done = $0.state { return true }; return false }
+        guard finalized.count > keep else { return }
+        let toRemove = finalized.count - keep
+        var removed = 0
+        var i = 0
+        while removed < toRemove && i < blocks.count {
+            let b = blocks[i]
+            if case .done = b.state {
+                let id = b.id
+                blocks.remove(at: i)
+                renderCache[id] = nil
+                openState[id] = nil
+                linearLineCount[id] = nil
+                droppedLineCount[id] = nil
+                #if canImport(SwiftTerm)
+                terminals[id] = nil
+                hasCursorMovement.remove(id)
+                #endif
+                #if canImport(UIKit) && canImport(SwiftTerm)
+                liveBlockHandles[id] = nil
+                #endif
+                removed += 1
+            } else {
+                i += 1
+            }
+        }
+    }
+
     // MARK: - Rendering
 
     /// Render the block to an AttributedString. Cached until chunks change.

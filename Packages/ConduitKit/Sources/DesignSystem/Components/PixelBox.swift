@@ -227,6 +227,7 @@ private struct PixelCell: View {
             .fill(look.rgb.color(look.opacity))
             .frame(width: cellSize, height: cellSize)
             .shadow(color: look.glow > 0 ? look.rgb.color(0.85) : .clear, radius: look.glow)
+            .shadow(color: look.glow > cellSize * 0.3 ? look.rgb.color(0.3) : .clear, radius: look.glow * 2.2)
             .offset(x: look.dx, y: look.dy)
     }
 
@@ -248,6 +249,7 @@ private struct PixelCell: View {
                             .fill(look.rgb.color(look.opacity))
                             .frame(width: subSize, height: subSize)
                             .shadow(color: look.glow > 0 ? look.rgb.color(0.7) : .clear, radius: look.glow)
+                            .shadow(color: look.glow > cellSize * 0.3 ? look.rgb.color(0.3) : .clear, radius: look.glow * 2.2)
                     }
                 }
             }
@@ -297,7 +299,7 @@ private struct PixelCell: View {
             let b = 0.5 + 0.5 * sin(now * 1.55 + Double(cellIndex) * 0.05)
             let rgb = lerp(base, lerp(base, RGB.corrupt, 0.18), b) // brighten slightly at peak
             let opacity = 0.40 + 0.60 * b
-            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.34 * b)
+            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.65 * b)
 
         case .glitching:
             return glitchLook()

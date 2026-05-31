@@ -125,8 +125,13 @@ public struct SessionView: View {
                 SSHConnectOverlay(phase: connectOverlayPhase)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        if connectOverlayPhase == .connected {
+                        switch connectOverlayPhase {
+                        case .connected:
                             withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
+                        case .failed:
+                            withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
+                        default:
+                            break
                         }
                     }
             }
@@ -188,6 +193,9 @@ public struct SessionView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                     withAnimation(.easeOut(duration: 0.4)) { showConnectOverlay = false }
                 }
+            case .failed(let reason):
+                connectOverlayPhase = .failed(message: reason)
+                showConnectOverlay = true
             default:
                 break
             }

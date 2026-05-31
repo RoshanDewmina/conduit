@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 @preconcurrency import Citadel
 @preconcurrency import NIOCore
 @preconcurrency import NIOSSH
@@ -31,8 +32,44 @@ public actor SSHSession {
 
     private static let connectTimeout: Duration = .seconds(15)
 
+    /// DNS pre-resolution with a 2-second ceiling. Skipped for IP literals.
+    /// Throws `.dnsResolutionFailed(host:)` if the lookup fails.
+    private func preResolveHost() async throws {
+        let h = host.hostname
+        // Skip resolution for IPv4 literals (digits + dots) and IPv6 (contains colon)
+        let isIPLiteral = h.allSatisfy({ $0.isNumber || $0 == "." }) || h.contains(":")
+        guard !isIPLiteral else { return }
+
+        try await withThrowingTimeout(.seconds(2)) {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                var hints = addrinfo()
+                hints.ai_flags = AI_ADDRCONFIG
+                hints.ai_socktype = SOCK_STREAM
+                var res: UnsafeMutablePointer<addrinfo>?
+                let ret = getaddrinfo(h, nil, &hints, &res)
+                if ret != 0 {
+                    cont.resume(throwing: ConduitError.dnsResolutionFailed(host: h))
+                } else {
+                    freeaddrinfo(res)
+                    cont.resume()
+                }
+            }
+        }
+    }
+
     public func connect(credential: SSHCredential, hostKeyStore: HostKeyStore) async throws {
         if isConnected { return }
+        // Pre-resolve hostname to give a fast, clear error for bad hosts.
+        do {
+            try await preResolveHost()
+        } catch let e as ConduitError {
+            lastError = e
+            throw e
+        } catch {
+            let mapped = ConduitError.dnsResolutionFailed(host: host.hostname)
+            lastError = mapped
+            throw mapped
+        }
         let method: SSHAuthenticationMethod = switch credential {
         case .password(let pw):
             .passwordBased(username: host.username, password: pw)
