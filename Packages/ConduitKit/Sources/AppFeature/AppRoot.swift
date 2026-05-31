@@ -492,27 +492,27 @@ public struct AppRoot: View {
         case .sessions:
             sessionsHome(env: env)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    bar.safeAreaPadding(.bottom)
+                    bar
                 }
         case .hosts:
             NavigationStack {
                 rootDestination(.hosts, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar.safeAreaPadding(.bottom)
+                        bar
                     }
             }
         case .inbox:
             NavigationStack {
                 rootDestination(.inbox, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar.safeAreaPadding(.bottom)
+                        bar
                     }
             }
         case .settings:
             NavigationStack {
                 rootDestination(.settings, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar.safeAreaPadding(.bottom)
+                        bar
                     }
             }
         }

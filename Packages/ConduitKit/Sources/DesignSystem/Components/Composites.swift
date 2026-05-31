@@ -584,8 +584,14 @@ public struct DSTabBar: View {
                 tabButton(item)
             }
         }
-        .frame(height: 64)
-        .background(t.surface)
+        .frame(maxWidth: .infinity)
+        .frame(height: 50)
+        // Clear the home indicator (pad), THEN paint the surface over both the
+        // row and that padding and let it bleed under the indicator — so the bar
+        // reads as one filled band instead of a 64pt row floating above a
+        // transparent gap.
+        .safeAreaPadding(.bottom)
+        .background(t.surface, ignoresSafeAreaEdges: .bottom)
         .overlay(alignment: .top) {
             Rectangle().fill(t.border).frame(height: 1)
         }
