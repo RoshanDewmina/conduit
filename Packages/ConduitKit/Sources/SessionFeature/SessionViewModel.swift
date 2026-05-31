@@ -140,7 +140,10 @@ public final class SessionViewModel {
 
     /// Observer token for UIApplication memory-warning notifications.
     /// Retained so we can remove the observer in `deinit`.
-    private var memoryWarningObserver: NSObjectProtocol?
+    /// `@ObservationIgnored nonisolated(unsafe)` so the nonisolated `deinit`
+    /// can read it under strict concurrency (mirrors PurchaseManager's
+    /// `transactionListener`); it is not observable UI state.
+    @ObservationIgnored nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     /// Consecutive auth failures since last successful connect. Resets on success.
     public private(set) var consecutiveAuthFailures = 0
