@@ -25,8 +25,43 @@ Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
 *.instrumentscli
 .dmux/
 
-# Local agent scratch worktrees
+# Local agent scratch worktrees and installed skills (Claude Code tooling)
 .claude/worktrees/
+.claude/skills/
+
+# AI agent tooling dotfiles (Claude Code, Cursor, Goose, Kiro, etc.)
+# New agents drop a dot-dir at repo root — catch them all with this glob.
+.agents/
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.hermes/
+.junie/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.zencoder/
+
+# Skills / agent lock files (tooling artifacts, not source)
+skills-lock.json
+
+# Remotion animation tooling (not shipped in app bundle)
+animations/node_modules/
+
+# Push-backend compiled binaries (distributed via GitHub Releases, not git)
+daemon/push-backend/push-backend-linux
 
 # conduitd compiled binaries (distributed via GitHub Releases, not git)
 daemon/conduitd/conduitd
