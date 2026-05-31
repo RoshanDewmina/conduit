@@ -63,9 +63,15 @@ public final class KeysViewModel {
 
 public struct KeysView: View {
     @State private var vm: KeysViewModel
+    @State private var showImportSheet = false
     @Environment(\.conduitTokens) private var t
 
-    public init(viewModel: KeysViewModel) { _vm = State(initialValue: viewModel) }
+    private let store: KeyStore
+
+    public init(viewModel: KeysViewModel, store: KeyStore) {
+        _vm = State(initialValue: viewModel)
+        self.store = store
+    }
 
     public var body: some View {
         List {
@@ -74,6 +80,12 @@ public struct KeysView: View {
                     Task { await vm.generate() }
                 } label: {
                     Label("Generate Ed25519 keypair", systemImage: "key.fill")
+                        .foregroundStyle(t.accent)
+                }
+                Button {
+                    showImportSheet = true
+                } label: {
+                    Label("Import existing key…", systemImage: "square.and.arrow.down")
                         .foregroundStyle(t.accent)
                 }
             }
@@ -145,6 +157,12 @@ public struct KeysView: View {
         .contentMargins(.bottom, 72, for: .scrollContent)
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .task { await vm.reload() }
+        .sheet(isPresented: $showImportSheet) {
+            KeyImportView(store: store) {
+                showImportSheet = false
+                Task { await vm.reload() }
+            }
+        }
         .alert("Error", isPresented: .constant(vm.error != nil)) {
             Button("OK") { vm.error = nil }
         } message: { Text(vm.error ?? "") }

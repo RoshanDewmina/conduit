@@ -285,7 +285,7 @@ public struct SettingsView: View {
                             }
                             if let store = keyStore {
                                 if snippetRepo != nil { divider }
-                                NavigationLink { KeysView(viewModel: KeysViewModel(store: store)) } label: {
+                                NavigationLink { KeysView(viewModel: KeysViewModel(store: store), store: store) } label: {
                                     settingsNavRow("SSH Keys", icon: "key")
                                 }
                             }
