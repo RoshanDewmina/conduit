@@ -38,6 +38,9 @@ public struct PixelAvatar: View {
         .clipShape(rounded
             ? AnyShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
             : AnyShape(Rectangle()))
+        // Decorative pixel art — VoiceOver should skip this and read the host
+        // name from the containing row element instead.
+        .accessibilityHidden(true)
     }
 
     private func makePixelData(seed: String) -> (pixels: [Bool], bg: Color, fg: Color) {

@@ -124,11 +124,23 @@ public actor CloudSync {
     }
 
     #if os(iOS) && !targetEnvironment(simulator)
+    /// Whether this build is provisioned to use CloudKit.
+    ///
+    /// iOS has **no public API** to read our own entitlements at runtime
+    /// (`SecTaskCreateFromSelf` / `SecTaskCopyValueForEntitlement` are macOS-only —
+    /// using them is what broke the device build). And signed-into-iCloud is NOT a
+    /// safe proxy: it's true on any iCloud user's phone even when this build ships
+    /// the stripped `Conduit-DeviceTesting.entitlements` (no `icloud-services`),
+    /// which makes `CKContainer` log *"your process must have a
+    /// com.apple.developer.icloud-services entitlement"* and every sync fail.
+    ///
+    /// So we gate on an explicit Info.plist flag (same pattern as
+    /// `CONDUIT_PUSH_BACKEND_URL`). It is set to `true` **only** in builds that ship
+    /// the full `Conduit.entitlements`; default-false means device-testing builds
+    /// never construct a container and never touch CloudKit. Flip it together with
+    /// the entitlements swap documented in `project.yml`.
     private static func hasCloudKitEntitlement() -> Bool {
-        guard let task = SecTaskCreateFromSelf(nil) else { return false }
-        let key = "com.apple.developer.icloud-services" as CFString
-        guard let value = SecTaskCopyValueForEntitlement(task, key, nil) as? [String] else { return false }
-        return value.contains("CloudKit")
+        Bundle.main.object(forInfoDictionaryKey: "CONDUIT_ICLOUD_ENABLED") as? Bool ?? false
     }
     #endif
 }

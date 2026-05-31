@@ -194,6 +194,8 @@ struct SessionsHomeView: View {
             SessionRowView(summary: s)
         }
         .buttonStyle(SessionRowButtonStyle(t: t))
+        .accessibilityLabel(sessionRowLabel(s))
+        .accessibilityHint(s.isLive ? "Opens live session" : "Reconnect to this host")
         .contextMenu {
             if s.isLive, let onDisconnectLiveSession {
                 Button(role: .destructive) {
@@ -203,6 +205,19 @@ struct SessionsHomeView: View {
                 }
             }
         }
+    }
+
+    private func sessionRowLabel(_ s: SessionSummary) -> String {
+        var parts: [String] = [s.hostName, s.subtitle]
+        if s.isLive {
+            parts.append(s.agentState == .done ? "Connected" : s.agentState.islandLabel)
+        } else {
+            parts.append("Last used \(s.relativeTime) ago")
+        }
+        if s.unreadCount > 0 {
+            parts.append("\(s.unreadCount) pending approval\(s.unreadCount == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Empty state
@@ -303,7 +318,11 @@ private struct SessionRowView: View {
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
                 HStack(spacing: 6) {
-                    PixelBox(state: summary.agentState, size: 5, gap: 1, subdivisions: 2)
+                    // size:6 → dominant 3×3 cells; subdivisions:3 → 3×3 sub-pixels
+                    // per cell for the "pixels-of-pixels" texture; gap:1 keeps the
+                    // 3×3 macro structure clear. Fixed-geometry invariant: ZStack
+                    // below always allocates width:20 for the badge slot.
+                    PixelBox(state: summary.agentState, size: 6, gap: 1, subdivisions: 3)
                     ZStack(alignment: .trailing) {
                         if summary.unreadCount > 0 {
                             Text("\(summary.unreadCount)")

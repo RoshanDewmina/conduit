@@ -22,6 +22,8 @@ public struct PixelBox: View {
     /// keeps the original flat behaviour for existing call sites.
     let subdivisions: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init(state: AgentState = .offline, size: CGFloat = 5, gap: CGFloat = 1, subdivisions: Int = 1) {
         self.mode = .state(state)
         self.size = size
@@ -39,6 +41,22 @@ public struct PixelBox: View {
     }
 
     private var behavior: CellBehavior {
+        // When Reduce Motion is enabled, collapse all animated states to their
+        // still equivalent so the grid is static (no TimelineView, no flicker).
+        if reduceMotion {
+            switch mode {
+            case .color(let c): return .still(RGB(c), opacity: 0.85)
+            case .state(let s):
+                switch s {
+                case .thinking:  return .still(RGB(0.82, 0.44, 0.18), opacity: 0.90)
+                case .streaming: return .still(RGB.blue,               opacity: 0.90)
+                case .approval:  return .still(RGB.amber,              opacity: 0.90)
+                case .error:     return .still(RGB.red,                opacity: 0.90)
+                case .done:      return .still(RGB.green,              opacity: 0.92)
+                case .offline:   return .still(RGB.offline,            opacity: 0.90)
+                }
+            }
+        }
         switch mode {
         case .color(let c):  return .breathing(RGB(c))
         case .state(let s):
@@ -57,16 +75,24 @@ public struct PixelBox: View {
         let beh = behavior
         // Subdivided grids always animate (the micro-cells shimmer even when the
         // macro state is still), so drive a TimelineView whenever either applies.
-        if beh.isAnimated || subdivisions > 1 {
-            TimelineView(.animation) { tl in
-                grid(behavior: beh, now: tl.date.timeIntervalSinceReferenceDate)
+        // Reduce Motion collapses behaviour to still(), which never enters the
+        // animated path and also disables sub-cell shimmer.
+        let effectiveSubs = reduceMotion ? 1 : subdivisions
+        Group {
+            if beh.isAnimated || effectiveSubs > 1 {
+                TimelineView(.animation) { tl in
+                    grid(behavior: beh, subdivisions: effectiveSubs, now: tl.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                grid(behavior: beh, subdivisions: effectiveSubs, now: 0)
             }
-        } else {
-            grid(behavior: beh, now: 0)
         }
+        // PixelBox is decorative status art — VoiceOver should skip it and read
+        // the containing element's accessibility label instead.
+        .accessibilityHidden(true)
     }
 
-    private func grid(behavior: CellBehavior, now: TimeInterval) -> some View {
+    private func grid(behavior: CellBehavior, subdivisions: Int, now: TimeInterval) -> some View {
         Grid(horizontalSpacing: gap, verticalSpacing: gap) {
             ForEach(0..<3, id: \.self) { row in
                 GridRow {
