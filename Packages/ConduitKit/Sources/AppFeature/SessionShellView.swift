@@ -52,12 +52,15 @@ struct SessionShellView: View {
 
     private var isPro: Bool {
         #if DEBUG
-        return true // DEV: Pro unlocked for UX eval — restore before release
+        // Default: unlocked in debug so UX is never blocked in simulator/device.
+        // Set conduitDebugProBypass=false in UserDefaults to re-engage the paywall.
+        if UserDefaults.standard.object(forKey: "conduitDebugProBypass") == nil { return true }
+        if UserDefaults.standard.bool(forKey: "conduitDebugProBypass") { return true }
+        return pm.purchaseState == .purchased
         #else
-        switch pm.purchaseState {
-        case .purchased, .unknown: return true
-        default: return false
-        }
+        // Release gate: only a verified purchase unlocks Pro surfaces.
+        // .unknown (not yet loaded) stays locked — never grant free Pro.
+        return pm.purchaseState == .purchased
         #endif
     }
 

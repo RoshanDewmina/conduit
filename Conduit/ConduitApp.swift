@@ -2,6 +2,7 @@ import SwiftUI
 import AppFeature
 import DesignSystem
 import NotificationsKit
+import SettingsFeature
 import UserNotifications
 #if canImport(Sentry)
 import Sentry
@@ -10,8 +11,12 @@ import Sentry
 import UIKit
 #endif
 
-/// GCP VM push backend. Switch to HTTPS before public App Store release.
-private let pushBackendURL = "http://35.201.3.231:8080"
+/// Push backend HTTPS URL, injected from build config via Info.plist.
+/// Set CONDUIT_PUSH_BACKEND_URL in project.yml (or Xcode build settings) to your
+/// Cloud Run service URL — e.g. "https://conduit-push-HASH-ts.a.run.app".
+/// Empty string disables push registration silently (safe for local/simulator runs).
+/// ATS blocks any plain http:// URL in Release builds so no fallback is provided.
+private let pushBackendURL: String = Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
 
 // RELEASE GATE: Paste your Sentry DSN here before App Store submission.
 // Create a project at https://sentry.io (or your self-hosted instance) to get a DSN.
@@ -69,7 +74,11 @@ struct ConduitApp: App {
         AppRoot()
             .onOpenURL { url in
                 guard url.scheme == "conduit", url.host == "billing" else { return }
+                // Store the return URL so BillingView / settings can surface it.
                 UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
+                // Refresh StoreKit entitlements — the user may have completed a
+                // purchase (StoreKit or Stripe) and returned via the deep link.
+                Task { await PurchaseManager.shared.restore() }
             }
     }
 }
@@ -118,8 +127,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        // Background push received — handled by existing local notification flow.
-        completionHandler(.noData)
+        // Broadcast so the Inbox can refresh approval/run-complete state in background.
+        NotificationCenter.default.post(
+            name: .conduitRemoteApprovalReceived,
+            object: nil,
+            userInfo: userInfo
+        )
+        completionHandler(.newData)
     }
 }
 
