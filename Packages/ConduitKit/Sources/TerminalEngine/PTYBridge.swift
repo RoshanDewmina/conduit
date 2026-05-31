@@ -230,9 +230,12 @@ public actor PTYBridge {
             inAltScreen = false
             onAltScreenExit?()
         }
+        // Check enable and disable independently so a chunk containing both
+        // (enable immediately followed by disable) ends with the correct state.
         if !bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteEnable) {
             bracketedPasteActive = true
-        } else if bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteDisable) {
+        }
+        if bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteDisable) {
             bracketedPasteActive = false
         }
     }

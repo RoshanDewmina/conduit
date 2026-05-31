@@ -57,6 +57,7 @@ public struct ChatTranscriptView: View {
                         ToolCardView(
                             block: block,
                             render: blocks.render(block),
+                            droppedLineCount: blocks.droppedLineCount[block.id] ?? 0,
                             liveHandle: blocks.liveBlockHandles[block.id],
                             onLiveBytes: { bytes in onLiveBytes(bytes) },
                             onLiveResize: { cols, rows in onLiveResize(cols, rows) },

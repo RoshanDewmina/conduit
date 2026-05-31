@@ -423,4 +423,238 @@ struct PTYBridgeTests {
         #expect(active == true,
                 "integrationActive should be true once any OSC 133 marker is received")
     }
+
+    // MARK: - Hardening: rapid consecutive commands
+
+    @Test("rapid A→C→D→A→C→D sequence — all callbacks fire in order")
+    func rapidConsecutiveCommands() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let order = Box<[String]>([])
+        await bridge.configure(
+            onPromptStart:  { order.value.append("A") },
+            onCommandStart: { order.value.append("C") },
+            onCommandDone:  { code in order.value.append("D;\(code)") }
+        )
+
+        let pumpTask = Task { await bridge.start() }
+
+        // Simulate two commands back-to-back with no extra output between them.
+        var seq: [UInt8] = []
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]   // prompt 1
+        seq += [0x1b, 0x5d] + Array("133;C".utf8) + [0x07]   // cmd 1 start
+        seq += [0x1b, 0x5d] + Array("133;D;0".utf8) + [0x07] // cmd 1 done
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]   // prompt 2
+        seq += [0x1b, 0x5d] + Array("133;C".utf8) + [0x07]   // cmd 2 start
+        seq += [0x1b, 0x5d] + Array("133;D;1".utf8) + [0x07] // cmd 2 done
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]   // final prompt
+        await mock.feed(seq)
+        await mock.finish()
+        await pumpTask.value
+
+        #expect(order.value == ["A", "C", "D;0", "A", "C", "D;1", "A"],
+                "All callbacks must fire in order for rapid consecutive commands")
+    }
+
+    // MARK: - Hardening: no-output command (A→C→D with no bytes between C and D)
+
+    @Test("no-output command — A→C→D fires all three callbacks with empty output")
+    func noOutputCommand() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let output = Box(Data())
+        let events = Box<[String]>([])
+        await bridge.configure(
+            onBlockBytes:   { bytes in output.value.append(contentsOf: bytes) },
+            onPromptStart:  { events.value.append("A") },
+            onCommandStart: { events.value.append("C") },
+            onCommandDone:  { code in events.value.append("D;\(code)") }
+        )
+
+        let pumpTask = Task { await bridge.start() }
+
+        // No bytes between C and D — simulates a command with no stdout/stderr.
+        var seq: [UInt8] = []
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;C".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;D;0".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        await mock.feed(seq)
+        await mock.finish()
+        await pumpTask.value
+
+        #expect(events.value == ["A", "C", "D;0", "A"],
+                "No-output command should still fire A, C, D;0 in order")
+        let text = String(data: output.value, encoding: .utf8) ?? ""
+        #expect(text.isEmpty, "No-output command should produce no block bytes")
+    }
+
+    // MARK: - Hardening: stderr-only output lands in block bytes
+
+    @Test("stderr-only output — bytes reach onBlockBytes even with no stdout")
+    func stderrOnlyOutput() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let output = Box(Data())
+        await bridge.configure(onBlockBytes: { bytes in output.value.append(contentsOf: bytes) })
+
+        let pumpTask = Task { await bridge.start() }
+
+        // OSC 133 A/C framing with error output between them.
+        var seq: [UInt8] = []
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;C".utf8) + [0x07]
+        seq += Array("error: command not found\r\n".utf8)
+        seq += [0x1b, 0x5d] + Array("133;D;127".utf8) + [0x07]
+        await mock.feed(seq)
+        await mock.finish()
+        await pumpTask.value
+
+        let text = String(data: output.value, encoding: .utf8) ?? ""
+        #expect(text.contains("error: command not found"),
+                "stderr output should appear in onBlockBytes")
+    }
+
+    // MARK: - Hardening: Ctrl-C mid-stream (D with exit code 130)
+
+    @Test("Ctrl-C mid-stream — D;130 fires onCommandDone with exit code 130")
+    func ctrlCMidStream() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let received = Box<Int?>(nil)
+        await bridge.configure(onCommandDone: { code in received.value = code })
+
+        let pumpTask = Task { await bridge.start() }
+
+        // Ctrl-C sends SIGINT; zsh/bash exit code 130 (128 + SIGINT=2).
+        var seq: [UInt8] = []
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;C".utf8) + [0x07]
+        seq += Array("partial output\r\n".utf8)
+        seq += [0x03]  // ^C byte
+        seq += [0x1b, 0x5d] + Array("133;D;130".utf8) + [0x07]
+        seq += [0x1b, 0x5d] + Array("133;A".utf8) + [0x07]
+        await mock.feed(seq)
+        await mock.finish()
+        await pumpTask.value
+
+        #expect(received.value == 130, "Ctrl-C should fire onCommandDone with exit code 130")
+    }
+
+    // MARK: - TUIDetector: alt-screen enter triggers escalation
+
+    @Test("TUIDetector: alt-screen enter \\e[?1049h triggers shouldEscalate")
+    func tuiDetectorAltScreenEnter() {
+        let data = Data("\u{1B}[?1049h".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[?1049h (alt-screen enter) must trigger TUIDetector")
+    }
+
+    @Test("TUIDetector: older alt-screen \\e[?47h triggers shouldEscalate")
+    func tuiDetectorLegacyAltScreen() {
+        let data = Data("\u{1B}[?47h".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[?47h (legacy alt-screen) must trigger TUIDetector")
+    }
+
+    @Test("TUIDetector: application cursor keys \\e[?1h triggers shouldEscalate")
+    func tuiDetectorAppCursorKeys() {
+        let data = Data("\u{1B}[?1h".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[?1h (application cursor keys) must trigger TUIDetector")
+    }
+
+    @Test("TUIDetector: cursor home \\e[H triggers shouldEscalate")
+    func tuiDetectorCursorHome() {
+        let data = Data("\u{1B}[H".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[H (cursor home) must trigger TUIDetector for inline-TUI detection")
+    }
+
+    @Test("TUIDetector: erase display \\e[2J triggers shouldEscalate")
+    func tuiDetectorEraseDisplay() {
+        let data = Data("\u{1B}[2J".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[2J (erase display) must trigger TUIDetector for inline-TUI detection")
+    }
+
+    @Test("TUIDetector: hide cursor \\e[?25l triggers shouldEscalate")
+    func tuiDetectorHideCursor() {
+        let data = Data("\u{1B}[?25l".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "\\e[?25l (hide cursor) must trigger TUIDetector")
+    }
+
+    @Test("TUIDetector: plain text does not trigger shouldEscalate")
+    func tuiDetectorPlainText() {
+        let data = Data("hello world\r\n".utf8)
+        #expect(!TUIDetector.shouldEscalate(to: data),
+                "Plain text must not trigger TUIDetector")
+    }
+
+    @Test("TUIDetector: normal SGR sequence does not trigger shouldEscalate")
+    func tuiDetectorSGROnly() {
+        let data = Data("\u{1B}[32mgreen text\u{1B}[0m".utf8)
+        #expect(!TUIDetector.shouldEscalate(to: data),
+                "SGR color sequences must not trigger TUIDetector — only alt-screen/cursor-positioning signals TUI")
+    }
+
+    @Test("TUIDetector: promptEditing-only sequences (ZLE \\e[?1h) do not bypass the .submitted guard")
+    func tuiDetectorSubmittedGuardIntent() {
+        // This test verifies the detector fires on ZLE app-cursor-key mode
+        // (\\e[?1h) — which is what zsh emits at every prompt. The *guard*
+        // that prevents idle promptEditing from escalating lives in
+        // SessionViewModel.onBlockBytes, not TUIDetector itself.  TUIDetector
+        // returns true for \\e[?1h so the VM can catch it for .submitted blocks.
+        let data = Data("\u{1B}[?1h".utf8)
+        #expect(TUIDetector.shouldEscalate(to: data),
+                "TUIDetector must return true for \\e[?1h; the .submitted guard is in the VM")
+    }
+
+    // MARK: - Hardening: bracketedPaste flag toggled by sequences
+
+    @Test("bracketed-paste enable sequence sets bracketedPasteActive")
+    func bracketedPasteEnable() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let pumpTask = Task { await bridge.start() }
+
+        // \e[?2004h — enable bracketed paste mode
+        let enable: [UInt8] = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68]
+        await mock.feed(enable)
+        await mock.finish()
+        await pumpTask.value
+
+        let active = await bridge.bracketedPasteActive
+        #expect(active == true, "bracketedPasteActive should be true after \\e[?2004h")
+    }
+
+    @Test("bracketed-paste disable sequence clears bracketedPasteActive")
+    func bracketedPasteDisable() async throws {
+        let mock = MockShellHandle()
+        let terminal = makeMockTerminal()
+        let bridge = PTYBridge(shell: mock.shell, terminal: terminal)
+
+        let pumpTask = Task { await bridge.start() }
+
+        // Enable then disable
+        let enable: [UInt8]  = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68]
+        let disable: [UInt8] = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c]
+        await mock.feed(enable + disable)
+        await mock.finish()
+        await pumpTask.value
+
+        let active = await bridge.bracketedPasteActive
+        #expect(active == false, "bracketedPasteActive should be false after \\e[?2004l")
+    }
 }

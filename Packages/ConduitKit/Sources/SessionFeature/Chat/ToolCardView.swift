@@ -11,6 +11,10 @@ import DesignSystem
 public struct ToolCardView<Footer: View>: View {
     let block: Block
     let render: AttributedString
+    /// Number of lines silently dropped from the top of this block's output
+    /// because it exceeded `BlockRenderer.maxLinearLines`. Zero means no
+    /// truncation. Non-zero renders a "⚠ N earlier lines dropped" notice.
+    let droppedLineCount: Int
     let liveHandle: TerminalFeedHandle?
     let onLiveBytes: ((ArraySlice<UInt8>) -> Void)?
     let onLiveResize: ((Int, Int) -> Void)?
@@ -30,6 +34,7 @@ public struct ToolCardView<Footer: View>: View {
     public init(
         block: Block,
         render: AttributedString,
+        droppedLineCount: Int = 0,
         liveHandle: TerminalFeedHandle? = nil,
         onLiveBytes: ((ArraySlice<UInt8>) -> Void)? = nil,
         onLiveResize: ((Int, Int) -> Void)? = nil,
@@ -41,6 +46,7 @@ public struct ToolCardView<Footer: View>: View {
     ) {
         self.block = block
         self.render = render
+        self.droppedLineCount = droppedLineCount
         self.liveHandle = liveHandle
         self.onLiveBytes = onLiveBytes
         self.onLiveResize = onLiveResize
@@ -66,6 +72,9 @@ public struct ToolCardView<Footer: View>: View {
         liveHandle != nil && block.state == .executing
     }
 
+    /// Full-size inline TUI height — only used when a live TUI handle is actively
+    /// rendering cursor-positioning content. Matches screen × 0.55, clamped to
+    /// 360…720 pt. Short/idle blocks skip this floor and size to their content.
     private var inlineTerminalHeight: CGFloat {
         #if os(iOS)
         let screenH = UIApplication.shared.connectedScenes
@@ -75,6 +84,13 @@ public struct ToolCardView<Footer: View>: View {
         #else
         return 420
         #endif
+    }
+
+    /// Returns `true` only when the live TUI handle is actively rendering and the
+    /// block is executing in alt-screen / inline-TUI mode. Idle and finished blocks
+    /// always return `false` so they don't reserve the large height floor.
+    private var needsFullTUIHeight: Bool {
+        hasLiveTerminal
     }
 
     private var highlightedRender: AttributedString {
@@ -245,14 +261,32 @@ public struct ToolCardView<Footer: View>: View {
                 onResize: { cols, rows in onLiveResize?(cols, rows) },
                 inlineEmbedded: true
             )
-            .frame(height: inlineTerminalHeight)
+            // Reserve the full TUI height only while a live handle is actively
+            // rendering (needsFullTUIHeight == true). Idle and short blocks size
+            // to content so they don't leave a 360–720 pt blank floor.
+            .frame(height: needsFullTUIHeight ? inlineTerminalHeight : nil)
             .frame(maxWidth: .infinity)
         } else if block.hasOutput {
-            Text(searchQuery.isEmpty ? render : highlightedRender)
-                .font(.dsMonoPt(termFontSize))
-                .foregroundStyle(t.termText)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                if droppedLineCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(t.termAccent)
+                        Text("output truncated — \(droppedLineCount) earlier \(droppedLineCount == 1 ? "line" : "lines") dropped")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.termAccent)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(t.termAccent.opacity(0.12).cornerRadius(4))
+                }
+                Text(searchQuery.isEmpty ? render : highlightedRender)
+                    .font(.dsMonoPt(termFontSize))
+                    .foregroundStyle(t.termText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } else if cardState == .running {
             // Placeholder streaming caret while output hasn't arrived yet
             HStack(spacing: 6) {

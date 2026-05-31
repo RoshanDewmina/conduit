@@ -28,6 +28,19 @@ public final class BlockRenderer {
     private var renderCache: [BlockID: AttributedString] = [:]
     private let parser = AnsiSGRParser()
 
+    /// Maximum number of lines retained per block in the linear SGR path.
+    /// When output exceeds this, the oldest lines are discarded and the count
+    /// is recorded in `droppedLineCount` for the truncation affordance.
+    public static let maxLinearLines = 2000
+
+    /// Number of lines that have been silently discarded for each block.
+    /// Non-zero entries power the "⚠ N earlier lines dropped" affordance in
+    /// `ToolCardView`. Cleared on `finalize` (terminal snapshot takes over).
+    public private(set) var droppedLineCount: [BlockID: Int] = [:]
+
+    /// Running line count for the linear SGR path (chunk-level, not rendered).
+    private var linearLineCount: [BlockID: Int] = [:]
+
     #if canImport(SwiftTerm)
     // MARK: - Per-block terminal emulator (Warp-style VTE-per-block)
     //
@@ -134,6 +147,11 @@ public final class BlockRenderer {
 
         if !text.isEmpty {
             blocks[idx].chunks.append(BlockChunk(text: text, stream: stream))
+            // Track line count for the linear SGR path. Trim oldest chunks when
+            // the block exceeds maxLinearLines so memory stays bounded.
+            let newLines = text.filter { $0 == "\n" }.count
+            linearLineCount[id, default: 0] += newLines
+            truncateOldestLinesIfNeeded(id: id, blockIndex: idx)
         }
         renderCache[id] = nil
 
@@ -147,6 +165,44 @@ public final class BlockRenderer {
             }
         }
         #endif
+    }
+
+    /// Remove the oldest chunks from `blocks[blockIndex]` when the running line
+    /// count exceeds `maxLinearLines`. Dropped lines are tallied in
+    /// `droppedLineCount` so the view can show a "N earlier lines dropped" banner.
+    private func truncateOldestLinesIfNeeded(id: BlockID, blockIndex idx: Int) {
+        let limit = Self.maxLinearLines
+        guard (linearLineCount[id] ?? 0) > limit else { return }
+        let excess = (linearLineCount[id] ?? 0) - limit
+        var dropped = 0
+        while dropped < excess, !blocks[idx].chunks.isEmpty {
+            let chunk = blocks[idx].chunks[0]
+            let linesInChunk = chunk.text.filter { $0 == "\n" }.count
+            if dropped + linesInChunk <= excess {
+                blocks[idx].chunks.removeFirst()
+                dropped += linesInChunk
+            } else {
+                // Partially trim the first chunk: drop enough lines from the front.
+                let linesToDrop = excess - dropped
+                var remaining = chunk.text
+                var dropCount = 0
+                while dropCount < linesToDrop, let nl = remaining.firstIndex(of: "\n") {
+                    remaining = String(remaining[remaining.index(after: nl)...])
+                    dropCount += 1
+                }
+                blocks[idx].chunks[0] = BlockChunk(text: remaining, stream: chunk.stream,
+                                                    receivedAt: chunk.receivedAt)
+                dropped += dropCount
+                break
+            }
+        }
+        linearLineCount[id] = limit
+        droppedLineCount[id, default: 0] += dropped
+        // SGR state is now stale — reset it so the next render re-parses from the
+        // trimmed start. This loses accumulated open-color state but prevents
+        // applying a state from lines that no longer exist.
+        openState[id] = nil
+        renderCache[id] = nil
     }
 
     private func normalizeLineEditorControls(_ text: String, blockIndex idx: Int) -> String {
@@ -196,6 +252,9 @@ public final class BlockRenderer {
         guard let idx = blocks.firstIndex(where: { $0.id == id }) else { return }
         blocks[idx].chunks.removeAll()
         renderCache[id] = nil
+        linearLineCount[id] = nil
+        droppedLineCount[id] = nil
+        openState[id] = nil
         #if canImport(SwiftTerm)
         hasCursorMovement.remove(id)
         terminals[id] = makeBlockTerminal()
@@ -207,6 +266,7 @@ public final class BlockRenderer {
         blocks[idx].exitStatus = ExitStatus(code: exitCode)
         blocks[idx].finishedAt = .now
         blocks[idx].state = .done(exitCode: exitCode)
+        linearLineCount[id] = nil
         #if canImport(SwiftTerm)
         // Freeze the final screen state into the render cache, then free the terminal.
         if let term = terminals[id], hasCursorMovement.contains(id) {
@@ -244,6 +304,8 @@ public final class BlockRenderer {
         blocks.removeAll()
         openState.removeAll()
         renderCache.removeAll()
+        linearLineCount.removeAll()
+        droppedLineCount.removeAll()
         pendingTUIEscalation = false
         #if canImport(SwiftTerm)
         terminals.removeAll()
