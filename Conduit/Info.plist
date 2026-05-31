@@ -29,6 +29,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CONDUIT_ICLOUD_ENABLED</key>
+	<false/>
+	<key>CONDUIT_PUSH_BACKEND_URL</key>
+	<string>$(CONDUIT_PUSH_BACKEND_URL)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

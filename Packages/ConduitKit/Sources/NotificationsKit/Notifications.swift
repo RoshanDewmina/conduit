@@ -11,6 +11,10 @@ public extension Notification.Name {
     /// Posted when the user taps View on a run-complete push notification.
     /// userInfo: ["sessionId": String]
     static let conduitRunCompleteAction = Notification.Name("dev.conduit.runCompleteAction")
+    /// Posted when a background remote (APNs) push is received so the Inbox
+    /// can refresh approval / run-complete state without the user opening the app.
+    /// userInfo: the raw APNs userInfo dictionary forwarded from the push payload.
+    static let conduitRemoteApprovalReceived = Notification.Name("dev.conduit.remoteApprovalReceived")
 }
 
 /// Local + remote notification orchestration. For M3 we use only local

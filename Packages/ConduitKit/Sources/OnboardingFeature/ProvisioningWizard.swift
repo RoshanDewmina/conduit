@@ -42,10 +42,17 @@ public final class ProvisioningWizardViewModel {
                     return
                 }
                 provisioner = FlyProvisioner(apiToken: flyAPIToken)
+            #if DEBUG
             case .lightsail:
                 provisioner = LightsailProvisioner(accessKey: "", secretKey: "")
             case .orbstack:
                 provisioner = OrbstackProvisioner()
+            #else
+            default:
+                error = "This provider is not available in this build."
+                step = .configure
+                return
+            #endif
             }
 
             let host = try await provisioner.create(plan: plan, log: log)

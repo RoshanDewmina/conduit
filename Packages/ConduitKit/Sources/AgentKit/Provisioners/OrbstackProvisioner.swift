@@ -1,8 +1,10 @@
+#if DEBUG
 import Foundation
 import ConduitCore
 
 /// Provisions an OrbStack Linux VM on the local machine.
 /// OrbStack must be running and its CLI (`orb`) must be installed.
+/// Gated to DEBUG — multi-cloud provisioning is post-launch. Only Fly.io ships in v1.
 public actor OrbstackProvisioner: Provisioner {
     private let baseURL = URL(string: "http://127.0.0.1:28935")!
 
@@ -53,3 +55,4 @@ public actor OrbstackProvisioner: Provisioner {
         )
     }
 }
+#endif // DEBUG
