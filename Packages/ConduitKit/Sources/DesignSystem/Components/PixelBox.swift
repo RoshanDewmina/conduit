@@ -255,16 +255,16 @@ private struct PixelCell: View {
             let rgb = sampleGradient(evolveStops, phase)
             // Gentle, slightly desynced breathing so it feels alive, not strobing.
             let b = 0.5 + 0.5 * sin(now * 1.25 + Double(cellIndex) * 0.32)
-            let opacity = 0.62 + 0.38 * b
-            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.22 * b)
+            let opacity = 0.68 + 0.32 * b
+            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.55 * b)
 
         case .flowing:
             // A brightness wave travels along the diagonal — data in motion.
             let wave = sin(now * 3.0 - diag * 0.95)
             let b = 0.5 + 0.5 * wave
             let rgb = lerp(RGB.blue, RGB.blueLit, b)
-            let opacity = 0.26 + 0.74 * b
-            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.30 * b)
+            let opacity = 0.32 + 0.68 * b
+            return Look(rgb: rgb, opacity: opacity, glow: cellSize * 0.65 * b)
 
         case .breathing(let base):
             // Calm, near-synchronized swell (a heartbeat). Tiny per-cell offset for life.

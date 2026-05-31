@@ -16,8 +16,20 @@ public enum ShellIntegrationScript {
         return fallbackScript(for: shell)
     }
 
+    /// COLORFGBG environment hint for remote TUI programs (Claude Code, codex, etc.).
+    /// Dark terminal themes → `15;0` (white fg on black bg), Light → `0;15`.
+    /// Remote apps read COLORFGBG at startup to auto-select their colour scheme,
+    /// avoiding the need to run `/theme` manually after every connect.
+    public static func colorfgbgExport() -> String {
+        let themeName = UserDefaults.standard.string(forKey: "terminalTheme") ?? "Dark"
+        let isDark = themeName != "Light"
+        return isDark ? "export COLORFGBG='15;0'" : "export COLORFGBG='0;15'"
+    }
+
     public static func bootstrapForPOSIXShells() -> String {
-        """
+        let colorHint = colorfgbgExport()
+        return """
+        \(colorHint)
         __conduit_prompt_command() {
           local __conduit_status="$?"
           printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$__conduit_status" "${HOST:-${HOSTNAME:-localhost}}" "$PWD"

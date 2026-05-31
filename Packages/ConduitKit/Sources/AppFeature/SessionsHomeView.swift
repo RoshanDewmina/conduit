@@ -303,7 +303,7 @@ private struct SessionRowView: View {
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
                 HStack(spacing: 6) {
-                    PixelBox(state: summary.agentState, size: 5, gap: 1)
+                    PixelBox(state: summary.agentState, size: 5, gap: 1, subdivisions: 2)
                     ZStack(alignment: .trailing) {
                         if summary.unreadCount > 0 {
                             Text("\(summary.unreadCount)")

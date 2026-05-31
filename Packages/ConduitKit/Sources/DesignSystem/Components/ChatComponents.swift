@@ -200,16 +200,22 @@ public struct DSApprovalCard: View {
                     .foregroundStyle(t.text3)
             }
 
-            // Description
-            HStack(spacing: 4) {
-                Text(agentName).fontWeight(.semibold)
-                Text("wants to \(action) on")
+            // Action sentence — who + what, uniform font/color, no mid-sentence font switch
+            (Text(agentName).fontWeight(.semibold) + Text(" wants to \(action)"))
+                .font(.dsSansPt(14))
+                .foregroundStyle(t.text)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Host/path metadata row — visually separated; mono + dimmer color + server glyph
+            HStack(spacing: 5) {
+                DSIconView(.server, size: 11, color: t.text3)
                 Text(hostLabel)
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(.dsSansPt(14))
-            .foregroundStyle(t.text)
 
             // Command block
             if let cmd = command {
