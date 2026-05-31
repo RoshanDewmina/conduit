@@ -1,8 +1,73 @@
 import Testing
 import Foundation
 @testable import SSHTransport
+@testable import ConduitCore
 
 // MARK: - B4: Reconnect coverage
+
+// MARK: - Backoff schedule
+
+@Suite("ReconnectController — backoff schedule")
+struct BackoffScheduleTests {
+
+    @Test("first attempt is 250 ms ± 20%")
+    func firstAttempt() {
+        let d = ReconnectController.backoff(attempt: 0)
+        let ms = Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+        #expect(ms >= 200 && ms <= 300, "attempt 0 should be ~250 ms, got \(ms) ms")
+    }
+
+    @Test("attempt 1 is 500 ms ± 20%")
+    func secondAttempt() {
+        let d = ReconnectController.backoff(attempt: 1)
+        let ms = Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+        #expect(ms >= 400 && ms <= 600, "attempt 1 should be ~500 ms, got \(ms) ms")
+    }
+
+    @Test("attempt 5+ caps at 10 s ± 20%")
+    func capAtTen() {
+        for attempt in 5...8 {
+            let d = ReconnectController.backoff(attempt: attempt)
+            let ms = Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+            #expect(ms >= 8000 && ms <= 12000,
+                    "attempt \(attempt) should be ~10 s, got \(ms) ms")
+        }
+    }
+
+    @Test("backoff is always positive (jitter never produces zero)")
+    func alwaysPositive() {
+        for i in 0..<20 {
+            let d = ReconnectController.backoff(attempt: i)
+            let ms = Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+            #expect(ms > 0, "backoff for attempt \(i) must be positive")
+        }
+    }
+}
+
+// MARK: - Error mapping: authentication pass-through
+
+@Suite("SSHSession — auth-failure credential clear")
+struct AuthCredentialTests {
+
+    @Test("map(error:) returns .authFailed for ConduitError.authFailed pass-through")
+    func authFailedPassthrough() {
+        let err = ConduitError.authFailed(reason: "bad password")
+        let mapped = SSHSession.map(error: err, host: "h")
+        if case .authFailed(let reason) = mapped {
+            #expect(reason == "bad password")
+        } else {
+            Issue.record("Expected .authFailed passthrough, got \(mapped)")
+        }
+    }
+
+    @Test("map(error:) returns .timeout for ConduitError.timeout pass-through")
+    func timeoutPassthrough() {
+        let mapped = SSHSession.map(error: ConduitError.timeout, host: "h")
+        #expect(mapped == .timeout)
+    }
+}
+
+// MARK: - AutoReconnectEngine — trigger and retry
 
 @Suite("AutoReconnectEngine — trigger and retry")
 struct ReconnectRetryTests {

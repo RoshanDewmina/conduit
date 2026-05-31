@@ -182,6 +182,7 @@ public final class SessionViewModel {
                 try? await tmux.attachOrCreate(name: name)
             }
             status = .connected
+            startKeepAlive()
             await openUnifiedShell()
             await loadPersistedBlocks()
             await refreshCWD()
@@ -411,7 +412,11 @@ public final class SessionViewModel {
     }
 
     private func startKeepAlive() {
-        let interval = UserDefaults.standard.integer(forKey: "terminalKeepAlive")
+        // Mirror TerminalSettingsView.keepAliveInterval: default 60 s when unset,
+        // 0 means the user explicitly chose "Off".
+        let interval = UserDefaults.standard.object(forKey: "terminalKeepAlive") == nil
+            ? 60
+            : UserDefaults.standard.integer(forKey: "terminalKeepAlive")
         guard interval > 0 else { return }
         keepAliveTask?.cancel()
         keepAliveTask = Task { [weak self] in
