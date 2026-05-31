@@ -62,6 +62,7 @@ animations/node_modules/
 
 # Push-backend compiled binaries (distributed via GitHub Releases, not git)
 daemon/push-backend/push-backend-linux
+daemon/push-backend/push-backend
 
 # conduitd compiled binaries (distributed via GitHub Releases, not git)
 daemon/conduitd/conduitd
