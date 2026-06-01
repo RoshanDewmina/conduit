@@ -320,7 +320,7 @@ public struct AgentIdentityBadge: View {
         HStack(spacing: 5) {
             // Colored mark tile
             ZStack {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 2)
                     .fill(agent.markColor)
                     .frame(width: 14, height: 14)
                 Text(agent.markLabel)
@@ -329,18 +329,19 @@ public struct AgentIdentityBadge: View {
             }
             if let label {
                 Text(label)
-                    .font(.dsSansPt(11))
-                    .foregroundStyle(dark ? Color(.sRGB, red: 0.557, green: 0.541, blue: 0.510, opacity: 1) : t.text2)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(dark ? Color(.sRGB, red: 0.541, green: 0.553, blue: 0.588, opacity: 1) : t.text2)
                     .lineLimit(1)
             }
         }
         .padding(.leading, 4)
         .padding(.trailing, 8)
         .padding(.vertical, 2)
-        .background(dark ? Color.white.opacity(0.06) : t.surfaceSunk)
-        .clipShape(Capsule())
-        .overlay(dark ? Capsule().strokeBorder(
-            Color(.sRGB, red: 0.149, green: 0.165, blue: 0.192, opacity: 1), lineWidth: 1) : nil)
+        .background(dark ? Color.white.opacity(0.05) : t.surfaceSunk)
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(dark ? Color.white.opacity(0.10) : t.border, lineWidth: 1))
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
@@ -364,9 +365,11 @@ public struct DSSearchField: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            DSIconView(.search, size: 16, color: t.text3)
+            Text("$")
+                .font(.dsMonoPt(13, weight: .medium))
+                .foregroundStyle(t.accent)
             TextField(placeholder, text: $text)
-                .font(.dsSansPt(13))
+                .font(.dsMonoPt(13))
                 .foregroundStyle(t.text)
                 .tint(t.accent)
                 .focused($isFocused)
@@ -389,10 +392,13 @@ public struct DSSearchField: View {
         }
         .padding(.leading, 12)
         .padding(.trailing, 8)
-        .frame(height: 36)
-        .background(t.surface)
-        .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(t.border, lineWidth: 1))
+        .frame(height: 38)
+        .background(t.surfaceSunk)
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(isFocused ? t.accent : t.border, lineWidth: 1)
+        )
     }
 }
 
@@ -443,6 +449,7 @@ public struct SectionHead: View {
 
 public struct DSEmptyState: View {
     let icon: DSIcon
+    let dotState: DotMatrixState?
     let title: String
     let subtitle: String?
     let action: (label: String, handler: () -> Void)?
@@ -456,6 +463,21 @@ public struct DSEmptyState: View {
         action: (label: String, handler: () -> Void)? = nil
     ) {
         self.icon = icon
+        self.dotState = nil
+        self.title = title
+        self.subtitle = subtitle
+        self.action = action
+    }
+
+    /// BLOCKS state card — the dot-matrix carries the mood (idle / error / done).
+    public init(
+        dotMatrix: DotMatrixState,
+        title: String,
+        subtitle: String? = nil,
+        action: (label: String, handler: () -> Void)? = nil
+    ) {
+        self.icon = .terminal
+        self.dotState = dotMatrix
         self.title = title
         self.subtitle = subtitle
         self.action = action
@@ -463,7 +485,12 @@ public struct DSEmptyState: View {
 
     public var body: some View {
         VStack(spacing: 10) {
-            DSIconView(icon, size: 28, color: t.text4)
+            if let dotState {
+                DotMatrixView(state: dotState, cols: 22, rows: 6, cell: 7, dot: 3)
+                    .padding(.bottom, 4)
+            } else {
+                DSIconView(icon, size: 28, color: t.text4)
+            }
             Text(title)
                 .font(.dsSansPt(14, weight: .medium))
                 .foregroundStyle(t.text)

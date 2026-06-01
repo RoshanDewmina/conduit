@@ -90,14 +90,16 @@ public struct DSChip: View {
         .padding(.vertical, vPad)
         .background(bgColor)
         .foregroundStyle(fgColor)
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
         .overlay(
-            Capsule().strokeBorder(borderColor, lineWidth: variant == .outlined ? 1 : variant == .dashed ? 0 : 0)
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: variant == .outlined ? 1 : 0)
         )
         .overlay(
             Group {
                 if variant == .dashed {
-                    Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         .foregroundStyle(borderColor)
                 }
             }
@@ -219,33 +221,24 @@ public struct RiskBadge: View {
 
     public var body: some View {
         HStack(spacing: 5) {
-            // 3 bars
-            HStack(alignment: .bottom, spacing: 1) {
-                ForEach(0..<3, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(i <= activeBars ? barColor : barColor.opacity(0.35))
-                        .frame(width: 2, height: [3, 6, 9][i])
-                }
-            }
+            // square status dot (BLOCKS: shape + colour for colour-blind safety)
+            Rectangle()
+                .fill(barColor)
+                .frame(width: 5, height: 5)
             Text(riskLabel)
-                .font(.dsMonoPt(11, weight: .medium))
-                .tracking(11 * 0.06)
+                .font(.dsDisplayPt(10, weight: .semibold))
+                .tracking(10 * 0.1)
                 .textCase(.uppercase)
         }
-        .padding(.leading, 5)
-        .padding(.trailing, 7)
+        .padding(.horizontal, 7)
         .padding(.vertical, 2)
         .background(softColor)
-        .clipShape(Capsule())
-    }
-
-    private var activeBars: Int {
-        switch risk {
-        case 0:  return 0
-        case 1:  return 1
-        case 2:  return 2
-        default: return 2
-        }
+        .foregroundStyle(barColor)
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(barColor.opacity(0.45), lineWidth: 1)
+        )
     }
 
     private var barColor: Color {
@@ -300,7 +293,7 @@ public struct AgentBadge: View {
         .padding(.vertical, 4)
         .background(state.color(tokens: t).opacity(0.12))
         .foregroundStyle(state.color(tokens: t))
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
     }
 
     private var streamingDots: some View {

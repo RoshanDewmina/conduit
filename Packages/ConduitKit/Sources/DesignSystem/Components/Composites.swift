@@ -591,7 +591,7 @@ public struct DSTabBar: View {
         // reads as one filled band instead of a 64pt row floating above a
         // transparent gap.
         .safeAreaPadding(.bottom)
-        .background(t.surface, ignoresSafeAreaEdges: .bottom)
+        .background(t.surface2, ignoresSafeAreaEdges: .bottom)
         .overlay(alignment: .top) {
             Rectangle().fill(t.border).frame(height: 1)
         }
@@ -603,24 +603,31 @@ public struct DSTabBar: View {
         return Button {
             selectedID = item.id
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 ZStack(alignment: .topTrailing) {
-                    DSIconView(item.icon, size: 20, color: isActive ? t.text : t.text3)
+                    DSIconView(item.icon, size: 20, color: isActive ? t.accent : t.text3)
                     if item.badge {
                         Circle()
                             .fill(t.accent)
                             .frame(width: 6, height: 6)
-                            .overlay(Circle().strokeBorder(t.surface, lineWidth: 2))
+                            .overlay(Circle().strokeBorder(t.surface2, lineWidth: 2))
                             .offset(x: 4, y: -4)
                     }
                 }
                 Text(item.label)
-                    .font(.dsMonoPt(10))
-                    .tracking(10 * 0.06)
+                    .font(.dsDisplayPt(9, weight: .semibold))
+                    .tracking(9 * 0.10)
                     .textCase(.uppercase)
-                    .foregroundStyle(isActive ? t.text : t.text3)
+                    .foregroundStyle(isActive ? t.accent : t.text3)
             }
             .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+            .overlay(alignment: .top) {
+                // BLOCKS active indicator — 2px accent bar over the active tab.
+                if isActive {
+                    Rectangle().fill(t.accent).frame(width: 24, height: 2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
