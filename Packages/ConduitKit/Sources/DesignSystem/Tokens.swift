@@ -60,12 +60,13 @@ public struct ConduitTokens: Sendable {
     public var termOk: Color           // oklch(0.74 0.16 150) ≈ #3fc06f
     public var termErr: Color          // oklch(0.70 0.18 27) ≈ #df5a4a
 
-    // MARK: Radii
-    public var r1: CGFloat = 4
-    public var r2: CGFloat = 6
-    public var r3: CGFloat = 8
-    public var r4: CGFloat = 12
-    public var r5: CGFloat = 16
+    // MARK: Radii — BLOCKS identity is the square corner (r0). Only sheets round slightly;
+    // dots / avatars / pings use `pill`.
+    public var r1: CGFloat = 0   // cards / blocks
+    public var r2: CGFloat = 2   // chips / tags
+    public var r3: CGFloat = 0   // buttons / inputs
+    public var r4: CGFloat = 0   // block cards
+    public var r5: CGFloat = 4   // sheets / overlays
     public var pill: CGFloat = 999
 
     // MARK: Spacing
@@ -99,6 +100,19 @@ public struct ConduitTokens: Sendable {
         }
     }
 
+    // MARK: Famicom spectrum (M-THEORY cartridge) — the signature device.
+    // Drives the spectrum bar, dot-matrix loaders, logo and the risk ramp. Same in both schemes.
+    public static let spectrumColors: [Color] = [
+        Color(.sRGB, red: 0.784, green: 0.259, blue: 0.231, opacity: 1), // #C8423B
+        Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1), // #E2662C
+        Color(.sRGB, red: 0.941, green: 0.573, blue: 0.180, opacity: 1), // #F0922E
+        Color(.sRGB, red: 0.949, green: 0.757, blue: 0.306, opacity: 1), // #F2C14E
+        Color(.sRGB, red: 0.780, green: 0.482, blue: 0.651, opacity: 1), // #C77BA6
+        Color(.sRGB, red: 0.494, green: 0.310, blue: 0.710, opacity: 1), // #7E4FB5
+        Color(.sRGB, red: 0.329, green: 0.376, blue: 0.784, opacity: 1), // #5460C8
+    ]
+    public var spectrum: [Color] { Self.spectrumColors }
+
     // MARK: Backward-compat aliases
     public var surf0: Color { bg }
     public var surf1: Color { surface }
@@ -110,11 +124,11 @@ public struct ConduitTokens: Sendable {
     public var termYellow: Color { termAccent }
     public var termBlue: Color   { termCwd }
 
-    public var radiusXS: CGFloat  { r2 }  // 6
-    public var radiusSM: CGFloat  { r3 }  // 8
-    public var radiusMD: CGFloat  { r4 }  // 12
-    public var radiusLG: CGFloat  { r5 }  // 16
-    public var radiusXL: CGFloat  { 20 }
+    public var radiusXS: CGFloat  { r2 }  // 2
+    public var radiusSM: CGFloat  { r3 }  // 0
+    public var radiusMD: CGFloat  { r4 }  // 0
+    public var radiusLG: CGFloat  { r5 }  // 4
+    public var radiusXL: CGFloat  { r5 }  // 4 (sheets/overlays cap)
     public var radiusPill: CGFloat { pill }
 
     public var sp1: CGFloat { s1 }   // 4
@@ -127,118 +141,119 @@ public struct ConduitTokens: Sendable {
 
     // MARK: Prebuilt palettes
 
-    /// Light palette — warm off-white surfaces, warm-tinted text, orange accent.
+    /// Light palette — clean light surfaces, cool near-black text, electric-blue accent, square corners.
+    /// Secondary to the dark BLOCKS theme; terminal + HUD stay always-dark.
     public static let light = ConduitTokens(
         // Surfaces
-        bg:            Color(.sRGB, red: 0.953, green: 0.953, blue: 0.949, opacity: 1), // #f3f3f2
-        bgTint:        Color(.sRGB, red: 0.925, green: 0.922, blue: 0.914, opacity: 1), // #ecebe9
+        bg:            Color(.sRGB, red: 0.957, green: 0.957, blue: 0.949, opacity: 1), // #f4f4f2
+        bgTint:        Color(.sRGB, red: 0.925, green: 0.929, blue: 0.918, opacity: 1), // #ecedea
         surface:       Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
-        surface2:      Color(.sRGB, red: 0.969, green: 0.969, blue: 0.965, opacity: 1), // #f7f7f6
-        surfaceSunk:   Color(.sRGB, red: 0.929, green: 0.929, blue: 0.922, opacity: 1), // #ededeb
-        border:        Color(.sRGB, red: 0.890, green: 0.886, blue: 0.875, opacity: 1), // #e3e2df
-        borderStrong:  Color(.sRGB, red: 0.831, green: 0.827, blue: 0.812, opacity: 1), // #d4d3cf
-        divider:       Color(.sRGB, red: 0.925, green: 0.922, blue: 0.910, opacity: 1), // #ecebe8
+        surface2:      Color(.sRGB, red: 0.965, green: 0.965, blue: 0.957, opacity: 1), // #f6f6f4
+        surfaceSunk:   Color(.sRGB, red: 0.925, green: 0.933, blue: 0.941, opacity: 1), // #eceef0
+        border:        Color(.sRGB, red: 0.886, green: 0.890, blue: 0.878, opacity: 1), // #e2e3e0
+        borderStrong:  Color(.sRGB, red: 0.824, green: 0.831, blue: 0.816, opacity: 1), // #d2d4d0
+        divider:       Color(.sRGB, red: 0.925, green: 0.925, blue: 0.918, opacity: 1), // #ececea
 
-        // Text — warm-tinted (not neutral grey)
-        text:          Color(.sRGB, red: 0.082, green: 0.078, blue: 0.059, opacity: 1), // #15140f
-        text2:         Color(.sRGB, red: 0.294, green: 0.286, blue: 0.271, opacity: 1), // #4b4945
-        text3:         Color(.sRGB, red: 0.541, green: 0.529, blue: 0.510, opacity: 1), // #8a8782
-        text4:         Color(.sRGB, red: 0.702, green: 0.690, blue: 0.667, opacity: 1), // #b3b0aa
-        textOnDark:    Color(.sRGB, red: 0.945, green: 0.933, blue: 0.910, opacity: 1), // #f1eee8
+        // Text — cool near-black
+        text:          Color(.sRGB, red: 0.078, green: 0.086, blue: 0.106, opacity: 1), // #14161b
+        text2:         Color(.sRGB, red: 0.290, green: 0.302, blue: 0.333, opacity: 1), // #4a4d55
+        text3:         Color(.sRGB, red: 0.502, green: 0.514, blue: 0.549, opacity: 1), // #80838c
+        text4:         Color(.sRGB, red: 0.682, green: 0.694, blue: 0.722, opacity: 1), // #aeb1b8
+        textOnDark:    Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
 
-        // Accent — warm orange oklch(0.66 0.17 38)
-        accent:        Color(.sRGB, red: 0.820, green: 0.439, blue: 0.184, opacity: 1), // #d1702f
-        accentInk:     Color(.sRGB, red: 0.561, green: 0.290, blue: 0.118, opacity: 1), // #8f4a1e
-        accentSoft:    Color(.sRGB, red: 0.965, green: 0.925, blue: 0.882, opacity: 1), // #f6ece1
+        // Accent — electric blue
+        accent:        Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        accentInk:     Color(.sRGB, red: 0.114, green: 0.169, blue: 0.722, opacity: 1), // #1d2bb8
+        accentSoft:    Color(.sRGB, red: 0.906, green: 0.914, blue: 1.000, opacity: 1), // #e7e9ff
         accentFg:      Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
 
         // Semantic
-        ok:            Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1), // #2c9b59
-        okSoft:        Color(.sRGB, red: 0.886, green: 0.953, blue: 0.910, opacity: 1), // #e2f3e8
-        warn:          Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1), // #c79528
+        ok:            Color(.sRGB, red: 0.122, green: 0.616, blue: 0.341, opacity: 1), // #1f9d57
+        okSoft:        Color(.sRGB, red: 0.882, green: 0.953, blue: 0.910, opacity: 1), // #e1f3e8
+        warn:          Color(.sRGB, red: 0.725, green: 0.514, blue: 0.102, opacity: 1), // #b9831a
         warnSoft:      Color(.sRGB, red: 0.965, green: 0.933, blue: 0.827, opacity: 1), // #f6eed3
-        danger:        Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1), // #c33a31
+        danger:        Color(.sRGB, red: 0.812, green: 0.231, blue: 0.173, opacity: 1), // #cf3b2c
         dangerSoft:    Color(.sRGB, red: 0.973, green: 0.906, blue: 0.890, opacity: 1), // #f8e7e3
-        info:          Color(.sRGB, red: 0.235, green: 0.498, blue: 0.765, opacity: 1), // #3c7fc3
-        infoSoft:      Color(.sRGB, red: 0.902, green: 0.933, blue: 0.965, opacity: 1), // #e6eef6
-        neutralSoft:   Color(.sRGB, red: 0.933, green: 0.929, blue: 0.914, opacity: 1), // #eeede9
+        info:          Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        infoSoft:      Color(.sRGB, red: 0.906, green: 0.914, blue: 1.000, opacity: 1), // #e7e9ff
+        neutralSoft:   Color(.sRGB, red: 0.929, green: 0.929, blue: 0.918, opacity: 1), // #ededea
 
         // HUD (always dark)
         hudBg:         Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
-        hudText:       Color(.sRGB, red: 0.867, green: 0.882, blue: 0.906, opacity: 1), // #dde1e7
-        hudBorder:     Color(.sRGB, red: 0.110, green: 0.122, blue: 0.145, opacity: 1), // #1c1f25
+        hudText:       Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
+        hudBorder:     Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d
 
-        // Terminal (always dark)
-        termBg:           Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
-        termSurface:      Color(.sRGB, red: 0.086, green: 0.094, blue: 0.114, opacity: 1), // #16181d
-        termSurface2:     Color(.sRGB, red: 0.110, green: 0.122, blue: 0.145, opacity: 1), // #1c1f25
-        termBorder:       Color(.sRGB, red: 0.149, green: 0.165, blue: 0.192, opacity: 1), // #262a31
+        // Terminal (always dark — BLOCKS)
+        termBg:           Color(.sRGB, red: 0.039, green: 0.043, blue: 0.051, opacity: 1), // #0a0b0d
+        termSurface:      Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
+        termSurface2:     Color(.sRGB, red: 0.082, green: 0.090, blue: 0.110, opacity: 1), // #15171c
+        termBorder:       Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d
         termBorderStrong: Color(.sRGB, red: 0.184, green: 0.204, blue: 0.235, opacity: 1), // #2f343c
-        termText:         Color(.sRGB, red: 0.839, green: 0.827, blue: 0.800, opacity: 1), // #d6d3cc
-        termText2:        Color(.sRGB, red: 0.557, green: 0.541, blue: 0.510, opacity: 1), // #8e8a82
-        termText3:        Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1), // #5f5b54
-        termPrompt:       Color(.sRGB, red: 0.247, green: 0.710, blue: 0.557, opacity: 1), // #3fb58e
-        termCwd:          Color(.sRGB, red: 0.373, green: 0.627, blue: 0.839, opacity: 1), // #5fa0d6
-        termAccent:       Color(.sRGB, red: 0.784, green: 0.604, blue: 0.290, opacity: 1), // #c89a4a
-        termOk:           Color(.sRGB, red: 0.247, green: 0.753, blue: 0.435, opacity: 1), // #3fc06f
-        termErr:          Color(.sRGB, red: 0.875, green: 0.353, blue: 0.290, opacity: 1)  // #df5a4a
+        termText:         Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
+        termText2:        Color(.sRGB, red: 0.541, green: 0.553, blue: 0.588, opacity: 1), // #8a8d96
+        termText3:        Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963
+        termPrompt:       Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        termCwd:          Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963
+        termAccent:       Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1), // #f0a93b
+        termOk:           Color(.sRGB, red: 0.212, green: 0.761, blue: 0.420, opacity: 1), // #36c26b
+        termErr:          Color(.sRGB, red: 0.878, green: 0.325, blue: 0.247, opacity: 1)  // #e0533f
     )
 
-    /// Dark palette — near-black surfaces, same warm-orange accent hue.
+    /// Dark palette — the primary BLOCKS theme: near-black surfaces, warm-grey ink, electric-blue accent.
     public static let dark = ConduitTokens(
         // Surfaces
-        bg:            Color(.sRGB, red: 0.059, green: 0.059, blue: 0.067, opacity: 1), // #0f0f11
-        bgTint:        Color(.sRGB, red: 0.078, green: 0.078, blue: 0.086, opacity: 1), // #141416
-        surface:       Color(.sRGB, red: 0.090, green: 0.094, blue: 0.106, opacity: 1), // #17181b
-        surface2:      Color(.sRGB, red: 0.118, green: 0.122, blue: 0.137, opacity: 1), // #1e1f23
-        surfaceSunk:   Color(.sRGB, red: 0.047, green: 0.047, blue: 0.059, opacity: 1), // #0c0c0f
-        border:        Color(.sRGB, red: 0.149, green: 0.153, blue: 0.184, opacity: 1), // #262730
-        borderStrong:  Color(.sRGB, red: 0.184, green: 0.188, blue: 0.259, opacity: 1), // #2f3042
-        divider:       Color(.sRGB, red: 0.102, green: 0.106, blue: 0.125, opacity: 1), // #1a1b20
+        bg:            Color(.sRGB, red: 0.039, green: 0.043, blue: 0.051, opacity: 1), // #0a0b0d
+        bgTint:        Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
+        surface:       Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12 bg-block
+        surface2:      Color(.sRGB, red: 0.067, green: 0.075, blue: 0.090, opacity: 1), // #111317 bg-raised
+        surfaceSunk:   Color(.sRGB, red: 0.082, green: 0.090, blue: 0.110, opacity: 1), // #15171c bg-input
+        border:        Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d line
+        borderStrong:  Color(.sRGB, red: 0.184, green: 0.204, blue: 0.235, opacity: 1), // #2f343c
+        divider:       Color(.sRGB, red: 0.094, green: 0.102, blue: 0.122, opacity: 1), // #181a1f line-soft
 
         // Text
-        text:          Color(.sRGB, red: 0.941, green: 0.941, blue: 0.949, opacity: 1), // #f0f0f2
-        text2:         Color(.sRGB, red: 0.722, green: 0.722, blue: 0.745, opacity: 1), // #b8b8be
-        text3:         Color(.sRGB, red: 0.498, green: 0.498, blue: 0.541, opacity: 1), // #7f7f8a
-        text4:         Color(.sRGB, red: 0.314, green: 0.314, blue: 0.376, opacity: 1), // #505060
-        textOnDark:    Color(.sRGB, red: 0.945, green: 0.933, blue: 0.910, opacity: 1), // #f1eee8
+        text:          Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2 fg
+        text2:         Color(.sRGB, red: 0.541, green: 0.553, blue: 0.588, opacity: 1), // #8a8d96 fg-dim
+        text3:         Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963 fg-faint
+        text4:         Color(.sRGB, red: 0.204, green: 0.216, blue: 0.243, opacity: 1), // #34373e fg-ghost
+        textOnDark:    Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
 
-        // Accent — warm orange, brighter for dark bg oklch(0.70 0.17 38) ≈ #da7f38
-        accent:        Color(.sRGB, red: 0.855, green: 0.498, blue: 0.220, opacity: 1), // #da7f38
-        accentInk:     Color(.sRGB, red: 0.910, green: 0.576, blue: 0.310, opacity: 1), // #e8934f
-        accentSoft:    Color(.sRGB, red: 0.165, green: 0.086, blue: 0.031, opacity: 1), // #2a1608
-        accentFg:      Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1),
+        // Accent — electric blue
+        accent:        Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        accentInk:     Color(.sRGB, red: 0.353, green: 0.408, blue: 1.000, opacity: 1), // #5a68ff (legible on dark)
+        accentSoft:    Color(.sRGB, red: 0.102, green: 0.122, blue: 0.302, opacity: 1), // #1a1f4d accent-dim
+        accentFg:      Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
 
         // Semantic
-        ok:            Color(.sRGB, red: 0.133, green: 0.773, blue: 0.369, opacity: 1), // #22c55e
-        okSoft:        Color(.sRGB, red: 0.051, green: 0.137, blue: 0.094, opacity: 1), // #0d2318
-        warn:          Color(.sRGB, red: 0.961, green: 0.620, blue: 0.043, opacity: 1), // #f59e0b
-        warnSoft:      Color(.sRGB, red: 0.141, green: 0.102, blue: 0.027, opacity: 1), // #241a07
-        danger:        Color(.sRGB, red: 0.973, green: 0.529, blue: 0.529, opacity: 1), // #f87171
-        dangerSoft:    Color(.sRGB, red: 0.145, green: 0.051, blue: 0.051, opacity: 1), // #250d0d
-        info:          Color(.sRGB, red: 0.376, green: 0.647, blue: 0.980, opacity: 1), // #60a5fa
-        infoSoft:      Color(.sRGB, red: 0.055, green: 0.102, blue: 0.157, opacity: 1), // #0e1a28
-        neutralSoft:   Color(.sRGB, red: 0.118, green: 0.122, blue: 0.118, opacity: 1), // #1e1f1e
+        ok:            Color(.sRGB, red: 0.212, green: 0.761, blue: 0.420, opacity: 1), // #36c26b
+        okSoft:        Color(.sRGB, red: 0.063, green: 0.149, blue: 0.102, opacity: 1), // #10261a
+        warn:          Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1), // #f0a93b
+        warnSoft:      Color(.sRGB, red: 0.165, green: 0.125, blue: 0.031, opacity: 1), // #2a2008
+        danger:        Color(.sRGB, red: 0.878, green: 0.325, blue: 0.247, opacity: 1), // #e0533f
+        dangerSoft:    Color(.sRGB, red: 0.165, green: 0.078, blue: 0.063, opacity: 1), // #2a1410
+        info:          Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        infoSoft:      Color(.sRGB, red: 0.071, green: 0.082, blue: 0.180, opacity: 1), // #12152e
+        neutralSoft:   Color(.sRGB, red: 0.082, green: 0.090, blue: 0.110, opacity: 1), // #15171c
 
-        // HUD (always dark — same in both modes)
+        // HUD (always dark)
         hudBg:         Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
-        hudText:       Color(.sRGB, red: 0.867, green: 0.882, blue: 0.906, opacity: 1), // #dde1e7
-        hudBorder:     Color(.sRGB, red: 0.110, green: 0.122, blue: 0.145, opacity: 1), // #1c1f25
+        hudText:       Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
+        hudBorder:     Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d
 
-        // Terminal (always dark — same in both modes)
-        termBg:           Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1),
-        termSurface:      Color(.sRGB, red: 0.086, green: 0.094, blue: 0.114, opacity: 1),
-        termSurface2:     Color(.sRGB, red: 0.110, green: 0.122, blue: 0.145, opacity: 1),
-        termBorder:       Color(.sRGB, red: 0.149, green: 0.165, blue: 0.192, opacity: 1),
-        termBorderStrong: Color(.sRGB, red: 0.184, green: 0.204, blue: 0.235, opacity: 1),
-        termText:         Color(.sRGB, red: 0.839, green: 0.827, blue: 0.800, opacity: 1),
-        termText2:        Color(.sRGB, red: 0.557, green: 0.541, blue: 0.510, opacity: 1),
-        termText3:        Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1),
-        termPrompt:       Color(.sRGB, red: 0.247, green: 0.710, blue: 0.557, opacity: 1),
-        termCwd:          Color(.sRGB, red: 0.373, green: 0.627, blue: 0.839, opacity: 1),
-        termAccent:       Color(.sRGB, red: 0.784, green: 0.604, blue: 0.290, opacity: 1),
-        termOk:           Color(.sRGB, red: 0.247, green: 0.753, blue: 0.435, opacity: 1),
-        termErr:          Color(.sRGB, red: 0.875, green: 0.353, blue: 0.290, opacity: 1)
+        // Terminal (always dark — BLOCKS)
+        termBg:           Color(.sRGB, red: 0.039, green: 0.043, blue: 0.051, opacity: 1), // #0a0b0d
+        termSurface:      Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
+        termSurface2:     Color(.sRGB, red: 0.082, green: 0.090, blue: 0.110, opacity: 1), // #15171c
+        termBorder:       Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d
+        termBorderStrong: Color(.sRGB, red: 0.184, green: 0.204, blue: 0.235, opacity: 1), // #2f343c
+        termText:         Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
+        termText2:        Color(.sRGB, red: 0.541, green: 0.553, blue: 0.588, opacity: 1), // #8a8d96
+        termText3:        Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963
+        termPrompt:       Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
+        termCwd:          Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963
+        termAccent:       Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1), // #f0a93b
+        termOk:           Color(.sRGB, red: 0.212, green: 0.761, blue: 0.420, opacity: 1), // #36c26b
+        termErr:          Color(.sRGB, red: 0.878, green: 0.325, blue: 0.247, opacity: 1)  // #e0533f
     )
 }
 
@@ -279,8 +294,8 @@ enum DI {
     static let ink  = Color(.sRGB, red: 0.957, green: 0.949, blue: 0.933, opacity: 1) // #f4f2ee
     static let ink2 = Color(.sRGB, red: 0.608, green: 0.588, blue: 0.553, opacity: 1) // #9b968d
     static let ink3 = Color(.sRGB, red: 0.400, green: 0.384, blue: 0.357, opacity: 1) // #66625b
-    static let approval  = Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1)
-    static let streaming = Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1)
+    static let approval  = Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1) // warn #f0a93b
+    static let streaming = Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1) // accent #2f43ff
 
     static func bg(approval: Bool) -> Color {
         approval ? Color(.sRGB, red: 0.110, green: 0.075, blue: 0.020, opacity: 1) // #1c1305

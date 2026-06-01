@@ -1,16 +1,17 @@
 import SwiftUI
 
-// MARK: - Font helpers
-// Uses Bricolage Grotesque (display/titles), DM Sans (UI/body), Fragment Mono (code/terminal/labels).
-// Custom fonts don't respond to .weight(), so weight is mapped to face name.
+// MARK: - Font helpers — BLOCKS type system
+// Chakra Petch (display/titles) + Fira Code (mono — body, UI, terminal, labels, code).
+// Body/UI is monospace by design; `dsSans*` is kept as an alias onto Fira Code so existing
+// call-sites flip automatically. Custom fonts don't respond to .weight(), so weight maps to face name.
 
 public extension Font {
-    /// Bricolage Grotesque at the given TextStyle — use for screen titles and large headers.
+    /// Chakra Petch at the given TextStyle — use for screen titles and large headers.
     static func dsDisplay(_ style: TextStyle, weight: Weight = .semibold) -> Font {
         .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Bricolage Grotesque at an exact point size, scaled relative to the nearest TextStyle.
+    /// Chakra Petch at an exact point size, scaled relative to the nearest TextStyle.
     static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
         .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
@@ -81,13 +82,14 @@ private func nearestTextStyle(_ size: CGFloat) -> Font.TextStyle {
 
 // MARK: - Design type scale (from tokens.css --fz-* values)
 private func dsSize(_ style: Font.TextStyle) -> CGFloat {
+    // BLOCKS scale: display 48 / title 34 / heading 22 / body 16 / callout 14 / caption 12 / micro 10.
     switch style {
-    case .largeTitle:   return 30
-    case .title:        return 24
-    case .title2:       return 20
-    case .title3:       return 18
-    case .headline:     return 16
-    case .body:         return 15
+    case .largeTitle:   return 34
+    case .title:        return 28
+    case .title2:       return 24
+    case .title3:       return 22
+    case .headline:     return 18
+    case .body:         return 16
     case .callout:      return 14
     case .subheadline:  return 14
     case .footnote:     return 13
@@ -100,25 +102,26 @@ private func dsSize(_ style: Font.TextStyle) -> CGFloat {
 // MARK: - Face name helpers
 
 private func displayFaceName(_ weight: Font.Weight) -> String {
+    // Chakra Petch — the BLOCKS display face (wordmark, titles, section heads, tab labels).
     switch weight {
-    case .black:                         return "BricolageGrotesque-ExtraBold"
-    case .heavy, .bold:                  return "BricolageGrotesque-Bold"
-    case .semibold:                      return "BricolageGrotesque-SemiBold"
-    case .medium:                        return "BricolageGrotesque-Medium"
-    default:                             return "BricolageGrotesque-Regular"
+    case .black, .heavy, .bold:          return "ChakraPetch-Bold"
+    case .semibold:                      return "ChakraPetch-SemiBold"
+    case .medium:                        return "ChakraPetch-Medium"
+    default:                             return "ChakraPetch-Regular"
     }
 }
 
 private func sansFaceName(_ weight: Font.Weight) -> String {
-    switch weight {
-    case .bold, .heavy, .black:          return "DMSans-Bold"
-    case .semibold:                      return "DMSans-SemiBold"
-    case .medium:                        return "DMSans-Medium"
-    default:                             return "DMSans-Regular"
-    }
+    // BLOCKS is monospace-everything for body/UI text → Fira Code.
+    return monoFaceName(weight)
 }
 
 private func monoFaceName(_ weight: Font.Weight) -> String {
-    // Fragment Mono ships Regular only; all weights map to it.
-    return "FragmentMono-Regular"
+    // Fira Code — the BLOCKS mono face (body, terminal, list rows, captions, code).
+    switch weight {
+    case .black, .heavy, .bold:          return "FiraCode-Bold"
+    case .semibold:                      return "FiraCode-SemiBold"
+    case .medium:                        return "FiraCode-Medium"
+    default:                             return "FiraCode-Regular"
+    }
 }

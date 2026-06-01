@@ -39,12 +39,12 @@ private enum KeyCode {
 private enum RailStyle {
     static let surface2 = UIColor(red: 0.110, green: 0.122, blue: 0.145, alpha: 1) // #1c1f25 termSurface2
     static let border   = UIColor(red: 0.149, green: 0.165, blue: 0.192, alpha: 1) // #262a31 termBorder
-    static let text     = UIColor(red: 0.839, green: 0.827, blue: 0.800, alpha: 1) // #d6d3cc termText
-    static let accent   = UIColor(red: 0.784, green: 0.604, blue: 0.290, alpha: 1) // #c89a4a termAccent
+    static let text     = UIColor(red: 0.914, green: 0.914, blue: 0.886, alpha: 1) // #e9e9e2 termText
+    static let accent   = UIColor(red: 0.941, green: 0.663, blue: 0.231, alpha: 1) // #f0a93b termAccent
     static let onAccent = UIColor(red: 0.055, green: 0.059, blue: 0.071, alpha: 1) // #0e0f12 termBg
 
     static func mono(_ size: CGFloat) -> UIFont {
-        UIFont(name: "FragmentMono-Regular", size: size)
+        UIFont(name: "FiraCode-Regular", size: size)
             ?? .monospacedSystemFont(ofSize: size, weight: .medium)
     }
 }

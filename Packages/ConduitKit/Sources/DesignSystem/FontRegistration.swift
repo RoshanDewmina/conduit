@@ -1,7 +1,7 @@
 import Foundation
 import CoreText
 
-/// Registers the bundled Bricolage Grotesque, DM Sans, and Fragment Mono fonts at app launch.
+/// Registers the bundled BLOCKS fonts — Chakra Petch (display) + Fira Code (mono) — at app launch.
 /// Call once from ConduitApp.init() before any view renders.
 @MainActor
 public enum DesignSystemFonts {
@@ -11,17 +11,14 @@ public enum DesignSystemFonts {
         guard !didRegister else { return }
         didRegister = true
         let names = [
-            "BricolageGrotesque-Regular",
-            "BricolageGrotesque-Medium",
-            "BricolageGrotesque-SemiBold",
-            "BricolageGrotesque-Bold",
-            "BricolageGrotesque-ExtraBold",
-            "DMSans-Regular",
-            "DMSans-Medium",
-            "DMSans-SemiBold",
-            "DMSans-Bold",
-            "FragmentMono-Regular",
-            "FragmentMono-Italic",
+            "ChakraPetch-Regular",
+            "ChakraPetch-Medium",
+            "ChakraPetch-SemiBold",
+            "ChakraPetch-Bold",
+            "FiraCode-Regular",
+            "FiraCode-Medium",
+            "FiraCode-SemiBold",
+            "FiraCode-Bold",
         ]
         for name in names {
             guard let url = Bundle.module.url(forResource: name, withExtension: "ttf") else {

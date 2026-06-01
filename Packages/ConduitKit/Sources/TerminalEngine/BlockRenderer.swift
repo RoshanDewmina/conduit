@@ -514,9 +514,9 @@ public final class BlockRenderer {
         if let fg { c.foregroundColor = fg }
         if let bg { c.backgroundColor = bg }
 
-        var font: SwiftUI.Font = .custom("FragmentMono-Regular", size: 17)
+        var font: SwiftUI.Font = .custom("FiraCode-Regular", size: 17)
         if style.contains(.bold)   { font = font.bold() }
-        if style.contains(.italic) { font = .custom("FragmentMono-Italic", size: 17) }
+        if style.contains(.italic) { font = .custom("FiraCode-Regular", size: 17) }
         c.font = font
         if style.contains(.underline) { c.underlineStyle = .single }
         if style.contains(.dim) { c.foregroundColor = (fg ?? theme.foreground).opacity(0.7) }
