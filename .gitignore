@@ -13,6 +13,9 @@ Package.resolved
 # macOS
 .DS_Store
 
+# Playwright MCP cache (tooling artifact, not source)
+.playwright-mcp/
+
 # Local secrets
 *.env
 secrets.plist

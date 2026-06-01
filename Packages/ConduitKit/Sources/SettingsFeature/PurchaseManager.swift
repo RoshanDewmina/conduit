@@ -60,19 +60,31 @@ public final class PurchaseManager {
             let products = try await Product.products(for: [Self.proProductID])
             guard let loadedProduct = products.first else {
                 product = nil
+                #if DEBUG
                 purchaseState = .error("Product not found. Check that Conduit.storekit is selected in the Run scheme for StoreKit testing.")
+                #else
+                purchaseState = .error("Couldn't load purchase options. Please check your connection and try again.")
+                #endif
                 return
             }
             product = loadedProduct
             await refreshPurchaseState()
         } catch {
+            #if DEBUG
             purchaseState = .error(error.localizedDescription)
+            #else
+            purchaseState = .error("Couldn't load purchase options. Please check your connection and try again.")
+            #endif
         }
     }
 
     public func purchase() async {
         guard let product else {
+            #if DEBUG
             purchaseState = .error("Product not loaded")
+            #else
+            purchaseState = .error("Couldn't start the purchase. Please try again.")
+            #endif
             return
         }
         purchaseState = .purchasing
