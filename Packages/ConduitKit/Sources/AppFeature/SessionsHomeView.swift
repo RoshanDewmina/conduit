@@ -252,7 +252,7 @@ struct SessionsHomeView: View {
 
 // MARK: - Session Row View
 
-private struct SessionRowView: View {
+struct SessionRowView: View {
     let summary: SessionSummary
     @Environment(\.conduitTokens) private var t
 
@@ -338,7 +338,7 @@ private struct SessionRowView: View {
 }
 
 // Row press-scale button style
-private struct SessionRowButtonStyle: ButtonStyle {
+struct SessionRowButtonStyle: ButtonStyle {
     let t: ConduitTokens
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
