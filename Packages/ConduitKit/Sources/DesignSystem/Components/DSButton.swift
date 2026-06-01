@@ -1,9 +1,8 @@
 import SwiftUI
 
 // MARK: - DSButton
-// Spec: primitives.css:55-110, primitives.jsx:43-74
-// PRIMARY = bg `text` (near-black), fg `bg` — NOT accent.
-// ACCENT  = bg `accent` (warm orange), fg white.
+// BLOCKS: the single filled primary action is electric blue (accent). PRIMARY and ACCENT are both
+// the blue CTA; SECONDARY = 1px line border; DESTRUCTIVE = danger outline; GHOST = bare. Square corners.
 
 public enum DSButtonVariant {
     case primary      // bg=text (dark), fg=bg (light) — the design's default CTA
@@ -135,8 +134,8 @@ public struct DSButton: View {
     // MARK: Colors
     private var bgColor: Color {
         switch variant {
-        case .primary:     return t.text          // near-black
-        case .accent:      return t.accent         // warm orange
+        case .primary:     return t.accent         // BLOCKS: the single filled CTA is electric blue
+        case .accent:      return t.accent
         case .secondary:   return t.surface
         case .ghost:       return .clear
         case .destructive: return t.surface
@@ -145,8 +144,8 @@ public struct DSButton: View {
 
     private var fgColor: Color {
         switch variant {
-        case .primary:     return t.bg             // light page bg
-        case .accent:      return t.accentFg       // white
+        case .primary:     return t.accentFg       // white on blue
+        case .accent:      return t.accentFg
         case .secondary:   return t.text
         case .ghost:       return t.text2
         case .destructive: return t.danger

@@ -492,15 +492,13 @@ public struct DSSegmentedPicker<V: Hashable & Sendable>: View {
                 let selected = selection == opt.value
                 Button { selection = opt.value } label: {
                     Text(opt.label)
-                        .font(.dsSansPt(13, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? t.text : t.text3)
+                        .font(.dsMonoPt(12, weight: .medium))
+                        .foregroundStyle(selected ? t.accentFg : t.text3)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 7)
                         .background(
                             selected
-                                ? RoundedRectangle(cornerRadius: t.r2, style: .continuous)
-                                    .fill(t.surface)
-                                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                                ? RoundedRectangle(cornerRadius: t.r2, style: .continuous).fill(t.accent)
                                 : nil
                         )
                 }

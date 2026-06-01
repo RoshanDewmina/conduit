@@ -327,6 +327,7 @@ public struct DSAutonomyPresetBar: View {
                     }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
             .background(Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
