@@ -7,58 +7,49 @@ public struct PremiumComparisonView: View {
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
     @State private var pm = PurchaseManager.shared
-    @State private var showPaywall = false
 
     public init() {}
 
-    private let freeFeatures = [
-        "Core SSH terminal",
-        "1 host connection",
-        "Block-based command history",
-        "Shell integration (OSC 133)",
+    private struct ComparisonRow {
+        let feature: String
+        let freeTier: Bool
+    }
+
+    private static let rows: [ComparisonRow] = [
+        ComparisonRow(feature: "Unlimited BYO hosts",           freeTier: true),
+        ComparisonRow(feature: "Block terminal + raw PTY",      freeTier: true),
+        ComparisonRow(feature: "Agent inbox & approvals",        freeTier: true),
+        ComparisonRow(feature: "tmux survival + reconnect",      freeTier: true),
+        ComparisonRow(feature: "Dev-server preview",             freeTier: false),
+        ComparisonRow(feature: "SFTP file browser",              freeTier: false),
+        ComparisonRow(feature: "Partial-hunk diff",              freeTier: false),
+        ComparisonRow(feature: "CloudKit sync",                  freeTier: false),
+        ComparisonRow(feature: "Multi-agent",                    freeTier: false),
     ]
 
     public var body: some View {
         ZStack {
             t.bg.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    Spacer(minLength: 8)
+            VStack(spacing: 0) {
+                DSScreenHeader("upgrade", breadcrumb: "free vs pro")
 
-                    // Header
-                    VStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(t.accentSoft)
-                                .frame(width: 64, height: 64)
-                            Image(systemName: "star.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(t.accent)
-                        }
-                        Text("Free vs Pro")
-                            .font(.dsDisplayPt(22, weight: .bold))
-                            .foregroundStyle(t.text)
-                        Text("One-time purchase · no subscription")
-                            .font(.dsSansPt(13))
-                            .foregroundStyle(t.text3)
-                    }
-                    .padding(.top, 8)
-
-                    // Comparison table
+                ScrollView {
                     VStack(spacing: 0) {
                         // Header row
-                        HStack {
-                            Text("Feature")
-                                .font(.dsSansPt(12, weight: .semibold))
-                                .foregroundStyle(t.text3)
+                        HStack(spacing: 0) {
+                            Text("")
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("Free")
-                                .font(.dsSansPt(12, weight: .semibold))
+                            Text("free")
+                                .font(.dsMonoPt(10, weight: .medium))
+                                .tracking(10 * 0.10)
+                                .textCase(.uppercase)
                                 .foregroundStyle(t.text3)
                                 .frame(width: 52, alignment: .center)
-                            Text("Pro")
-                                .font(.dsSansPt(12, weight: .semibold))
+                            Text("pro")
+                                .font(.dsMonoPt(10, weight: .medium))
+                                .tracking(10 * 0.10)
+                                .textCase(.uppercase)
                                 .foregroundStyle(t.accent)
                                 .frame(width: 52, alignment: .center)
                         }
@@ -66,138 +57,90 @@ public struct PremiumComparisonView: View {
                         .padding(.vertical, 10)
                         .background(t.surface)
 
-                        Divider().foregroundStyle(t.border)
+                        DSDivider(.line)
 
-                        ForEach(Array(comparisonRows.enumerated()), id: \.offset) { idx, row in
-                            HStack {
-                                Text(row.feature)
-                                    .font(.dsSansPt(14))
-                                    .foregroundStyle(t.text)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: row.free ? "checkmark.circle.fill" : "xmark.circle")
-                                    .foregroundStyle(row.free ? t.ok : t.text3.opacity(0.4))
-                                    .frame(width: 52, alignment: .center)
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(t.accent)
+                        ForEach(Array(Self.rows.enumerated()), id: \.offset) { idx, row in
+                            HStack(spacing: 0) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.feature)
+                                        .font(.dsMonoPt(12))
+                                        .foregroundStyle(t.text)
+                                    if row.freeTier && idx == 2 {
+                                        Text("(free)")
+                                            .font(.dsMonoPt(10))
+                                            .foregroundStyle(t.text3)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                // Free column
+                                Group {
+                                    if row.freeTier {
+                                        DSIconView(.check, size: 14, color: t.text3)
+                                    } else {
+                                        Text("·")
+                                            .font(.dsMonoPt(14))
+                                            .foregroundStyle(t.text4)
+                                    }
+                                }
+                                .frame(width: 52, alignment: .center)
+
+                                // Pro column — always check
+                                DSIconView(.check, size: 14, color: t.ok)
                                     .frame(width: 52, alignment: .center)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 11)
                             .background(idx % 2 == 0 ? t.surface : t.bg)
 
-                            if idx < comparisonRows.count - 1 {
-                                Divider()
-                                    .padding(.leading, 16)
-                                    .foregroundStyle(t.border)
+                            if idx < Self.rows.count - 1 {
+                                DSDivider(.soft, leadingInset: 16)
                             }
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+                    .background(t.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                             .strokeBorder(t.border, lineWidth: 0.5)
                     )
-                    .padding(.horizontal, 4)
-
-                    // Price callout
-                    if let product = pm.product {
-                        Text("\(product.displayPrice) · one-time, yours forever")
-                            .font(.dsSansPt(14, weight: .semibold))
-                            .foregroundStyle(t.text)
-                    } else {
-                        Text("$14.99 · one-time, yours forever")
-                            .font(.dsSansPt(14, weight: .semibold))
-                            .foregroundStyle(t.text)
-                    }
-
-                    // CTA
-                    VStack(spacing: 12) {
-                        switch pm.purchaseState {
-                        case .purchased:
-                            HStack(spacing: 8) {
-                                DSIconView(.check, size: 16, color: t.ok)
-                                Text("You're on Pro")
-                                    .font(.dsSansPt(16, weight: .semibold))
-                                    .foregroundStyle(t.ok)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(t.ok.opacity(0.12), in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-                        case .error(let msg):
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    DSIconView(.alert, size: 14, color: t.danger)
-                                    Text("Purchase unavailable")
-                                        .font(.dsSansPt(14, weight: .medium))
-                                        .foregroundStyle(t.danger)
-                                }
-                                Text(msg)
-                                    .font(.dsSansPt(13))
-                                    .foregroundStyle(t.text3)
-                                Button("Try again") { Task { await pm.load() } }
-                                    .font(.dsSansPt(13))
-                                    .foregroundStyle(t.accent)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 14)
-                        case .unknown:
-                            HStack(spacing: 10) {
-                                ProgressView().scaleEffect(0.85)
-                                Text("Loading…")
-                                    .font(.dsSansPt(14))
-                                    .foregroundStyle(t.text3)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                        default:
-                            Button {
-                                Task { await pm.purchase() }
-                            } label: {
-                                Group {
-                                    if case .purchasing = pm.purchaseState {
-                                        HStack(spacing: 8) {
-                                            ProgressView().tint(t.accentFg)
-                                            Text("Processing…")
-                                        }
-                                    } else {
-                                        Text("Upgrade to Pro")
-                                    }
-                                }
-                                .font(.dsSansPt(16, weight: .semibold))
-                                .foregroundStyle(t.accentFg)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(t.accent, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled({ if case .purchasing = pm.purchaseState { return true }; return false }())
-
-                            Button("Restore Purchase") {
-                                Task { await pm.restore() }
-                            }
-                            .font(.dsSansPt(13))
-                            .foregroundStyle(t.accent)
-                        }
-                    }
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 20)
+
+                // Sticky footer
+                VStack(spacing: 8) {
+                    DSDivider(.line)
+                    VStack(spacing: 8) {
+                        DSButton(
+                            "unlock pro · \(pm.product?.displayPrice ?? "$14.99") once",
+                            variant: .primary,
+                            mono: true,
+                            isLoading: {
+                                if case .purchasing = pm.purchaseState { return true }
+                                return false
+                            }(),
+                            fullWidth: true,
+                            action: { Task { await pm.purchase() } }
+                        )
+                        .disabled({
+                            switch pm.purchaseState {
+                            case .purchasing, .purchased: return true
+                            default: return false
+                            }
+                        }())
+
+                        Text("one-time · yours forever · no subscription")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text3)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .background(t.bg)
             }
         }
-        .navigationTitle("Upgrade to Pro")
-        .navigationBarTitleDisplayMode(.inline)
         .task { await pm.load() }
-    }
-
-    private struct ComparisonRow {
-        let feature: String
-        let free: Bool
-    }
-
-    private var comparisonRows: [ComparisonRow] {
-        let freeSet = Set(freeFeatures)
-        let allFeatures = freeFeatures + PaywallSheet.proFeatures
-        return allFeatures.map { ComparisonRow(feature: $0, free: freeSet.contains($0)) }
     }
 }
 #endif

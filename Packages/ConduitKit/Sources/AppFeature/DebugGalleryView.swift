@@ -12,6 +12,7 @@ import FilesFeature
 import WorkspacesFeature
 import PersistenceKit
 import SecurityKit
+import SettingsFeature
 
 // UI-audit harness. Routed from AppRoot when SIMCTL_CHILD_CONDUIT_GALLERY is set.
 struct DebugGalleryView: View {
@@ -52,6 +53,9 @@ struct DebugGalleryView: View {
         case "library":        LibraryGalleryScreen()
         case "statusbar":      PersistentStatusBarGalleryScreen()
         case "addhost":        AddHostGalleryScreen()
+        case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
+        case "compare":        PremiumComparisonView()
+        case "billing":        BillingView()
         case "review":         reviewScreen
         default:               reviewScreen
         }
