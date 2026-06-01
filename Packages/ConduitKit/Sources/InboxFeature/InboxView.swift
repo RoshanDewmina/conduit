@@ -61,25 +61,12 @@ public struct InboxView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Title row
-                HStack(alignment: .center) {
-                    Text(title)
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if pendingCount > 0 {
-                        Text("\(pendingCount)")
-                            .font(.dsMonoPt(12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(t.accent)
-                            .clipShape(Capsule())
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                // ── BLOCKS header
+                DSScreenHeader(
+                    "inbox",
+                    breadcrumb: "agent approvals",
+                    count: pendingCount > 0 ? "\(pendingCount) pending" : nil
+                )
 
                 if !statusHeaderAgents.isEmpty {
                     AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
@@ -136,6 +123,7 @@ public struct InboxView: View {
             DSAskQuestionCard(
                 agentKey: agentKey(approval.agent),
                 agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
                 timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
                 question: approval.question ?? "What should I do next?",
                 choices: approval.choices ?? [],
@@ -148,6 +136,7 @@ public struct InboxView: View {
             DSMCPCallCard(
                 agentKey: agentKey(approval.agent),
                 agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
                 timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
                 toolName: approval.command ?? "unknown_tool",
                 args: approval.patch,
@@ -211,10 +200,9 @@ public struct InboxView: View {
         VStack {
             Spacer()
             DSEmptyState(
-                icon: .inbox,
-                title: "Inbox is empty",
-                subtitle: "Agent approvals and run results appear here.",
-                action: nil
+                dotMatrix: .idle,
+                title: "inbox zero",
+                subtitle: "Nothing waiting on you. Agents are running clean."
             )
             .padding(.horizontal, 24)
             Spacer()

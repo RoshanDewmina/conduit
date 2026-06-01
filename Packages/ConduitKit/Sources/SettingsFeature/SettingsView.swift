@@ -182,21 +182,12 @@ public struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // ── Title row
-                    HStack {
-                        Text("Settings")
-                            .font(.dsDisplayPt(30, weight: .bold))
-                            .foregroundStyle(t.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, statusHeaderAgents.isEmpty ? 20 : 0)
+                    // ── Header (BLOCKS DSScreenHeader pattern)
+                    DSScreenHeader("settings", breadcrumb: "device & agent")
 
                     if !statusHeaderAgents.isEmpty {
                         AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 8)
                     }
 
                     // ── AI Provider
@@ -258,8 +249,8 @@ public struct SettingsView: View {
                     settingsCard {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Theme")
-                                .font(.dsSansPt(13))
-                                .foregroundStyle(t.text3)
+                                .font(.dsSansPt(13, weight: .medium))
+                                .foregroundStyle(t.text2)
                             DSSegmentedPicker(
                                 options: [
                                     (label: "System", value: "system"),
@@ -342,7 +333,18 @@ public struct SettingsView: View {
                         .foregroundStyle(t.text3)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 32)
+                        .padding(.bottom, 20)
+
+                    // ── Footer: version / build
+                    Group {
+                        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+                        let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+                        Text("conduit \(version) (\(build))")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text4)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                    .padding(.bottom, 36)
                 }
             }
         }
@@ -410,15 +412,18 @@ public struct SettingsView: View {
 
     // MARK: - Layout helpers
 
+    /// Grouped section label — uppercase Chakra Petch, t.text3, letter-spaced (BLOCKS handoff spec).
     private func sectionHead(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.dsMonoPt(11))
-            .tracking(0.8)
+            .font(.dsDisplayPt(10, weight: .semibold))
+            .tracking(1.2)
             .foregroundStyle(t.text3)
             .padding(.horizontal, 20)
+            .padding(.top, 20)
             .padding(.bottom, 6)
     }
 
+    /// Square bordered container — 1px t.border, bg t.surface, zero corner radius (BLOCKS square style).
     private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             content()
@@ -432,6 +437,7 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
     }
 
+    /// Nav row: icon + label (t.text2/t.text) + chevron. 12/13 pt padding, contentShape for tap.
     private func settingsNavRow(_ label: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -443,16 +449,17 @@ public struct SettingsView: View {
                 .foregroundStyle(t.text)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(t.text4)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 13)
         .contentShape(Rectangle())
     }
 
+    /// Canonical 1px row separator — DSDivider with 16pt leading inset to align with content.
     private var divider: some View {
-        Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 16)
+        DSDivider(.soft, leadingInset: 16)
     }
 
     private func aboutRow(icon: String, title: String, detail: String) -> some View {

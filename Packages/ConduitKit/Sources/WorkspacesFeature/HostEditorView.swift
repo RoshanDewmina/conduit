@@ -9,7 +9,7 @@ import SecurityKit
 
 @MainActor @Observable
 public final class HostEditorViewModel {
-    public enum AuthChoice: String, CaseIterable, Identifiable {
+    public enum AuthChoice: String, CaseIterable, Identifiable, Hashable, Sendable {
         case password
         case ed25519
 
@@ -176,21 +176,10 @@ public struct HostEditorView: View {
                     // ── Authentication
                     sectionHead("Authentication")
                     editorCard {
-                        HStack(spacing: 8) {
-                            ForEach(HostEditorViewModel.AuthChoice.allCases) { choice in
-                                let selected = vm.authChoice == choice
-                                Text(choice.label)
-                                    .font(.dsSansPt(13, weight: selected ? .semibold : .regular))
-                                    .foregroundStyle(selected ? t.accentFg : t.text2)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 7)
-                                    .background(selected ? t.accent : t.surfaceSunk, in: Capsule())
-                                    .contentShape(Capsule())
-                                    .onTapGesture { vm.authChoice = choice }
-                                    .animation(.easeInOut(duration: 0.15), value: vm.authChoice)
-                            }
-                            Spacer()
-                        }
+                        DSSegmentedPicker(
+                            options: HostEditorViewModel.AuthChoice.allCases.map { (label: $0.label, value: $0) },
+                            selection: $vm.authChoice
+                        )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
 
@@ -274,15 +263,11 @@ public struct HostEditorView: View {
                     }
 
                     // ── Save button
-                    HStack {
-                        Spacer()
-                        DSButton("Save host", variant: .primary, action: {
-                            Task { await vm.save() }
-                        })
-                        .disabled(!vm.isValid)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
+                    DSButton("save host", variant: .accent, fullWidth: true, action: {
+                        Task { await vm.save() }
+                    })
+                    .disabled(!vm.isValid)
+                    .padding(.horizontal, 16)
                     .padding(.bottom, 40)
                 }
                 .padding(.top, 8)
@@ -312,52 +297,80 @@ public struct HostEditorView: View {
 
     private func editorCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0) { content() }
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
             )
             .padding(.horizontal, 16)
     }
 
     private var cardDivider: some View {
-        t.border.frame(height: 0.5).padding(.horizontal, 16)
+        DSDivider(.line)
     }
 
     private func inputRow(label: String, placeholder: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.dsSansPt(11, weight: .medium))
-                .foregroundStyle(t.text3)
-            TextField(placeholder, text: text)
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        FocusableInputRow(label: label, placeholder: placeholder, text: text, mono: false, keyboard: .default, tokens: t)
     }
 
     private func monoInputRow(label: String, placeholder: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.dsSansPt(11, weight: .medium))
-                .foregroundStyle(t.text3)
-            TextField(placeholder, text: text)
-                .font(.dsMonoPt(15))
-                .foregroundStyle(t.text)
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        FocusableInputRow(label: label, placeholder: placeholder, text: text, mono: true, keyboard: keyboard, tokens: t)
     }
 
     private func shortKeyLabel(_ tag: String) -> String {
         let prefix = tag.prefix(8)
         return "\(prefix)…"
+    }
+}
+
+// MARK: - FocusableInputRow
+// BLOCKS field: uppercase label above a SQUARE bg-surfaceSunk bordered input.
+// Turns the border accent-blue on focus (matching DSSearchField behaviour).
+
+private struct FocusableInputRow: View {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    let mono: Bool
+    let keyboard: UIKeyboardType
+    let tokens: ConduitTokens
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label.uppercased())
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(10 * 0.08)
+                .foregroundStyle(tokens.text3)
+
+            HStack(spacing: 8) {
+                if mono {
+                    Text("$")
+                        .font(.dsMonoPt(13, weight: .medium))
+                        .foregroundStyle(tokens.accent)
+                }
+                TextField(placeholder, text: $text)
+                    .font(mono ? .dsMonoPt(13) : .dsSansPt(13))
+                    .foregroundStyle(tokens.text)
+                    .tint(tokens.accent)
+                    .keyboardType(keyboard)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(tokens.surfaceSunk)
+            .clipShape(RoundedRectangle(cornerRadius: tokens.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: tokens.r3, style: .continuous)
+                    .strokeBorder(isFocused ? tokens.accent : tokens.border, lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 

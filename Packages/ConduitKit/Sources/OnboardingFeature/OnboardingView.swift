@@ -69,11 +69,11 @@ private struct OnboardingVariantAView: View {
             VStack(spacing: 0) {
                 // Top bar
                 HStack {
-                    stepDots
+                    stepSquares
                     Spacer()
                     if currentStep < Self.totalSteps - 1 {
-                        Button("Skip") { onComplete() }
-                            .font(.dsSansPt(14))
+                        Button("skip") { onComplete() }
+                            .font(.dsMonoPt(12))
                             .foregroundStyle(t.text3)
                     }
                 }
@@ -120,14 +120,14 @@ private struct OnboardingVariantAView: View {
         )
     }
 
-    // MARK: Dots
+    // MARK: Square step indicators (BLOCKS style)
 
-    private var stepDots: some View {
-        HStack(spacing: 6) {
+    private var stepSquares: some View {
+        HStack(spacing: 5) {
             ForEach(0..<Self.totalSteps, id: \.self) { i in
-                Capsule()
+                Rectangle()
                     .fill(i == currentStep ? t.accent : t.border)
-                    .frame(width: i == currentStep ? 20 : 6, height: 6)
+                    .frame(width: i == currentStep ? 16 : 6, height: 4)
                     .animation(.spring(response: 0.3, dampingFraction: 0.75), value: currentStep)
             }
         }
@@ -141,10 +141,10 @@ private struct OnboardingVariantAView: View {
         if currentStep < Self.totalSteps - 1 {
             HStack(spacing: 12) {
                 if currentStep > 0 {
-                    DSButton("Back", variant: .secondary, size: .lg, action: goBack)
+                    DSButton("back", variant: .secondary, size: .lg, action: goBack)
                 }
                 DSButton(
-                    "Next",
+                    "next",
                     icon: .chevronRight,
                     variant: .accent,
                     size: .lg,
@@ -154,7 +154,7 @@ private struct OnboardingVariantAView: View {
             }
         } else {
             VStack(spacing: 10) {
-                DSButton("Add your first host", icon: .plus,
+                DSButton("add host", icon: .plus,
                          variant: .accent, size: .lg, fullWidth: true,
                          action: onComplete)
             }
@@ -182,37 +182,49 @@ private struct OnboardingVariantAView: View {
     private var slideWelcome: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 28) {
-                Spacer(minLength: 20)
+                Spacer(minLength: 16)
 
-                // Animated PixelBox logo
-                PixelBox(color: t.accent, size: 64, gap: 3, subdivisions: 3)
+                // Wordmark
+                Text("conduit")
+                    .font(.dsDisplayPt(13, weight: .bold))
+                    .foregroundStyle(t.text3)
+                    .kerning(3.5)
+                    .textCase(.uppercase)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                    .shadow(color: t.accent.opacity(0.35), radius: 24, x: 0, y: 8)
+
+                // DotMatrix hero
+                DotMatrixView(state: .connecting, cols: 26, rows: 9, cell: 9, dot: 4)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
                 VStack(spacing: 10) {
-                    Text("Conduit")
-                        .font(.dsDisplayPt(38, weight: .bold))
+                    Text("connect your\nfirst host")
+                        .font(.dsDisplayPt(25, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
                     Text("A phone-native cockpit\nfor remote AI coding.")
-                        .font(.dsSansPt(18))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 260)
                 }
 
                 // Feature highlights
-                VStack(alignment: .leading, spacing: 16) {
-                    featureRow("Connect", "SSH into any server in seconds.", icon: "bolt.fill")
-                    featureRow("Survive", "Sessions stay alive across Wi-Fi and cellular.", icon: "antenna.radiowaves.left.and.right")
-                    featureRow("Approve", "Review and approve agent tool calls on the go.", icon: "checkmark.seal.fill")
-                    featureRow("Review", "Warp-style block output, diffs, and logs.", icon: "doc.text.magnifyingglass")
+                VStack(alignment: .leading, spacing: 14) {
+                    featureRow("connect", "SSH into any server in seconds.", icon: "bolt.fill")
+                    featureRow("survive", "Sessions stay alive across Wi-Fi and cellular.", icon: "antenna.radiowaves.left.and.right")
+                    featureRow("approve", "Review and approve agent tool calls on the go.", icon: "checkmark.seal.fill")
+                    featureRow("review", "Warp-style block output, diffs, and logs.", icon: "doc.text.magnifyingglass")
                 }
                 .padding(.top, 4)
 
-                Spacer(minLength: 20)
+                // Spectrum bar footer
+                SpectrumBar(mode: .idle, height: 4)
+
+                Spacer(minLength: 12)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 24)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
@@ -224,19 +236,20 @@ private struct OnboardingVariantAView: View {
 
     private var slideHowItWorks: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 28) {
+            VStack(spacing: 24) {
                 Spacer(minLength: 12)
 
                 VStack(spacing: 10) {
-                    Text("Smart blocks.")
+                    Text("smart blocks.")
                         .font(.dsDisplayPt(30, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
                     Text("Commands run in smart blocks. Each command is its own card.")
-                        .font(.dsSansPt(16))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 280)
                 }
 
                 // Animated block mock
@@ -244,20 +257,20 @@ private struct OnboardingVariantAView: View {
 
                 calloutCard(
                     header: {
-                        Label("Terminal blocks", systemImage: "terminal.fill")
-                            .font(.dsSansPt(13, weight: .semibold))
-                            .foregroundStyle(t.text2)
+                        Text("// terminal blocks")
+                            .font(.dsMonoPt(12, weight: .bold))
+                            .foregroundStyle(t.text3)
                     },
                     content: {
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: 8) {
                             modelPoint(icon: "rectangle.split.1x2",
-                                       title: "One block per command",
+                                       title: "one block per command",
                                        detail: "Header, output panel, and exit status — all tied together.")
                             modelPoint(icon: "sparkles",
-                                       title: "Inline AI agent",
+                                       title: "inline AI agent",
                                        detail: "Run claude or codex and the block expands into a live agent view.")
                             modelPoint(icon: "display",
-                                       title: "Alt-screen apps",
+                                       title: "alt-screen apps",
                                        detail: "Vim and htop auto-escalate to a full-screen overlay and return on exit.")
                         }
                     }
@@ -265,7 +278,7 @@ private struct OnboardingVariantAView: View {
 
                 Spacer(minLength: 20)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 24)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
@@ -280,36 +293,62 @@ private struct OnboardingVariantAView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: Slide 4 — Get started
+    // MARK: Slide 4 — Get started (BLOCKS spec primary screen)
     // --------------------------------------------------------
 
     private var slideGetStarted: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 28) {
-                Spacer(minLength: 20)
+            VStack(spacing: 24) {
+                Spacer(minLength: 12)
 
-                PixelBox(state: .done, size: 64, gap: 3, subdivisions: 3)
+                // Wordmark
+                Text("conduit")
+                    .font(.dsDisplayPt(13, weight: .bold))
+                    .foregroundStyle(t.text3)
+                    .kerning(3.5)
+                    .textCase(.uppercase)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                    .shadow(color: t.ok.opacity(0.30), radius: 20, x: 0, y: 6)
+
+                // DotMatrix hero
+                DotMatrixView(state: .connecting, cols: 26, rows: 9, cell: 9, dot: 4)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
                 VStack(spacing: 10) {
-                    Text("You're ready.")
-                        .font(.dsDisplayPt(32, weight: .bold))
+                    Text("connect your\nfirst host")
+                        .font(.dsDisplayPt(25, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
                     Text("Add an SSH host to start your first session.")
-                        .font(.dsSansPt(16))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 260)
                 }
+
+                // SQUARE terminal input row
+                TerminalInputMockView()
 
                 // Optional Anthropic key entry
                 AnthropicKeyEntryView()
 
-                Spacer(minLength: 20)
+                // Secondary link
+                HStack(spacing: 4) {
+                    Text("or ")
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.text3)
+                    Text("scan a pairing code")
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.accent)
+                }
+
+                // Spectrum bar footer
+                SpectrumBar(mode: .idle, height: 4)
+
+                Spacer(minLength: 12)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 24)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
@@ -320,15 +359,15 @@ private struct OnboardingVariantAView: View {
     private func featureRow(_ title: String, _ subtitle: String, icon: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(t.accent)
-                .frame(width: 26)
+                .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.dsSansPt(16, weight: .semibold))
+                    .font(.dsMonoPt(13, weight: .bold))
                     .foregroundStyle(t.text)
                 Text(subtitle)
-                    .font(.dsSansPt(13))
+                    .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -338,12 +377,12 @@ private struct OnboardingVariantAView: View {
     private func modelPoint(icon: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(t.accent)
-                .frame(width: 16, alignment: .center)
+                .frame(width: 14, alignment: .center)
                 .padding(.top, 1)
             (Text(title).fontWeight(.semibold) + Text(" \(detail)"))
-                .font(.dsSansPt(13))
+                .font(.dsMonoPt(12))
                 .foregroundStyle(t.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -358,11 +397,60 @@ private struct OnboardingVariantAView: View {
             content()
         }
         .padding(14)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(t.surface)
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+            Rectangle()
                 .strokeBorder(t.border, lineWidth: 0.5)
         )
+    }
+}
+
+// --------------------------------------------------------
+// MARK: - Terminal input mock (BLOCKS style)
+// --------------------------------------------------------
+
+private struct TerminalInputMockView: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Blue $ prompt
+            Text("$")
+                .font(.dsMonoPt(14, weight: .bold))
+                .foregroundStyle(t.accent)
+                .padding(.leading, 13)
+                .padding(.trailing, 8)
+            // Placeholder
+            Text("ssh user@host")
+                .font(.dsMonoPt(13))
+                .foregroundStyle(t.text4)
+            Spacer()
+            // Blinking caret block
+            BlinkingCaret()
+                .padding(.trailing, 13)
+        }
+        .padding(.vertical, 12)
+        .background(t.surfaceSunk)
+        .overlay(
+            Rectangle()
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+    }
+}
+
+private struct BlinkingCaret: View {
+    @Environment(\.conduitTokens) private var t
+    @State private var visible = true
+    var body: some View {
+        Rectangle()
+            .fill(t.accent)
+            .frame(width: 8, height: 14)
+            .opacity(visible ? 1 : 0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.55).repeatForever()) {
+                    visible.toggle()
+                }
+            }
     }
 }
 
@@ -407,7 +495,6 @@ private struct AnimatedBlockMockView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if visibleLines < outputLines.count {
-                    // Blinking cursor
                     BlinkingCursor()
                 }
             }
@@ -424,7 +511,7 @@ private struct AnimatedBlockMockView: View {
                         .foregroundStyle(t.termOk)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(t.termOk.opacity(0.12), in: Capsule())
+                        .background(t.termOk.opacity(0.12))
                     Spacer()
                 }
                 .padding(.horizontal, 12)
@@ -433,9 +520,9 @@ private struct AnimatedBlockMockView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(Rectangle())
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            Rectangle()
                 .strokeBorder(t.termBorder, lineWidth: 0.5)
         )
         .animation(.easeOut(duration: 0.35), value: visibleLines)
@@ -455,10 +542,11 @@ private struct AnimatedBlockMockView: View {
 }
 
 private struct BlinkingCursor: View {
+    @Environment(\.conduitTokens) private var t
     @State private var visible = true
     var body: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.7))
+            .fill(t.accent.opacity(0.85))
             .frame(width: 7, height: 13)
             .opacity(visible ? 1 : 0)
             .onAppear {
@@ -479,40 +567,32 @@ private struct SSHSetupSlideView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Spacer(minLength: 12)
 
                 // Hero
-                VStack(spacing: 8) {
-                    ZStack {
-                        t.accentSoft
-                            .clipShape(RoundedRectangle(cornerRadius: t.r5, style: .continuous))
-                        Image(systemName: "network")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundStyle(t.accent)
-                    }
-                    .frame(width: 64, height: 64)
+                VStack(spacing: 10) {
+                    // DotMatrix replacing icon hero
+                    DotMatrixView(state: .connecting, cols: 16, rows: 5, cell: 9, dot: 4)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                    Text("Enable SSH on your server.")
-                        .font(.dsDisplayPt(26, weight: .bold))
+                    Text("enable SSH\non your server")
+                        .font(.dsDisplayPt(24, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
                     Text("Pick your server's OS for exact setup steps.")
-                        .font(.dsSansPt(15))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 260)
                 }
 
-                // Platform picker
-                Picker("Platform", selection: $selectedPlatform) {
-                    ForEach(SSHPlatform.allCases) { p in
-                        Text(p.rawValue).tag(p)
-                    }
-                }
-                .pickerStyle(.segmented)
+                // Platform picker — styled as mono segment strip
+                SSHPlatformPicker(selected: $selectedPlatform)
 
-                // Steps card
+                // Steps card — SQUARE
                 VStack(alignment: .leading, spacing: 12) {
                     switch selectedPlatform {
                     case .macOS:   macOSSteps
@@ -521,16 +601,16 @@ private struct SSHSetupSlideView: View {
                     }
                 }
                 .padding(16)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+                .background(t.surface)
                 .overlay(
-                    RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    Rectangle()
                         .strokeBorder(t.border, lineWidth: 0.5)
                 )
                 .animation(.easeInOut(duration: 0.2), value: selectedPlatform)
 
                 Spacer(minLength: 20)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 24)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
         }
@@ -544,7 +624,7 @@ private struct SSHSetupSlideView: View {
             sshStepLabel("2", "Go to General → Sharing")
             sshStepLabel("3", "Toggle Remote Login to on")
             sshStepLabel("4", "Allow access for your user account")
-            Divider()
+            Divider().background(t.divider)
             sshNote("Your Mac's SSH address is shown in the Sharing panel once enabled.")
         }
     }
@@ -557,7 +637,7 @@ private struct SSHSetupSlideView: View {
             sshStepLabel("2", "Search \"OpenSSH Server\" → Install")
             sshStepLabel("3", "Open Services (services.msc)")
             sshStepLabel("4", "Set OpenSSH SSH Server to Automatic → Start")
-            Divider()
+            Divider().background(t.divider)
             sshNote("Default port is 22. Allow it through Windows Firewall if prompted.")
         }
     }
@@ -568,7 +648,7 @@ private struct SSHSetupSlideView: View {
         VStack(alignment: .leading, spacing: 10) {
             sshStepLabel("systemd", "sudo systemctl enable --now sshd")
             sshStepLabel("SysV", "sudo service ssh start")
-            Divider()
+            Divider().background(t.divider)
             sshNote("On Ubuntu/Debian, install first:\nsudo apt install openssh-server")
         }
     }
@@ -582,10 +662,10 @@ private struct SSHSetupSlideView: View {
                 .foregroundStyle(t.accentFg)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(t.accent, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .background(t.accent)
                 .fixedSize()
             Text(text)
-                .font(.dsSansPt(14))
+                .font(.dsMonoPt(13))
                 .foregroundStyle(t.text)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -593,9 +673,42 @@ private struct SSHSetupSlideView: View {
 
     private func sshNote(_ text: String) -> some View {
         Text(text)
-            .font(.dsSansPt(12))
+            .font(.dsMonoPt(11.5))
             .foregroundStyle(t.text3)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+// MARK: - SSH platform picker (BLOCKS style square tabs)
+
+private struct SSHPlatformPicker: View {
+    @Binding var selected: SSHPlatform
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(SSHPlatform.allCases) { platform in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selected = platform }
+                } label: {
+                    Text(platform.rawValue)
+                        .font(.dsMonoPt(12, weight: .bold))
+                        .foregroundStyle(selected == platform ? t.accentFg : t.text3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(selected == platform ? t.accent : t.surfaceSunk)
+                }
+                if platform != SSHPlatform.allCases.last {
+                    Rectangle()
+                        .fill(t.border)
+                        .frame(width: 1)
+                }
+            }
+        }
+        .overlay(
+            Rectangle()
+                .strokeBorder(t.border, lineWidth: 1)
+        )
     }
 }
 
@@ -609,30 +722,38 @@ private struct AnthropicKeyEntryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Anthropic API key (optional)", systemImage: "key.fill")
-                .font(.dsSansPt(13, weight: .semibold))
-                .foregroundStyle(t.text2)
+            HStack(spacing: 6) {
+                Text("$")
+                    .font(.dsMonoPt(11, weight: .bold))
+                    .foregroundStyle(t.accent)
+                Text("ANTHROPIC_API_KEY")
+                    .font(.dsMonoPt(11, weight: .bold))
+                    .foregroundStyle(t.text2)
+                Text("(optional)")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
 
             SecureField("sk-ant-…", text: $apiKey)
                 .font(.dsMonoPt(13))
                 .foregroundStyle(t.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+                .background(t.surfaceSunk)
                 .overlay(
-                    RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous)
+                    Rectangle()
                         .strokeBorder(t.border, lineWidth: 0.5)
                 )
 
             Text("Paste your key from console.anthropic.com. It goes directly to the API and never leaves your device.")
-                .font(.dsSansPt(11))
+                .font(.dsMonoPt(11))
                 .foregroundStyle(t.text4)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(t.surface)
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+            Rectangle()
                 .strokeBorder(t.border, lineWidth: 0.5)
         )
     }
@@ -669,8 +790,8 @@ private struct OnboardingVariantBView: View {
                     stepCounterLabel
                     Spacer()
                     if currentStep < Self.totalSteps - 1 {
-                        Button("Skip") { onContinue() }
-                            .font(.dsSansPt(14))
+                        Button("skip") { onContinue() }
+                            .font(.dsMonoPt(12))
                             .foregroundStyle(t.text3)
                     }
                 }
@@ -700,8 +821,8 @@ private struct OnboardingVariantBView: View {
                 .animation(.spring(response: 0.38, dampingFraction: 0.88), value: currentStep)
 
                 // Bottom controls
-                VStack(spacing: 14) {
-                    dotIndicators
+                VStack(spacing: 12) {
+                    squareDotIndicators
                     actionButtons
                 }
                 .padding(.horizontal, 24)
@@ -722,21 +843,20 @@ private struct OnboardingVariantBView: View {
     // MARK: Step counter
 
     private var stepCounterLabel: some View {
-        Text("\(currentStep + 1) / \(Self.totalSteps)")
-            .font(.dsSansPt(13))
+        Text("\(currentStep + 1)/\(Self.totalSteps)")
+            .font(.dsMonoPt(12))
             .foregroundStyle(t.text3)
             .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
-    // MARK: Dots
+    // MARK: Square dot indicators (BLOCKS style)
 
-    private var dotIndicators: some View {
-        HStack(spacing: 6) {
+    private var squareDotIndicators: some View {
+        HStack(spacing: 5) {
             ForEach(0..<Self.totalSteps, id: \.self) { index in
-                Circle()
+                Rectangle()
                     .fill(index == currentStep ? t.accent : t.border)
-                    .frame(width: index == currentStep ? 8 : 6,
-                           height: index == currentStep ? 8 : 6)
+                    .frame(width: index == currentStep ? 16 : 6, height: 4)
                     .animation(.easeInOut(duration: 0.2), value: currentStep)
             }
         }
@@ -750,22 +870,22 @@ private struct OnboardingVariantBView: View {
         if currentStep < Self.totalSteps - 1 {
             HStack(spacing: 12) {
                 if currentStep > 0 {
-                    DSButton("Back", variant: .secondary, size: .lg, action: goBack)
+                    DSButton("back", variant: .secondary, size: .lg, action: goBack)
                 }
-                DSButton("Next", icon: .chevronRight, variant: .accent, size: .lg,
+                DSButton("next", icon: .chevronRight, variant: .accent, size: .lg,
                          fullWidth: currentStep == 0, action: advance)
             }
         } else {
             VStack(spacing: 10) {
-                DSButton("Add your first host", icon: .plus,
+                DSButton("add host", icon: .plus,
                          variant: .accent, size: .lg, fullWidth: true,
                          action: onContinue)
                 VStack(spacing: 4) {
-                    DSButton("Set up a workspace for me", systemImage: "wand.and.stars",
+                    DSButton("set up a workspace for me", systemImage: "wand.and.stars",
                              variant: .secondary, size: .lg, fullWidth: true,
                              action: onSetupWorkspace)
-                    Text("Provision a new Fly.io VM · Beta")
-                        .font(.dsSansPt(11))
+                    Text("provision a new Fly.io VM · Beta")
+                        .font(.dsMonoPt(11))
                         .foregroundStyle(t.text4)
                 }
             }
@@ -787,31 +907,44 @@ private struct OnboardingVariantBView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: B-Slide 1 — Welcome (neon glow on PixelBox)
+    // MARK: B-Slide 1 — Welcome
     // --------------------------------------------------------
 
     private var bStepWelcome: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 24) {
-                // Neon-glowing PixelBox logo
-                PixelBox(color: t.accent, size: 56, gap: 6, subdivisions: 3)
+                Spacer(minLength: 12)
+
+                // Wordmark
+                Text("conduit")
+                    .font(.dsDisplayPt(13, weight: .bold))
+                    .foregroundStyle(t.text3)
+                    .kerning(3.5)
+                    .textCase(.uppercase)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                    .shadow(color: t.accent.opacity(0.45), radius: 28, x: 0, y: 10)
-                    .padding(.top, 20)
+
+                // DotMatrix replacing PixelBox logo
+                DotMatrixView(state: .connecting, cols: 26, rows: 9, cell: 9, dot: 4)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
                 VStack(spacing: 8) {
-                    Text("Conduit")
-                        .font(.dsDisplayPt(36, weight: .bold))
+                    Text("connect your\nfirst host")
+                        .font(.dsDisplayPt(25, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
                     Text("A phone-native cockpit for remote AI coding.")
-                        .font(.dsSansPt(17))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 260)
                 }
 
                 bFeatureGrid
+
+                // Spectrum bar
+                SpectrumBar(mode: .idle, height: 4)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
@@ -821,13 +954,13 @@ private struct OnboardingVariantBView: View {
     }
 
     private var bFeatureGrid: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            bFeatureRow("Attach", "Connect to your remote workspace in seconds.", icon: "bolt")
-            bFeatureRow("Survive", "Sessions stay alive across Wi-Fi and cellular.", icon: "antenna.radiowaves.left.and.right")
-            bFeatureRow("Approve", "See and approve agent actions from your phone.", icon: "checkmark.seal")
-            bFeatureRow("Review", "Diffs, logs, and tests on a phone-sized screen.", icon: "doc.text.magnifyingglass")
+        VStack(alignment: .leading, spacing: 12) {
+            bFeatureRow("attach", "Connect to your remote workspace in seconds.", icon: "bolt")
+            bFeatureRow("survive", "Sessions stay alive across Wi-Fi and cellular.", icon: "antenna.radiowaves.left.and.right")
+            bFeatureRow("approve", "See and approve agent actions from your phone.", icon: "checkmark.seal")
+            bFeatureRow("review", "Diffs, logs, and tests on a phone-sized screen.", icon: "doc.text.magnifyingglass")
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
     }
 
     // --------------------------------------------------------
@@ -836,21 +969,21 @@ private struct OnboardingVariantBView: View {
 
     private var bStepBYOHost: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 24) {
-                bStepHero(icon: "server.rack", headline: "No account. No subscription.")
+            VStack(spacing: 20) {
+                bStepHero(icon: "server.rack", headline: "no account.\nno subscription.")
                 bCalloutCard(
                     header: {
-                        Label("How Conduit works", systemImage: "info.circle.fill")
-                            .font(.dsSansPt(13, weight: .semibold))
-                            .foregroundStyle(t.text2)
+                        Text("// how conduit works")
+                            .font(.dsMonoPt(12, weight: .bold))
+                            .foregroundStyle(t.text3)
                     },
                     content: {
-                        VStack(alignment: .leading, spacing: 7) {
-                            bModelPoint(icon: "server.rack", title: "Your server",
+                        VStack(alignment: .leading, spacing: 8) {
+                            bModelPoint(icon: "server.rack", title: "your server",
                                         detail: "Any SSH host — a VPS, cloud VM, or local machine.")
-                            bModelPoint(icon: "key.fill", title: "Your API key",
+                            bModelPoint(icon: "key.fill", title: "your API key",
                                         detail: "Paste your Anthropic key. It goes directly to the provider.")
-                            bModelPoint(icon: "person.badge.minus", title: "No account needed",
+                            bModelPoint(icon: "person.badge.minus", title: "no account needed",
                                         detail: "No Conduit login. Data stays on your device.")
                         }
                     }
@@ -873,43 +1006,46 @@ private struct OnboardingVariantBView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: B-Slide 4 — Blocks (with glowing PixelBox)
+    // MARK: B-Slide 4 — Blocks
     // --------------------------------------------------------
 
     private var bStepBlocks: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 24) {
-                // Thinking PixelBox with neon glow
-                PixelBox(state: .thinking, size: 52, gap: 5, subdivisions: 3)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                    .shadow(color: t.accent.opacity(0.40), radius: 22, x: 0, y: 8)
-                    .padding(.top, 20)
+            VStack(spacing: 20) {
+                Spacer(minLength: 12)
 
-                Text("Warp-style command blocks.")
+                // DotMatrix replacing PixelBox thinking state
+                DotMatrixView(state: .connecting, cols: 20, rows: 7, cell: 9, dot: 4)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+                Text("warp-style\ncommand blocks.")
                     .font(.dsDisplayPt(24, weight: .bold))
                     .foregroundStyle(t.text)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(2)
 
                 bCalloutCard(
                     header: {
-                        Label("Terminal blocks", systemImage: "terminal.fill")
-                            .font(.dsSansPt(13, weight: .semibold))
-                            .foregroundStyle(t.text2)
+                        Text("// terminal blocks")
+                            .font(.dsMonoPt(12, weight: .bold))
+                            .foregroundStyle(t.text3)
                     },
                     content: {
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: 8) {
                             bModelPoint(icon: "rectangle.split.1x2",
-                                        title: "One block per command",
+                                        title: "one block per command",
                                         detail: "Header, output, and exit status — always tied together.")
                             bModelPoint(icon: "sparkles",
-                                        title: "Inline AI agent",
+                                        title: "inline AI agent",
                                         detail: "Run claude and the block expands into a live agent view.")
                             bModelPoint(icon: "display",
-                                        title: "Alt-screen apps",
+                                        title: "alt-screen apps",
                                         detail: "Vim and htop auto-escalate to full-screen raw terminal.")
                         }
                     }
                 )
+
+                SpectrumBar(mode: .scan, height: 4)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
@@ -920,27 +1056,56 @@ private struct OnboardingVariantBView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: B-Slide 5 — Final CTAs
+    // MARK: B-Slide 5 — Final CTAs (BLOCKS primary spec)
     // --------------------------------------------------------
 
     private var bStepCTAs: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 24) {
-                PixelBox(color: t.accent, size: 48, gap: 5, subdivisions: 3)
+            VStack(spacing: 20) {
+                Spacer(minLength: 12)
+
+                // Wordmark
+                Text("conduit")
+                    .font(.dsDisplayPt(13, weight: .bold))
+                    .foregroundStyle(t.text3)
+                    .kerning(3.5)
+                    .textCase(.uppercase)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                    .shadow(color: t.accent.opacity(0.35), radius: 20, x: 0, y: 6)
-                    .padding(.top, 20)
+
+                // DotMatrix hero
+                DotMatrixView(state: .connecting, cols: 26, rows: 9, cell: 9, dot: 4)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
                 VStack(spacing: 8) {
-                    Text("You're ready.")
-                        .font(.dsDisplayPt(32, weight: .bold))
+                    Text("you're ready.")
+                        .font(.dsDisplayPt(25, weight: .bold))
                         .foregroundStyle(t.text)
                         .multilineTextAlignment(.center)
                     Text("Add a host to start your first session, or let Conduit provision a cloud workspace for you.")
-                        .font(.dsSansPt(16))
-                        .foregroundStyle(t.text3)
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 260)
                 }
+
+                // SQUARE terminal input row
+                TerminalInputMockView()
+
+                // Secondary link
+                HStack(spacing: 4) {
+                    Text("or ")
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.text3)
+                    Text("scan a pairing code")
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.accent)
+                }
+
+                // Spectrum bar footer
+                SpectrumBar(mode: .idle, height: 4)
+
+                Spacer(minLength: 12)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
@@ -954,21 +1119,16 @@ private struct OnboardingVariantBView: View {
 
     private func bStepHero(icon: String, headline: String) -> some View {
         VStack(spacing: 14) {
-            ZStack {
-                t.accentSoft
-                    .clipShape(RoundedRectangle(cornerRadius: t.r5, style: .continuous))
-                Image(systemName: icon)
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundStyle(t.accent)
-            }
-            .frame(width: 72, height: 72)
-            .shadow(color: t.accent.opacity(0.22), radius: 16, x: 0, y: 4)
-            .padding(.top, 12)
+            // DotMatrix small panel replacing icon square
+            DotMatrixView(state: .connecting, cols: 12, rows: 4, cell: 9, dot: 4)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                .padding(.top, 12)
             Text(headline)
                 .font(.dsDisplayPt(24, weight: .bold))
                 .foregroundStyle(t.text)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
         }
     }
 
@@ -981,9 +1141,9 @@ private struct OnboardingVariantBView: View {
             content()
         }
         .padding(14)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(t.surface)
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+            Rectangle()
                 .strokeBorder(t.border, lineWidth: 0.5)
         )
     }
@@ -991,12 +1151,12 @@ private struct OnboardingVariantBView: View {
     private func bModelPoint(icon: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(t.accent)
-                .frame(width: 16, alignment: .center)
+                .frame(width: 14, alignment: .center)
                 .padding(.top, 1)
             (Text(title).fontWeight(.semibold) + Text(" \(detail)"))
-                .font(.dsSansPt(13))
+                .font(.dsMonoPt(12))
                 .foregroundStyle(t.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1005,14 +1165,15 @@ private struct OnboardingVariantBView: View {
     private func bFeatureRow(_ title: String, _ subtitle: String, icon: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .frame(width: 24)
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(t.accent)
+                .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.dsSansPt(16, weight: .semibold))
+                    .font(.dsMonoPt(13, weight: .bold))
                     .foregroundStyle(t.text)
                 Text(subtitle)
-                    .font(.dsSansPt(13))
+                    .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
             }
             .fixedSize(horizontal: false, vertical: true)

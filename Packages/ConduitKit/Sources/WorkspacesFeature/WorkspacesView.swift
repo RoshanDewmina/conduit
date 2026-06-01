@@ -84,34 +84,18 @@ public struct WorkspacesView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Title row
-                HStack(alignment: .center) {
-                    Text("Hosts")
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(action: handleAdd) {
-                        ZStack {
-                            Circle()
-                                .fill(t.text)
-                                .frame(width: 32, height: 32)
-                            DSIconView(.plus, size: 16, color: t.bg)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                // ── Title row (BLOCKS DSScreenHeader)
+                DSScreenHeader("hosts", breadcrumb: "saved connections", count: vm.hosts.isEmpty ? nil : "\(vm.hosts.count)") {
+                    DSIconButton(.plus) { handleAdd() }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
 
                 if !statusHeaderAgents.isEmpty {
                     AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
-                        .padding(.top, 10)
                 }
 
                 DSSearchField(text: $searchText, placeholder: "Search or \"ssh user@host\"")
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
                     .padding(.bottom, 8)
 
                 if vm.hosts.isEmpty && searchText.isEmpty {
@@ -122,7 +106,7 @@ public struct WorkspacesView: View {
                             // Quick connect row
                             if let qc = quickConnectHost {
                                 quickConnectRow(qc)
-                                Rectangle().fill(t.border).frame(height: 1)
+                                DSDivider(.line)
                             }
 
                             if filteredHosts.isEmpty {
@@ -135,11 +119,10 @@ public struct WorkspacesView: View {
                                     ForEach(group.hosts) { host in
                                         hostRow(host)
                                         if host.id != group.hosts.last?.id {
-                                            Rectangle().fill(t.divider).frame(height: 1)
-                                                .padding(.leading, 70)
+                                            DSDivider(.soft, leadingInset: 70)
                                         }
                                     }
-                                    Rectangle().fill(t.border).frame(height: 1)
+                                    DSDivider(.line)
                                 }
                             }
                         }
@@ -196,15 +179,55 @@ public struct WorkspacesView: View {
     private func hostRow(_ host: Host) -> some View {
         let isConnected = vm.connectedHostIDs.contains(host.id)
         let attention   = vm.attentionCounters[host.id] ?? 0
-        DSHostRow(
-            name: host.name,
-            address: host.displayAddress,
-            initials: hostInitials(host),
-            status: isConnected ? .connected : .disconnected,
-            pendingApprovals: attention,
-            lastConnected: host.lastConnectedAt.map { relativeTime($0) },
-            onTap: { onSelect(host) }
-        )
+        Button { onSelect(host) } label: {
+            HStack(spacing: 14) {
+                // Avatar (pixel art seeded by host name) with optional attention ring
+                ZStack {
+                    PixelAvatar(seed: host.name, size: 44)
+                    if attention > 0 {
+                        AttentionFlashRing(trigger: attention,
+                                           reason: vm.attentionReasons[host.id] ?? .generic,
+                                           cornerRadius: t.pill)
+                    }
+                }
+
+                // Body
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(host.name)
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                        .lineLimit(1)
+                    Text(host.displayAddress)
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.text2)
+                        .lineLimit(1)
+                    if let last = host.lastConnectedAt.map({ relativeTime($0) }) {
+                        Text(last)
+                            .font(.dsMonoPt(10.5))
+                            .foregroundStyle(t.text3)
+                    }
+                }
+
+                Spacer()
+
+                // Trailing status
+                VStack(alignment: .trailing, spacing: 4) {
+                    DSStatusDot(tone: isConnected ? .ok : .off,
+                                pulse: isConnected,
+                                size: 8)
+                    Text(isConnected ? "online" : "offline")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(isConnected ? t.ok : t.text4)
+                    if attention > 0 {
+                        DSChip("\(attention)", tone: .accent, variant: .solid, size: .sm)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 Task { await vm.remove(host) }
@@ -212,7 +235,7 @@ public struct WorkspacesView: View {
         }
         .swipeActions(edge: .leading) {
             Button { onEdit(host) } label: { Label("Edit", systemImage: "pencil") }
-                .tint(.blue)
+                .tint(t.accent)
         }
     }
 
@@ -221,7 +244,7 @@ public struct WorkspacesView: View {
         Button { onSelect(host) } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                         .fill(t.accentSoft)
                         .frame(width: 38, height: 38)
                     DSIconView(.server, size: 18, color: t.accent)
@@ -281,15 +304,6 @@ public struct WorkspacesView: View {
         } else {
             onAddHost()
         }
-    }
-
-    private func hostInitials(_ host: Host) -> String {
-        let words = host.name.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-        if words.count >= 2 {
-            return String((words[0].prefix(1) + words[1].prefix(1)).uppercased())
-        }
-        return String(host.name.prefix(2).uppercased())
     }
 
     private func relativeTime(_ date: Date) -> String {

@@ -63,66 +63,44 @@ struct SessionsHomeView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Title row
-                HStack(alignment: .center) {
-                    Text("Sessions")
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(action: onAddSession) {
-                        ZStack {
-                            Circle()
-                                .fill(t.text)
-                                .frame(width: 32, height: 32)
-                            DSIconView(.plus, size: 16, color: t.bg)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                // ── BLOCKS header
+                DSScreenHeader(
+                    "sessions",
+                    breadcrumb: "active workspaces",
+                    count: liveSummaries.isEmpty ? nil : "\(liveSummaries.count) live"
+                ) {
+                    DSIconButton(.plus, action: onAddSession)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
 
                 // ── Agent status header (only while a live session exists)
                 if !statusHeaderAgents.isEmpty {
                     AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
-                        .padding(.top, 10)
+                        .padding(.top, 4)
                 }
 
-                // ── Search pill
-                DSSearchField(text: $searchText, placeholder: "Search sessions")
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
+                // ── Search field
+                DSSearchField(text: $searchText, placeholder: "search sessions")
+                    .padding(.horizontal, 18)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
 
                 // ── Session list
                 if filteredSummaries.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        LazyVStack(spacing: 12) {
                             if !liveSummaries.isEmpty {
                                 DSListSectionHead("ACTIVE", count: liveSummaries.count)
-                                ForEach(liveSummaries) { s in
-                                    sessionRow(s)
-                                    if s.id != liveSummaries.last?.id {
-                                        Rectangle().fill(t.divider).frame(height: 1)
-                                            .padding(.leading, 74)
-                                    }
-                                }
-                                Rectangle().fill(t.border).frame(height: 1)
+                                ForEach(liveSummaries) { s in sessionRow(s) }
                             }
                             if !recentVisible.isEmpty {
                                 DSListSectionHead("RECENT")
-                                ForEach(recentVisible) { s in
-                                    sessionRow(s)
-                                    if s.id != recentVisible.last?.id {
-                                        Rectangle().fill(t.divider).frame(height: 1)
-                                            .padding(.leading, 74)
-                                    }
-                                }
+                                    .padding(.top, liveSummaries.isEmpty ? 0 : 6)
+                                ForEach(recentVisible) { s in sessionRow(s) }
                             }
                         }
+                        .padding(.bottom, 16)
                     }
                 }
             }
@@ -194,6 +172,7 @@ struct SessionsHomeView: View {
             SessionRowView(summary: s)
         }
         .buttonStyle(SessionRowButtonStyle(t: t))
+        .padding(.horizontal, 18)
         .accessibilityLabel(sessionRowLabel(s))
         .accessibilityHint(s.isLive ? "Opens live session" : "Reconnect to this host")
         .contextMenu {
@@ -226,10 +205,10 @@ struct SessionsHomeView: View {
         VStack(spacing: 0) {
             Spacer()
             DSEmptyState(
-                icon: .terminal,
-                title: "No sessions yet",
+                dotMatrix: .idle,
+                title: "no sessions yet",
                 subtitle: "Add your SSH host on the Hosts tab, then tap it to start a session. No Conduit account needed — just your own server and API key.",
-                action: ("Go to Hosts", onAddSession)
+                action: ("go to hosts", onAddSession)
             )
             .padding(.horizontal, 24)
             Spacer()
@@ -278,79 +257,82 @@ private struct SessionRowView: View {
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Avatar + status dot overlay
-            ZStack(alignment: .bottomTrailing) {
-                PixelAvatar(seed: summary.hostName, size: 46)
-                DSStatusDot(
-                    tone: statusDotTone,
-                    pulse: summary.isLive && summary.agentState != .done,
-                    size: 12
-                )
-                .background(
-                    Circle().fill(t.bg).frame(width: 16, height: 16)
-                )
-                .offset(x: 2, y: 2)
-            }
-
-            // Body
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(summary.hostName)
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .foregroundStyle(t.text)
-                    if summary.isLive && summary.agentKey != .unknown {
-                        AgentIdentityBadge(agent: summary.agentKey, label: nil)
-                    }
-                }
-                Text(summary.subtitle)
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
+        VStack(spacing: 0) {
+            // ── Header tier: host · agent · status
+            HStack(spacing: 7) {
+                DSIconView(.server, size: 13, color: t.text3)
+                Text(summary.hostName)
+                    .font(.dsMonoPt(12, weight: .medium))
+                    .foregroundStyle(t.text)
                     .lineLimit(1)
-            }
-
-            Spacer()
-
-            // Right column: time / PixelBox / unread — fixed geometry so PixelBox never shifts.
-            // Capped at accessibility3 so the badge slot never expands and breaks alignment.
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(summary.relativeTime)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                HStack(spacing: 6) {
-                    // size:6 → dominant 3×3 cells; subdivisions:3 → 3×3 sub-pixels
-                    // per cell for the "pixels-of-pixels" texture; gap:1 keeps the
-                    // 3×3 macro structure clear. Fixed-geometry invariant: ZStack
-                    // below always allocates width:20 for the badge slot.
-                    PixelBox(state: summary.agentState, size: 6, gap: 1, subdivisions: 3)
-                    ZStack(alignment: .trailing) {
-                        if summary.unreadCount > 0 {
-                            Text("\(summary.unreadCount)")
-                                .font(.dsMonoPt(11, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(t.accent)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .frame(width: 20, alignment: .trailing)
+                if summary.isLive && summary.agentKey != .unknown {
+                    AgentIdentityBadge(agent: summary.agentKey, label: nil)
                 }
+                Spacer(minLength: 6)
+                statusCluster
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+
+            DSDivider(.soft)
+
+            // ── Footer tier: cwd + meta
+            HStack(spacing: 6) {
+                Text("$").font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.accent)
+                Text(summary.subtitle)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text2)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if summary.unreadCount > 0 {
+                    Text("\(summary.unreadCount) pending")
+                        .font(.dsMonoPt(10.5))
+                        .foregroundStyle(t.warn)
+                }
+                Text(summary.relativeTime)
+                    .font(.dsMonoPt(10.5))
+                    .foregroundStyle(t.text3)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         }
-        .padding(.horizontal, t.s5)
-        .padding(.vertical, t.s4)
+        .background(t.surface)
+        .overlay(
+            Rectangle().strokeBorder(t.border, lineWidth: 1)
+        )
         .contentShape(Rectangle())
     }
 
-    private var statusDotTone: DSStatusDotTone {
+    // Live ping + label, or idle dot, mirroring the BLOCKS session card.
+    @ViewBuilder
+    private var statusCluster: some View {
+        let (label, tone) = statusLabelTone
+        HStack(spacing: 6) {
+            if summary.isLive && summary.unreadCount == 0 && summary.agentState != .error {
+                DSStatusDot(tone: .ok, pulse: summary.agentState != .done, size: 7)
+            } else {
+                Rectangle()
+                    .fill(tone == t.text3 ? Color.clear : tone)
+                    .frame(width: 6, height: 6)
+                    .overlay(tone == t.text3 ? Rectangle().strokeBorder(t.text3, lineWidth: 1) : nil)
+            }
+            Text(label)
+                .font(.dsMonoPt(11))
+                .foregroundStyle(tone)
+        }
+    }
+
+    private var statusLabelTone: (String, Color) {
+        if summary.unreadCount > 0 { return ("needs you", t.warn) }
+        if !summary.isLive { return (summary.relativeTime == "–" ? "idle" : "idle \(summary.relativeTime)", t.text3) }
         switch summary.agentState {
-        case .thinking, .streaming: return .accent
-        case .done:                 return .ok
-        case .approval:             return .warn
-        case .error:                return .danger
-        case .offline:              return .off
+        case .thinking:  return ("thinking", t.ok)
+        case .streaming: return ("running", t.ok)
+        case .done:      return ("connected", t.ok)
+        case .approval:  return ("needs you", t.warn)
+        case .error:     return ("error", t.danger)
+        case .offline:   return ("idle", t.text3)
         }
     }
 }

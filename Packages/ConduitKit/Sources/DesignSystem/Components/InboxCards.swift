@@ -11,6 +11,7 @@ import ConduitCore
 public struct DSAskQuestionCard: View {
     let agentKey: AgentKey
     let agentName: String
+    let hostLabel: String
     let timeLabel: String
     let question: String
     let choices: [String]
@@ -22,6 +23,7 @@ public struct DSAskQuestionCard: View {
     public init(
         agentKey: AgentKey,
         agentName: String,
+        hostLabel: String = "",
         timeLabel: String,
         question: String,
         choices: [String],
@@ -29,6 +31,7 @@ public struct DSAskQuestionCard: View {
     ) {
         self.agentKey = agentKey
         self.agentName = agentName
+        self.hostLabel = hostLabel
         self.timeLabel = timeLabel
         self.question = question
         self.choices = choices
@@ -37,18 +40,38 @@ public struct DSAskQuestionCard: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Head
-            HStack {
+            // Head: AgentIdentityBadge + host name + spacer + time
+            HStack(spacing: 6) {
                 AgentIdentityBadge(agent: agentKey, label: agentName)
-                DSChip("question", tone: .info, style: .soft)
+                Text(hostLabel)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer()
                 Text(timeLabel)
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
             }
 
-            // Question
-            DSQuoteBlock(title: "question", message: question, tone: .accent)
+            // Left-accent-bar question block
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(t.accent)
+                    .frame(width: 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("QUESTION")
+                        .font(.dsDisplayPt(9, weight: .semibold))
+                        .tracking(9 * 0.12)
+                        .foregroundStyle(t.accent)
+                    Text(question)
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.leading, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // Choice grid
             VStack(spacing: 6) {
@@ -71,7 +94,7 @@ public struct DSAskQuestionCard: View {
                 .disabled(selected == nil)
             }
         }
-        .padding(16)
+        .padding(13)
         .background(t.surface)
         .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
         .overlay(
@@ -91,33 +114,37 @@ public struct DSAskQuestionCard: View {
             Haptics.selection()
         } label: {
             HStack(spacing: 10) {
-                // Letter badge
+                // Letter chip: filled blue when selected, plain border otherwise
                 ZStack {
                     RoundedRectangle(cornerRadius: t.r2, style: .continuous)
-                        .fill(isSelected ? t.accent : t.surfaceSunk)
+                        .fill(isSelected ? t.accent : t.bg)
                         .frame(width: 26, height: 26)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                                .strokeBorder(isSelected ? t.accent : t.border, lineWidth: 1)
+                        )
                     Text(letter)
                         .font(.dsMonoPt(12, weight: .semibold))
-                        .foregroundStyle(isSelected ? t.accentFg : t.text3)
+                        .foregroundStyle(isSelected ? .white : t.text2)
                 }
                 Text(label)
-                    .font(.dsSansPt(14))
+                    .font(.dsMonoPt(13))
                     .foregroundStyle(isSelected ? t.text : t.text2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(t.accent)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 11)
             .padding(.vertical, 9)
-            .background(isSelected ? t.accentSoft : t.surface2)
+            .background(isSelected ? t.accentSoft : t.bg)
             .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(isSelected ? t.accent.opacity(0.5) : t.border, lineWidth: 1)
+                    .strokeBorder(isSelected ? t.accent : t.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -133,6 +160,7 @@ public struct DSAskQuestionCard: View {
 public struct DSMCPCallCard: View {
     let agentKey: AgentKey
     let agentName: String
+    let hostLabel: String
     let timeLabel: String
     let toolName: String     // e.g. "read_file" or "bash"
     let args: String?        // one-line summary of arguments
@@ -145,6 +173,7 @@ public struct DSMCPCallCard: View {
     public init(
         agentKey: AgentKey,
         agentName: String,
+        hostLabel: String = "",
         timeLabel: String,
         toolName: String,
         args: String? = nil,
@@ -154,6 +183,7 @@ public struct DSMCPCallCard: View {
     ) {
         self.agentKey = agentKey
         self.agentName = agentName
+        self.hostLabel = hostLabel
         self.timeLabel = timeLabel
         self.toolName = toolName
         self.args = args
@@ -164,50 +194,82 @@ public struct DSMCPCallCard: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            // Head: AgentIdentityBadge + RiskBadge + spacer + time
+            HStack(spacing: 6) {
                 AgentIdentityBadge(agent: agentKey, label: agentName)
                 RiskBadge(risk: risk)
-                DSChip("MCP", tone: .info, style: .soft)
                 Spacer()
                 Text(timeLabel)
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
             }
 
-            HStack(spacing: 4) {
-                Text(agentName).fontWeight(.semibold)
-                Text("wants to call")
-            }
-            .font(.dsSansPt(14))
-            .foregroundStyle(t.text)
+            // "claude wants to call a tool" sentence
+            (Text(agentName).foregroundStyle(t.text)
+             + Text(" wants to call a tool").foregroundStyle(t.text2))
+                .font(.dsMonoPt(12))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Tool name row
-            HStack(spacing: 8) {
-                Image(systemName: "bolt.horizontal")
-                    .font(.system(size: 12))
-                    .foregroundStyle(t.info)
-                Text(toolName)
-                    .font(.dsMonoPt(13, weight: .semibold))
-                    .foregroundStyle(t.termCwd)
-                if let a = args {
-                    Text(a)
+            // Command well: t.bg background, t.divider border, $ in danger + tool name mono
+            HStack(alignment: .top, spacing: 8) {
+                Text("$")
+                    .font(.dsMonoPt(12, weight: .semibold))
+                    .foregroundStyle(t.danger)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(toolName)
                         .font(.dsMonoPt(12))
-                        .foregroundStyle(t.text3)
-                        .lineLimit(1)
+                        .foregroundStyle(t.text)
+                    if let a = args {
+                        Text(a)
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(t.surfaceSunk)
-            .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(t.bg)
+            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                    .strokeBorder(t.divider, lineWidth: 1)
+            )
 
-            HStack(spacing: 8) {
-                Spacer()
-                DSButton("DENY", variant: .destructive, size: .sm, mono: true, action: onDeny)
-                DSButton("APPROVE", variant: .primary, size: .sm, mono: true, action: onApprove)
+            // Action buttons: equal width, square, BLOCKS display font
+            HStack(spacing: 0) {
+                Button(action: onDeny) {
+                    Text("✕  deny")
+                        .font(.dsDisplayPt(12, weight: .semibold))
+                        .foregroundStyle(t.danger)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(t.bg)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.danger.opacity(0.6), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Spacer().frame(width: 8)
+
+                Button(action: onApprove) {
+                    Text("✓  approve")
+                        .font(.dsDisplayPt(12, weight: .semibold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(t.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(16)
+        .padding(13)
         .background(t.surface)
         .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
         .overlay(
@@ -221,30 +283,69 @@ public struct DSMCPCallCard: View {
 
 // MARK: - DSAutonomyPresetBar
 //
-// Horizontal segmented control for the three autonomy presets. Persists the
-// selected preset to AppStorage under "inbox.autonomyPreset".
+// Full-width BLOCKS segmented bar for the three autonomy presets.
+// 1px t.border outer stroke, 1px dividers between segments, active = t.accent fill
+// + white text; inactive = transparent + t.text2. Label: dsDisplayPt(10) semibold uppercase.
 
 public struct DSAutonomyPresetBar: View {
     @Binding var preset: AutonomyPreset
     @Environment(\.conduitTokens) private var t
+
+    private let presets: [AutonomyPreset] = AutonomyPreset.allCases
 
     public init(preset: Binding<AutonomyPreset>) {
         self._preset = preset
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            DSSegmentedPicker(
-                options: AutonomyPreset.allCases.map { (.init($0.shortLabel), $0) },
-                selection: $preset
+        VStack(alignment: .leading, spacing: 0) {
+            // Segmented bar
+            HStack(spacing: 0) {
+                ForEach(Array(presets.enumerated()), id: \.element) { idx, option in
+                    let isActive = preset == option
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.12)) { preset = option }
+                        Haptics.selection()
+                    } label: {
+                        Text(option.shortLabel.uppercased())
+                            .font(.dsDisplayPt(10, weight: .semibold))
+                            .tracking(10 * 0.08)
+                            .foregroundStyle(isActive ? .white : t.text2)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(isActive ? t.accent : Color.clear)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.12), value: preset)
+
+                    // Divider between segments (not after last)
+                    if idx < presets.count - 1 {
+                        Rectangle()
+                            .fill(t.border)
+                            .frame(width: 1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
             )
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+
+            // Description hint
             Text(preset.description)
                 .font(.dsMonoPt(11))
                 .foregroundStyle(t.text3)
                 .animation(.easeInOut(duration: 0.15), value: preset)
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
         .background(t.surface2)
         .overlay(alignment: .bottom) {
             Rectangle().fill(t.border).frame(height: 1)
