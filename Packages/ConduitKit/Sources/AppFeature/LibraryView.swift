@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import ConduitCore
 import SettingsFeature
 import KeysFeature
 import PersistenceKit

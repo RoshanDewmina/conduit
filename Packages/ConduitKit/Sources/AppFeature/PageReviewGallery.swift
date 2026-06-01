@@ -465,4 +465,86 @@ struct SettingsAboutGalleryScreen: View {
         .padding(.vertical, 12)
     }
 }
+
+// MARK: - Library gallery (CONDUIT_GALLERY=library)
+
+struct LibraryGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                DSScreenHeader("library", breadcrumb: "your toolkit", spectrumMode: .idle) {
+                    DSIconButton(.plus) {}
+                }
+                ScrollView {
+                    VStack(spacing: 16) {
+                        LazyVGrid(
+                            columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            DSCategoryCard(icon: .list,     count: "12", label: "Snippets",  subtitle: "reusable commands")
+                            DSCategoryCard(icon: .key,      count: "3",  label: "SSH Keys",  subtitle: "enclave-backed")
+                            DSCategoryCard(icon: .diff,     count: "4",  label: "Workflows", subtitle: "multi-step runs")
+                            DSCategoryCard(icon: .sparkles, count: "2",  label: "Agents",    subtitle: "claude · codex")
+                        }
+                        VStack(spacing: 0) {
+                            DSListSectionHead("RECENT")
+                            DSSnippetRow(name: "deploy --prod", body: "git push && ssh prod ./deploy.sh", useCount: 14) {}
+                            DSDivider()
+                            DSSnippetRow(name: "tail logs", body: "tail -f /var/log/app.log", useCount: 8) {}
+                            DSDivider()
+                            DSSnippetRow(name: "db backup", body: "pg_dump $DB_URL > backup.sql", useCount: 3) {}
+                            DSDivider()
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - PersistentStatusBar gallery (CONDUIT_GALLERY=statusbar)
+
+struct PersistentStatusBarGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    private static let idle:     [AgentInfo] = []
+    private static let working:  [AgentInfo] = [AgentInfo(name: "claude", agentKey: .claudeCode, host: "prod-api",   cwd: "~/web",   state: .streaming)]
+    private static let approval: [AgentInfo] = [AgentInfo(name: "claude", agentKey: .claudeCode, host: "gpu-box",    cwd: "~/train", state: .approval)]
+    private static let error:    [AgentInfo] = [AgentInfo(name: "claude", agentKey: .claudeCode, host: "mac-studio", cwd: "~/proj",  state: .error)]
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                DSScreenHeader("statusbar", breadcrumb: "all states")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        stateBlock("idle (no session)", agents: Self.idle)
+                        stateBlock("working · streaming", agents: Self.working)
+                        stateBlock("needs approval", agents: Self.approval)
+                        stateBlock("error · reconnect", agents: Self.error)
+                    }
+                    .padding(16)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stateBlock(_ label: String, agents: [AgentInfo]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label.uppercased())
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text3)
+                .tracking(0.8)
+            PersistentStatusBar(agents: agents, onTap: {}, onReconnect: agents.first?.state == .error ? {} : nil)
+                .background(t.surface)
+        }
+    }
+}
 #endif

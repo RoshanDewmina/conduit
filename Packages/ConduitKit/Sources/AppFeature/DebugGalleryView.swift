@@ -46,6 +46,8 @@ struct DebugGalleryView: View {
         case "keyboard":       KeyboardGalleryScreen()
         case "inbox-typed":    TypedInboxGalleryScreen()
         case "features":       FeaturesGalleryScreen()
+        case "library":        LibraryGalleryScreen()
+        case "statusbar":      PersistentStatusBarGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
         }
