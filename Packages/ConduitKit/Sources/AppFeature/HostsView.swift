@@ -242,7 +242,9 @@ public struct HostsView: View {
             HStack(spacing: 14) {
                 // 44×44 pixel avatar tile + optional attention ring
                 ZStack {
-                    PixelAvatar(seed: host.name, size: 44)
+                    DSIconView(.server, size: 18, color: t.text2)
+                        .frame(width: 44, height: 44)
+                        .background(t.surface)
                         .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
@@ -282,7 +284,7 @@ public struct HostsView: View {
                 ZStack(alignment: .trailing) {
                     VStack(alignment: .trailing, spacing: 4) {
                         DSStatusDot(tone: .off, size: 8)
-                        Text("saved")
+                        Text("offline")
                             .font(.dsMonoPt(11))
                             .foregroundStyle(t.text4)
                     }
