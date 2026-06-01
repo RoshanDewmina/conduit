@@ -265,25 +265,6 @@ public struct SettingsView: View {
                     }
                     .padding(.bottom, 16)
 
-                    // ── Library (Snippets + SSH Keys)
-                    if snippetRepo != nil || keyStore != nil {
-                        sectionHead("Library")
-                        settingsCard {
-                            if let repo = snippetRepo {
-                                NavigationLink { SnippetEditorView(repository: repo) } label: {
-                                    settingsNavRow("Snippets", icon: "text.append")
-                                }
-                            }
-                            if let store = keyStore {
-                                if snippetRepo != nil { divider }
-                                NavigationLink { KeysView(viewModel: KeysViewModel(store: store), store: store) } label: {
-                                    settingsNavRow("SSH Keys", icon: "key")
-                                }
-                            }
-                        }
-                        .padding(.bottom, 16)
-                    }
-
                     // ── Integrations
                     sectionHead("Integrations")
                     settingsCard {

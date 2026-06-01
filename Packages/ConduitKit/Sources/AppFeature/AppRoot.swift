@@ -98,7 +98,7 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
-    @State private var selectedTab: Tab = .sessions
+    @State private var selectedTab: Tab = .hosts
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
     @State private var editingHost: Host?
@@ -156,28 +156,28 @@ public struct AppRoot: View {
     }
 
     public enum Tab: Hashable, Sendable {
-        case sessions    // Sessions Home (was: session)
-        case hosts       // Host list (was: workspaces)
+        case hosts
         case inbox
+        case library
         case settings
 
-        static let rootTabs: [Tab] = [.sessions, .hosts, .inbox, .settings]
+        static let rootTabs: [Tab] = [.hosts, .inbox, .library, .settings]
 
         var title: String {
             switch self {
-            case .sessions:  "Sessions"
-            case .hosts:     "Hosts"
-            case .inbox:     "Inbox"
-            case .settings:  "Settings"
+            case .hosts:    "Hosts"
+            case .inbox:    "Inbox"
+            case .library:  "Library"
+            case .settings: "Settings"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .sessions:  "bubble.left.and.text.bubble.right"
-            case .hosts:     "server.rack"
-            case .inbox:     "tray"
-            case .settings:  "gear"
+            case .hosts:    "server.rack"
+            case .inbox:    "tray"
+            case .library:  "square.grid.2x2"
+            case .settings: "gear"
             }
         }
     }
@@ -200,8 +200,9 @@ public struct AppRoot: View {
             switch tab {
             case "hosts":    _selectedTab = State(initialValue: .hosts)
             case "inbox":    _selectedTab = State(initialValue: .inbox)
+            case "library":  _selectedTab = State(initialValue: .library)
             case "settings": _selectedTab = State(initialValue: .settings)
-            default:         _selectedTab = State(initialValue: .sessions)
+            default:         _selectedTab = State(initialValue: .hosts)
             }
         }
         #endif
@@ -378,23 +379,6 @@ public struct AppRoot: View {
         }
     }
 
-    /// The agent status header shows only when there's a live session to surface
-    /// and we're not inside the full-screen live session cover.
-    private var isAgentBannerVisible: Bool {
-        !hudStore.agents.isEmpty && !isShowingLiveSession
-    }
-
-    /// The slim status header, gated by visibility. Mounted below the nav bar on
-    /// the non-sessions tabs (Sessions injects it into its own custom header).
-    @ViewBuilder
-    private var agentHeaderInset: some View {
-        if isAgentBannerVisible {
-            AgentStatusHeader(agents: hudStore.agents) {
-                if sessionViewModel != nil { isShowingLiveSession = true }
-            }
-        }
-    }
-
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
         Group {
@@ -445,18 +429,18 @@ public struct AppRoot: View {
     private func compactRoot(env: AppEnvironment) -> some View {
         let inboxBadge = activeInboxViewModel.approvals.filter(\.isPending).count > 0
         let tabItems: [DSTabItem] = [
-            DSTabItem(id: "sessions", icon: .terminal, label: "Sessions"),
             DSTabItem(id: "hosts",    icon: .server,   label: "Hosts"),
             DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
+            DSTabItem(id: "library",  icon: .list,     label: "Library"),
             DSTabItem(id: "settings", icon: .settings, label: "Settings"),
         ]
 
         let tabID = Binding<String>(
             get: {
                 switch selectedTab {
-                case .sessions: "sessions"
                 case .hosts:    "hosts"
                 case .inbox:    "inbox"
+                case .library:  "library"
                 case .settings: "settings"
                 }
             },
@@ -464,15 +448,23 @@ public struct AppRoot: View {
                 switch id {
                 case "hosts":    selectedTab = .hosts
                 case "inbox":    selectedTab = .inbox
+                case "library":  selectedTab = .library
                 case "settings": selectedTab = .settings
-                default:         selectedTab = .sessions
+                default:         selectedTab = .hosts
                 }
             }
         )
 
         return ZStack {
             t.bg.ignoresSafeArea()
-            tabContent(env: env, tabItems: tabItems, tabID: tabID)
+            VStack(spacing: 0) {
+                PersistentStatusBar(
+                    agents: isShowingLiveSession ? [] : hudStore.agents,
+                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                    onReconnect: nil
+                )
+                tabContent(env: env, tabItems: tabItems, tabID: tabID)
+            }
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = sessionViewModel {
@@ -489,31 +481,25 @@ public struct AppRoot: View {
         let bar = DSTabBar(items: tabItems, selectedID: tabID)
 
         switch selectedTab {
-        case .sessions:
-            sessionsHome(env: env)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    bar
-                }
         case .hosts:
             NavigationStack {
                 rootDestination(.hosts, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar
-                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         case .inbox:
             NavigationStack {
                 rootDestination(.inbox, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar
-                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+            }
+        case .library:
+            NavigationStack {
+                rootDestination(.library, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         case .settings:
             NavigationStack {
                 rootDestination(.settings, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bar
-                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         }
     }
@@ -531,25 +517,6 @@ public struct AppRoot: View {
         }
     }
 
-    @ViewBuilder
-    private func sessionsHome(env: AppEnvironment) -> some View {
-        SessionsHomeView(
-            liveSession: sessionViewModel,
-            liveInboxVM: liveInboxVM,
-            hostRepo: env.hostRepo,
-            blockRepo: env.blockRepo,
-            snapshotRepo: env.snapshotRepo,
-            statusHeaderAgents: isAgentBannerVisible ? hudStore.agents : [],
-            onTapStatusHeader: { isShowingLiveSession = true },
-            onTapLiveSession: { isShowingLiveSession = true },
-            onAddSession: {
-                addHostPresented = true
-                selectedTab = .hosts
-            },
-            onDisconnectLiveSession: { disconnectLiveSession() }
-        )
-    }
-
     /// Tear down the live session and clear it from the UI. Used by the
     /// active-row long-press menu and (indirectly) the in-session menu.
     private func disconnectLiveSession() {
@@ -565,43 +532,31 @@ public struct AppRoot: View {
 
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
-        // Each view renders the agent header below its own title row — no
-        // safeAreaInset needed (that placed it above the title on non-sessions tabs).
-        let headerAgents = isAgentBannerVisible ? hudStore.agents : []
-        let headerTap: () -> Void = { if sessionViewModel != nil { isShowingLiveSession = true } }
-
         switch tab {
-        case .sessions:
-            sessionsHome(env: env)
-
         case .hosts:
-            WorkspacesView(
-                viewModel: WorkspacesViewModel(repository: env.hostRepo),
-                onSelect: { host in openSession(host: host, env: env) },
-                onEdit: { host in editingHost = host },
+            HostsView(
+                liveSession: sessionViewModel,
+                liveInboxVM: liveInboxVM,
+                hostRepo: env.hostRepo,
+                blockRepo: env.blockRepo,
+                snapshotRepo: env.snapshotRepo,
+                onTapLiveSession: { isShowingLiveSession = true },
+                onDisconnectLiveSession: { disconnectLiveSession() },
                 onAddHost: { addHostPresented = true },
-                onAddHostGated: isPro ? nil : {
-                    paywallFeatureName = "Unlimited SSH Hosts"
-                    showingPaywall = true
-                },
-                statusHeaderAgents: headerAgents,
-                onTapStatusHeader: headerTap
+                onSelect: { host in openSession(host: host, env: env) },
+                onEdit: { host in editingHost = host }
             )
             .id(workspacesRevision)
 
         case .inbox:
-            if isPro {
-                InboxView(
-                    viewModel: activeInboxViewModel,
-                    statusHeaderAgents: headerAgents,
-                    onTapStatusHeader: headerTap
-                )
-            } else {
-                GlobalInboxGateView {
-                    paywallFeatureName = "AI Agent Inbox"
-                    showingPaywall = true
-                }
-            }
+            InboxView(
+                viewModel: activeInboxViewModel,
+                statusHeaderAgents: [],
+                onTapStatusHeader: {}
+            )
+
+        case .library:
+            LibraryView(snippetRepo: env.snippetRepo, keyStore: env.keyStore)
 
         case .settings:
             SettingsView(
@@ -609,8 +564,8 @@ public struct AppRoot: View {
                 syncEngine: env.syncEngine,
                 snippetRepo: env.snippetRepo,
                 keyStore: env.keyStore,
-                statusHeaderAgents: headerAgents,
-                onTapStatusHeader: headerTap
+                statusHeaderAgents: [],
+                onTapStatusHeader: {}
             )
         }
     }
@@ -679,7 +634,7 @@ public struct AppRoot: View {
                 self.approvalIngest = ingest
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
-                self.selectedTab = .sessions
+                self.selectedTab = .hosts
                 self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
