@@ -351,18 +351,19 @@ public struct AppRoot: View {
             )
         }
         .sheet(isPresented: $addHostPresented) {
-            NavigationStack {
-                HostEditorView(
-                    viewModel: HostEditorViewModel(repository: env.hostRepo, keyStore: env.keyStore) { host in
-                        addHostPresented = false
-                        workspacesRevision = UUID()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            openSession(host: host, env: env)
-                        }
+            AddHostView(
+                repository: env.hostRepo,
+                keyStore: env.keyStore,
+                onCancel: { addHostPresented = false },
+                onConnectAndSave: { host in
+                    addHostPresented = false
+                    workspacesRevision = UUID()
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(250))
+                        openSession(host: host, env: env)
                     }
-                )
-            }
+                }
+            )
         }
         .sheet(item: $editingHost) { host in
             NavigationStack {

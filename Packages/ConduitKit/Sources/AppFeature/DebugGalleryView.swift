@@ -9,6 +9,9 @@ import OnboardingFeature
 import DiffFeature
 import DiffKit
 import FilesFeature
+import WorkspacesFeature
+import PersistenceKit
+import SecurityKit
 
 // UI-audit harness. Routed from AppRoot when SIMCTL_CHILD_CONDUIT_GALLERY is set.
 struct DebugGalleryView: View {
@@ -48,6 +51,7 @@ struct DebugGalleryView: View {
         case "features":       FeaturesGalleryScreen()
         case "library":        LibraryGalleryScreen()
         case "statusbar":      PersistentStatusBarGalleryScreen()
+        case "addhost":        AddHostGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
         }
