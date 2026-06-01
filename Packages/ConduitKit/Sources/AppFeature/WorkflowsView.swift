@@ -46,7 +46,7 @@ public struct WorkflowsView: View {
                     .font(.dsMonoPt(14, weight: .semibold))
                     .foregroundStyle(t.text)
                     .lineLimit(1)
-                Text("\(wf.stepCount) steps · last run \(wf.lastRun)")
+                Text("\(wf.stepCount) step\(wf.stepCount == 1 ? "" : "s") · last run \(wf.lastRun)")
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
                     .lineLimit(1)

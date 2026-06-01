@@ -58,7 +58,7 @@ public final class AppEnvironment {
         self.approvalRepo = ApprovalRepository(database)
     }
 
-    public func aiClient(provider: AIProvider? = nil) async -> (any AIClient)? {
+    public func aiClient(provider: AIProvider? = nil, managedOpenRouterKey: String? = nil) async -> (any AIClient)? {
         let selectedProvider = provider ?? SettingsViewModel.persistedDefaultProvider()
         switch selectedProvider {
         case .anthropic:
@@ -67,6 +67,12 @@ public final class AppEnvironment {
         case .openai:
             guard let key = try? await aiKeyStore.loadAPIKey(provider: .openai) else { return nil }
             return OpenAIClient(apiKey: key)
+        case .openrouter:
+            if let managed = managedOpenRouterKey, !managed.isEmpty {
+                return OpenRouterClient(apiKey: managed)
+            }
+            guard let key = try? await aiKeyStore.loadAPIKey(provider: .openrouter) else { return nil }
+            return OpenRouterClient(apiKey: key)
         case .xai:
             return nil  // M5+
         }
@@ -136,6 +142,7 @@ public struct AppRoot: View {
     @State private var isUnlocked: Bool = false
     @State private var watchConnector = PhoneWatchConnector()
     @State private var pm = PurchaseManager.shared
+    @State private var agentStore: AgentStore?
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
@@ -240,6 +247,11 @@ public struct AppRoot: View {
         .task { watchConnector.activate() }
         .task { await pm.load() }
         .task {
+            if case .ready(let env) = environment {
+                configureCloudServices(env: env)
+            }
+        }
+        .task {
             await Notifications.shared.registerCategories()
             _ = await Notifications.shared.requestAuthorization()
         }
@@ -251,6 +263,49 @@ public struct AppRoot: View {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
         }
+        // Route lock-screen Approve/Reject notification actions into the same
+        // decision path the in-app Inbox uses. ConduitNotificationDelegate posts
+        // these names; without an observer the buttons were silently dead.
+        .onReceive(NotificationCenter.default.publisher(for: .conduitApprovalAction)) { note in
+            handleApprovalAction(note)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { _ in
+            if sessionViewModel != nil { isShowingLiveSession = true }
+        }
+    }
+
+    /// Applies an Approve/Reject decision delivered from a notification action
+    /// button via `Notification.Name.conduitApprovalAction`. Routes through
+    /// `activeInboxViewModel.decide` — the live VM forwards to the daemon channel
+    /// and persists; the static fallback updates in-memory state.
+    private func handleApprovalAction(_ note: Notification) {
+        guard
+            let info = note.userInfo,
+            let idString = info["approvalId"] as? String,
+            let uuid = UUID(uuidString: idString),
+            let action = info["action"] as? String
+        else { return }
+        let decision: Approval.Decision = (action == "approve") ? .approved : .rejected
+        activeInboxViewModel.decide(ApprovalID(uuid), decision: decision)
+    }
+
+    private func configureCloudServices(env: AppEnvironment) async {
+        let url = Self.pushBackendURL()
+        pm.configure(backendURL: url)
+        await pm.refreshCloudEntitlement(backendURL: url)
+        if agentStore == nil {
+            agentStore = AgentStore(
+                backendURL: url,
+                hostRepo: env.hostRepo,
+                keyStore: env.keyStore,
+                hostKeyStore: env.hostKeyStore,
+                purchaseManager: pm
+            )
+        }
+    }
+
+    private static func pushBackendURL() -> String {
+        Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
     }
 
     private func attemptUnlock() async {
@@ -461,7 +516,12 @@ public struct AppRoot: View {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
                     onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
-                    onReconnect: nil
+                    // Manual retry after the auto-reconnect engine gives up
+                    // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
+                    // re-arms a session stuck in `.failed`.
+                    onReconnect: sessionViewModel == nil ? nil : {
+                        Task { await sessionViewModel?.reconnect() }
+                    }
                 )
                 tabContent(env: env, tabItems: tabItems, tabID: tabID)
             }
@@ -505,15 +565,30 @@ public struct AppRoot: View {
     }
 
     private func regularRoot(env: AppEnvironment) -> some View {
-        NavigationSplitView {
-            List(selection: splitSelection) {
-                ForEach(Tab.rootTabs, id: \.self) { tab in
-                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
+        VStack(spacing: 0) {
+            PersistentStatusBar(
+                agents: isShowingLiveSession ? [] : hudStore.agents,
+                onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                onReconnect: sessionViewModel == nil ? nil : {
+                    Task { await sessionViewModel?.reconnect() }
                 }
+            )
+            NavigationSplitView {
+                List(selection: splitSelection) {
+                    ForEach(Tab.rootTabs, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                    }
+                }
+                .navigationTitle("Conduit")
+            } detail: {
+                rootDestination(selectedTab, env: env)
             }
-            .navigationTitle("Conduit")
-        } detail: {
-            rootDestination(selectedTab, env: env)
+        }
+        .fullScreenCover(isPresented: $isShowingLiveSession) {
+            if let vm = sessionViewModel {
+                SessionView(viewModel: vm)
+                    .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            }
         }
     }
 
@@ -556,7 +631,15 @@ public struct AppRoot: View {
             )
 
         case .library:
-            LibraryView(snippetRepo: env.snippetRepo, keyStore: env.keyStore)
+            if let agentStore {
+                LibraryView(
+                    snippetRepo: env.snippetRepo,
+                    keyStore: env.keyStore,
+                    agentStore: agentStore
+                )
+            } else {
+                ProgressView("Loading library…")
+            }
 
         case .settings:
             SettingsView(
@@ -593,7 +676,7 @@ public struct AppRoot: View {
     ) {
         let sshSession = SSHSession(host: host)
         Task {
-            let aiClient = await env.aiClient()
+            let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
             let vm = SessionViewModel(
                 host: host,
                 sshSession: sshSession,
