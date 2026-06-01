@@ -258,6 +258,7 @@ public struct HostsView: View {
                         )
                     }
                 }
+                .frame(width: 44, height: 44)
 
                 // Host body
                 VStack(alignment: .leading, spacing: 3) {

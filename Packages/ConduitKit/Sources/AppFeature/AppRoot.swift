@@ -565,23 +565,26 @@ public struct AppRoot: View {
     }
 
     private func regularRoot(env: AppEnvironment) -> some View {
-        VStack(spacing: 0) {
-            PersistentStatusBar(
-                agents: isShowingLiveSession ? [] : hudStore.agents,
-                onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
-                onReconnect: sessionViewModel == nil ? nil : {
-                    Task { await sessionViewModel?.reconnect() }
-                }
-            )
-            NavigationSplitView {
-                List(selection: splitSelection) {
-                    ForEach(Tab.rootTabs, id: \.self) { tab in
-                        Label(tab.title, systemImage: tab.systemImage).tag(tab)
+        ZStack {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                PersistentStatusBar(
+                    agents: isShowingLiveSession ? [] : hudStore.agents,
+                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                    onReconnect: sessionViewModel == nil ? nil : {
+                        Task { await sessionViewModel?.reconnect() }
                     }
+                )
+                NavigationSplitView {
+                    List(selection: splitSelection) {
+                        ForEach(Tab.rootTabs, id: \.self) { tab in
+                            Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                        }
+                    }
+                    .navigationTitle("Conduit")
+                } detail: {
+                    rootDestination(selectedTab, env: env)
                 }
-                .navigationTitle("Conduit")
-            } detail: {
-                rootDestination(selectedTab, env: env)
             }
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
