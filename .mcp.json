@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "XcodeBuildMCP": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "xcodebuildmcp@latest", "mcp"],
+      "env": {
+        "XCODEBUILDMCP_SENTRY_DISABLED": "true",
+        "XCODEBUILDMCP_ENABLED_WORKFLOWS": "simulator,simulator-management,session-management,project-discovery,device,debugging,ui-automation,coverage,swift-package,macos,utilities,doctor"
+      }
+    },
+    "xcode": {
+      "type": "stdio",
+      "command": "xcrun",
+      "args": ["mcpbridge"],
+      "env": {}
+    },
+    "apple-docs": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@kimsungwhee/apple-docs-mcp"],
+      "env": {}
+    },
+    "ios-simulator": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "ios-simulator-mcp"],
+      "env": {}
+    }
+  }
+}

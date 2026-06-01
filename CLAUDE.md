@@ -1,5 +1,28 @@
 # CLAUDE.md — Conduit iOS codebase guide
 
+## MCP tooling — prefer these over raw shell for Apple-platform work
+
+Five MCP servers are configured for this project in the checked-in [`.mcp.json`](.mcp.json) (project scope — it overrides any same-named user/global server, and teammates inherit it; approve the servers when Claude Code prompts on first launch). **Reach for them before raw `xcodebuild` / `xcrun` / shell** when one fits: they return structured JSON (precise error `file:line`, per-test results, view hierarchies) instead of logs you have to grep, and they don't depend on shell env-var propagation quirks. They also cover Swift/iOS/Xcode work generally — not just this app.
+
+| Server | Tool prefix | Reach for it when |
+|---|---|---|
+| **XcodeBuildMCP** (headless — no Xcode running) | `mcp__XcodeBuildMCP__*` | Build / run / test the **Xcode app** target; simulator lifecycle (`boot_sim`, `list_sims`, `open_sim`); `install_app_sim` / `launch_app_sim`; `screenshot`; UI automation (`snapshot_ui`); code coverage (`get_coverage_report`). **Physical-device** build/test/install/launch and **LLDB debugging** (attach, breakpoints, stack/variable inspection) are enabled too — see workflows below. |
+| **xcode** (mcpbridge — needs Xcode.app open) | `mcp__xcode__*` | Live diagnostics (`XcodeListNavigatorIssues`, `XcodeRefreshCodeIssuesInFile`); SwiftUI `RenderPreview`; `ExecuteSnippet` (Swift REPL); `DocumentationSearch`; `GetTestList` / `RunSomeTests`. |
+| **apple-docs** | `mcp__apple-docs__*` | Apple framework/API questions — `search_apple_docs`, `search_framework_symbols`, `get_apple_doc_content`, WWDC sessions & `get_sample_code`. Use **before guessing** any SwiftUI/UIKit/Foundation/Swift-concurrency API. |
+| **context7** | `mcp__context7__*` | Docs for **third-party** libraries/SDKs (SwiftNIO, swift-crypto, Citadel/SSH, etc.). `resolve-library-id` → `query-docs`. Don't guess third-party APIs from memory. |
+| **ios-simulator** | `mcp__ios-simulator__*` | Simulator UI automation by accessibility tree: `ui_describe_all`, `ui_find_element`, `ui_tap` / `ui_type` / `ui_swipe`, `ui_view`, `screenshot`. Better than eyeballing a PNG when you need tap coordinates or to assert on-screen state. |
+
+### Rules
+- **Build & test the app target** via `mcp__XcodeBuildMCP__build_sim` / `test_sim` (or `mcp__xcode__BuildProject` / `RunSomeTests` when Xcode is open) rather than parsing `xcodebuild` output. The SPM inner loop `cd Packages/ConduitKit && swift build` (see [Build](#build)) **stays** — it's fastest for ConduitKit-only changes. Switch to the MCP **app** build when you need the full Xcode target, which catches the strict-concurrency breaks SPM tests miss (a known footgun — see memory `project_ws10_qa`).
+- **First build/run/test of a session:** call `mcp__XcodeBuildMCP__session_show_defaults` **once** to confirm project + scheme + simulator; set them with `session_set_defaults` if missing. Then `build_run_sim` can be called with empty args.
+- **Don't guess APIs.** Apple symbols → `apple-docs`. Third-party libraries → `context7`. These reflect current docs; training data may be stale.
+- **UI inspection** (what's on screen, tap targets, hierarchy) → `ios-simulator` `ui_describe_all` / `ui_find_element`, not a bare screenshot.
+- **Enabled XcodeBuildMCP workflows** (set in [`.mcp.json`](.mcp.json) via `XCODEBUILDMCP_ENABLED_WORKFLOWS`, a full-replacement comma list): `simulator`, `simulator-management`, `session-management`, `project-discovery`, `device`, `debugging`, `ui-automation`, `coverage`, `swift-package`, `macos`, `utilities`, `doctor`. The Xcode IDE bridge is intentionally **not** enabled here — use the dedicated `xcode` server for that. To add/remove a workflow, edit that list and restart Claude Code. Tools for newly-enabled workflows surface on demand via ToolSearch (`mcp__XcodeBuildMCP__*`), so they cost no context until used.
+- **Physical-device builds:** with the `device` + `debugging` workflows enabled, prefer the XcodeBuildMCP device tools (list/build/test/install/launch + LLDB) over the bash `xcodebuild` device flow in memory `project_device_build`. Code signing / DeviceTesting entitlements still apply (that memory's caveats hold — sim-only bugs hide on device, iCloud gated by `CONDUIT_ICLOUD_ENABLED`); the MCP just replaces the build/run plumbing.
+
+### Driving the gallery / live-SSH harness with these tools
+The harness launches in [Visual verification](#visual-verification-process) and [Block terminal](#block-terminal-warp-style-blocks--live-agents-over-ssh) rely on `SIMCTL_CHILD_*` env vars. `mcp__XcodeBuildMCP__launch_app_sim` takes an `env` map and **adds the `SIMCTL_CHILD_` prefix itself**, so it sidesteps the documented "env didn't propagate → re-run standalone" gotcha. Flow: `build_sim` → `install_app_sim` → `launch_app_sim` with e.g. `env: { CONDUIT_GALLERY: "review" }` (for the live session, add the `CONDUIT_TEST_*` vars + the password fetched via Bash `security find-generic-password`), then `mcp__XcodeBuildMCP__screenshot`. The `xcrun simctl` bash blocks documented below remain a valid, already-verified fallback — use them if a launch lands on the wrong screen.
+
 ## Build
 
 ```bash
