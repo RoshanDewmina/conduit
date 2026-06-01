@@ -8,6 +8,7 @@ public struct DSScreenHeader<Trailing: View>: View {
     let title: String
     let breadcrumb: String?
     let count: String?
+    let spectrumMode: SpectrumMode
     let trailing: Trailing
 
     @Environment(\.conduitTokens) private var t
@@ -16,11 +17,13 @@ public struct DSScreenHeader<Trailing: View>: View {
         _ title: String,
         breadcrumb: String? = nil,
         count: String? = nil,
+        spectrumMode: SpectrumMode = .idle,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.title = title
         self.breadcrumb = breadcrumb
         self.count = count
+        self.spectrumMode = spectrumMode
         self.trailing = trailing()
     }
 
@@ -55,7 +58,7 @@ public struct DSScreenHeader<Trailing: View>: View {
                 .font(.dsMonoPt(11))
                 .lineLimit(1)
             }
-            SpectrumBar(mode: .idle, height: 3)
+            SpectrumBar(mode: spectrumMode, height: 3)
                 .opacity(0.75)
         }
         .padding(.horizontal, 18)
@@ -71,6 +74,7 @@ public struct DSScreenHeader<Trailing: View>: View {
 public struct DSDetailHeader<Trailing: View>: View {
     let title: String
     let onBack: (() -> Void)?
+    let spectrumMode: SpectrumMode
     let trailing: Trailing
 
     @Environment(\.conduitTokens) private var t
@@ -78,10 +82,12 @@ public struct DSDetailHeader<Trailing: View>: View {
     public init(
         _ title: String,
         onBack: (() -> Void)? = nil,
+        spectrumMode: SpectrumMode = .idle,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.title = title
         self.onBack = onBack
+        self.spectrumMode = spectrumMode
         self.trailing = trailing()
     }
 
@@ -115,7 +121,7 @@ public struct DSDetailHeader<Trailing: View>: View {
                 Spacer(minLength: 8)
                 trailing
             }
-            SpectrumBar(mode: .idle, height: 3)
+            SpectrumBar(mode: spectrumMode, height: 3)
                 .opacity(0.75)
         }
         .padding(.horizontal, 18)

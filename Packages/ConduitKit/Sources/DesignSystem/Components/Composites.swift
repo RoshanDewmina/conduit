@@ -726,6 +726,37 @@ public struct DSTimeline: View {
     }
 }
 
+// MARK: - DSCategoryCard — Library grid card (2×2 layout)
+
+public struct DSCategoryCard: View {
+    let icon: DSIcon
+    let count: String
+    let label: String
+    let subtitle: String
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(icon: DSIcon, count: String, label: String, subtitle: String) {
+        self.icon = icon; self.count = count; self.label = label; self.subtitle = subtitle
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DSIconView(icon, size: 20, color: t.accent)
+                .frame(width: 38, height: 38)
+                .background(t.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            Text(count).font(.dsDisplayPt(28, weight: .bold)).foregroundStyle(t.text)
+            Text(label).font(.dsDisplayPt(15, weight: .semibold)).foregroundStyle(t.text)
+            Text(subtitle).font(.dsMonoPt(11)).foregroundStyle(t.text3).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(t.surface)
+        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+    }
+}
+
 // MARK: - KeyboardRail
 // primitives.css:439-446 — horizontal scroll of DSKey chips.
 
