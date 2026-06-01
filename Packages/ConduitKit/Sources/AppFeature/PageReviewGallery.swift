@@ -2,6 +2,9 @@
 import SwiftUI
 import ConduitCore
 import DesignSystem
+import WorkspacesFeature
+import PersistenceKit
+import SecurityKit
 
 // MARK: - Combined pages review (launch with SIMCTL_CHILD_CONDUIT_GALLERY=pages)
 
@@ -504,6 +507,58 @@ struct LibraryGalleryScreen: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - AddHost gallery (CONDUIT_GALLERY=addhost)
+//
+// Renders AddHostView with an in-memory HostRepository and KeyStore so the
+// paste-to-parse, clipboard-sniff banner, and key-gen card are all inspectable
+// without any real SSH host or Keychain access.
+
+struct AddHostGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    // In-memory deps — no real DB or Keychain (try! is safe in DEBUG-only gallery)
+    private let mockRepo = HostRepository(try! AppDatabase.inMemory())
+    private let mockKeyStore = KeyStore(inMemory: true)
+
+    @State private var connectLog: String? = nil
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            AddHostView(
+                repository: mockRepo,
+                keyStore: mockKeyStore,
+                onCancel: { connectLog = "cancelled" },
+                onConnectAndSave: { host in
+                    connectLog = "connect & save → \(host.name)"
+                }
+            )
+
+            // Toast overlay to confirm actions in the gallery
+            if let log = connectLog {
+                VStack {
+                    Spacer()
+                    Text(log)
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.75))
+                        .clipShape(Capsule())
+                        .padding(.bottom, 40)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        withAnimation { connectLog = nil }
+                    }
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: connectLog)
     }
 }
 
