@@ -181,20 +181,27 @@ public struct WorkspacesView: View {
         let attention   = vm.attentionCounters[host.id] ?? 0
         Button { onSelect(host) } label: {
             HStack(spacing: 14) {
-                // Avatar (pixel art seeded by host name) with optional attention ring
+                // BLOCKS host glyph: square bordered server tile + optional attention ring
                 ZStack {
-                    PixelAvatar(seed: host.name, size: 44)
+                    DSIconView(.server, size: 18, color: t.text2)
+                        .frame(width: 44, height: 44)
+                        .background(t.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.border, lineWidth: 1)
+                        )
                     if attention > 0 {
                         AttentionFlashRing(trigger: attention,
                                            reason: vm.attentionReasons[host.id] ?? .generic,
-                                           cornerRadius: t.pill)
+                                           cornerRadius: t.r3)
                     }
                 }
 
                 // Body
                 VStack(alignment: .leading, spacing: 3) {
                     Text(host.name)
-                        .font(.dsSansPt(14, weight: .semibold))
+                        .font(.dsMonoPt(13, weight: .medium))
                         .foregroundStyle(t.text)
                         .lineLimit(1)
                     Text(host.displayAddress)

@@ -64,6 +64,66 @@ public struct DSScreenHeader<Trailing: View>: View {
     }
 }
 
+// MARK: - DSDetailHeader — BLOCKS header for pushed/sheet detail screens
+// Square back button + lowercase Chakra Petch title with blue `_` cursor + spectrum rule.
+// Replaces the system navigation bar (rounded Cancel/Save pills + SF title) on pushed screens.
+
+public struct DSDetailHeader<Trailing: View>: View {
+    let title: String
+    let onBack: (() -> Void)?
+    let trailing: Trailing
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(
+        _ title: String,
+        onBack: (() -> Void)? = nil,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.title = title
+        self.onBack = onBack
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if let onBack {
+                    Button(action: onBack) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(t.text)
+                            .frame(width: 36, height: 36)
+                            .background(t.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                    .strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                HStack(spacing: 0) {
+                    Text(title.lowercased())
+                        .font(.dsDisplayPt(24, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Text("_")
+                        .font(.dsDisplayPt(24, weight: .bold))
+                        .foregroundStyle(t.accent)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                Spacer(minLength: 8)
+                trailing
+            }
+            SpectrumBar(mode: .idle, height: 3)
+                .opacity(0.75)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+    }
+}
+
 // MARK: - DSIconButton — square bordered action button (the BLOCKS `+` in the header)
 
 public struct DSIconButton: View {
