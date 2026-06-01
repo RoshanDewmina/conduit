@@ -34,6 +34,10 @@ public struct AddHostView: View {
     @State private var keyTags: [String] = []
     @State private var selectedKeyTag: String?
 
+    // MARK: - Advanced navigation (HostEditorView push)
+    @State private var showingAdvanced = false
+    @State private var advancedVM: HostEditorViewModel?
+
     // MARK: - Key generation (V6)
     @State private var generatedKeyInfo: KeyStore.PublicKeyInfo?
     @State private var isGeneratingKey = false
@@ -215,9 +219,7 @@ public struct AddHostView: View {
                 HStack(spacing: 6) {
                     DSChip("user · \(p.user)", tone: .ok, variant: .solid, size: .sm)
                     DSChip("host · \(p.host)", tone: .ok, variant: .solid, size: .sm)
-                    if p.port != 22 {
-                        DSChip("port · \(p.port)", tone: .ok, variant: .solid, size: .sm)
-                    }
+                    DSChip("port · \(p.port)", tone: .ok, variant: .solid, size: .sm)
                     if let idf = p.identityFile {
                         DSChip("key · \(URL(fileURLWithPath: idf).lastPathComponent)", tone: .accent, variant: .solid, size: .sm)
                     }
@@ -509,17 +511,17 @@ public struct AddHostView: View {
     }
 
     private var fullEditorRow: some View {
-        HStack(spacing: 8) {
+        let rowLabel = HStack(spacing: 8) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 12))
-                .foregroundStyle(t.text3)
+                .foregroundStyle(parsed != nil ? t.text3 : t.text4)
             Text("more options — tmux, startup command, and more")
                 .font(.dsMonoPt(11))
-                .foregroundStyle(t.text3)
+                .foregroundStyle(parsed != nil ? t.text3 : t.text4)
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(t.text4)
+                .foregroundStyle(parsed != nil ? t.text4 : t.text4.opacity(0.4))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -529,9 +531,43 @@ public struct AddHostView: View {
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(t.border, lineWidth: 1)
         )
-        // Note: tapping this would push HostEditorView pre-filled.
-        // For now it's informational; a NavigationLink version is left for Stream B polish.
-        .opacity(0.6)
+        .opacity(parsed != nil ? 1.0 : 0.5)
+
+        return Group {
+            if parsed != nil {
+                Button {
+                    buildAdvancedVM()
+                    showingAdvanced = true
+                } label: {
+                    rowLabel
+                }
+                .buttonStyle(.plain)
+                .navigationDestination(isPresented: $showingAdvanced) {
+                    if let vm = advancedVM {
+                        HostEditorView(viewModel: vm)
+                    }
+                }
+            } else {
+                rowLabel
+            }
+        }
+    }
+
+    private func buildAdvancedVM() {
+        guard let p = parsed else { return }
+        let vm = HostEditorViewModel(
+            repository: repository,
+            keyStore: keyStore,
+            onSaved: { host in
+                showingAdvanced = false
+                onConnectAndSave(host)
+            }
+        )
+        vm.name = p.displayName
+        vm.hostname = p.host
+        vm.port = String(p.port)
+        vm.username = p.user
+        advancedVM = vm
     }
 
     // MARK: - Footer CTA
