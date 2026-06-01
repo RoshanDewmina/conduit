@@ -82,7 +82,19 @@ public func parseSSHCommand(_ text: String) -> SSHParseResult? {
         let host = String(pos[atRange.upperBound...])
         guard !user.isEmpty, !host.isEmpty,
               isValidUser(user), isValidHost(host) else { return nil }
-        return SSHParseResult(user: user, host: host, port: port, identityFile: identityFile)
+
+        // Strip optional :port suffix (e.g. admin@192.168.1.1:2222)
+        var resolvedHost = host
+        var resolvedPort = port
+        if let colonIdx = host.lastIndex(of: ":"),
+           !host.hasPrefix("["),   // not an IPv6 literal
+           let p = Int(host[host.index(after: colonIdx)...]),
+           (1...65535).contains(p) {
+            resolvedHost = String(host[..<colonIdx])
+            resolvedPort = p
+        }
+
+        return SSHParseResult(user: user, host: resolvedHost, port: resolvedPort, identityFile: identityFile)
     }
 
     // No "@" — bare hostname, no user to infer safely
@@ -117,7 +129,9 @@ private func tokenize(_ s: String) -> [String] {
             inSingle.toggle()
         case "\"":
             inDouble.toggle()
-        case " ", "\t" where !inSingle && !inDouble:
+        case " " where !inSingle && !inDouble:
+            if !current.isEmpty { tokens.append(current); current = "" }
+        case "\t" where !inSingle && !inDouble:
             if !current.isEmpty { tokens.append(current); current = "" }
         default:
             current.append(ch)
@@ -132,7 +146,7 @@ private func isValidUser(_ s: String) -> Bool {
 }
 
 private func isValidHost(_ s: String) -> Bool {
-    s.range(of: #"^[a-zA-Z0-9_.\-\[\]:]+$"#, options: .regularExpression) != nil
+    s.range(of: #"^[a-zA-Z0-9_.\-\[\]]+$"#, options: .regularExpression) != nil
         && !s.isEmpty
 }
 

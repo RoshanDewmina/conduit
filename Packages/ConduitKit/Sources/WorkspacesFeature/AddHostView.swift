@@ -43,6 +43,7 @@ public struct AddHostView: View {
     @State private var isGeneratingKey = false
     @State private var keyGenError: String?
     @State private var showCopiedSSHCopyId = false
+    @State private var keyGenTask: Task<Void, Never>? = nil
 
     // MARK: - Save / connect
     @State private var isSaving = false
@@ -144,6 +145,10 @@ public struct AddHostView: View {
             await sniffClipboard()
             // Load existing keys
             await loadKeys()
+        }
+        .onDisappear {
+            keyGenTask?.cancel()
+            keyGenTask = nil
         }
     }
 
@@ -422,9 +427,8 @@ public struct AddHostView: View {
                     }
                     if let p = parsed {
                         DSButton("ssh-copy-id", variant: .secondary, size: .sm, mono: true) {
-                            let cmd = "ssh-copy-id -i /dev/stdin \(p.user)@\(p.host)\(p.port != 22 ? " -p \(p.port)" : "")"
-                            let payload = keyInfo.openSSH + "\n| " + cmd
-                            UIPasteboard.general.string = payload
+                            let oneLiner = "echo '\(keyInfo.openSSH)' | ssh-copy-id -i /dev/stdin \(p.user)@\(p.host)\(p.port != 22 ? " -p \(p.port)" : "")"
+                            UIPasteboard.general.string = oneLiner
                             showCopiedSSHCopyId = true
                         }
                     }
@@ -445,7 +449,7 @@ public struct AddHostView: View {
                     mono: true,
                     isLoading: isGeneratingKey
                 ) {
-                    Task { await generateKey() }
+                    keyGenTask = Task { await generateKey() }
                 }
                 .disabled(isGeneratingKey)
             }
@@ -465,7 +469,7 @@ public struct AddHostView: View {
         .alert("Copied", isPresented: $showCopiedSSHCopyId) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Paste the ssh-copy-id command into your terminal to install the key.")
+            Text("Paste this command into your terminal on the server machine.")
         }
     }
 
@@ -542,13 +546,13 @@ public struct AddHostView: View {
                     rowLabel
                 }
                 .buttonStyle(.plain)
-                .navigationDestination(isPresented: $showingAdvanced) {
-                    if let vm = advancedVM {
-                        HostEditorView(viewModel: vm)
-                    }
-                }
             } else {
                 rowLabel
+            }
+        }
+        .navigationDestination(isPresented: $showingAdvanced) {
+            if let vm = advancedVM {
+                HostEditorView(viewModel: vm)
             }
         }
     }
@@ -603,11 +607,11 @@ public struct AddHostView: View {
     }
 
     private func sniffClipboard() async {
-        // UIPasteboard access is synchronous but may briefly pause UI; do it off the main thread, then publish.
-        let str = await Task.detached { UIPasteboard.general.string }.value
+        // .task inherits the view's MainActor context; UIPasteboard is safe to read here.
+        let str = UIPasteboard.general.string
         guard let str, !str.isEmpty else { return }
         if let result = parseSSHCommand(str) {
-            await MainActor.run { clipboardBannerResult = result }
+            clipboardBannerResult = result
         }
     }
 
@@ -625,9 +629,12 @@ public struct AddHostView: View {
     private func generateKey() async {
         isGeneratingKey = true
         keyGenError = nil
+        defer { isGeneratingKey = false }
+        guard !Task.isCancelled else { return }
         do {
             let tag = UUID().uuidString
             let info = try await keyStore.generateEd25519(tag: tag, comment: "conduit@iphone")
+            guard !Task.isCancelled else { return }
             generatedKeyInfo = info
             // Reload tags so the key picker shows up if user closes and reopens
             let tags = (try? await keyStore.allTags()) ?? []
@@ -636,7 +643,6 @@ public struct AddHostView: View {
         } catch {
             keyGenError = error.localizedDescription
         }
-        isGeneratingKey = false
     }
 
     private func connectAndSave() async {
