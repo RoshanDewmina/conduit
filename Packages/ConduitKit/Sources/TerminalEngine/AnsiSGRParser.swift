@@ -25,16 +25,22 @@ public struct AnsiSGRParser: Sendable {
 
         while !slice.isEmpty {
             guard let escRange = slice.range(of: "\u{1B}[") else {
-                var chunk = AttributedString(String(slice))
-                chunk.mergeAttributes(current.attributes())
-                result += chunk
+                let tail = Self.stripResidualEscapes(slice)
+                if !tail.isEmpty {
+                    var chunk = AttributedString(tail)
+                    chunk.mergeAttributes(current.attributes())
+                    result += chunk
+                }
                 break
             }
 
-            // Plain text before the escape.
-            let plain = slice[slice.startIndex ..< escRange.lowerBound]
+            // Plain text before the escape. Strip residual non-CSI ESC
+            // sequences (charset designators, keypad/cursor-save controls)
+            // that full-redraw TUIs like `top` emit — they are not CSI/SGR,
+            // so without this their tails ("(B", "=", …) leak as literal text.
+            let plain = Self.stripResidualEscapes(slice[slice.startIndex ..< escRange.lowerBound])
             if !plain.isEmpty {
-                var chunk = AttributedString(String(plain))
+                var chunk = AttributedString(plain)
                 chunk.mergeAttributes(current.attributes())
                 result += chunk
             }
@@ -53,6 +59,69 @@ public struct AnsiSGRParser: Sendable {
         }
 
         return (result, current)
+    }
+
+    /// Remove residual non-CSI ESC sequences that survive into the block-TEXT
+    /// render path. Full-redraw, non-alt-screen TUIs (macOS `top` is the repro)
+    /// emit charset designators (`ESC ( B`) and keypad/cursor controls
+    /// (`ESC =`, `ESC >`, …) that are not CSI/SGR; the SGR parser only
+    /// recognizes `ESC [ … m`, so these would otherwise paint their tails
+    /// (`(B`, `=`, …) as literal garbage text.
+    ///
+    /// This strip lives ONLY here, in the block-text path — NOT in
+    /// `PTYBridge`'s shared `clean` stream, which also feeds SwiftTerm for
+    /// alt-screen rendering where `ESC ( 0` (DEC line-drawing charset) is load
+    /// bearing for box-drawing in real TUIs (vim/htop).
+    ///
+    /// Stripped:
+    ///   - 2-byte finals: `ESC =` `ESC >` `ESC 7` `ESC 8` `ESC c` `ESC M`
+    ///     `ESC D` `ESC E`
+    ///   - 3-byte charset designators: `ESC` + (`(` `)` `*` `+`) + 1 selector
+    ///
+    /// A lone trailing `ESC` (sequence split across chunk boundaries) is
+    /// dropped; the next chunk carries its own continuation. SGR (`ESC [ … m`)
+    /// never reaches this function — the caller has already split on `ESC [`.
+    static func stripResidualEscapes(_ input: Substring) -> String {
+        guard input.contains("\u{1B}") else { return String(input) }
+
+        // Operate on unicode scalars so multi-byte UTF-8 content passes through
+        // untouched; the escape finals/selectors we match are all ASCII.
+        let twoByteFinals: Set<Unicode.Scalar> = [
+            "=", ">", "7", "8", "c", "M", "D", "E",
+        ]
+        let charsetIntroducers: Set<Unicode.Scalar> = ["(", ")", "*", "+"]
+
+        var out = String.UnicodeScalarView()
+        var scalars = Array(input.unicodeScalars)
+        var i = 0
+        while i < scalars.count {
+            let s = scalars[i]
+            if s == "\u{1B}" {
+                // Look at the byte after ESC.
+                guard i + 1 < scalars.count else {
+                    // Lone trailing ESC — drop it (continuation is in next chunk).
+                    break
+                }
+                let next = scalars[i + 1]
+                if charsetIntroducers.contains(next) {
+                    // ESC ( B style — drop ESC, introducer, and 1 selector byte.
+                    i += (i + 2 < scalars.count) ? 3 : 2
+                    continue
+                } else if twoByteFinals.contains(next) {
+                    // ESC = / ESC > / ESC 7 … — drop both.
+                    i += 2
+                    continue
+                } else {
+                    // Unknown 2-byte ESC final — drop ESC + final defensively so
+                    // it can't leak as literal text in linear block output.
+                    i += 2
+                    continue
+                }
+            }
+            out.append(s)
+            i += 1
+        }
+        return String(out)
     }
 }
 
