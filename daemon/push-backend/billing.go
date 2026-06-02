@@ -14,18 +14,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 const stripeAPIVersion = "2026-04-22.dahlia"
-
-var billingEntitlements = struct {
-	sync.RWMutex
-	byCustomer map[string]subscriptionEntitlement
-}{
-	byCustomer: make(map[string]subscriptionEntitlement),
-}
 
 type checkoutRequest struct {
 	Plan            string `json:"plan"`
@@ -37,17 +29,6 @@ type checkoutRequest struct {
 type portalRequest struct {
 	CustomerID string `json:"customerId"`
 	ReturnURL  string `json:"returnUrl,omitempty"`
-}
-
-type subscriptionEntitlement struct {
-	CustomerID       string `json:"customerId,omitempty"`
-	SubscriptionID   string `json:"subscriptionId,omitempty"`
-	Status           string `json:"status"`
-	Active           bool   `json:"active"`
-	PriceID          string `json:"priceId,omitempty"`
-	AppAccountToken  string `json:"appAccountToken,omitempty"`
-	CurrentPeriodEnd int64  `json:"currentPeriodEnd,omitempty"`
-	UpdatedAt        string `json:"updatedAt"`
 }
 
 type stripeSession struct {
@@ -96,6 +77,7 @@ func registerBillingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /billing/checkout", handleBillingCheckout)
 	mux.HandleFunc("POST /billing/portal", handleBillingPortal)
 	mux.HandleFunc("GET /billing/subscription-status", handleBillingStatus)
+	mux.HandleFunc("GET /billing/entitlement", handleBillingEntitlement)
 	mux.HandleFunc("POST /billing/webhook", handleBillingWebhook)
 	mux.HandleFunc("GET /billing/return", handleBillingReturn)
 }
@@ -212,16 +194,16 @@ func handleBillingStatus(w http.ResponseWriter, r *http.Request) {
 		log.Printf("stripe status lookup failed: %v", err)
 	}
 
-	billingEntitlements.RLock()
-	entitlement, ok := billingEntitlements.byCustomer[customerID]
-	billingEntitlements.RUnlock()
-	if !ok {
-		entitlement = subscriptionEntitlement{
-			CustomerID: customerID,
-			Status:     "not_found",
-			Active:     false,
-			UpdatedAt:  time.Now().UTC().Format(time.RFC3339),
-		}
+	if ent, ok := lookupEntitlement(customerID, ""); ok {
+		writeJSON(w, http.StatusOK, ent)
+		return
+	}
+
+	entitlement := subscriptionEntitlement{
+		CustomerID: customerID,
+		Status:     "not_found",
+		Active:     false,
+		UpdatedAt:  time.Now().UTC().Format(time.RFC3339),
 	}
 	writeJSON(w, http.StatusOK, entitlement)
 }
@@ -403,15 +385,6 @@ func subscriptionIsActive(status string) bool {
 	default:
 		return false
 	}
-}
-
-func cacheEntitlement(entitlement subscriptionEntitlement) {
-	if entitlement.CustomerID == "" {
-		return
-	}
-	billingEntitlements.Lock()
-	billingEntitlements.byCustomer[entitlement.CustomerID] = entitlement
-	billingEntitlements.Unlock()
 }
 
 func verifyStripeSignature(payload []byte, header, secret string, tolerance time.Duration) error {

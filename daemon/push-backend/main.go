@@ -62,6 +62,12 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 	registerBillingRoutes(mux)
+	registerAgentRoutes(mux)
+	registerUsageRoutes(mux)
+
+	initEntitlementStore()
+	initControlPlaneStore()
+	initOpenRouterClient()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -79,7 +85,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
