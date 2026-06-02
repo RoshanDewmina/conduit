@@ -141,8 +141,11 @@ public struct SGRState: Sendable, Equatable {
         var c = AttributeContainer()
         if let foreground { c.foregroundColor = foreground }
         if let background { c.backgroundColor = background }
-        var font: Font = .system(.body, design: .monospaced)
+        var font: Font = .custom("FiraCode-Regular", size: 17)
         if bold { font = font.bold() }
+        // `.italic()` keeps Fira Code (which ships no italic face) and applies a
+        // synthetic slant; applied to `font` so it composes with `.bold()` above
+        // rather than clobbering it (the old line re-assigned the base font).
         if italic { font = font.italic() }
         c.font = font
         if underline { c.underlineStyle = .single }

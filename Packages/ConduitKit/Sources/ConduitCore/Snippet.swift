@@ -10,6 +10,8 @@ public struct Snippet: Identifiable, Sendable, Hashable, Codable {
     public var useCount: Int                   // Tier 2.4 — palette ranking
     public var createdAt: Date
     public var lastUsedAt: Date?
+    /// LWW clock — bumped on every local edit, used by SyncEngine to resolve conflicts.
+    public var modifiedAt: Date
 
     public init(
         id: SnippetID = .init(),
@@ -20,7 +22,8 @@ public struct Snippet: Identifiable, Sendable, Hashable, Codable {
         arguments: [SnippetArgument] = [],
         useCount: Int = 0,
         createdAt: Date = .now,
-        lastUsedAt: Date? = nil
+        lastUsedAt: Date? = nil,
+        modifiedAt: Date = .now
     ) {
         self.id = id
         self.name = name
@@ -31,6 +34,7 @@ public struct Snippet: Identifiable, Sendable, Hashable, Codable {
         self.useCount = useCount
         self.createdAt = createdAt
         self.lastUsedAt = lastUsedAt
+        self.modifiedAt = modifiedAt
     }
 }
 

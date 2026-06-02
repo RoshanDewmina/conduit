@@ -3,7 +3,7 @@ import SwiftUI
 import ConduitCore
 import DesignSystem
 
-// Compact navigation header: back button, PixelAvatar, host name, AgentBadge,
+// Compact navigation header: back button, BLOCKS server glyph, host name, AgentBadge,
 // live cwd chip. Sits above the transcript.
 public struct ChatHeaderView: View {
     let hostName: String
@@ -47,18 +47,26 @@ public struct ChatHeaderView: View {
                 .buttonStyle(.plain)
             }
 
-            PixelAvatar(seed: hostName, size: 34)
+            // BLOCKS host glyph: square bordered server tile (matches session rows).
+            DSIconView(.server, size: 16, color: t.text2)
+                .frame(width: 34, height: 34)
+                .background(t.surface)
+                .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(hostName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(t.text1)
+                    .font(.dsMonoPt(13, weight: .medium))
+                    .foregroundStyle(t.text)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
-                    Image(systemName: "folder").font(.caption2).foregroundStyle(t.text4)
+                    Text("$").font(.dsMonoPt(10, weight: .medium)).foregroundStyle(t.accent)
                     Text(cwd)
-                        .font(.caption2.monospaced())
+                        .font(.dsMonoPt(10))
                         .foregroundStyle(t.text3)
                         .lineLimit(1).truncationMode(.head)
                 }
@@ -102,11 +110,11 @@ public struct ChatHeaderView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(t.surf1)
+        .background(t.surface2)
         .overlay(
             Rectangle()
-                .fill(t.surf3.opacity(0.6))
-                .frame(height: 0.5),
+                .fill(t.border)
+                .frame(height: 1),
             alignment: .bottom
         )
     }

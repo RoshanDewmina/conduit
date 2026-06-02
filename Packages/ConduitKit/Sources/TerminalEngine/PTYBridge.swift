@@ -156,13 +156,15 @@ public actor PTYBridge {
 
     private enum OSCState {
         case normal
-        case sawEsc        // saw 0x1b, waiting for ] (0x5d)
+        case sawEsc        // saw 0x1b, waiting for ] (OSC) or [ (CSI)
         case inOSC         // inside an OSC sequence body
         case inOSCSawEsc   // inside OSC, saw 0x1b — checking for ST (0x5c)
+        case inCSI         // inside a CSI sequence (ESC [ … final)
     }
 
     private var oscState: OSCState = .normal
     private var oscBody: [UInt8] = []  // accumulates OSC body bytes
+    private var csiBody: [UInt8] = []  // accumulates CSI param/intermediate bytes
 
     // MARK: - Init
 
@@ -188,28 +190,23 @@ public actor PTYBridge {
     /// Safe to call from a detached `Task`.
     public func start() async {
         for await chunk in await shell.bytes {
-            // 1. Alt-screen detection — kept for diagnostics + escalation flags,
-            //    but no longer gates byte routing. The active block's embedded
-            //    SwiftTerm handles `\e[?1049h` natively (it has its own primary
-            //    and alt buffers), so the same byte path serves both inline
-            //    TUIs (Claude/Codex) and alt-screen TUIs (htop/vim/tmux).
+            // 1. Alt-screen detection — diagnostics + escalation flags. The
+            //    active block's embedded SwiftTerm handles `\e[?1049h` natively,
+            //    so the same byte path serves inline TUIs (Claude/Codex) and
+            //    alt-screen TUIs (htop/vim/tmux).
             scanAltScreen(chunk)
 
-            // 2. OSC 133/7 parsing + simultaneous stripping
-            //    Returns a clean copy with OSC sequences removed, suitable for
-            //    block-mode rendering.
-            let cleanBytes = parseAndStripOSC(chunk)
-
-            // 3. Always feed SwiftTerm the raw bytes so its terminal model
-            //    (cursor, scroll-back, colour) stays authoritative.
+            // 2. Feed SwiftTerm the raw bytes so its terminal model (cursor,
+            //    scroll-back, colour) stays authoritative.
             await terminal.feed(chunk)
 
-            // 4. Route clean bytes to the block renderer in all states.
-            //    The view model decides whether to yield to a live in-block
-            //    terminal handle or just keep the text-snapshot path.
-            if let cb = onBlockBytes, !cleanBytes.isEmpty {
-                cb(cleanBytes)
-            }
+            // 3. Parse + strip OSC 133/7, flushing the clean (OSC-removed) bytes
+            //    to `onBlockBytes` *interleaved* with the lifecycle callbacks.
+            //    Emitting the bytes that precede a marker before firing it means
+            //    the prompt + command echo ahead of 133;C reach the view model
+            //    while it is still in the prompt phase (isExecutingUnified ==
+            //    false), so they are dropped rather than captured as output.
+            emitCleanBytes(chunk)
         }
     }
 
@@ -233,9 +230,12 @@ public actor PTYBridge {
             inAltScreen = false
             onAltScreenExit?()
         }
+        // Check enable and disable independently so a chunk containing both
+        // (enable immediately followed by disable) ends with the correct state.
         if !bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteEnable) {
             bracketedPasteActive = true
-        } else if bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteDisable) {
+        }
+        if bracketedPasteActive, contains(chunk, subsequence: Self.bracketedPasteDisable) {
             bracketedPasteActive = false
         }
     }
@@ -256,34 +256,77 @@ public actor PTYBridge {
     /// Parses OSC sequences out of `chunk`, firing appropriate callbacks, and
     /// returns the same bytes with all OSC sequences removed (so they don't
     /// appear as garbage text in block-mode output).
-    private func parseAndStripOSC(_ chunk: [UInt8]) -> [UInt8] {
+    private func emitCleanBytes(_ chunk: [UInt8]) {
         var clean: [UInt8] = []
         clean.reserveCapacity(chunk.count)
+
+        // Emit accumulated clean bytes to the block sink. Called *before* each
+        // OSC 133 dispatch so pre-marker bytes (prompt/echo) reach the view
+        // model ahead of the marker callback and are correctly attributed.
+        func flush() {
+            guard !clean.isEmpty else { return }
+            onBlockBytes?(clean)
+            clean.removeAll(keepingCapacity: true)
+        }
 
         for byte in chunk {
             switch oscState {
 
             case .normal:
                 if byte == 0x1b {
-                    oscState = .sawEsc
-                    // Don't emit yet — we don't know if this is OSC or CSI
+                    oscState = .sawEsc      // OSC or CSI? decide on next byte
                 } else {
                     clean.append(byte)
                 }
 
             case .sawEsc:
-                if byte == 0x5d {       // ESC ] — OSC start
+                if byte == 0x5d {           // ESC ] — OSC start
                     oscState = .inOSC
                     oscBody.removeAll()
-                } else {
-                    // Not OSC (e.g. ESC [ CSI, ESC O SS3 …) — emit both bytes.
+                } else if byte == 0x5b {    // ESC [ — CSI start
+                    oscState = .inCSI
+                    csiBody.removeAll()
+                } else {                    // other ESC seq (SS3 etc.) — pass through
                     clean.append(0x1b)
                     clean.append(byte)
                     oscState = .normal
                 }
 
+            case .inCSI:
+                // Buffer the CSI until its final byte (0x40–0x7E). Drop only
+                // window-manipulation reports (final byte 't', e.g. tmux's
+                // `\e[8;rows;cols t`) — they are control reports that otherwise
+                // leak as literal text. Everything else (SGR `m`, cursor moves,
+                // erases) is re-emitted verbatim so colour/positioning survive.
+                if (0x40...0x7e).contains(byte) {
+                    if byte != 0x74 {       // 0x74 == 't'
+                        clean.append(0x1b)
+                        clean.append(0x5b)
+                        clean.append(contentsOf: csiBody)
+                        clean.append(byte)
+                    }
+                    csiBody.removeAll()
+                    oscState = .normal
+                } else if (0x20...0x3f).contains(byte) {
+                    csiBody.append(byte)    // valid param/intermediate byte
+                } else {
+                    // Malformed CSI (control byte / ESC mid-sequence) — emit what
+                    // we have and reprocess this byte from the normal state.
+                    clean.append(0x1b)
+                    clean.append(0x5b)
+                    clean.append(contentsOf: csiBody)
+                    csiBody.removeAll()
+                    if byte == 0x1b {
+                        oscState = .sawEsc
+                    } else {
+                        clean.append(byte)
+                        oscState = .normal
+                    }
+                }
+
             case .inOSC:
-                if byte == 0x07 {       // BEL — OSC terminator
+                if byte == 0x07 {           // BEL — OSC terminator
+                    flush()
                     dispatchOSC(String(bytes: oscBody, encoding: .utf8) ?? "")
                     oscBody.removeAll()
                     oscState = .normal
@@ -294,7 +337,8 @@ public actor PTYBridge {
                 }
 
             case .inOSCSawEsc:
-                if byte == 0x5c {       // ST (ESC \) — OSC terminator
+                if byte == 0x5c {           // ST (ESC \) — OSC terminator
+                    flush()
                     dispatchOSC(String(bytes: oscBody, encoding: .utf8) ?? "")
                     oscBody.removeAll()
                     oscState = .normal
@@ -307,7 +351,7 @@ public actor PTYBridge {
             }
         }
 
-        return clean
+        flush()
     }
 
     private func dispatchOSC(_ body: String) {

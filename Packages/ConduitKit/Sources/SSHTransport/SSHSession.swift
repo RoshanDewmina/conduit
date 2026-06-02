@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 @preconcurrency import Citadel
 @preconcurrency import NIOCore
 @preconcurrency import NIOSSH
@@ -31,8 +32,44 @@ public actor SSHSession {
 
     private static let connectTimeout: Duration = .seconds(15)
 
+    /// DNS pre-resolution with a 2-second ceiling. Skipped for IP literals.
+    /// Throws `.dnsResolutionFailed(host:)` if the lookup fails.
+    private func preResolveHost() async throws {
+        let h = host.hostname
+        // Skip resolution for IPv4 literals (digits + dots) and IPv6 (contains colon)
+        let isIPLiteral = h.allSatisfy({ $0.isNumber || $0 == "." }) || h.contains(":")
+        guard !isIPLiteral else { return }
+
+        try await withThrowingTimeout(.seconds(2)) {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                var hints = addrinfo()
+                hints.ai_flags = AI_ADDRCONFIG
+                hints.ai_socktype = SOCK_STREAM
+                var res: UnsafeMutablePointer<addrinfo>?
+                let ret = getaddrinfo(h, nil, &hints, &res)
+                if ret != 0 {
+                    cont.resume(throwing: ConduitError.dnsResolutionFailed(host: h))
+                } else {
+                    freeaddrinfo(res)
+                    cont.resume()
+                }
+            }
+        }
+    }
+
     public func connect(credential: SSHCredential, hostKeyStore: HostKeyStore) async throws {
         if isConnected { return }
+        // Pre-resolve hostname to give a fast, clear error for bad hosts.
+        do {
+            try await preResolveHost()
+        } catch let e as ConduitError {
+            lastError = e
+            throw e
+        } catch {
+            let mapped = ConduitError.dnsResolutionFailed(host: host.hostname)
+            lastError = mapped
+            throw mapped
+        }
         let method: SSHAuthenticationMethod = switch credential {
         case .password(let pw):
             .passwordBased(username: host.username, password: pw)
@@ -93,7 +130,7 @@ public actor SSHSession {
     /// Re-establishes the SSH connection using the credentials from the most
     /// recent successful `connect(credential:hostKeyStore:)` call.
     ///
-    /// - Throws: `ConduitError.unsupportedPlatform` when no cached credential
+    /// - Throws: `ConduitError.noCredentialAvailable` when no cached credential
     ///   is available (e.g. the session was never successfully connected).
     public func attemptReconnect() async throws {
         // Guard: we must have previously connected successfully.
@@ -101,7 +138,7 @@ public actor SSHSession {
               let hostKeyStore = cachedHostKeyStore else {
             // No cached credential — cannot reconnect automatically.
             // Callers should present the credential UI instead.
-            throw ConduitError.unsupportedPlatform
+            throw ConduitError.noCredentialAvailable
         }
         // Reset state so connect() doesn't early-return.
         isConnected = false
@@ -113,6 +150,41 @@ public actor SSHSession {
         if let client { try? await client.close() }
         client = nil
         isConnected = false
+        cachedCredential = nil
+        cachedHostKeyStore = nil
+    }
+
+    /// Clears the cached credential without closing the connection.
+    /// Call before a password-retry flow so the new password is accepted.
+    public func clearCachedCredential() {
+        cachedCredential = nil
+        cachedHostKeyStore = nil
+    }
+
+    /// Marks the session as disconnected without closing the channel.
+    /// Used by keepalive to signal a silently-dropped TCP link.
+    public func markDisconnected() {
+        isConnected = false
+    }
+
+    /// Probe liveness with a no-op remote command. Returns `false` and clears
+    /// `isConnected` when the link is dead. Used by the keepalive loop and
+    /// `SessionPool.heartbeat()`.
+    ///
+    /// Note: Citadel does not expose NIO's `ClientBootstrap` for TCP-level
+    /// SO_KEEPALIVE configuration; this application-level probe provides the
+    /// same dead-link detection.
+    public func ping(timeout: Duration = .seconds(10)) async -> Bool {
+        guard isConnected, client != nil else { return false }
+        do {
+            _ = try await withThrowingTimeout(timeout) {
+                try await self.executeCollected(":")
+            }
+            return true
+        } catch {
+            isConnected = false
+            return false
+        }
     }
 
     // MARK: - Exec channel (one-shot command)
@@ -284,13 +356,39 @@ public actor SSHSession {
         (error as? Citadel.SSHClient.CommandFailed)?.exitCode
     }
 
-    private static func map(error: any Error, host: String) -> ConduitError {
+    // Internal so tests can exercise the mapping without going through connect().
+    internal static func map(error: any Error, host: String) -> ConduitError {
         if let error = error as? ConduitError { return error }
-        let msg = String(describing: error).lowercased()
-        if msg.contains("connection refused")  { return .connectionRefused(host: host) }
-        if msg.contains("authentication") || msg.contains("auth failed") {
+
+        // Type-based catches for known Citadel/NIOSSH error types.
+        if error is AuthenticationFailed {
             return .authFailed(reason: "Server rejected credentials")
         }
+        if let clientErr = error as? SSHClientError {
+            switch clientErr {
+            case .allAuthenticationOptionsFailed:
+                return .authFailed(reason: "All authentication methods failed")
+            case .channelCreationFailed:
+                return .channelClosed
+            default:
+                break
+            }
+        }
+        if let citadelErr = error as? CitadelError {
+            switch citadelErr {
+            case .unauthorized:
+                return .authFailed(reason: "Unauthorized")
+            case .channelCreationFailed, .channelFailure:
+                return .channelClosed
+            default:
+                break
+            }
+        }
+
+        // Fallback: string inspection for errors without exposed types
+        // (NIO transport errors, OS-level ECONNREFUSED, etc.)
+        let msg = String(describing: error).lowercased()
+        if msg.contains("connection refused")  { return .connectionRefused(host: host) }
         if msg.contains("timeout") || msg.contains("timed out") { return .timeout }
         if msg.contains("cancel")                              { return .cancelled }
         if msg.contains("channel")                             { return .channelClosed }

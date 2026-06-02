@@ -16,10 +16,19 @@ settings:
     ENABLE_APP_INTENTS_METADATA_EXTRACTION: "NO"
     SWIFT_STRICT_CONCURRENCY: "complete"
     OTHER_SWIFT_FLAGS: "-warn-implicit-overrides"
+    # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
+    # No plain-HTTP fallback; ATS rejects http:// in Release builds.
+    # Example: https://conduit-push-HASH-ts.a.run.app
+    CONDUIT_PUSH_BACKEND_URL: ""
 
 packages:
   ConduitKit:
     path: Packages/ConduitKit
+  # Crash reporting — privacy-friendly, self-hostable. No ad/tracking data collected.
+  # Set sentryDSN in Conduit/ConduitApp.swift before release. See ARCHITECTURE.md §19.
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 8.0.0
 
 targets:
   Conduit:
@@ -44,10 +53,21 @@ targets:
           - CFBundleURLName: dev.conduit.mobile
             CFBundleURLSchemes:
               - conduit
-        ConduitCloudKitEnabled: true
-    # NOTE: iCloud + Push require a paid Apple Developer account. For free-tier
-    # device testing without CloudKit, swap to `Conduit-DeviceTesting.entitlements`
-    # and set ConduitCloudKitEnabled to false above.
+        # Push backend HTTPS URL — read at runtime by ConduitApp.swift.
+        # Set CONDUIT_PUSH_BACKEND_URL in build settings to the Cloud Run service URL.
+        CONDUIT_PUSH_BACKEND_URL: "$(CONDUIT_PUSH_BACKEND_URL)"
+        # iCloud/CloudKit gate, read at runtime by SyncKit/CloudSync.swift.
+        # MUST stay false while building with Conduit-DeviceTesting.entitlements
+        # (no icloud-services entitlement). Flip to true together with the
+        # entitlements swap below, once the iCloud capability + CloudKit
+        # container are enabled in the Apple Developer portal.
+        CONDUIT_ICLOUD_ENABLED: false
+    # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
+    # account. While on a free personal team, point at the stripped
+    # `Conduit-DeviceTesting.entitlements` file (Keychain only). Swap back
+    # to `Conduit.entitlements` + restore the properties block below once
+    # enrolled in the paid program — and flip CONDUIT_ICLOUD_ENABLED above
+    # to true at the same time, or CloudKit will error at runtime.
     entitlements:
       path: Conduit/Conduit.entitlements
       properties:
@@ -78,6 +98,8 @@ targets:
     dependencies:
       - package: ConduitKit
         product: AppFeature
+      - package: Sentry
+        product: Sentry
       - target: ConduitWatch
         embed: true
       - target: ConduitLiveActivityWidget

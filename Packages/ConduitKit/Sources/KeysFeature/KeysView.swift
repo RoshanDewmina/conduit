@@ -93,156 +93,171 @@ public final class KeysViewModel {
 
 public struct KeysView: View {
     @State private var vm: KeysViewModel
+    @State private var showImportSheet = false
     @Environment(\.conduitTokens) private var t
-    @State private var importText = ""
-    @State private var isShowingPasteImport = false
-    @State private var isShowingFileImporter = false
+    @Environment(\.dismiss) private var dismiss
 
-    public init(viewModel: KeysViewModel) { _vm = State(initialValue: viewModel) }
+    private let store: KeyStore
+
+    public init(viewModel: KeysViewModel, store: KeyStore) {
+        _vm = State(initialValue: viewModel)
+        self.store = store
+    }
 
     public var body: some View {
-        List {
-            Section {
-                Button {
-                    Task { await vm.generate() }
-                } label: {
-                    Label("Generate Ed25519 keypair", systemImage: "key.fill")
-                        .foregroundStyle(t.accent)
-                }
+        ZStack {
+            t.bg.ignoresSafeArea()
 
-                Button {
-                    importText = ""
-                    isShowingPasteImport = true
-                } label: {
-                    Label("Import key (paste)", systemImage: "doc.on.clipboard")
-                        .foregroundStyle(t.accent)
-                }
+            VStack(spacing: 0) {
+                DSDetailHeader("ssh keys", onBack: { dismiss() })
 
-                Button {
-                    isShowingFileImporter = true
-                } label: {
-                    Label("Import key (file)", systemImage: "square.and.arrow.down")
-                        .foregroundStyle(t.accent)
-                }
-            }
-            .listRowBackground(t.surf1)
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // ── Actions
+                        VStack(spacing: 0) {
+                            actionRow(.key, "generate ed25519 keypair") { Task { await vm.generate() } }
+                            DSDivider(.soft)
+                            actionRow(.download, "import existing key…") { showImportSheet = true }
+                        }
+                        .blocksCard(t)
 
-            if let publicKey = vm.lastGeneratedPublic {
-                Section("Last generated public key") {
-                    Text(publicKey)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(t.text2)
-                        .textSelection(.enabled)
-                    Button("Copy") {
-                        #if os(iOS)
-                        UIPasteboard.general.string = publicKey
-                        #endif
-                        Haptics.selection()
-                    }
-                    .foregroundStyle(t.accent)
-                }
-                .listRowBackground(t.surf1)
-            }
-
-            Section("Keys") {
-                if vm.keys.isEmpty {
-                    Text("No keys yet")
-                        .foregroundStyle(t.text3)
-                        .listRowBackground(t.surf1)
-                } else {
-                    ForEach(vm.keys) { key in
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "key")
-                                .foregroundStyle(t.accent)
-                                .padding(.top, 2)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(key.tag)
-                                    .font(.system(.callout, design: .monospaced))
-                                    .foregroundStyle(t.text1)
-                                    .textSelection(.enabled)
-                                Text(key.algorithmLabel)
-                                    .font(.caption2)
-                                    .foregroundStyle(t.text3)
-                                Text(key.fingerprint)
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(t.text3)
-                                    .textSelection(.enabled)
-                                Button("Copy public key") {
-                                    #if os(iOS)
-                                    UIPasteboard.general.string = key.openSSH
-                                    #endif
-                                    Haptics.selection()
+                        // ── Last generated public key
+                        if let publicKey = vm.lastGeneratedPublic {
+                            VStack(alignment: .leading, spacing: 8) {
+                                sectionHead("LAST GENERATED PUBLIC KEY")
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(publicKey)
+                                        .font(.dsMonoPt(11))
+                                        .foregroundStyle(t.text2)
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    copyButton("copy") { copy(publicKey) }
                                 }
-                                .font(.caption)
-                                .buttonStyle(.bordered)
-                                .controlSize(.mini)
-                                .tint(t.accent)
-                                .disabled(key.openSSH.contains("<private-key-imported>"))
+                                .padding(13)
+                                .blocksCard(t)
                             }
                         }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                Task { await vm.delete(key.tag) }
-                            } label: { Label("Delete", systemImage: "trash") }
+
+                        // ── Keys
+                        VStack(alignment: .leading, spacing: 8) {
+                            sectionHead("KEYS")
+                            if vm.keys.isEmpty {
+                                DSEmptyState(
+                                    dotMatrix: .idle,
+                                    title: "no keys yet",
+                                    subtitle: "Generate or import an Ed25519 key to authenticate without a password."
+                                )
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(vm.keys.enumerated()), id: \.element.id) { idx, key in
+                                        keyRow(key)
+                                        if idx < vm.keys.count - 1 { DSDivider(.soft) }
+                                    }
+                                }
+                                .blocksCard(t)
+                            }
                         }
                     }
-                    .listRowBackground(t.surf1)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(t.surf0)
-        .navigationTitle("SSH Keys")
-        .contentMargins(.bottom, 72, for: .scrollContent)
-        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
+        .toolbar(.hidden, for: .navigationBar)
         .task { await vm.reload() }
-        .fileImporter(
-            isPresented: $isShowingFileImporter,
-            allowedContentTypes: [.data, .text, .item],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
-                let didStart = url.startAccessingSecurityScopedResource()
-                Task {
-                    await vm.importFromFile(url)
-                    if didStart { url.stopAccessingSecurityScopedResource() }
-                }
-            case .failure(let error):
-                vm.error = error.localizedDescription
+        .sheet(isPresented: $showImportSheet) {
+            KeyImportView(store: store) {
+                showImportSheet = false
+                Task { await vm.reload() }
             }
-        }
-        .sheet(isPresented: $isShowingPasteImport) {
-            NavigationStack {
-                Form {
-                    Section("Private key text") {
-                        TextEditor(text: $importText)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minHeight: 220)
-                    }
-                }
-                .navigationTitle("Import Key")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { isShowingPasteImport = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Import") {
-                            let text = importText
-                            isShowingPasteImport = false
-                            Task { await vm.importFromText(text) }
-                        }
-                        .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
         }
         .alert("Error", isPresented: .constant(vm.error != nil)) {
             Button("OK") { vm.error = nil }
         } message: { Text(vm.error ?? "") }
+    }
+
+    // MARK: - Pieces
+
+    private func sectionHead(_ s: String) -> some View {
+        Text(s)
+            .font(.dsDisplayPt(10, weight: .semibold))
+            .tracking(10 * 0.12)
+            .foregroundStyle(t.text3)
+    }
+
+    private func actionRow(_ icon: DSIcon, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: { action(); Haptics.selection() }) {
+            HStack(spacing: 10) {
+                DSIconView(icon, size: 15, color: t.accent)
+                Text(label)
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.accent)
+                Spacer()
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func keyRow(_ key: KeysViewModel.StoredKey) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            DSIconView(.key, size: 14, color: t.text3).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(key.tag)
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .textSelection(.enabled)
+                Text(key.fingerprint)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 14) {
+                    copyButton("copy public key") { copy(key.openSSH) }
+                    Button("delete") { Task { await vm.delete(key.tag) } }
+                        .font(.dsMonoPt(11, weight: .medium))
+                        .foregroundStyle(t.danger)
+                        .buttonStyle(.plain)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(13)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("SSH key \(key.tag), fingerprint \(key.fingerprint)")
+    }
+
+    private func copyButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                DSIconView(.copy, size: 11, color: t.accent)
+                Text(label).font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.accent)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func copy(_ s: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = s
+        #endif
+        Haptics.selection()
+    }
+}
+
+// Square BLOCKS card: surface fill + 1px border, square corners.
+private extension View {
+    func blocksCard(_ t: ConduitTokens) -> some View {
+        self
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
     }
 }
 

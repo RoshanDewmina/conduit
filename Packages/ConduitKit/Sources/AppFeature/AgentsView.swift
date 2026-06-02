@@ -198,7 +198,7 @@ struct AgentDetailView: View {
                 .lineLimit(3...6)
                 .padding(12)
                 .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD))
-            DSButton(isRunning ? "Running…" : "Start run", variant: .primary) {
+            DSButton(isRunning ? "Running…" : "Start run", variant: .primary, mono: true) {
                 Task {
                     isRunning = true
                     defer { isRunning = false }
@@ -224,7 +224,7 @@ struct AgentDetailView: View {
                 .font(.dsMonoPt(13))
                 .padding(10)
                 .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD))
-            DSButton(scheduleSaving ? "Saving…" : "Save schedule", variant: .secondary) {
+            DSButton(scheduleSaving ? "Saving…" : "Save schedule", variant: .secondary, mono: true) {
                 Task {
                     scheduleSaving = true
                     defer { scheduleSaving = false }
@@ -346,7 +346,7 @@ struct AgentRunDetailView: View {
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
             } else {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                ForEach(lines) { line in
                     Text(line.text)
                         .font(.dsMonoPt(12))
                         .foregroundStyle(t.text2)
@@ -365,7 +365,7 @@ struct AgentRunDetailView: View {
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
             } else {
-                ForEach(Array(artifacts.enumerated()), id: \.offset) { _, artifact in
+                ForEach(artifacts) { artifact in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(artifact.name)
@@ -379,7 +379,7 @@ struct AgentRunDetailView: View {
                         }
                         Spacer()
                         if artifact.downloadURL != nil {
-                            DSButton("Open", variant: .ghost, size: .sm) {
+                            DSButton("Open", variant: .ghost, size: .sm, mono: true) {
                                 if let url = artifact.downloadURL { openURL(url) }
                             }
                         }
@@ -394,7 +394,7 @@ struct AgentRunDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             DSListSectionHead("APPROVALS")
             let approvals = store.selectedRun?.approvals ?? run.approvals
-            ForEach(Array(approvals.enumerated()), id: \.offset) { _, approval in
+            ForEach(approvals) { approval in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(approval.kind)
@@ -410,10 +410,10 @@ struct AgentRunDetailView: View {
                     Spacer()
                     if approval.status == .pending {
                         HStack(spacing: 8) {
-                            DSButton("Deny", variant: .secondary) {
+                            DSButton("Deny", variant: .secondary, mono: true) {
                                 Task { await store.respondToApproval(runID: run.id, approvalID: approval.id, approved: false) }
                             }
-                            DSButton("Allow", variant: .primary) {
+                            DSButton("Allow", variant: .primary, mono: true) {
                                 Task { await store.respondToApproval(runID: run.id, approvalID: approval.id, approved: true) }
                             }
                         }
@@ -429,7 +429,7 @@ struct AgentRunDetailView: View {
     private var usageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             DSListSectionHead("USAGE")
-            ForEach(Array(displayUsageRecords.enumerated()), id: \.offset) { _, record in
+            ForEach(displayUsageRecords) { record in
                 HStack {
                     Text(record.model ?? "model")
                         .font(.dsMonoPt(12))

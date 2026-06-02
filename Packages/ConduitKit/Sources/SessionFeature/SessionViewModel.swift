@@ -48,6 +48,13 @@ public final class SessionViewModel {
     // Host-key TOFU state: non-nil while awaiting user confirmation
     public private(set) var pendingHostKeyFingerprint: String?
 
+    /// Consecutive auth failures since the last successful connect. Resets on success.
+    public private(set) var consecutiveAuthFailures = 0
+
+    /// Raised after `consecutiveAuthFailures >= 2`. The UI should re-present
+    /// the password prompt and call `retryWithNewPassword(_:)`.
+    public private(set) var awaitingPasswordRetry = false
+
     // MARK: - Raw PTY mode
     //
     // `isRaw` is now set ONLY by alt-screen detection (Phase 5 — no manual toggle).
@@ -165,7 +172,8 @@ public final class SessionViewModel {
 
     private let sshSession: SSHSession
     public var session: SSHSession { sshSession }
-    private let credentialProvider: @Sendable () async throws -> SSHCredential
+    // `var` so `retryWithNewPassword(_:)` can swap it for a password-retry flow.
+    private var credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
     private let aiClient: (any AIClient)?
     private let onAIUsage: (@Sendable (UsageRecord) async -> Void)?
@@ -207,6 +215,34 @@ public final class SessionViewModel {
         self.blocks = BlockRenderer()
     }
 
+    #if DEBUG
+    /// Convenience for debug harnesses: a password-auth session with an
+    /// in-memory host-key store. Pair with `connect()` then `trustHostKey()`
+    /// for a plug-and-play localhost test (auto-trusts the first host key).
+    public static func debugPasswordSession(
+        name: String,
+        hostname: String,
+        port: Int,
+        username: String,
+        password: String,
+        startupCommand: String? = nil
+    ) -> SessionViewModel {
+        let host = Host(
+            name: name,
+            hostname: hostname,
+            port: port,
+            username: username,
+            startupCommand: startupCommand
+        )
+        return SessionViewModel(
+            host: host,
+            sshSession: SSHSession(host: host),
+            credentialProvider: { .password(password) },
+            hostKeyStore: HostKeyStore(inMemory: true)
+        )
+    }
+    #endif
+
     // MARK: - Connection lifecycle
 
     public func connect() async {
@@ -215,6 +251,8 @@ public final class SessionViewModel {
         do {
             let cred = try await credentialProvider()
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
+            consecutiveAuthFailures = 0
+            awaitingPasswordRetry = false
             await transitionStatus(.connected)
             try? await auditRepo?.record(hostID: host.id, type: .connect)
             applyScreenSleepPolicy(connected: true)
@@ -278,6 +316,12 @@ public final class SessionViewModel {
                 type: .authFailure,
                 metadata: ["reason": reason]
             )
+            consecutiveAuthFailures += 1
+            // After 2 consecutive auth failures, prompt for a new password
+            // rather than leaving the session in a dead .failed state.
+            if consecutiveAuthFailures >= 2 {
+                awaitingPasswordRetry = true
+            }
             await transitionStatus(.failed(reason: "Authentication failed: \(reason)"))
         } catch let err as ConduitError {
             await transitionStatus(.failed(reason: err.errorDescription ?? "connection failed"))
@@ -291,6 +335,21 @@ public final class SessionViewModel {
         try? await hostKeyStore.record(hostID: host.id, fingerprint: fp)
         pendingHostKeyFingerprint = nil
         await connect()
+    }
+
+    /// Retry connecting with a new password after repeated auth failures.
+    public func retryWithNewPassword(_ password: String) async {
+        awaitingPasswordRetry = false
+        consecutiveAuthFailures = 0
+        await sshSession.clearCachedCredential()
+        credentialProvider = { .password(password) }
+        await connect()
+    }
+
+    /// Cancel a pending password-retry prompt (dismiss without re-authenticating).
+    public func cancelPasswordRetry() {
+        awaitingPasswordRetry = false
+        consecutiveAuthFailures = 0
     }
 
     public func rejectHostKey() {

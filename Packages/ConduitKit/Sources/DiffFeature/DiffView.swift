@@ -127,6 +127,7 @@ public struct DiffView: View {
             Text(line.text)
                 .foregroundStyle(fg == t.text2 ? t.text2 : fg.opacity(0.85))
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(.caption, design: .monospaced))

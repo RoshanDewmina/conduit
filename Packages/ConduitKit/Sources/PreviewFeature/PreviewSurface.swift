@@ -48,6 +48,7 @@ public struct PreviewView: View {
 public struct SmartPreviewView: View {
     @State private var vm = PreviewViewModel()
     public let session: SSHSession
+    @Environment(\.conduitTokens) private var t
 
     public init(session: SSHSession) {
         self.session = session
@@ -57,9 +58,9 @@ public struct SmartPreviewView: View {
         VStack(spacing: 0) {
             PreviewToolbar(vm: $vm, session: session)
                 .padding(.vertical, 8)
-                .conduitGlassChrome(cornerRadius: 0)
+                .background(t.surface)
 
-            Divider()
+            t.border.frame(height: 0.5)
 
             if let port = vm.activePort {
                 previewContent(port: port)

@@ -27,60 +27,50 @@ public struct HostKeyConfirmSheet: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Warning icon
                 HStack(spacing: 12) {
-                    Image(systemName: "shield.slash")
-                        .font(.title2)
-                        .foregroundStyle(t.warn)
+                    DSIconView(.shield, size: 24, color: t.warn)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Unknown Host Key")
-                            .font(.headline)
-                            .foregroundStyle(t.text1)
+                            .font(.dsSansPt(16, weight: .semibold))
+                            .foregroundStyle(t.text)
                         Text("The authenticity of \(hostName) cannot be established.")
-                            .font(.subheadline)
+                            .font(.dsSansPt(13))
                             .foregroundStyle(t.text3)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Fingerprint (SHA256)")
-                        .font(.caption.weight(.medium))
+                        .font(.dsSansPt(11, weight: .medium))
                         .foregroundStyle(t.text3)
                     Text(fingerprint)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.dsMonoPt(12))
                         .textSelection(.enabled)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(t.surf2)
-                        .clipShape(RoundedRectangle(cornerRadius: t.radiusSM))
+                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+                        .foregroundStyle(t.text2)
                         .foregroundStyle(t.text2)
                 }
 
                 Text("If you trust this host, tap **Trust & Connect**. If you are not expecting this fingerprint, tap **Cancel** and verify out-of-band.")
-                    .font(.footnote)
+                    .font(.dsSansPt(13))
                     .foregroundStyle(t.text3)
 
                 Spacer()
 
-                VStack(spacing: 12) {
-                    Button(action: onTrust) {
-                        Text("Trust & Connect")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button(role: .cancel, action: onReject) {
-                        Text("Cancel")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+                VStack(spacing: 10) {
+                    DSButton("Trust & Connect", variant: .primary, action: onTrust)
+                    DSButton("Cancel", variant: .secondary, action: onReject)
                 }
             }
             .padding()
-            .background(t.surf0)
+            .background(t.bg)
             .navigationTitle("Verify Host")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onReject)
+                        .foregroundStyle(t.accent)
                 }
             }
         }

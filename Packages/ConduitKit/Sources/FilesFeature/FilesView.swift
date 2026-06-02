@@ -75,9 +75,13 @@ public struct FilesView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill").foregroundStyle(t.accent)
                     Text(vm.path)
-                        .font(.system(.callout, design: .monospaced))
+                        .font(.dsMonoPt(14))
                         .foregroundStyle(t.text2)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .listRowBackground(t.surf1)
 
@@ -93,7 +97,7 @@ public struct FilesView: View {
                         Image(systemName: e.isDirectory ? "folder" : "doc.text")
                             .foregroundStyle(e.isDirectory ? t.accent : t.text3)
                         Text(e.name)
-                            .font(.system(.callout, design: .monospaced))
+                            .font(.dsMonoPt(14))
                             .foregroundStyle(t.text1)
                         Spacer()
                         if let s = e.sizeBytes, !e.isDirectory {
@@ -168,9 +172,13 @@ public struct SFTPFilesView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill").foregroundStyle(t.accent)
                     Text(vm.currentPath)
-                        .font(.system(.callout, design: .monospaced))
+                        .font(.dsMonoPt(14))
                         .foregroundStyle(t.text2)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .listRowBackground(t.surf1)
 

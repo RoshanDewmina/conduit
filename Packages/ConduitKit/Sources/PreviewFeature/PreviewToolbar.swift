@@ -129,6 +129,7 @@ public struct PreviewToolbar: View {
                 Image(systemName: "network")
                 Text(verbatim: vm.activePort.map { ":\($0)" } ?? "No port")
                     .font(.system(.callout, design: .monospaced))
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                     .lineLimit(1)
             }
         }

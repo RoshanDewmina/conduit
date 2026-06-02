@@ -444,9 +444,6 @@ public struct SectionHead: View {
     }
 }
 
-/// Backward-compatibility alias — prefer `SectionHead` in new code.
-public typealias DSListSectionHead = SectionHead
-
 // MARK: - EmptyState
 // primitives.css:378-389
 

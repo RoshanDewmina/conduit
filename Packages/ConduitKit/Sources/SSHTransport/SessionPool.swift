@@ -45,4 +45,12 @@ public actor SessionPool {
         }
         return result
     }
+
+    /// Ping every pooled session. Sessions whose TCP link is silently dead have
+    /// their `isConnected` flag cleared so callers get accurate status.
+    public func heartbeat() async {
+        for session in sessions.values {
+            _ = await session.ping()
+        }
+    }
 }

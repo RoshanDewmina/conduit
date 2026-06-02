@@ -67,18 +67,24 @@ Three rules keep the codebase honest:
 
 ## Status
 
-| M  | Title           | Status |
-|----|-----------------|--------|
-| M0 | Scaffolding     | ✅ verified |
-| M1 | First connect   | 🚧 credential flow + TOFU started |
-| M2 | Real terminal   | ⏳ |
-| M3 | Survive         | ⏳ |
-| M4 | AI loop         | ⏳ |
-| M5 | Inbox + Approvals | ⏳ |
-| M6 | Preview         | ⏳ |
-| M7 | Diff + Files    | ⏳ |
+| M  | Title             | Status |
+|----|-------------------|--------|
+| M0 | Scaffolding       | ✅ verified |
+| M1 | First connect     | ✅ Ed25519 + biometric gate + TOFU + password-at-connect |
+| M2 | Real terminal     | ✅ raw PTY via SwiftTerm, auto block↔raw |
+| M3 | Survive           | ✅ tmux auto-attach, auto-reconnect on scene resume |
+| M4 | AI loop           | ✅ `#`-prefix NL→cmd, explain-block streaming |
+| M5 | Inbox + Approvals | ✅ conduitd daemon + LiveInboxViewModel + Codex hook |
+| M6 | Preview           | ✅ WKWebView + SSH-proxy scheme + port auto-detect |
+| M7 | Diff + Files      | ✅ SFTPFiles + DiffView + UnifiedDiffParser |
+| M8 | Watch + Sync      | ✅ Watch app + CloudKit LWW + widget |
+| M9 | Hardware input    | ✅ external keyboard, key commands, snippets |
+| M10 | Billing + Store  | ✅ StoreKit + Stripe + Privacy manifest |
+| M11 | Temporal wall    | 🚧 Phase 0+1+UX landed 2026-05-27; Phase 2 pending |
+| M12 | Live Block I/O   | 🚧 core implementation landed 2026-05-28; real-host TUI validation pending |
 
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) §14 for full roadmap.
+Last updated 2026-05-28. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) §14 for the full roadmap and
+[`docs/current-state-audit.md`](./docs/current-state-audit.md) for the verified-this-pass details.
 
 Current implementation audit: [`docs/current-state-audit.md`](./docs/current-state-audit.md).
 

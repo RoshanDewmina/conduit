@@ -1,45 +1,113 @@
 import SwiftUI
 import AppFeature
+import DesignSystem
 import NotificationsKit
+import SettingsFeature
+import UserNotifications
+#if canImport(Sentry)
+import Sentry
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
 
-/// GCP VM push backend. Override in DEBUG via CONDUIT_PUSH_BACKEND_URL.
-private func pushBackendURL() -> String {
+/// Push backend HTTPS URL, injected from build config via Info.plist.
+/// Set CONDUIT_PUSH_BACKEND_URL in project.yml (or Xcode build settings) to your
+/// Cloud Run service URL — e.g. "https://conduit-push-HASH-ts.a.run.app".
+/// Empty string disables push registration silently (safe for local/simulator runs).
+/// ATS blocks any plain http:// URL in Release builds so no fallback is provided.
+private var pushBackendURL: String {
     #if DEBUG
     if let envURL = ProcessInfo.processInfo.environment["CONDUIT_PUSH_BACKEND_URL"],
        !envURL.isEmpty {
         return envURL
     }
     #endif
-    if let plist = Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String,
-       !plist.isEmpty {
-        return plist
-    }
-    return "http://35.201.3.231:8080"
+    return Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
 }
+
+// RELEASE GATE: Paste your Sentry DSN here before App Store submission.
+// Create a project at https://sentry.io (or your self-hosted instance) to get a DSN.
+// Leave empty to disable crash reporting entirely (SDK never starts).
+// Opt-out key: "dev.conduit.crashReportingOptedOut" (bool) in UserDefaults.
+private let sentryDSN = ""
 
 @main
 struct ConduitApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        DesignSystemFonts.register()
+        configureSentry()
+    }
+
+    private func configureSentry() {
+        #if canImport(Sentry)
+        guard !sentryDSN.isEmpty else { return }
+        guard !UserDefaults.standard.bool(forKey: "dev.conduit.crashReportingOptedOut") else { return }
+        SentrySDK.start { options in
+            options.dsn = sentryDSN
+            options.debug = false
+            options.tracesSampleRate = 0    // no performance tracing — crash reports only
+            options.sendDefaultPii = false  // no user PII (email, IP, etc.)
+        }
+        #if DEBUG
+        // Uncomment one line below, run on device, then re-comment to verify symbolication:
+        // SentrySDK.crash()
+        #endif
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            AppRoot()
-                .onOpenURL { url in
-                    guard url.scheme == "conduit", url.host == "billing" else { return }
-                    UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
-                }
+            rootView
         }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["CONDUIT_TERMINAL_TEST"] == "1" {
+            // New SwiftTerm-based terminal harness (live SSH). See DebugTerminalHarness.
+            DebugTerminalHarness()
+        } else {
+            appRoot
+        }
+        #else
+        appRoot
+        #endif
+    }
+
+    private var appRoot: some View {
+        AppRoot()
+            .onOpenURL { url in
+                guard url.scheme == "conduit", url.host == "billing" else { return }
+                // Store the return URL so BillingView / settings can surface it.
+                UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
+                // Refresh StoreKit entitlements — the user may have completed a
+                // purchase (StoreKit or Stripe) and returned via the deep link.
+                Task {
+                    await PurchaseManager.shared.restore()
+                    await PurchaseManager.shared.refreshCloudEntitlement()
+                }
+            }
     }
 }
 
+// MARK: - AppDelegate
+
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Singleton notification delegate kept alive for the app lifetime.
+    private let notificationDelegate = ConduitNotificationDelegate()
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Register approval + run-complete action categories.
+        Notifications.shared.registerCategories()
+        // Foreground banner + action-response handling.
+        UNUserNotificationCenter.current().delegate = notificationDelegate
         application.registerForRemoteNotifications()
         return true
     }
@@ -48,12 +116,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        guard !pushBackendURL().isEmpty else { return }
+        guard !pushBackendURL.isEmpty else { return }
         Task {
             await Notifications.shared.registerDeviceToken(
                 deviceToken,
                 sessionID: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString,
-                backendURL: pushBackendURL()
+                backendURL: pushBackendURL
             )
         }
     }
@@ -70,7 +138,71 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        // Background push received — handled by existing local notification flow.
-        completionHandler(.noData)
+        // Broadcast so the Inbox can refresh approval/run-complete state in background.
+        NotificationCenter.default.post(
+            name: .conduitRemoteApprovalReceived,
+            object: nil,
+            userInfo: userInfo
+        )
+        completionHandler(.newData)
+    }
+}
+
+// MARK: - Notification delegate (separate class avoids Swift 6 actor-isolation conflict)
+
+/// Handles UNUserNotificationCenter callbacks: foreground banner display and
+/// action-button responses (Approve/Reject from the lock screen).
+final class ConduitNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+
+    /// Show banners even when the app is in the foreground.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// Route lock-screen action buttons (Approve / Reject / View) into the app.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let info      = response.notification.request.content.userInfo
+        let approvalId = info["approvalId"] as? String ?? ""
+        let sessionId  = info["sessionId"]  as? String ?? ""
+
+        switch response.actionIdentifier {
+        case "approval.approve":
+            NotificationCenter.default.post(
+                name: .conduitApprovalAction,
+                object: nil,
+                userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": "approve"]
+            )
+        case "approval.reject":
+            NotificationCenter.default.post(
+                name: .conduitApprovalAction,
+                object: nil,
+                userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": "reject"]
+            )
+        case "run.view":
+            NotificationCenter.default.post(
+                name: .conduitRunCompleteAction,
+                object: nil,
+                userInfo: ["sessionId": sessionId]
+            )
+        case UNNotificationDefaultActionIdentifier:
+            // Tapping the notification body (not an action button) — bring the
+            // user to the relevant session rather than doing nothing.
+            NotificationCenter.default.post(
+                name: .conduitRunCompleteAction,
+                object: nil,
+                userInfo: ["sessionId": sessionId]
+            )
+        default:
+            break
+        }
+        completionHandler()
     }
 }

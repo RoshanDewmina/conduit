@@ -16,8 +16,20 @@ public enum ShellIntegrationScript {
         return fallbackScript(for: shell)
     }
 
+    /// COLORFGBG environment hint for remote TUI programs (Claude Code, codex, etc.).
+    /// Dark terminal themes → `15;0` (white fg on black bg), Light → `0;15`.
+    /// Remote apps read COLORFGBG at startup to auto-select their colour scheme,
+    /// avoiding the need to run `/theme` manually after every connect.
+    public static func colorfgbgExport() -> String {
+        let themeName = UserDefaults.standard.string(forKey: "terminalTheme") ?? "Dark"
+        let isDark = themeName != "Light"
+        return isDark ? "export COLORFGBG='15;0'" : "export COLORFGBG='0;15'"
+    }
+
     public static func bootstrapForPOSIXShells() -> String {
-        """
+        let colorHint = colorfgbgExport()
+        return """
+        \(colorHint)
         __conduit_prompt_command() {
           local __conduit_status="$?"
           printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$__conduit_status" "${HOST:-${HOSTNAME:-localhost}}" "$PWD"
@@ -31,6 +43,10 @@ public enum ShellIntegrationScript {
           add-zsh-hook -d preexec __conduit_preexec 2>/dev/null
           add-zsh-hook precmd __conduit_prompt_command
           add-zsh-hook preexec __conduit_preexec
+          # Suppress the partial-line marker ("%") zsh prints before a prompt
+          # when the last command's output lacked a trailing newline — it would
+          # otherwise leak into block output.
+          PROMPT_EOL_MARK=''
         elif [ -n "${BASH_VERSION-}" ]; then
           __conduit_prompt_command() { local __conduit_status="$?"; trap '__conduit_preexec' DEBUG; printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$__conduit_status" "${HOSTNAME:-${HOST:-localhost}}" "$PWD"; }
           __conduit_preexec() { printf '\\033]133;C\\007'; trap - DEBUG; }
@@ -38,6 +54,27 @@ public enum ShellIntegrationScript {
           trap '__conduit_preexec' DEBUG
         fi
         """
+    }
+
+    /// Encodes `script` as base64 and returns a single newline-free eval line.
+    /// Works on both BSD base64 (macOS/iOS) and GNU base64: `--decode` is the
+    /// portable flag; `-d`/`-D` diverge between implementations.
+    private static func singleLineEval(_ script: String) -> String {
+        let b64 = Data(script.utf8).base64EncodedString()
+        return #"eval "$(printf %s '\#(b64)' | base64 --decode)""#
+    }
+
+    /// Returns a single newline-free line that installs the POSIX integration
+    /// hooks into the running interactive shell via eval+base64.
+    public static func bootstrapForPOSIXShellsOneLine() -> String {
+        return singleLineEval(bootstrapForPOSIXShells())
+    }
+
+    /// Returns a single newline-free line for fish shell.
+    public static func bootstrapForFishOneLine() -> String {
+        let script = script(for: .fish)
+        let b64 = Data(script.utf8).base64EncodedString()
+        return "eval (printf %s '\(b64)' | base64 --decode)"
     }
 
     private static func fallbackScript(for shell: Shell) -> String {
@@ -54,9 +91,11 @@ public enum ShellIntegrationScript {
             __conduit_precmd() { local s="$?"; printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' "$s" "${HOST:-${HOSTNAME:-localhost}}" "$PWD"; }
             __conduit_preexec() { printf '\\033]133;C\\007'; }
             add-zsh-hook precmd __conduit_precmd; add-zsh-hook preexec __conduit_preexec
+            PROMPT_EOL_MARK=''
             """
         case .fish:
             return """
+            set -gx COLORFGBG '15;0'
             function __conduit_prompt --on-event fish_prompt; set -l s $status; printf '\\033]133;D;%s\\007\\033]133;A\\007\\033]7;file://%s%s\\007' $s (hostname) (pwd); end
             function __conduit_preexec --on-event fish_preexec; printf '\\033]133;C\\007'; end
             """

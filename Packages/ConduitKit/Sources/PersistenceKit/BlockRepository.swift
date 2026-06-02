@@ -39,6 +39,13 @@ public actor BlockRepository {
                 block.originatingSnippetID?.uuidString,
             ])
 
+            // Keep the FTS index in sync with the (possibly upserted) block row.
+            // Streaming updates re-persist the same block id, so delete any prior
+            // FTS row for this rowid before re-inserting — otherwise the index
+            // accumulates stale duplicate rows and search misses the latest output.
+            try db.execute(sql: """
+                DELETE FROM blocks_fts WHERE rowid = (SELECT rowid FROM blocks WHERE id = ?)
+            """, arguments: [block.id.uuidString])
             try db.execute(sql: """
                 INSERT INTO blocks_fts (rowid, command, output)
                 VALUES ((SELECT rowid FROM blocks WHERE id = ?), ?, ?)

@@ -1,18 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-// Private helper: map AgentState → HUD color (always-dark palette, matches DI constants).
-private func agentStateColor(_ state: AgentState) -> Color {
-    switch state {
-    case .thinking:  Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1) // blue
-    case .streaming: Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1) // blue
-    case .approval:  Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1) // amber
-    case .done:      Color(.sRGB, red: 0.247, green: 0.753, blue: 0.435, opacity: 1) // green
-    case .error:     Color(.sRGB, red: 0.875, green: 0.353, blue: 0.290, opacity: 1) // red
-    case .offline:   Color(.sRGB, red: 0.400, green: 0.384, blue: 0.357, opacity: 1) // dim
-    }
-}
-
 // ============================================================
 // Agent Island — an in-app agent HUD banner.
 //
@@ -33,8 +21,6 @@ private func agentStateColor(_ state: AgentState) -> Color {
 // the existing `PixelBox(state:)`; avatars are `PixelAvatar`.
 //
 // Store-free: hand it `agents` + callbacks. `AgentIslandHost` mounts it.
-//
-// STATUS: DORMANT — not mounted in the live app. Gallery-only via hud route.
 // ============================================================
 
 public enum AgentDecision: Sendable { case approve, deny }
@@ -46,6 +32,7 @@ public struct AgentIsland: View {
     var onResolve: (UUID, AgentDecision) -> Void
 
     @State private var expanded = false
+    @State private var panelH: CGFloat = 220
     @State private var nudge = false
 
     public init(
@@ -76,6 +63,7 @@ public struct AgentIsland: View {
     private var compactW: CGFloat { (hasApproval ? 272 : 250) }
     private var panelW: CGFloat { min(screenWidth - 28, 372) }
     private var shellW: CGFloat { expanded ? panelW : compactW }
+    private var shellH: CGFloat { expanded ? panelH : 38 }
     private var shellR: CGFloat { expanded ? 34 : 19 }
 
     public var body: some View {
@@ -106,14 +94,14 @@ public struct AgentIsland: View {
 
             expandedLayer
                 .frame(width: panelW, alignment: .top)
-                // fixedSize lets the panel grow to intrinsic content height,
-                // fixing the expanded-panel-renders-black regression (cc5bd86).
                 .fixedSize(horizontal: false, vertical: true)
                 .opacity(expanded ? 1 : 0)
                 .scaleEffect(expanded ? 1 : 0.97, anchor: .top)
         }
         // Width morphs between compact and panel; height is intrinsic when expanded
         // (sized to panel content) and pinned to pill height when collapsed.
+        // A prior GeometryReader→panelH→shellH→clipShape feedback loop collapsed
+        // panelH to ~0, so content stayed in the a11y tree but never painted.
         .frame(width: shellW, alignment: .top)
         .frame(height: expanded ? nil : 38, alignment: .top)
         .background(DI.bg(approval: hasApproval))
@@ -154,10 +142,10 @@ public struct AgentIsland: View {
     private var compactLayer: some View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
-                PixelBox(color: agentStateColor(primary.state), size: 14)
+                PixelBox(state: primary.state, size: 14)
                 Text(primary.state.islandLabel)
                     .font(.dsSansPt(15, weight: .semibold))
-                    .foregroundStyle(agentStateColor(primary.state))
+                    .foregroundStyle(PixelBox.stateColor(primary.state))
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -243,11 +231,11 @@ private struct StateBadge: View {
     let state: AgentState
     var body: some View {
         HStack(spacing: 6) {
-            PixelBox(color: agentStateColor(state), size: 11)
+            PixelBox(state: state, size: 11)
             Text(state.islandLabel)
                 .font(.dsSansPt(12.5, weight: .semibold))
         }
-        .foregroundStyle(agentStateColor(state))
+        .foregroundStyle(PixelBox.stateColor(state))
         .padding(.init(top: 4, leading: 8, bottom: 4, trailing: 10))
         .background(Color.white.opacity(0.06), in: Capsule())
         .fixedSize()
@@ -313,7 +301,7 @@ private struct InlineApproval: View {
         let ap = agent.approval
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                PixelBox(color: DI.approval, size: 12)
+                PixelBox(state: .approval, size: 12)
                 Text("\(agent.name) wants to run")
                     .font(.dsSansPt(12.5, weight: .semibold))
                     .foregroundStyle(DI.approval)
@@ -324,10 +312,9 @@ private struct InlineApproval: View {
                         .foregroundStyle(riskColor(risk))
                 }
             }
-            // No lineLimit — the full command must be readable before the user
-            // can approve. Truncating the middle could hide dangerous command parts.
             Text(ap?.cmd ?? agent.tool ?? "")
                 .font(DI.mono(12)).foregroundStyle(DI.ink)
+                .lineLimit(1).truncationMode(.middle)
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -356,10 +343,10 @@ private struct InlineApproval: View {
 
     private func riskColor(_ r: AgentApproval.Risk) -> Color {
         switch r {
-        case .low:      agentStateColor(.done)
-        case .medium:   DI.approval
-        case .high:     agentStateColor(.thinking)
-        case .critical: agentStateColor(.error)
+        case .low: PixelBox.stateColor(.done)
+        case .medium: DI.approval
+        case .high: PixelBox.stateColor(.thinking)
+        case .critical: PixelBox.stateColor(.error)
         }
     }
 }
@@ -384,8 +371,8 @@ private struct AgentRow: View {
                 Spacer(minLength: 0)
                 Text(agent.state.islandLabel)
                     .font(.dsSansPt(11.5, weight: .semibold))
-                    .foregroundStyle(agentStateColor(agent.state))
-                PixelBox(color: agentStateColor(agent.state), size: 11)
+                    .foregroundStyle(PixelBox.stateColor(agent.state))
+                PixelBox(state: agent.state, size: 11)
                 Image(systemName: "chevron.right")
                     .font(.dsSansPt(10, weight: .bold))
                     .foregroundStyle(Color(.sRGB, red: 0.27, green: 0.255, blue: 0.235, opacity: 1))
@@ -394,6 +381,21 @@ private struct AgentRow: View {
             .opacity(agent.state == .offline ? 0.55 : 1)
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+// ── height measurement (mirrors the design's ResizeObserver) ──
+private struct HeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+private extension View {
+    func measureHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: HeightKey.self, value: g.size.height)
+        })
+        .onPreferenceChange(HeightKey.self, perform: onChange)
     }
 }
 #endif

@@ -1,0 +1,23 @@
+{
+  "name": "minimalistic-ui-animations",
+  "version": "1.0.0",
+  "description": "Minimalistic UI animations built with Remotion",
+  "scripts": {
+    "start": "npx remotion studio",
+    "render": "npx remotion render",
+    "build": "npx remotion bundle"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0"
+  },
+  "remotion": {
+    "entryPoint": "src/index.tsx"
+  }
+}

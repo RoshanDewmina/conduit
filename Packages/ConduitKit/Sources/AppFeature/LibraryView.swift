@@ -25,6 +25,7 @@ public struct LibraryView: View {
         self.agentStore = agentStore
     }
 
+    private var workflowCount: Int { LibraryMocks.workflows.count }
     private var agentCount: Int { agentStore.hasCloudEntitlement ? agentStore.agents.count : 0 }
 
     public var body: some View {
@@ -35,7 +36,7 @@ public struct LibraryView: View {
                     DSIconButton(.plus) { /* new snippet — TODO */ }
                 }
 
-                if snippetCount == 0 && keyCount == 0 && !agentStore.hasCloudEntitlement {
+                if snippetCount == 0 && keyCount == 0 && workflowCount == 0 && !agentStore.hasCloudEntitlement {
                     Spacer()
                     DSEmptyState(
                         icon: .list,
@@ -51,7 +52,7 @@ public struct LibraryView: View {
                                 spacing: 12
                             ) {
                                 NavigationLink {
-                                    SnippetEditorView(repository: snippetRepo)
+                                    SnippetsLibraryView(repository: snippetRepo)
                                 } label: {
                                     DSCategoryCard(
                                         icon: .list,
@@ -63,13 +64,25 @@ public struct LibraryView: View {
                                 .buttonStyle(.plain)
 
                                 NavigationLink {
-                                    KeysView(viewModel: KeysViewModel(store: keyStore))
+                                    KeysManagementView(keyStore: keyStore)
                                 } label: {
                                     DSCategoryCard(
                                         icon: .key,
                                         count: "\(keyCount)",
                                         label: "SSH Keys",
-                                        subtitle: "on-device keychain"
+                                        subtitle: "enclave-backed"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                NavigationLink {
+                                    WorkflowBuilderView()
+                                } label: {
+                                    DSCategoryCard(
+                                        icon: .diff,
+                                        count: "\(workflowCount)",
+                                        label: "Workflows",
+                                        subtitle: "multi-step runs"
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -97,7 +110,7 @@ public struct LibraryView: View {
                                     ForEach(recentSnippets) { snippet in
                                         DSSnippetRow(
                                             name: snippet.name,
-                                            snippetBody: snippet.body,
+                                            body: snippet.body,
                                             useCount: snippet.useCount
                                         ) { /* run snippet — TODO */ }
                                         DSDivider()
@@ -137,76 +150,4 @@ public struct LibraryView: View {
         keyCount = k.count
     }
 }
-
-
-private struct DSCategoryCard: View {
-    let icon: DSIcon
-    let count: String
-    let label: String
-    let subtitle: String
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                DSIconView(icon, size: 16, color: t.accent)
-                Spacer()
-                Text(count)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-            }
-            Text(label)
-                .font(.dsSansPt(14, weight: .semibold))
-                .foregroundStyle(t.text)
-            Text(subtitle)
-                .font(.dsMonoPt(10))
-                .foregroundStyle(t.text3)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(t.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(t.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct DSSnippetRow: View {
-    let name: String
-    let snippetBody: String
-    let useCount: Int
-    let action: () -> Void
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 10) {
-                DSIconView(.command, size: 14, color: t.text3)
-                    .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(name)
-                        .font(.dsSansPt(13, weight: .semibold))
-                        .foregroundStyle(t.text)
-                    Text(snippetBody)
-                        .font(.dsMonoPt(10))
-                        .foregroundStyle(t.text3)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Text("\(useCount)x")
-                    .font(.dsMonoPt(10))
-                    .foregroundStyle(t.text3)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 #endif

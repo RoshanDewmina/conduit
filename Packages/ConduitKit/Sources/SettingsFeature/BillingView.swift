@@ -62,6 +62,7 @@ public struct BillingView: View {
                                     "unlock conduit pro · \(pm.product?.displayPrice ?? "$14.99") once",
                                     variant: .primary,
                                     size: .sm,
+                                    mono: true,
                                     isLoading: {
                                         if case .purchasing = pm.purchaseState { return true }
                                         return false

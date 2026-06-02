@@ -1,10 +1,10 @@
 {
-  "identifier" : "dev.conduit.mobile.storekit",
+  "identifier" : "1B5E8F3A-0C7D-4E9A-9F2B-3D6A1C4E7B8F",
   "nonConsumableProducts" : [
     {
       "displayPrice" : "14.99",
       "familyShareable" : false,
-      "internalID" : "dev.conduit.mobile.pro",
+      "internalID" : "6740914657",
       "localizations" : [
         {
           "description" : "Full access to all Conduit features: AI agent approval inbox, SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH hosts.",
@@ -17,9 +17,58 @@
       "type" : "NonConsumable"
     }
   ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
   "version" : {
     "major" : 3,
-    "minor" : 0,
-    "patch" : 0
+    "minor" : 0
   }
 }

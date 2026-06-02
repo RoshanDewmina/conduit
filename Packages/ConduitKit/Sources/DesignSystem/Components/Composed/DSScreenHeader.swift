@@ -95,9 +95,7 @@ public struct DSDetailHeader<Trailing: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 if let onBack {
-                    Button {
-                        onBack()
-                    } label: {
+                    Button(action: onBack) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(t.text)
@@ -149,9 +147,7 @@ public struct DSIconButton: View {
     }
 
     public var body: some View {
-        Button {
-            action()
-        } label: {
+        Button(action: action) {
             DSIconView(icon, size: 17, color: t.text)
                 .frame(width: 36, height: 36)
                 .background(t.surface2)

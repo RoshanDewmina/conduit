@@ -28,10 +28,12 @@ public final class AppEnvironment {
     public let hostRepo: HostRepository
     public let snippetRepo: SnippetRepository
     public let blockRepo: BlockRepository
+    public let snapshotRepo: SessionSnapshotRepository
     public let keyStore: KeyStore
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
+    public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
 
@@ -40,15 +42,19 @@ public final class AppEnvironment {
         self.hostRepo = HostRepository(database)
         self.snippetRepo = SnippetRepository(db: database)
         self.blockRepo = BlockRepository(database)
+        self.snapshotRepo = SessionSnapshotRepository(database)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
-        let cloudKitEnabled = Bundle.main.object(forInfoDictionaryKey: "ConduitCloudKitEnabled") as? Bool == true
-        let cloudSync = CloudSync(cloudKitEnabled: cloudKitEnabled)
+        self.tombstoneRepo = SyncTombstoneRepository(database)
+        let cloudSync = CloudSync()
+        let ks = self.keyStore
         self.syncEngine = SyncEngine(
             cloudSync: cloudSync,
             hostRepo: HostRepository(database),
-            snippetRepo: SnippetRepository(db: database)
+            snippetRepo: SnippetRepository(db: database),
+            tombstoneRepo: SyncTombstoneRepository(database),
+            keyStore: ks
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
@@ -100,7 +106,7 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
-    @State private var selectedTab: Tab = .sessions
+    @State private var selectedTab: Tab = .hosts
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
     @State private var editingHost: Host?
@@ -109,6 +115,7 @@ public struct AppRoot: View {
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
+    @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
@@ -141,40 +148,46 @@ public struct AppRoot: View {
     @State private var agentStore: AgentStore?
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
+    @State private var isShowingLiveSession = false
 
     private var isPro: Bool {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["CONDUIT_FORCE_PRO"] == "1" { return true }
-        #endif
+        // RELEASE GATE: Pro is force-unlocked in all debug builds for UX evaluation.
+        // Delete this block entirely before submitting to App Store.
+        #warning("isPro always returns true in DEBUG — remove before App Store release")
+        return true
+        #else
         switch pm.purchaseState {
-        case .purchased, .unknown: return true
+        case .purchased: return true
+        // .unknown = purchase state not yet loaded; keep locked rather than granting free Pro.
         default: return false
         }
+        #endif
     }
 
     public enum Tab: Hashable, Sendable {
-        case sessions    // Sessions Home (was: session)
-        case hosts       // Host list (was: workspaces)
+        case hosts
         case inbox
+        case library
         case settings
 
-        static let rootTabs: [Tab] = [.sessions, .hosts, .inbox, .settings]
+        static let rootTabs: [Tab] = [.hosts, .inbox, .library, .settings]
 
         var title: String {
             switch self {
-            case .sessions:  "Sessions"
-            case .hosts:     "Hosts"
-            case .inbox:     "Inbox"
-            case .settings:  "Settings"
+            case .hosts:    "Hosts"
+            case .inbox:    "Inbox"
+            case .library:  "Library"
+            case .settings: "Settings"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .sessions:  "bubble.left.and.text.bubble.right"
-            case .hosts:     "server.rack"
-            case .inbox:     "tray"
-            case .settings:  "gear"
+            case .hosts:    "server.rack"
+            case .inbox:    "tray"
+            case .library:  "square.grid.2x2"
+            case .settings: "gear"
             }
         }
     }
@@ -197,8 +210,9 @@ public struct AppRoot: View {
             switch tab {
             case "hosts":    _selectedTab = State(initialValue: .hosts)
             case "inbox":    _selectedTab = State(initialValue: .inbox)
+            case "library":  _selectedTab = State(initialValue: .library)
             case "settings": _selectedTab = State(initialValue: .settings)
-            default:         _selectedTab = State(initialValue: .sessions)
+            default:         _selectedTab = State(initialValue: .hosts)
             }
         }
         #endif
@@ -242,7 +256,12 @@ public struct AppRoot: View {
         .task { watchConnector.activate() }
         .task { await pm.load() }
         .task {
-            await Notifications.shared.registerCategories()
+            if case .ready(let env) = environment {
+                await configureCloudServices(env: env)
+            }
+        }
+        .task {
+            Notifications.shared.registerCategories()
             _ = await Notifications.shared.requestAuthorization()
         }
         .sheet(isPresented: $showingPaywall) {
@@ -272,6 +291,30 @@ public struct AppRoot: View {
                 isUnlocked = true
             }
         }
+        // Route lock-screen Approve/Reject notification actions into the same
+        // decision path the in-app Inbox uses. ConduitNotificationDelegate posts
+        // these names; without an observer the buttons were silently dead.
+        .onReceive(NotificationCenter.default.publisher(for: .conduitApprovalAction)) { note in
+            handleApprovalAction(note)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { _ in
+            if sessionViewModel != nil { isShowingLiveSession = true }
+        }
+    }
+
+    /// Applies an Approve/Reject decision delivered from a notification action
+    /// button via `Notification.Name.conduitApprovalAction`. Routes through
+    /// `activeInboxViewModel.decide` — the live VM forwards to the daemon channel
+    /// and persists; the static fallback updates in-memory state.
+    private func handleApprovalAction(_ note: Notification) {
+        guard
+            let info = note.userInfo,
+            let idString = info["approvalId"] as? String,
+            let uuid = UUID(uuidString: idString),
+            let action = info["action"] as? String
+        else { return }
+        let decision: Approval.Decision = (action == "approve") ? .approved : .rejected
+        activeInboxViewModel.decide(ApprovalID(uuid), decision: decision)
     }
 
     private func attemptUnlock() async {
@@ -318,8 +361,11 @@ public struct AppRoot: View {
         }
         .sheet(isPresented: $addHostPresented) {
             NavigationStack {
-                HostEditorView(
-                    viewModel: HostEditorViewModel(repository: env.hostRepo, keyStore: env.keyStore) { host in
+                AddHostView(
+                    repository: env.hostRepo,
+                    keyStore: env.keyStore,
+                    onCancel: { addHostPresented = false },
+                    onConnectAndSave: { host in
                         addHostPresented = false
                         workspacesRevision = UUID()
                         Task { @MainActor in
@@ -352,6 +398,22 @@ public struct AppRoot: View {
                     env: env,
                     credentialProvider: { .password(password) }
                 )
+            }
+            .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            .preferredColorScheme(preferredScheme)
+        }
+        // Re-prompt after consecutive auth failures on an existing session,
+        // reusing the same SessionViewModel rather than creating a new one.
+        .sheet(isPresented: Binding(
+            get: { sessionViewModel?.awaitingPasswordRetry == true },
+            set: { if !$0 { sessionViewModel?.cancelPasswordRetry() } }
+        )) {
+            if let vm = sessionViewModel {
+                PasswordPromptView(host: vm.host) { password in
+                    Task { await vm.retryWithNewPassword(password) }
+                }
+                .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+                .preferredColorScheme(preferredScheme)
             }
         }
         .sheet(isPresented: Binding(
@@ -387,10 +449,25 @@ public struct AppRoot: View {
 
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
-        if horizontalSizeClass == .regular {
-            regularRoot(env: env)
-        } else {
-            compactRoot(env: env)
+        Group {
+            if horizontalSizeClass == .regular {
+                regularRoot(env: env)
+            } else {
+                compactRoot(env: env)
+            }
+        }
+        // Agent status header — a slim, in-layout strip shown only while a live
+        // session exists (the store returns no agents when idle). Each tab renders
+        // it below its own title row — passed as statusHeaderAgents to every tab
+        // view so placement is consistent. Hidden behind the live SessionView cover.
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
+        .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
+            hudStore.pendingApprovals = count
+            // Keep the real Dynamic Island / lock-screen Live Activity badge
+            // live — this is the glanceable signal while Conduit is backgrounded.
+            if #available(iOS 16.2, *) {
+                Task { await ConduitLiveActivityManager.shared.updatePendingApprovals(count) }
+            }
         }
     }
 
@@ -415,91 +492,171 @@ public struct AppRoot: View {
         inboxVM = liveVM
     }
 
-    private func compactRoot(env: AppEnvironment) -> some View {
-        TabView(selection: $selectedTab) {
-            rootDestination(.sessions, env: env)
-                .tabItem { Label(Tab.sessions.title, systemImage: Tab.sessions.systemImage) }
-                .tag(Tab.sessions)
+    @Environment(\.conduitTokens) private var t
 
+    private func compactRoot(env: AppEnvironment) -> some View {
+        let inboxBadge = activeInboxViewModel.approvals.filter(\.isPending).count > 0
+        let tabItems: [DSTabItem] = [
+            DSTabItem(id: "hosts",    icon: .server,   label: "Hosts"),
+            DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
+            DSTabItem(id: "library",  icon: .list,     label: "Library"),
+            DSTabItem(id: "settings", icon: .settings, label: "Settings"),
+        ]
+
+        let tabID = Binding<String>(
+            get: {
+                switch selectedTab {
+                case .hosts:    "hosts"
+                case .inbox:    "inbox"
+                case .library:  "library"
+                case .settings: "settings"
+                }
+            },
+            set: { id in
+                switch id {
+                case "hosts":    selectedTab = .hosts
+                case "inbox":    selectedTab = .inbox
+                case "library":  selectedTab = .library
+                case "settings": selectedTab = .settings
+                default:         selectedTab = .hosts
+                }
+            }
+        )
+
+        return ZStack {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                PersistentStatusBar(
+                    agents: isShowingLiveSession ? [] : hudStore.agents,
+                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                    // Manual retry after the auto-reconnect engine gives up
+                    // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
+                    // re-arms a session stuck in `.failed`.
+                    onReconnect: sessionViewModel == nil ? nil : {
+                        Task { await sessionViewModel?.reconnect() }
+                    }
+                )
+                tabContent(env: env, tabItems: tabItems, tabID: tabID)
+            }
+        }
+        .fullScreenCover(isPresented: $isShowingLiveSession) {
+            if let vm = sessionViewModel {
+                SessionView(viewModel: vm)
+                    .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            }
+        }
+    }
+
+    // Tab bar is placed INSIDE each tab's root view so NavigationStack push
+    // naturally hides it — pushed detail views don't inherit the safeAreaInset.
+    @ViewBuilder
+    private func tabContent(env: AppEnvironment, tabItems: [DSTabItem], tabID: Binding<String>) -> some View {
+        let bar = DSTabBar(items: tabItems, selectedID: tabID)
+
+        switch selectedTab {
+        case .hosts:
             NavigationStack {
                 rootDestination(.hosts, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-            .tabItem { Label(Tab.hosts.title, systemImage: Tab.hosts.systemImage) }
-            .tag(Tab.hosts)
-
+        case .inbox:
             NavigationStack {
                 rootDestination(.inbox, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-            .tabItem { Label(Tab.inbox.title, systemImage: Tab.inbox.systemImage) }
-            .badge(activeInboxViewModel.approvals.filter(\.isPending).count)
-            .tag(Tab.inbox)
-
+        case .library:
+            NavigationStack {
+                rootDestination(.library, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+            }
+        case .settings:
             NavigationStack {
                 rootDestination(.settings, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-            .tabItem { Label(Tab.settings.title, systemImage: Tab.settings.systemImage) }
-            .tag(Tab.settings)
         }
-        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
     }
 
     private func regularRoot(env: AppEnvironment) -> some View {
-        NavigationSplitView {
-            List(selection: splitSelection) {
-                ForEach(Tab.rootTabs, id: \.self) { tab in
-                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
+        ZStack {
+            t.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                PersistentStatusBar(
+                    agents: isShowingLiveSession ? [] : hudStore.agents,
+                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                    onReconnect: sessionViewModel == nil ? nil : {
+                        Task { await sessionViewModel?.reconnect() }
+                    }
+                )
+                NavigationSplitView {
+                    List(selection: splitSelection) {
+                        ForEach(Tab.rootTabs, id: \.self) { tab in
+                            Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                        }
+                    }
+                    .navigationTitle("Conduit")
+                } detail: {
+                    rootDestination(selectedTab, env: env)
                 }
             }
-            .navigationTitle("Conduit")
-        } detail: {
-            rootDestination(selectedTab, env: env)
+        }
+        .fullScreenCover(isPresented: $isShowingLiveSession) {
+            if let vm = sessionViewModel {
+                SessionView(viewModel: vm)
+                    .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+            }
         }
     }
 
-    @ViewBuilder
-    private func sessionsHome(env: AppEnvironment) -> some View {
-        SessionsHomeView(
-            liveSession: sessionViewModel,
-            liveInboxVM: liveInboxVM,
-            hostRepo: env.hostRepo,
-            blockRepo: env.blockRepo,
-            onTapLiveSession: { selectedTab = .sessions },
-            onAddSession: {
-                addHostPresented = true
-                selectedTab = .hosts
+    /// Tear down the live session and clear it from the UI. Used by the
+    /// active-row long-press menu and (indirectly) the in-session menu.
+    private func disconnectLiveSession() {
+        guard let vm = sessionViewModel else { return }
+        Task {
+            await vm.disconnect()
+            await MainActor.run {
+                sessionViewModel = nil
+                hudStore.session = nil
             }
-        )
+        }
     }
 
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
         switch tab {
-        case .sessions:
-            sessionsHome(env: env)
-
         case .hosts:
-            WorkspacesView(
-                viewModel: WorkspacesViewModel(repository: env.hostRepo),
-                onSelect: { host in openSession(host: host, env: env) },
-                onEdit: { host in editingHost = host },
+            HostsView(
+                liveSession: sessionViewModel,
+                liveInboxVM: liveInboxVM,
+                hostRepo: env.hostRepo,
+                blockRepo: env.blockRepo,
+                snapshotRepo: env.snapshotRepo,
+                onTapLiveSession: { isShowingLiveSession = true },
+                onDisconnectLiveSession: { disconnectLiveSession() },
                 onAddHost: { addHostPresented = true },
-                onAddHostGated: isPro ? nil : {
-                    paywallFeatureName = "Unlimited SSH Hosts"
-                    showingPaywall = true
-                }
+                onSelect: { host in openSession(host: host, env: env) },
+                onEdit: { host in editingHost = host }
             )
             .id(workspacesRevision)
 
         case .inbox:
-            if isPro {
-                InboxView(viewModel: activeInboxViewModel)
+            InboxView(
+                viewModel: activeInboxViewModel,
+                statusHeaderAgents: [],
+                onTapStatusHeader: {}
+            )
+
+        case .library:
+            if let agentStore {
+                LibraryView(
+                    snippetRepo: env.snippetRepo,
+                    keyStore: env.keyStore,
+                    agentStore: agentStore
+                )
             } else {
-                GlobalInboxGateView {
-                    paywallFeatureName = "AI Agent Inbox"
-                    showingPaywall = true
-                }
+                ProgressView("Loading library…")
             }
+
         case .settings:
             SettingsView(
                 viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
@@ -532,7 +689,7 @@ public struct AppRoot: View {
                                 Label("Snippets", systemImage: "text.quote")
                             }
                             NavigationLink {
-                                KeysView(viewModel: KeysViewModel(store: env.keyStore))
+                                KeysView(viewModel: KeysViewModel(store: env.keyStore), store: env.keyStore)
                             } label: {
                                 Label("SSH Keys", systemImage: "key")
                             }
@@ -659,12 +816,14 @@ public struct AppRoot: View {
                     }
                 )
                 self.sessionViewModel = vm
+                self.hudStore.session = vm
                 self.approvalRepository = approvalRepo
                 self.daemonChannel = channel
                 self.approvalIngest = ingest
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
-                self.selectedTab = .sessions
+                self.selectedTab = .hosts
+                self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
                         guard let vm else { return }
@@ -751,33 +910,112 @@ private struct PasswordPromptView: View {
 
     @State private var password = ""
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+    @FocusState private var passwordFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Host") {
-                    LabeledContent("Address", value: host.displayAddress)
-                }
-                Section("Password") {
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                }
-            }
-            .navigationTitle("Connect")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") {
-                        let value = password
-                        dismiss()
-                        onConnect(value)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Title row + close
+                HStack {
+                    Text("Connect")
+                        .font(.dsDisplayPt(28, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(t.text3)
+                            .frame(width: 30, height: 30)
+                            .background(t.surfaceSunk, in: Circle())
                     }
-                    .disabled(password.isEmpty)
+                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 18)
+
+                // ── Host identity card
+                card {
+                    HStack(spacing: 12) {
+                        PixelAvatar(seed: host.name, size: 44)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(host.name)
+                                .font(.dsSansPt(16, weight: .semibold))
+                                .foregroundStyle(t.text)
+                                .lineLimit(1)
+                            Text(host.displayAddress)
+                                .font(.dsMonoPt(12))
+                                .foregroundStyle(t.text3)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+
+                // ── Password
+                Text("PASSWORD")
+                    .font(.dsMonoPt(11))
+                    .tracking(0.8)
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+                SecureField("Password", text: $password)
+                    .font(.dsMonoPt(14))
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($passwordFocused)
+                    .submitLabel(.go)
+                    .onSubmit(connect)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+                    .background(t.surfaceSunk)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+
+                Spacer()
+
+                // ── Connect CTA (content-width, centered — house style)
+                HStack {
+                    Spacer()
+                    DSButton("Connect", variant: .primary, size: .lg, action: connect)
+                        .disabled(password.isEmpty)
+                    Spacer()
+                }
+                .padding(.bottom, 28)
             }
         }
+        .presentationDetents([.medium])
+        .onAppear { passwordFocused = true }
+    }
+
+    private func connect() {
+        guard !password.isEmpty else { return }
+        let value = password
+        dismiss()
+        onConnect(value)
+    }
+
+    @ViewBuilder
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
     }
 }
 

@@ -11,6 +11,10 @@ import DesignSystem
 public struct ToolCardView<Footer: View>: View {
     let block: Block
     let render: AttributedString
+    /// Number of lines silently dropped from the top of this block's output
+    /// because it exceeded `BlockRenderer.maxLinearLines`. Zero means no
+    /// truncation. Non-zero renders a "⚠ N earlier lines dropped" notice.
+    let droppedLineCount: Int
     let liveHandle: TerminalFeedHandle?
     let onLiveBytes: ((ArraySlice<UInt8>) -> Void)?
     let onLiveResize: ((Int, Int) -> Void)?
@@ -24,11 +28,13 @@ public struct ToolCardView<Footer: View>: View {
     @State private var searchQuery = ""
     @State private var runningPhase = false
 
+    @AppStorage("terminalFontSize") private var termFontSize: Double = 11
     @Environment(\.conduitTokens) private var t
 
     public init(
         block: Block,
         render: AttributedString,
+        droppedLineCount: Int = 0,
         liveHandle: TerminalFeedHandle? = nil,
         onLiveBytes: ((ArraySlice<UInt8>) -> Void)? = nil,
         onLiveResize: ((Int, Int) -> Void)? = nil,
@@ -40,6 +46,7 @@ public struct ToolCardView<Footer: View>: View {
     ) {
         self.block = block
         self.render = render
+        self.droppedLineCount = droppedLineCount
         self.liveHandle = liveHandle
         self.onLiveBytes = onLiveBytes
         self.onLiveResize = onLiveResize
@@ -65,6 +72,9 @@ public struct ToolCardView<Footer: View>: View {
         liveHandle != nil && block.state == .executing
     }
 
+    /// Full-size inline TUI height — only used when a live TUI handle is actively
+    /// rendering cursor-positioning content. Matches screen × 0.55, clamped to
+    /// 360…720 pt. Short/idle blocks skip this floor and size to their content.
     private var inlineTerminalHeight: CGFloat {
         #if os(iOS)
         let screenH = UIApplication.shared.connectedScenes
@@ -74,6 +84,13 @@ public struct ToolCardView<Footer: View>: View {
         #else
         return 420
         #endif
+    }
+
+    /// Returns `true` only when the live TUI handle is actively rendering and the
+    /// block is executing in alt-screen / inline-TUI mode. Idle and finished blocks
+    /// always return `false` so they don't reserve the large height floor.
+    private var needsFullTUIHeight: Bool {
+        hasLiveTerminal
     }
 
     private var highlightedRender: AttributedString {
@@ -93,34 +110,41 @@ public struct ToolCardView<Footer: View>: View {
     // MARK: - Body
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // ── Top state strip (matches tc2 design) ──────────────────────
+        HStack(alignment: .top, spacing: 0) {
+            // ── Left gutter accent by state (matches DSBlockCard) ──────────
             Rectangle()
-                .fill(stripColor)
-                .frame(height: 3)
+                .fill(gutterColor)
+                .frame(width: 3)
 
-            // ── Header strip ──────────────────────────────────────────────
-            cardHeader
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-                .padding(.bottom, block.isCollapsed ? 10 : 6)
-
-            if !block.isCollapsed {
-                Divider().opacity(0.5)
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Tier 1: kind label + meta (on card surface) ───────────
+                cardHeader
                     .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
 
-                // ── Output body ───────────────────────────────────────────
-                outputBody
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                if !block.isCollapsed {
+                    // ── Tier 2: "$ command" bar (sunken) ──────────────────
+                    commandBar
 
-                // ── Search bar ────────────────────────────────────────────
-                if searchActive { searchBar.padding(.horizontal, 12).padding(.bottom, 6) }
+                    // ── Tier 3: output panel (darkest terminal surface) ───
+                    if showsOutputArea {
+                        outputBody
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(t.termBg)
+                    }
 
-                // ── Caller-injected footer (prompt input) ─────────────────
-                if hasFooter {
-                    Divider().opacity(0.4).padding(.horizontal, 12)
-                    footer.padding(.horizontal, 12).padding(.vertical, 4)
+                    // ── Search bar ────────────────────────────────────────
+                    if searchActive {
+                        searchBar.padding(.horizontal, 12).padding(.vertical, 6)
+                    }
+
+                    // ── Caller-injected footer (prompt input) ─────────────
+                    if hasFooter {
+                        Rectangle().fill(t.termBorder).frame(height: 1)
+                        footer.padding(.horizontal, 12).padding(.vertical, 4)
+                    }
                 }
             }
         }
@@ -130,6 +154,7 @@ public struct ToolCardView<Footer: View>: View {
             RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
                 .strokeBorder(cardBorder, lineWidth: 0.75)
         )
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .contextMenu { contextMenuItems }
         .onAppear {
             if cardState == .running {
@@ -152,82 +177,77 @@ public struct ToolCardView<Footer: View>: View {
     // MARK: - Card header
 
     private var cardHeader: some View {
-        HStack(alignment: .center, spacing: 8) {
-            // State icon / spinner
-            stateIcon
-
-            VStack(alignment: .leading, spacing: 2) {
-                // Command
-                if !block.command.isEmpty {
-                    Text(block.command)
-                        .font(.system(.callout, design: .monospaced).weight(.medium))
-                        .foregroundStyle(t.text1)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-                }
-                // Prompt line (host:cwd)
-                HStack(spacing: 4) {
-                    Text(block.prompt.hostName).foregroundStyle(t.accent).font(.caption2)
-                    Text(":").foregroundStyle(t.text4).font(.caption2)
-                    Text(block.prompt.cwd)
-                        .foregroundStyle(t.text3)
-                        .font(.caption2.monospaced())
-                        .lineLimit(1).truncationMode(.head)
-                }
+        HStack(spacing: 8) {
+            // Kind label — "RUN › COMMAND" (verb › noun, matches tc2 design)
+            HStack(spacing: 4) {
+                Text(kind.verb).foregroundStyle(t.termText2).fontWeight(.semibold)
+                Text("›").foregroundStyle(t.termText3)
+                Text(kind.noun).foregroundStyle(t.termText3)
             }
+            .font(.dsMonoPt(10))
+            .tracking(10 * 0.12)
+            .textCase(.uppercase)
+            .lineLimit(1)
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            // Right meta cluster
-            HStack(spacing: 6) {
-                if block.originatingSnippetID != nil {
-                    Image(systemName: "curlybraces.square.fill")
-                        .font(.caption2).foregroundStyle(t.accent)
-                }
-                if let d = block.duration, cardState != .running {
-                    Text(String(format: "%.2fs", d))
-                        .font(.caption2.monospaced()).foregroundStyle(t.text4)
-                }
-                if case .error(let code) = cardState {
-                    DSChip("\(code)", tone: .danger, style: .soft)
-                } else if case .success = cardState, block.exitStatus != nil {
-                    Image(systemName: "checkmark").font(.caption2.weight(.semibold))
-                        .foregroundStyle(t.ok)
-                }
-                if block.isStarred {
-                    Image(systemName: "star.fill").font(.caption2).foregroundStyle(t.warn)
-                }
-                Button(action: onCollapse) {
-                    Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")
-                        .font(.caption2).foregroundStyle(t.text3)
-                }
-                .buttonStyle(.plain)
+            // Meta cluster
+            if block.originatingSnippetID != nil {
+                Image(systemName: "curlybraces.square.fill")
+                    .font(.caption2).foregroundStyle(t.termAccent)
             }
+            if let d = block.duration, cardState != .running {
+                Text(String(format: "%.2fs", d))
+                    .font(.dsMonoPt(11)).foregroundStyle(t.termText3)
+            }
+            if case .done(let code) = block.state {
+                DSExitChip(code: code)
+            }
+            if cardState == .running {
+                ProgressView().scaleEffect(0.5).tint(t.termAccent).frame(width: 12, height: 12)
+            }
+            if block.isStarred {
+                Image(systemName: "star.fill").font(.caption2).foregroundStyle(t.termAccent)
+            }
+            Button(action: onCollapse) {
+                Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")
+                    .font(.caption2).foregroundStyle(t.termText3)
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    private var stateIcon: some View {
-        ZStack {
-            switch cardState {
-            case .idle:
-                Circle().fill(t.text4.opacity(0.3)).frame(width: 22, height: 22)
-                Image(systemName: "terminal").font(.caption2).foregroundStyle(t.text3)
-            case .queued:
-                Circle().fill(t.info.opacity(0.15)).frame(width: 22, height: 22)
-                Image(systemName: "clock").font(.caption2).foregroundStyle(t.info)
-            case .running:
-                Circle()
-                    .fill(t.accent.opacity(runningPhase ? 0.25 : 0.12))
-                    .frame(width: 22, height: 22)
-                ProgressView().scaleEffect(0.55).tint(t.accent)
-            case .success:
-                Circle().fill(t.ok.opacity(0.15)).frame(width: 22, height: 22)
-                Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(t.ok)
-            case .error:
-                Circle().fill(t.danger.opacity(0.15)).frame(width: 22, height: 22)
-                Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(t.danger)
+    /// The "$ command" bar — terminal prompt (reused `DSPromptLine`) + the
+    /// command, on a sunken surface between the header and the output panel.
+    private var commandBar: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            DSPromptLine(host: block.prompt.hostName, cwd: block.prompt.cwd)
+                .lineLimit(1)
+            if !block.command.isEmpty {
+                Text(block.command)
+                    .font(.dsMonoPt(termFontSize))
+                    .foregroundStyle(t.termText)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.termSurface2)
+        .overlay(alignment: .top) { Rectangle().fill(t.termBorder).frame(height: 1) }
+        .overlay(alignment: .bottom) { Rectangle().fill(t.termBorder).frame(height: 1) }
+    }
+
+    /// Kind verb/noun. Shell blocks are always "Run › command"; richer kinds
+    /// (Read/Apply/Write) arrive with agent tool cards (Phase 3).
+    private var kind: (verb: String, noun: String) {
+        ("Run", "command")
+    }
+
+    private var showsOutputArea: Bool {
+        hasLiveTerminal || block.hasOutput || cardState == .running
     }
 
     // MARK: - Output body
@@ -241,28 +261,44 @@ public struct ToolCardView<Footer: View>: View {
                 onResize: { cols, rows in onLiveResize?(cols, rows) },
                 inlineEmbedded: true
             )
-            .frame(height: inlineTerminalHeight)
+            // Reserve the full TUI height only while a live handle is actively
+            // rendering (needsFullTUIHeight == true). Idle and short blocks size
+            // to content so they don't leave a 360–720 pt blank floor.
+            .frame(height: needsFullTUIHeight ? inlineTerminalHeight : nil)
             .frame(maxWidth: .infinity)
         } else if block.hasOutput {
-            Text(searchQuery.isEmpty ? render : highlightedRender)
-                .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(t.text2)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 6)
+            VStack(alignment: .leading, spacing: 4) {
+                if droppedLineCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(t.termAccent)
+                        Text("output truncated — \(droppedLineCount) earlier \(droppedLineCount == 1 ? "line" : "lines") dropped")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.termAccent)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(t.termAccent.opacity(0.12).cornerRadius(4))
+                }
+                Text(searchQuery.isEmpty ? render : highlightedRender)
+                    .font(.dsMonoPt(termFontSize))
+                    .foregroundStyle(t.termText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } else if cardState == .running {
             // Placeholder streaming caret while output hasn't arrived yet
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(t.accent)
+                    .fill(t.termAccent)
                     .frame(width: 2, height: 14)
                     .opacity(runningPhase ? 1 : 0)
                     .animation(.easeInOut(duration: 0.5).repeatForever(), value: runningPhase)
                 Text("Running…")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(t.text3)
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.termText3)
             }
-            .padding(.vertical, 8)
         }
     }
 
@@ -270,24 +306,25 @@ public struct ToolCardView<Footer: View>: View {
 
     private var searchBar: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(t.text3)
+            Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(t.termText3)
             TextField("Search output…", text: $searchQuery)
-                .font(.caption.monospaced())
+                .font(.dsMonoPt(termFontSize))
+                .foregroundStyle(t.termText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             if let result = BlockSearch.search(query: searchQuery, in: block) {
                 Text("\(result.matchCount) match\(result.matchCount == 1 ? "" : "es")")
-                    .font(.caption2).foregroundStyle(t.accent)
+                    .font(.caption2).foregroundStyle(t.termAccent)
             } else if !searchQuery.isEmpty {
-                Text("No matches").font(.caption2).foregroundStyle(t.text3)
+                Text("No matches").font(.caption2).foregroundStyle(t.termText3)
             }
             Button { searchActive = false; searchQuery = "" } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(t.text3)
+                Image(systemName: "xmark.circle.fill").foregroundStyle(t.termText3)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(t.surf2.cornerRadius(6))
+        .background(t.termSurface2.cornerRadius(6))
     }
 
     // MARK: - Context menu
@@ -329,30 +366,25 @@ public struct ToolCardView<Footer: View>: View {
 
     // MARK: - Card chrome
 
-    private var stripColor: Color {
+    private var gutterColor: Color {
         switch cardState {
-        case .success: return t.ok
-        case .error:   return t.danger
-        case .running: return t.accent
-        case .queued:  return t.info
-        case .idle:    return t.text4.opacity(0.5)
+        case .success: return t.termOk.opacity(0.55)
+        case .error:   return t.termErr
+        case .running: return t.termAccent
+        case .queued:  return t.termText3
+        case .idle:    return t.termText3
         }
     }
 
     private var cardBg: Color {
-        switch cardState {
-        case .running: return t.surf1
-        case .error:   return t.danger.opacity(0.05)
-        default:       return t.surf1
-        }
+        t.termSurface
     }
 
     private var cardBorder: Color {
         switch cardState {
-        case .running: return t.accent.opacity(0.35)
-        case .error:   return t.danger.opacity(0.25)
-        case .success: return t.ok.opacity(0.2)
-        default:       return t.surf3
+        case .running: return t.termAccent.opacity(0.4)
+        case .error:   return t.termErr.opacity(0.4)
+        default:       return t.termBorder
         }
     }
 

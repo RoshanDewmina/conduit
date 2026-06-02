@@ -2,24 +2,40 @@
 import SwiftUI
 import DesignSystem
 
-public enum SSHConnectPhase: Equatable {
-    case connecting    // orb pulsing, spinner visible
-    case connected     // orb expands, spinner → checkmark
+extension DSConnectError {
+    // Heuristic classification from raw SSH error strings.
+    static func classify(_ message: String) -> DSConnectError {
+        let m = message.lowercased()
+        if m.contains("auth") || m.contains("password") || m.contains("refused") || m.contains("key") && m.contains("fail") {
+            return .authRejected
+        } else if m.contains("resolve") || m.contains("dns") || m.contains("hostname") || m.contains("find host") {
+            return .dnsFailed
+        } else if m.contains("mismatch") || m.contains("fingerprint") || m.contains("host key") || m.contains("mitm") {
+            return .hostKeyMismatch
+        } else if m.contains("timeout") || m.contains("refused") || m.contains("unreachable") || m.contains("connect") {
+            return .hostUnreachable
+        } else {
+            return .other(message)
+        }
+    }
 }
 
-// Full-screen 4-phase SSH connect orb overlay.
-// Phases: connecting → orb pulses → expanding → done (dismiss).
-// Uses phaseAnimator for the orb and keyframeAnimator for the expand/burst.
+public enum SSHConnectPhase: Equatable {
+    case connecting             // pixel grid cycles through "working" animations
+    case slow(message: String)  // still trying, but taking a while
+    case connected              // grid settles to the green "done" state
+    case failed(message: String) // terminal failure, show error
+}
+
+// Full-screen SSH connect overlay built around the nested PixelBox.
+// While connecting it crossfades between "working" grid animations (thinking ↔
+// streaming) to convey loading; on connect it settles to the green "done" grid.
+// No orb / ring / spinner — just the living pixel grid + a label.
 public struct SSHConnectOverlay: View {
     let phase: SSHConnectPhase
 
-    @State private var orbScale: CGFloat = 1
-    @State private var orbOpacity: Double = 0.7
-    @State private var ringScale: CGFloat = 0.6
-    @State private var ringOpacity: Double = 0
-    @State private var checkVisible = false
+    @State private var displayState: AgentState = .thinking
     @State private var labelText = "Connecting…"
-    @State private var subText: String? = nil
     @State private var showDismissHint = false
 
     @Environment(\.conduitTokens) private var t
@@ -28,124 +44,92 @@ public struct SSHConnectOverlay: View {
         self.phase = phase
     }
 
+    // States cycled while connecting — the two "busy" grid animations.
+    private let loadingCycle: [AgentState] = [.thinking, .streaming]
+
     public var body: some View {
         ZStack {
-            // Backdrop
-            Color.black.opacity(0.85).ignoresSafeArea()
+            Color.black.opacity(0.9).ignoresSafeArea()
 
-            VStack(spacing: 32) {
-                Spacer()
-
-                // Orb cluster
-                ZStack {
-                    // Outer ring pulse (connecting state)
-                    Circle()
-                        .strokeBorder(t.accent.opacity(0.25), lineWidth: 1.5)
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(ringScale)
-                        .opacity(ringOpacity)
-
-                    Circle()
-                        .strokeBorder(t.accent.opacity(0.15), lineWidth: 1)
-                        .frame(width: 170, height: 170)
-                        .scaleEffect(ringScale * 1.2)
-                        .opacity(ringOpacity * 0.6)
-
-                    // Gradient blob (the orb)
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    t.accent.opacity(0.9),
-                                    t.accent.opacity(0.4),
-                                    t.accent.opacity(0.0)
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 55
-                            )
+            if case .failed(let message) = phase {
+                // Typed error card replaces the raw string message
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 60)
+                        DSTypedErrorCard(
+                            error: .classify(message),
+                            onPrimary: nil,
+                            onSecondary: nil
                         )
-                        .frame(width: 110, height: 110)
-                        .scaleEffect(orbScale)
-                        .opacity(orbOpacity)
-
-                    // Core: spinner or checkmark
-                    ZStack {
-                        if !checkVisible {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(1.3)
-                        } else {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .transition(.scale.combined(with: .opacity))
+                        .padding(.horizontal, 24)
+                        if showDismissHint {
+                            Text("Tap anywhere to dismiss")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.4))
+                                .padding(.top, 20)
+                                .transition(.opacity)
                         }
+                        Spacer(minLength: 40)
                     }
-                    .animation(.spring(response: 0.4), value: checkVisible)
                 }
+            } else {
+                VStack(spacing: 30) {
+                    Spacer()
 
-                // Labels
-                VStack(spacing: 8) {
+                    ZStack {
+                        PixelBox(state: displayState, size: 22, gap: 3, subdivisions: 3)
+                            .id(displayState)
+                            .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    }
+                    .frame(width: 92, height: 92)
+                    .animation(.easeInOut(duration: 0.45), value: displayState)
+                    .shadow(color: PixelBox.stateColor(displayState).opacity(0.35), radius: 24)
+
                     Text(labelText)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
+                        .contentTransition(.opacity)
                         .animation(.easeInOut(duration: 0.3), value: labelText)
 
-                    if let sub = subText {
-                        Text(sub)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
+                    if showDismissHint {
+                        Text(phase == .connected ? "Tap anywhere to continue" : "Tap anywhere to dismiss")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.4))
                             .transition(.opacity)
                     }
-                }
 
-                if showDismissHint {
-                    Text("Tap anywhere to continue")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .transition(.opacity)
+                    Spacer()
                 }
-
-                Spacer()
             }
         }
         .transition(.opacity)
-        .onAppear { startConnectingAnimation() }
-        .onChange(of: phase) { _, newPhase in
-            if newPhase == .connected { playConnectedBurst() }
-        }
+        .task(id: phase) { await runPhase() }
     }
 
-    // MARK: - Animations
-
-    private func startConnectingAnimation() {
-        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-            orbScale = 1.08
-            orbOpacity = 1.0
-        }
-        withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
-            ringScale = 1.3
-            ringOpacity = 0.0
-        }
-        labelText = "Connecting…"
-    }
-
-    private func playConnectedBurst() {
-        // Expand orb
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-            orbScale = 1.3
-        }
-        // Swap spinner → checkmark
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            checkVisible = true
-            labelText = "Connected"
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                orbScale = 1.0
+    private func runPhase() async {
+        switch phase {
+        case .connecting:
+            labelText = "Connecting…"
+            showDismissHint = false
+            var i = 0
+            while !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.45)) {
+                    displayState = loadingCycle[i % loadingCycle.count]
+                }
+                i += 1
+                try? await Task.sleep(for: .seconds(2.0))
             }
-        }
-        // Show dismiss hint after a beat
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        case .slow(let message):
+            labelText = message
+            // Keep cycling the loading animation (don't change displayState)
+        case .connected:
+            withAnimation(.easeInOut(duration: 0.6)) { displayState = .done }
+            labelText = "Connected"
+            try? await Task.sleep(for: .seconds(0.9))
+            withAnimation { showDismissHint = true }
+        case .failed(let message):
+            withAnimation(.easeInOut(duration: 0.3)) { displayState = .error }
+            labelText = message
             withAnimation { showDismissHint = true }
         }
     }

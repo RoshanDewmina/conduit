@@ -104,12 +104,32 @@ public actor CloudSync {
     }
 
     /// Saves or updates records in the private database.
+    /// Uses .changedKeys so the last writer wins regardless of server state.
     public func save(records: [CKRecordWrapper]) async throws {
         #if os(iOS) && !targetEnvironment(simulator)
         guard let db, !records.isEmpty else { return }
         let ckRecords = records.map(\.record)
         let operation = CKModifyRecordsOperation(recordsToSave: ckRecords, recordIDsToDelete: nil)
-        operation.savePolicy = .ifServerRecordUnchanged
+        operation.savePolicy = .changedKeys
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
+    /// Deletes records from the private database by record name.
+    public func delete(recordIDs: [String]) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db, !recordIDs.isEmpty else { return }
+        let ckIDs = recordIDs.map { CKRecord.ID(recordName: $0) }
+        let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: ckIDs)
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
             operation.modifyRecordsResultBlock = { result in
@@ -124,40 +144,23 @@ public actor CloudSync {
     }
 
     #if os(iOS) && !targetEnvironment(simulator)
-    private static func debugLog(
-        hypothesisId: String,
-        location: String,
-        message: String,
-        data: [String: Any]
-    ) {
-        let payload: [String: Any] = [
-            "sessionId": "6a22e9",
-            "hypothesisId": hypothesisId,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
-        ]
-        guard JSONSerialization.isValidJSONObject(payload),
-              let json = try? JSONSerialization.data(withJSONObject: payload)
-        else { return }
-        var request = URLRequest(
-            url: URL(string: "http://127.0.0.1:7531/ingest/f956616c-beac-4baf-8b56-a323a2cf21e8")!
-        )
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("6a22e9", forHTTPHeaderField: "X-Debug-Session-Id")
-        request.httpBody = json
-        URLSession.shared.dataTask(with: request).resume()
-    }
-
-    static func debugLogSyncStart(status: String) {
-        debugLog(
-            hypothesisId: "D",
-            location: "SyncEngine.swift:start",
-            message: "SyncEngine start account status",
-            data: ["status": status]
-        )
+    /// Whether this build is provisioned to use CloudKit.
+    ///
+    /// iOS has **no public API** to read our own entitlements at runtime
+    /// (`SecTaskCreateFromSelf` / `SecTaskCopyValueForEntitlement` are macOS-only —
+    /// using them is what broke the device build). And signed-into-iCloud is NOT a
+    /// safe proxy: it's true on any iCloud user's phone even when this build ships
+    /// the stripped `Conduit-DeviceTesting.entitlements` (no `icloud-services`),
+    /// which makes `CKContainer` log *"your process must have a
+    /// com.apple.developer.icloud-services entitlement"* and every sync fail.
+    ///
+    /// So we gate on an explicit Info.plist flag (same pattern as
+    /// `CONDUIT_PUSH_BACKEND_URL`). It is set to `true` **only** in builds that ship
+    /// the full `Conduit.entitlements`; default-false means device-testing builds
+    /// never construct a container and never touch CloudKit. Flip it together with
+    /// the entitlements swap documented in `project.yml`.
+    private static func hasCloudKitEntitlement() -> Bool {
+        Bundle.main.object(forInfoDictionaryKey: "CONDUIT_ICLOUD_ENABLED") as? Bool ?? false
     }
     #endif
 }
@@ -173,9 +176,13 @@ public struct CKRecordWrapper: @unchecked Sendable {
     public let record: CKRecord
     public init(record: CKRecord) { self.record = record }
     public var recordName: String { record.recordID.recordName }
+    /// Server-set timestamp of when this record was last saved to CloudKit.
+    /// Used as the authoritative LWW timestamp on pull.
+    public var modificationDate: Date? { record.modificationDate }
     public subscript(key: String) -> (any CKRecordValueProtocol)? { record[key] }
     #else
     public var recordName: String { "" }
+    public var modificationDate: Date? { nil }
     public init() {}
     #endif
 }

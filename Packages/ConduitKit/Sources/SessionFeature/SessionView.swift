@@ -15,6 +15,8 @@ public struct SessionView: View {
     @State private var rawCtrlLatched = false
     @State private var showingPortForward = false
     @State private var showRawHistory = false
+    @State private var keyboardExpanded = false
+    @State private var expandedKeyboardTab: TerminalKeyboardPanel.Tab = .keys
     @State private var dictation = DictationEngine()
     @State private var showTmuxSheet = false
     @State private var liveInputActive = false
@@ -67,15 +69,8 @@ public struct SessionView: View {
             t.surf0.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Always-dark HUD strip
-                AgentStatusBar(
-                    state: agentState,
-                    message: agentMessage,
-                    pendingApprovals: 0,
-                    tickValues: tickHistory
-                )
-
-                // Compact identity header below HUD
+                // Compact identity header (the Agent Island floats above it,
+                // merging with the hardware island — see .overlay below).
                 ChatHeaderView(
                     hostName: vm.host.name,
                     cwd: vm.cwd,
@@ -140,25 +135,23 @@ public struct SessionView: View {
                 SSHConnectOverlay(phase: connectOverlayPhase)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        if connectOverlayPhase == .connected {
+                        switch connectOverlayPhase {
+                        case .connected:
                             withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
+                        case .failed:
+                            withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
+                        default:
+                            break
                         }
                     }
             }
         }
+        // No agent HUD overlay here: the session's own ChatHeaderView already
+        // shows host · status, and an island here would overlap the camera
+        // cutout. The slim app-wide AgentStatusHeader covers the tab screens.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !vm.isRaw {
                 chatBottomBar
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    showingPortForward = true
-                } label: {
-                    Label("Port Forwarding", systemImage: "arrow.left.arrow.right")
-                }
-                .disabled(vm.status != .connected)
             }
         }
         .sheet(isPresented: $showingPortForward) {
@@ -210,6 +203,9 @@ public struct SessionView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                     withAnimation(.easeOut(duration: 0.4)) { showConnectOverlay = false }
                 }
+            case .failed(let reason):
+                connectOverlayPhase = .failed(message: reason)
+                showConnectOverlay = true
             default:
                 break
             }
@@ -227,14 +223,6 @@ public struct SessionView: View {
         case .suspended:          return .offline
         case .reconnecting:       return .thinking
         case .failed:             return .error
-        }
-    }
-
-    private var agentMessage: String? {
-        switch vm.status {
-        case .failed(let reason): return reason
-        case .reconnecting(let n): return "attempt \(n)"
-        default: return nil
         }
     }
 
@@ -258,6 +246,8 @@ public struct SessionView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
 
+                expandKeyboardButton
+
                 Button { showRawHistory = true } label: {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.title3)
@@ -272,26 +262,89 @@ public struct SessionView: View {
             .background(t.surf1)
             .overlay(Rectangle().fill(t.surf3.opacity(0.5)).frame(height: 0.5), alignment: .top)
 
-            // Chat input pill
-            ChatInputBar(
-                inputText: $vm.inputText,
-                isExecuting: vm.isExecutingUnified,
-                isTranslating: vm.isTranslating,
-                isDisconnected: vm.status != .connected,
-                onSubmit: { Task { await vm.submit() } },
-                onSnippet: { showingSnippetPalette = true },
-                onMic: {
-                    Task {
-                        if dictation.isListening { dictation.stop() }
-                        else { await dictation.start { text in vm.inputText = text } }
-                    }
-                },
-                isMicActive: dictation.isListening,
-                onSendLiveKey: { bytes in Task { await vm.sendKeystrokes(bytes) } },
-                liveInputActive: $liveInputActive
-            )
+            if keyboardExpanded {
+                TerminalKeyboardPanel(
+                    selectedTab: $expandedKeyboardTab,
+                    ctrlLatched: $rawCtrlLatched,
+                    commandHistory: vm.commandHistory,
+                    snippets: availableSnippets,
+                    onBytes: { bytes in Task { await vm.sendKeystrokes(bytes) } },
+                    onPaste: { if let b = pasteBytes() { Task { await vm.sendKeystrokes(b) } } },
+                    onRunHistory: { cmd in Task { await vm.sendToShell(cmd) } },
+                    onInsertSnippet: { snippet in vm.inputText += snippet.body },
+                    onDismiss: { collapseKeyboard() }
+                )
+                .frame(height: 300)
+                .transition(.move(edge: .bottom))
+            } else {
+                // Chat input pill
+                ChatInputBar(
+                    inputText: $vm.inputText,
+                    isExecuting: vm.isExecutingUnified,
+                    isTranslating: vm.isTranslating,
+                    isDisconnected: vm.status != .connected,
+                    onSubmit: { Task { await vm.submit() } },
+                    onSnippet: { showingSnippetPalette = true },
+                    onMic: {
+                        Task {
+                            if dictation.isListening { dictation.stop() }
+                            else { await dictation.start { text in vm.inputText = text } }
+                        }
+                    },
+                    isMicActive: dictation.isListening,
+                    onSendLiveKey: { bytes in Task { await vm.sendKeystrokes(bytes) } },
+                    liveInputActive: $liveInputActive
+                )
+            }
         }
         .sheet(isPresented: $showRawHistory) { rawHistorySheet }
+    }
+
+    // MARK: - Expandable keyboard helpers
+
+    /// Toggle between the system keyboard and the expanded key panel.
+    private var expandKeyboardButton: some View {
+        Button {
+            if keyboardExpanded { collapseKeyboard() } else { expandKeyboard() }
+        } label: {
+            Image(systemName: keyboardExpanded ? "keyboard.chevron.compact.down" : "keyboard.chevron.compact.up")
+                .font(.title3)
+                .foregroundStyle(keyboardExpanded ? t.accent : t.text3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(keyboardExpanded ? "Hide key panel" : "Show key panel")
+    }
+
+    private func expandKeyboard() {
+        dismissSystemKeyboard()
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            keyboardExpanded = true
+        }
+    }
+
+    private func collapseKeyboard() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            keyboardExpanded = false
+        }
+    }
+
+    private func dismissSystemKeyboard() {
+        liveInputActive = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+    }
+
+    /// Clipboard bytes for the panel's paste key. Wraps multi-line text in
+    /// bracketed-paste markers; single-line text is sent verbatim (no newline,
+    /// so it lands at the prompt without auto-executing).
+    private func pasteBytes() -> [UInt8]? {
+        guard let s = UIPasteboard.general.string, !s.isEmpty else { return nil }
+        if s.contains("\n") {
+            return Array(("\u{1B}[200~" + s + "\u{1B}[201~").utf8)
+        }
+        return Array(s.utf8)
     }
 
     // MARK: - Raw terminal content
@@ -313,23 +366,46 @@ public struct SessionView: View {
                 }
             )
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(spacing: 6) {
-                    KeyboardAccessoryRail(ctrlLatched: $rawCtrlLatched) { bytes in
-                        Task { try? await vm.activeShell?.send(bytes) }
+                VStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        KeyboardAccessoryRail(ctrlLatched: $rawCtrlLatched) { bytes in
+                            Task { try? await vm.activeShell?.send(bytes) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+
+                        expandKeyboardButton
+
+                        Button { showRawHistory = true } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.title3)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .disabled(vm.commandHistory.isEmpty)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
-                    Button { showRawHistory = true } label: {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                    .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                    if keyboardExpanded {
+                        TerminalKeyboardPanel(
+                            selectedTab: $expandedKeyboardTab,
+                            ctrlLatched: $rawCtrlLatched,
+                            commandHistory: vm.commandHistory,
+                            snippets: availableSnippets,
+                            onBytes: { bytes in Task { try? await vm.activeShell?.send(bytes) } },
+                            onPaste: { if let b = pasteBytes() { Task { try? await vm.activeShell?.send(b) } } },
+                            onRunHistory: { cmd in Task { await vm.sendToShell(cmd) } },
+                            onInsertSnippet: { snippet in
+                                Task { try? await vm.activeShell?.send(Array(snippet.body.utf8)) }
+                            },
+                            onDismiss: { collapseKeyboard() }
+                        )
+                        .frame(height: 300)
+                        .transition(.move(edge: .bottom))
                     }
-                    .disabled(vm.commandHistory.isEmpty)
                 }
-                .conduitGlassChrome(cornerRadius: 16, interactive: true)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(.bar)
+                .background(t.termBg)
             }
             .sheet(isPresented: $showRawHistory) { rawHistorySheet }
         } else {
@@ -384,34 +460,93 @@ public struct SessionView: View {
     // MARK: - Tmux sheet
 
     private var tmuxSessionSheet: some View {
-        NavigationStack {
-            List {
-                Section("Available Sessions") {
-                    ForEach(vm.availableTmuxSessions, id: \.self) { name in
-                        Button {
-                            vm.attachToTmuxSession(name)
-                            showTmuxSheet = false
-                        } label: {
-                            HStack {
-                                Image(systemName: "rectangle.3.group").foregroundStyle(.tint)
-                                Text(name).font(.system(.body, design: .monospaced)).foregroundStyle(.primary)
-                                Spacer()
-                                Text("Attach").font(.caption).foregroundStyle(.secondary)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Header
+                HStack(alignment: .top, spacing: t.s4) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tmux Sessions")
+                            .font(.dsDisplayPt(22, weight: .bold))
+                            .foregroundStyle(t.text)
+                        Text("Reattach to a session still running on this host to restore its programs and scrollback.")
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    DSButton("Skip", variant: .ghost, size: .sm) { showTmuxSheet = false }
+                }
+                .padding(.horizontal, t.s6)
+                .padding(.top, t.s7)
+                .padding(.bottom, t.s5)
+
+                // ── Section head
+                Text("AVAILABLE SESSIONS")
+                    .font(.dsMonoPt(11))
+                    .tracking(0.8)
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, t.s6)
+                    .padding(.bottom, t.s2)
+
+                // ── Session cards
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(vm.availableTmuxSessions, id: \.self) { name in
+                            Button {
+                                vm.attachToTmuxSession(name)
+                                showTmuxSheet = false
+                            } label: {
+                                HStack(spacing: t.s4) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                            .fill(t.accentSoft)
+                                            .frame(width: 34, height: 34)
+                                        DSIconView(.terminal, size: 16, color: t.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(name)
+                                            .font(.dsMonoPt(15, weight: .medium))
+                                            .foregroundStyle(t.text)
+                                        Text("tmux session")
+                                            .font(.dsSansPt(12))
+                                            .foregroundStyle(t.text3)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Text("ATTACH")
+                                        .font(.dsMonoPt(11, weight: .medium))
+                                        .tracking(0.6)
+                                        .foregroundStyle(t.accent)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(t.text4)
+                                }
+                                .padding(.horizontal, t.s5)
+                                .padding(.vertical, t.s4)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if name != vm.availableTmuxSessions.last {
+                                Rectangle().fill(t.divider).frame(height: 1)
+                                    .padding(.leading, t.s5 + 34 + t.s4)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
-                }
-            }
-            .navigationTitle("Tmux Sessions")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Skip") { showTmuxSheet = false }
+                    .background(t.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+                    .padding(.horizontal, t.s5)
+                    .padding(.bottom, t.s6)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Explain sheet

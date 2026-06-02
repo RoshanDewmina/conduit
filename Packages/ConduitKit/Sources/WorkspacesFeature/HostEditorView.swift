@@ -9,7 +9,7 @@ import SecurityKit
 
 @MainActor @Observable
 public final class HostEditorViewModel {
-    public enum AuthChoice: String, CaseIterable, Identifiable {
+    public enum AuthChoice: String, CaseIterable, Identifiable, Hashable, Sendable {
         case password
         case ed25519
 
@@ -153,128 +153,239 @@ public final class HostEditorViewModel {
     }
 }
 
+// MARK: - HostEditorView
+
 public struct HostEditorView: View {
     @State private var vm: HostEditorViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
 
     public init(viewModel: HostEditorViewModel) {
         _vm = State(initialValue: viewModel)
     }
 
     public var body: some View {
-        Form {
-            Section("Identity") {
-                TextField("Display name", text: $vm.name)
-                    .textInputAutocapitalization(.never)
-                TextField("Tags (comma-separated)", text: $vm.tagsInput)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if !vm.parsedTags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(vm.parsedTags, id: \.self) { tag in
-                                DSChip(tag, tone: .neutral, variant: .soft, size: .sm)
-                            }
-                        }
-                        .padding(.vertical, 4)
+        ZStack {
+            t.bg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // ── Identity
+                    sectionHead("Identity")
+                    editorCard {
+                        inputRow(label: "Display name", placeholder: "e.g. prod-server", text: $vm.name)
                     }
-                }
-            }
-            Section("Connection") {
-                TerminalSafeTextField(
-                    "Hostname or IP",
-                    text: $vm.hostname,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                .keyboardType(.URL)
-                TextField("Port", text: $vm.port)
-                    .keyboardType(.numberPad)
-                TerminalSafeTextField(
-                    "Username",
-                    text: $vm.username,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-            }
-            Section("Session") {
-                TerminalSafeTextField(
-                    "tmux session name",
-                    text: $vm.tmuxSessionName,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text("Optional. If set, Conduit attaches to this tmux session on connect, keeping your work alive across disconnects.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 16)
 
-                TerminalSafeTextField(
-                    "startup command",
-                    text: $vm.startupCommand,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text("Optional. Runs after connect (and any tmux attach). Example: cd ~/proj && claude.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Toggle("Auto-resume agent session", isOn: $vm.autoResume)
-                Text("When on, Conduit reattaches to the last Claude Code / Codex / Cursor / Grok / Gemini session running on this host.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                TerminalSafeTextField(
-                    "preferred shell (optional)",
-                    text: $vm.preferredShell,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text("Optional shell override for this host, e.g. /bin/zsh or /usr/bin/fish.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Authentication") {
-                Picker("Method", selection: $vm.authChoice) {
-                    ForEach(HostEditorViewModel.AuthChoice.allCases) { choice in
-                        Text(choice.label).tag(choice)
+                    // ── Connection
+                    sectionHead("Connection")
+                    editorCard {
+                        monoInputRow(label: "Hostname or IP", placeholder: "192.168.1.1", text: $vm.hostname, keyboard: .URL)
+                        cardDivider
+                        monoInputRow(label: "Port", placeholder: "22", text: $vm.port, keyboard: .numberPad)
+                        cardDivider
+                        monoInputRow(label: "Username", placeholder: "ubuntu", text: $vm.username, keyboard: .default)
                     }
-                }
+                    .padding(.bottom, 16)
 
-                if vm.authChoice == .ed25519 {
-                    if vm.keyTags.isEmpty {
-                        Text("Generate an Ed25519 key in Settings > SSH Keys, then return here to assign it to this host.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Key", selection: $vm.selectedKeyTag) {
-                            ForEach(vm.keyTags, id: \.self) { tag in
-                                Text(shortKeyLabel(tag)).tag(Optional(tag))
+                    // ── Authentication
+                    sectionHead("Authentication")
+                    editorCard {
+                        DSSegmentedPicker(
+                            options: HostEditorViewModel.AuthChoice.allCases.map { (label: $0.label, value: $0) },
+                            selection: $vm.authChoice
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+
+                        if vm.authChoice == .ed25519 {
+                            cardDivider
+                            if vm.keyTags.isEmpty {
+                                Text("Generate an Ed25519 key in Settings > SSH Keys, then return here to assign it to this host.")
+                                    .font(.dsSansPt(13))
+                                    .foregroundStyle(t.text3)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                            } else {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Key")
+                                        .font(.dsSansPt(11, weight: .medium))
+                                        .foregroundStyle(t.text3)
+                                    ForEach(vm.keyTags, id: \.self) { tag in
+                                        let selected = vm.selectedKeyTag == tag
+                                        HStack {
+                                            Text(shortKeyLabel(tag))
+                                                .font(.dsMonoPt(13))
+                                                .foregroundStyle(t.text)
+                                            Spacer()
+                                            if selected {
+                                                DSIconView(.check, size: 14, color: t.accent)
+                                            }
+                                        }
+                                        .padding(.vertical, 8)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { vm.selectedKeyTag = tag }
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                             }
+                        } else {
+                            cardDivider
+                            Text("Password is requested at connect time and is not stored.")
+                                .font(.dsSansPt(13))
+                                .foregroundStyle(t.text3)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                         }
                     }
-                } else {
-                    Text("The password is requested at connect time and is not stored by this scaffold.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    .padding(.bottom, 16)
+
+                    // ── Session
+                    sectionHead("Session")
+                    editorCard {
+                        monoInputRow(label: "Tmux session", placeholder: "optional", text: $vm.tmuxSessionName, keyboard: .default)
+                        cardDivider
+                        monoInputRow(label: "Startup command", placeholder: "cd ~/proj && claude", text: $vm.startupCommand, keyboard: .default)
+                        cardDivider
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Auto-resume agent")
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Text("Reattach to the last running agent session on connect.")
+                                    .font(.dsSansPt(12))
+                                    .foregroundStyle(t.text3)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $vm.autoResume)
+                                .labelsHidden()
+                                .tint(t.accent)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+
+                    // ── Error
+                    if let err = vm.saveError {
+                        HStack(spacing: 8) {
+                            DSIconView(.alert, size: 14, color: t.danger)
+                            Text(err).font(.dsSansPt(13)).foregroundStyle(t.danger)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                    }
+
+                    // ── Save button
+                    DSButton("save host", variant: .accent, fullWidth: true, action: {
+                        Task { await vm.save() }
+                    })
+                    .disabled(!vm.isValid)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
                 }
+                .padding(.top, 8)
             }
         }
         .navigationTitle(vm.isEditing ? "Edit Host" : "Add Host")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    Task { await vm.save() }
-                }
-                .disabled(!vm.isValid)
-            }
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
+                    .foregroundStyle(t.accent)
             }
         }
-        .alert("Error", isPresented: .constant(vm.saveError != nil), actions: {
-            Button("OK") { vm.saveError = nil }
-        }, message: { Text(vm.saveError ?? "") })
         .task { await vm.loadKeys() }
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHead(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.dsSansPt(11, weight: .semibold))
+            .foregroundStyle(t.text3)
+            .tracking(0.5)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func editorCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
+    }
+
+    private var cardDivider: some View {
+        DSDivider(.line)
+    }
+
+    private func inputRow(label: String, placeholder: String, text: Binding<String>) -> some View {
+        FocusableInputRow(label: label, placeholder: placeholder, text: text, mono: false, keyboard: .default, tokens: t)
+    }
+
+    private func monoInputRow(label: String, placeholder: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
+        FocusableInputRow(label: label, placeholder: placeholder, text: text, mono: true, keyboard: keyboard, tokens: t)
     }
 
     private func shortKeyLabel(_ tag: String) -> String {
         let prefix = tag.prefix(8)
-        return "\(prefix)..."
+        return "\(prefix)…"
+    }
+}
+
+// MARK: - FocusableInputRow
+// BLOCKS field: uppercase label above a SQUARE bg-surfaceSunk bordered input.
+// Turns the border accent-blue on focus (matching DSSearchField behaviour).
+
+private struct FocusableInputRow: View {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    let mono: Bool
+    let keyboard: UIKeyboardType
+    let tokens: ConduitTokens
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label.uppercased())
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(10 * 0.08)
+                .foregroundStyle(tokens.text3)
+
+            HStack(spacing: 8) {
+                if mono {
+                    Text("$")
+                        .font(.dsMonoPt(13, weight: .medium))
+                        .foregroundStyle(tokens.accent)
+                }
+                TextField(placeholder, text: $text)
+                    .font(mono ? .dsMonoPt(13) : .dsSansPt(13))
+                    .foregroundStyle(tokens.text)
+                    .tint(tokens.accent)
+                    .keyboardType(keyboard)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(tokens.surfaceSunk)
+            .clipShape(RoundedRectangle(cornerRadius: tokens.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: tokens.r3, style: .continuous)
+                    .strokeBorder(isFocused ? tokens.accent : tokens.border, lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 

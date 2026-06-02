@@ -13,146 +13,228 @@ public class InboxViewModel {
         self.approvals = approvals
     }
 
-    open func decide(_ id: ApprovalID, decision: Approval.Decision) {
+    open func decide(_ id: ApprovalID, decision: Approval.Decision, choiceIndex: Int? = nil) {
         if let idx = approvals.firstIndex(where: { $0.id == id }) {
             approvals[idx].decision = decision
             approvals[idx].decidedAt = .now
+            if let ci = choiceIndex { approvals[idx].answeredChoice = ci }
             Haptics.selection()
         }
     }
 }
 
 public struct InboxView: View {
-    // Using a plain var (not @State) so SwiftUI's @Observable machinery tracks
-    // the *current* viewModel instance. @State would pin the initial instance
-    // and ignore subsequent replacements (e.g. when liveInboxVM is set after seeding).
     private var vm: InboxViewModel
     private let sessionID: SessionID?
     private let title: String
+    public var statusHeaderAgents: [AgentInfo] = []
+    public var onTapStatusHeader: () -> Void = {}
+
+    @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
+    @AppStorage("flag.autonomyPresets") private var autonomyPresetsEnabled: Bool = true
 
     @Environment(\.conduitTokens) private var t
 
-    public init(viewModel: InboxViewModel, sessionID: SessionID? = nil, title: String = "Inbox") {
+    private var autonomyPreset: Binding<AutonomyPreset> {
+        Binding(
+            get: { AutonomyPreset(rawValue: autonomyPresetRaw) ?? .alwaysAsk },
+            set: { autonomyPresetRaw = $0.rawValue }
+        )
+    }
+
+    public init(
+        viewModel: InboxViewModel,
+        sessionID: SessionID? = nil,
+        title: String = "Inbox",
+        statusHeaderAgents: [AgentInfo] = [],
+        onTapStatusHeader: @escaping () -> Void = {}
+    ) {
         self.vm = viewModel
         self.sessionID = sessionID
         self.title = title
+        self.statusHeaderAgents = statusHeaderAgents
+        self.onTapStatusHeader = onTapStatusHeader
     }
 
     public var body: some View {
-        List {
-            if visibleApprovals.isEmpty {
-                ContentUnavailableView(
-                    title == "Inbox" ? "Inbox is empty" : "Session inbox is empty",
-                    systemImage: "tray",
-                    description: Text("Agent approvals and run results land here.")
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // ── BLOCKS header
+                DSScreenHeader(
+                    "inbox",
+                    breadcrumb: "agent approvals",
+                    count: pendingCount > 0 ? "\(pendingCount) pending" : nil
                 )
-                .listRowBackground(Color.clear)
-            } else {
-                ForEach(visibleApprovals) { approval in
-                    ApprovalCard(approval: approval) { decision in
-                        vm.decide(approval.id, decision: decision)
+
+                if !statusHeaderAgents.isEmpty {
+                    AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                }
+
+                if autonomyPresetsEnabled {
+                    DSAutonomyPresetBar(preset: autonomyPreset)
+                        .padding(.top, 8)
+                }
+
+                Spacer().frame(height: 12)
+
+                if visibleApprovals.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            let pending = visibleApprovals.filter { $0.isPending }
+                            let decided = visibleApprovals.filter { !$0.isPending }
+
+                            if !pending.isEmpty {
+                                DSListSectionHead("PENDING", count: pending.count)
+                                ForEach(pending) { approval in
+                                    pendingCard(approval)
+                                        .padding(.horizontal, 16)
+                                }
+                            }
+
+                            if !decided.isEmpty {
+                                DSListSectionHead("DECIDED", count: decided.count)
+                                ForEach(decided) { approval in
+                                    decidedRow(approval)
+                                }
+                            }
+                        }
+                        // BUG-4: constrain scroll content to the viewport width so wide
+                        // rows at large Dynamic Type wrap instead of overflowing and being
+                        // centre-clipped on the leading edge by the ScrollView.
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                     }
-                    .listRowBackground(t.surf1)
-                    .listRowInsets(.init(top: 8, leading: 12, bottom: 8, trailing: 12))
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(t.surf0)
-        .navigationTitle(title)
-        .contentMargins(.bottom, 72, for: .scrollContent)
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 72)
+    }
+
+    // MARK: - Pending card dispatch
+
+    @ViewBuilder
+    private func pendingCard(_ approval: Approval) -> some View {
+        switch approval.kind {
+        case .askQuestion:
+            DSAskQuestionCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                question: approval.question ?? "What should I do next?",
+                choices: approval.choices ?? [],
+                onAnswer: { idx in
+                    vm.decide(approval.id, decision: .approved, choiceIndex: idx)
+                }
+            )
+
+        case .callMCP:
+            DSMCPCallCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                toolName: approval.command ?? "unknown_tool",
+                args: approval.patch,
+                risk: approval.risk.rawValue,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
+            )
+
+        default:
+            DSApprovalCard(
+                agentKey: agentKey(approval.agent),
+                risk: approval.risk.rawValue,
+                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                agentName: agentName(approval.agent),
+                action: actionPhrase(approval.kind),
+                hostLabel: approval.cwd,
+                command: approval.command,
+                onViewDiff: approval.patch != nil ? {} : nil,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
+            )
         }
     }
+
+    // MARK: - Decided row (compact)
+
+    @ViewBuilder
+    private func decidedRow(_ approval: Approval) -> some View {
+        HStack(spacing: 12) {
+            AgentIdentityBadge(agent: agentKey(approval.agent), label: nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(decidedLabel(approval))
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .lineLimit(1)
+                Text(approval.cwd)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+            Spacer()
+            if let d = approval.decision {
+                let approved = d == .approved || d == .approvedAlways
+                if d == .approved, let ci = approval.answeredChoice,
+                   let choices = approval.choices, ci < choices.count {
+                    DSChip("→ \(choices[ci])", tone: .ok, style: .soft)
+                } else {
+                    DSChip(d == .approvedAlways ? "always" : d.rawValue, tone: approved ? .ok : .danger, style: .soft)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack {
+            Spacer()
+            DSEmptyState(
+                dotMatrix: .idle,
+                title: "inbox zero",
+                subtitle: "Nothing waiting on you. Agents are running clean."
+            )
+            .padding(.horizontal, 24)
+            Spacer()
+        }
+    }
+
+    // MARK: - Computed
 
     private var visibleApprovals: [Approval] {
         guard let sessionID else { return vm.approvals }
         return vm.approvals.filter { $0.sessionID == sessionID }
     }
-}
 
-private struct ApprovalCard: View {
-    let approval: Approval
-    var onDecide: (Approval.Decision) -> Void
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                agentMark
-                Text(agentLabel)
-                    .font(.caption.weight(.semibold)).foregroundStyle(t.text2)
-                RiskBadge(risk: approval.risk.rawValue)
-                Spacer()
-                Text(approval.createdAt.formatted(date: .omitted, time: .shortened))
-                    .font(.caption2.monospaced()).foregroundStyle(t.text4)
-            }
-
-            // Descriptive line: "<Agent> wants to <kind> on <cwd>"
-            (Text(agentLabel).font(.caption.weight(.semibold)).foregroundStyle(t.text1)
-             + Text(" \(kindPhrase)").font(.caption).foregroundStyle(t.text2))
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let cmd = approval.command {
-                Text(cmd)
-                    .font(.system(.callout, design: .monospaced))
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(t.surf2)
-                    .clipShape(RoundedRectangle(cornerRadius: t.radiusSM))
-                    .foregroundStyle(t.text1)
-            }
-            HStack(spacing: 4) {
-                Image(systemName: "folder").font(.caption2).foregroundStyle(t.text4)
-                Text(approval.cwd).font(.caption2.monospaced()).foregroundStyle(t.text4)
-            }
-
-            if approval.isPending {
-                ViewThatFits(in: .horizontal) {
-                    decisionButtons(axis: .horizontal)
-                    decisionButtons(axis: .vertical)
-                }
-            } else if let d = approval.decision {
-                HStack(spacing: 4) {
-                    let approved = (d == .approved || d == .approvedAlways)
-                    Image(systemName: approved ? "checkmark.seal.fill" : "xmark.seal.fill")
-                        .font(.caption)
-                        .foregroundStyle(approved ? t.ok : t.danger)
-                    Text(d.rawValue.capitalized)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(approved ? t.ok : t.danger)
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private var pendingCount: Int {
+        visibleApprovals.filter { $0.isPending }.count
     }
 
-    private var agentMark: some View {
-        Text(agentInitials)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundStyle(.white)
-            .frame(width: 16, height: 16)
-            .background(t.accent)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-    }
+    // MARK: - Mapping helpers
 
-    private var agentInitials: String {
-        switch approval.agent {
-        case .claudeCode: "CC"
-        case .codex:      "CX"
-        case .cursor:     "CR"
-        case .opencode:   "OC"
-        case .devin:      "DV"
-        case .unknown:    "?"
+    private func agentKey(_ source: Approval.AgentSource) -> AgentKey {
+        switch source {
+        case .claudeCode: return .claudeCode
+        case .codex:      return .codex
+        case .cursor:     return .cursor
+        case .opencode:   return .opencode
+        case .devin:      return .devin
+        case .unknown:    return .unknown
         }
     }
 
-    private var agentLabel: String {
-        switch approval.agent {
+    private func agentName(_ source: Approval.AgentSource) -> String {
+        switch source {
         case .claudeCode: "Claude Code"
         case .codex:      "Codex"
         case .cursor:     "Cursor"
@@ -162,26 +244,27 @@ private struct ApprovalCard: View {
         }
     }
 
-    private var kindPhrase: String {
-        switch approval.kind {
-        case .command:    "wants to run a command"
-        case .patch:      "wants to apply a patch"
-        case .fileWrite:  "wants to write a file"
-        case .fileDelete: "wants to delete a file"
-        case .network:    "wants to make a network call"
-        case .credential: "wants a credential"
-        case .browser:    "wants to perform a browser action"
+    private func actionPhrase(_ kind: Approval.Kind) -> String {
+        switch kind {
+        case .command:      "run a command"
+        case .patch:        "apply a patch"
+        case .fileWrite:    "write a file"
+        case .fileDelete:   "delete a file"
+        case .network:      "make a network call"
+        case .credential:   "access a credential"
+        case .browser:      "perform a browser action"
+        case .callMCP:      "call an MCP tool"
+        case .askQuestion:  "ask a question"
         }
     }
 
-    @ViewBuilder
-    private func decisionButtons(axis: Axis) -> some View {
-        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 8)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-        layout {
-            DSButton("Deny", variant: .destructive, size: .sm) { onDecide(.rejected) }
-            DSButton("Allow always", variant: .secondary, size: .sm) { onDecide(.approvedAlways) }
-            DSButton("Approve", variant: .primary, size: .sm) { onDecide(.approved) }
+    private func decidedLabel(_ approval: Approval) -> String {
+        if approval.kind == .askQuestion,
+           let ci = approval.answeredChoice,
+           let choices = approval.choices, ci < choices.count {
+            return "Answered: \(choices[ci])"
         }
+        return approval.command ?? actionPhrase(approval.kind)
     }
 }
 

@@ -12,13 +12,13 @@ public final class PortForwardViewModel {
     public private(set) var tunnels: [(forward: PortForward, tunnel: (any PortForwardTunnel)?)] = []
     public let supportsRemoteForwards: Bool = false
 
-    // Add form state
     public var addDirection: PortForward.Direction = .local
     public var addLocalPort: String = ""
     public var addRemoteHost: String = "localhost"
     public var addRemotePort: String = ""
     public var addLabel: String = ""
     public var errorMessage: String?
+    public var showAddForm: Bool = false
 
     private let session: SSHSession
     private let hostID: HostID
@@ -78,6 +78,7 @@ public final class PortForwardViewModel {
         addLocalPort = ""
         addRemotePort = ""
         addLabel = ""
+        showAddForm = false
     }
 
     public func removeForward(at index: Int) async {
@@ -90,7 +91,7 @@ public final class PortForwardViewModel {
 
 public struct PortForwardView: View {
     @State private var vm: PortForwardViewModel
-    @State private var showAddForm = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.conduitTokens) private var t
 
     public init(viewModel: PortForwardViewModel) {
@@ -99,49 +100,145 @@ public struct PortForwardView: View {
 
     public var body: some View {
         NavigationStack {
-            List {
-                if vm.tunnels.isEmpty {
-                    ContentUnavailableView(
-                        "No Forwarded Ports",
-                        systemImage: "arrow.left.arrow.right",
-                        description: Text("Add a tunnel to forward ports through this SSH session.")
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(Array(vm.tunnels.enumerated()), id: \.element.forward.id) { idx, item in
-                        TunnelRow(
-                            forward: item.forward,
-                            isActive: item.tunnel?.isActive == true,
-                            onToggle: {
-                                Task {
-                                    if item.tunnel?.isActive == true {
-                                        await vm.stopTunnel(for: item.forward)
-                                    } else {
-                                        await vm.startTunnel(for: item.forward)
+            ZStack {
+                t.bg.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Title row
+                        HStack {
+                            Text("Port Forwarding")
+                                .font(.dsDisplayPt(22, weight: .bold))
+                                .foregroundStyle(t.text)
+                            Spacer()
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    vm.showAddForm.toggle()
+                                }
+                            } label: {
+                                DSIconView(vm.showAddForm ? .close : .plus, size: 18, color: t.accent)
+                                    .frame(width: 36, height: 36)
+                                    .background(t.surface, in: Circle())
+                                    .overlay(Circle().strokeBorder(t.border, lineWidth: 0.5))
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
+
+                        // Add form
+                        if vm.showAddForm {
+                            sectionHead("New Tunnel")
+                            editorCard {
+                                // Direction picker
+                                HStack(spacing: 8) {
+                                    directionChip("Local", .local)
+                                    directionChip("Remote", .remote)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+
+                                cardDivider
+
+                                // Ports row
+                                HStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Local port")
+                                            .font(.dsSansPt(11, weight: .medium))
+                                            .foregroundStyle(t.text3)
+                                        TextField("8080", text: $vm.addLocalPort)
+                                            .font(.dsMonoPt(15))
+                                            .foregroundStyle(t.text)
+                                            .keyboardType(.numberPad)
+                                    }
+                                    DSIconView(.arrowRight, size: 14, color: t.text3)
+                                        .padding(.top, 18)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Remote host")
+                                            .font(.dsSansPt(11, weight: .medium))
+                                            .foregroundStyle(t.text3)
+                                        TextField("localhost", text: $vm.addRemoteHost)
+                                            .font(.dsMonoPt(15))
+                                            .foregroundStyle(t.text)
+                                            .textInputAutocapitalization(.never)
+                                    }
+                                    Text(":")
+                                        .font(.dsMonoPt(15))
+                                        .foregroundStyle(t.text3)
+                                        .padding(.top, 18)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Port")
+                                            .font(.dsSansPt(11, weight: .medium))
+                                            .foregroundStyle(t.text3)
+                                        TextField("3000", text: $vm.addRemotePort)
+                                            .font(.dsMonoPt(15))
+                                            .foregroundStyle(t.text)
+                                            .keyboardType(.numberPad)
+                                            .frame(width: 52)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+
+                                cardDivider
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Label (optional)")
+                                        .font(.dsSansPt(11, weight: .medium))
+                                        .foregroundStyle(t.text3)
+                                    TextField("e.g. dev server", text: $vm.addLabel)
+                                        .font(.dsSansPt(15))
+                                        .foregroundStyle(t.text)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .padding(.bottom, 12)
+
+                            HStack {
+                                Spacer()
+                                DSButton("Start Tunnel", variant: .primary, action: {
+                                    Task { await vm.addForward() }
+                                })
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                        }
+
+                        // Tunnel list
+                        if vm.tunnels.isEmpty && !vm.showAddForm {
+                            DSEmptyState(
+                                icon: .plug,
+                                title: "No forwarded ports",
+                                subtitle: "Tap + to add a port tunnel through this SSH session."
+                            )
+                            .padding(.top, 60)
+                        } else if !vm.tunnels.isEmpty {
+                            sectionHead("Active Tunnels")
+                            VStack(spacing: 0) {
+                                ForEach(Array(vm.tunnels.enumerated()), id: \.element.forward.id) { idx, item in
+                                    tunnelRow(item: item, idx: idx)
+                                    if idx < vm.tunnels.count - 1 {
+                                        cardDivider
                                     }
                                 }
                             }
-                        )
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                Task { await vm.removeForward(at: idx) }
-                            } label: { Label("Remove", systemImage: "trash") }
+                            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                                    .strokeBorder(t.border, lineWidth: 0.5)
+                            )
+                            .padding(.horizontal, 16)
                         }
-                    }
-                }
 
-                if showAddForm {
-                    addFormSection
-                }
-            }
-            .navigationTitle("Port Forwarding")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showAddForm.toggle() } label: {
-                        Label(showAddForm ? "Cancel" : "Add", systemImage: showAddForm ? "xmark" : "plus")
+                        Spacer(minLength: 40)
                     }
+                    .padding(.top, 8)
                 }
             }
+            .navigationBarHidden(true)
             .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
                 Button("OK") { vm.errorMessage = nil }
             } message: {
@@ -150,74 +247,85 @@ public struct PortForwardView: View {
         }
     }
 
-    private var addFormSection: some View {
-        Section("New Tunnel") {
-            Picker("Direction", selection: $vm.addDirection) {
-                Text("Local").tag(PortForward.Direction.local)
-                if vm.supportsRemoteForwards {
-                    Text("Remote").tag(PortForward.Direction.remote)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowSeparator(.hidden)
-
-            HStack {
-                TextField("Local port", text: $vm.addLocalPort)
-                    .keyboardType(.numberPad)
-                Image(systemName: "arrow.right")
-                    .foregroundStyle(.secondary)
-                TerminalSafeTextField(
-                    "Remote host",
-                    text: $vm.addRemoteHost,
-                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
-                )
-                Text(":")
-                    .foregroundStyle(.secondary)
-                TextField("Port", text: $vm.addRemotePort)
-                    .keyboardType(.numberPad)
-                    .frame(width: 52)
-            }
-            .font(.system(.body, design: .monospaced))
-
-            TextField("Label (optional)", text: $vm.addLabel)
-
-            Button("Start Tunnel") {
-                Task { await vm.addForward() }
-                showAddForm = false
-            }
-            .frame(maxWidth: .infinity)
-            .buttonStyle(.borderedProminent)
-        }
-    }
-}
-
-// MARK: - Tunnel row
-
-private struct TunnelRow: View {
-    let forward: PortForward
-    let isActive: Bool
-    let onToggle: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(isActive ? Color.green : Color.secondary.opacity(0.3))
-                .frame(width: 8, height: 8)
+    private func tunnelRow(item: (forward: PortForward, tunnel: (any PortForwardTunnel)?), idx: Int) -> some View {
+        let isActive = item.tunnel?.isActive == true
+        return HStack(spacing: 12) {
+            DSStatusDot(tone: isActive ? .ok : .off, pulse: isActive, size: 8)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(forward.displayTitle)
-                    .font(.body.weight(.medium))
-                Text("\(forward.direction == .local ? "Local" : "Remote") · localhost:\(forward.localPort) → \(forward.remoteHost):\(forward.remotePort)")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                Text(item.forward.displayTitle.isEmpty ? "Tunnel" : item.forward.displayTitle)
+                    .font(.dsSansPt(14, weight: .medium))
+                    .foregroundStyle(t.text)
+                Text("\(item.forward.direction == .local ? "Local" : "Remote") · :\(item.forward.localPort) → \(item.forward.remoteHost):\(item.forward.remotePort)")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
             }
+
             Spacer()
-            Button(isActive ? "Stop" : "Start") { onToggle() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(isActive ? .red : .green)
+
+            HStack(spacing: 6) {
+                Button(isActive ? "Stop" : "Start") {
+                    Task {
+                        if isActive {
+                            await vm.stopTunnel(for: item.forward)
+                        } else {
+                            await vm.startTunnel(for: item.forward)
+                        }
+                    }
+                }
+                .font(.dsSansPt(12, weight: .medium))
+                .foregroundStyle(isActive ? t.danger : t.ok)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isActive ? t.dangerSoft : t.okSoft, in: Capsule())
+
+                Button {
+                    Task { await vm.removeForward(at: idx) }
+                } label: {
+                    DSIconView(.close, size: 14, color: t.text3)
+                }
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func directionChip(_ label: String, _ dir: PortForward.Direction) -> some View {
+        let selected = vm.addDirection == dir
+        return Text(label)
+            .font(.dsSansPt(13, weight: selected ? .semibold : .regular))
+            .foregroundStyle(selected ? t.accentFg : t.text2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(selected ? t.accent : t.surfaceSunk, in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture { vm.addDirection = dir }
+            .animation(.easeInOut(duration: 0.15), value: vm.addDirection)
+    }
+
+    // MARK: - Layout helpers
+
+    private func sectionHead(_ label: String) -> some View {
+        Text(label.uppercased())
+            .font(.dsSansPt(11, weight: .semibold))
+            .foregroundStyle(t.text3)
+            .tracking(0.5)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func editorCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
+    }
+
+    private var cardDivider: some View {
+        t.border.frame(height: 0.5).padding(.horizontal, 16)
     }
 }
 #endif

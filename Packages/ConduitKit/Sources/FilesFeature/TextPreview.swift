@@ -22,6 +22,7 @@ public struct TextPreview: View {
                     Text(text)
                         .font(.system(.caption, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding()
                         .textSelection(.enabled)
                 }

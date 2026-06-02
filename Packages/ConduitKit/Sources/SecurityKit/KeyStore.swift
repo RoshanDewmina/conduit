@@ -145,6 +145,33 @@ public actor KeyStore {
         return try await importPrivateKey(tag: tag, keyString: text, comment: comment)
     }
 
+    /// Parse and import an OpenSSH private key PEM.
+    ///
+    /// - Parameters:
+    ///   - tag:        Unique identifier stored in Keychain (UUID string recommended).
+    ///   - pem:        Full PEM text (BEGIN OPENSSH PRIVATE KEY … END OPENSSH PRIVATE KEY).
+    ///   - passphrase: Passphrase for encrypted keys; `nil` for unencrypted keys.
+    ///                 **Never persisted** — used transiently during parsing only.
+    ///   - comment:    Optional human-readable label. Falls back to `tag` when omitted.
+    /// - Returns: `PublicKeyInfo` with the OpenSSH public key string and SHA256 fingerprint.
+    /// - Throws:  `ConduitError.keyDecodeFailed` if parsing fails;
+    ///            `ConduitError.keyNotFound` / Keychain errors if the write fails.
+    public func importEd25519FromPEM(
+        tag: String,
+        pem: String,
+        passphrase: String?,
+        comment: String? = nil
+    ) async throws -> PublicKeyInfo {
+        let seed: Data
+        do {
+            seed = try OpenSSHKeyParser.parseEd25519(pem: pem, passphrase: passphrase)
+        } catch let e as OpenSSHKeyParser.ParseError {
+            throw ConduitError.keyDecodeFailed(reason: e.errorDescription ?? String(describing: e))
+        }
+        // Keychain attrs: whenUnlockedThisDeviceOnly, non-synchronizable (enforced by Keychain actor).
+        return try await importEd25519(tag: tag, rawPrivate: seed, comment: comment)
+    }
+
     public func loadEd25519(tag: String) async throws -> Curve25519.Signing.PrivateKey {
         switch try await loadPrivateKey(tag: tag) {
         case .ed25519(let key):
