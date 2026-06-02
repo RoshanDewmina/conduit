@@ -312,9 +312,10 @@ private struct InlineApproval: View {
                         .foregroundStyle(riskColor(risk))
                 }
             }
+            // No lineLimit — the full command must be readable before the user
+            // can approve. Truncating the middle could hide dangerous command parts.
             Text(ap?.cmd ?? agent.tool ?? "")
                 .font(DI.mono(12)).foregroundStyle(DI.ink)
-                .lineLimit(1).truncationMode(.middle)
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
