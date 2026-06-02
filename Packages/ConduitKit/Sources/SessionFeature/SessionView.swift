@@ -85,7 +85,13 @@ public struct SessionView: View {
                         Task { await vm.disconnect() }
                         dismiss()
                     },
-                    onPortForward: { showingPortForward = true }
+                    onPortForward: { showingPortForward = true },
+                    // Manual reconnect: only surfaced when the connection is not
+                    // healthy (dropped/failed/suspended), so the user isn't stranded
+                    // on a dead session when automatic reconnect hasn't fired.
+                    onReconnect: connectionIsUnhealthy
+                        ? { Task { await vm.reconnect() } }
+                        : nil
                 )
 
                 if case .reconnecting = vm.status {
@@ -213,6 +219,15 @@ public struct SessionView: View {
         case .suspended:          return .offline
         case .reconnecting:       return .thinking
         case .failed:             return .error
+        }
+    }
+
+    // True when the connection is dropped/failed and a manual reconnect makes
+    // sense. `.reconnecting` is excluded — its banner already drives auto-retry.
+    private var connectionIsUnhealthy: Bool {
+        switch vm.status {
+        case .disconnected, .suspended, .failed: return true
+        case .connecting, .connected, .reconnecting: return false
         }
     }
 
