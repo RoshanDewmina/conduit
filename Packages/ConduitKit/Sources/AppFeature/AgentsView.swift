@@ -160,12 +160,13 @@ struct AgentDetailView: View {
     @State private var scheduleCommand = ""
     @State private var scheduleSaving = false
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                DSDetailHeader(agent.name)
+                DSDetailHeader(agent.name, onBack: { dismiss() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         runPromptSection
@@ -305,12 +306,13 @@ struct AgentRunDetailView: View {
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                DSDetailHeader("run")
+                DSDetailHeader("run", onBack: { dismiss() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         logsSection
