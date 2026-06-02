@@ -32,8 +32,8 @@ struct DebugGalleryView: View {
         case "orb-slow":       SSHConnectOverlay(phase: .slow(message: "Still connecting…"))
         case "orb-failed":     SSHConnectOverlay(phase: .failed(message: "Can't find host \"example.invalid\". Check the hostname."))
         case "orb-phases":     OrbPhasesDemo()
-        case "onboarding":     OnboardingView(variant: .variantA, onContinue: {}, onSetupWorkspace: {})
-        case "onboarding-b":   OnboardingView(variant: .variantB, onContinue: {}, onSetupWorkspace: {})
+        case "onboarding":     OnboardingView(onContinue: {}, onSetupWorkspace: {})
+        case "onboarding-b":   OnboardingView(onContinue: {}, onSetupWorkspace: {})
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "chat":           chatGallery
