@@ -23,6 +23,7 @@ public struct SessionView: View {
     @State private var connectOverlayPhase: SSHConnectPhase = .connecting
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: SessionViewModel) {
         _vm = State(initialValue: viewModel)
@@ -78,7 +79,24 @@ public struct SessionView: View {
                 ChatHeaderView(
                     hostName: vm.host.name,
                     cwd: vm.cwd,
-                    state: agentState
+                    state: agentState,
+                    // Back is pure navigation — it must NOT disconnect. The session
+                    // (and its SSH connection) stays alive in the background so the
+                    // active-session list + global HUD keep working; re-opening the
+                    // row re-presents this same VM, still connected. Explicit
+                    // disconnect lives in the header overflow menu / row long-press.
+                    onBack: { dismiss() },
+                    onDisconnect: {
+                        Task { await vm.disconnect() }
+                        dismiss()
+                    },
+                    onPortForward: { showingPortForward = true },
+                    // Manual reconnect: only surfaced when the connection is not
+                    // healthy (dropped/failed/suspended), so the user isn't stranded
+                    // on a dead session when automatic reconnect hasn't fired.
+                    onReconnect: connectionIsUnhealthy
+                        ? { Task { await vm.reconnect() } }
+                        : nil
                 )
 
                 if case .reconnecting = vm.status {
@@ -217,6 +235,15 @@ public struct SessionView: View {
         case .failed(let reason): return reason
         case .reconnecting(let n): return "attempt \(n)"
         default: return nil
+        }
+    }
+
+    // True when the connection is dropped/failed and a manual reconnect makes
+    // sense. `.reconnecting` is excluded — its banner already drives auto-retry.
+    private var connectionIsUnhealthy: Bool {
+        switch vm.status {
+        case .disconnected, .suspended, .failed: return true
+        case .connecting, .connected, .reconnecting: return false
         }
     }
 

@@ -10,6 +10,9 @@ public struct ChatHeaderView: View {
     let cwd: String
     let state: AgentState
     let onBack: (() -> Void)?
+    let onDisconnect: (() -> Void)?
+    let onPortForward: (() -> Void)?
+    let onReconnect: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
 
@@ -17,12 +20,18 @@ public struct ChatHeaderView: View {
         hostName: String,
         cwd: String,
         state: AgentState,
-        onBack: (() -> Void)? = nil
+        onBack: (() -> Void)? = nil,
+        onDisconnect: (() -> Void)? = nil,
+        onPortForward: (() -> Void)? = nil,
+        onReconnect: (() -> Void)? = nil
     ) {
         self.hostName = hostName
         self.cwd = cwd
         self.state = state
         self.onBack = onBack
+        self.onDisconnect = onDisconnect
+        self.onPortForward = onPortForward
+        self.onReconnect = onReconnect
     }
 
     public var body: some View {
@@ -58,6 +67,38 @@ public struct ChatHeaderView: View {
             Spacer()
 
             AgentBadge(state)
+
+            if onDisconnect != nil || onPortForward != nil || onReconnect != nil {
+                Menu {
+                    if let onReconnect {
+                        Button {
+                            onReconnect()
+                        } label: {
+                            Label("Reconnect", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    if let onPortForward {
+                        Button {
+                            onPortForward()
+                        } label: {
+                            Label("Port Forwarding", systemImage: "arrow.left.arrow.right")
+                        }
+                    }
+                    if let onDisconnect {
+                        Button(role: .destructive) {
+                            onDisconnect()
+                        } label: {
+                            Label("Disconnect", systemImage: "bolt.slash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(t.text2)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
