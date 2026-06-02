@@ -38,19 +38,16 @@ type AgentRun struct {
 }
 
 type createAgentRequest struct {
-	CustomerID      string          `json:"customerId"`
-	AppAccountToken string          `json:"appAccountToken,omitempty"`
-	Name            string          `json:"name"`
-	Description     string          `json:"description,omitempty"`
-	Runtime         string          `json:"runtime"`
-	Config          json.RawMessage `json:"config,omitempty"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Runtime     string          `json:"runtime"`
+	Config      json.RawMessage `json:"config,omitempty"`
 }
 
 type createRunRequest struct {
-	AgentID    string `json:"agentId"`
-	CustomerID string `json:"customerId,omitempty"`
-	Command    string `json:"command,omitempty"`
-	Status     string `json:"status,omitempty"`
+	AgentID string `json:"agentId"`
+	Command string `json:"command,omitempty"`
+	Status  string `json:"status,omitempty"`
 }
 
 type controlPlaneData struct {
@@ -93,6 +90,12 @@ func registerAgentRoutes(mux *http.ServeMux) {
 }
 
 func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	var req createAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -106,19 +109,6 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		req.Runtime = "ssh-host"
 	}
 
-	entReq := entitlementFromRequest(r, req.CustomerID, req.AppAccountToken)
-	ent, err := resolveEntitlement(&entReq)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-	if req.CustomerID == "" {
-		req.CustomerID = ent.CustomerID
-	}
-	if req.AppAccountToken == "" {
-		req.AppAccountToken = ent.AppAccountToken
-	}
-
 	keyHash, _, err := ensureOpenRouterSubKey(ent)
 	if err != nil {
 		log.Printf("openrouter provision failed: %v", err)
@@ -129,8 +119,8 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	agent := Agent{
 		ID:                newResourceID("agent"),
-		CustomerID:        req.CustomerID,
-		AppAccountToken:   req.AppAccountToken,
+		CustomerID:        ent.CustomerID,
+		AppAccountToken:   ent.AppAccountToken,
 		Name:              req.Name,
 		Description:       req.Description,
 		Runtime:           req.Runtime,
@@ -152,10 +142,9 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleListAgents(w http.ResponseWriter, r *http.Request) {
-	entReq := entitlementFromRequest(r, "", "")
-	ent, err := resolveEntitlement(&entReq)
+	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -171,14 +160,13 @@ func handleListAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	entReq := entitlementFromRequest(r, "", "")
-	ent, err := resolveEntitlement(&entReq)
+	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	id := r.PathValue("id")
 	controlPlane.mu.RLock()
 	defer controlPlane.mu.RUnlock()
 	for _, agent := range controlPlane.data.Agents {
@@ -195,6 +183,12 @@ func handleGetAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateRun(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	var req createRunRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -202,13 +196,6 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AgentID == "" {
 		http.Error(w, "agentId is required", http.StatusBadRequest)
-		return
-	}
-
-	entReq := entitlementFromRequest(r, req.CustomerID, "")
-	ent, err := resolveEntitlement(&entReq)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
@@ -251,14 +238,13 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetRun(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	entReq := entitlementFromRequest(r, "", "")
-	ent, err := resolveEntitlement(&entReq)
+	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	id := r.PathValue("id")
 	controlPlane.mu.RLock()
 	defer controlPlane.mu.RUnlock()
 	for _, run := range controlPlane.data.Runs {
@@ -275,14 +261,13 @@ func handleGetRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleListRuns(w http.ResponseWriter, r *http.Request) {
-	agentID := strings.TrimSpace(r.URL.Query().Get("agentId"))
-	entReq := entitlementFromRequest(r, "", "")
-	ent, err := resolveEntitlement(&entReq)
+	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
+	agentID := strings.TrimSpace(r.URL.Query().Get("agentId"))
 	controlPlane.mu.RLock()
 	defer controlPlane.mu.RUnlock()
 	out := make([]AgentRun, 0)

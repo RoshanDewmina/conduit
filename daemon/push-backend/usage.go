@@ -20,13 +20,12 @@ type UsageRecord struct {
 }
 
 type usageIngestRequest struct {
-	CustomerID string  `json:"customerId,omitempty"`
-	RunID      string  `json:"runId,omitempty"`
-	AgentID    string  `json:"agentId,omitempty"`
-	Model      string  `json:"model,omitempty"`
-	TokensIn   int     `json:"tokensIn,omitempty"`
-	TokensOut  int     `json:"tokensOut,omitempty"`
-	Cost       float64 `json:"cost"`
+	RunID     string  `json:"runId,omitempty"`
+	AgentID   string  `json:"agentId,omitempty"`
+	Model     string  `json:"model,omitempty"`
+	TokensIn  int     `json:"tokensIn,omitempty"`
+	TokensOut int     `json:"tokensOut,omitempty"`
+	Cost      float64 `json:"cost"`
 }
 
 type usageData struct {
@@ -44,20 +43,16 @@ func registerUsageRoutes(mux *http.ServeMux) {
 }
 
 func handleUsageIngest(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	var req usageIngestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	entReq := entitlementFromRequest(r, req.CustomerID, "")
-	ent, err := resolveEntitlement(&entReq)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-	if req.CustomerID == "" {
-		req.CustomerID = ent.CustomerID
 	}
 	if req.Cost < 0 {
 		http.Error(w, "cost must be non-negative", http.StatusBadRequest)

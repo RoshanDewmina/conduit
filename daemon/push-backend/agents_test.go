@@ -8,21 +8,36 @@ import (
 	"testing"
 )
 
+// clientTokenFor retrieves the server-issued bearer token for a seeded customer.
+func clientTokenFor(t *testing.T, customerID string) string {
+	t.Helper()
+	ent, ok := getEntitlementStore().GetByCustomerID(customerID)
+	if !ok {
+		t.Fatalf("no entitlement found for %s", customerID)
+	}
+	if ent.ClientToken == "" {
+		t.Fatalf("entitlement for %s has no ClientToken", customerID)
+	}
+	return ent.ClientToken
+}
+
+func bearerHeader(token string) string {
+	return "Bearer " + token
+}
+
 func TestAgentAndRunHandlers(t *testing.T) {
 	setupTestStores(t)
 	seedActiveEntitlement(t, "cus_agent", "agent-token")
+	tok := clientTokenFor(t, "cus_agent")
 
 	mux := http.NewServeMux()
 	registerAgentRoutes(mux)
 
-	createBody := `{
-		"customerId":"cus_agent",
-		"appAccountToken":"agent-token",
-		"name":"Deploy Bot",
-		"runtime":"ssh-host"
-	}`
+	// Create agent — identity comes from bearer token, not request body.
+	createBody := `{"name":"Deploy Bot","runtime":"ssh-host"}`
 	req := httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -37,17 +52,29 @@ func TestAgentAndRunHandlers(t *testing.T) {
 		t.Fatalf("unexpected agent: %+v", agent)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/agents?customerId=cus_agent", nil)
+	// List agents.
+	req = httptest.NewRequest(http.MethodGet, "/agents", nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list agents status=%d", rec.Code)
 	}
 
+	// Get agent.
+	req = httptest.NewRequest(http.MethodGet, "/agents/"+agent.ID, nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get agent status=%d", rec.Code)
+	}
+
+	// Create run.
 	runBody := `{"agentId":"` + agent.ID + `","command":"echo hello"}`
 	req = httptest.NewRequest(http.MethodPost, "/runs", bytes.NewBufferString(runBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Customer-Id", "cus_agent")
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -59,14 +86,18 @@ func TestAgentAndRunHandlers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/runs/"+run.ID+"?customerId=cus_agent", nil)
+	// Get run.
+	req = httptest.NewRequest(http.MethodGet, "/runs/"+run.ID, nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get run status=%d", rec.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/runs?agentId="+agent.ID+"&customerId=cus_agent", nil)
+	// List runs.
+	req = httptest.NewRequest(http.MethodGet, "/runs?agentId="+agent.ID, nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -74,31 +105,44 @@ func TestAgentAndRunHandlers(t *testing.T) {
 	}
 }
 
-func TestHostedAPIRequiresEntitlement(t *testing.T) {
+func TestHostedAPIRequiresBearer(t *testing.T) {
 	setupTestStores(t)
 
 	mux := http.NewServeMux()
 	registerAgentRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(`{"name":"x","customerId":"cus_none"}`))
+	// No Authorization header → 401.
+	req := httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(`{"name":"x"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+
+	// Invalid bearer token → 401.
+	req = httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(`{"name":"x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer invalid-token-that-does-not-exist")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad token, got %d", rec.Code)
 	}
 }
 
 func TestUsageIngest(t *testing.T) {
 	setupTestStores(t)
 	seedActiveEntitlement(t, "cus_usage", "usage-token")
+	tok := clientTokenFor(t, "cus_usage")
 
 	mux := http.NewServeMux()
 	registerUsageRoutes(mux)
 
-	body := `{"customerId":"cus_usage","model":"anthropic/claude-3.5-sonnet","tokensIn":100,"tokensOut":50,"cost":0.012}`
+	body := `{"model":"anthropic/claude-3.5-sonnet","tokensIn":100,"tokensOut":50,"cost":0.012}`
 	req := httptest.NewRequest(http.MethodPost, "/usage", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(tok))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
