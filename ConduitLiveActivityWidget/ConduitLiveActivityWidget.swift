@@ -8,7 +8,9 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import AppIntents
 import SessionFeature
+import NotificationsKit
 
 @main
 struct ConduitLiveActivityWidgetBundle: WidgetBundle {
@@ -24,29 +26,58 @@ struct ConduitSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ConduitSessionAttributes.self) { context in
             // Lock-screen + banner appearance.
-            HStack(spacing: 12) {
-                Image(systemName: statusIcon(context.state.status))
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.attributes.hostName)
-                        .font(.headline)
-                    HStack(spacing: 4) {
-                        if let agent = context.state.agentName {
-                            Text(agent).foregroundStyle(.secondary)
-                            Text("·").foregroundStyle(.tertiary)
+            VStack(spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: statusIcon(context.state.status))
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.attributes.hostName)
+                            .font(.headline)
+                        HStack(spacing: 4) {
+                            if let agent = context.state.agentName {
+                                Text(agent).foregroundStyle(.secondary)
+                                Text("·").foregroundStyle(.tertiary)
+                            }
+                            Text(context.state.status)
+                                .foregroundStyle(.secondary)
                         }
-                        Text(context.state.status)
-                            .foregroundStyle(.secondary)
+                        .font(.caption.monospaced())
                     }
-                    .font(.caption.monospaced())
+                    Spacer()
+                    if context.state.pendingApprovals > 0 {
+                        Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.orange)
+                            .font(.caption.weight(.semibold))
+                    }
                 }
-                Spacer()
-                if context.state.pendingApprovals > 0 {
-                    Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.orange)
-                        .font(.caption.weight(.semibold))
+
+                if let approvalID = context.state.pendingApprovalID, !approvalID.isEmpty {
+                    HStack(spacing: 8) {
+                        Button(
+                            intent: ApprovalActionIntent(
+                                approvalID: approvalID,
+                                hostID: context.attributes.hostID,
+                                decision: .reject
+                            )
+                        ) {
+                            Label("Reject", systemImage: "xmark.circle")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(
+                            intent: ApprovalActionIntent(
+                                approvalID: approvalID,
+                                hostID: context.attributes.hostID,
+                                decision: .approve
+                            )
+                        ) {
+                            Label("Approve", systemImage: "checkmark.circle")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .font(.caption)
                 }
             }
             .padding(.horizontal, 16)
@@ -73,7 +104,32 @@ struct ConduitSessionLiveActivity: Widget {
                         }
                     }
                 }
-                DynamicIslandExpandedRegion(.bottom) { EmptyView() }
+                DynamicIslandExpandedRegion(.bottom) {
+                    if let approvalID = context.state.pendingApprovalID, !approvalID.isEmpty {
+                        HStack(spacing: 10) {
+                            Button(
+                                intent: ApprovalActionIntent(
+                                    approvalID: approvalID,
+                                    hostID: context.attributes.hostID,
+                                    decision: .reject
+                                )
+                            ) {
+                                Label("Reject", systemImage: "xmark")
+                            }
+                            .buttonStyle(.bordered)
+                            Button(
+                                intent: ApprovalActionIntent(
+                                    approvalID: approvalID,
+                                    hostID: context.attributes.hostID,
+                                    decision: .approve
+                                )
+                            ) {
+                                Label("Approve", systemImage: "checkmark")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
             } compactLeading: {
                 Image(systemName: statusIcon(context.state.status))
                     .foregroundStyle(.tint)
@@ -88,6 +144,7 @@ struct ConduitSessionLiveActivity: Widget {
             }
         }
     }
+
 
     private func statusIcon(_ status: String) -> String {
         switch status {

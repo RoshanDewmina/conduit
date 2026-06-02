@@ -52,6 +52,18 @@ struct SessionsHomeView: View {
             .searchable(text: $searchText, prompt: "Search sessions")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        HistoryView(
+                            viewModel: HistoryViewModel(
+                                repository: blockRepo,
+                                liveSession: liveSession
+                            )
+                        )
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onAddSession) {
                         Image(systemName: "plus")
                     }

@@ -62,7 +62,10 @@ let package = Package(
         ),
         .target(
             name: "SecurityKit",
-            dependencies: ["ConduitCore"],
+            dependencies: [
+                "ConduitCore",
+                .product(name: "Citadel", package: "Citadel"),
+            ],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -90,7 +93,7 @@ let package = Package(
         ),
         .target(
             name: "AgentKit",
-            dependencies: ["ConduitCore", "SecurityKit"],
+            dependencies: ["ConduitCore", "SecurityKit", "SSHTransport"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -102,6 +105,7 @@ let package = Package(
             name: "PersistenceKit",
             dependencies: [
                 "ConduitCore",
+                "AgentKit",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             swiftSettings: swiftSettings
@@ -144,7 +148,7 @@ let package = Package(
             name: "SessionFeature",
             dependencies: [
                 "DesignSystem", "TerminalEngine", "SSHTransport",
-                "AgentKit", "PersistenceKit", "SecurityKit",
+                "AgentKit", "PersistenceKit", "SecurityKit", "NotificationsKit",
             ],
             swiftSettings: swiftSettings
         ),

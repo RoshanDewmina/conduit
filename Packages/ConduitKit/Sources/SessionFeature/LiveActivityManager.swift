@@ -33,17 +33,20 @@ public struct ConduitSessionAttributes: ActivityAttributes {
         public var status: String           // "connected" / "reconnecting" / "suspended"
         public var pendingApprovals: Int
         public var agentName: String?       // "Claude Code" when an agent is running
+        public var pendingApprovalID: String?
         public var lastUpdate: Date
 
         public init(
             status: String,
             pendingApprovals: Int = 0,
             agentName: String? = nil,
+            pendingApprovalID: String? = nil,
             lastUpdate: Date = .now
         ) {
             self.status = status
             self.pendingApprovals = pendingApprovals
             self.agentName = agentName
+            self.pendingApprovalID = pendingApprovalID
             self.lastUpdate = lastUpdate
         }
     }
@@ -82,14 +85,16 @@ public final class ConduitLiveActivityManager {
         hostName: String,
         status: String = "connected",
         agentName: String? = nil,
-        pendingApprovals: Int = 0
+        pendingApprovals: Int = 0,
+        pendingApprovalID: String? = nil
     ) async {
         guard isEnabled else { return }
 
         let content = ConduitSessionAttributes.ContentState(
             status: status,
             pendingApprovals: pendingApprovals,
-            agentName: agentName
+            agentName: agentName,
+            pendingApprovalID: pendingApprovalID
         )
 
         if let existing = activities[hostID] {
@@ -117,13 +122,15 @@ public final class ConduitLiveActivityManager {
         hostID: String,
         status: String,
         agentName: String? = nil,
-        pendingApprovals: Int = 0
+        pendingApprovals: Int = 0,
+        pendingApprovalID: String? = nil
     ) async {
         guard let activity = activities[hostID] else { return }
         let content = ConduitSessionAttributes.ContentState(
             status: status,
             pendingApprovals: pendingApprovals,
-            agentName: agentName
+            agentName: agentName,
+            pendingApprovalID: pendingApprovalID
         )
         await activity.update(.init(state: content, staleDate: nil))
     }

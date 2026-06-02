@@ -108,6 +108,10 @@ public struct SessionView: View {
                         onStar: { block in
                             vm.blocks.toggleStarred(id: block.id)
                             Haptics.selection()
+                        },
+                        onLoadOlder: {
+                            guard vm.hasOlderScrollback else { return }
+                            Task { await vm.loadOlderScrollback() }
                         }
                     )
                 }
@@ -151,7 +155,7 @@ public struct SessionView: View {
         }
         .task {
             if let db = try? AppDatabase.openShared(),
-               let snippets = try? await SnippetRepository(db: db).rankedForPalette() {
+               let snippets = try? await SnippetRepository(db: db).rankedForPalette(hostTags: vm.host.tags) {
                 availableSnippets = snippets
             }
         }

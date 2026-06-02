@@ -8,14 +8,17 @@ import PersistenceKit
 public final class LiveInboxViewModel: InboxViewModel {
     private let repository: ApprovalRepository
     private let onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)?
+    private let onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)?
     @ObservationIgnored nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,
-        onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)? = nil
+        onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)? = nil,
+        onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)? = nil
     ) {
         self.repository = repository
         self.onDecision = onDecision
+        self.onPendingApprovalsChanged = onPendingApprovalsChanged
         super.init()
         startObserving()
     }
@@ -27,6 +30,12 @@ public final class LiveInboxViewModel: InboxViewModel {
                 for try await approvals in await self.repository.observe() {
                     guard !Task.isCancelled else { break }
                     self.approvals = approvals
+                    let pending = approvals.filter(\.isPending)
+                    await self.onPendingApprovalsChanged?(
+                        pending.count,
+                        pending.first.map(Self.agentLabel(for:)),
+                        pending.first?.id.uuidString
+                    )
                 }
             } catch { /* observation ended */ }
         }
@@ -42,6 +51,17 @@ public final class LiveInboxViewModel: InboxViewModel {
 
     deinit {
         observationTask?.cancel()
+    }
+
+    private static func agentLabel(for approval: Approval) -> String {
+        switch approval.agent {
+        case .claudeCode: "Claude Code"
+        case .codex:      "Codex"
+        case .cursor:     "Cursor"
+        case .opencode:   "OpenCode"
+        case .devin:      "Devin"
+        case .unknown:    "Agent"
+        }
     }
 }
 #endif

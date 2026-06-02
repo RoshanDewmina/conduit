@@ -1,5 +1,6 @@
 import Foundation
 @preconcurrency import Citadel
+@preconcurrency import NIOCore
 import ConduitCore
 
 // MARK: - SFTPEntry
@@ -118,6 +119,133 @@ public actor SFTPClient {
                 guard let bytes = buf.readBytes(length: clamp) else { return Data() }
                 return Data(bytes)
             }
+        }
+    }
+
+    /// Downloads data from a remote file, reporting optional transfer progress.
+    public func download(
+        path: String,
+        limitBytes: Int = 50 * 1024 * 1024,
+        onProgress: (@Sendable (FileTransferProgress) -> Void)? = nil
+    ) async throws -> Data {
+        try await session.withSFTP { sftp in
+            let attrs = try await sftp.getAttributes(at: path)
+            let total = attrs.size.map(Int64.init)
+            return try await sftp.withFile(filePath: path, flags: .read) { file in
+                var offset: UInt64 = 0
+                var received: Int64 = 0
+                var result = Data()
+                let chunkSize: UInt32 = 32_000
+
+                while received < Int64(limitBytes) {
+                    let requested = UInt32(Swift.min(Int(chunkSize), limitBytes - Int(received)))
+                    if requested == 0 { break }
+                    var chunk = try await file.read(from: offset, length: requested)
+                    let bytes = chunk.readableBytes
+                    if bytes == 0 { break }
+                    guard let data = chunk.readBytes(length: bytes) else { break }
+                    result.append(contentsOf: data)
+                    received += Int64(bytes)
+                    offset += UInt64(bytes)
+                    onProgress?(FileTransferProgress(bytesTransferred: received, totalBytes: total))
+                }
+                return result
+            }
+        }
+    }
+
+    /// Streams a local file to a remote path over SFTP.
+    public func upload(
+        localFileURL: URL,
+        to remotePath: String,
+        onProgress: (@Sendable (FileTransferProgress) -> Void)? = nil
+    ) async throws {
+        let attrs = try FileManager.default.attributesOfItem(atPath: localFileURL.path)
+        let totalBytes = (attrs[.size] as? NSNumber)?.int64Value
+        let handle = try FileHandle(forReadingFrom: localFileURL)
+        defer { try? handle.close() }
+
+        try await session.withSFTP { sftp in
+            try await sftp.withFile(filePath: remotePath, flags: [.write, .create, .truncate]) { remote in
+                var offset: UInt64 = 0
+                var transferred: Int64 = 0
+                let chunkSize = 32_000
+                while true {
+                    let data = try handle.read(upToCount: chunkSize) ?? Data()
+                    if data.isEmpty { break }
+                    var buffer = ByteBufferAllocator().buffer(capacity: data.count)
+                    buffer.writeBytes(data)
+                    try await remote.write(buffer, at: offset)
+                    offset += UInt64(data.count)
+                    transferred += Int64(data.count)
+                    onProgress?(FileTransferProgress(bytesTransferred: transferred, totalBytes: totalBytes))
+                }
+            }
+        }
+    }
+
+    /// Writes `data` to `path`, replacing any existing file.
+    public func write(
+        path: String,
+        data: Data,
+        onProgress: (@Sendable (FileTransferProgress) -> Void)? = nil
+    ) async throws {
+        try await session.withSFTP { sftp in
+            try await sftp.withFile(filePath: path, flags: [.write, .create, .truncate]) { file in
+                let chunkSize = 32_000
+                var offset: UInt64 = 0
+                var transferred = 0
+                while transferred < data.count {
+                    let end = Swift.min(transferred + chunkSize, data.count)
+                    let chunk = data[transferred..<end]
+                    var buffer = ByteBufferAllocator().buffer(capacity: chunk.count)
+                    buffer.writeBytes(chunk)
+                    try await file.write(buffer, at: offset)
+                    transferred = end
+                    offset += UInt64(chunk.count)
+                    onProgress?(FileTransferProgress(
+                        bytesTransferred: Int64(transferred),
+                        totalBytes: Int64(data.count)
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Removes a file at `path`.
+    public func remove(path: String) async throws {
+        try await session.withSFTP { sftp in
+            try await sftp.remove(at: path)
+        }
+    }
+
+    /// Renames a file or directory from `from` to `to`.
+    public func rename(from: String, to: String) async throws {
+        try await session.withSFTP { sftp in
+            try await sftp.rename(at: from, to: to)
+        }
+    }
+
+    /// Creates a directory at `path`.
+    public func mkdir(path: String) async throws {
+        try await session.withSFTP { sftp in
+            try await sftp.createDirectory(atPath: path)
+        }
+    }
+
+    /// Removes an empty directory at `path`.
+    public func rmdir(path: String) async throws {
+        try await session.withSFTP { sftp in
+            try await sftp.rmdir(at: path)
+        }
+    }
+
+    /// Applies Unix mode bits at `path` (e.g. `0o755`).
+    public func chmod(path: String, mode: UInt32) async throws {
+        try await session.withSFTP { sftp in
+            var attrs = SFTPFileAttributes()
+            attrs.permissions = mode
+            try await sftp.setAttributes(at: path, to: attrs)
         }
     }
 

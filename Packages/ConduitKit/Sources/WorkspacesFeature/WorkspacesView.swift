@@ -52,6 +52,7 @@ public final class WorkspacesViewModel {
 public struct WorkspacesView: View {
     @State private var vm: WorkspacesViewModel
     @State private var searchText = ""
+    @State private var collapsedSections: Set<String> = []
     public var onSelect: (Host) -> Void
     public var onEdit: (Host) -> Void
     public var onAddHost: () -> Void
@@ -92,16 +93,20 @@ public struct WorkspacesView: View {
         parseSSHCommand(searchText)
     }
 
-    /// Hosts split into groups by their first tag, with an "Untagged" group
-    /// (title `""`) at the top. Within each group, sort by name.
+    /// Hosts split into groups by all tags, with "Untagged" at the top.
     private var hostGroups: [(title: String, hosts: [Host])] {
         var untagged: [Host] = []
         var byTag: [String: [Host]] = [:]
         for host in filteredHosts {
-            if let tag = host.tags.first, !tag.isEmpty {
-                byTag[tag, default: []].append(host)
-            } else {
+            let tags = host.tags
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if tags.isEmpty {
                 untagged.append(host)
+            } else {
+                for tag in Set(tags) {
+                    byTag[tag, default: []].append(host)
+                }
             }
         }
         var result: [(String, [Host])] = []
@@ -188,14 +193,22 @@ public struct WorkspacesView: View {
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(hostGroups, id: \.title) { group in
-                    if group.title.isEmpty {
-                        // Untagged hosts shown without a header.
-                        ForEach(group.hosts) { host in hostRow(host) }
-                    } else {
-                        Section(group.title) {
+                    let sectionID = group.title.isEmpty ? "__untagged" : group.title
+                    DisclosureGroup(
+                        isExpanded: isExpandedBinding(for: sectionID),
+                        content: {
                             ForEach(group.hosts) { host in hostRow(host) }
+                        },
+                        label: {
+                            HStack {
+                                Text(group.title.isEmpty ? "Untagged" : group.title)
+                                Spacer()
+                                Text("\(group.hosts.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    }
+                    )
                 }
             }
         }
@@ -225,6 +238,19 @@ public struct WorkspacesView: View {
         }, message: {
             Text(vm.loadError ?? "")
         })
+    }
+
+    private func isExpandedBinding(for sectionID: String) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedSections.contains(sectionID) },
+            set: { expanded in
+                if expanded {
+                    collapsedSections.remove(sectionID)
+                } else {
+                    collapsedSections.insert(sectionID)
+                }
+            }
+        )
     }
 }
 

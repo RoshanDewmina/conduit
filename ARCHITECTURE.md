@@ -146,6 +146,7 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 | Agent inbox / approvals | ⚪ | ⚪ | 🟡 | ✅ | ✅ | ✅ |
 | Diff review on phone | ⚪ | ⚪ | ✅ | 🟡 | ✅ | ✅ |
 | Live web preview of remote port | ⚪ | ⚪ | ⚪ | ✅ | 🟡 | ✅ |
+| Reverse SSH port forwarding (`tcpip-forward`) | ✅ | ✅ | ✅ | 🟡 | ⚪ | ⚪ (known gap) |
 | Push notifications | 🟡 | ⚪ | ⚪ | ⚪ | ⏳ | ✅ |
 | AI command synthesis (NL → cmd) | 🟡 🔒 | ⚪ | ✅ | 🟡 | ⚪ | ✅ |
 | Error-explain on stderr | ⚪ | ⚪ | ✅ | 🟡 | ⚪ | ✅ |

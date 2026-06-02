@@ -247,6 +247,34 @@ public final class BlockRenderer {
         #endif
     }
 
+    public func appendHistory(_ history: [Block]) {
+        guard !history.isEmpty else { return }
+        let known = Set(blocks.map(\.id))
+        let deduped = history.filter { !known.contains($0.id) }
+        guard !deduped.isEmpty else { return }
+        blocks.insert(contentsOf: deduped, at: 0)
+    }
+
+    public func trimToLatest(_ maxCount: Int) {
+        guard maxCount > 0, blocks.count > maxCount else { return }
+        let removeCount = blocks.count - maxCount
+        let removed = Array(blocks.prefix(removeCount))
+        let removedIDs = Set(removed.map(\.id))
+        blocks.removeFirst(removeCount)
+        removedIDs.forEach { id in
+            openState[id] = nil
+            renderCache[id] = nil
+            #if canImport(SwiftTerm)
+            terminals[id] = nil
+            hasCursorMovement.remove(id)
+            #endif
+            #if canImport(UIKit) && canImport(SwiftTerm)
+            liveBlockHandles[id]?.finish()
+            liveBlockHandles[id] = nil
+            #endif
+        }
+    }
+
     // MARK: - Rendering
 
     /// Render the block to an AttributedString. Cached until chunks change.

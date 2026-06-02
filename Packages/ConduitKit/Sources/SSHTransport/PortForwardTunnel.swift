@@ -134,6 +134,25 @@ public final class LocalPortForwardTunnel: PortForwardTunnel, @unchecked Sendabl
     }
 }
 
+// MARK: - Remote forward fallback
+
+public final class RemotePortForwardTunnel: PortForwardTunnel, @unchecked Sendable {
+    public let forward: PortForward
+    public private(set) var isActive: Bool = false
+
+    init(forward: PortForward) {
+        self.forward = forward
+    }
+
+    func start() async throws {
+        throw ConduitError.unsupportedPlatform
+    }
+
+    public func stop() async {
+        isActive = false
+    }
+}
+
 // MARK: - Inbound stream wrapper for directTCPIP channel
 
 final class DirectTCPIPStream: @unchecked Sendable {
@@ -170,6 +189,12 @@ private final class DirectTCPIPInboundHandler: ChannelInboundHandler, @unchecked
 extension SSHSession {
     public func startLocalPortForward(_ forward: PortForward) async throws -> LocalPortForwardTunnel {
         let tunnel = LocalPortForwardTunnel(sshSession: self, forward: forward)
+        try await tunnel.start()
+        return tunnel
+    }
+
+    public func startRemotePortForward(_ forward: PortForward) async throws -> RemotePortForwardTunnel {
+        let tunnel = RemotePortForwardTunnel(forward: forward)
         try await tunnel.start()
         return tunnel
     }

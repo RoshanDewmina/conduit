@@ -4,12 +4,16 @@ import Observation
 import SwiftUI
 import UIKit
 import os.signpost
+#if os(iOS)
+import WidgetKit
+#endif
 import ConduitCore
 import TerminalEngine
 import SSHTransport
 import SecurityKit
 import AgentKit
 import PersistenceKit
+import NotificationsKit
 
 private let blockLog = OSLog(subsystem: "com.conduit.terminal", category: "BlockLifecycle")
 
@@ -105,12 +109,36 @@ public final class SessionViewModel {
     public private(set) var tmuxSessionName: String? = nil
     private var reconnectEngine: AutoReconnectEngine?
     private var keepAliveTask: Task<Void, Never>?
+    private var livePendingApprovals: Int = 0
+    private var liveAgentName: String?
+    private var livePendingApprovalID: String?
+    private var historyOffset: Int = 0
+    public private(set) var hasOlderScrollback: Bool = false
+    private static let scrollbackPageSize = 200
+
+    private struct LiveActivitySnapshot: Equatable {
+        let status: String
+        let pendingApprovals: Int
+        let agentName: String?
+        let pendingApprovalID: String?
+    }
+
+    private var lastLiveActivitySnapshot: LiveActivitySnapshot?
 
     public func handleSceneActive() async {
         let connected = await sshSession.isConnected
+        if connected, status == .suspended {
+            await transitionStatus(.connected)
+            return
+        }
         if !connected && status != .connecting {
             await attemptReconnect()
         }
+    }
+
+    public func handleSceneBackground() async {
+        guard status == .connected else { return }
+        await transitionStatus(.suspended)
     }
 
     public func enableTmux(sessionName: String) {
@@ -118,18 +146,18 @@ public final class SessionViewModel {
     }
 
     private func attemptReconnect() async {
-        status = .reconnecting(attempt: 1)
+        await transitionStatus(.reconnecting(attempt: 1))
         do {
             try await sshSession.attemptReconnect()
             if let name = tmuxSessionName {
                 let tmux = TmuxClient(session: sshSession)
                 try await tmux.attachOrCreate(name: name)
             }
-            status = .connected
+            await transitionStatus(.connected)
             await openUnifiedShell()
             await refreshCWD()
         } catch {
-            status = .failed(reason: "Reconnect failed: \(error.localizedDescription)")
+            await transitionStatus(.failed(reason: "Reconnect failed: \(error.localizedDescription)"))
         }
     }
 
@@ -140,7 +168,9 @@ public final class SessionViewModel {
     private let credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
     private let aiClient: (any AIClient)?
+    private let onAIUsage: (@Sendable (UsageRecord) async -> Void)?
     private let blockRepo: BlockRepository?
+    private let auditRepo: AuditRepository?
 
     /// Optional snapshot repository — when injected, `connect()` will read the
     /// last `SessionSnapshot` for this host and, if `host.autoResume` is on
@@ -158,7 +188,9 @@ public final class SessionViewModel {
         credentialProvider: @escaping @Sendable () async throws -> SSHCredential,
         hostKeyStore: HostKeyStore,
         aiClient: (any AIClient)? = nil,
+        onAIUsage: (@Sendable (UsageRecord) async -> Void)? = nil,
         blockRepo: BlockRepository? = nil,
+        auditRepo: AuditRepository? = nil,
         snapshotRepo: SessionSnapshotRepository? = nil,
         agentRegistry: AgentRegistry = .defaults
     ) {
@@ -167,7 +199,9 @@ public final class SessionViewModel {
         self.credentialProvider = credentialProvider
         self.hostKeyStore = hostKeyStore
         self.aiClient = aiClient
+        self.onAIUsage = onAIUsage
         self.blockRepo = blockRepo
+        self.auditRepo = auditRepo
         self.snapshotRepo = snapshotRepo
         self.agentRegistry = agentRegistry
         self.blocks = BlockRenderer()
@@ -177,13 +211,15 @@ public final class SessionViewModel {
 
     public func connect() async {
         guard status != .connected else { return }
-        status = .connecting
+        await transitionStatus(.connecting)
         do {
             let cred = try await credentialProvider()
             try await sshSession.connect(credential: cred, hostKeyStore: hostKeyStore)
-            status = .connected
+            await transitionStatus(.connected)
+            try? await auditRepo?.record(hostID: host.id, type: .connect)
             applyScreenSleepPolicy(connected: true)
             startKeepAlive()
+            await startReconnectEngine()
             // If host has a tmux session configured, attach or create it.
             if let name = host.tmuxSessionName, !name.isEmpty {
                 tmuxSessionName = name
@@ -191,6 +227,7 @@ public final class SessionViewModel {
                 try? await tmux.attachOrCreate(name: name)
             }
             await refreshCWD()
+            await loadInitialScrollbackFromStore()
             await openUnifiedShell()
             // Tier 1.4 + 1.5.2: after the unified shell is up, fire the
             // per-host startup command (if any), then attempt agent session
@@ -213,16 +250,39 @@ public final class SessionViewModel {
                 await ConduitLiveActivityManager.shared.start(
                     hostID: host.id.uuidString,
                     hostName: host.name,
-                    status: "connected"
+                    status: "connected",
+                    agentName: liveAgentName,
+                    pendingApprovals: livePendingApprovals,
+                    pendingApprovalID: livePendingApprovalID
                 )
+                await updateLiveActivityIfNeeded()
             }
         } catch ConduitError.hostKeyUnknown(let fp) {
             pendingHostKeyFingerprint = fp
-            status = .disconnected
+            try? await auditRepo?.record(
+                hostID: host.id,
+                type: .hostKeyChanged,
+                metadata: ["fingerprint": fp, "reason": "unknownHostKey"]
+            )
+            await transitionStatus(.disconnected)
+        } catch ConduitError.hostKeyMismatch(let expected, let actual) {
+            try? await auditRepo?.record(
+                hostID: host.id,
+                type: .hostKeyChanged,
+                metadata: ["expected": expected, "actual": actual]
+            )
+            await transitionStatus(.failed(reason: "Host key changed"))
+        } catch ConduitError.authFailed(let reason) {
+            try? await auditRepo?.record(
+                hostID: host.id,
+                type: .authFailure,
+                metadata: ["reason": reason]
+            )
+            await transitionStatus(.failed(reason: "Authentication failed: \(reason)"))
         } catch let err as ConduitError {
-            status = .failed(reason: err.errorDescription ?? "connection failed")
+            await transitionStatus(.failed(reason: err.errorDescription ?? "connection failed"))
         } catch {
-            status = .failed(reason: error.localizedDescription)
+            await transitionStatus(.failed(reason: error.localizedDescription))
         }
     }
 
@@ -235,7 +295,7 @@ public final class SessionViewModel {
 
     public func rejectHostKey() {
         pendingHostKeyFingerprint = nil
-        status = .disconnected
+        Task { [weak self] in await self?.transitionStatus(.disconnected) }
     }
 
     public func reconnect() async {
@@ -245,12 +305,14 @@ public final class SessionViewModel {
 
     public func disconnect() async {
         stopKeepAlive()
+        await stopReconnectEngine()
         integrationFallbackTask?.cancel()
         integrationFallbackTask = nil
         await deescalate()
         await closeUnifiedShell()
         await sshSession.disconnect()
-        status = .disconnected
+        try? await auditRepo?.record(hostID: host.id, type: .disconnect)
+        await transitionStatus(.disconnected)
         applyScreenSleepPolicy(connected: false)
         // Tier 1.5.1: dismiss the lock-screen Live Activity for this host.
         if #available(iOS 16.2, *) {
@@ -281,6 +343,150 @@ public final class SessionViewModel {
             ? true
             : UserDefaults.standard.bool(forKey: "terminalPreventSleep")
         UIApplication.shared.isIdleTimerDisabled = connected && prevent
+    }
+
+    private func startReconnectEngine() async {
+        if let reconnectEngine {
+            await reconnectEngine.start()
+            return
+        }
+        let engine = AutoReconnectEngine(
+            hostName: host.name,
+            onReconnect: { [weak self] in
+                guard let self else { return }
+                await self.attemptReconnect()
+            },
+            onFailed: { _ in
+                // App-extension-safe no-op; reconnect failure is surfaced in-session.
+            }
+        )
+        reconnectEngine = engine
+        await engine.start()
+    }
+
+    private func stopReconnectEngine() async {
+        if let reconnectEngine {
+            await reconnectEngine.stop()
+        }
+        self.reconnectEngine = nil
+    }
+
+    private func scrollbackLimit() -> Int {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "terminalScrollback") == nil { return 1_000 }
+        return max(0, defaults.integer(forKey: "terminalScrollback"))
+    }
+
+    private func enforceScrollbackLimit() {
+        let limit = scrollbackLimit()
+        guard limit > 0 else { return }
+        blocks.trimToLatest(limit)
+    }
+
+    private func loadInitialScrollbackFromStore() async {
+        guard let blockRepo else { return }
+        let limit = scrollbackLimit()
+        let pageSize = limit == 0 ? Self.scrollbackPageSize : min(limit, Self.scrollbackPageSize)
+        guard pageSize > 0 else { return }
+        let recent = (try? await blockRepo.recent(
+            hostName: host.name,
+            limit: pageSize,
+            offset: 0
+        )) ?? []
+        guard !recent.isEmpty else {
+            historyOffset = 0
+            hasOlderScrollback = false
+            return
+        }
+        let chronological = recent.reversed()
+        blocks.appendHistory(Array(chronological))
+        historyOffset = recent.count
+        hasOlderScrollback = recent.count == pageSize && (limit == 0 || historyOffset < limit)
+        enforceScrollbackLimit()
+    }
+
+    public func loadOlderScrollback() async {
+        guard hasOlderScrollback, let blockRepo else { return }
+        let limit = scrollbackLimit()
+        let remaining = limit == 0 ? Self.scrollbackPageSize : max(0, limit - historyOffset)
+        guard remaining > 0 else {
+            hasOlderScrollback = false
+            return
+        }
+        let pageSize = min(Self.scrollbackPageSize, remaining)
+        let older = (try? await blockRepo.recent(
+            hostName: host.name,
+            limit: pageSize,
+            offset: historyOffset
+        )) ?? []
+        if older.isEmpty {
+            hasOlderScrollback = false
+            return
+        }
+        let chronological = older.reversed()
+        blocks.appendHistory(Array(chronological))
+        historyOffset += older.count
+        hasOlderScrollback = older.count == pageSize && (limit == 0 || historyOffset < limit)
+        enforceScrollbackLimit()
+    }
+
+    public func setLiveActivityPendingApprovals(
+        _ pendingApprovals: Int,
+        agentName: String?,
+        approvalID: String?
+    ) async {
+        livePendingApprovals = max(0, pendingApprovals)
+        livePendingApprovalID = pendingApprovals > 0 ? approvalID : nil
+        if let agentName, !agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            liveAgentName = agentName
+        } else if livePendingApprovals == 0 {
+            liveAgentName = nil
+        }
+        await updateLiveActivityIfNeeded()
+    }
+
+    private func transitionStatus(_ newStatus: Session.Status) async {
+        status = newStatus
+        await updateLiveActivityIfNeeded()
+    }
+
+    private func liveActivityStatus(for status: Session.Status) -> String? {
+        switch status {
+        case .connected: "connected"
+        case .reconnecting: "reconnecting"
+        case .suspended: "suspended"
+        default: nil
+        }
+    }
+
+    private func updateLiveActivityIfNeeded() async {
+        guard #available(iOS 16.2, *),
+              let liveStatus = liveActivityStatus(for: status) else { return }
+        let snapshot = LiveActivitySnapshot(
+            status: liveStatus,
+            pendingApprovals: livePendingApprovals,
+            agentName: liveAgentName,
+            pendingApprovalID: livePendingApprovalID
+        )
+        guard snapshot != lastLiveActivitySnapshot else { return }
+        lastLiveActivitySnapshot = snapshot
+        await ConduitLiveActivityManager.shared.update(
+            hostID: host.id.uuidString,
+            status: snapshot.status,
+            agentName: snapshot.agentName,
+            pendingApprovals: snapshot.pendingApprovals,
+            pendingApprovalID: snapshot.pendingApprovalID
+        )
+        writeWidgetSnapshot(snapshot)
+    }
+
+    private func writeWidgetSnapshot(_ snapshot: LiveActivitySnapshot) {
+        guard let defaults = UserDefaults(suiteName: WidgetSnapshot.appGroupID) else { return }
+        defaults.set(snapshot.pendingApprovals, forKey: WidgetSnapshot.pendingApprovalsKey)
+        defaults.set(snapshot.status, forKey: WidgetSnapshot.sessionStatusKey)
+        defaults.set(host.name, forKey: WidgetSnapshot.hostNameKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: WidgetSnapshot.lastUpdatedKey)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Tier 1.4 + 1.5.2: Startup command + agent resume
@@ -431,7 +637,7 @@ public final class SessionViewModel {
                     Task { @MainActor [weak self] in
                         guard let self, let blockID = self.unifiedBlockID else { return }
                         if self.status == .disconnected {
-                            self.status = .connected
+                            await self.transitionStatus(.connected)
                         }
                         let data = Data(bytes)
                         let interactiveHint = TUIDetector.shouldEscalate(to: data)
@@ -467,7 +673,7 @@ public final class SessionViewModel {
                     Task { @MainActor [weak self] in
                         guard let self else { return }
                         if self.status == .disconnected {
-                            self.status = .connected
+                            await self.transitionStatus(.connected)
                         }
                         // Phase 7 fallback: cancel the "no-markers fallback" timer
                         // once we know shell integration is working.
@@ -499,6 +705,7 @@ public final class SessionViewModel {
                             prompt: prompt
                         )
                         self.unifiedBlockID = blockID
+                        self.enforceScrollbackLimit()
                         os_signpost(.event, log: blockLog, name: "blockPromptStart",
                                     "%{public}s", blockID.uuidString)
                     }
@@ -517,7 +724,7 @@ public final class SessionViewModel {
                     Task { @MainActor [weak self] in
                         guard let self else { return }
                         if self.status == .disconnected {
-                            self.status = .connected
+                            await self.transitionStatus(.connected)
                         }
                         self.isExecutingUnified = true
                         if let blockID = self.unifiedBlockID {
@@ -536,6 +743,7 @@ public final class SessionViewModel {
                             os_signpost(.end, log: blockLog, name: "blockExecuting",
                                         "exit=%d", exitCode)
                             self.blocks.finalize(id: blockID, exitCode: exitCode)
+                            self.enforceScrollbackLimit()
                             if let repo = self.blockRepo,
                                let b = self.blocks.blocks.first(where: { $0.id == blockID }) {
                                 try? await repo.persist(b)
@@ -693,6 +901,7 @@ public final class SessionViewModel {
             let blockID = blocks.begin(sessionID: sessionID, command: text, prompt: prompt)
             if let sid = snippetID { blocks.setOriginatingSnippet(sid, for: blockID) }
             unifiedBlockID = blockID
+            enforceScrollbackLimit()
             try? await shell.send(Array((text + "\n").utf8))
         }
     }
@@ -771,9 +980,20 @@ public final class SessionViewModel {
                 messages: [.user(intent)], system: system, maxTokens: 256
             )
             inputText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            await reportAIUsageIfNeeded(from: ai)
         } catch {
             inputText = "#\(query)"
             commandAssistantError = "AI command translation failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func reportAIUsageIfNeeded(from ai: any AIClient) async {
+        guard let onAIUsage else { return }
+        if let client = ai as? OpenRouterClient {
+            let record = await client.latestUsageRecord()
+            if record.totalTokens > 0 || (record.costUSD ?? 0) > 0 {
+                await onAIUsage(record)
+            }
         }
     }
 

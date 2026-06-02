@@ -5,6 +5,7 @@ import ConduitCore
 import AgentKit
 import DesignSystem
 import SyncKit
+import PersistenceKit
 
 @MainActor @Observable
 public final class SettingsViewModel {
@@ -76,6 +77,9 @@ public final class SettingsViewModel {
                 client = AnthropicClient(apiKey: key)
             case .openai:
                 client = OpenAIClient(apiKey: key)
+            case .openrouter:
+                testKeyResult = "OpenRouter key test not yet supported."
+                return
             case .xai:
                 testKeyResult = "xAI key test not yet supported."
                 return
@@ -96,12 +100,24 @@ public final class SettingsViewModel {
 
 public struct SettingsView: View {
     @State private var vm: SettingsViewModel
+    @State private var pm = PurchaseManager.shared
     let syncEngine: SyncEngine?
+    let backendURL: String
+    let auditRepository: AuditRepository?
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @AppStorage("appLockEnabled") private var appLockEnabled = false
+    @AppStorage("redactSavedHistory") private var redactSavedHistory = false
 
-    public init(viewModel: SettingsViewModel, syncEngine: SyncEngine? = nil) {
+    public init(
+        viewModel: SettingsViewModel,
+        syncEngine: SyncEngine? = nil,
+        backendURL: String = "",
+        auditRepository: AuditRepository? = nil
+    ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
+        self.backendURL = backendURL
+        self.auditRepository = auditRepository
     }
 
     public var body: some View {
@@ -139,9 +155,28 @@ public struct SettingsView: View {
                 }
             }
 
+            Section("Security") {
+                Toggle("Require Face ID on launch/foreground", isOn: $appLockEnabled)
+                Toggle("Redact secrets in saved history", isOn: $redactSavedHistory)
+                if let auditRepository {
+                    NavigationLink("Security Audit Log") {
+                        AuditView(viewModel: AuditViewModel(repository: auditRepository))
+                    }
+                }
+            }
+
+            if let org = pm.cloudEntitlement?.teamOrg {
+                Section("Team") {
+                    LabeledContent("Organization", value: org.displayName)
+                    Text("Org ID: \(org.orgId)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Providers") {
                 NavigationLink("Billing & Usage") {
-                    BillingView()
+                    BillingView(backendURL: backendURL)
                 }
             }
 
@@ -155,7 +190,10 @@ public struct SettingsView: View {
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 72)
         }
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            await pm.refreshCloudEntitlement(backendURL: backendURL)
+        }
         .alert("Settings", isPresented: .constant(vm.saveMessage != nil), actions: {
             Button("OK") { vm.saveMessage = nil }
         }, message: { Text(vm.saveMessage ?? "") })

@@ -31,6 +31,8 @@ public final class HostEditorViewModel {
     public var selectedKeyTag: String?
     public var tmuxSessionName: String = ""
     public var startupCommand: String = ""
+    public var tagsInput: String = ""
+    public var preferredShell: String = ""
     public var autoResume: Bool = true
     public var saveError: String?
 
@@ -56,6 +58,8 @@ public final class HostEditorViewModel {
             username = existingHost.username
             tmuxSessionName = existingHost.tmuxSessionName ?? ""
             startupCommand = existingHost.startupCommand ?? ""
+            tagsInput = existingHost.tags.joined(separator: ", ")
+            preferredShell = existingHost.preferredShell ?? ""
             autoResume = existingHost.autoResume
             switch existingHost.authMethod {
             case .password, .agent:
@@ -108,6 +112,7 @@ public final class HostEditorViewModel {
 
         let tmux = tmuxSessionName.trimmingCharacters(in: .whitespaces)
         let startup = startupCommand.trimmingCharacters(in: .whitespaces)
+        let shell = preferredShell.trimmingCharacters(in: .whitespacesAndNewlines)
         let host = Host(
             id: existingHost?.id ?? .init(),
             name: name.trimmingCharacters(in: .whitespaces),
@@ -115,9 +120,9 @@ public final class HostEditorViewModel {
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
             authMethod: authMethod,
-            tags: existingHost?.tags ?? [],
+            tags: parsedTags,
             hostKeyFingerprint: existingHost?.hostKeyFingerprint,
-            preferredShell: existingHost?.preferredShell,
+            preferredShell: shell.isEmpty ? nil : shell,
             tmuxSessionName: tmux.isEmpty ? nil : tmux,
             startupCommand: startup.isEmpty ? nil : startup,
             autoResume: autoResume,
@@ -136,6 +141,16 @@ public final class HostEditorViewModel {
         guard let selectedKeyTag, let uuid = UUID(uuidString: selectedKeyTag) else { return nil }
         return KeyID(uuid)
     }
+
+    var parsedTags: [String] {
+        Array(Set(
+            tagsInput
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+        ))
+        .sorted()
+    }
 }
 
 public struct HostEditorView: View {
@@ -151,6 +166,19 @@ public struct HostEditorView: View {
             Section("Identity") {
                 TextField("Display name", text: $vm.name)
                     .textInputAutocapitalization(.never)
+                TextField("Tags (comma-separated)", text: $vm.tagsInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !vm.parsedTags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(vm.parsedTags, id: \.self) { tag in
+                                DSChip(tag, tone: .neutral, variant: .soft, size: .sm)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
             }
             Section("Connection") {
                 TerminalSafeTextField(
@@ -188,6 +216,15 @@ public struct HostEditorView: View {
 
                 Toggle("Auto-resume agent session", isOn: $vm.autoResume)
                 Text("When on, Conduit reattaches to the last Claude Code / Codex / Cursor / Grok / Gemini session running on this host.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                TerminalSafeTextField(
+                    "preferred shell (optional)",
+                    text: $vm.preferredShell,
+                    font: .monospacedSystemFont(ofSize: 17, weight: .regular)
+                )
+                Text("Optional shell override for this host, e.g. /bin/zsh or /usr/bin/fish.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

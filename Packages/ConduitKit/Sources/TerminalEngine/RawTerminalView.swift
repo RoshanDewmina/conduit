@@ -135,7 +135,10 @@ public struct RawTerminalView: UIViewRepresentable {
 
         private func sendArrowKey(_ bytes: [UInt8]) {
             cursorDragOnBytes?(bytes)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if UserDefaults.standard.object(forKey: "terminalHapticFeedback") == nil ||
+                UserDefaults.standard.bool(forKey: "terminalHapticFeedback") {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
         }
 
         // MARK: - UIGestureRecognizerDelegate

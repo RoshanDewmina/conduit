@@ -38,6 +38,14 @@ public actor SSHSession {
             .passwordBased(username: host.username, password: pw)
         case .ed25519(let key):
             .ed25519(username: host.username, privateKey: key)
+        case .rsa(let key):
+            .rsa(username: host.username, privateKey: key)
+        case .ecdsaP256(let key):
+            .p256(username: host.username, privateKey: key)
+        case .ecdsaP384(let key):
+            .p384(username: host.username, privateKey: key)
+        case .ecdsaP521(let key):
+            .p521(username: host.username, privateKey: key)
         }
         let hostKeyValidator = TOFUHostKeyValidator(hostID: host.id, store: hostKeyStore)
 

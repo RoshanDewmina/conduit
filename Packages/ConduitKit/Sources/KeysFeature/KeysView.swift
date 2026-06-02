@@ -4,11 +4,13 @@ import Observation
 import ConduitCore
 import SecurityKit
 import DesignSystem
+import UniformTypeIdentifiers
 
 @MainActor @Observable
 public final class KeysViewModel {
     public struct StoredKey: Identifiable, Hashable {
         public let tag: String
+        public let algorithm: KeyStore.KeyAlgorithm
         public let openSSH: String
         public let fingerprint: String
 
@@ -30,6 +32,7 @@ public final class KeysViewModel {
                 let info = try await store.publicKey(tag: tag)
                 loaded.append(StoredKey(
                     tag: tag,
+                    algorithm: info.algorithm,
                     openSSH: info.openSSH,
                     fingerprint: info.sha256Fingerprint
                 ))
@@ -59,11 +62,41 @@ public final class KeysViewModel {
             await reload()
         } catch let err { self.error = err.localizedDescription }
     }
+
+    public func importFromText(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let tag = KeyID().uuidString
+        do {
+            _ = try await store.importPrivateKey(tag: tag, keyString: trimmed, comment: tag)
+            await reload()
+            Haptics.success()
+        } catch {
+            self.error = error.localizedDescription
+            Haptics.error()
+        }
+    }
+
+    public func importFromFile(_ url: URL) async {
+        do {
+            let data = try Data(contentsOf: url)
+            let tag = KeyID().uuidString
+            _ = try await store.importPrivateKey(tag: tag, keyData: data, comment: tag)
+            await reload()
+            Haptics.success()
+        } catch {
+            self.error = error.localizedDescription
+            Haptics.error()
+        }
+    }
 }
 
 public struct KeysView: View {
     @State private var vm: KeysViewModel
     @Environment(\.conduitTokens) private var t
+    @State private var importText = ""
+    @State private var isShowingPasteImport = false
+    @State private var isShowingFileImporter = false
 
     public init(viewModel: KeysViewModel) { _vm = State(initialValue: viewModel) }
 
@@ -74,6 +107,21 @@ public struct KeysView: View {
                     Task { await vm.generate() }
                 } label: {
                     Label("Generate Ed25519 keypair", systemImage: "key.fill")
+                        .foregroundStyle(t.accent)
+                }
+
+                Button {
+                    importText = ""
+                    isShowingPasteImport = true
+                } label: {
+                    Label("Import key (paste)", systemImage: "doc.on.clipboard")
+                        .foregroundStyle(t.accent)
+                }
+
+                Button {
+                    isShowingFileImporter = true
+                } label: {
+                    Label("Import key (file)", systemImage: "square.and.arrow.down")
                         .foregroundStyle(t.accent)
                 }
             }
@@ -112,6 +160,9 @@ public struct KeysView: View {
                                     .font(.system(.callout, design: .monospaced))
                                     .foregroundStyle(t.text1)
                                     .textSelection(.enabled)
+                                Text(key.algorithmLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(t.text3)
                                 Text(key.fingerprint)
                                     .font(.system(.caption2, design: .monospaced))
                                     .foregroundStyle(t.text3)
@@ -126,6 +177,7 @@ public struct KeysView: View {
                                 .buttonStyle(.bordered)
                                 .controlSize(.mini)
                                 .tint(t.accent)
+                                .disabled(key.openSSH.contains("<private-key-imported>"))
                             }
                         }
                         .swipeActions {
@@ -145,9 +197,64 @@ public struct KeysView: View {
         .contentMargins(.bottom, 72, for: .scrollContent)
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .task { await vm.reload() }
+        .fileImporter(
+            isPresented: $isShowingFileImporter,
+            allowedContentTypes: [.data, .text, .item],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let didStart = url.startAccessingSecurityScopedResource()
+                Task {
+                    await vm.importFromFile(url)
+                    if didStart { url.stopAccessingSecurityScopedResource() }
+                }
+            case .failure(let error):
+                vm.error = error.localizedDescription
+            }
+        }
+        .sheet(isPresented: $isShowingPasteImport) {
+            NavigationStack {
+                Form {
+                    Section("Private key text") {
+                        TextEditor(text: $importText)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(minHeight: 220)
+                    }
+                }
+                .navigationTitle("Import Key")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isShowingPasteImport = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Import") {
+                            let text = importText
+                            isShowingPasteImport = false
+                            Task { await vm.importFromText(text) }
+                        }
+                        .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .alert("Error", isPresented: .constant(vm.error != nil)) {
             Button("OK") { vm.error = nil }
         } message: { Text(vm.error ?? "") }
+    }
+}
+
+private extension KeysViewModel.StoredKey {
+    var algorithmLabel: String {
+        switch algorithm {
+        case .ed25519: return "Ed25519"
+        case .rsa: return "RSA"
+        case .ecdsaP256: return "ECDSA P-256"
+        case .ecdsaP384: return "ECDSA P-384"
+        case .ecdsaP521: return "ECDSA P-521"
+        }
     }
 }
 

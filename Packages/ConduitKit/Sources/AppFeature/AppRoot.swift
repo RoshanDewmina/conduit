@@ -33,6 +33,7 @@ public final class AppEnvironment {
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
     public let approvalRepo: ApprovalRepository
+    public let auditRepo: AuditRepository
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -49,9 +50,10 @@ public final class AppEnvironment {
             snippetRepo: SnippetRepository(db: database)
         )
         self.approvalRepo = ApprovalRepository(database)
+        self.auditRepo = AuditRepository(database)
     }
 
-    public func aiClient(provider: AIProvider? = nil) async -> (any AIClient)? {
+    public func aiClient(provider: AIProvider? = nil, managedOpenRouterKey: String? = nil) async -> (any AIClient)? {
         let selectedProvider = provider ?? SettingsViewModel.persistedDefaultProvider()
         switch selectedProvider {
         case .anthropic:
@@ -60,6 +62,12 @@ public final class AppEnvironment {
         case .openai:
             guard let key = try? await aiKeyStore.loadAPIKey(provider: .openai) else { return nil }
             return OpenAIClient(apiKey: key)
+        case .openrouter:
+            if let managed = managedOpenRouterKey, !managed.isEmpty {
+                return OpenRouterClient(apiKey: managed)
+            }
+            guard let key = try? await aiKeyStore.loadAPIKey(provider: .openrouter) else { return nil }
+            return OpenRouterClient(apiKey: key)
         case .xai:
             return nil  // M5+
         }
@@ -106,6 +114,7 @@ public struct AppRoot: View {
     @State private var showingProvisioningWizard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var systemScheme
@@ -128,6 +137,7 @@ public struct AppRoot: View {
     @State private var isUnlocked: Bool = false
     @State private var watchConnector = PhoneWatchConnector()
     @State private var pm = PurchaseManager.shared
+    @State private var agentStore: AgentStore?
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
 
@@ -204,7 +214,7 @@ public struct AppRoot: View {
 
     private var mainBody: some View {
         Group {
-            if !isUnlocked {
+            if appLockEnabled && !isUnlocked {
                 LaunchLockView(onUnlock: { await attemptUnlock() })
                     .preferredColorScheme(preferredScheme)
             } else {
@@ -221,7 +231,13 @@ public struct AppRoot: View {
                 }
             }
         }
-        .task { await attemptUnlock() }
+        .task {
+            if appLockEnabled {
+                await attemptUnlock()
+            } else {
+                isUnlocked = true
+            }
+        }
         .task { watchConnector.activate() }
         .task { await pm.load() }
         .task {
@@ -232,8 +248,27 @@ public struct AppRoot: View {
             PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background, #available(iOS 16.2, *) {
+                Task { await ConduitLiveActivityManager.shared.endAll() }
+            }
+            if appLockEnabled {
+                switch newPhase {
+                case .active:
+                    isUnlocked = false
+                    Task { await attemptUnlock() }
+                case .background:
+                    isUnlocked = false
+                default:
+                    break
+                }
+            }
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
+            }
+        }
+        .onChange(of: appLockEnabled) { _, enabled in
+            if !enabled {
+                isUnlocked = true
             }
         }
     }
@@ -339,6 +374,7 @@ public struct AppRoot: View {
         })
         .task {
             configureGlobalInbox(env: env)
+            await configureCloudServices(env: env)
             await env.syncEngine.start()
         }
         .task {
@@ -464,10 +500,31 @@ public struct AppRoot: View {
                 }
             }
         case .settings:
-            SettingsView(viewModel: SettingsViewModel(keyStore: env.aiKeyStore), syncEngine: env.syncEngine)
+            SettingsView(
+                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+                syncEngine: env.syncEngine,
+                backendURL: Self.pushBackendURL(),
+                auditRepository: env.auditRepo
+            )
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
+                            if let agentStore {
+                                NavigationLink {
+                                    LibraryView(
+                                        snippetRepo: env.snippetRepo,
+                                        keyStore: env.keyStore,
+                                        agentStore: agentStore
+                                    )
+                                } label: {
+                                    Label("Library", systemImage: "square.grid.2x2")
+                                }
+                                NavigationLink {
+                                    AgentsView(store: agentStore)
+                                } label: {
+                                    Label("Hosted Agents", systemImage: "sparkles")
+                                }
+                            }
                             NavigationLink {
                                 SnippetEditorView(repository: env.snippetRepo)
                             } label: {
@@ -484,6 +541,31 @@ public struct AppRoot: View {
                     }
                 }
         }
+    }
+
+    private func configureCloudServices(env: AppEnvironment) async {
+        let url = Self.pushBackendURL()
+        pm.configure(backendURL: url)
+        await pm.refreshCloudEntitlement(backendURL: url)
+        if agentStore == nil {
+            agentStore = AgentStore(
+                backendURL: url,
+                hostRepo: env.hostRepo,
+                keyStore: env.keyStore,
+                hostKeyStore: env.hostKeyStore,
+                purchaseManager: pm
+            )
+        }
+    }
+
+    private static func pushBackendURL() -> String {
+        #if DEBUG
+        if let envURL = ProcessInfo.processInfo.environment["CONDUIT_PUSH_BACKEND_URL"],
+           !envURL.isEmpty {
+            return envURL
+        }
+        #endif
+        return Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
     }
 
     private func openSession(host: Host, env: AppEnvironment) {
@@ -508,15 +590,22 @@ public struct AppRoot: View {
         credentialProvider: @escaping @Sendable () async throws -> SSHCredential
     ) {
         let sshSession = SSHSession(host: host)
+        let snapshotRepo = SessionSnapshotRepository(env.database)
         Task {
-            let aiClient = await env.aiClient()
+            let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
+            let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { [weak agentStore] record in
+                await agentStore?.ingestUsage(record, runID: nil, agentID: nil)
+            }
             let vm = SessionViewModel(
                 host: host,
                 sshSession: sshSession,
                 credentialProvider: credentialProvider,
                 hostKeyStore: env.hostKeyStore,
                 aiClient: aiClient,
-                blockRepo: env.blockRepo
+                onAIUsage: usageReporter,
+                blockRepo: env.blockRepo,
+                auditRepo: env.auditRepo,
+                snapshotRepo: snapshotRepo
             )
             let approvalRepo = ApprovalRepository(env.database)
             let channel = DaemonChannel(session: sshSession)
@@ -524,7 +613,23 @@ public struct AppRoot: View {
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
                 onDecision: { [channel] id, decision in
+                    try? await env.auditRepo.record(
+                        hostID: host.id,
+                        type: .approval,
+                        metadata: [
+                            "approvalId": id.uuidString,
+                            "decision": decision.rawValue,
+                            "source": "inbox",
+                        ]
+                    )
                     try? await channel.respond(approvalId: id.uuidString, decision: decision)
+                },
+                onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, approvalID in
+                    await vm?.setLiveActivityPendingApprovals(
+                        pendingCount,
+                        agentName: agentName,
+                        approvalID: approvalID
+                    )
                 }
             )
             await MainActor.run {
@@ -540,6 +645,15 @@ public struct AppRoot: View {
                     snippetRepo: env.snippetRepo,
                     sessionViewModel: vm,
                     onDecision: { [channel] id, decision in
+                        try? await env.auditRepo.record(
+                            hostID: host.id,
+                            type: .approval,
+                            metadata: [
+                                "approvalId": id.uuidString,
+                                "decision": decision.rawValue,
+                                "source": "watch",
+                            ]
+                        )
                         try? await channel.respond(approvalId: id.uuidString, decision: decision)
                     }
                 )
@@ -557,7 +671,9 @@ public struct AppRoot: View {
                     },
                     onBackground: { [weak vm] in
                         guard let vm else { return }
-                        if vm.status == .connected {
+                        let wasConnected = vm.status == .connected
+                        await vm.handleSceneBackground()
+                        if wasConnected {
                             await Notifications.shared.postSessionSuspended(
                                 hostName: vm.host.name
                             )
@@ -566,6 +682,9 @@ public struct AppRoot: View {
                 )
             }
             await vm.connect()
+            if vm.status == .connected {
+                try? await env.hostRepo.touch(id: host.id)
+            }
             try? await channel.start()  // launch conduitd serve on remote host
             await ingest.start()
         }

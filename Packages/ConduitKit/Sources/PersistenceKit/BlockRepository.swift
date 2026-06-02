@@ -1,12 +1,19 @@
 import Foundation
 import GRDB
 import ConduitCore
+import AgentKit
 
 public actor BlockRepository {
     private let db: AppDatabase
     public init(_ db: AppDatabase) { self.db = db }
 
     public func persist(_ block: Block) async throws {
+        let outputToPersist: String
+        if Self.redactionEnabled {
+            outputToPersist = Redactor.shared.redact(block.joinedOutput).redacted
+        } else {
+            outputToPersist = block.joinedOutput
+        }
         try await db.dbWriter.write { db in
             try db.execute(sql: """
                 INSERT INTO blocks (id, sessionId, hostName, cwd, command, output, exitCode,
@@ -24,7 +31,7 @@ public actor BlockRepository {
                 block.prompt.hostName,
                 block.prompt.cwd,
                 block.command,
-                block.joinedOutput,
+                outputToPersist,
                 block.exitStatus?.code,
                 block.startedAt,
                 block.finishedAt,
@@ -38,7 +45,7 @@ public actor BlockRepository {
             """, arguments: [
                 block.id.uuidString,
                 block.command,
-                block.joinedOutput,
+                outputToPersist,
             ])
         }
     }
@@ -62,6 +69,22 @@ public actor BlockRepository {
                 SELECT * FROM blocks WHERE sessionId = ?
                 ORDER BY startedAt DESC LIMIT ?
             """, arguments: [sessionID.uuidString, limit])
+            return rows.compactMap(Self.decode)
+        }
+    }
+
+    public func recent(
+        hostName: String,
+        limit: Int = 200,
+        offset: Int = 0
+    ) async throws -> [Block] {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM blocks
+                WHERE hostName = ?
+                ORDER BY startedAt DESC
+                LIMIT ? OFFSET ?
+            """, arguments: [hostName, limit, offset])
             return rows.compactMap(Self.decode)
         }
     }
@@ -95,5 +118,9 @@ public actor BlockRepository {
             originatingSnippetID: snippetID,
             state: .done(exitCode: exitCode)
         )
+    }
+
+    private static var redactionEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "redactSavedHistory")
     }
 }

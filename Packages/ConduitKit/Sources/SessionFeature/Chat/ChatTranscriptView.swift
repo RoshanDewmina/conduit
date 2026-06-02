@@ -16,6 +16,7 @@ public struct ChatTranscriptView: View {
     let onRerun: (Block) -> Void
     let onCollapse: (Block) -> Void
     let onStar: (Block) -> Void
+    let onLoadOlder: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
 
@@ -26,7 +27,8 @@ public struct ChatTranscriptView: View {
         onExplain: @escaping (Block) -> Void,
         onRerun: @escaping (Block) -> Void,
         onCollapse: @escaping (Block) -> Void,
-        onStar: @escaping (Block) -> Void
+        onStar: @escaping (Block) -> Void,
+        onLoadOlder: (() -> Void)? = nil
     ) {
         self.blocks = blocks
         self.onLiveBytes = onLiveBytes
@@ -35,12 +37,16 @@ public struct ChatTranscriptView: View {
         self.onRerun = onRerun
         self.onCollapse = onCollapse
         self.onStar = onStar
+        self.onLoadOlder = onLoadOlder
     }
 
     public var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
+                    Color.clear
+                        .frame(height: 1)
+                        .onAppear { onLoadOlder?() }
                     ForEach(blocks.blocks) { block in
                         ToolCardView(
                             block: block,

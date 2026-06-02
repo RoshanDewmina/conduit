@@ -6,9 +6,5 @@
 	<array>
 		<string>group.dev.conduit.mobile</string>
 	</array>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)dev.conduit.mobile</string>
-	</array>
 </dict>
 </plist>

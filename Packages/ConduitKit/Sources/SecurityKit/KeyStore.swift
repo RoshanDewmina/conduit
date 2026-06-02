@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+@preconcurrency import Citadel
 import ConduitCore
 
 /// Stores SSH Ed25519 keypairs.
@@ -12,9 +13,44 @@ import ConduitCore
 /// `NIOSSHPrivateKey` backed by SecKey operations on Secure Enclave keys
 /// (tracked in §16 Q-Enclave).
 public actor KeyStore {
+    public enum KeyAlgorithm: String, Sendable, Hashable, Codable {
+        case ed25519
+        case rsa
+        case ecdsaP256
+        case ecdsaP384
+        case ecdsaP521
+    }
+
+    public enum StoredPrivateKey: Sendable {
+        case ed25519(Curve25519.Signing.PrivateKey)
+        case rsa(Insecure.RSA.PrivateKey)
+        case ecdsaP256(P256.Signing.PrivateKey)
+        case ecdsaP384(P384.Signing.PrivateKey)
+        case ecdsaP521(P521.Signing.PrivateKey)
+    }
+
     public struct PublicKeyInfo: Sendable, Hashable {
+        public let algorithm: KeyAlgorithm
         public let openSSH: String
         public let sha256Fingerprint: String  // matches `ssh-keygen -l -f` SHA256
+
+        public init(algorithm: KeyAlgorithm, openSSH: String, sha256Fingerprint: String) {
+            self.algorithm = algorithm
+            self.openSSH = openSSH
+            self.sha256Fingerprint = sha256Fingerprint
+        }
+    }
+
+    private struct StoredKeyRecord: Codable, Sendable {
+        enum Format: String, Codable, Sendable {
+            case rawEd25519
+            case openSSH
+            case pem
+        }
+
+        let algorithm: KeyAlgorithm
+        let format: Format
+        let payload: Data
     }
 
     public let keychain: Keychain
@@ -27,22 +63,116 @@ public actor KeyStore {
 
     public func generateEd25519(tag: String, comment: String? = nil) async throws -> PublicKeyInfo {
         let pk = Curve25519.Signing.PrivateKey()
-        try await keychain.write(pk.rawRepresentation, account: tag)
-        return Self.publicKey(for: pk.publicKey, comment: comment ?? tag)
+        try await persist(
+            .init(
+                algorithm: .ed25519,
+                format: .rawEd25519,
+                payload: pk.rawRepresentation
+            ),
+            tag: tag
+        )
+        return Self.publicKey(for: pk.publicKey, comment: comment ?? tag, algorithm: .ed25519)
     }
 
     public func importEd25519(tag: String, rawPrivate: Data, comment: String? = nil) async throws -> PublicKeyInfo {
         let pk = try Curve25519.Signing.PrivateKey(rawRepresentation: rawPrivate)
-        try await keychain.write(pk.rawRepresentation, account: tag)
-        return Self.publicKey(for: pk.publicKey, comment: comment ?? tag)
+        try await persist(
+            .init(
+                algorithm: .ed25519,
+                format: .rawEd25519,
+                payload: pk.rawRepresentation
+            ),
+            tag: tag
+        )
+        return Self.publicKey(for: pk.publicKey, comment: comment ?? tag, algorithm: .ed25519)
+    }
+
+    /// Imports an OpenSSH or PEM private key string.
+    public func importPrivateKey(tag: String, keyString: String, comment: String? = nil) async throws -> PublicKeyInfo {
+        let normalized = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw ConduitError.keyDecodeFailed(reason: "Key text is empty.")
+        }
+
+        if normalized.contains("BEGIN OPENSSH PRIVATE KEY") {
+            let detected = try SSHKeyDetection.detectPrivateKeyType(from: normalized)
+            switch detected {
+            case .ed25519:
+                try await persist(
+                    .init(algorithm: .ed25519, format: .openSSH, payload: Data(normalized.utf8)),
+                    tag: tag
+                )
+                return placeholderInfo(algorithm: .ed25519, payload: Data(normalized.utf8), comment: comment ?? tag)
+            case .rsa:
+                try await persist(
+                    .init(algorithm: .rsa, format: .openSSH, payload: Data(normalized.utf8)),
+                    tag: tag
+                )
+                return placeholderInfo(algorithm: .rsa, payload: Data(normalized.utf8), comment: comment ?? tag)
+            case .ecdsaP256, .ecdsaP384, .ecdsaP521:
+                throw ConduitError.keyDecodeFailed(
+                    reason: "OpenSSH ECDSA private keys are unsupported. Import a PEM ECDSA key."
+                )
+            default:
+                throw ConduitError.keyDecodeFailed(reason: "Unsupported OpenSSH key type.")
+            }
+        }
+
+        if normalized.contains("BEGIN") && normalized.contains("PRIVATE KEY") {
+            if normalized.contains("BEGIN RSA PRIVATE KEY") {
+                try await persist(
+                    .init(algorithm: .rsa, format: .pem, payload: Data(normalized.utf8)),
+                    tag: tag
+                )
+                return placeholderInfo(algorithm: .rsa, payload: Data(normalized.utf8), comment: comment ?? tag)
+            }
+            if normalized.contains("BEGIN EC PRIVATE KEY") || normalized.contains("BEGIN PRIVATE KEY") {
+                try await persist(
+                    .init(algorithm: .ecdsaP256, format: .pem, payload: Data(normalized.utf8)),
+                    tag: tag
+                )
+                return placeholderInfo(algorithm: .ecdsaP256, payload: Data(normalized.utf8), comment: comment ?? tag)
+            }
+        }
+
+        throw ConduitError.keyDecodeFailed(reason: "Unsupported key format.")
+    }
+
+    public func importPrivateKey(tag: String, keyData: Data, comment: String? = nil) async throws -> PublicKeyInfo {
+        guard let text = String(data: keyData, encoding: .utf8) else {
+            throw ConduitError.keyDecodeFailed(reason: "The selected file is not UTF-8 text.")
+        }
+        return try await importPrivateKey(tag: tag, keyString: text, comment: comment)
     }
 
     public func loadEd25519(tag: String) async throws -> Curve25519.Signing.PrivateKey {
-        let raw = try await keychain.read(account: tag)
-        do {
-            return try Curve25519.Signing.PrivateKey(rawRepresentation: raw)
-        } catch {
-            throw ConduitError.keyDecodeFailed(reason: String(describing: error))
+        switch try await loadPrivateKey(tag: tag) {
+        case .ed25519(let key):
+            return key
+        default:
+            throw ConduitError.keyDecodeFailed(reason: "Stored key is not Ed25519.")
+        }
+    }
+
+    public func loadPrivateKey(tag: String) async throws -> StoredPrivateKey {
+        let record = try await loadRecord(tag: tag)
+        switch (record.algorithm, record.format) {
+        case (.ed25519, .rawEd25519):
+            return try .ed25519(Curve25519.Signing.PrivateKey(rawRepresentation: record.payload))
+        case (.ed25519, .openSSH), (.ed25519, .pem):
+            throw ConduitError.keyDecodeFailed(reason: "OpenSSH/PEM Ed25519 import is metadata-only in this build.")
+        case (.rsa, .openSSH):
+            throw ConduitError.keyDecodeFailed(reason: "OpenSSH RSA import is metadata-only in this build.")
+        case (.rsa, .pem):
+            throw ConduitError.keyDecodeFailed(reason: "PEM RSA import is metadata-only in this build.")
+        case (.ecdsaP256, .pem):
+            throw ConduitError.keyDecodeFailed(reason: "PEM ECDSA import is metadata-only in this build.")
+        case (.ecdsaP384, .pem):
+            throw ConduitError.keyDecodeFailed(reason: "PEM ECDSA import is metadata-only in this build.")
+        case (.ecdsaP521, .pem):
+            throw ConduitError.keyDecodeFailed(reason: "PEM ECDSA import is metadata-only in this build.")
+        default:
+            throw ConduitError.keyDecodeFailed(reason: "Unsupported key algorithm/format combination.")
         }
     }
 
@@ -55,13 +185,24 @@ public actor KeyStore {
     }
 
     public func publicKey(tag: String, comment: String? = nil) async throws -> PublicKeyInfo {
-        let pk = try await loadEd25519(tag: tag)
-        return Self.publicKey(for: pk.publicKey, comment: comment ?? tag)
+        let record = try await loadRecord(tag: tag)
+        switch try await loadPrivateKey(tag: tag) {
+        case .ed25519(let pk):
+            return Self.publicKey(for: pk.publicKey, comment: comment ?? tag, algorithm: .ed25519)
+        case .rsa:
+            return placeholderInfo(algorithm: .rsa, payload: record.payload, comment: comment ?? tag)
+        case .ecdsaP256:
+            return placeholderInfo(algorithm: .ecdsaP256, payload: record.payload, comment: comment ?? tag)
+        case .ecdsaP384:
+            return placeholderInfo(algorithm: .ecdsaP384, payload: record.payload, comment: comment ?? tag)
+        case .ecdsaP521:
+            return placeholderInfo(algorithm: .ecdsaP521, payload: record.payload, comment: comment ?? tag)
+        }
     }
 
     // MARK: - OpenSSH wire format
 
-    private static func publicKey(for pub: Curve25519.Signing.PublicKey, comment: String) -> PublicKeyInfo {
+    private static func publicKey(for pub: Curve25519.Signing.PublicKey, comment: String, algorithm: KeyAlgorithm) -> PublicKeyInfo {
         // ssh-ed25519 wire format:
         //   string  "ssh-ed25519"   (length-prefixed)
         //   string  pubkey-bytes    (length-prefixed, 32 bytes)
@@ -83,6 +224,33 @@ public actor KeyStore {
         let fpBase64 = Data(digest).base64EncodedString().trimmingCharacters(in: ["="])
         let fingerprint = "SHA256:\(fpBase64)"
 
-        return PublicKeyInfo(openSSH: openSSH, sha256Fingerprint: fingerprint)
+        return PublicKeyInfo(algorithm: algorithm, openSSH: openSSH, sha256Fingerprint: fingerprint)
+    }
+
+    private func persist(_ record: StoredKeyRecord, tag: String) async throws {
+        let data = try JSONEncoder().encode(record)
+        try await keychain.write(data, account: tag)
+    }
+
+    private func loadRecord(tag: String) async throws -> StoredKeyRecord {
+        let raw = try await keychain.read(account: tag)
+        if let record = try? JSONDecoder().decode(StoredKeyRecord.self, from: raw) {
+            return record
+        }
+        // Backward compatibility with pre-import Ed25519 storage.
+        if raw.count == 32 {
+            return .init(algorithm: .ed25519, format: .rawEd25519, payload: raw)
+        }
+        throw ConduitError.keyDecodeFailed(reason: "Unknown key format in keychain.")
+    }
+
+    private func placeholderInfo(algorithm: KeyAlgorithm, payload: Data, comment: String) -> PublicKeyInfo {
+        let digest = SHA256.hash(data: payload)
+        let fpBase64 = Data(digest).base64EncodedString().trimmingCharacters(in: ["="])
+        return PublicKeyInfo(
+            algorithm: algorithm,
+            openSSH: "\(algorithm.rawValue) <private-key-imported> \(comment)",
+            sha256Fingerprint: "SHA256:\(fpBase64)"
+        )
     }
 }

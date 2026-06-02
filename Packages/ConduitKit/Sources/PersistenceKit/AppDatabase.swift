@@ -138,6 +138,17 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Tier 3.1 (security audit log).
+        m.registerMigration("v5") { db in
+            try db.create(table: "audit_events") { t in
+                t.column("id",        .text).primaryKey()
+                t.column("hostId",    .text).notNull().indexed()
+                t.column("type",      .text).notNull().indexed()
+                t.column("metadata",  .text).notNull().defaults(to: "{}")
+                t.column("createdAt", .datetime).notNull().indexed()
+            }
+        }
+
         return m
     }
 }

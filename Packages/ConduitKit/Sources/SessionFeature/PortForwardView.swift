@@ -10,6 +10,7 @@ import SSHTransport
 @MainActor @Observable
 public final class PortForwardViewModel {
     public private(set) var tunnels: [(forward: PortForward, tunnel: (any PortForwardTunnel)?)] = []
+    public let supportsRemoteForwards: Bool = false
 
     // Add form state
     public var addDirection: PortForward.Direction = .local
@@ -31,7 +32,13 @@ public final class PortForwardViewModel {
         let idx = tunnels.firstIndex { $0.forward.id == forward.id }
         if let i = idx, tunnels[i].tunnel?.isActive == true { return }
         do {
-            let tunnel = try await session.startLocalPortForward(forward)
+            let tunnel: any PortForwardTunnel
+            switch forward.direction {
+            case .local:
+                tunnel = try await session.startLocalPortForward(forward)
+            case .remote:
+                tunnel = try await session.startRemotePortForward(forward)
+            }
             if let i = idx {
                 tunnels[i] = (forward, tunnel)
             } else {
@@ -49,6 +56,7 @@ public final class PortForwardViewModel {
     }
 
     public func addForward() async {
+        if !supportsRemoteForwards { addDirection = .local }
         guard let localPort = Int(addLocalPort), localPort > 0, localPort < 65536 else {
             errorMessage = "Local port must be 1–65535"
             return
@@ -146,7 +154,9 @@ public struct PortForwardView: View {
         Section("New Tunnel") {
             Picker("Direction", selection: $vm.addDirection) {
                 Text("Local").tag(PortForward.Direction.local)
-                Text("Remote").tag(PortForward.Direction.remote)
+                if vm.supportsRemoteForwards {
+                    Text("Remote").tag(PortForward.Direction.remote)
+                }
             }
             .pickerStyle(.segmented)
             .listRowSeparator(.hidden)

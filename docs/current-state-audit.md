@@ -1,6 +1,6 @@
 # Current State Audit
 
-Updated: 2026-05-28
+Updated: 2026-06-02
 
 ## Executive Summary
 
@@ -38,6 +38,12 @@ interactive validation is not complete yet.
 - Debug Pro bypass in Debug builds for simulator coverage of gated surfaces
 - Watch app, conduitd JSON-RPC, push backend, billing scaffolding (see
   `docs/remaining-work.md` for the full list)
+- Security audit log pipeline (connect/disconnect/auth failure/host-key/approval)
+  with JSON export in Settings
+- Optional biometric app lock toggle (launch + foreground gate)
+- Optional redaction pass for persisted command output (default off)
+- iPhone home/lock-screen widget for session status + pending approvals
+- Interactive Live Activity approval buttons (Approve/Reject)
 
 **What's pending:**
 - Validation against a real SSH host across all auth methods
@@ -53,6 +59,25 @@ interactive validation is not complete yet.
   (currently uses the scene-phase observer pattern; iOS 26 API not wired)
 - Complete Liquid Glass adoption across non-chrome surfaces (see §
   "Liquid Glass adoption status" below)
+- True reverse SSH port forwarding (`tcpip-forward` / `cancel-tcpip-forward`)
+  is not implemented yet; current shipping path covers local forwarding and
+  preview wiring only
+- Live Activity push-to-start wake flow is deferred (Tier 4.3)
+
+## Termius parity tiers (2026-06-02)
+
+- **Tier 1 (terminal reliability + continuity):** shipped — Live Activity
+  updates, scrollback loading/paging, auto reconnect, last-connected snapshot
+  stamps, haptics updates, and remote-forward UI plumbing (remote-host UI kept
+  hidden pending full reverse forwarding support).
+- **Tier 2 (workflow parity):** shipped — full SFTP flow, key import path,
+  host tags/folders, and command history integration.
+- **Tier 3 (security/controls):** shipped — audit log UI/export,
+  optional biometric app lock, and optional output redaction.
+- **Tier 4 (surface parity):** shipped — iPhone widget and interactive
+  Live Activity Approve/Reject affordances.
+- **Tier 4.3:** deferred — push-to-start remains intentionally out of scope
+  for this pass.
 
 ## Verified In This Pass (2026-05-28)
 
