@@ -94,11 +94,16 @@ public struct AgentIsland: View {
 
             expandedLayer
                 .frame(width: panelW, alignment: .top)
-                .measureHeight { panelH = $0 }
+                .fixedSize(horizontal: false, vertical: true)
                 .opacity(expanded ? 1 : 0)
                 .scaleEffect(expanded ? 1 : 0.97, anchor: .top)
         }
-        .frame(width: shellW, height: shellH, alignment: .top)
+        // Width morphs between compact and panel; height is intrinsic when expanded
+        // (sized to panel content) and pinned to pill height when collapsed.
+        // A prior GeometryReader→panelH→shellH→clipShape feedback loop collapsed
+        // panelH to ~0, so content stayed in the a11y tree but never painted.
+        .frame(width: shellW, alignment: .top)
+        .frame(height: expanded ? nil : 38, alignment: .top)
         .background(DI.bg(approval: hasApproval))
         .clipShape(RoundedRectangle(cornerRadius: shellR, style: .continuous))
         .overlay(approvalGlow)
