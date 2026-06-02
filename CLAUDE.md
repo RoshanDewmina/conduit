@@ -100,7 +100,7 @@ Session rows and similar list rows must allocate a fixed-width slot for the unre
 
 Full design/debugging writeup: **`docs/block-terminal-implementation.md`** (read it before touching the terminal/block code). Architecture rules: `docs/agent-contract.md` §5.
 
-**Pipeline:** one unified PTY → `PTYBridge` (parses/strips OSC 133 A/B/C/D + OSC 7, detects alt-screen) → `SessionViewModel` → `BlockRenderer` (`@Observable` block store + per-block live grid) → `ChatTranscriptView`/`ToolCardView`. Shell commands form Warp-style blocks; alt-screen apps (vim/htop/tmux) auto-escalate to a raw `RawTerminalView` overlay (`\e[?1049h`) and de-escalate on exit; inline Ink TUIs (claude/codex) render **inside their block** via `BlockRenderer.liveBlockHandles`.
+**Pipeline:** one unified PTY → `PTYBridge` (parses/strips OSC 133 A/B/C/D + OSC 7, detects alt-screen) → `SessionViewModel` → `BlockRenderer` (`@Observable` block store + per-block live grid) → `ChatTranscriptView`/`ToolCardView`. Shell commands form Warp-style blocks; alt-screen apps (vim/htop/tmux) render **inside their block** via a block-embedded SwiftTerm that handles `\e[?1049h` natively — there is **no** full-screen overlay swap (Phase 5: "no user-facing escalation"). On alt-screen enter, `SessionViewModel.onAltScreenEnter` just clears the block's text-snapshot chunks so the TUI starts on a clean canvas; on exit the block finalizes (e.g. `✓ exit 0`) and a fresh prompt appears. The legacy `isRaw`/`activeShell`/`RawTerminalView` full-screen escalation path still exists in code but is **dormant** — nothing drives a user-facing escalation. Inline Ink TUIs (claude/codex) likewise render **inside their block** via `BlockRenderer.liveBlockHandles`.
 
 **Block card UI** lives in `SessionFeature/Chat/ToolCardView.swift`, built on the design-system `DSBlockCard` language (dark `termSurface`, left state gutter, `DSPromptLine` + `DSExitChip`, three tiers: `RUN › COMMAND` header / `$ command` bar / output panel). The canonical reference card is `DSBlockCard` in `DesignSystem/Components/Composites.swift` — keep `ToolCardView` visually consistent with it.
 
@@ -125,3 +125,6 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png
 Prereqs: macOS Remote Login (sshd) on, and the login password in Keychain (`security add-generic-password -s conduit-localhost-ssh -a "$USER" -w 'PW' -U`). `CONDUIT_TEST_AUTOCMD` auto-runs a command on connect so a block forms without typing. Harnesses auto-trust the first host key (debug only) — **production paths must keep the TOFU prompt**.
 
 **Gotcha:** if a launch lands on the normal "Sessions" home instead of the harness, the `SIMCTL_CHILD_*` env didn't propagate — re-run the launch as a standalone command (not chained after `xcodebuild`/`install`).
+
+**Known limitations:**
+- Powerline separator glyphs in some TUI status lines (e.g. vim's airline/lightline bar) render as `[?]` tofu because the bundled terminal mono font lacks those glyphs. Cosmetic only, low priority.
