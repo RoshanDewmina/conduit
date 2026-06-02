@@ -248,7 +248,7 @@ public struct AppRoot: View {
         .task { await pm.load() }
         .task {
             if case .ready(let env) = environment {
-                configureCloudServices(env: env)
+                await configureCloudServices(env: env)
             }
         }
         .task {

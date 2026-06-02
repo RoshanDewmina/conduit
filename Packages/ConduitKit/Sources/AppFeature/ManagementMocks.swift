@@ -3,56 +3,56 @@ import Foundation
 
 // MARK: - Mock VM / workspace data
 
-struct MockVM: Identifiable {
-    let id = UUID()
-    let name: String
-    let status: String       // "running" | "sleeping" | "stopped"
-    let vcpu: Int
-    let memGB: Int
-    let ratePerHour: Double?
-    let cpuPercent: Double
-    let memUsedGB: Double
-    let gpuPercent: Double
-    let costToday: Double
+public struct MockVM: Identifiable, Sendable {
+    public let id = UUID()
+    public let name: String
+    public let status: String       // "running" | "sleeping" | "stopped"
+    public let vcpu: Int
+    public let memGB: Int
+    public let ratePerHour: Double?
+    public let cpuPercent: Double
+    public let memUsedGB: Double
+    public let gpuPercent: Double
+    public let costToday: Double
 }
 
 // MARK: - Mock Agent (M2a/M2b)
 
-struct MockAgent: Identifiable {
-    let id = UUID()
-    let name: String
-    let model: String
-    let provider: String
-    let status: String       // "working" | "idle" | "off"
-    let costMonth: Double?
-    let byok: Bool
+public struct MockAgent: Identifiable, Sendable {
+    public let id = UUID()
+    public let name: String
+    public let model: String
+    public let provider: String
+    public let status: String       // "working" | "idle" | "off"
+    public let costMonth: Double?
+    public let byok: Bool
 }
 
 // MARK: - Mock Port Forward
 
-struct MockPortForward: Identifiable {
-    let id = UUID()
-    let local: Int
-    let remote: Int
-    let description: String
+public struct MockPortForward: Identifiable, Sendable {
+    public let id = UUID()
+    public let local: Int
+    public let remote: Int
+    public let description: String
 }
 
 // MARK: - Mock Workflow Step
 
-struct MockWorkflowStep: Identifiable {
-    let id = UUID()
-    let title: String
-    let subtitle: String
+public struct MockWorkflowStep: Identifiable, Sendable {
+    public let id = UUID()
+    public let title: String
+    public let subtitle: String
 }
 
 // MARK: - Mock Diagnostic Check
 
-struct MockDiagnosticCheck: Identifiable {
-    let id = UUID()
-    let label: String
-    let status: String
-    let timingMS: Int?
-    let tone: String  // "ok" | "warn" | "danger"
+public struct MockDiagnosticCheck: Identifiable, Sendable {
+    public let id = UUID()
+    public let label: String
+    public let status: String
+    public let timingMS: Int?
+    public let tone: String  // "ok" | "warn" | "danger"
 }
 
 enum ManagementMocks {
