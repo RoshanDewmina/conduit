@@ -44,6 +44,34 @@ struct AnsiSGRParserTests {
         #expect(state.foreground != nil)
     }
 
+    @Test("residual non-CSI ESC sequences (top) are stripped from text")
+    func stripsResidualEscapes() {
+        let parser = AnsiSGRParser()
+        // `top`-style full-redraw output: ESC ( B (designate G0 = US-ASCII) and
+        // ESC = (DECKPAM) wrap the line. The SGR parser must not leak their
+        // tails ("(B", "=") as literal text.
+        let input = "\u{1b}(B\u{1b}=Processes: 840 total\u{1b}(B"
+        let (out, _) = parser.parse(input)
+        let text = String(out.characters)
+        #expect(text == "Processes: 840 total")
+        #expect(!text.contains("(B"))
+        #expect(!text.contains("="))
+    }
+
+    @Test("charset designators and keypad controls stripped, SGR text intact")
+    func stripsResidualButKeepsSGRText() {
+        let parser = AnsiSGRParser()
+        // Mix a charset designator, ESC 7/8 (save/restore cursor), and an SGR
+        // color around real text. Color text must survive with no residue.
+        let input = "\u{1b}(B\u{1b}7\u{1b}[31mred text\u{1b}[0m\u{1b}8 tail"
+        let (out, _) = parser.parse(input)
+        let text = String(out.characters)
+        #expect(text == "red text tail")
+        #expect(!text.contains("(B"))
+        #expect(!text.contains("7"))
+        #expect(!text.contains("8"))
+    }
+
     @Test("alt-screen escalates to TUI mode")
     func tuiDetector() {
         let data = Data("\u{1B}[?1049h".utf8)
