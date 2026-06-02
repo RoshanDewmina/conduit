@@ -20,6 +20,7 @@ public struct Redactor: Sendable {
         // Anthropic keys start with sk-ant-; listed before the generic sk- pattern
         // to ensure the more specific match is applied first and named distinctly.
         ("Anthropic key",    #"sk-ant-[A-Za-z0-9\-_]{20,}"#),
+        ("OpenRouter key",   #"sk-or-[A-Za-z0-9\-_]{20,}"#),
         ("OpenAI key",       #"sk-[A-Za-z0-9\-]{20,}"#),
         ("GitHub server",    #"ghs_[A-Za-z0-9]+"#),
     ]

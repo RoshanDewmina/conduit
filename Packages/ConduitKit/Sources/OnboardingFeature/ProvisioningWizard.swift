@@ -27,6 +27,9 @@ public final class ProvisioningWizardViewModel {
         step = .provisioning
         error = nil
         logLines = []
+        // Zero the API token once provisioning finishes (any exit path) so the
+        // secret doesn't linger in the view model / SecureField binding.
+        defer { flyAPIToken = "" }
 
         let log: @Sendable (String) async -> Void = { [weak self] line in
             await MainActor.run { self?.logLines.append(line) }

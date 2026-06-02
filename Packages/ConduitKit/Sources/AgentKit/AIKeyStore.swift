@@ -12,13 +12,19 @@ public protocol AIKeyStoring: Sendable {
 }
 
 public enum AIProvider: String, Sendable, Codable, CaseIterable {
-    case anthropic, openai, xai
+    case anthropic, openai, openrouter, xai
 
     public var displayName: String {
         switch self {
         case .anthropic: "Anthropic"
         case .openai:    "OpenAI"
+        case .openrouter: "OpenRouter"
         case .xai:       "xAI"
         }
+    }
+
+    /// True when the provider can be backed by Conduit-managed keys (premium tier).
+    public var supportsManagedKeys: Bool {
+        self == .openrouter
     }
 }

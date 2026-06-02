@@ -103,6 +103,8 @@ public final class SettingsViewModel {
                 client = AnthropicClient(apiKey: key)
             case .openai:
                 client = OpenAIClient(apiKey: key)
+            case .openrouter:
+                client = OpenRouterClient(apiKey: key)
             case .xai:
                 testKeyResult = "xAI key test not yet supported."
                 return
@@ -131,6 +133,11 @@ public final class SettingsViewModel {
             let validPrefix = key.hasPrefix("sk-proj-") || (key.hasPrefix("sk-") && !key.hasPrefix("sk-ant-"))
             guard validPrefix, key.count >= 40 else {
                 return "OpenAI keys must start with \"sk-\" and be at least 40 characters."
+            }
+            return nil
+        case .openrouter:
+            guard key.hasPrefix("sk-or-"), key.count >= 20 else {
+                return "OpenRouter keys must start with \"sk-or-\"."
             }
             return nil
         case .xai:

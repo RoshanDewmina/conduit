@@ -78,7 +78,10 @@ struct ConduitApp: App {
                 UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
                 // Refresh StoreKit entitlements — the user may have completed a
                 // purchase (StoreKit or Stripe) and returned via the deep link.
-                Task { await PurchaseManager.shared.restore() }
+                Task {
+                    await PurchaseManager.shared.restore()
+                    await PurchaseManager.shared.refreshCloudEntitlement()
+                }
             }
     }
 }
@@ -176,6 +179,14 @@ final class ConduitNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
                 userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": "reject"]
             )
         case "run.view":
+            NotificationCenter.default.post(
+                name: .conduitRunCompleteAction,
+                object: nil,
+                userInfo: ["sessionId": sessionId]
+            )
+        case UNNotificationDefaultActionIdentifier:
+            // Tapping the notification body (not an action button) — bring the
+            // user to the relevant session rather than doing nothing.
             NotificationCenter.default.post(
                 name: .conduitRunCompleteAction,
                 object: nil,

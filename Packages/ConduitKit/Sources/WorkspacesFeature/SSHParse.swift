@@ -44,7 +44,7 @@ public func parseSSHCommand(_ text: String) -> SSHParseResult? {
     var identityFile: String?
     var positional: String?
 
-    var tokens = tokenize(remainder)
+    let tokens = tokenize(remainder)
     var idx = 0
     while idx < tokens.count {
         let tok = tokens[idx]
