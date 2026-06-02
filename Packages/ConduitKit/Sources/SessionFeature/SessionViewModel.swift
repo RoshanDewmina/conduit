@@ -990,7 +990,7 @@ public final class SessionViewModel {
     private func reportAIUsageIfNeeded(from ai: any AIClient) async {
         guard let onAIUsage else { return }
         if let client = ai as? OpenRouterClient {
-            let record = await client.latestUsageRecord()
+            let record = client.latestUsageRecord()
             if record.totalTokens > 0 || (record.costUSD ?? 0) > 0 {
                 await onAIUsage(record)
             }

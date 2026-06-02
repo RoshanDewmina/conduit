@@ -286,7 +286,7 @@ public final class AgentStore {
     }
 
     public func ingestOpenRouterUsage(client: OpenRouterClient, runID: String? = nil, agentID: String? = nil) async {
-        let record = await client.latestUsageRecord()
+        let record = client.latestUsageRecord()
         guard record.totalTokens > 0 || (record.costUSD ?? 0) > 0 else { return }
         await ingestUsage(record, runID: runID, agentID: agentID)
     }
