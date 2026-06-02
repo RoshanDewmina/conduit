@@ -181,6 +181,14 @@ final class ConduitNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
                 object: nil,
                 userInfo: ["sessionId": sessionId]
             )
+        case UNNotificationDefaultActionIdentifier:
+            // Tapping the notification body (not an action button) — bring the
+            // user to the relevant session rather than doing nothing.
+            NotificationCenter.default.post(
+                name: .conduitRunCompleteAction,
+                object: nil,
+                userInfo: ["sessionId": sessionId]
+            )
         default:
             break
         }

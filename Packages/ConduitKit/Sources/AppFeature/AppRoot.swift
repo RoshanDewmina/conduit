@@ -251,6 +251,30 @@ public struct AppRoot: View {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
         }
+        // Route lock-screen Approve/Reject notification actions into the same
+        // decision path the in-app Inbox uses. ConduitNotificationDelegate posts
+        // these names; without an observer the buttons were silently dead.
+        .onReceive(NotificationCenter.default.publisher(for: .conduitApprovalAction)) { note in
+            handleApprovalAction(note)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { _ in
+            if sessionViewModel != nil { isShowingLiveSession = true }
+        }
+    }
+
+    /// Applies an Approve/Reject decision delivered from a notification action
+    /// button via `Notification.Name.conduitApprovalAction`. Routes through
+    /// `activeInboxViewModel.decide` — the live VM forwards to the daemon channel
+    /// and persists; the static fallback updates in-memory state.
+    private func handleApprovalAction(_ note: Notification) {
+        guard
+            let info = note.userInfo,
+            let idString = info["approvalId"] as? String,
+            let uuid = UUID(uuidString: idString),
+            let action = info["action"] as? String
+        else { return }
+        let decision: Approval.Decision = (action == "approve") ? .approved : .rejected
+        activeInboxViewModel.decide(ApprovalID(uuid), decision: decision)
     }
 
     private func attemptUnlock() async {
@@ -461,7 +485,12 @@ public struct AppRoot: View {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
                     onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
-                    onReconnect: nil
+                    // Manual retry after the auto-reconnect engine gives up
+                    // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
+                    // re-arms a session stuck in `.failed`.
+                    onReconnect: sessionViewModel == nil ? nil : {
+                        Task { await sessionViewModel?.reconnect() }
+                    }
                 )
                 tabContent(env: env, tabItems: tabItems, tabID: tabID)
             }

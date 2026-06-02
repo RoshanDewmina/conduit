@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import SwiftUI
 import UIKit
-import os.signpost
+import os
 import ConduitCore
 import TerminalEngine
 import SSHTransport
@@ -12,6 +12,7 @@ import AgentKit
 import PersistenceKit
 
 private let blockLog = OSLog(subsystem: "com.conduit.terminal", category: "BlockLifecycle")
+private let blockLogger = Logger(subsystem: "com.conduit.terminal", category: "BlockLifecycle")
 
 @MainActor @Observable
 public final class SessionViewModel {
@@ -98,6 +99,10 @@ public final class SessionViewModel {
     /// this so they run at the clean post-clear prompt rather than racing the
     /// injection (which would paste the clear/bootstrap into a launched app).
     private var unifiedIntegrationReady = false
+    /// Set true while connecting, between sending the screen-clear and seeing the
+    /// post-clear prompt's 133;A. Lets `onPromptStart` mark integration ready on
+    /// the real event instead of a fixed timer (correct on high-latency links).
+    private var awaitingPostClearPrompt = false
 
     /// When `true`, the next OSC 133 A callback is silently skipped.
     /// The integration script's `precmd` fires a `133;A` before the
@@ -403,7 +408,15 @@ public final class SessionViewModel {
 
     public func trustHostKey() async {
         guard let fp = pendingHostKeyFingerprint else { return }
-        try? await hostKeyStore.record(hostID: host.id, fingerprint: fp)
+        do {
+            try await hostKeyStore.record(hostID: host.id, fingerprint: fp)
+        } catch {
+            // Persisting the trust decision failed (e.g. Keychain temporarily
+            // locked). Do NOT connect with an unpersisted key — keep the prompt
+            // pending so the user can retry, and surface the reason.
+            status = .failed(reason: "Couldn't save host key: \(error.localizedDescription)")
+            return
+        }
         pendingHostKeyFingerprint = nil
         await connect()
     }
@@ -726,6 +739,16 @@ public final class SessionViewModel {
                             return
                         }
 
+                        // H2: the first real prompt after the screen-clear is the
+                        // clean post-injection prompt — mark integration ready on this
+                        // actual event rather than a fixed timer, so connect-time
+                        // commands wait for the prompt on high-latency links instead
+                        // of racing it (which pastes bootstrap into a launched app).
+                        if self.awaitingPostClearPrompt {
+                            self.awaitingPostClearPrompt = false
+                            self.unifiedIntegrationReady = true
+                        }
+
                         // Finalize any lingering block that didn't get a 133;D
                         // (interrupted command, shell restart, etc.).
                         if let prevID = self.unifiedBlockID,
@@ -734,7 +757,8 @@ public final class SessionViewModel {
                             self.blocks.finalize(id: prevID, exitCode: -1)
                             if let repo = self.blockRepo,
                                let b = self.blocks.blocks.first(where: { $0.id == prevID }) {
-                                try? await repo.persist(b)
+                                do { try await repo.persist(b) }
+                                catch { blockLogger.error("block persist failed (prompt-finalize): \(String(describing: error), privacy: .public)") }
                             }
                         }
 
@@ -786,7 +810,8 @@ public final class SessionViewModel {
                             self.blocks.finalize(id: blockID, exitCode: exitCode)
                             if let repo = self.blockRepo,
                                let b = self.blocks.blocks.first(where: { $0.id == blockID }) {
-                                try? await repo.persist(b)
+                                do { try await repo.persist(b) }
+                                catch { blockLogger.error("block persist failed (command-done): \(String(describing: error), privacy: .public)") }
                             }
                             self.blocks.evictOldBlocksIfNeeded(protecting: self.unifiedBlockID)
                             // Don't nil out unifiedBlockID here — onPromptStart will
@@ -871,10 +896,21 @@ public final class SessionViewModel {
                 try? await Task.sleep(for: .milliseconds(300))
                 // Clear the bootstrap chatter, then settle so the fresh post-clear
                 // prompt (its 133;A) lands before any connect-time command runs.
+                await MainActor.run { self.awaitingPostClearPrompt = true }
                 try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
-                try? await Task.sleep(for: .milliseconds(500))
+                // Wait for the post-clear prompt's own 133;A (event-driven readiness,
+                // set in onPromptStart) with a ceiling, so a shell whose integration
+                // never emits 133;A still proceeds. The Phase-7 raw fallback and
+                // awaitUnifiedShellReady's own timeout remain the ultimate safety nets.
+                var settleWaited = 0
+                while settleWaited < 4000 {
+                    if await MainActor.run(body: { self.unifiedIntegrationReady }) { break }
+                    try? await Task.sleep(for: .milliseconds(50))
+                    settleWaited += 50
+                }
                 await MainActor.run {
-                    self.unifiedIntegrationReady = true
+                    self.unifiedIntegrationReady = true   // floor for broken-integration shells
+                    self.awaitingPostClearPrompt = false
                     // Start fallback timer — if 133;A never arrived, degrade to
                     // blockless live PTY (Phase 7).
                     self.startIntegrationFallback()
@@ -1017,7 +1053,10 @@ public final class SessionViewModel {
             usesBrackets = await bridge.bracketedPasteActive
         }
         let payload = usesBrackets ? "\u{1B}[200~\(text)\u{1B}[201~\n" : text + "\n"
-        try? await activeShell?.send(Array(payload.utf8))
+        // `activeShell` is only non-nil during raw/alt-screen escalation; in normal
+        // block mode it is nil. Fall back to the unified PTY (the single byte source)
+        // so block-mode callers — e.g. "run from history" — aren't silently dropped.
+        try? await (activeShell ?? unifiedShell)?.send(Array(payload.utf8))
     }
 
     // MARK: - CWD refresh

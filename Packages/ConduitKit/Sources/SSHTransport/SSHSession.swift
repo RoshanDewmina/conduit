@@ -122,7 +122,7 @@ public actor SSHSession {
     /// Re-establishes the SSH connection using the credentials from the most
     /// recent successful `connect(credential:hostKeyStore:)` call.
     ///
-    /// - Throws: `ConduitError.unsupportedPlatform` when no cached credential
+    /// - Throws: `ConduitError.noCredentialAvailable` when no cached credential
     ///   is available (e.g. the session was never successfully connected).
     public func attemptReconnect() async throws {
         // Guard: we must have previously connected successfully.
@@ -130,7 +130,7 @@ public actor SSHSession {
               let hostKeyStore = cachedHostKeyStore else {
             // No cached credential — cannot reconnect automatically.
             // Callers should present the credential UI instead.
-            throw ConduitError.unsupportedPlatform
+            throw ConduitError.noCredentialAvailable
         }
         // Reset state so connect() doesn't early-return.
         isConnected = false

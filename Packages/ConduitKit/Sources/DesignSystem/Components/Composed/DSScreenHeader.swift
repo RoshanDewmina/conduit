@@ -105,6 +105,9 @@ public struct DSDetailHeader<Trailing: View>: View {
                             .overlay(
                                 RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                                     .strokeBorder(t.border, lineWidth: 1))
+                            // 36pt visual, 44pt touch target (Apple HIG minimum).
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -152,6 +155,9 @@ public struct DSIconButton: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                         .strokeBorder(t.border, lineWidth: 1))
+                // 36pt visual, 44pt touch target (Apple HIG minimum).
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

@@ -74,7 +74,10 @@ public struct SGRState: Sendable, Equatable {
         if let background { c.backgroundColor = background }
         var font: Font = .custom("FiraCode-Regular", size: 17)
         if bold { font = font.bold() }
-        if italic { font = .custom("FiraCode-Regular", size: 17) }
+        // `.italic()` keeps Fira Code (which ships no italic face) and applies a
+        // synthetic slant; applied to `font` so it composes with `.bold()` above
+        // rather than clobbering it (the old line re-assigned the base font).
+        if italic { font = font.italic() }
         c.font = font
         if underline { c.underlineStyle = .single }
         if dim { c.foregroundColor = (foreground ?? .primary).opacity(0.7) }

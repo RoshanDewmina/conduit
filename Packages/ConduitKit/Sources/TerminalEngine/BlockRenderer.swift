@@ -516,7 +516,9 @@ public final class BlockRenderer {
 
         var font: SwiftUI.Font = .custom("FiraCode-Regular", size: 17)
         if style.contains(.bold)   { font = font.bold() }
-        if style.contains(.italic) { font = .custom("FiraCode-Regular", size: 17) }
+        // `.italic()` keeps Fira Code (no italic face ships) and applies a synthetic
+        // slant; composed onto `font` so bold+italic keeps the bold weight.
+        if style.contains(.italic) { font = font.italic() }
         c.font = font
         if style.contains(.underline) { c.underlineStyle = .single }
         if style.contains(.dim) { c.foregroundColor = (fg ?? theme.foreground).opacity(0.7) }

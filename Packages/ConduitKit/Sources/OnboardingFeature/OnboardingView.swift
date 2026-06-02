@@ -338,9 +338,11 @@ private struct OnboardingVariantAView: View {
                     Text("or ")
                         .font(.dsMonoPt(11.5))
                         .foregroundStyle(t.text3)
-                    Text("scan a pairing code")
+                    // Pairing isn't shipped yet — render muted (not accent) so it
+                    // reads as informational copy rather than a tappable link.
+                    Text("scan a pairing code (soon)")
                         .font(.dsMonoPt(11.5))
-                        .foregroundStyle(t.accent)
+                        .foregroundStyle(t.text3)
                 }
 
                 // Spectrum bar footer
@@ -1097,9 +1099,11 @@ private struct OnboardingVariantBView: View {
                     Text("or ")
                         .font(.dsMonoPt(11.5))
                         .foregroundStyle(t.text3)
-                    Text("scan a pairing code")
+                    // Pairing isn't shipped yet — render muted (not accent) so it
+                    // reads as informational copy rather than a tappable link.
+                    Text("scan a pairing code (soon)")
                         .font(.dsMonoPt(11.5))
-                        .foregroundStyle(t.accent)
+                        .foregroundStyle(t.text3)
                 }
 
                 // Spectrum bar footer

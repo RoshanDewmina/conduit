@@ -99,7 +99,7 @@ public final class ConduitLiveActivityManager {
         )
 
         if let existing = activities[hostID] {
-            await existing.update(.init(state: content, staleDate: nil))
+            await existing.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
             lastContent[hostID] = content
             return
         }
@@ -108,7 +108,7 @@ public final class ConduitLiveActivityManager {
         do {
             let activity = try Activity.request(
                 attributes: attrs,
-                content: .init(state: content, staleDate: nil),
+                content: .init(state: content, staleDate: Date().addingTimeInterval(1800)),
                 pushType: nil
             )
             activities[hostID] = activity
@@ -133,7 +133,7 @@ public final class ConduitLiveActivityManager {
             pendingApprovals: pendingApprovals,
             agentName: agentName
         )
-        await activity.update(.init(state: content, staleDate: nil))
+        await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[hostID] = content
     }
 
@@ -152,7 +152,7 @@ public final class ConduitLiveActivityManager {
                 agentName: base.agentName,
                 isStreaming: base.isStreaming
             )
-            await activity.update(.init(state: content, staleDate: nil))
+            await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
             lastContent[hostID] = content
         }
     }
@@ -169,7 +169,7 @@ public final class ConduitLiveActivityManager {
             agentName: base.agentName,
             isStreaming: isStreaming
         )
-        await activity.update(.init(state: content, staleDate: nil))
+        await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[hostID] = content
     }
 

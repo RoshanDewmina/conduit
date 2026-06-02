@@ -37,6 +37,7 @@ public enum ConduitError: Error, LocalizedError, Sendable, Equatable {
 
     // Generic
     case unsupportedPlatform
+    case noCredentialAvailable
     case configurationMissing(key: String)
     case unknown(detail: String)
 
@@ -65,6 +66,7 @@ public enum ConduitError: Error, LocalizedError, Sendable, Equatable {
         case .approvalExpired:                    "This approval expired."
         case .approvalUnknown(let id):            "Unknown approval id: \(id)"
         case .unsupportedPlatform:                "This feature is not supported on this device."
+        case .noCredentialAvailable:              "No saved credential to reconnect. Please sign in again."
         case .configurationMissing(let k):        "Missing configuration: \(k)"
         case .unknown(let d):                     "Unexpected error: \(d)"
         }
