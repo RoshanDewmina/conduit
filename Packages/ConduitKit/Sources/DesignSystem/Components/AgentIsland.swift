@@ -1,6 +1,18 @@
 #if os(iOS)
 import SwiftUI
 
+// Private helper: map AgentState → HUD color (always-dark palette, matches DI constants).
+private func agentStateColor(_ state: AgentState) -> Color {
+    switch state {
+    case .thinking:  Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1) // blue
+    case .streaming: Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1) // blue
+    case .approval:  Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1) // amber
+    case .done:      Color(.sRGB, red: 0.247, green: 0.753, blue: 0.435, opacity: 1) // green
+    case .error:     Color(.sRGB, red: 0.875, green: 0.353, blue: 0.290, opacity: 1) // red
+    case .offline:   Color(.sRGB, red: 0.400, green: 0.384, blue: 0.357, opacity: 1) // dim
+    }
+}
+
 // ============================================================
 // Agent Island — an in-app agent HUD banner.
 //
@@ -142,10 +154,10 @@ public struct AgentIsland: View {
     private var compactLayer: some View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
-                PixelBox(state: primary.state, size: 14)
+                PixelBox(color: agentStateColor(primary.state), size: 14)
                 Text(primary.state.islandLabel)
                     .font(.dsSansPt(15, weight: .semibold))
-                    .foregroundStyle(PixelBox.stateColor(primary.state))
+                    .foregroundStyle(agentStateColor(primary.state))
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
@@ -231,11 +243,11 @@ private struct StateBadge: View {
     let state: AgentState
     var body: some View {
         HStack(spacing: 6) {
-            PixelBox(state: state, size: 11)
+            PixelBox(color: agentStateColor(state), size: 11)
             Text(state.islandLabel)
                 .font(.dsSansPt(12.5, weight: .semibold))
         }
-        .foregroundStyle(PixelBox.stateColor(state))
+        .foregroundStyle(agentStateColor(state))
         .padding(.init(top: 4, leading: 8, bottom: 4, trailing: 10))
         .background(Color.white.opacity(0.06), in: Capsule())
         .fixedSize()
@@ -301,7 +313,7 @@ private struct InlineApproval: View {
         let ap = agent.approval
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                PixelBox(state: .approval, size: 12)
+                PixelBox(color: DI.approval, size: 12)
                 Text("\(agent.name) wants to run")
                     .font(.dsSansPt(12.5, weight: .semibold))
                     .foregroundStyle(DI.approval)
@@ -344,10 +356,10 @@ private struct InlineApproval: View {
 
     private func riskColor(_ r: AgentApproval.Risk) -> Color {
         switch r {
-        case .low: PixelBox.stateColor(.done)
-        case .medium: DI.approval
-        case .high: PixelBox.stateColor(.thinking)
-        case .critical: PixelBox.stateColor(.error)
+        case .low:      agentStateColor(.done)
+        case .medium:   DI.approval
+        case .high:     agentStateColor(.thinking)
+        case .critical: agentStateColor(.error)
         }
     }
 }
@@ -372,8 +384,8 @@ private struct AgentRow: View {
                 Spacer(minLength: 0)
                 Text(agent.state.islandLabel)
                     .font(.dsSansPt(11.5, weight: .semibold))
-                    .foregroundStyle(PixelBox.stateColor(agent.state))
-                PixelBox(state: agent.state, size: 11)
+                    .foregroundStyle(agentStateColor(agent.state))
+                PixelBox(color: agentStateColor(agent.state), size: 11)
                 Image(systemName: "chevron.right")
                     .font(.dsSansPt(10, weight: .bold))
                     .foregroundStyle(Color(.sRGB, red: 0.27, green: 0.255, blue: 0.235, opacity: 1))
