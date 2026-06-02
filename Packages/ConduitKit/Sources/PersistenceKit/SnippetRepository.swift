@@ -114,10 +114,16 @@ public actor SnippetRepository {
 
     /// Tier 2.4: snippets sorted by `recency × frequency` — the higher the
     /// useCount and the more recently used, the higher in the list.
-    public func rankedForPalette() async throws -> [Snippet] {
+    public func rankedForPalette(hostTags: [String] = []) async throws -> [Snippet] {
+        let normalizedHostTags = Set(hostTags.map { $0.lowercased() })
         let all = try await self.all()
+        let filtered = all.filter { snippet in
+            if snippet.hostTags.isEmpty { return true }
+            let snippetTags = Set(snippet.hostTags.map { $0.lowercased() })
+            return !normalizedHostTags.isDisjoint(with: snippetTags)
+        }
         let now = Date.timeIntervalSinceReferenceDate
-        return all.sorted { a, b in
+        return filtered.sorted { a, b in
             score(a, now: now) > score(b, now: now)
         }
     }

@@ -43,7 +43,8 @@ public final class AppEnvironment {
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
-        let cloudSync = CloudSync()
+        let cloudKitEnabled = Bundle.main.object(forInfoDictionaryKey: "ConduitCloudKitEnabled") as? Bool == true
+        let cloudSync = CloudSync(cloudKitEnabled: cloudKitEnabled)
         self.syncEngine = SyncEngine(
             cloudSync: cloudSync,
             hostRepo: HostRepository(database),

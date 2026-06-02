@@ -112,6 +112,8 @@ public struct SnippetEditorView: View {
 private struct SnippetEditSheet: View {
     @State private var name: String
     @State private var commandBody: String
+    @State private var hostTagsRaw: String
+    @State private var tagsRaw: String
     @State private var arguments: [SnippetArgument]
     @State private var editingArgIndex: Int? = nil
     @State private var isAddingArg = false
@@ -125,6 +127,8 @@ private struct SnippetEditSheet: View {
     init(snippet: Snippet, onSave: @escaping (Snippet) -> Void, onCancel: @escaping () -> Void) {
         _name = State(initialValue: snippet.name)
         _commandBody = State(initialValue: snippet.body)
+        _hostTagsRaw = State(initialValue: snippet.hostTags.joined(separator: ", "))
+        _tagsRaw = State(initialValue: snippet.tags.joined(separator: ", "))
         _arguments = State(initialValue: snippet.arguments)
         originalID = snippet.id
         originalCreatedAt = snippet.createdAt
@@ -150,6 +154,17 @@ private struct SnippetEditSheet: View {
                     Text("Use {{name}} placeholders to define parameters.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                Section("Tag filters") {
+                    TextField("Host tags (comma-separated)", text: $hostTagsRaw)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Text("Only shown in the command palette for hosts with matching tags. Leave empty for all hosts.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("Snippet tags (comma-separated)", text: $tagsRaw)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                 }
 
                 Section {
@@ -190,6 +205,8 @@ private struct SnippetEditSheet: View {
                             id: originalID,
                             name: name,
                             body: commandBody,
+                            hostTags: parseTags(hostTagsRaw),
+                            tags: parseTags(tagsRaw),
                             arguments: arguments,
                             useCount: originalUseCount,
                             createdAt: originalCreatedAt
@@ -219,6 +236,15 @@ private struct SnippetEditSheet: View {
                 }
             }
         }
+    }
+
+    private func parseTags(_ raw: String) -> [String] {
+        Array(Set(
+            raw
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+        )).sorted()
     }
 }
 

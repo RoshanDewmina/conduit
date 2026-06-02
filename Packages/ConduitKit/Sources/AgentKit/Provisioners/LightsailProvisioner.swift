@@ -4,6 +4,7 @@ import ConduitCore
 
 /// Provisions an AWS Lightsail instance using the Lightsail REST API with SigV4 signing.
 /// No external AWS SDK — only CryptoKit + URLSession.
+/// AWS Lightsail provisioning — enabled via `ProvisioningFeatureFlags.lightsailEnabled`.
 public actor LightsailProvisioner: Provisioner {
     private let accessKey: String
     private let secretKey: String
@@ -198,3 +199,4 @@ private extension ContiguousBytes {
         return result
     }
 }
+

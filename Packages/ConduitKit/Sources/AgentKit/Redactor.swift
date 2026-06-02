@@ -17,7 +17,8 @@ public struct Redactor: Sendable {
     private static let builtInPatterns: [(name: String, pattern: String)] = [
         ("AWS key",        #"AKIA[0-9A-Z]{16}"#),
         ("GitHub token",   #"gh[pousr]_[A-Za-z0-9_]+"#),
-        ("OpenAI key",     #"sk-[A-Za-z0-9\-]{20,}"#),
+        ("OpenRouter key", #"sk-or-v1-[A-Za-z0-9\-]{20,}"#),
+        ("OpenAI key",     #"sk-(?!or-v1-)[A-Za-z0-9\-]{20,}"#),
         ("GitHub server",  #"ghs_[A-Za-z0-9]+"#),
     ]
 

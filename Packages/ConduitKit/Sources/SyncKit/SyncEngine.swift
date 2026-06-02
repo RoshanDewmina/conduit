@@ -28,6 +28,11 @@ public actor SyncEngine {
     /// Starts the sync engine. Registers for CloudKit change notifications.
     public func start() async {
         let status = try? await cloudSync.accountStatus()
+        // #region agent log
+        #if os(iOS) && !targetEnvironment(simulator)
+        CloudSync.debugLogSyncStart(status: String(describing: status))
+        #endif
+        // #endregion
         guard status == .available else { return }
 
         // Initial sync

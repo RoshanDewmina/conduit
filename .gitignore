@@ -28,6 +28,48 @@ Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
 # Local agent scratch worktrees
 .claude/worktrees/
 
+# AI-tool scratch directories (never commit)
+.agents/
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.hermes/
+.junie/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.playwright-mcp/
+.roo/
+.trae/
+.zencoder/
+
+# Claude Code / superpowers lock file
+skills-lock.json
+
+# Claude Code plugin skill symlinks (user-local tooling state)
+.claude/skills/
+
+# Remotion/animations node_modules
+animations/node_modules/
+
+# Marketing site build artifacts
+marketing/.next/
+marketing/node_modules/
+
+# push-backend compiled binaries
+daemon/push-backend/push-backend
+daemon/push-backend/push-backend-linux
+
 # conduitd compiled binaries (distributed via GitHub Releases, not git)
 daemon/conduitd/conduitd
 daemon/conduitd/conduitd-macos

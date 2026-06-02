@@ -46,14 +46,39 @@ type approvalEvent struct {
 	HostName  string `json:"hostName"`
 }
 
+type runCompleteEvent struct {
+	SessionID string `json:"sessionId"`
+	Command   string `json:"command"`
+	ExitCode  int    `json:"exitCode"`
+	HostName  string `json:"hostName"`
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /register", handleRegister)
 	mux.HandleFunc("POST /approval", handleApproval)
+	mux.HandleFunc("POST /run-complete", handleRunComplete)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	registerBillingRoutes(mux)
+	registerCreditsRoutes(mux)
+	registerQuotaRoutes(mux)
+	registerAgentRoutes(mux)
+	registerUsageRoutes(mux)
+	registerArtifactRoutes(mux)
+	registerScheduleRoutes(mux)
+	registerOrgRoutes(mux)
+
+	initEntitlementStore()
+	initControlPlaneStore()
+	initOpenRouterClient()
+	initCreditsStore()
+	initArtifactsStore()
+	initSchedulesStore()
+	initGCPOrchestrationStore()
+	initOrgsStore()
+	startScheduleTicker()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -71,7 +96,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -115,6 +140,84 @@ func handleApproval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleRunComplete(w http.ResponseWriter, r *http.Request) {
+	var ev runCompleteEvent
+	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	registry.RLock()
+	token, ok := registry.tokens[ev.SessionID]
+	registry.RUnlock()
+	if !ok {
+		log.Printf("no device token for session %s — dropping run-complete", ev.SessionID)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	if err := pushRunComplete(token, ev); err != nil {
+		log.Printf("APNs run-complete push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func pushRunComplete(deviceToken string, ev runCompleteEvent) error {
+	keyID := mustEnv("APNS_KEY_ID")
+	teamID := mustEnv("APNS_TEAM_ID")
+	keyPath := mustEnv("APNS_KEY_PATH")
+	bundleID := mustEnv("APNS_BUNDLE_ID")
+
+	key, err := loadP8Key(keyPath)
+	if err != nil {
+		return fmt.Errorf("load APNs key: %w", err)
+	}
+	token, err := makeJWT(keyID, teamID, key)
+	if err != nil {
+		return fmt.Errorf("make JWT: %w", err)
+	}
+
+	ok := ev.ExitCode == 0
+	title := fmt.Sprintf("Run complete · %s", ev.HostName)
+	if !ok {
+		title = fmt.Sprintf("Run failed · %s", ev.HostName)
+	}
+	body := fmt.Sprintf("%s — exit %d", ev.Command, ev.ExitCode)
+
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{"title": title, "body": body},
+			"sound": "default",
+			"category": "run-complete",
+		},
+		"sessionId": ev.SessionID,
+		"exitCode":  ev.ExitCode,
+	}
+
+	buf, _ := json.Marshal(payload)
+	url := fmt.Sprintf("https://api.push.apple.com/3/device/%s", deviceToken)
+
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(buf))
+	req.Header.Set("authorization", "bearer "+token)
+	req.Header.Set("apns-topic", bundleID)
+	req.Header.Set("apns-push-type", "alert")
+	req.Header.Set("apns-priority", "5") // non-time-critical
+	req.Header.Set("content-type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("APNs returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func pushApproval(deviceToken string, ev approvalEvent) error {

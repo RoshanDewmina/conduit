@@ -16,6 +16,8 @@ public final class ProvisioningWizardViewModel {
     public var logLines: [String] = []
     public var error: String?
     public var flyAPIToken: String = ""
+    public var lightsailAccessKey: String = ""
+    public var lightsailSecretKey: String = ""
 
     private let hostRepo: HostRepository
 
@@ -43,9 +45,25 @@ public final class ProvisioningWizardViewModel {
                 }
                 provisioner = FlyProvisioner(apiToken: flyAPIToken)
             case .lightsail:
-                provisioner = LightsailProvisioner(accessKey: "", secretKey: "")
+                guard ProvisioningFeatureFlags.lightsailEnabled else {
+                    error = "Lightsail provisioning is not enabled."
+                    step = .configure
+                    return
+                }
+                guard !lightsailAccessKey.isEmpty, !lightsailSecretKey.isEmpty else {
+                    error = "Enter AWS access key and secret."
+                    step = .configure
+                    return
+                }
+                provisioner = LightsailProvisioner(
+                    accessKey: lightsailAccessKey,
+                    secretKey: lightsailSecretKey,
+                    region: plan.region.isEmpty ? "us-east-1" : plan.region
+                )
+            #if DEBUG
             case .orbstack:
                 provisioner = OrbstackProvisioner()
+            #endif
             }
 
             let host = try await provisioner.create(plan: plan, log: log)

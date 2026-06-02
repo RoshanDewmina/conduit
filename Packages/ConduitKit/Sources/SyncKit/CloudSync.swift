@@ -4,7 +4,6 @@ import PersistenceKit
 
 #if os(iOS)
 import CloudKit
-import Security
 #endif
 
 // CKOperation callbacks are called serially by CloudKit, so this accumulator
@@ -22,11 +21,32 @@ public actor CloudSync {
     private var db: CKDatabase? { container?.privateCloudDatabase }
     #endif
 
-    public init(containerIdentifier: String = "iCloud.dev.conduit.mobile") {
+    public init(
+        containerIdentifier: String = "iCloud.dev.conduit.mobile",
+        cloudKitEnabled: Bool = false
+    ) {
         #if os(iOS) && !targetEnvironment(simulator)
-        self.container = CloudSync.hasCloudKitEntitlement()
-            ? CKContainer(identifier: containerIdentifier)
-            : nil
+        // #region agent log
+        CloudSync.debugLog(
+            hypothesisId: "A",
+            location: "CloudSync.swift:init",
+            message: "CloudKit entitlement probe",
+            data: [
+                "cloudKitEnabled": cloudKitEnabled,
+                "containerIdentifier": containerIdentifier,
+                "willCreateContainer": cloudKitEnabled,
+            ]
+        )
+        // #endregion
+        self.container = cloudKitEnabled ? CKContainer(identifier: containerIdentifier) : nil
+        // #region agent log
+        CloudSync.debugLog(
+            hypothesisId: "C",
+            location: "CloudSync.swift:init",
+            message: "CloudSync container state",
+            data: ["containerIsNil": container == nil]
+        )
+        // #endregion
         #endif
     }
 
@@ -104,11 +124,40 @@ public actor CloudSync {
     }
 
     #if os(iOS) && !targetEnvironment(simulator)
-    private static func hasCloudKitEntitlement() -> Bool {
-        guard let task = SecTaskCreateFromSelf(nil) else { return false }
-        let key = "com.apple.developer.icloud-services" as CFString
-        guard let value = SecTaskCopyValueForEntitlement(task, key, nil) as? [String] else { return false }
-        return value.contains("CloudKit")
+    private static func debugLog(
+        hypothesisId: String,
+        location: String,
+        message: String,
+        data: [String: Any]
+    ) {
+        let payload: [String: Any] = [
+            "sessionId": "6a22e9",
+            "hypothesisId": hypothesisId,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let json = try? JSONSerialization.data(withJSONObject: payload)
+        else { return }
+        var request = URLRequest(
+            url: URL(string: "http://127.0.0.1:7531/ingest/f956616c-beac-4baf-8b56-a323a2cf21e8")!
+        )
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("6a22e9", forHTTPHeaderField: "X-Debug-Session-Id")
+        request.httpBody = json
+        URLSession.shared.dataTask(with: request).resume()
+    }
+
+    static func debugLogSyncStart(status: String) {
+        debugLog(
+            hypothesisId: "D",
+            location: "SyncEngine.swift:start",
+            message: "SyncEngine start account status",
+            data: ["status": status]
+        )
     }
     #endif
 }
