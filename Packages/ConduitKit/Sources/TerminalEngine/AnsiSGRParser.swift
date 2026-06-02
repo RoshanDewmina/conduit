@@ -92,7 +92,7 @@ public struct AnsiSGRParser: Sendable {
         let charsetIntroducers: Set<Unicode.Scalar> = ["(", ")", "*", "+"]
 
         var out = String.UnicodeScalarView()
-        var scalars = Array(input.unicodeScalars)
+        let scalars = Array(input.unicodeScalars)
         var i = 0
         while i < scalars.count {
             let s = scalars[i]
