@@ -27,7 +27,7 @@ public struct OnboardingView: View {
     @State private var animationDirection: Int = 1
     @Environment(\.conduitTokens) private var t
 
-    private static let totalSteps = 7
+    fileprivate static let totalSteps = 7
 
     public init(
         onContinue: @escaping () -> Void,
@@ -269,7 +269,7 @@ public struct OnboardingView: View {
     // ================================================================
 
     private var screen3SSH: some View {
-        SSHScreen(onContinue: advance)
+        SSHScreen(onContinue: advance, currentStep: step)
     }
 
     // ================================================================
@@ -331,7 +331,7 @@ public struct OnboardingView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                     DSButton("enable notifications", variant: .primary, size: .lg, fullWidth: true) {
                         Task {
-                            Notifications.shared.registerCategories()
+                            await Notifications.shared.registerCategories()
                             let _ = await Notifications.shared.requestAuthorization()
                             advance()
                         }
@@ -398,7 +398,7 @@ public struct OnboardingView: View {
     // ================================================================
 
     private var screen5FaceID: some View {
-        FaceIDScreen(onContinue: advance)
+        FaceIDScreen(onContinue: advance, currentStep: step)
     }
 
     // ================================================================
@@ -488,11 +488,15 @@ public struct OnboardingView: View {
                 .padding(.horizontal, 26)
                 .padding(.top, 16)
 
-                // CTA
-                DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
-                    .padding(.horizontal, 26)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
+                // Step dots + CTA
+                VStack(spacing: 14) {
+                    stepDots
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
+                }
+                .padding(.horizontal, 26)
+                .padding(.top, 20)
+                .padding(.bottom, 40)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -588,13 +592,17 @@ public struct OnboardingView: View {
 
                 Spacer(minLength: 32)
 
-                // CTAs
-                VStack(spacing: 12) {
-                    DSButton("create a workspace", variant: .primary, size: .lg, fullWidth: true) {
-                        onSetupWorkspace()
-                    }
-                    DSButton("i'll use my own host", variant: .ghost, size: .lg, fullWidth: true) {
-                        onContinue()
+                // Step dots + CTAs
+                VStack(spacing: 14) {
+                    stepDots
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    VStack(spacing: 12) {
+                        DSButton("create a workspace", variant: .primary, size: .lg, fullWidth: true) {
+                            onSetupWorkspace()
+                        }
+                        DSButton("i'll use my own host", variant: .ghost, size: .lg, fullWidth: true) {
+                            onContinue()
+                        }
                     }
                 }
                 .padding(.horizontal, 26)
@@ -612,9 +620,21 @@ public struct OnboardingView: View {
 
 private struct SSHScreen: View {
     let onContinue: () -> Void
+    let currentStep: Int
     @State private var selectedPlatform: SSHPlatform = .macOS
     @State private var copyFeedback = false
     @Environment(\.conduitTokens) private var t
+
+    private var stepDots: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<OnboardingView.totalSteps, id: \.self) { i in
+                Rectangle()
+                    .fill(i == currentStep ? t.accent : t.border)
+                    .frame(width: i == currentStep ? 16 : 6, height: 4)
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -714,9 +734,13 @@ private struct SSHScreen: View {
 
                 Spacer(minLength: 24)
 
-                DSButton("i've enabled it", variant: .primary, size: .lg, fullWidth: true, action: onContinue)
-                    .padding(.horizontal, 26)
-                    .padding(.bottom, 40)
+                VStack(spacing: 14) {
+                    stepDots
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    DSButton("i've enabled it", variant: .primary, size: .lg, fullWidth: true, action: onContinue)
+                }
+                .padding(.horizontal, 26)
+                .padding(.bottom, 40)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -750,16 +774,15 @@ private struct SSHScreen: View {
 
 private struct FaceIDScreen: View {
     let onContinue: () -> Void
-    @State private var faceIDToggle: Bool = true
+    let currentStep: Int
     @Environment(\.conduitTokens) private var t
 
     private var stepDots: some View {
-        let total = OnboardingView.totalSteps
-        return HStack(spacing: 5) {
-            ForEach(0..<total, id: \.self) { i in
+        HStack(spacing: 5) {
+            ForEach(0..<OnboardingView.totalSteps, id: \.self) { i in
                 Rectangle()
-                    .fill(i == 4 ? t.accent : t.border)
-                    .frame(width: i == 4 ? 16 : 6, height: 4)
+                    .fill(i == currentStep ? t.accent : t.border)
+                    .frame(width: i == currentStep ? 16 : 6, height: 4)
             }
         }
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
@@ -804,28 +827,6 @@ private struct FaceIDScreen: View {
                     .padding(.horizontal, 26)
                     .padding(.top, 12)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                // Toggle row in bordered block
-                HStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(t.text3)
-                    Text("Face ID for critical approvals")
-                        .font(.dsMonoPt(12.5))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    Toggle("", isOn: $faceIDToggle)
-                        .labelsHidden()
-                        .tint(t.accent)
-                }
-                .padding(16)
-                .background(t.surface)
-                .overlay(
-                    Rectangle()
-                        .strokeBorder(t.border, lineWidth: 0.5)
-                )
-                .padding(.horizontal, 26)
-                .padding(.top, 20)
 
                 Spacer(minLength: 24)
 
