@@ -56,6 +56,17 @@ struct DebugGalleryView: View {
         case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
         case "compare":        PremiumComparisonView()
         case "billing":        BillingView()
+        // Phase 5 management screens
+        case "mgmt-hostdetail":   MgmtGalleryHostDetail()
+        case "mgmt-agentpolicy":  AgentPolicyView()
+        case "mgmt-agents":       AgentListView()
+        case "mgmt-vmlist":       VMListView()
+        case "mgmt-vmdetail":     VMDetailView(vm: ManagementMocks.vms[0])
+        case "mgmt-keys":         MgmtGalleryKeys()
+        case "mgmt-snippets":     MgmtGallerySnippets()
+        case "mgmt-workflow":     WorkflowBuilderView()
+        case "mgmt-diagnostics":  DiagnosticsView()
+        case "mgmt-commandbar":   CommandBarView(onConnect: { _ in }, onOpenInbox: {}, onRunSnippet: {}, onNewWorkspace: {}, onDismiss: {})
         case "review":         reviewScreen
         default:               reviewScreen
         }

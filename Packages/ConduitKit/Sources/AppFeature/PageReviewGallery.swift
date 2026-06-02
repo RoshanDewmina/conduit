@@ -602,4 +602,40 @@ struct PersistentStatusBarGalleryScreen: View {
         }
     }
 }
+
+// MARK: - Phase 5 management gallery helpers
+// These wrap screens that need a store with an in-memory or no-op dep.
+
+struct MgmtGalleryHostDetail: View {
+    @Environment(\.conduitTokens) private var t
+    var body: some View {
+        ZStack {
+            t.bg.ignoresSafeArea()
+            HostDetailView(hostName: "prod-api", hostAddress: "user@192.168.1.10")
+        }
+    }
+}
+
+struct MgmtGalleryKeys: View {
+    @Environment(\.conduitTokens) private var t
+    private let mockKeyStore = KeyStore(inMemory: true)
+    var body: some View {
+        ZStack {
+            t.bg.ignoresSafeArea()
+            KeysManagementView(keyStore: mockKeyStore)
+        }
+    }
+}
+
+struct MgmtGallerySnippets: View {
+    @Environment(\.conduitTokens) private var t
+    // try! is safe in DEBUG-only gallery
+    private let mockRepo = SnippetRepository(db: try! AppDatabase.inMemory())
+    var body: some View {
+        ZStack {
+            t.bg.ignoresSafeArea()
+            SnippetsLibraryView(repository: mockRepo)
+        }
+    }
+}
 #endif

@@ -10,20 +10,23 @@ import SecurityKit
 public struct LibraryView: View {
     let snippetRepo: SnippetRepository
     let keyStore: KeyStore
+    @Bindable var agentStore: AgentStore
 
     @State private var snippetCount: Int = 0
     @State private var keyCount: Int = 0
     @State private var recentSnippets: [Snippet] = []
+    @State private var pm = PurchaseManager.shared
 
     @Environment(\.conduitTokens) private var t
 
-    public init(snippetRepo: SnippetRepository, keyStore: KeyStore) {
+    public init(snippetRepo: SnippetRepository, keyStore: KeyStore, agentStore: AgentStore) {
         self.snippetRepo = snippetRepo
         self.keyStore = keyStore
+        self.agentStore = agentStore
     }
 
     private var workflowCount: Int { LibraryMocks.workflows.count }
-    private var agentCount: Int { LibraryMocks.agents.count }
+    private var agentCount: Int { agentStore.hasCloudEntitlement ? agentStore.agents.count : 0 }
 
     public var body: some View {
         ZStack(alignment: .top) {
@@ -33,7 +36,7 @@ public struct LibraryView: View {
                     DSIconButton(.plus) { /* new snippet — TODO */ }
                 }
 
-                if snippetCount == 0 && keyCount == 0 && workflowCount == 0 && agentCount == 0 {
+                if snippetCount == 0 && keyCount == 0 && workflowCount == 0 && !agentStore.hasCloudEntitlement {
                     Spacer()
                     DSEmptyState(
                         icon: .list,
@@ -49,7 +52,7 @@ public struct LibraryView: View {
                                 spacing: 12
                             ) {
                                 NavigationLink {
-                                    SnippetEditorView(repository: snippetRepo)
+                                    SnippetsLibraryView(repository: snippetRepo)
                                 } label: {
                                     DSCategoryCard(
                                         icon: .list,
@@ -61,10 +64,7 @@ public struct LibraryView: View {
                                 .buttonStyle(.plain)
 
                                 NavigationLink {
-                                    KeysView(
-                                        viewModel: KeysViewModel(store: keyStore),
-                                        store: keyStore
-                                    )
+                                    KeysManagementView(keyStore: keyStore)
                                 } label: {
                                     DSCategoryCard(
                                         icon: .key,
@@ -76,7 +76,7 @@ public struct LibraryView: View {
                                 .buttonStyle(.plain)
 
                                 NavigationLink {
-                                    WorkflowsView()
+                                    WorkflowBuilderView()
                                 } label: {
                                     DSCategoryCard(
                                         icon: .diff,
@@ -87,17 +87,21 @@ public struct LibraryView: View {
                                 }
                                 .buttonStyle(.plain)
 
-                                NavigationLink {
-                                    AgentsView()
-                                } label: {
-                                    DSCategoryCard(
-                                        icon: .sparkles,
-                                        count: "\(agentCount)",
-                                        label: "Agents",
-                                        subtitle: "claude · codex"
-                                    )
+                                if agentStore.hasCloudEntitlement {
+                                    NavigationLink {
+                                        AgentListView()
+                                    } label: {
+                                        DSCategoryCard(
+                                            icon: .sparkles,
+                                            count: "\(agentCount)",
+                                            label: "Agents",
+                                            subtitle: "hosted · SSH"
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    cloudAgentsCard
                                 }
-                                .buttonStyle(.plain)
                             }
 
                             if !recentSnippets.isEmpty {
@@ -120,7 +124,21 @@ public struct LibraryView: View {
                 }
             }
         }
-        .task { await loadCounts() }
+        .task {
+            await pm.refreshCloudEntitlement()
+            await loadCounts()
+            await agentStore.loadAgents()
+        }
+    }
+
+    private var cloudAgentsCard: some View {
+        DSCategoryCard(
+            icon: .sparkles,
+            count: "—",
+            label: "Agents",
+            subtitle: "Conduit Cloud"
+        )
+        .opacity(0.55)
     }
 
     private func loadCounts() async {
