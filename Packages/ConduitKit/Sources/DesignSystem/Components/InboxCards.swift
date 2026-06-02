@@ -205,8 +205,7 @@ public struct DSMCPCallCard: View {
             }
 
             // "claude wants to call a tool" sentence
-            (Text(agentName).foregroundStyle(t.text)
-             + Text(" wants to call a tool").foregroundStyle(t.text2))
+            Text("\(Text(agentName).foregroundStyle(t.text))\(Text(" wants to call a tool").foregroundStyle(t.text2))")
                 .font(.dsMonoPt(12))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

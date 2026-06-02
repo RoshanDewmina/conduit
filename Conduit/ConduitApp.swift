@@ -16,7 +16,15 @@ import UIKit
 /// Cloud Run service URL — e.g. "https://conduit-push-HASH-ts.a.run.app".
 /// Empty string disables push registration silently (safe for local/simulator runs).
 /// ATS blocks any plain http:// URL in Release builds so no fallback is provided.
-private let pushBackendURL: String = Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
+private var pushBackendURL: String {
+    #if DEBUG
+    if let envURL = ProcessInfo.processInfo.environment["CONDUIT_PUSH_BACKEND_URL"],
+       !envURL.isEmpty {
+        return envURL
+    }
+    #endif
+    return Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
+}
 
 // RELEASE GATE: Paste your Sentry DSN here before App Store submission.
 // Create a project at https://sentry.io (or your self-hosted instance) to get a DSN.

@@ -201,7 +201,7 @@ public struct DSApprovalCard: View {
             }
 
             // Action sentence — who + what, uniform font/color, no mid-sentence font switch
-            (Text(agentName).fontWeight(.semibold) + Text(" wants to \(action)"))
+            Text("\(Text(agentName).fontWeight(.semibold))\(Text(" wants to \(action)"))")
                 .font(.dsSansPt(14))
                 .foregroundStyle(t.text)
                 .lineLimit(3)

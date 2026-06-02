@@ -64,4 +64,10 @@ struct HostedAgentTests {
         #expect(mapped.status == .running)
         #expect(mapped.prompt == "echo hello")
     }
+
+    @Test("Fly runtime maps correctly")
+    func flyRuntimeMapping() {
+        #expect(HostedAgentAPIClient.mapRuntimeKind("fly") == .fly)
+        #expect(HostedAgentAPIClient.mapRuntime(.fly) == "fly")
+    }
 }

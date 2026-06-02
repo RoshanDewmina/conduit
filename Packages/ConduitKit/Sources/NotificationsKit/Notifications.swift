@@ -135,7 +135,7 @@ public actor Notifications {
         catch { }
     }
 
-    public func registerCategories() {
+    public nonisolated func registerCategories() {
         let approve = UNNotificationAction(
             identifier: "approval.approve",
             title: "Approve",

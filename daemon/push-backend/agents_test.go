@@ -149,11 +149,11 @@ func TestUsageIngest(t *testing.T) {
 		t.Fatalf("usage ingest status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	var record UsageRecord
-	if err := json.Unmarshal(rec.Body.Bytes(), &record); err != nil {
+	var resp usageIngestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatal(err)
 	}
-	if record.CustomerID != "cus_usage" || record.Cost != 0.012 {
-		t.Fatalf("unexpected usage record: %+v", record)
+	if resp.CustomerID != "cus_usage" || resp.Cost != 0.012 {
+		t.Fatalf("unexpected usage record: %+v", resp)
 	}
 }

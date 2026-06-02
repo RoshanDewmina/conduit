@@ -62,12 +62,23 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 	registerBillingRoutes(mux)
+	registerCreditsRoutes(mux)
+	registerQuotaRoutes(mux)
 	registerAgentRoutes(mux)
 	registerUsageRoutes(mux)
+	registerArtifactRoutes(mux)
+	registerScheduleRoutes(mux)
+	registerOrgRoutes(mux)
 
 	initEntitlementStore()
 	initControlPlaneStore()
 	initOpenRouterClient()
+	initCreditsStore()
+	initArtifactsStore()
+	initSchedulesStore()
+	initGCPOrchestrationStore()
+	initOrgsStore()
+	startScheduleTicker()
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -29,10 +29,12 @@ public enum AgentStoreError: Error, Sendable, Equatable {
 public struct ControlPlaneAuth: Sendable, Equatable {
     public var customerId: String?
     public var appAccountToken: String?
+    public var clientToken: String?
 
-    public init(customerId: String? = nil, appAccountToken: String? = nil) {
+    public init(customerId: String? = nil, appAccountToken: String? = nil, clientToken: String? = nil) {
         self.customerId = customerId
         self.appAccountToken = appAccountToken
+        self.clientToken = clientToken
     }
 }
 
@@ -103,6 +105,46 @@ public struct HostedAgentAPIClient: Sendable {
         _ = try await post("usage", body: body, as: UsageIngestResponse.self)
     }
 
+    // MARK: Credits
+
+    public func fetchCredits() async throws -> CreditBalance {
+        try await get("billing/credits")
+    }
+
+    /// Optional server quota endpoint; returns nil on 404.
+    public func fetchQuota() async -> HostedQuotaSnapshot? {
+        do {
+            return try await get("billing/quota")
+        } catch let error as ConduitError {
+            if case .providerUnavailable(_, let status) = error, status == 404 {
+                return nil
+            }
+            return nil
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: Artifacts
+
+    public func listArtifacts(runID: String) async throws -> [AgentArtifact] {
+        let response: ArtifactsListResponse = try await get("runs/\(runID)/artifacts")
+        return response.artifacts.map(Self.mapArtifact)
+    }
+
+    // MARK: Schedules
+
+    public func listSchedules(agentID: String) async throws -> [AgentSchedule] {
+        let response: SchedulesListResponse = try await get("agents/\(agentID)/schedules")
+        return response.schedules.map(Self.mapSchedule)
+    }
+
+    public func createSchedule(agentID: String, cronExpr: String, command: String?, enabled: Bool = true) async throws -> AgentSchedule {
+        let body = CreateScheduleBody(cronExpr: cronExpr, command: command, enabled: enabled)
+        let created: BackendSchedule = try await post("agents/\(agentID)/schedules", body: body)
+        return Self.mapSchedule(created)
+    }
+
     // MARK: - DTO mapping (testable)
 
     static func mapAgent(_ backend: BackendAgent) -> HostedAgent {
@@ -132,6 +174,7 @@ public struct HostedAgentAPIClient: Sendable {
     static func mapRuntimeKind(_ runtime: String) -> HostedRuntimeKind {
         switch runtime {
         case "fly": .fly
+        case "gcp_cloud_run", "gcp-cloud-run": .gcpCloudRun
         default: .sshHost
         }
     }
@@ -140,7 +183,33 @@ public struct HostedAgentAPIClient: Sendable {
         switch kind {
         case .sshHost: "ssh-host"
         case .fly: "fly"
+        case .gcpCloudRun: "gcp_cloud_run"
         }
+    }
+
+    static func mapArtifact(_ backend: BackendArtifact) -> AgentArtifact {
+        AgentArtifact(
+            id: backend.id,
+            runID: backend.runId,
+            name: backend.name,
+            contentType: backend.contentType,
+            sizeBytes: backend.sizeBytes,
+            storageRef: backend.storageRef,
+            gcsURI: backend.gcsUri,
+            createdAt: parseRFC3339(backend.createdAt)
+        )
+    }
+
+    static func mapSchedule(_ backend: BackendSchedule) -> AgentSchedule {
+        AgentSchedule(
+            id: backend.id,
+            agentID: backend.agentId,
+            cronExpr: backend.cronExpr,
+            command: backend.command,
+            enabled: backend.enabled,
+            nextRunAt: parseRFC3339(backend.nextRunAt),
+            lastRunAt: parseRFC3339(backend.lastRunAt)
+        )
     }
 
     static func parseRFC3339(_ value: String?) -> Date? {
@@ -210,6 +279,36 @@ public struct HostedAgentAPIClient: Sendable {
         let cost: Double
     }
 
+    private struct ArtifactsListResponse: Decodable { let artifacts: [BackendArtifact] }
+    private struct SchedulesListResponse: Decodable { let schedules: [BackendSchedule] }
+
+    struct BackendArtifact: Decodable, Equatable {
+        let id: String
+        let runId: String
+        let name: String
+        let contentType: String?
+        let sizeBytes: Int64?
+        let storageRef: String
+        let gcsUri: String?
+        let createdAt: String?
+    }
+
+    struct BackendSchedule: Decodable, Equatable {
+        let id: String
+        let agentId: String
+        let cronExpr: String
+        let command: String?
+        let enabled: Bool
+        let nextRunAt: String?
+        let lastRunAt: String?
+    }
+
+    private struct CreateScheduleBody: Encodable {
+        let cronExpr: String
+        let command: String?
+        let enabled: Bool
+    }
+
     private func get<T: Decodable>(_ path: String) async throws -> T {
         let url = url(for: path)
         var request = URLRequest(url: url)
@@ -249,6 +348,9 @@ public struct HostedAgentAPIClient: Sendable {
     }
 
     private func applyAuthHeaders(to request: inout URLRequest) {
+        if let clientToken = auth.clientToken, !clientToken.isEmpty {
+            request.setValue("Bearer \(clientToken)", forHTTPHeaderField: "Authorization")
+        }
         if let customerId = auth.customerId, !customerId.isEmpty {
             request.setValue(customerId, forHTTPHeaderField: "X-Customer-Id")
         }

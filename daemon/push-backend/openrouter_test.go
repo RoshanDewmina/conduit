@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpenRouterProvisioning(t *testing.T) {
@@ -33,6 +34,15 @@ func TestOpenRouterProvisioning(t *testing.T) {
 		})
 	}))
 	defer server.Close()
+	defer func() {
+		t.Setenv("OPENROUTER_PROVISIONING_KEY", "")
+		setOpenRouterClient(&openRouterClient{
+			baseURL:         "https://openrouter.ai",
+			provisioningKey: "",
+			httpClient:      &http.Client{Timeout: 15 * time.Second},
+		})
+		resetOpenRouterKeyCache()
+	}()
 
 	setOpenRouterClient(&openRouterClient{
 		baseURL:         server.URL,

@@ -28,6 +28,7 @@ public final class PurchaseManager {
     public static let proProductID = "dev.conduit.mobile.pro"
     public static let stripeCustomerIDKey = "dev.conduit.stripeCustomerId"
     public static let appAccountTokenKey = "dev.conduit.appAccountToken"
+    public static let clientTokenKey = "dev.conduit.clientToken"
 
     public var purchaseState: PurchaseState = .unknown
     public var product: Product?
@@ -186,6 +187,9 @@ public final class PurchaseManager {
             cloudEntitlementState = .loaded
             if let customerId = entitlement.customerId, !customerId.isEmpty {
                 UserDefaults.standard.set(customerId, forKey: Self.stripeCustomerIDKey)
+            }
+            if let clientToken = entitlement.clientToken, !clientToken.isEmpty {
+                UserDefaults.standard.set(clientToken, forKey: Self.clientTokenKey)
             }
         } catch {
             cloudEntitlementState = .error(error.localizedDescription)

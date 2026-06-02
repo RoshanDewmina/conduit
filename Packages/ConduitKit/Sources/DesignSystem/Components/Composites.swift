@@ -388,21 +388,26 @@ public struct DSSnippetRow: View {
         .buttonStyle(.plain)
     }
 
-    // Highlight {{param}} spans using Text concatenation
+    // Highlight {{param}} spans using AttributedString
     private var parameterizedText: some View {
         let parts = snippetBody.components(separatedBy: "{{")
-        return parts.enumerated().reduce(Text("")) { acc, item in
-            let (i, part) = item
-            if i == 0 { return acc + Text(part) }
+        var attributed = AttributedString()
+        for (i, part) in parts.enumerated() {
+            if i == 0 {
+                attributed += AttributedString(part)
+                continue
+            }
             let inner = part.components(separatedBy: "}}")
             if inner.count >= 2 {
-                return acc
-                    + Text("{{" + inner[0] + "}}")
-                        .foregroundColor(t.accentInk)
-                    + Text(inner.dropFirst().joined(separator: "}}"))
+                var param = AttributedString("{{\(inner[0])}}")
+                param.swiftUI.foregroundColor = t.accentInk
+                attributed += param
+                attributed += AttributedString(inner.dropFirst().joined(separator: "}}"))
+            } else {
+                attributed += AttributedString(part)
             }
-            return acc + Text(part)
         }
+        return Text(attributed)
     }
 }
 

@@ -237,6 +237,7 @@ public final class SessionViewModel {
     private var credentialProvider: @Sendable () async throws -> SSHCredential
     private let hostKeyStore: HostKeyStore
     private let aiClient: (any AIClient)?
+    private let onAIUsage: (@Sendable (UsageRecord) async -> Void)?
     private let blockRepo: BlockRepository?
 
     /// Optional snapshot repository — when injected, `connect()` will read the
@@ -255,6 +256,7 @@ public final class SessionViewModel {
         credentialProvider: @escaping @Sendable () async throws -> SSHCredential,
         hostKeyStore: HostKeyStore,
         aiClient: (any AIClient)? = nil,
+        onAIUsage: (@Sendable (UsageRecord) async -> Void)? = nil,
         blockRepo: BlockRepository? = nil,
         snapshotRepo: SessionSnapshotRepository? = nil,
         agentRegistry: AgentRegistry = .defaults
@@ -264,6 +266,7 @@ public final class SessionViewModel {
         self.credentialProvider = credentialProvider
         self.hostKeyStore = hostKeyStore
         self.aiClient = aiClient
+        self.onAIUsage = onAIUsage
         self.blockRepo = blockRepo
         self.snapshotRepo = snapshotRepo
         self.agentRegistry = agentRegistry
@@ -1071,9 +1074,20 @@ public final class SessionViewModel {
                 messages: [.user(intent)], system: system, maxTokens: 256
             )
             inputText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            await reportAIUsageIfNeeded(from: ai)
         } catch {
             inputText = "#\(query)"
             commandAssistantError = "AI command translation failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func reportAIUsageIfNeeded(from ai: any AIClient) async {
+        guard let onAIUsage else { return }
+        if let client = ai as? OpenRouterClient {
+            let record = await client.latestUsageRecord()
+            if record.totalTokens > 0 || (record.costUSD ?? 0) > 0 {
+                await onAIUsage(record)
+            }
         }
     }
 

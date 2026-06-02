@@ -17,6 +17,8 @@ import (
 
 type subscriptionEntitlement struct {
 	CustomerID       string `json:"customerId,omitempty"`
+	OrgID            string `json:"orgId,omitempty"`
+	OrgName          string `json:"orgName,omitempty"`
 	SubscriptionID   string `json:"subscriptionId,omitempty"`
 	Status           string `json:"status"`
 	Active           bool   `json:"active"`
@@ -397,7 +399,7 @@ func handleBillingEntitlement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ent, ok := lookupEntitlement(req.CustomerID, req.AppAccountToken); ok {
-		writeJSON(w, http.StatusOK, ent)
+		writeJSON(w, http.StatusOK, enrichEntitlementForClient(ent))
 		return
 	}
 
@@ -405,7 +407,7 @@ func handleBillingEntitlement(w http.ResponseWriter, r *http.Request) {
 		entitlement, err := fetchCustomerEntitlement(req.CustomerID)
 		if err == nil {
 			cacheEntitlement(entitlement)
-			writeJSON(w, http.StatusOK, entitlement)
+			writeJSON(w, http.StatusOK, enrichEntitlementForClient(entitlement))
 			return
 		}
 		log.Printf("stripe entitlement lookup failed: %v", err)

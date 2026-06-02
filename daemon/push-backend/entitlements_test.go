@@ -20,12 +20,34 @@ func setupTestStores(t *testing.T) {
 	t.Setenv("ENTITLEMENTS_FILE", filepath.Join(dir, "entitlements.json"))
 	t.Setenv("CONTROL_PLANE_FILE", filepath.Join(dir, "control-plane.json"))
 	t.Setenv("USAGE_FILE", filepath.Join(dir, "usage.json"))
+	t.Setenv("CREDITS_FILE", filepath.Join(dir, "credits.json"))
+	t.Setenv("ARTIFACTS_FILE", filepath.Join(dir, "artifacts.json"))
+	t.Setenv("SCHEDULES_FILE", filepath.Join(dir, "schedules.json"))
+	t.Setenv("GCP_ORCHESTRATION_FILE", filepath.Join(dir, "gcp-orchestrations.json"))
+	t.Setenv("ORGS_FILE", filepath.Join(dir, "orgs.json"))
+	t.Setenv("SCHEDULE_TICKER_ENABLED", "false")
 	setEntitlementStore(newFileEntitlementStore(filepath.Join(dir, "entitlements.json")))
 	setControlPlanePath(filepath.Join(dir, "control-plane.json"))
 	setUsagePath(filepath.Join(dir, "usage.json"))
+	setCreditsPath(filepath.Join(dir, "credits.json"))
+	setArtifactsPath(filepath.Join(dir, "artifacts.json"))
+	setSchedulesPath(filepath.Join(dir, "schedules.json"))
+	setGCPOrchestrationPath(filepath.Join(dir, "gcp-orchestrations.json"))
+	setOrgsPath(filepath.Join(dir, "orgs.json"))
 	resetOpenRouterKeyCache()
+	t.Setenv("OPENROUTER_PROVISIONING_KEY", "")
+	setOpenRouterClient(&openRouterClient{
+		baseURL:         "https://openrouter.ai",
+		provisioningKey: "",
+		httpClient:      &http.Client{Timeout: 15 * time.Second},
+	})
 	resetControlPlaneForTests()
 	resetUsageForTests()
+	resetCreditsForTests()
+	resetArtifactsForTests()
+	resetSchedulesForTests()
+	resetGCPOrchestrationForTests()
+	resetOrgsForTests()
 }
 
 func seedActiveEntitlement(t *testing.T, customerID, appToken string) {

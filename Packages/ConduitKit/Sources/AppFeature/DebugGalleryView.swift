@@ -812,8 +812,7 @@ private struct ReviewActivityItem: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Actor (agent) line + relative time
                 HStack(alignment: .firstTextBaseline) {
-                    (Text(agentName).font(.dsSansPt(14, weight: .semibold)).foregroundColor(t.text)
-                        + Text(" \(action) ").font(.dsSansPt(14)).foregroundColor(t.text2))
+                    Text("\(Text(agentName).font(.dsSansPt(14, weight: .semibold)).foregroundColor(t.text))\(Text(" \(action) ").font(.dsSansPt(14)).foregroundColor(t.text2))")
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Text(time)

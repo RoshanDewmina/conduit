@@ -188,14 +188,14 @@ func handleBillingStatus(w http.ResponseWriter, r *http.Request) {
 		entitlement, err := fetchCustomerEntitlement(customerID)
 		if err == nil {
 			cacheEntitlement(entitlement)
-			writeJSON(w, http.StatusOK, entitlement)
+			writeJSON(w, http.StatusOK, enrichEntitlementForClient(entitlement))
 			return
 		}
 		log.Printf("stripe status lookup failed: %v", err)
 	}
 
 	if ent, ok := lookupEntitlement(customerID, ""); ok {
-		writeJSON(w, http.StatusOK, ent)
+		writeJSON(w, http.StatusOK, enrichEntitlementForClient(ent))
 		return
 	}
 
@@ -366,8 +366,18 @@ func entitlementFromSubscription(sub stripeSubscription) subscriptionEntitlement
 	if len(sub.Items.Data) > 0 {
 		priceID = sub.Items.Data[0].Price.ID
 	}
+	orgID := sub.Metadata["org_id"]
+	if orgID == "" {
+		orgID = sub.Metadata["orgId"]
+	}
+	orgName := sub.Metadata["org_name"]
+	if orgName == "" {
+		orgName = sub.Metadata["orgName"]
+	}
 	return subscriptionEntitlement{
 		CustomerID:       string(sub.Customer),
+		OrgID:            orgID,
+		OrgName:          orgName,
 		SubscriptionID:   sub.ID,
 		Status:           sub.Status,
 		Active:           subscriptionIsActive(sub.Status),

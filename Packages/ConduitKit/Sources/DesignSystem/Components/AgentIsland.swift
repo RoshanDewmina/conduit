@@ -175,8 +175,7 @@ public struct AgentIsland: View {
                     Text(primary.name)
                         .font(.dsSansPt(16, weight: .semibold))
                         .foregroundStyle(DI.ink).lineLimit(1)
-                    (Text(primary.host + " · ").foregroundStyle(DI.ink3)
-                     + Text(primary.cwd).foregroundStyle(DI.streaming))
+                    Text("\(Text(primary.host + " · ").foregroundStyle(DI.ink3))\(Text(primary.cwd).foregroundStyle(DI.streaming))")
                         .font(DI.mono(11.5)).lineLimit(1).truncationMode(.head)
                 }
                 Spacer(minLength: 0)

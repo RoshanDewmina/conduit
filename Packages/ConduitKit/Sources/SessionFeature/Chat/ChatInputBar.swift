@@ -11,7 +11,6 @@ public enum ComposerAttachment: Sendable {
     case file(URL)
 }
 
-extension UTType: @unchecked @retroactive Sendable {}
 
 // MARK: - ChatInputBar
 

@@ -305,7 +305,13 @@ public struct AppRoot: View {
     }
 
     private static func pushBackendURL() -> String {
-        Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
+        #if DEBUG
+        if let envURL = ProcessInfo.processInfo.environment["CONDUIT_PUSH_BACKEND_URL"],
+           !envURL.isEmpty {
+            return envURL
+        }
+        #endif
+        return Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
     }
 
     private func attemptUnlock() async {
@@ -683,12 +689,16 @@ public struct AppRoot: View {
         let sshSession = SSHSession(host: host)
         Task {
             let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
+            let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { [weak agentStore] record in
+                await agentStore?.ingestUsage(record, runID: nil, agentID: nil)
+            }
             let vm = SessionViewModel(
                 host: host,
                 sshSession: sshSession,
                 credentialProvider: credentialProvider,
                 hostKeyStore: env.hostKeyStore,
                 aiClient: aiClient,
+                onAIUsage: usageReporter,
                 blockRepo: env.blockRepo
             )
             let approvalRepo = ApprovalRepository(env.database)

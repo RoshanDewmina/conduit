@@ -1,11 +1,10 @@
-#if DEBUG
 import Foundation
 import CryptoKit
 import ConduitCore
 
 /// Provisions an AWS Lightsail instance using the Lightsail REST API with SigV4 signing.
 /// No external AWS SDK — only CryptoKit + URLSession.
-/// Gated to DEBUG — multi-cloud provisioning is post-launch. Only Fly.io ships in v1.
+/// AWS Lightsail provisioning — enabled via `ProvisioningFeatureFlags.lightsailEnabled`.
 public actor LightsailProvisioner: Provisioner {
     private let accessKey: String
     private let secretKey: String
@@ -200,4 +199,4 @@ private extension ContiguousBytes {
         return result
     }
 }
-#endif // DEBUG
+

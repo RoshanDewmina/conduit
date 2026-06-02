@@ -42,10 +42,19 @@ func registerUsageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /usage", handleUsageIngest)
 }
 
+type usageIngestResponse struct {
+	UsageRecord
+	Credit *creditDeductResult `json:"credit,omitempty"`
+}
+
 func handleUsageIngest(w http.ResponseWriter, r *http.Request) {
 	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := enforceQuota(ent, quotaCheckUsage); err != nil {
+		writeQuotaError(w, err)
 		return
 	}
 
@@ -80,7 +89,23 @@ func handleUsageIngest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to persist usage", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, record)
+
+	creditResult, err := deductCredits(ent.CustomerID, req.Cost)
+	if err != nil {
+		http.Error(w, "failed to deduct credits", http.StatusInternalServerError)
+		return
+	}
+	if creditResult.Blocked {
+		w.Header().Set("X-Credit-Overage", "blocked")
+		http.Error(w, "insufficient prepaid credits; overage not allowed", http.StatusPaymentRequired)
+		return
+	}
+
+	resp := usageIngestResponse{UsageRecord: record, Credit: &creditResult}
+	if creditResult.Overage {
+		w.Header().Set("X-Credit-Overage", "true")
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func setUsagePath(path string) {

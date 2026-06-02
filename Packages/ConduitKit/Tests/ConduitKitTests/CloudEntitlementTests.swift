@@ -12,7 +12,8 @@ struct CloudEntitlementTests {
           "subscriptionId": "sub_456",
           "status": "active",
           "active": true,
-          "openRouterAPIKey": "sk-or-v1-test"
+          "openRouterAPIKey": "sk-or-v1-test",
+          "clientToken": "ctok_abc123"
         }
         """.data(using: .utf8)!
 
@@ -20,6 +21,7 @@ struct CloudEntitlementTests {
         #expect(entitlement.active)
         #expect(entitlement.customerId == "cus_123")
         #expect(entitlement.openRouterAPIKey == "sk-or-v1-test")
+        #expect(entitlement.clientToken == "ctok_abc123")
     }
 
     @Test("policy separates inactive entitlement from debug bypass")
@@ -35,5 +37,11 @@ struct CloudEntitlementTests {
     @Test("AgentStoreError entitlementRequired is equatable")
     func storeErrors() {
         #expect(AgentStoreError.entitlementRequired == AgentStoreError.entitlementRequired)
+    }
+
+    @Test("teamOrg is nil without orgId")
+    func noTeamWithoutOrg() {
+        let ent = CloudEntitlement(active: true)
+        #expect(ent.teamOrg == nil)
     }
 }

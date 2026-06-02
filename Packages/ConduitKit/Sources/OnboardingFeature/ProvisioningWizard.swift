@@ -16,6 +16,8 @@ public final class ProvisioningWizardViewModel {
     public var logLines: [String] = []
     public var error: String?
     public var flyAPIToken: String = ""
+    public var lightsailAccessKey: String = ""
+    public var lightsailSecretKey: String = ""
 
     private let hostRepo: HostRepository
 
@@ -29,7 +31,11 @@ public final class ProvisioningWizardViewModel {
         logLines = []
         // Zero the API token once provisioning finishes (any exit path) so the
         // secret doesn't linger in the view model / SecureField binding.
-        defer { flyAPIToken = "" }
+        defer {
+            flyAPIToken = ""
+            lightsailAccessKey = ""
+            lightsailSecretKey = ""
+        }
 
         let log: @Sendable (String) async -> Void = { [weak self] line in
             await MainActor.run { self?.logLines.append(line) }
@@ -45,16 +51,25 @@ public final class ProvisioningWizardViewModel {
                     return
                 }
                 provisioner = FlyProvisioner(apiToken: flyAPIToken)
-            #if DEBUG
             case .lightsail:
-                provisioner = LightsailProvisioner(accessKey: "", secretKey: "")
+                guard ProvisioningFeatureFlags.lightsailEnabled else {
+                    error = "Lightsail provisioning is not enabled."
+                    step = .configure
+                    return
+                }
+                guard !lightsailAccessKey.isEmpty, !lightsailSecretKey.isEmpty else {
+                    error = "Enter AWS access key and secret."
+                    step = .configure
+                    return
+                }
+                provisioner = LightsailProvisioner(
+                    accessKey: lightsailAccessKey,
+                    secretKey: lightsailSecretKey,
+                    region: plan.region.isEmpty ? "us-east-1" : plan.region
+                )
+            #if DEBUG
             case .orbstack:
                 provisioner = OrbstackProvisioner()
-            #else
-            default:
-                error = "This provider is not available in this build."
-                step = .configure
-                return
             #endif
             }
 
@@ -130,6 +145,7 @@ public struct ProvisioningWizard: View {
                 settingsCard {
                     ForEach(ProvisioningPlan.Provider.allCases, id: \.rawValue) { provider in
                         let isAvailable = provider == .fly
+                            || (provider == .lightsail && ProvisioningFeatureFlags.lightsailEnabled)
                         HStack {
                             Text(provider.displayName)
                                 .font(.dsSansPt(15))
@@ -179,6 +195,36 @@ public struct ProvisioningWizard: View {
                         .padding(.vertical, 12)
                 }
                 .padding(.bottom, 16)
+
+                if vm.plan.provider == .lightsail {
+                    sectionHead("AWS credentials")
+                    settingsCard {
+                        SecureField("Access key", text: $vm.lightsailAccessKey)
+                            .font(.dsMonoPt(14))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        cardDivider
+                        SecureField("Secret key", text: $vm.lightsailSecretKey)
+                            .font(.dsMonoPt(14))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                    }
+                    .padding(.bottom, 16)
+
+                    sectionHead("Region")
+                    settingsCard {
+                        TextField("us-east-1", text: $vm.plan.region)
+                            .font(.dsMonoPt(14))
+                            .textInputAutocapitalization(.never)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                    .padding(.bottom, 16)
+                }
 
                 if vm.plan.provider == .fly {
                     sectionHead("Fly.io API Token")

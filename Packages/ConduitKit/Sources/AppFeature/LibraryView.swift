@@ -89,7 +89,7 @@ public struct LibraryView: View {
 
                                 if agentStore.hasCloudEntitlement {
                                     NavigationLink {
-                                        AgentListView()
+                                        AgentsView(store: agentStore)
                                     } label: {
                                         DSCategoryCard(
                                             icon: .sparkles,

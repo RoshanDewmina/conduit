@@ -14,6 +14,7 @@ import (
 type Agent struct {
 	ID                string          `json:"id"`
 	CustomerID        string          `json:"customerId"`
+	OrgID             string          `json:"orgId,omitempty"`
 	AppAccountToken   string          `json:"appAccountToken,omitempty"`
 	Name              string          `json:"name"`
 	Description       string          `json:"description,omitempty"`
@@ -28,6 +29,7 @@ type AgentRun struct {
 	ID          string `json:"id"`
 	AgentID     string `json:"agentId"`
 	CustomerID  string `json:"customerId"`
+	OrgID       string `json:"orgId,omitempty"`
 	Status      string `json:"status"`
 	Command     string `json:"command,omitempty"`
 	StartedAt   string `json:"startedAt,omitempty"`
@@ -95,6 +97,10 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	if err := enforceQuota(ent, quotaCheckAgent); err != nil {
+		writeQuotaError(w, err)
+		return
+	}
 
 	var req createAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -105,8 +111,10 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name is required", http.StatusBadRequest)
 		return
 	}
-	if req.Runtime == "" {
-		req.Runtime = "ssh-host"
+	req.Runtime = normalizeRuntime(req.Runtime)
+	if err := validateRuntime(req.Runtime); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	keyHash, _, err := ensureOpenRouterSubKey(ent)
@@ -120,6 +128,7 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	agent := Agent{
 		ID:                newResourceID("agent"),
 		CustomerID:        ent.CustomerID,
+		OrgID:             ent.OrgID,
 		AppAccountToken:   ent.AppAccountToken,
 		Name:              req.Name,
 		Description:       req.Description,
@@ -128,6 +137,12 @@ func handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		OpenRouterKeyHash: keyHash,
 		CreatedAt:         now,
 		UpdatedAt:         now,
+	}
+
+	if err := provisionRuntimeIfNeeded(&agent); err != nil {
+		log.Printf("runtime provision failed: %v", err)
+		http.Error(w, "failed to provision runtime", http.StatusBadGateway)
+		return
 	}
 
 	controlPlane.mu.Lock()
@@ -152,7 +167,7 @@ func handleListAgents(w http.ResponseWriter, r *http.Request) {
 	defer controlPlane.mu.RUnlock()
 	out := make([]Agent, 0)
 	for _, agent := range controlPlane.data.Agents {
-		if agent.CustomerID == ent.CustomerID {
+		if resourceVisibleToEntitlement(ent, agent.CustomerID, agent.OrgID) {
 			out = append(out, agent)
 		}
 	}
@@ -171,7 +186,7 @@ func handleGetAgent(w http.ResponseWriter, r *http.Request) {
 	defer controlPlane.mu.RUnlock()
 	for _, agent := range controlPlane.data.Agents {
 		if agent.ID == id {
-			if agent.CustomerID != ent.CustomerID {
+			if !resourceVisibleToEntitlement(ent, agent.CustomerID, agent.OrgID) {
 				http.Error(w, "agent not found", http.StatusNotFound)
 				return
 			}
@@ -186,6 +201,10 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	ent, err := resolveEntitlementFromBearer(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := enforceQuota(ent, quotaCheckRun); err != nil {
+		writeQuotaError(w, err)
 		return
 	}
 
@@ -209,7 +228,7 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if agent == nil || agent.CustomerID != ent.CustomerID {
+	if agent == nil || !resourceVisibleToEntitlement(ent, agent.CustomerID, agent.OrgID) {
 		http.Error(w, "agent not found", http.StatusNotFound)
 		return
 	}
@@ -223,6 +242,7 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		ID:         newResourceID("run"),
 		AgentID:    req.AgentID,
 		CustomerID: ent.CustomerID,
+		OrgID:      ent.OrgID,
 		Status:     status,
 		Command:    req.Command,
 		StartedAt:  now,
@@ -249,7 +269,7 @@ func handleGetRun(w http.ResponseWriter, r *http.Request) {
 	defer controlPlane.mu.RUnlock()
 	for _, run := range controlPlane.data.Runs {
 		if run.ID == id {
-			if run.CustomerID != ent.CustomerID {
+			if !resourceVisibleToEntitlement(ent, run.CustomerID, run.OrgID) {
 				http.Error(w, "run not found", http.StatusNotFound)
 				return
 			}
@@ -272,7 +292,7 @@ func handleListRuns(w http.ResponseWriter, r *http.Request) {
 	defer controlPlane.mu.RUnlock()
 	out := make([]AgentRun, 0)
 	for _, run := range controlPlane.data.Runs {
-		if run.CustomerID != ent.CustomerID {
+		if !resourceVisibleToEntitlement(ent, run.CustomerID, run.OrgID) {
 			continue
 		}
 		if agentID != "" && run.AgentID != agentID {

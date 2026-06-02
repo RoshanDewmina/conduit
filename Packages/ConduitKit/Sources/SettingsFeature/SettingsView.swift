@@ -286,8 +286,12 @@ public struct SettingsView: View {
                         // showPaidSurfaces gates them back in when production-ready.
                         if Self.showPaidSurfaces {
                             divider
-                            NavigationLink { BillingView() } label: {
+                            NavigationLink { BillingView(backendURL: Self.pushBackendURL()) } label: {
                                 settingsNavRow("Billing & usage", icon: "creditcard")
+                            }
+                            if let org = PurchaseManager.shared.cloudEntitlement?.teamOrg {
+                                divider
+                                teamOrgRow(org)
                             }
                             if let engine = syncEngine {
                                 divider
@@ -426,6 +430,34 @@ public struct SettingsView: View {
     }
 
     /// Nav row: icon + label (t.text2/t.text) + chevron. 12/13 pt padding, contentShape for tap.
+    private static func pushBackendURL() -> String {
+        #if DEBUG
+        if let envURL = ProcessInfo.processInfo.environment["CONDUIT_PUSH_BACKEND_URL"],
+           !envURL.isEmpty {
+            return envURL
+        }
+        #endif
+        return Bundle.main.infoDictionary?["CONDUIT_PUSH_BACKEND_URL"] as? String ?? ""
+    }
+
+    private func teamOrgRow(_ org: TeamOrgInfo) -> some View {
+        HStack(spacing: 12) {
+            DSIconView(.server, size: 16, color: t.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Team")
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text)
+                Text(org.displayName)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+            DSChip("org", tone: .accent, variant: .soft, size: .sm)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
     private func settingsNavRow(_ label: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)

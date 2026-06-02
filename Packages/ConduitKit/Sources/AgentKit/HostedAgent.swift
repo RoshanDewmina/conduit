@@ -42,6 +42,23 @@ public struct HostedAgent: Identifiable, Codable, Sendable, Hashable {
 public enum HostedRuntimeKind: String, Codable, Sendable, Hashable, CaseIterable {
     case sshHost
     case fly
+    case gcpCloudRun
+
+    public var displayName: String {
+        switch self {
+        case .sshHost: "SSH host"
+        case .fly: "Fly.io"
+        case .gcpCloudRun: "GCP Cloud Run"
+        }
+    }
+
+    /// Requires a saved host id for SSH-backed execution on device.
+    public var requiresHostID: Bool {
+        switch self {
+        case .sshHost, .fly: true
+        case .gcpCloudRun: false
+        }
+    }
 }
 
 // MARK: - Agent run
@@ -166,4 +183,170 @@ public struct UsageRecord: Identifiable, Codable, Sendable, Hashable {
     }
 
     public var totalTokens: Int { inputTokens + outputTokens }
+}
+
+// MARK: - Artifacts
+
+public struct AgentArtifact: Identifiable, Codable, Sendable, Hashable {
+    public let id: String
+    public let runID: String
+    public var name: String
+    public var contentType: String?
+    public var sizeBytes: Int64?
+    /// Opaque storage key or HTTPS download URL from the control plane.
+    public var storageRef: String
+    public var gcsURI: String?
+    public var createdAt: Date?
+
+    public init(
+        id: String,
+        runID: String,
+        name: String,
+        contentType: String? = nil,
+        sizeBytes: Int64? = nil,
+        storageRef: String,
+        gcsURI: String? = nil,
+        createdAt: Date? = nil
+    ) {
+        self.id = id
+        self.runID = runID
+        self.name = name
+        self.contentType = contentType
+        self.sizeBytes = sizeBytes
+        self.storageRef = storageRef
+        self.gcsURI = gcsURI
+        self.createdAt = createdAt
+    }
+
+    public var downloadURL: URL? {
+        if let gcsURI, let url = URL(string: gcsURI) { return url }
+        if storageRef.hasPrefix("http://") || storageRef.hasPrefix("https://") {
+            return URL(string: storageRef)
+        }
+        return nil
+    }
+}
+
+// MARK: - Schedules
+
+public struct AgentSchedule: Identifiable, Codable, Sendable, Hashable {
+    public let id: String
+    public let agentID: String
+    public var cronExpr: String
+    public var command: String?
+    public var enabled: Bool
+    public var nextRunAt: Date?
+    public var lastRunAt: Date?
+
+    public init(
+        id: String,
+        agentID: String,
+        cronExpr: String,
+        command: String? = nil,
+        enabled: Bool = true,
+        nextRunAt: Date? = nil,
+        lastRunAt: Date? = nil
+    ) {
+        self.id = id
+        self.agentID = agentID
+        self.cronExpr = cronExpr
+        self.command = command
+        self.enabled = enabled
+        self.nextRunAt = nextRunAt
+        self.lastRunAt = lastRunAt
+    }
+}
+
+/// Presets understood by push-backend schedule ticker.
+public enum SchedulePreset: String, CaseIterable, Sendable {
+    case hourly = "@hourly"
+    case daily = "@daily"
+    case weekly = "@weekly"
+
+    public var label: String {
+        switch self {
+        case .hourly: "Every hour"
+        case .daily: "Every day"
+        case .weekly: "Every week"
+        }
+    }
+
+    public static func every(seconds: Int) -> String {
+        "every:\(seconds)"
+    }
+}
+
+// MARK: - Billing / quota
+
+public struct CreditBalance: Codable, Sendable, Equatable {
+    public let customerId: String?
+    public var prepaidUSD: Double
+    public var overageUSD: Double
+    public var allowOverage: Bool
+    public var updatedAt: String?
+
+    public init(
+        customerId: String? = nil,
+        prepaidUSD: Double = 0,
+        overageUSD: Double = 0,
+        allowOverage: Bool = true,
+        updatedAt: String? = nil
+    ) {
+        self.customerId = customerId
+        self.prepaidUSD = prepaidUSD
+        self.overageUSD = overageUSD
+        self.allowOverage = allowOverage
+        self.updatedAt = updatedAt
+    }
+
+    public var creditsRemainingLabel: String {
+        String(format: "$%.2f", max(0, prepaidUSD))
+    }
+}
+
+public struct HostedQuotaSnapshot: Codable, Sendable, Equatable {
+    public var agentsUsed: Int
+    public var agentsLimit: Int
+    public var runsToday: Int
+    public var concurrentRuns: Int
+    public var concurrentRunsLimit: Int
+    public var usageTodayUSD: Double
+    public var dailyUsageLimitUSD: Double
+    public var creditsRemainingUSD: Double?
+
+    public init(
+        agentsUsed: Int = 0,
+        agentsLimit: Int = HostedQuotaPolicy.defaultMaxAgents,
+        runsToday: Int = 0,
+        concurrentRuns: Int = 0,
+        concurrentRunsLimit: Int = HostedQuotaPolicy.defaultMaxConcurrentRuns,
+        usageTodayUSD: Double = 0,
+        dailyUsageLimitUSD: Double = HostedQuotaPolicy.defaultDailyUsageUSD,
+        creditsRemainingUSD: Double? = nil
+    ) {
+        self.agentsUsed = agentsUsed
+        self.agentsLimit = agentsLimit
+        self.runsToday = runsToday
+        self.concurrentRuns = concurrentRuns
+        self.concurrentRunsLimit = concurrentRunsLimit
+        self.usageTodayUSD = usageTodayUSD
+        self.dailyUsageLimitUSD = dailyUsageLimitUSD
+        self.creditsRemainingUSD = creditsRemainingUSD
+    }
+}
+
+public enum HostedQuotaPolicy {
+    public static let defaultMaxAgents = 20
+    public static let defaultMaxConcurrentRuns = 5
+    public static let defaultDailyUsageUSD = 100.0
+}
+
+public struct TeamOrgInfo: Sendable, Equatable {
+    public let orgId: String
+    public let displayName: String
+
+    public init(orgId: String, displayName: String) {
+        self.orgId = orgId
+        self.displayName = displayName
+    }
 }

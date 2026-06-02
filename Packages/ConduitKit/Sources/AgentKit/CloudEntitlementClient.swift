@@ -12,6 +12,11 @@ public struct CloudEntitlement: Codable, Sendable, Equatable {
     public let updatedAt: String?
     /// Provisioned OpenRouter sub-key when the user is on the managed AI tier.
     public let openRouterAPIKey: String?
+    /// Server-issued bearer token for control-plane /agents and /runs endpoints.
+    public let clientToken: String?
+    /// Team org id when the subscription is org-scoped (Phase 3 stub).
+    public let orgId: String?
+    public let orgName: String?
 
     public init(
         customerId: String? = nil,
@@ -22,7 +27,10 @@ public struct CloudEntitlement: Codable, Sendable, Equatable {
         appAccountToken: String? = nil,
         currentPeriodEnd: Int64? = nil,
         updatedAt: String? = nil,
-        openRouterAPIKey: String? = nil
+        openRouterAPIKey: String? = nil,
+        clientToken: String? = nil,
+        orgId: String? = nil,
+        orgName: String? = nil
     ) {
         self.customerId = customerId
         self.subscriptionId = subscriptionId
@@ -33,6 +41,15 @@ public struct CloudEntitlement: Codable, Sendable, Equatable {
         self.currentPeriodEnd = currentPeriodEnd
         self.updatedAt = updatedAt
         self.openRouterAPIKey = openRouterAPIKey
+        self.clientToken = clientToken
+        self.orgId = orgId
+        self.orgName = orgName
+    }
+
+    public var teamOrg: TeamOrgInfo? {
+        guard let orgId, !orgId.isEmpty else { return nil }
+        let name = orgName?.isEmpty == false ? orgName! : orgId
+        return TeamOrgInfo(orgId: orgId, displayName: name)
     }
 }
 
