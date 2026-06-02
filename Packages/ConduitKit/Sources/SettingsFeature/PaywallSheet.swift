@@ -14,134 +14,137 @@ public struct PaywallSheet: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                t.bg.ignoresSafeArea()
+        ZStack(alignment: .topTrailing) {
+            t.bg.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 28) {
-                        Spacer(minLength: 16)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
 
-                        // Icon
-                        ZStack {
-                            Circle()
-                                .fill(t.accentSoft)
-                                .frame(width: 80, height: 80)
-                            Image(systemName: "lock.shield.fill")
-                                .font(.system(size: 34))
+                    // Spectrum bar
+                    SpectrumBar(mode: .idle, height: 8)
+
+                    VStack(alignment: .leading, spacing: 20) {
+
+                        // "no subscriptions, ever" chip
+                        HStack(spacing: 6) {
+                            Rectangle()
+                                .fill(t.danger)
+                                .frame(width: 5, height: 5)
+                            Text("no subscriptions, ever")
+                                .font(.dsMonoPt(11, weight: .medium))
+                                .tracking(11 * 0.08)
+                                .textCase(.uppercase)
+                                .foregroundStyle(t.danger)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.danger.opacity(0.5), lineWidth: 1)
+                        )
+
+                        // Two-line big title
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("pay once.")
+                                .font(.dsDisplayPt(34, weight: .bold))
+                                .foregroundStyle(t.text)
+                            Text("yours forever.")
+                                .font(.dsDisplayPt(34, weight: .bold))
                                 .foregroundStyle(t.accent)
                         }
 
-                        // Headline
-                        VStack(spacing: 8) {
-                            Text("Conduit Pro")
-                                .font(.dsDisplayPt(22, weight: .bold))
-                                .foregroundStyle(t.text)
-                            Text("\(featureName) requires Conduit Pro.")
-                                .font(.dsSansPt(15))
+                        // Body text
+                        Text("Unlock every Pro power-tool with a single purchase. No recurring fee to use your own hardware — that's a promise.")
+                            .font(.dsMonoPt(12))
+                            .foregroundStyle(t.text3)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        // Feature context note
+                        Text("\(featureName) — part of Pro.")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+
+                        // Price display
+                        HStack(alignment: .lastTextBaseline, spacing: 4) {
+                            Group {
+                                if let product = pm.product {
+                                    Text(product.displayPrice)
+                                } else {
+                                    Text("$14.99")
+                                }
+                            }
+                            .font(.dsDisplayPt(38, weight: .bold))
+                            .foregroundStyle(t.text)
+
+                            Text("once")
+                                .font(.dsMonoPt(12))
                                 .foregroundStyle(t.text3)
-                                .multilineTextAlignment(.center)
                         }
 
-                        // Feature list
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(Self.proFeatures, id: \.self) { feature in
-                                HStack(spacing: 10) {
-                                    DSIconView(.check, size: 14, color: t.ok)
-                                    Text(feature)
-                                        .font(.dsSansPt(14))
-                                        .foregroundStyle(t.text)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 0.5)
-                        )
-                        .padding(.horizontal, 4)
-
-                        // Price
-                        Group {
-                            if let product = pm.product {
-                                Text("\(product.displayPrice) · one-time purchase")
-                            } else {
-                                Text("$14.99 · one-time purchase")
-                            }
-                        }
-                        .font(.dsSansPt(13))
-                        .foregroundStyle(t.text3)
-
-                        // Actions
+                        // CTA
                         VStack(spacing: 12) {
-                            Button {
-                                Task { await pm.purchase() }
-                            } label: {
-                                Group {
-                                    switch pm.purchaseState {
-                                    case .purchasing:
-                                        HStack(spacing: 8) {
-                                            ProgressView().tint(t.accentFg)
-                                            Text("Processing…")
-                                        }
-                                    case .purchased:
-                                        HStack(spacing: 6) {
-                                            DSIconView(.check, size: 16, color: t.accentFg)
-                                            Text("Purchased")
-                                        }
-                                    default:
-                                        Text("Buy Conduit Pro")
-                                    }
-                                }
-                                .font(.dsSansPt(16, weight: .semibold))
-                                .foregroundStyle(t.accentFg)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(t.accent, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
+                            DSButton(
+                                "unlock conduit pro",
+                                variant: .primary,
+                                mono: true,
+                                isLoading: {
+                                    if case .purchasing = pm.purchaseState { return true }
+                                    return false
+                                }(),
+                                fullWidth: true,
+                                action: { Task { await pm.purchase() } }
+                            )
                             .disabled({
                                 switch pm.purchaseState {
                                 case .purchasing, .purchased: return true
-                                default: return false
+                                default: return pm.product == nil
                                 }
                             }())
 
-                            Button("Restore Purchase") {
+                            if pm.product == nil, case .unknown = pm.purchaseState {
+                                Text("loading price…")
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text3)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            }
+
+                            Button("restore purchase") {
                                 Task { await pm.restore() }
                             }
-                            .font(.dsSansPt(13))
+                            .font(.dsMonoPt(11))
                             .foregroundStyle(t.accent)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                            if case .error(let msg) = pm.purchaseState {
+                                VStack(spacing: 6) {
+                                    Text(msg)
+                                        .font(.dsMonoPt(11))
+                                        .foregroundStyle(t.danger)
+                                        .multilineTextAlignment(.center)
+                                    Button("try again") { Task { await pm.load() } }
+                                        .font(.dsMonoPt(11))
+                                        .foregroundStyle(t.accent)
+                                }
+                                .padding(.horizontal, 4)
+                            }
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 48)
                 }
             }
-            .navigationTitle("Upgrade to Pro")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Not now") { dismiss() }
-                        .foregroundStyle(t.accent)
-                }
-            }
+
+            // Dismiss button
+            DSIconButton(.close) { dismiss() }
+                .padding(.top, 8)
+                .padding(.trailing, 8)
         }
         .task { await pm.load() }
         .onChange(of: pm.purchaseState) { _, new in
             if case .purchased = new { dismiss() }
         }
     }
-
-    static let proFeatures = [
-        "Unlimited SSH hosts",
-        "AI agent approval inbox",
-        "Dev server preview (port forwarding)",
-        "Diff review with partial-hunk approval",
-        "SFTP file browser",
-        "CloudKit sync across devices",
-    ]
 }
 #endif
