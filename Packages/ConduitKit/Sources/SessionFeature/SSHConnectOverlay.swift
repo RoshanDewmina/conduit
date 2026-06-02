@@ -2,6 +2,24 @@
 import SwiftUI
 import DesignSystem
 
+extension DSConnectError {
+    // Heuristic classification from raw SSH error strings.
+    static func classify(_ message: String) -> DSConnectError {
+        let m = message.lowercased()
+        if m.contains("auth") || m.contains("password") || m.contains("refused") || m.contains("key") && m.contains("fail") {
+            return .authRejected
+        } else if m.contains("resolve") || m.contains("dns") || m.contains("hostname") || m.contains("find host") {
+            return .dnsFailed
+        } else if m.contains("mismatch") || m.contains("fingerprint") || m.contains("host key") || m.contains("mitm") {
+            return .hostKeyMismatch
+        } else if m.contains("timeout") || m.contains("refused") || m.contains("unreachable") || m.contains("connect") {
+            return .hostUnreachable
+        } else {
+            return .other(message)
+        }
+    }
+}
+
 public enum SSHConnectPhase: Equatable {
     case connecting             // pixel grid cycles through "working" animations
     case slow(message: String)  // still trying, but taking a while
@@ -33,34 +51,55 @@ public struct SSHConnectOverlay: View {
         ZStack {
             Color.black.opacity(0.9).ignoresSafeArea()
 
-            VStack(spacing: 30) {
-                Spacer()
-
-                // The grid. `.id` + transition gives a soft crossfade each time
-                // the state switches, so the loading loop never pops.
-                ZStack {
-                    PixelBox(state: displayState, size: 22, gap: 3, subdivisions: 3)
-                        .id(displayState)
-                        .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            if case .failed(let message) = phase {
+                // Typed error card replaces the raw string message
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 60)
+                        DSTypedErrorCard(
+                            error: .classify(message),
+                            onPrimary: nil,
+                            onSecondary: nil
+                        )
+                        .padding(.horizontal, 24)
+                        if showDismissHint {
+                            Text("Tap anywhere to dismiss")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.4))
+                                .padding(.top, 20)
+                                .transition(.opacity)
+                        }
+                        Spacer(minLength: 40)
+                    }
                 }
-                .frame(width: 92, height: 92)
-                .animation(.easeInOut(duration: 0.45), value: displayState)
-                .shadow(color: PixelBox.stateColor(displayState).opacity(0.35), radius: 24)
+            } else {
+                VStack(spacing: 30) {
+                    Spacer()
 
-                Text(labelText)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.3), value: labelText)
+                    ZStack {
+                        PixelBox(state: displayState, size: 22, gap: 3, subdivisions: 3)
+                            .id(displayState)
+                            .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    }
+                    .frame(width: 92, height: 92)
+                    .animation(.easeInOut(duration: 0.45), value: displayState)
+                    .shadow(color: PixelBox.stateColor(displayState).opacity(0.35), radius: 24)
 
-                if showDismissHint {
-                    Text(phase == .connected ? "Tap anywhere to continue" : "Tap anywhere to dismiss")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .transition(.opacity)
+                    Text(labelText)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.3), value: labelText)
+
+                    if showDismissHint {
+                        Text(phase == .connected ? "Tap anywhere to continue" : "Tap anywhere to dismiss")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .transition(.opacity)
+                    }
+
+                    Spacer()
                 }
-
-                Spacer()
             }
         }
         .transition(.opacity)

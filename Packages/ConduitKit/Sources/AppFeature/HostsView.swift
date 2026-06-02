@@ -35,6 +35,7 @@ public struct HostsView: View {
     @State private var snapshots: [SessionSnapshot] = []
     @State private var hostsByID: [HostID: Host] = [:]
     @State private var managedHost: Host? = nil
+    @State private var isLoading = true
 
     @Environment(\.conduitTokens) private var t
 
@@ -85,7 +86,9 @@ public struct HostsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
 
-                if everythingEmpty {
+                if isLoading {
+                    DSSkeletonList(count: 4)
+                } else if everythingEmpty {
                     hostsEmptyState
                 } else {
                     ScrollView {
@@ -381,8 +384,8 @@ public struct HostsView: View {
         async let hostsLoad: Void = vm.load()
         let (snaps, _) = await (snapsTask, hostsLoad)
         snapshots = snaps ?? []
-        // vm.hosts is now populated by vm.load(); build lookup from it
         hostsByID = Dictionary(uniqueKeysWithValues: vm.hosts.map { ($0.id, $0) })
+        isLoading = false
     }
 
     // MARK: - Helpers

@@ -67,6 +67,8 @@ struct DebugGalleryView: View {
         case "mgmt-workflow":     WorkflowBuilderView()
         case "mgmt-diagnostics":  DiagnosticsView()
         case "mgmt-commandbar":   CommandBarView(onConnect: { _ in }, onOpenInbox: {}, onRunSnippet: {}, onNewWorkspace: {}, onDismiss: {})
+        // Phase 6 state atoms
+        case "states":         StatesGalleryScreen()
         case "review":         reviewScreen
         default:               reviewScreen
         }
