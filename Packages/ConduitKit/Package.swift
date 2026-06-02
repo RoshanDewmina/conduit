@@ -95,7 +95,7 @@ let package = Package(
         ),
         .target(
             name: "AgentKit",
-            dependencies: ["ConduitCore", "SecurityKit"],
+            dependencies: ["ConduitCore", "SecurityKit", "SSHTransport"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -138,7 +138,7 @@ let package = Package(
         // Features (UI). Each feature is one-screen-deep + view models.
         .target(
             name: "OnboardingFeature",
-            dependencies: ["DesignSystem", "SecurityKit", "PersistenceKit", "SSHTransport", "AgentKit"],
+            dependencies: ["DesignSystem", "SecurityKit", "NotificationsKit", "PersistenceKit", "SSHTransport", "AgentKit"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -188,6 +188,7 @@ let package = Package(
             name: "AppFeature",
             dependencies: [
                 "DesignSystem",
+                "AgentKit",
                 "PersistenceKit",
                 "NotificationsKit",
                 "WorkspacesFeature",
@@ -222,6 +223,7 @@ let package = Package(
                 "PreviewKit",
                 "SessionFeature",
                 "SettingsFeature",
+                "AppFeature",
             ],
             swiftSettings: swiftSettings
         ),
