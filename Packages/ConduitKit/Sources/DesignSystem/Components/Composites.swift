@@ -575,6 +575,12 @@ public struct DSTabBar: View {
     @Binding var selectedID: String
 
     @Environment(\.conduitTokens) private var t
+    @Namespace private var indicatorNS
+    // Captured home-indicator inset. We deliberately reserve LESS than the full
+    // safe-area so the row sits closer to the bottom edge instead of floating
+    // above a tall empty band. Seeded at a typical notched-device value to avoid
+    // a first-frame jump; corrected on appear for every device (0 on SE-class).
+    @State private var bottomInset: CGFloat = 34
 
     public init(items: [DSTabItem], selectedID: Binding<String>) {
         self.items = items
@@ -588,12 +594,14 @@ public struct DSTabBar: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 50)
-        // Clear the home indicator (pad), THEN paint the surface over both the
-        // row and that padding and let it bleed under the indicator — so the bar
-        // reads as one filled band instead of a 64pt row floating above a
-        // transparent gap.
-        .safeAreaPadding(.bottom)
+        .frame(height: 46)
+        // Push the row down toward the home indicator: reserve only a trimmed
+        // slice of the safe-area inset (keeps ~clearance for the indicator) so
+        // the icons aren't stranded above a tall empty band.
+        .padding(.bottom, max(bottomInset - 20, 6))
+        .background(safeInsetReader)
+        // Paint the surface over the row AND the trimmed padding, bleeding under
+        // the indicator so the bar reads as one filled band.
         .background(t.surface2, ignoresSafeAreaEdges: .bottom)
         .overlay(alignment: .top) {
             Rectangle().fill(t.border).frame(height: 1)
@@ -601,14 +609,30 @@ public struct DSTabBar: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
+    // Reads the live bottom safe-area inset without affecting layout.
+    private var safeInsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { bottomInset = proxy.safeAreaInsets.bottom }
+                .onChange(of: proxy.safeAreaInsets.bottom) { _, newValue in
+                    bottomInset = newValue
+                }
+        }
+    }
+
     private func tabButton(_ item: DSTabItem) -> some View {
         let isActive = item.id == selectedID
         return Button {
-            selectedID = item.id
+            guard selectedID != item.id else { return }
+            Haptics.selection()
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                selectedID = item.id
+            }
         } label: {
             VStack(spacing: 5) {
                 ZStack(alignment: .topTrailing) {
                     DSIconView(item.icon, size: 20, color: isActive ? t.accent : t.text3)
+                        .scaleEffect(isActive ? 1.0 : 0.92)
                     if item.badge {
                         Circle()
                             .fill(t.accent)
@@ -624,11 +648,15 @@ public struct DSTabBar: View {
                     .foregroundStyle(isActive ? t.accent : t.text3)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+            .padding(.top, 8)
             .overlay(alignment: .top) {
-                // BLOCKS active indicator — 2px accent bar over the active tab.
+                // BLOCKS active indicator — 2px accent bar that SLIDES between
+                // tabs via a shared matchedGeometry id.
                 if isActive {
-                    Rectangle().fill(t.accent).frame(width: 24, height: 2)
+                    Rectangle()
+                        .fill(t.accent)
+                        .frame(width: 24, height: 2)
+                        .matchedGeometryEffect(id: "dsTabIndicator", in: indicatorNS)
                 }
             }
             .contentShape(Rectangle())

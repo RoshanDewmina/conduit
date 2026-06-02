@@ -20,6 +20,16 @@ public struct AddHostView: View {
     let onCancel: () -> Void
     let onConnectAndSave: (Host) -> Void
 
+    // MARK: - Hosted / Conduit Cloud
+    // Entitlement + upgrade-eligibility are injected (the entitlement source
+    // lives in SettingsFeature, which this module must not depend on).
+    private let hasCloudEntitlement: Bool
+    private let cloudUpgradeEligible: Bool
+    private let onUseHosted: (() -> Void)?
+
+    // MARK: - Source mode (BYO SSH vs Conduit Cloud)
+    @State private var mode: SourceMode = .byo
+
     // MARK: - Paste field state
     @State private var pasteText: String = ""
     @State private var parsed: SSHParseResult?
@@ -58,6 +68,11 @@ public struct AddHostView: View {
         var label: String { self == .password ? "Password" : "Ed25519" }
     }
 
+    private enum SourceMode: Hashable, Sendable {
+        case byo      // bring-your-own SSH host
+        case hosted   // Conduit Cloud managed runtime
+    }
+
     // Whether the clipboard banner should be shown
     private var showClipboardBanner: Bool {
         !clipboardBannerDismissed && clipboardBannerResult != nil
@@ -74,12 +89,18 @@ public struct AddHostView: View {
     public init(
         repository: HostRepository,
         keyStore: KeyStore,
+        hasCloudEntitlement: Bool = false,
+        cloudUpgradeEligible: Bool = false,
         onCancel: @escaping () -> Void,
+        onUseHosted: (() -> Void)? = nil,
         onConnectAndSave: @escaping (Host) -> Void
     ) {
         self.repository = repository
         self.keyStore = keyStore
+        self.hasCloudEntitlement = hasCloudEntitlement
+        self.cloudUpgradeEligible = cloudUpgradeEligible
         self.onCancel = onCancel
+        self.onUseHosted = onUseHosted
         self.onConnectAndSave = onConnectAndSave
     }
 
@@ -93,8 +114,14 @@ public struct AddHostView: View {
                 // ── Header
                 DSDetailHeader("add host", onBack: onCancel)
 
-                // ── Clipboard banner (V3)
-                if showClipboardBanner, let result = clipboardBannerResult {
+                // ── Source mode picker (BYO SSH vs Conduit Cloud)
+                modePicker
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+
+                // ── Clipboard banner (V3) — BYO only
+                if mode == .byo, showClipboardBanner, let result = clipboardBannerResult {
                     clipboardBanner(result)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
@@ -104,39 +131,51 @@ public struct AddHostView: View {
                 // ── Body
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // ── Paste field section
-                        pasteSection
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+                        if mode == .byo {
+                            // ── Paste field section
+                            pasteSection
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
 
-                        // ── Advanced disclosure (V6)
-                        advancedSection
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
+                            // ── Advanced disclosure (V6)
+                            advancedSection
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
 
-                        // ── Error
-                        if let err = saveError {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(t.danger)
-                                Text(err)
-                                    .font(.dsSansPt(13))
-                                    .foregroundStyle(t.danger)
+                            // ── Error
+                            if let err = saveError {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(t.danger)
+                                    Text(err)
+                                        .font(.dsSansPt(13))
+                                        .foregroundStyle(t.danger)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.top, 12)
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
+                        } else {
+                            // ── Conduit Cloud panel
+                            hostedPanel
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .transition(.opacity)
                         }
 
                         Spacer(minLength: 40)
                     }
                 }
 
-                // ── Footer CTA
-                footerCTA
+                // ── Footer CTA — BYO only (hosted has its own in-panel CTA)
+                if mode == .byo {
+                    footerCTA
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
         .navigationBarHidden(true)
+        .animation(.easeInOut(duration: 0.2), value: mode)
         .animation(.easeInOut(duration: 0.2), value: showClipboardBanner)
         .animation(.easeInOut(duration: 0.2), value: parsed != nil)
         .animation(.easeInOut(duration: 0.2), value: advancedExpanded)
@@ -149,6 +188,149 @@ public struct AddHostView: View {
         .onDisappear {
             keyGenTask?.cancel()
             keyGenTask = nil
+        }
+    }
+
+    // MARK: - Source mode picker
+
+    private var modePicker: some View {
+        DSSegmentedPicker(
+            options: [
+                (label: "bring your own", value: SourceMode.byo),
+                (label: "conduit cloud", value: SourceMode.hosted),
+            ],
+            selection: $mode
+        )
+        .onChange(of: mode) { _, _ in Haptics.selection() }
+    }
+
+    // MARK: - Conduit Cloud panel (hosted)
+
+    private var hostedPanel: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // ── Hero art: 3×3 pixel glyphs echoing the agent aesthetic
+            hostedHeroArt
+
+            // ── Headline
+            VStack(alignment: .leading, spacing: 6) {
+                Text("skip the setup")
+                    .font(.dsDisplayPt(22, weight: .bold))
+                    .foregroundStyle(t.text)
+                Text("Run claude or codex on Conduit's managed infrastructure — no server to provision, patch, or keep online.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // ── Feature bullets
+            VStack(alignment: .leading, spacing: 9) {
+                hostedBullet("Managed runtime — agents run in the cloud, not on your hardware")
+                hostedBullet("Metered usage, billed by the second — cancel anytime")
+                hostedBullet("Your BYO SSH hosts stay free, always")
+            }
+
+            // ── State-dependent CTA
+            if hasCloudEntitlement {
+                hostedActiveCTA
+            } else {
+                hostedUpgradeCTA
+            }
+        }
+    }
+
+    private var hostedHeroArt: some View {
+        HStack(spacing: 18) {
+            Spacer(minLength: 0)
+            PixelBox(state: .thinking,  size: 12, gap: 2, subdivisions: 2)
+            PixelBox(state: .streaming, size: 12, gap: 2, subdivisions: 2)
+            PixelBox(state: .approval,  size: 12, gap: 2, subdivisions: 2)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity)
+        .background(t.surfaceSunk)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.accent.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private func hostedBullet(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(t.accent)
+                .frame(width: 14, height: 16, alignment: .center)
+            Text(text)
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var hostedActiveCTA: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Circle().fill(t.ok).frame(width: 6, height: 6)
+                Text("cloud active")
+                    .font(.dsMonoPt(11, weight: .medium))
+                    .tracking(11 * 0.08)
+                    .textCase(.uppercase)
+                    .foregroundStyle(t.ok)
+            }
+
+            DSButton(
+                "use hosted runtime",
+                systemImage: "sparkles",
+                variant: .primary,
+                mono: true,
+                fullWidth: true
+            ) {
+                Haptics.success()
+                onUseHosted?()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var hostedUpgradeCTA: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Rectangle().fill(t.danger).frame(width: 5, height: 5)
+                Text("no subscriptions on your own hardware")
+                    .font(.dsMonoPt(10, weight: .medium))
+                    .tracking(10 * 0.06)
+                    .textCase(.uppercase)
+                    .foregroundStyle(t.danger)
+            }
+
+            if cloudUpgradeEligible {
+                Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("upgrade to conduit cloud")
+                            .font(.dsMonoPt(13, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(t.accentFg)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity)
+                    .background(t.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
+            } else {
+                Text("Manage your Conduit Cloud subscription in Settings › Billing.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -300,6 +482,7 @@ public struct AddHostView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Disclosure toggle row
             Button {
+                Haptics.light()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     advancedExpanded.toggle()
                 }
@@ -364,6 +547,7 @@ public struct AddHostView: View {
                 ForEach(AuthChoice.allCases) { choice in
                     let selected = authChoice == choice
                     Button {
+                        Haptics.selection()
                         authChoice = choice
                         if choice == .ed25519 { Task { await loadKeys() } }
                     } label: {
@@ -671,10 +855,12 @@ public struct AddHostView: View {
         do {
             try await repository.upsert(newHost)
             isSaving = false
+            Haptics.success()
             onConnectAndSave(newHost)
         } catch {
             saveError = error.localizedDescription
             isSaving = false
+            Haptics.error()
         }
     }
 

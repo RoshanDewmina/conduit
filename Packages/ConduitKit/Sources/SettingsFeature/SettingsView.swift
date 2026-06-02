@@ -160,7 +160,17 @@ public struct SettingsView: View {
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
+    // Agent approval policy — global preference, shared with the inbox filter.
+    @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
+    @AppStorage("flag.autonomyPresets") private var autonomyPresetsEnabled: Bool = true
     @Environment(\.conduitTokens) private var t
+
+    private var autonomyPreset: Binding<AutonomyPreset> {
+        Binding(
+            get: { AutonomyPreset(rawValue: autonomyPresetRaw) ?? .alwaysAsk },
+            set: { autonomyPresetRaw = $0.rawValue }
+        )
+    }
 
     /// Providers with a working AIClient — keeps the provider picker and the
     /// API Keys list in sync. Add `.xai` here once its client is implemented.
@@ -309,6 +319,11 @@ public struct SettingsView: View {
                     }
                     .padding(.bottom, 16)
 
+                    // ── Agent approvals (moved here from the Inbox header)
+                    if autonomyPresetsEnabled {
+                        agentApprovalsSection
+                    }
+
                     // ── Integrations
                     sectionHead("Integrations")
                     settingsCard {
@@ -437,6 +452,36 @@ public struct SettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    // MARK: - Agent approvals
+
+    // Extracted from `body` so the main view's type-check stays within budget.
+    @ViewBuilder
+    private var agentApprovalsSection: some View {
+        sectionHead("Agent approvals")
+        settingsCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Approval policy")
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.text2)
+                DSSegmentedPicker(
+                    options: AutonomyPreset.allCases.map {
+                        (label: $0.shortLabel, value: $0)
+                    },
+                    selection: autonomyPreset
+                )
+                Text(autonomyPreset.wrappedValue.description)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(.easeInOut(duration: 0.15), value: autonomyPresetRaw)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .padding(.bottom, 16)
+        .onChange(of: autonomyPresetRaw) { _, _ in Haptics.selection() }
     }
 
     // MARK: - Layout helpers

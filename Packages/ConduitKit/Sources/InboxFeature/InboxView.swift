@@ -30,17 +30,7 @@ public struct InboxView: View {
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
 
-    @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
-    @AppStorage("flag.autonomyPresets") private var autonomyPresetsEnabled: Bool = true
-
     @Environment(\.conduitTokens) private var t
-
-    private var autonomyPreset: Binding<AutonomyPreset> {
-        Binding(
-            get: { AutonomyPreset(rawValue: autonomyPresetRaw) ?? .alwaysAsk },
-            set: { autonomyPresetRaw = $0.rawValue }
-        )
-    }
 
     public init(
         viewModel: InboxViewModel,
@@ -70,11 +60,6 @@ public struct InboxView: View {
 
                 if !statusHeaderAgents.isEmpty {
                     AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
-                }
-
-                if autonomyPresetsEnabled {
-                    DSAutonomyPresetBar(preset: autonomyPreset)
-                        .padding(.top, 8)
                 }
 
                 Spacer().frame(height: 12)

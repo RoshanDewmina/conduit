@@ -531,7 +531,11 @@ struct AddHostGalleryScreen: View {
             AddHostView(
                 repository: mockRepo,
                 keyStore: mockKeyStore,
+                // Gallery exercises the hosted-cloud upgrade path + art.
+                hasCloudEntitlement: false,
+                cloudUpgradeEligible: true,
                 onCancel: { connectLog = "cancelled" },
+                onUseHosted: { connectLog = "use hosted runtime →" },
                 onConnectAndSave: { host in
                     connectLog = "connect & save → \(host.name)"
                 }

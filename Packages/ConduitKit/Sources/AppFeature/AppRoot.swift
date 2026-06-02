@@ -364,7 +364,14 @@ public struct AppRoot: View {
                 AddHostView(
                     repository: env.hostRepo,
                     keyStore: env.keyStore,
+                    hasCloudEntitlement: pm.hasCloudEntitlement,
+                    cloudUpgradeEligible: pm.externalStripeEligible,
                     onCancel: { addHostPresented = false },
+                    onUseHosted: {
+                        // Hand off to the hosted-agents surface (under Library).
+                        addHostPresented = false
+                        selectedTab = .library
+                    },
                     onConnectAndSave: { host in
                         addHostPresented = false
                         workspacesRevision = UUID()
@@ -658,46 +665,15 @@ public struct AppRoot: View {
             }
 
         case .settings:
+            // The Library tab is the single hub for Library / Hosted Agents /
+            // Snippets / SSH Keys — Settings no longer duplicates those routes
+            // via an overflow "Manage" menu.
             SettingsView(
                 viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
                 syncEngine: env.syncEngine,
                 backendURL: Self.pushBackendURL(),
                 auditRepository: env.auditRepo
             )
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            if let agentStore {
-                                NavigationLink {
-                                    LibraryView(
-                                        snippetRepo: env.snippetRepo,
-                                        keyStore: env.keyStore,
-                                        agentStore: agentStore
-                                    )
-                                } label: {
-                                    Label("Library", systemImage: "square.grid.2x2")
-                                }
-                                NavigationLink {
-                                    AgentsView(store: agentStore)
-                                } label: {
-                                    Label("Hosted Agents", systemImage: "sparkles")
-                                }
-                            }
-                            NavigationLink {
-                                SnippetEditorView(repository: env.snippetRepo)
-                            } label: {
-                                Label("Snippets", systemImage: "text.quote")
-                            }
-                            NavigationLink {
-                                KeysView(viewModel: KeysViewModel(store: env.keyStore), store: env.keyStore)
-                            } label: {
-                                Label("SSH Keys", systemImage: "key")
-                            }
-                        } label: {
-                            Label("Manage", systemImage: "ellipsis.circle")
-                        }
-                    }
-                }
         }
     }
 
