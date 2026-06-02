@@ -5,7 +5,6 @@ import StoreKit
 
 public struct PremiumComparisonView: View {
     @Environment(\.conduitTokens) private var t
-    @Environment(\.dismiss) private var dismiss
     @State private var pm = PurchaseManager.shared
 
     public init() {}
@@ -128,6 +127,13 @@ public struct PremiumComparisonView: View {
                             default: return false
                             }
                         }())
+
+                        Button("restore purchase") {
+                            Task { await pm.restore() }
+                        }
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.accent)
+                        .frame(maxWidth: .infinity, alignment: .center)
 
                         Text("one-time · yours forever · no subscription")
                             .font(.dsMonoPt(10))

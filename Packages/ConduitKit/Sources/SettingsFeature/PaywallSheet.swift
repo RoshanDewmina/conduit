@@ -98,9 +98,16 @@ public struct PaywallSheet: View {
                             .disabled({
                                 switch pm.purchaseState {
                                 case .purchasing, .purchased: return true
-                                default: return false
+                                default: return pm.product == nil
                                 }
                             }())
+
+                            if pm.product == nil, case .unknown = pm.purchaseState {
+                                Text("loading price…")
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text3)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            }
 
                             Button("restore purchase") {
                                 Task { await pm.restore() }
@@ -108,6 +115,19 @@ public struct PaywallSheet: View {
                             .font(.dsMonoPt(11))
                             .foregroundStyle(t.accent)
                             .frame(maxWidth: .infinity, alignment: .center)
+
+                            if case .error(let msg) = pm.purchaseState {
+                                VStack(spacing: 6) {
+                                    Text(msg)
+                                        .font(.dsMonoPt(11))
+                                        .foregroundStyle(t.danger)
+                                        .multilineTextAlignment(.center)
+                                    Button("try again") { Task { await pm.load() } }
+                                        .font(.dsMonoPt(11))
+                                        .foregroundStyle(t.accent)
+                                }
+                                .padding(.horizontal, 4)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)

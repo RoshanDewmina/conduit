@@ -97,7 +97,7 @@ public struct BillingView: View {
                         HStack(spacing: 0) {
                             DSListSectionHead("Managed Compute")
                             Spacer()
-                            Text("— this mo")
+                            Text("$— / mo")
                                 .font(.dsMonoPt(11))
                                 .foregroundStyle(t.text3)
                                 .padding(.horizontal, 16)
