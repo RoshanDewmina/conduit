@@ -149,6 +149,7 @@ public struct AppRoot: View {
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
+    @State private var showingHostedAgents = false
 
     private var isPro: Bool {
         #if DEBUG
@@ -368,9 +369,16 @@ public struct AppRoot: View {
                     cloudUpgradeEligible: pm.externalStripeEligible,
                     onCancel: { addHostPresented = false },
                     onUseHosted: {
-                        // Hand off to the hosted-agents surface (under Library).
+                        // Dismiss the add-host sheet, then open the Hosted Agents
+                        // screen so the user lands on the cloud surface directly
+                        // (a sheet can't present over another mid-dismiss, so we
+                        // sequence it after a short delay — same pattern as
+                        // openSession below).
                         addHostPresented = false
-                        selectedTab = .library
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            showingHostedAgents = true
+                        }
                     },
                     onConnectAndSave: { host in
                         addHostPresented = false
@@ -381,6 +389,13 @@ public struct AppRoot: View {
                         }
                     }
                 )
+            }
+        }
+        .sheet(isPresented: $showingHostedAgents) {
+            if let agentStore {
+                NavigationStack {
+                    AgentsView(store: agentStore)
+                }
             }
         }
         .sheet(item: $editingHost) { host in

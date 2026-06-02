@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - PromptLine
 // composites.css:44-53 — `host:cwd $` inline with term colors.
@@ -576,48 +579,53 @@ public struct DSTabBar: View {
 
     @Environment(\.conduitTokens) private var t
     @Namespace private var indicatorNS
-    // Captured home-indicator inset. We deliberately reserve LESS than the full
-    // safe-area so the row sits closer to the bottom edge instead of floating
-    // above a tall empty band. Seeded at a typical notched-device value to avoid
-    // a first-frame jump; corrected on appear for every device (0 on SE-class).
-    @State private var bottomInset: CGFloat = 34
 
     public init(items: [DSTabItem], selectedID: Binding<String>) {
         self.items = items
         self._selectedID = selectedID
     }
 
+    // Physical home-indicator inset read straight from the key window. Reading it
+    // here is reliable, unlike a GeometryReader inside a `.safeAreaInset`-placed
+    // view (which reports 0 because the inset already consumed the safe area).
+    private var homeIndicatorInset: CGFloat {
+        #if canImport(UIKit)
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+        #else
+        return 0
+        #endif
+    }
+
     public var body: some View {
-        HStack(spacing: 0) {
+        // AppRoot hosts this bar via `.safeAreaInset(edge: .bottom)`, which
+        // reserves the FULL home-indicator inset below the row — that's the tall
+        // empty band. We reclaim most of it with a negative bottom padding that
+        // pulls the row down toward the indicator, leaving only `clearance` pt of
+        // breathing room. The surface bleeds to the physical edge so the band
+        // still reads as one filled bar. Home-button devices (inset 0) are a
+        // no-op. `pullDown` is clamped so we never overshoot below the edge.
+        let inset = homeIndicatorInset
+        let clearance: CGFloat = 12
+        let pullDown: CGFloat = inset > clearance ? -(inset - clearance) : 0
+
+        return HStack(spacing: 0) {
             ForEach(items) { item in
                 tabButton(item)
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 46)
-        // Push the row down toward the home indicator: reserve only a trimmed
-        // slice of the safe-area inset (keeps ~clearance for the indicator) so
-        // the icons aren't stranded above a tall empty band.
-        .padding(.bottom, max(bottomInset - 20, 6))
-        .background(safeInsetReader)
-        // Paint the surface over the row AND the trimmed padding, bleeding under
-        // the indicator so the bar reads as one filled band.
+        .frame(height: 48)
+        .padding(.bottom, pullDown)
+        .frame(maxWidth: .infinity)
         .background(t.surface2, ignoresSafeAreaEdges: .bottom)
         .overlay(alignment: .top) {
             Rectangle().fill(t.border).frame(height: 1)
         }
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-    }
-
-    // Reads the live bottom safe-area inset without affecting layout.
-    private var safeInsetReader: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .onAppear { bottomInset = proxy.safeAreaInsets.bottom }
-                .onChange(of: proxy.safeAreaInsets.bottom) { _, newValue in
-                    bottomInset = newValue
-                }
-        }
     }
 
     private func tabButton(_ item: DSTabItem) -> some View {
