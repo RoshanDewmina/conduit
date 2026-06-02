@@ -34,6 +34,7 @@ public struct HostsView: View {
     @State private var searchText = ""
     @State private var snapshots: [SessionSnapshot] = []
     @State private var hostsByID: [HostID: Host] = [:]
+    @State private var managedHost: Host? = nil
 
     @Environment(\.conduitTokens) private var t
 
@@ -128,6 +129,11 @@ public struct HostsView: View {
         }, message: {
             Text(vm.loadError ?? "")
         })
+        .sheet(item: $managedHost) { host in
+            NavigationStack {
+                HostDetailView(hostName: host.name, hostAddress: host.displayAddress)
+            }
+        }
         .task { await loadData() }
     }
 
@@ -304,6 +310,8 @@ public struct HostsView: View {
         .swipeActions(edge: .leading) {
             Button { onEdit(host) } label: { Label("Edit", systemImage: "pencil") }
                 .tint(t.accent)
+            Button { managedHost = host } label: { Label("Manage", systemImage: "slider.horizontal.3") }
+                .tint(t.info)
         }
     }
 
