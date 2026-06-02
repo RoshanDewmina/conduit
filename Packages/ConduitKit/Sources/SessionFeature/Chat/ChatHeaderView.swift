@@ -12,6 +12,7 @@ public struct ChatHeaderView: View {
     let onBack: (() -> Void)?
     let onDisconnect: (() -> Void)?
     let onPortForward: (() -> Void)?
+    let onReconnect: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
 
@@ -21,7 +22,8 @@ public struct ChatHeaderView: View {
         state: AgentState,
         onBack: (() -> Void)? = nil,
         onDisconnect: (() -> Void)? = nil,
-        onPortForward: (() -> Void)? = nil
+        onPortForward: (() -> Void)? = nil,
+        onReconnect: (() -> Void)? = nil
     ) {
         self.hostName = hostName
         self.cwd = cwd
@@ -29,6 +31,7 @@ public struct ChatHeaderView: View {
         self.onBack = onBack
         self.onDisconnect = onDisconnect
         self.onPortForward = onPortForward
+        self.onReconnect = onReconnect
     }
 
     public var body: some View {
@@ -73,8 +76,15 @@ public struct ChatHeaderView: View {
 
             AgentBadge(state)
 
-            if onDisconnect != nil || onPortForward != nil {
+            if onDisconnect != nil || onPortForward != nil || onReconnect != nil {
                 Menu {
+                    if let onReconnect {
+                        Button {
+                            onReconnect()
+                        } label: {
+                            Label("Reconnect", systemImage: "arrow.clockwise")
+                        }
+                    }
                     if let onPortForward {
                         Button {
                             onPortForward()
