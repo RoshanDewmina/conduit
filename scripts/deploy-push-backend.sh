@@ -43,6 +43,14 @@ CORS_ALLOW_ORIGIN=*
 GCP_PROJECT=
 GCP_REGION=us-central1
 GCP_CLOUD_RUN_IMAGE=
+GOOGLE_APPLICATION_CREDENTIALS=/home/roshansilva/.conduit/push-backend/gcp-sa.json
+# --- OpenRouter (agent model auth) ---
+# OPENROUTER_PROVISIONING_KEY mints capped per-customer sub-keys (preferred, multi-tenant).
+# If you only have an ordinary inference key, set OPENROUTER_SHARED_KEY instead — all
+# runs share it (cap its spend in the OpenRouter dashboard). Free-tier keys can only
+# call :free models; real Claude models need OpenRouter credits.
+OPENROUTER_PROVISIONING_KEY=
+OPENROUTER_SHARED_KEY=
 ENVEOF'
 
 echo "=== Installing systemd service ==="

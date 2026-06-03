@@ -86,6 +86,30 @@ backend:
 
 ---
 
+## OpenRouter (agent model auth) — VERIFIED LIVE
+
+The runner routes the bundled Claude Code CLI through OpenRouter's Anthropic-compatible
+API (`agent-runner/main.go` `agentChildEnv`): sets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`,
+`ANTHROPIC_AUTH_TOKEN=<key>`, and `ANTHROPIC_API_KEY=` (empty). The key comes from
+`dispatchRun` → `openRouterKeyForCustomer`, which prefers a per-customer provisioned
+sub-key and falls back to `OPENROUTER_SHARED_KEY`.
+
+Two modes:
+- **Provisioning (preferred, multi-tenant):** set `OPENROUTER_PROVISIONING_KEY` (an
+  OpenRouter *management* key). The backend mints a capped sub-key per customer.
+- **Shared key (MVP/single-tenant):** set `OPENROUTER_SHARED_KEY` to an ordinary
+  inference key; all runs share it. Cap its spend in the OpenRouter dashboard.
+
+The VM (35.201.3.231) is currently running **shared-key mode**, verified live:
+`claude -p hello --output-format json` over the full VM→Cloud Run→agent path returned
+`subtype:success`, `stop_reason:end_turn`, with a real model call
+(`nvidia/nemotron-3-super-120b-a12b:free`, 22k in / 147 out tokens).
+
+> ⚠️ The configured key is **free-tier** — it can only call `:free` models (rate-limited,
+> often empty/odd output). For real Claude-model agents, add OpenRouter credits (or set a
+> provisioning key on a funded account). The plumbing is correct; this is purely a
+> credits/model-access matter.
+
 ## Cleanup (if abandoning the smoke harness)
 ```bash
 gcloud run services delete conduit-push-smoke --project conduit-runner-0603190634 --region us-central1
