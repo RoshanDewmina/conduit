@@ -32,7 +32,7 @@
 	<key>CONDUIT_ICLOUD_ENABLED</key>
 	<false/>
 	<key>CONDUIT_PUSH_BACKEND_URL</key>
-	<string>$(CONDUIT_PUSH_BACKEND_URL)</string>
+	<string>https://35.201.3.231.sslip.io</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
