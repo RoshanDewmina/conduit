@@ -184,19 +184,32 @@ func persistOpenRouterKey(customerID, key string) {
 	}
 }
 
-// openRouterKeyForCustomer returns the persisted sub-key for a customer, or ""
-// when none has been provisioned (e.g. dev fallback with no provisioning key).
+// openRouterKeyForCustomer returns the OpenRouter key injected into a customer's
+// cloud runs. Precedence: a per-customer provisioned sub-key (from the provisioning
+// flow) wins; otherwise it falls back to a single shared inference key
+// (OPENROUTER_SHARED_KEY), the MVP/single-tenant mode for deployments that have an
+// ordinary OpenRouter key but no management/provisioning key. Returns "" if neither
+// is available.
 func openRouterKeyForCustomer(customerID string) string {
-	if customerID == "" {
-		return ""
+	if customerID != "" {
+		openRouterKeysStore.mu.Lock()
+		var data openRouterKeysData
+		_ = loadJSONFile(openRouterKeysStore.path, &data)
+		openRouterKeysStore.mu.Unlock()
+		if k := data.Keys[customerID]; k != "" {
+			return k
+		}
 	}
-	openRouterKeysStore.mu.Lock()
-	defer openRouterKeysStore.mu.Unlock()
-	var data openRouterKeysData
-	if err := loadJSONFile(openRouterKeysStore.path, &data); err != nil {
-		return ""
-	}
-	return data.Keys[customerID]
+	return openRouterSharedKey()
+}
+
+// openRouterSharedKey is a single OpenRouter inference key shared across all customers
+// when per-customer provisioning is not configured. Set via OPENROUTER_SHARED_KEY.
+// Trades per-customer spend isolation for simplicity; set OPENROUTER_PROVISIONING_KEY
+// to mint capped per-customer sub-keys instead. Cap spend on the key in the OpenRouter
+// dashboard when using this mode.
+func openRouterSharedKey() string {
+	return strings.TrimSpace(os.Getenv("OPENROUTER_SHARED_KEY"))
 }
 
 func setOpenRouterKeysPath(path string) { openRouterKeysStore.path = path }

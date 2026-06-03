@@ -40,6 +40,7 @@ func setupTestStores(t *testing.T) {
 	resetOpenRouterKeyCache()
 	resetOpenRouterKeysForTests()
 	t.Setenv("OPENROUTER_PROVISIONING_KEY", "")
+	t.Setenv("OPENROUTER_SHARED_KEY", "")
 	setOpenRouterClient(&openRouterClient{
 		baseURL:         "https://openrouter.ai",
 		provisioningKey: "",
