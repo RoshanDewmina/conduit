@@ -110,6 +110,30 @@ The VM (35.201.3.231) is currently running **shared-key mode**, verified live:
 > provisioning key on a funded account). The plumbing is correct; this is purely a
 > credits/model-access matter.
 
+### Planned: move to provisioning mode
+
+**Decision:** ship the MVP on shared-key mode; **migrate to provisioning before
+real multi-tenant launch.** Provisioning gives per-customer spend caps (default
+$20/mo, 2× annual — `openRouterLimitForEntitlement`), per-customer attribution in
+the OpenRouter dashboard, and contained blast radius if a key leaks. Shared mode has
+none of these — one budget for everyone, no per-user limit.
+
+Migration steps when ready:
+1. Create an OpenRouter **management/provisioning key** on a **funded** account.
+2. Set `OPENROUTER_PROVISIONING_KEY` on the VM (and optional `OPENROUTER_LIMIT_MONTHLY`
+   / `OPENROUTER_LIMIT_ANNUAL` / `OPENROUTER_LIMIT_RESET`); restart `conduit-push`.
+3. Unset `OPENROUTER_SHARED_KEY` (per-customer sub-keys take precedence anyway, but
+   removing it avoids a silent fallback for customers not yet provisioned).
+No code change needed — `ensureOpenRouterSubKey` mints capped per-customer sub-keys
+automatically once the provisioning key is present.
+
+**Interim safety (shared mode):** set a hard spend cap on the shared key in the
+OpenRouter dashboard — shared mode enforces no per-user limit on its own.
+
+**Security follow-up (both modes):** OpenRouter keys / runner tokens / entitlement
+tokens are stored plaintext-at-rest in the JSON store (see the `NOTE` in
+`openrouter.go`). Migrate to a secrets manager / encrypted-at-rest before GA.
+
 ## Cleanup (if abandoning the smoke harness)
 ```bash
 gcloud run services delete conduit-push-smoke --project conduit-runner-0603190634 --region us-central1
