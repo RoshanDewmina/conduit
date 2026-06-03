@@ -32,6 +32,8 @@ func setupTestStores(t *testing.T) {
 	setCreditsPath(filepath.Join(dir, "credits.json"))
 	setArtifactsPath(filepath.Join(dir, "artifacts.json"))
 	setSchedulesPath(filepath.Join(dir, "schedules.json"))
+	setRunLogsPath(filepath.Join(dir, "run-logs.json"))
+	setRunTokensPath(filepath.Join(dir, "run-tokens.json"))
 	setGCPOrchestrationPath(filepath.Join(dir, "gcp-orchestrations.json"))
 	setOrgsPath(filepath.Join(dir, "orgs.json"))
 	resetOpenRouterKeyCache()
@@ -41,11 +43,17 @@ func setupTestStores(t *testing.T) {
 		provisioningKey: "",
 		httpClient:      &http.Client{Timeout: 15 * time.Second},
 	})
+	// Reset dispatch override so cloud-runtime dispatch is a no-op in tests by
+	// default. Tests that exercise dispatch (dispatch_test.go) override this
+	// themselves and restore it via t.Cleanup.
+	providerOverrideForTest = func(_ string) RuntimeProvider { return nil }
+	t.Cleanup(func() { providerOverrideForTest = nil })
 	resetControlPlaneForTests()
 	resetUsageForTests()
 	resetCreditsForTests()
 	resetArtifactsForTests()
 	resetSchedulesForTests()
+	resetRunLogsForTests()
 	resetGCPOrchestrationForTests()
 	resetOrgsForTests()
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/api/option"
+	runv2 "google.golang.org/api/run/v2"
 )
 
 type GCPJobOrchestration struct {
@@ -173,13 +177,48 @@ func buildCloudRunJobSpec(agent *Agent, project, region, jobName string) map[str
 }
 
 func submitCloudRunJobIfConfigured(spec map[string]any) error {
-	// Real GCP Cloud Run Jobs API integration is optional; requires
-	// GCP_PROJECT, GCP_REGION, and Application Default Credentials or
-	// GOOGLE_APPLICATION_CREDENTIALS. MVP records the spec only.
 	if !gcpCloudRunEnabled() {
 		return nil
 	}
-	_ = spec
+
+	meta, _ := spec["metadata"].(map[string]any)
+	if meta == nil {
+		return fmt.Errorf("invalid spec: missing metadata")
+	}
+	jobName, _ := meta["name"].(string)
+	namespace, _ := meta["namespace"].(string) // = GCP project ID
+	region := gcpRegion()
+	image := cloudRunDefaultImage()
+	controlPlaneURL := strings.TrimRight(strings.TrimSpace(os.Getenv("CONTROL_PLANE_PUBLIC_URL")), "/")
+
+	ctx := context.Background()
+	svc, err := runv2.NewService(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
+	if err != nil {
+		return fmt.Errorf("create Cloud Run service: %w", err)
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s", namespace, region)
+
+	job := &runv2.GoogleCloudRunV2Job{
+		Template: &runv2.GoogleCloudRunV2ExecutionTemplate{
+			Template: &runv2.GoogleCloudRunV2TaskTemplate{
+				Containers: []*runv2.GoogleCloudRunV2Container{
+					{
+						Image: image,
+						Env: []*runv2.GoogleCloudRunV2EnvVar{
+							{Name: "CONDUIT_CONTROL_PLANE_URL", Value: controlPlaneURL},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = svc.Projects.Locations.Jobs.Create(parent, job).JobId(jobName).Context(ctx).Do()
+	if err != nil && !strings.Contains(err.Error(), "409") {
+		// 409 = already exists — idempotent, treat as success
+		return fmt.Errorf("create Cloud Run job: %w", err)
+	}
 	return nil
 }
 

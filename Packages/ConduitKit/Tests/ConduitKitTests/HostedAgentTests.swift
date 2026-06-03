@@ -35,7 +35,7 @@ struct HostedAgentTests {
             id: "agent_abc",
             name: "Deploy Bot",
             runtime: "ssh-host",
-            config: .init(model: "anthropic/claude-sonnet-4", hostID: "host-1", command: "claude"),
+            config: .init(model: "anthropic/claude-sonnet-4", hostID: "host-1", command: "claude", workspacePath: "~/projects/app", region: nil),
             createdAt: "2025-06-02T12:00:00Z",
             updatedAt: "2025-06-02T12:00:00Z"
         )
@@ -45,6 +45,7 @@ struct HostedAgentTests {
         #expect(mapped.runtimeKind == .sshHost)
         #expect(mapped.hostID == "host-1")
         #expect(mapped.command == "claude")
+        #expect(mapped.workspacePath == "~/projects/app")
     }
 
     @Test("Backend run DTO maps to AgentRun")
@@ -94,5 +95,25 @@ struct HostedAgentTests {
     func flyRuntimeMapping() {
         #expect(HostedAgentAPIClient.mapRuntimeKind("fly") == .fly)
         #expect(HostedAgentAPIClient.mapRuntime(.fly) == "fly")
+    }
+
+    @Test("Backend schedule DTO maps to AgentSchedule")
+    func backendScheduleMapping() {
+        let backend = HostedAgentAPIClient.BackendSchedule(
+            id: "sched_1",
+            agentId: "agent_abc",
+            cronExpr: "@daily",
+            command: "echo hi",
+            enabled: false,
+            nextRunAt: "2026-06-03T12:00:00Z",
+            lastRunAt: nil
+        )
+        let mapped = HostedAgentAPIClient.mapSchedule(backend)
+        #expect(mapped.id == "sched_1")
+        #expect(mapped.cronExpr == "@daily")
+        #expect(mapped.command == "echo hi")
+        #expect(mapped.enabled == false)
+        #expect(mapped.nextRunAt != nil)
+        #expect(mapped.lastRunAt == nil)
     }
 }

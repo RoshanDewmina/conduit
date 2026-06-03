@@ -64,6 +64,15 @@ func registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /agents/{id}/schedules", handleCreateSchedule)
 	mux.HandleFunc("GET /agents/{id}/schedules", handleListSchedules)
 	mux.HandleFunc("POST /schedules/{id}/trigger", handleTriggerSchedule)
+	mux.HandleFunc("PATCH /schedules/{id}", handleUpdateSchedule)
+	mux.HandleFunc("DELETE /schedules/{id}", handleDeleteSchedule)
+}
+
+// updateScheduleRequest carries optional fields; only non-nil members are applied.
+type updateScheduleRequest struct {
+	CronExpr *string `json:"cronExpr,omitempty"`
+	Command  *string `json:"command,omitempty"`
+	Enabled  *bool   `json:"enabled,omitempty"`
 }
 
 func handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +196,100 @@ func handleTriggerSchedule(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	scheduleID := r.PathValue("id")
+
+	var req updateScheduleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	data, err := loadSchedulesData()
+	if err != nil {
+		http.Error(w, "failed to load schedules", http.StatusInternalServerError)
+		return
+	}
+	var schedule *Schedule
+	for i := range data.Schedules {
+		if data.Schedules[i].ID == scheduleID {
+			schedule = &data.Schedules[i]
+			break
+		}
+	}
+	if schedule == nil || !resourceVisibleToEntitlement(ent, schedule.CustomerID, schedule.OrgID) {
+		http.Error(w, "schedule not found", http.StatusNotFound)
+		return
+	}
+
+	now := time.Now().UTC()
+	if req.CronExpr != nil {
+		expr := strings.TrimSpace(*req.CronExpr)
+		if expr == "" {
+			http.Error(w, "cronExpr cannot be empty", http.StatusBadRequest)
+			return
+		}
+		nextRun, err := computeNextRun(expr, now)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		schedule.CronExpr = expr
+		schedule.NextRunAt = nextRun.UTC().Format(time.RFC3339)
+	}
+	if req.Command != nil {
+		schedule.Command = *req.Command
+	}
+	if req.Enabled != nil {
+		schedule.Enabled = *req.Enabled
+	}
+	schedule.UpdatedAt = now.Format(time.RFC3339)
+
+	updated := *schedule
+	if err := saveSchedulesData(data); err != nil {
+		http.Error(w, "failed to persist schedule", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	scheduleID := r.PathValue("id")
+
+	data, err := loadSchedulesData()
+	if err != nil {
+		http.Error(w, "failed to load schedules", http.StatusInternalServerError)
+		return
+	}
+	idx := -1
+	for i := range data.Schedules {
+		if data.Schedules[i].ID == scheduleID {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 || !resourceVisibleToEntitlement(ent, data.Schedules[idx].CustomerID, data.Schedules[idx].OrgID) {
+		http.Error(w, "schedule not found", http.StatusNotFound)
+		return
+	}
+	data.Schedules = append(data.Schedules[:idx], data.Schedules[idx+1:]...)
+	if err := saveSchedulesData(data); err != nil {
+		http.Error(w, "failed to persist schedules", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func triggerScheduleByID(ent subscriptionEntitlement, scheduleID string) (AgentRun, Schedule, error) {
 	data, err := loadSchedulesData()
 	if err != nil {
@@ -239,6 +342,11 @@ func executeSchedule(schedule *Schedule, data schedulesData) (AgentRun, Schedule
 		return AgentRun{}, Schedule{}, err
 	}
 	controlPlane.mu.Unlock()
+
+	if agent, ok := findAgentByID(schedule.AgentID); ok {
+		agentCopy, runCopy := agent, run
+		go dispatchRun(&agentCopy, &runCopy)
+	}
 
 	next, err := computeNextRun(schedule.CronExpr, time.Now().UTC())
 	if err != nil {

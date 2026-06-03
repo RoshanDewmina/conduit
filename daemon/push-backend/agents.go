@@ -35,8 +35,11 @@ type AgentRun struct {
 	StartedAt   string `json:"startedAt,omitempty"`
 	CompletedAt string `json:"completedAt,omitempty"`
 	ExitCode    *int   `json:"exitCode,omitempty"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	// CancelRequested is set by POST /runs/{id}/cancel; cloud runners poll it
+	// (GET /runs/{id}/control) and terminate. Never carries auth material.
+	CancelRequested bool   `json:"cancelRequested,omitempty"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
 }
 
 type createAgentRequest struct {
@@ -254,6 +257,8 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to persist run", http.StatusInternalServerError)
 		return
 	}
+	agentCopy, runCopy := *agent, run
+	go dispatchRun(&agentCopy, &runCopy)
 	writeJSON(w, http.StatusCreated, run)
 }
 

@@ -15,6 +15,8 @@ struct AgentDetailView: View {
     @State private var schedulePreset: SchedulePreset = .daily
     @State private var scheduleCommand = ""
     @State private var scheduleSaving = false
+    @State private var editingSchedule: AgentSchedule?
+    @State private var deletingSchedule: AgentSchedule?
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -27,6 +29,7 @@ struct AgentDetailView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         runPromptSection
                         scheduleSection
+                        toolsSection
                         if store.teamOrg != nil {
                             teamSection
                         }
@@ -41,6 +44,25 @@ struct AgentDetailView: View {
             await store.loadRuns(for: agent.id)
             await store.loadSchedules(agentID: agent.id)
         }
+        .sheet(item: $editingSchedule) { schedule in
+            EditScheduleSheet(store: store, agentID: agent.id, schedule: schedule)
+        }
+        .confirmationDialog(
+            "Delete this schedule?",
+            isPresented: Binding(
+                get: { deletingSchedule != nil },
+                set: { if !$0 { deletingSchedule = nil } }
+            ),
+            presenting: deletingSchedule
+        ) { schedule in
+            Button("Delete", role: .destructive) {
+                Task {
+                    try? await store.deleteSchedule(scheduleID: schedule.id, agentID: agent.id)
+                    deletingSchedule = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { deletingSchedule = nil }
+        }
     }
 
     private var runPromptSection: some View {
@@ -48,7 +70,11 @@ struct AgentDetailView: View {
             Text("RUN")
                 .font(.dsMonoPt(11, weight: .semibold))
                 .foregroundStyle(t.text3)
-            if !agent.runtimeKind.requiresHostID {
+            if agent.runtimeKind.isCloud {
+                Text("Runs in a managed cloud sandbox\(agent.region.map { " · \($0)" } ?? "") via the control plane.")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            } else if !agent.runtimeKind.requiresHostID {
                 Text("Runs execute on \(agent.runtimeKind.displayName) via the control plane.")
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
@@ -104,25 +130,50 @@ struct AgentDetailView: View {
                     .foregroundStyle(t.text3)
             } else {
                 ForEach(schedules) { schedule in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(schedule.cronExpr)
-                                .font(.dsMonoPt(12, weight: .semibold))
-                                .foregroundStyle(t.text)
-                            if let runLine = scheduleRunLine(schedule) {
-                                Text(runLine)
-                                    .font(.dsMonoPt(11))
-                                    .foregroundStyle(t.text3)
-                            }
-                        }
-                        Spacer()
-                        HStack(spacing: 8) {
-                            DSChip(schedule.enabled ? "on" : "off", tone: schedule.enabled ? .ok : .neutral, variant: .soft, size: .sm)
-                            DSButton("Run now", variant: .ghost, size: .sm, mono: true) {
-                                Task { try? await store.triggerSchedule(scheduleID: schedule.id, agentID: agent.id) }
-                            }
-                        }
+                    scheduleRow(schedule)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func scheduleRow(_ schedule: AgentSchedule) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(schedule.cronExpr)
+                    .font(.dsMonoPt(12, weight: .semibold))
+                    .foregroundStyle(t.text)
+                if let runLine = scheduleRunLine(schedule) {
+                    Text(runLine)
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
+            }
+            Spacer()
+            HStack(spacing: 8) {
+                Button {
+                    Task {
+                        try? await store.toggleSchedule(
+                            scheduleID: schedule.id,
+                            agentID: agent.id,
+                            enabled: !schedule.enabled
+                        )
                     }
+                } label: {
+                    DSChip(schedule.enabled ? "on" : "off", tone: schedule.enabled ? .ok : .neutral, variant: .soft, size: .sm)
+                }
+                .buttonStyle(.plain)
+                DSButton("Run now", variant: .ghost, size: .sm, mono: true) {
+                    Task { try? await store.triggerSchedule(scheduleID: schedule.id, agentID: agent.id) }
+                }
+                Menu {
+                    Button("Edit") { editingSchedule = schedule }
+                    Button("Delete", role: .destructive) { deletingSchedule = schedule }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(t.text3)
+                        .frame(width: 28, height: 28)
                 }
             }
         }
@@ -137,6 +188,57 @@ struct AgentDetailView: View {
             parts.append("last \(last.formatted(date: .abbreviated, time: .shortened))")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var toolsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSListSectionHead("TOOLS")
+            if agent.runtimeKind == .sshHost {
+                toolRow("Exec console", systemImage: "terminal") {
+                    AgentExecView(store: store, agent: agent)
+                }
+                toolRow("Files", systemImage: "folder") {
+                    AgentFilesView(store: store, agent: agent)
+                }
+                if agent.workspacePath != nil {
+                    toolRow("Workspace", systemImage: "arrow.triangle.branch") {
+                        AgentWorkspaceView(store: store, agent: agent)
+                    }
+                }
+            } else {
+                Text("Interactive tools require an ssh-host runtime.")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text3)
+                    .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func toolRow<Destination: View>(
+        _ title: String,
+        systemImage: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.accent)
+                    .frame(width: 18)
+                Text(title)
+                    .font(.dsMonoPt(13, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
     }
 
     private var teamSection: some View {

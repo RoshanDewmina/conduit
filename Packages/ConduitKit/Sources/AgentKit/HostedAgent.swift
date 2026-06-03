@@ -12,6 +12,12 @@ public struct HostedAgent: Identifiable, Codable, Sendable, Hashable {
     public var hostID: String?
     /// Shell command invoked when a run starts (e.g. `claude`).
     public var command: String?
+    /// Absolute path to the repository/working directory on the ssh-host that
+    /// workspace git operations (status/diff/commit/PR) target. nil ⇒ no workspace.
+    public var workspacePath: String?
+    /// Cloud-execution region hint (e.g. "us-east"). Cloud runtimes only; the
+    /// backend selects the concrete provider (Fly vs GCP) from runtime + region.
+    public var region: String?
     public var isActive: Bool
     public var createdAt: Date
     public var updatedAt: Date
@@ -23,6 +29,8 @@ public struct HostedAgent: Identifiable, Codable, Sendable, Hashable {
         runtimeKind: HostedRuntimeKind = .sshHost,
         hostID: String? = nil,
         command: String? = nil,
+        workspacePath: String? = nil,
+        region: String? = nil,
         isActive: Bool = true,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -33,6 +41,8 @@ public struct HostedAgent: Identifiable, Codable, Sendable, Hashable {
         self.runtimeKind = runtimeKind
         self.hostID = hostID
         self.command = command
+        self.workspacePath = workspacePath
+        self.region = region
         self.isActive = isActive
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -61,6 +71,75 @@ public enum HostedRuntimeKind: String, Codable, Sendable, Hashable, CaseIterable
         case .gcpCloudRun, .lightsail: false
         }
     }
+
+    /// True for runtimes orchestrated server-side in a cloud sandbox (no device SSH).
+    public var isCloud: Bool {
+        switch self {
+        case .sshHost: false
+        case .fly, .gcpCloudRun, .lightsail: true
+        }
+    }
+}
+
+/// The simplified user-facing execution choice. The UI offers only Cloud vs SSH
+/// host; the backend picks the concrete cloud provider (Fly/GCP) from the run's
+/// `runtime=cloud` + optional region (per the design spec §3.1 / §6).
+public enum HostedRuntimeChoice: String, CaseIterable, Sendable, Hashable {
+    case sshHost
+    case cloud
+
+    public var displayName: String {
+        switch self {
+        case .sshHost: "SSH host"
+        case .cloud:   "Cloud"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .sshHost: "Run on your own machine over SSH."
+        case .cloud:   "Run in a managed cloud sandbox."
+        }
+    }
+
+    /// Canonical backend runtime kind for this choice. Cloud maps to the
+    /// region-driven Cloud Run kind; the backend may re-route to Fly.
+    public var runtimeKind: HostedRuntimeKind {
+        switch self {
+        case .sshHost: .sshHost
+        case .cloud:   .gcpCloudRun
+        }
+    }
+
+    /// Derives the user-facing choice from a stored runtime kind.
+    public init(runtimeKind: HostedRuntimeKind) {
+        self = runtimeKind.isCloud ? .cloud : .sshHost
+    }
+}
+
+/// A curated cloud region the user can pick for cloud agents. The slug is sent
+/// to the backend; the backend resolves it to a concrete provider region.
+public struct CloudRegion: Identifiable, Sendable, Hashable {
+    public let slug: String
+    public let displayName: String
+    public var id: String { slug }
+
+    public init(slug: String, displayName: String) {
+        self.slug = slug
+        self.displayName = displayName
+    }
+
+    /// Curated default region list surfaced in the create flow.
+    public static let catalog: [CloudRegion] = [
+        CloudRegion(slug: "us-east",  displayName: "US East"),
+        CloudRegion(slug: "us-west",  displayName: "US West"),
+        CloudRegion(slug: "eu-west",  displayName: "EU West"),
+        CloudRegion(slug: "eu-central", displayName: "EU Central"),
+        CloudRegion(slug: "ap-south", displayName: "Asia Pacific (South)"),
+        CloudRegion(slug: "ap-northeast", displayName: "Asia Pacific (Northeast)"),
+    ]
+
+    public static let `default` = catalog[0]
 }
 
 // MARK: - Agent run
@@ -129,6 +208,17 @@ public struct RunLogLine: Identifiable, Codable, Sendable, Hashable {
         self.id = id
         self.timestamp = timestamp
         self.text = text
+    }
+}
+
+/// One page of an incremental run-log tail (GET /runs/{id}/logs?since=N).
+public struct RunLogsPage: Sendable {
+    public let lines: [RunLogLine]
+    public let nextSince: Int
+
+    public init(lines: [RunLogLine], nextSince: Int) {
+        self.lines = lines
+        self.nextSince = nextSince
     }
 }
 

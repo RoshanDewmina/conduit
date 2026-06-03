@@ -35,11 +35,19 @@ struct AgentRunDetailView: View {
             }
         }
         .navigationBarHidden(true)
-        .task {
-            await store.refreshRun(run.id)
+        .task(id: run.id) {
             await store.loadArtifacts(runID: run.id)
+            // Live tail: poll backend logs (cloud) + run status until terminal.
+            while !Task.isCancelled {
+                await store.loadNewRunLogs(runID: run.id)
+                await store.refreshRun(run.id)
+                if liveRun.status.isTerminal { break }
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
     }
+
+    private var isLive: Bool { !liveRun.status.isTerminal }
 
     private var displayUsageRecords: [UsageRecord] {
         store.selectedRun?.usageRecords ?? run.usageRecords
@@ -78,26 +86,66 @@ struct AgentRunDetailView: View {
 
     private var logsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            DSListSectionHead("LOGS")
-            let lines = store.selectedRun?.logLines ?? run.logLines
+            HStack {
+                DSListSectionHead("LOGS")
+                Spacer()
+                if isLive {
+                    HStack(spacing: 4) {
+                        Circle().fill(t.ok).frame(width: 6, height: 6)
+                        Text("live")
+                            .font(.dsMonoPt(10, weight: .semibold))
+                            .foregroundStyle(t.ok)
+                    }
+                }
+            }
+            let lines = store.logLines(for: run.id, fallback: run)
             if lines.isEmpty {
                 Text("No log lines yet.")
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
             } else {
-                ForEach(lines) { line in
-                    Text(line.text)
-                        .font(.dsMonoPt(12))
-                        .foregroundStyle(t.text2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(lines) { line in
+                                Text(line.text)
+                                    .font(.dsMonoPt(12))
+                                    .foregroundStyle(t.text2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id(line.id)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 280)
+                    .onChange(of: lines.count) { _, _ in
+                        if let last = lines.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
                 }
             }
         }
     }
 
     private var artifactsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DSListSectionHead("ARTIFACTS")
+        let agent = store.agents.first { $0.id == agentID }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                DSListSectionHead("ARTIFACTS")
+                Spacer()
+                if let agent, agent.runtimeKind == .sshHost {
+                    NavigationLink {
+                        AgentFilesView(store: store, agent: agent, attachToRunID: run.id)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "paperclip")
+                            Text("Attach from host")
+                        }
+                        .font(.dsMonoPt(11, weight: .semibold))
+                        .foregroundStyle(t.accent)
+                    }
+                }
+            }
             let artifacts = store.artifactsByRun[run.id] ?? []
             if artifacts.isEmpty {
                 Text("No artifacts for this run.")
@@ -117,7 +165,16 @@ struct AgentRunDetailView: View {
                             }
                         }
                         Spacer()
-                        if artifact.downloadURL != nil {
+                        if let gcsURI = artifact.gcsURI, !gcsURI.isEmpty {
+                            // Cloud artifact: fetch a short-lived signed URL from the backend.
+                            DSButton("Download", variant: .ghost, size: .sm, mono: true) {
+                                Task {
+                                    if let url = await store.artifactDownloadURL(runID: run.id, artifactID: artifact.id) {
+                                        openURL(url)
+                                    }
+                                }
+                            }
+                        } else if artifact.downloadURL != nil {
                             DSButton("Open", variant: .ghost, size: .sm, mono: true) {
                                 if let url = artifact.downloadURL { openURL(url) }
                             }

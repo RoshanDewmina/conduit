@@ -34,6 +34,8 @@ func provisionRuntimeIfNeeded(agent *Agent) error {
 		return provisionGCPCloudRunAgent(agent)
 	case "lightsail":
 		return provisionLightsailAgent(agent)
+	case "fly":
+		return nil // no pre-provisioning for Fly; machines are created per-run by flyProvider.Launch
 	default:
 		return nil
 	}

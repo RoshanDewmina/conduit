@@ -23,6 +23,11 @@ public final class AgentStore {
     public var schedulesByAgent: [String: [AgentSchedule]] = [:]
     public var orgMembers: [OrgMember] = []
 
+    /// Backend-streamed log lines for cloud runs, keyed by runID. ssh-host runs
+    /// populate `AgentRun.logLines` on-device instead; `logLines(for:)` merges them.
+    public var runLogsByRun: [String: [RunLogLine]] = [:]
+    private var runLogCursor: [String: Int] = [:]
+
     private var apiClient: HostedAgentAPIClient?
     private let apiBaseURL: URL?
     private let runtime: SSHHostRuntime
@@ -124,17 +129,23 @@ public final class AgentStore {
         model: String,
         runtimeKind: HostedRuntimeKind,
         hostID: String,
-        command: String
+        command: String,
+        workspacePath: String? = nil,
+        region: String? = nil
     ) async throws -> HostedAgent {
         guard hasCloudEntitlement else {
             throw AgentStoreError.entitlementRequired
         }
+        let trimmedWorkspace = workspacePath?.trimmingCharacters(in: .whitespaces)
         let agent = HostedAgent(
             name: name,
             model: model,
             runtimeKind: runtimeKind,
             hostID: runtimeKind.requiresHostID ? hostID : (hostID.isEmpty ? nil : hostID),
-            command: command
+            command: command,
+            workspacePath: (trimmedWorkspace?.isEmpty ?? true) ? nil : trimmedWorkspace,
+            // Region only applies to cloud runtimes; ignore it for ssh-host.
+            region: runtimeKind.isCloud ? region : nil
         )
         refreshAPIClientAuth()
         if let apiClient, apiClient.isConfigured {
@@ -178,8 +189,9 @@ public final class AgentStore {
             run.approvals = localRun.approvals
         } else {
             run.status = .running
+            let regionSuffix = agent.region.map { " · region \($0)" } ?? ""
             run.logLines = [
-                RunLogLine(text: "Run registered on control plane (\(agent.runtimeKind.displayName)). Cloud execution is orchestrated server-side.")
+                RunLogLine(text: "Run registered on control plane (cloud\(regionSuffix)). Execution is orchestrated server-side; logs stream here as they arrive.")
             ]
         }
 
@@ -236,6 +248,153 @@ public final class AgentStore {
         }
     }
 
+    /// Registers an artifact's metadata against a run and appends it to the local
+    /// list. Bytes are stored out-of-band (SFTP on the ssh-host, GCS for cloud);
+    /// `storageRef` points at that location.
+    @discardableResult
+    public func createArtifact(
+        runID: String,
+        name: String,
+        storageRef: String,
+        contentType: String? = nil,
+        sizeBytes: Int64? = nil
+    ) async throws -> AgentArtifact {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        let artifact = try await apiClient.createArtifact(
+            runID: runID,
+            name: name,
+            storageRef: storageRef,
+            contentType: contentType,
+            sizeBytes: sizeBytes
+        )
+        var list = artifactsByRun[runID] ?? []
+        list.append(artifact)
+        artifactsByRun[runID] = list
+        return artifact
+    }
+
+    /// GET /runs/{id}/artifacts/{artifactId}/download — returns a signed download
+    /// URL for cloud (GCS-backed) artifacts. Returns nil when the backend is
+    /// unconfigured or the request fails.
+    public func artifactDownloadURL(runID: String, artifactID: String) async -> URL? {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else { return nil }
+        return try? await apiClient.artifactDownloadURL(runID: runID, artifactID: artifactID)
+    }
+
+    /// Deletes an artifact (DELETE) and drops it from the local list.
+    public func deleteArtifact(runID: String, artifactID: String) async throws {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        try await apiClient.deleteArtifact(runID: runID, artifactID: artifactID)
+        artifactsByRun[runID]?.removeAll { $0.id == artifactID }
+    }
+
+    // MARK: - ssh-host files (SFTP)
+
+    /// Lists files in `path` on the agent's ssh-host over SFTP.
+    public func listHostFiles(agent: HostedAgent, path: String) async throws -> [SFTPEntry] {
+        try await runtime.listFiles(agent: agent, path: path)
+    }
+
+    /// Reads a remote file's bytes over SFTP (clamped to `limitBytes`).
+    public func readHostFile(
+        agent: HostedAgent,
+        path: String,
+        limitBytes: Int = 10 * 1024 * 1024
+    ) async throws -> Data {
+        try await runtime.readFile(agent: agent, path: path, limitBytes: limitBytes)
+    }
+
+    // MARK: - ssh-host workspace (git)
+
+    /// Reads `git status` for the agent's configured workspace.
+    public func workspaceStatus(agent: HostedAgent) async throws -> GitStatus {
+        try await runtime.gitStatus(agent: agent)
+    }
+
+    /// Returns a unified diff for the workspace (optionally scoped to `path`).
+    public func workspaceDiff(agent: HostedAgent, path: String? = nil) async throws -> String {
+        try await runtime.gitDiff(agent: agent, path: path)
+    }
+
+    /// Creates and checks out a new branch in the workspace.
+    public func workspaceCreateBranch(agent: HostedAgent, name: String) async throws {
+        try await runtime.gitCreateBranch(agent: agent, name: name)
+    }
+
+    /// Stages all changes and commits them with `message`.
+    public func workspaceCommitAll(agent: HostedAgent, message: String) async throws {
+        try await runtime.gitCommitAll(agent: agent, message: message)
+    }
+
+    /// Pushes the current branch to origin.
+    public func workspacePush(agent: HostedAgent) async throws {
+        try await runtime.gitPush(agent: agent)
+    }
+
+    /// Opens a PR via `gh` and returns its URL.
+    @discardableResult
+    public func workspaceCreatePR(
+        agent: HostedAgent,
+        title: String,
+        body: String,
+        base: String? = nil
+    ) async throws -> String {
+        try await runtime.gitCreatePullRequest(agent: agent, title: title, body: body, base: base)
+    }
+
+    /// Registers a file produced on the agent's ssh-host as a run artifact: stats
+    /// the remote file over SFTP to capture its size, then records the metadata in
+    /// the control plane with `storageRef` pointing at the host path. The bytes
+    /// stay on the host (no re-upload) — `storageRef` is how the host fetches them.
+    @discardableResult
+    public func uploadHostArtifact(
+        runID: String,
+        agent: HostedAgent,
+        remotePath: String,
+        name: String? = nil
+    ) async throws -> AgentArtifact {
+        let entry = try await runtime.statFile(agent: agent, path: remotePath)
+        let artifactName = name ?? (remotePath as NSString).lastPathComponent
+        return try await createArtifact(
+            runID: runID,
+            name: artifactName,
+            storageRef: remotePath,
+            contentType: HostedAgentAPIClient.inferContentType(for: artifactName),
+            sizeBytes: entry.sizeBytes.map(Int64.init)
+        )
+    }
+
+    /// Fetches any new backend log lines for a (typically cloud) run since the
+    /// last cursor and appends them. No-op when the backend is unconfigured.
+    public func loadNewRunLogs(runID: String) async {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else { return }
+        let since = runLogCursor[runID] ?? 0
+        guard let page = try? await apiClient.fetchRunLogs(runID: runID, since: since) else { return }
+        if !page.lines.isEmpty {
+            var existing = runLogsByRun[runID] ?? []
+            existing.append(contentsOf: page.lines)
+            runLogsByRun[runID] = existing
+        }
+        runLogCursor[runID] = page.nextSince
+    }
+
+    /// Merged log source for a run: backend-streamed lines when present
+    /// (cloud runs), otherwise the on-device lines (ssh-host runs).
+    public func logLines(for runID: String, fallback: AgentRun) -> [RunLogLine] {
+        let backend = runLogsByRun[runID] ?? []
+        if !backend.isEmpty { return backend }
+        if selectedRun?.id == runID { return selectedRun?.logLines ?? fallback.logLines }
+        return fallback.logLines
+    }
+
     public func loadSchedules(agentID: String) async {
         refreshAPIClientAuth()
         guard let apiClient, apiClient.isConfigured else { return }
@@ -274,6 +433,53 @@ public final class AgentStore {
         await loadBillingSnapshot()
     }
 
+    /// Edits a schedule (PATCH). Only non-nil fields are changed; the returned
+    /// schedule (with any recomputed nextRunAt) replaces the local copy.
+    public func updateSchedule(
+        scheduleID: String,
+        agentID: String,
+        cronExpr: String? = nil,
+        command: String? = nil,
+        enabled: Bool? = nil
+    ) async throws {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        let updated = try await apiClient.updateSchedule(
+            scheduleID: scheduleID,
+            cronExpr: cronExpr,
+            command: command,
+            enabled: enabled
+        )
+        replaceSchedule(updated, agentID: agentID)
+    }
+
+    /// Convenience enable/disable toggle (PATCH enabled only).
+    public func toggleSchedule(scheduleID: String, agentID: String, enabled: Bool) async throws {
+        try await updateSchedule(scheduleID: scheduleID, agentID: agentID, enabled: enabled)
+    }
+
+    /// Deletes a schedule (DELETE) and drops it from the local list.
+    public func deleteSchedule(scheduleID: String, agentID: String) async throws {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        try await apiClient.deleteSchedule(scheduleID: scheduleID)
+        schedulesByAgent[agentID]?.removeAll { $0.id == scheduleID }
+    }
+
+    private func replaceSchedule(_ schedule: AgentSchedule, agentID: String) {
+        var list = schedulesByAgent[agentID] ?? []
+        if let idx = list.firstIndex(where: { $0.id == schedule.id }) {
+            list[idx] = schedule
+        } else {
+            list.append(schedule)
+        }
+        schedulesByAgent[agentID] = list
+    }
+
     // MARK: - Orgs / team
 
     /// Loads members for the entitlement's team org; no-op for individual customers.
@@ -305,16 +511,28 @@ public final class AgentStore {
 
     // MARK: - Run cancel
 
-    /// Cancels an active run. Only ssh-host runtime runs execute locally and can be
-    /// cancelled on-device; cloud runtimes have no control-plane cancel endpoint yet.
+    /// Cancels an active run. ssh-host runs execute on-device and are cancelled
+    /// locally; cloud runs post a cancel request the runner honors (M6).
     public func cancelRun(runID: String, agent: HostedAgent) async {
-        guard agent.runtimeKind == .sshHost else { return }
         do {
-            try await runtime.cancelRun(id: runID)
+            if agent.runtimeKind == .sshHost {
+                try await runtime.cancelRun(id: runID)
+            } else {
+                refreshAPIClientAuth()
+                guard let apiClient, apiClient.isConfigured else { return }
+                try await apiClient.requestCancel(runID: runID)
+            }
             await refreshRun(runID)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - ssh-host interactive tools
+
+    /// Streams output of an ad-hoc command on the agent's ssh-host. ssh-host only.
+    public func execStream(agent: HostedAgent, command: String) -> AsyncThrowingStream<String, any Error> {
+        runtime.execStream(agent: agent, command: command)
     }
 
     // MARK: - Billing portal

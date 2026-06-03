@@ -68,6 +68,7 @@ func main() {
 	registerUsageRoutes(mux)
 	registerArtifactRoutes(mux)
 	registerScheduleRoutes(mux)
+	registerRunLogRoutes(mux)
 	registerOrgRoutes(mux)
 
 	initEntitlementStore()
@@ -76,6 +77,7 @@ func main() {
 	initCreditsStore()
 	initArtifactsStore()
 	initSchedulesStore()
+	initRunLogsStore()
 	initGCPOrchestrationStore()
 	initOrgsStore()
 	startScheduleTicker()

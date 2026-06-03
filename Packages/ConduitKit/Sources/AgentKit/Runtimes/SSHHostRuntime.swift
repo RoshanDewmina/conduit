@@ -96,6 +96,188 @@ public actor SSHHostRuntime: HostedAgentRuntime {
         activeRuns[id] = active
     }
 
+    /// One-shot interactive command execution against the agent's ssh-host,
+    /// streaming combined stdout/stderr as text. Uses `SSHSession.execute` (a
+    /// command channel — not the block-terminal PTY) on a dedicated session that
+    /// is torn down when the stream ends or the consumer cancels. ssh-host only.
+    public nonisolated func execStream(agent: HostedAgent, command: String) -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    guard agent.runtimeKind == .sshHost else {
+                        throw HostedAgentRuntimeError.unsupportedRuntime(agent.runtimeKind)
+                    }
+                    guard let hostID = agent.hostID else {
+                        throw HostedAgentRuntimeError.hostNotFound("missing hostID")
+                    }
+                    let (session, _) = try await self.openSession(hostID: hostID)
+                    defer { Task { await session.disconnect() } }
+                    let stream = try await session.execute(command)
+                    for try await (data, _) in stream {
+                        try Task.checkCancellation()
+                        if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                            continuation.yield(text)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Resolves a host id, builds a session, and connects it (TOFU host-key
+    /// validation applies). Shared by exec/files/workspace helpers.
+    func openSession(hostID: String) async throws -> (SSHSession, ConduitCore.Host) {
+        guard let host = try await resolveHost(hostID) else {
+            throw HostedAgentRuntimeError.hostNotFound(hostID)
+        }
+        let session = makeSession(host)
+        let credential = try await credentials(host)
+        try await session.connect(credential: credential, hostKeyStore: hostKeyStore)
+        return (session, host)
+    }
+
+    // MARK: - SFTP file operations (ssh-host only)
+
+    /// Lists directory entries on the agent's ssh-host over SFTP.
+    public func listFiles(agent: HostedAgent, path: String) async throws -> [SFTPEntry] {
+        try await withSFTPClient(agent: agent) { try await $0.list(path: path) }
+    }
+
+    /// Reads up to `limitBytes` of a remote file over SFTP.
+    public func readFile(
+        agent: HostedAgent,
+        path: String,
+        limitBytes: Int = 10 * 1024 * 1024
+    ) async throws -> Data {
+        try await withSFTPClient(agent: agent) {
+            try await $0.read(path: path, limitBytes: limitBytes)
+        }
+    }
+
+    /// Stats a single remote file/dir over SFTP (used to size artifacts).
+    public func statFile(agent: HostedAgent, path: String) async throws -> SFTPEntry {
+        try await withSFTPClient(agent: agent) { try await $0.stat(path: path) }
+    }
+
+    /// Writes `data` to a remote path over SFTP, replacing any existing file.
+    public func writeFile(agent: HostedAgent, path: String, data: Data) async throws {
+        try await withSFTPClient(agent: agent) { try await $0.write(path: path, data: data) }
+    }
+
+    /// Uploads a local file to a remote path over SFTP.
+    public func uploadFile(agent: HostedAgent, localFileURL: URL, to remotePath: String) async throws {
+        try await withSFTPClient(agent: agent) {
+            try await $0.upload(localFileURL: localFileURL, to: remotePath)
+        }
+    }
+
+    /// Removes a remote file over SFTP.
+    public func deleteFile(agent: HostedAgent, path: String) async throws {
+        try await withSFTPClient(agent: agent) { try await $0.remove(path: path) }
+    }
+
+    /// Opens a session for the agent's ssh-host, builds an `SFTPClient`, runs
+    /// `body`, and tears the session down — mirroring `execStream`'s one-shot
+    /// lifecycle so no long-lived SFTP handle is held. ssh-host only.
+    private func withSFTPClient<T: Sendable>(
+        agent: HostedAgent,
+        _ body: (SFTPClient) async throws -> T
+    ) async throws -> T {
+        guard agent.runtimeKind == .sshHost else {
+            throw HostedAgentRuntimeError.unsupportedRuntime(agent.runtimeKind)
+        }
+        guard let hostID = agent.hostID else {
+            throw HostedAgentRuntimeError.hostNotFound("missing hostID")
+        }
+        let (session, _) = try await openSession(hostID: hostID)
+        defer { Task { await session.disconnect() } }
+        return try await body(SFTPClient(session: session))
+    }
+
+    // MARK: - Workspace git operations (ssh-host only)
+
+    /// Reads `git status` for the agent's workspace.
+    public func gitStatus(agent: HostedAgent, workdir: String? = nil) async throws -> GitStatus {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.status(workdir: dir)
+        }
+    }
+
+    /// Returns a unified diff for the workspace (optionally scoped to `path`).
+    public func gitDiff(
+        agent: HostedAgent,
+        workdir: String? = nil,
+        path: String? = nil,
+        staged: Bool = false
+    ) async throws -> String {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.diff(workdir: dir, path: path, staged: staged)
+        }
+    }
+
+    /// Creates and checks out a new branch in the workspace.
+    public func gitCreateBranch(agent: HostedAgent, workdir: String? = nil, name: String) async throws {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.createBranch(workdir: dir, name: name)
+        }
+    }
+
+    /// Stages all changes and commits them with `message`.
+    public func gitCommitAll(agent: HostedAgent, workdir: String? = nil, message: String) async throws {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.stage(workdir: dir)
+            try await git.commit(workdir: dir, message: message)
+        }
+    }
+
+    /// Pushes the current branch to origin (setting upstream).
+    public func gitPush(agent: HostedAgent, workdir: String? = nil) async throws {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.push(workdir: dir)
+        }
+    }
+
+    /// Opens a PR via `gh` and returns its URL.
+    public func gitCreatePullRequest(
+        agent: HostedAgent,
+        workdir: String? = nil,
+        title: String,
+        body: String,
+        base: String? = nil
+    ) async throws -> String {
+        try await withGitClient(agent: agent, workdir: workdir) { git, dir in
+            try await git.createPullRequest(workdir: dir, title: title, body: body, base: base)
+        }
+    }
+
+    /// Resolves the workspace directory (explicit `workdir` override →
+    /// `agent.workspacePath`), opens a one-shot session, builds a `GitClient`,
+    /// runs `body`, and tears the session down. Throws when no workspace path is
+    /// configured. ssh-host only.
+    private func withGitClient<T: Sendable>(
+        agent: HostedAgent,
+        workdir: String?,
+        _ body: (GitClient, String) async throws -> T
+    ) async throws -> T {
+        guard agent.runtimeKind == .sshHost else {
+            throw HostedAgentRuntimeError.unsupportedRuntime(agent.runtimeKind)
+        }
+        guard let hostID = agent.hostID else {
+            throw HostedAgentRuntimeError.hostNotFound("missing hostID")
+        }
+        let resolved = workdir ?? agent.workspacePath
+        guard let dir = resolved, !dir.isEmpty else {
+            throw HostedAgentRuntimeError.workspaceNotConfigured
+        }
+        let (session, _) = try await openSession(hostID: hostID)
+        defer { Task { await session.disconnect() } }
+        return try await body(GitClient(session: session), dir)
+    }
+
     public func respondToApproval(runID: String, approvalID: String, approved: Bool) async throws {
         guard let active = activeRuns[runID], let channel = active.channel else {
             throw HostedAgentRuntimeError.runNotFound(runID)

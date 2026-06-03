@@ -16,6 +16,8 @@ public enum HostedAgentRuntimeError: Error, Sendable, Equatable {
     case hostNotFound(String)
     case runNotFound(String)
     case notConnected
+    /// Raised by workspace git operations when the agent has no workspacePath set.
+    case workspaceNotConfigured
 }
 
 public enum AgentStoreError: Error, Sendable, Equatable {
@@ -69,7 +71,13 @@ public struct HostedAgentAPIClient: Sendable {
         let body = CreateAgentBody(
             name: agent.name,
             runtime: Self.mapRuntime(agent.runtimeKind),
-            config: .init(model: agent.model, hostID: agent.hostID ?? "", command: agent.command ?? "")
+            config: .init(
+                model: agent.model,
+                hostID: agent.hostID ?? "",
+                command: agent.command ?? "",
+                workspacePath: agent.workspacePath,
+                region: agent.region
+            )
         )
         let created: BackendAgent = try await post("agents", body: body)
         return mapAgent(created)
@@ -132,6 +140,57 @@ public struct HostedAgentAPIClient: Sendable {
         return response.artifacts.map(Self.mapArtifact)
     }
 
+    /// POST /runs/{id}/artifacts — registers artifact metadata (bytes are stored
+    /// out-of-band: on the ssh-host via SFTP, or in GCS for cloud runs).
+    public func createArtifact(
+        runID: String,
+        name: String,
+        storageRef: String,
+        contentType: String? = nil,
+        sizeBytes: Int64? = nil
+    ) async throws -> AgentArtifact {
+        let body = CreateArtifactBody(
+            name: name,
+            storageRef: storageRef,
+            contentType: contentType,
+            sizeBytes: sizeBytes
+        )
+        let created: BackendArtifact = try await post("runs/\(runID)/artifacts", body: body)
+        return Self.mapArtifact(created)
+    }
+
+    /// DELETE /runs/{id}/artifacts/{artifactId}.
+    public func deleteArtifact(runID: String, artifactID: String) async throws {
+        try await delete("runs/\(runID)/artifacts/\(artifactID)")
+    }
+
+    /// GET /runs/{id}/artifacts/{artifactId}/download — returns a short-lived
+    /// signed download URL for cloud (GCS-backed) artifacts. ssh-host artifacts
+    /// have no signed URL; use SFTP instead.
+    public func artifactDownloadURL(runID: String, artifactID: String) async throws -> URL {
+        let response: ArtifactDownloadResponse = try await get("runs/\(runID)/artifacts/\(artifactID)/download")
+        guard let url = URL(string: response.url) else {
+            throw ConduitError.invalidResponse(detail: "artifact download endpoint returned an invalid URL")
+        }
+        return url
+    }
+
+    // MARK: Run logs / control
+
+    /// GET /runs/{id}/logs?since=N — incremental tail of a run's output.
+    public func fetchRunLogs(runID: String, since: Int) async throws -> RunLogsPage {
+        let response: RunLogsResponse = try await get("runs/\(runID)/logs?since=\(since)")
+        return RunLogsPage(
+            lines: response.lines.map(Self.mapLogLine),
+            nextSince: response.nextSince
+        )
+    }
+
+    /// POST /runs/{id}/cancel — sets the cancel flag; cloud runners honor it.
+    public func requestCancel(runID: String) async throws {
+        let _: OKResponse = try await post("runs/\(runID)/cancel", body: EmptyBody())
+    }
+
     // MARK: Schedules
 
     public func listSchedules(agentID: String) async throws -> [AgentSchedule] {
@@ -152,6 +211,23 @@ public struct HostedAgentAPIClient: Sendable {
             body: EmptyBody()
         )
         return Self.mapRun(response.run)
+    }
+
+    /// PATCH /schedules/{id} — only non-nil fields are applied server-side.
+    public func updateSchedule(
+        scheduleID: String,
+        cronExpr: String? = nil,
+        command: String? = nil,
+        enabled: Bool? = nil
+    ) async throws -> AgentSchedule {
+        let body = UpdateScheduleBody(cronExpr: cronExpr, command: command, enabled: enabled)
+        let updated: BackendSchedule = try await patch("schedules/\(scheduleID)", body: body)
+        return Self.mapSchedule(updated)
+    }
+
+    /// DELETE /schedules/{id} — 204 No Content on success.
+    public func deleteSchedule(scheduleID: String) async throws {
+        try await delete("schedules/\(scheduleID)")
     }
 
     // MARK: Orgs
@@ -189,6 +265,8 @@ public struct HostedAgentAPIClient: Sendable {
             runtimeKind: mapRuntimeKind(backend.runtime),
             hostID: backend.config?.hostID,
             command: backend.config?.command,
+            workspacePath: backend.config?.workspacePath,
+            region: backend.config?.region,
             createdAt: parseRFC3339(backend.createdAt) ?? .now,
             updatedAt: parseRFC3339(backend.updatedAt) ?? .now
         )
@@ -237,6 +315,32 @@ public struct HostedAgentAPIClient: Sendable {
         )
     }
 
+    /// Best-effort MIME type from a filename extension; nil when unknown so the
+    /// backend can fall back to `application/octet-stream`. Used when registering
+    /// ssh-host artifacts whose bytes live on the remote host.
+    public static func inferContentType(for filename: String) -> String? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+        switch ext {
+        case "txt", "log":  return "text/plain"
+        case "json":        return "application/json"
+        case "md":          return "text/markdown"
+        case "csv":         return "text/csv"
+        case "html", "htm": return "text/html"
+        case "xml":         return "application/xml"
+        case "yaml", "yml": return "application/yaml"
+        case "pdf":         return "application/pdf"
+        case "zip":         return "application/zip"
+        case "tar":         return "application/x-tar"
+        case "gz", "tgz":   return "application/gzip"
+        case "png":         return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "gif":         return "image/gif"
+        case "svg":         return "image/svg+xml"
+        default:            return nil
+        }
+    }
+
     static func mapSchedule(_ backend: BackendSchedule) -> AgentSchedule {
         AgentSchedule(
             id: backend.id,
@@ -246,6 +350,14 @@ public struct HostedAgentAPIClient: Sendable {
             enabled: backend.enabled,
             nextRunAt: parseRFC3339(backend.nextRunAt),
             lastRunAt: parseRFC3339(backend.lastRunAt)
+        )
+    }
+
+    static func mapLogLine(_ backend: BackendLogLine) -> RunLogLine {
+        RunLogLine(
+            id: "log_\(backend.seq)",
+            timestamp: parseRFC3339(backend.ts) ?? .now,
+            text: backend.text
         )
     }
 
@@ -289,6 +401,8 @@ public struct HostedAgentAPIClient: Sendable {
         let model: String?
         let hostID: String?
         let command: String?
+        let workspacePath: String?
+        let region: String?
     }
 
     struct BackendRun: Decodable, Equatable {
@@ -311,6 +425,8 @@ public struct HostedAgentAPIClient: Sendable {
             let model: String
             let hostID: String
             let command: String
+            let workspacePath: String?
+            let region: String?
         }
     }
 
@@ -329,6 +445,13 @@ public struct HostedAgentAPIClient: Sendable {
     }
 
     private struct ArtifactsListResponse: Decodable { let artifacts: [BackendArtifact] }
+
+    private struct CreateArtifactBody: Encodable {
+        let name: String
+        let storageRef: String
+        let contentType: String?
+        let sizeBytes: Int64?
+    }
     private struct SchedulesListResponse: Decodable { let schedules: [BackendSchedule] }
 
     struct BackendArtifact: Decodable, Equatable {
@@ -358,7 +481,31 @@ public struct HostedAgentAPIClient: Sendable {
         let enabled: Bool
     }
 
+    /// Optional members; synthesized `encodeIfPresent` omits nil so the PATCH
+    /// only carries fields the caller actually wants to change.
+    private struct UpdateScheduleBody: Encodable {
+        let cronExpr: String?
+        let command: String?
+        let enabled: Bool?
+    }
+
     private struct EmptyBody: Encodable {}
+
+    private struct OKResponse: Decodable { let ok: Bool? }
+
+    private struct ArtifactDownloadResponse: Decodable { let url: String }
+
+    private struct RunLogsResponse: Decodable {
+        let lines: [BackendLogLine]
+        let nextSince: Int
+    }
+
+    struct BackendLogLine: Decodable, Equatable {
+        let seq: Int
+        let stream: String?
+        let text: String
+        let ts: String?
+    }
 
     private struct TriggerScheduleResponse: Decodable {
         let run: BackendRun
@@ -411,6 +558,29 @@ public struct HostedAgentAPIClient: Sendable {
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
         return try decoder.decode(T.self, from: data)
+    }
+
+    private func patch<B: Encodable, T: Decodable>(_ path: String, body: B, as type: T.Type = T.self) async throws -> T {
+        let url = url(for: path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try encoder.encode(body)
+        applyAuthHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    /// DELETE with no response body (expects 2xx, typically 204).
+    private func delete(_ path: String) async throws {
+        let url = url(for: path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        applyAuthHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data)
     }
 
     private func url(for path: String) -> URL {

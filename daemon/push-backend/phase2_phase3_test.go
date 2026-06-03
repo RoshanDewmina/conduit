@@ -166,6 +166,212 @@ func TestSchedulesAndTrigger(t *testing.T) {
 	}
 }
 
+func TestScheduleUpdateAndDelete(t *testing.T) {
+	setupTestStores(t)
+	seedActiveEntitlement(t, "cus_schededit", "schededit-token")
+	tok := clientTokenFor(t, "cus_schededit")
+
+	agentMux := http.NewServeMux()
+	registerAgentRoutes(agentMux)
+	createReq := httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(`{"name":"Edit Bot","runtime":"ssh-host"}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", bearerHeader(tok))
+	createRec := httptest.NewRecorder()
+	agentMux.ServeHTTP(createRec, createReq)
+	var agent Agent
+	_ = json.Unmarshal(createRec.Body.Bytes(), &agent)
+
+	schedMux := http.NewServeMux()
+	registerScheduleRoutes(schedMux)
+	req := httptest.NewRequest(http.MethodPost, "/agents/"+agent.ID+"/schedules", bytes.NewBufferString(`{"cronExpr":"@hourly","command":"echo a"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec := httptest.NewRecorder()
+	schedMux.ServeHTTP(rec, req)
+	var schedule Schedule
+	_ = json.Unmarshal(rec.Body.Bytes(), &schedule)
+	originalNext := schedule.NextRunAt
+
+	// PATCH: change cron to @daily, disable, change command.
+	patchBody := `{"cronExpr":"@daily","command":"echo b","enabled":false}`
+	req = httptest.NewRequest(http.MethodPatch, "/schedules/"+schedule.ID, bytes.NewBufferString(patchBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	schedMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch schedule status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var updated Schedule
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.CronExpr != "@daily" || updated.Command != "echo b" || updated.Enabled {
+		t.Fatalf("patch did not apply: %+v", updated)
+	}
+	if updated.NextRunAt == originalNext {
+		t.Fatalf("nextRunAt should recompute on cron change (was %s)", originalNext)
+	}
+
+	// Invalid cron rejected.
+	req = httptest.NewRequest(http.MethodPatch, "/schedules/"+schedule.ID, bytes.NewBufferString(`{"cronExpr":"0 * * * *"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	schedMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported cron, got %d", rec.Code)
+	}
+
+	// DELETE.
+	req = httptest.NewRequest(http.MethodDelete, "/schedules/"+schedule.ID, nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	schedMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete schedule status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Gone now.
+	req = httptest.NewRequest(http.MethodDelete, "/schedules/"+schedule.ID, nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	schedMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 deleting missing schedule, got %d", rec.Code)
+	}
+}
+
+func TestRunLogsAndStatusLifecycle(t *testing.T) {
+	setupTestStores(t)
+	seedActiveEntitlement(t, "cus_logs", "logs-token")
+	tok := clientTokenFor(t, "cus_logs")
+
+	agentMux := http.NewServeMux()
+	registerAgentRoutes(agentMux)
+	createReq := httptest.NewRequest(http.MethodPost, "/agents", bytes.NewBufferString(`{"name":"Log Bot","runtime":"gcp_cloud_run"}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", bearerHeader(tok))
+	createRec := httptest.NewRecorder()
+	agentMux.ServeHTTP(createRec, createReq)
+	var agent Agent
+	_ = json.Unmarshal(createRec.Body.Bytes(), &agent)
+
+	runReq := httptest.NewRequest(http.MethodPost, "/runs", bytes.NewBufferString(`{"agentId":"`+agent.ID+`"}`))
+	runReq.Header.Set("Content-Type", "application/json")
+	runReq.Header.Set("Authorization", bearerHeader(tok))
+	runRec := httptest.NewRecorder()
+	agentMux.ServeHTTP(runRec, runReq)
+	var run AgentRun
+	_ = json.Unmarshal(runRec.Body.Bytes(), &run)
+
+	// Mint a runner token (normally done at dispatch).
+	runnerTok, err := mintRunToken(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logMux := http.NewServeMux()
+	registerRunLogRoutes(logMux)
+
+	// Runner appends logs.
+	appendBody := `{"lines":[{"stream":"stdout","text":"hello"},{"stream":"stderr","text":"warn"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/runs/"+run.ID+"/logs", bytes.NewBufferString(appendBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(runnerTok))
+	rec := httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("append logs status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Wrong token rejected.
+	req = httptest.NewRequest(http.MethodPost, "/runs/"+run.ID+"/logs", bytes.NewBufferString(appendBody))
+	req.Header.Set("Authorization", bearerHeader("rt_bogus"))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad runner token, got %d", rec.Code)
+	}
+
+	// Client tails logs.
+	req = httptest.NewRequest(http.MethodGet, "/runs/"+run.ID+"/logs?since=0", nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get logs status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var logsResp struct {
+		Lines     []RunLogEntry `json:"lines"`
+		NextSince int           `json:"nextSince"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &logsResp); err != nil {
+		t.Fatal(err)
+	}
+	if len(logsResp.Lines) != 2 || logsResp.NextSince != 2 {
+		t.Fatalf("unexpected logs: %+v", logsResp)
+	}
+
+	// Incremental tail returns nothing new.
+	req = httptest.NewRequest(http.MethodGet, "/runs/"+run.ID+"/logs?since=2", nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	_ = json.Unmarshal(rec.Body.Bytes(), &logsResp)
+	if len(logsResp.Lines) != 0 {
+		t.Fatalf("expected no new lines, got %d", len(logsResp.Lines))
+	}
+
+	// Client requests cancel.
+	req = httptest.NewRequest(http.MethodPost, "/runs/"+run.ID+"/cancel", nil)
+	req.Header.Set("Authorization", bearerHeader(tok))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel status=%d", rec.Code)
+	}
+
+	// Runner sees the cancel request via control endpoint.
+	req = httptest.NewRequest(http.MethodGet, "/runs/"+run.ID+"/control", nil)
+	req.Header.Set("Authorization", bearerHeader(runnerTok))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	var control struct {
+		Status          string `json:"status"`
+		CancelRequested bool   `json:"cancelRequested"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &control)
+	if !control.CancelRequested {
+		t.Fatalf("expected cancelRequested true, got %+v", control)
+	}
+
+	// Runner patches terminal status + exit code.
+	patchBody := `{"status":"succeeded","exitCode":0}`
+	req = httptest.NewRequest(http.MethodPatch, "/runs/"+run.ID, bytes.NewBufferString(patchBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerHeader(runnerTok))
+	rec = httptest.NewRecorder()
+	logMux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch run status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Confirm the run reflects the patch (completedAt auto-set on terminal).
+	getReq := httptest.NewRequest(http.MethodGet, "/runs/"+run.ID, nil)
+	getReq.Header.Set("Authorization", bearerHeader(tok))
+	getRec := httptest.NewRecorder()
+	agentMux.ServeHTTP(getRec, getReq)
+	var finalRun AgentRun
+	_ = json.Unmarshal(getRec.Body.Bytes(), &finalRun)
+	if finalRun.Status != "succeeded" || finalRun.ExitCode == nil || *finalRun.ExitCode != 0 {
+		t.Fatalf("run not patched: %+v", finalRun)
+	}
+	if finalRun.CompletedAt == "" {
+		t.Fatal("expected completedAt to be auto-set on terminal status")
+	}
+}
+
 func TestGCPCloudRunAgentCreate(t *testing.T) {
 	setupTestStores(t)
 	seedActiveEntitlement(t, "cus_gcp", "gcp-token")
@@ -344,8 +550,10 @@ func TestPhase2Phase3RoutesNot404(t *testing.T) {
 	registerBillingRoutes(mux)
 	registerCreditsRoutes(mux)
 	registerQuotaRoutes(mux)
+	registerAgentRoutes(mux)
 	registerArtifactRoutes(mux)
 	registerScheduleRoutes(mux)
+	registerRunLogRoutes(mux)
 	registerOrgRoutes(mux)
 
 	routes := []struct {
@@ -355,6 +563,11 @@ func TestPhase2Phase3RoutesNot404(t *testing.T) {
 		{http.MethodGet, "/billing/credits"},
 		{http.MethodGet, "/billing/quota"},
 		{http.MethodGet, "/runs/run_missing/artifacts"},
+		{http.MethodGet, "/runs/run_missing/logs"},
+		{http.MethodPost, "/runs/run_missing/cancel"},
+		{http.MethodGet, "/runs/run_missing/control"},
+		{http.MethodPatch, "/schedules/sched_missing"},
+		{http.MethodDelete, "/schedules/sched_missing"},
 		{http.MethodGet, "/agents/agent_missing/schedules"},
 		{http.MethodPost, "/schedules/sched_missing/trigger"},
 		{http.MethodGet, "/orgs/org_missing/members"},
