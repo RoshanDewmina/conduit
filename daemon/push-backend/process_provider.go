@@ -18,12 +18,16 @@ func (p processProvider) Launch(agent *Agent, run *AgentRun, env RunnerEnv) (str
 		runnerPath = "agent-runner"
 	}
 	cmd := exec.Command(runnerPath)
+	// The runner requires CONDUIT_COMMAND_ARGV (a JSON array) and exits if it is
+	// missing — it never parses CONDUIT_COMMAND. Send the same ARGV form the cloud
+	// providers use so the local e2e path matches production exactly.
 	cmd.Env = append(os.Environ(),
 		"CONDUIT_RUN_ID="+env.RunID,
 		"CONDUIT_RUNNER_TOKEN="+env.RunnerToken,
 		"CONDUIT_CONTROL_PLANE_URL="+env.ControlPlaneURL,
-		"CONDUIT_COMMAND="+env.Command,
+		"CONDUIT_COMMAND_ARGV="+buildCommandArgv(env.Command),
 		"CONDUIT_MODEL="+env.Model,
+		"CONDUIT_OPENROUTER_KEY="+env.OpenRouterKey,
 		"CONDUIT_AGENT_ID="+env.AgentID,
 	)
 	if err := cmd.Start(); err != nil {

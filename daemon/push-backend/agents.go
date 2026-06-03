@@ -37,9 +37,14 @@ type AgentRun struct {
 	ExitCode    *int   `json:"exitCode,omitempty"`
 	// CancelRequested is set by POST /runs/{id}/cancel; cloud runners poll it
 	// (GET /runs/{id}/control) and terminate. Never carries auth material.
-	CancelRequested bool   `json:"cancelRequested,omitempty"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
+	CancelRequested bool `json:"cancelRequested,omitempty"`
+	// Runtime + ProviderHandle are stamped at dispatch so cancel/reaper can resolve
+	// the provider and hard-terminate the underlying execution (Job exec / instance /
+	// machine). ProviderHandle carries no auth material.
+	Runtime        string `json:"runtime,omitempty"`
+	ProviderHandle string `json:"providerHandle,omitempty"`
+	CreatedAt      string `json:"createdAt"`
+	UpdatedAt      string `json:"updatedAt"`
 }
 
 type createAgentRequest struct {
@@ -89,6 +94,7 @@ func registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /agents", handleCreateAgent)
 	mux.HandleFunc("GET /agents", handleListAgents)
 	mux.HandleFunc("GET /agents/{id}", handleGetAgent)
+	mux.HandleFunc("DELETE /agents/{id}", handleDeleteAgent)
 	mux.HandleFunc("POST /runs", handleCreateRun)
 	mux.HandleFunc("GET /runs/{id}", handleGetRun)
 	mux.HandleFunc("GET /runs", handleListRuns)
@@ -198,6 +204,54 @@ func handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Error(w, "agent not found", http.StatusNotFound)
+}
+
+// handleDeleteAgent removes an agent's control-plane record and best-effort tears
+// down its provider resources (e.g. the GCP Cloud Run Job). Refuses while the agent
+// has a non-terminal run so we never orphan a live cloud execution. Terminal runs
+// are intentionally retained for audit; only the agent record is removed.
+func handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	ent, err := resolveEntitlementFromBearer(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	id := r.PathValue("id")
+
+	controlPlane.mu.Lock()
+	idx := -1
+	for i := range controlPlane.data.Agents {
+		if controlPlane.data.Agents[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 || !resourceVisibleToEntitlement(ent, controlPlane.data.Agents[idx].CustomerID, controlPlane.data.Agents[idx].OrgID) {
+		controlPlane.mu.Unlock()
+		http.Error(w, "agent not found", http.StatusNotFound)
+		return
+	}
+	for _, run := range controlPlane.data.Runs {
+		if run.AgentID == id && !isTerminalRunStatus(run.Status) {
+			controlPlane.mu.Unlock()
+			http.Error(w, "agent has active runs; cancel them before deleting", http.StatusConflict)
+			return
+		}
+	}
+	agent := controlPlane.data.Agents[idx]
+	controlPlane.data.Agents = append(controlPlane.data.Agents[:idx], controlPlane.data.Agents[idx+1:]...)
+	err = persistControlPlane()
+	controlPlane.mu.Unlock()
+	if err != nil {
+		http.Error(w, "failed to persist deletion", http.StatusInternalServerError)
+		return
+	}
+
+	// Best-effort provider teardown outside the lock — never blocks the API response.
+	if tdErr := teardownRuntimeIfNeeded(&agent); tdErr != nil {
+		log.Printf("agent %s deleted; runtime teardown failed (manual cleanup may be needed): %v", id, tdErr)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": id})
 }
 
 func handleCreateRun(w http.ResponseWriter, r *http.Request) {

@@ -81,6 +81,7 @@ func main() {
 	initGCPOrchestrationStore()
 	initOrgsStore()
 	startScheduleTicker()
+	startRunReaper()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -192,8 +193,8 @@ func pushRunComplete(deviceToken string, ev runCompleteEvent) error {
 
 	payload := map[string]any{
 		"aps": map[string]any{
-			"alert": map[string]string{"title": title, "body": body},
-			"sound": "default",
+			"alert":    map[string]string{"title": title, "body": body},
+			"sound":    "default",
 			"category": "run-complete",
 		},
 		"sessionId": ev.SessionID,

@@ -74,6 +74,7 @@ func dispatchRun(agent *Agent, run *AgentRun) {
 		ControlPlaneURL: baseURL,
 		Command:         resolveAgentCommand(agent, run),
 		Model:           agentConfigString(agent, "model"),
+		OpenRouterKey:   openRouterKeyForCustomer(agent.CustomerID),
 		AgentID:         agent.ID,
 	}
 	handle, err := prov.Launch(agent, run, env)
@@ -81,9 +82,13 @@ func dispatchRun(agent *Agent, run *AgentRun) {
 		failRun(run.ID, "failed to launch cloud runtime: "+err.Error())
 		return
 	}
-	_ = handle
+	// Persist runtime + provider handle so cancel/reaper can hard-terminate the
+	// underlying execution later (the cooperative cancel poll is the primary path;
+	// this is the backstop for a runner that hangs without polling).
 	updateRunFields(run.ID, func(r *AgentRun) {
 		r.Status = "running"
+		r.Runtime = normalizeRuntime(agent.Runtime)
+		r.ProviderHandle = handle
 	})
 }
 

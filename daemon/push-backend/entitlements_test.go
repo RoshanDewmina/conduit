@@ -36,7 +36,9 @@ func setupTestStores(t *testing.T) {
 	setRunTokensPath(filepath.Join(dir, "run-tokens.json"))
 	setGCPOrchestrationPath(filepath.Join(dir, "gcp-orchestrations.json"))
 	setOrgsPath(filepath.Join(dir, "orgs.json"))
+	setOpenRouterKeysPath(filepath.Join(dir, "openrouter-keys.json"))
 	resetOpenRouterKeyCache()
+	resetOpenRouterKeysForTests()
 	t.Setenv("OPENROUTER_PROVISIONING_KEY", "")
 	setOpenRouterClient(&openRouterClient{
 		baseURL:         "https://openrouter.ai",

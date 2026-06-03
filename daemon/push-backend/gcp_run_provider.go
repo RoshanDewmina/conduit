@@ -40,6 +40,7 @@ func (p gcpCloudRunProvider) Launch(agent *Agent, run *AgentRun, env RunnerEnv) 
 		{Name: "CONDUIT_CONTROL_PLANE_URL", Value: env.ControlPlaneURL},
 		{Name: "CONDUIT_COMMAND_ARGV", Value: buildCommandArgv(env.Command)},
 		{Name: "CONDUIT_MODEL", Value: env.Model},
+		{Name: "CONDUIT_OPENROUTER_KEY", Value: env.OpenRouterKey},
 		{Name: "CONDUIT_AGENT_ID", Value: env.AgentID},
 	}
 

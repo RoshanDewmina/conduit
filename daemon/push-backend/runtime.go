@@ -41,6 +41,18 @@ func provisionRuntimeIfNeeded(agent *Agent) error {
 	}
 }
 
+// teardownRuntimeIfNeeded best-effort releases provider resources provisioned for
+// an agent (currently the GCP Cloud Run Job). Best-effort: callers log and proceed
+// so a provider hiccup never blocks deleting the control-plane record.
+func teardownRuntimeIfNeeded(agent *Agent) error {
+	switch normalizeRuntime(agent.Runtime) {
+	case "gcp_cloud_run":
+		return deleteCloudRunJobIfConfigured(sanitizeJobName(agent.Name, agent.ID))
+	default:
+		return nil // lightsail/fly/ssh-host have no pre-provisioned per-agent resource
+	}
+}
+
 func provisionLightsailAgent(agent *Agent) error {
 	// MVP: accept lightsail runtime and record provisioning metadata for iOS
 	// LightsailProvisioner callbacks; no AWS API calls from push-backend yet.

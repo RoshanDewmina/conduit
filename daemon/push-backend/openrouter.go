@@ -15,16 +15,16 @@ import (
 )
 
 type openRouterKeyCreateRequest struct {
-	Name        string  `json:"name"`
-	Limit       float64 `json:"limit"`
-	LimitReset  string  `json:"limit_reset"`
-	Disabled    bool    `json:"disabled,omitempty"`
+	Name       string  `json:"name"`
+	Limit      float64 `json:"limit"`
+	LimitReset string  `json:"limit_reset"`
+	Disabled   bool    `json:"disabled,omitempty"`
 }
 
 type openRouterKeyCreateResponse struct {
 	Data struct {
-		Hash  string `json:"hash"`
-		Key   string `json:"key"`
+		Hash  string  `json:"hash"`
+		Key   string  `json:"key"`
 		Limit float64 `json:"limit"`
 	} `json:"data"`
 	Key string `json:"key"`
@@ -140,7 +140,71 @@ func ensureOpenRouterSubKey(ent subscriptionEntitlement) (hash string, key strin
 	customerKeyHashes.Lock()
 	customerKeyHashes.byCustomer[ent.CustomerID] = hash
 	customerKeyHashes.Unlock()
+	// Persist the actual sub-key: OpenRouter only vends it once, but the cloud
+	// runner needs it at dispatch time (which can be much later, after a process
+	// restart). Without this the runner launches with no OPENROUTER_API_KEY and
+	// the agent command fails auth.
+	persistOpenRouterKey(ent.CustomerID, created.Key)
 	return hash, created.Key, nil
+}
+
+// openRouterKeysStore persists customerID -> provisioned sub-key. The sub-key is
+// rate/spend-capped per customer; it is injected into the cloud runner env at
+// dispatch as CONDUIT_OPENROUTER_KEY. Stored alongside the other control-plane
+// JSON files. NOTE (security follow-up): this is plaintext-at-rest, consistent
+// with the existing MVP store posture (entitlement client tokens, runner tokens);
+// migrate all of these to a secrets manager / encrypted-at-rest before GA.
+var openRouterKeysStore = struct {
+	mu   sync.Mutex
+	path string
+}{
+	path: dataFilePath("OPENROUTER_KEYS_FILE", "conduit-openrouter-keys.json"),
+}
+
+type openRouterKeysData struct {
+	Keys map[string]string `json:"keys"`
+}
+
+func persistOpenRouterKey(customerID, key string) {
+	if customerID == "" || key == "" {
+		return
+	}
+	openRouterKeysStore.mu.Lock()
+	defer openRouterKeysStore.mu.Unlock()
+	var data openRouterKeysData
+	_ = loadJSONFile(openRouterKeysStore.path, &data)
+	if data.Keys == nil {
+		data.Keys = map[string]string{}
+	}
+	data.Keys[customerID] = key
+	if err := saveJSONFile(openRouterKeysStore.path, data); err != nil {
+		// Non-fatal: the key is still returned to the immediate caller; only the
+		// later cloud-dispatch lookup would miss. Log so it's diagnosable.
+		fmt.Printf("openrouter: persist key for %s failed: %v\n", customerID, err)
+	}
+}
+
+// openRouterKeyForCustomer returns the persisted sub-key for a customer, or ""
+// when none has been provisioned (e.g. dev fallback with no provisioning key).
+func openRouterKeyForCustomer(customerID string) string {
+	if customerID == "" {
+		return ""
+	}
+	openRouterKeysStore.mu.Lock()
+	defer openRouterKeysStore.mu.Unlock()
+	var data openRouterKeysData
+	if err := loadJSONFile(openRouterKeysStore.path, &data); err != nil {
+		return ""
+	}
+	return data.Keys[customerID]
+}
+
+func setOpenRouterKeysPath(path string) { openRouterKeysStore.path = path }
+
+func resetOpenRouterKeysForTests() {
+	openRouterKeysStore.mu.Lock()
+	defer openRouterKeysStore.mu.Unlock()
+	_ = saveJSONFile(openRouterKeysStore.path, openRouterKeysData{})
 }
 
 func (c *openRouterClient) createSubKey(name string, limit float64, limitReset string) (openRouterKeyCreateResponse, error) {

@@ -290,9 +290,19 @@ func handleCancelRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
 	}
-	if !updateRunFields(id, func(run *AgentRun) { run.CancelRequested = true }) {
+	var handle, runtime string
+	if !updateRunFields(id, func(run *AgentRun) {
+		run.CancelRequested = true
+		handle, runtime = run.ProviderHandle, run.Runtime
+	}) {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
+	}
+	// Cooperative cancel (the runner polls GET /control) is the primary path; this
+	// best-effort hard-terminate is the backstop for a runner that hangs without
+	// polling. Fire-and-forget so the HTTP response isn't blocked on a cloud call.
+	if handle != "" {
+		go hardCancel(runtime, handle)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

@@ -15,16 +15,16 @@ import (
 )
 
 type GCPJobOrchestration struct {
-	ID        string          `json:"id"`
-	AgentID   string          `json:"agentId"`
-	CustomerID string         `json:"customerId"`
-	Project   string          `json:"project"`
-	Region    string          `json:"region"`
-	JobName   string          `json:"jobName"`
-	Image     string          `json:"image,omitempty"`
-	Spec      json.RawMessage `json:"spec"`
-	Status    string          `json:"status"`
-	CreatedAt string          `json:"createdAt"`
+	ID         string          `json:"id"`
+	AgentID    string          `json:"agentId"`
+	CustomerID string          `json:"customerId"`
+	Project    string          `json:"project"`
+	Region     string          `json:"region"`
+	JobName    string          `json:"jobName"`
+	Image      string          `json:"image,omitempty"`
+	Spec       json.RawMessage `json:"spec"`
+	Status     string          `json:"status"`
+	CreatedAt  string          `json:"createdAt"`
 }
 
 type gcpOrchestrationData struct {
@@ -218,6 +218,30 @@ func submitCloudRunJobIfConfigured(spec map[string]any) error {
 	if err != nil && !strings.Contains(err.Error(), "409") {
 		// 409 = already exists — idempotent, treat as success
 		return fmt.Errorf("create Cloud Run job: %w", err)
+	}
+	return nil
+}
+
+// deleteCloudRunJobIfConfigured best-effort deletes the per-agent Cloud Run Job.
+// No-op unless GCP is configured (GCP_PROJECT set). A missing job (404) is treated
+// as success so teardown is idempotent. Never blocks agent deletion on GCP errors —
+// the caller logs and proceeds.
+func deleteCloudRunJobIfConfigured(jobName string) error {
+	if !gcpCloudRunEnabled() || jobName == "" {
+		return nil
+	}
+	project := gcpProject()
+	region := gcpRegion()
+
+	ctx := context.Background()
+	svc, err := runv2.NewService(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
+	if err != nil {
+		return fmt.Errorf("create Cloud Run service: %w", err)
+	}
+	name := fmt.Sprintf("projects/%s/locations/%s/jobs/%s", project, region, jobName)
+	_, err = svc.Projects.Locations.Jobs.Delete(name).Context(ctx).Do()
+	if err != nil && !strings.Contains(err.Error(), "404") {
+		return fmt.Errorf("delete Cloud Run job %s: %w", name, err)
 	}
 	return nil
 }

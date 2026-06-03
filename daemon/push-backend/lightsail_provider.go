@@ -88,6 +88,7 @@ export CONDUIT_RUNNER_TOKEN=$(echo '%s' | base64 -d)
 export CONDUIT_CONTROL_PLANE_URL=$(echo '%s' | base64 -d)
 export CONDUIT_COMMAND_ARGV=$(echo '%s' | base64 -d)
 export CONDUIT_MODEL=$(echo '%s' | base64 -d)
+export CONDUIT_OPENROUTER_KEY=$(echo '%s' | base64 -d)
 export CONDUIT_AGENT_ID=$(echo '%s' | base64 -d)
 _CPURL=$(echo '%s' | base64 -d)
 curl -fsSL "${_CPURL}/agent-runner-linux-amd64" -o /usr/local/bin/agent-runner \
@@ -100,6 +101,7 @@ chmod +x /usr/local/bin/agent-runner
 		b64(env.ControlPlaneURL),
 		b64(argv),
 		b64(env.Model),
+		b64(env.OpenRouterKey),
 		b64(env.AgentID),
 		b64(env.ControlPlaneURL),
 	)
