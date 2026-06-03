@@ -57,8 +57,8 @@ func TestDispatchInjectsOpenRouterKey(t *testing.T) {
 	persistOpenRouterKey("cus_or", "sk-or-test")
 
 	cp := &capturingProvider{got: make(chan RunnerEnv, 1)}
-	providerOverrideForTest = func(_ string) RuntimeProvider { return cp }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return cp })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 
 	// Create a cloud agent.
 	rec := httptest.NewRecorder()
@@ -81,6 +81,10 @@ func TestDispatchInjectsOpenRouterKey(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create run: status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	var run AgentRun
+	if err := json.Unmarshal(rec.Body.Bytes(), &run); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case env := <-cp.got:
@@ -92,5 +96,19 @@ func TestDispatchInjectsOpenRouterKey(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("provider was not launched within 2s")
+	}
+
+	// dispatchRun keeps running after Launch returns (it persists status=running +
+	// the provider handle). Wait for that final write so the detached goroutine is
+	// done before t.Cleanup removes the TempDir — otherwise cleanup races the write.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if status, _, ok := runControlSnapshot(run.ID); ok && status == "running" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("dispatchRun did not persist status=running within 2s")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

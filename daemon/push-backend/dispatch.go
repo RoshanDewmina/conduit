@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,14 +27,32 @@ type RuntimeProvider interface {
 }
 
 // providerOverrideForTest is set only in tests to inject a fake provider.
-// In production code this is always nil.
-var providerOverrideForTest func(runtime string) RuntimeProvider
+// In production code this is always nil. It is guarded by a mutex because
+// dispatchRun runs in a detached goroutine (handleCreateRun / executeSchedule),
+// so a test's t.Cleanup reset can race the goroutine's read without it.
+var (
+	providerOverrideMu      sync.RWMutex
+	providerOverrideForTest func(runtime string) RuntimeProvider
+)
+
+// setProviderOverrideForTest installs (or clears, with nil) the test provider hook.
+func setProviderOverrideForTest(f func(runtime string) RuntimeProvider) {
+	providerOverrideMu.Lock()
+	providerOverrideForTest = f
+	providerOverrideMu.Unlock()
+}
+
+func getProviderOverrideForTest() func(runtime string) RuntimeProvider {
+	providerOverrideMu.RLock()
+	defer providerOverrideMu.RUnlock()
+	return providerOverrideForTest
+}
 
 // providerFor selects the provider for an agent's runtime.
 // ssh-host returns nil (on-device path, never dispatched server-side).
 func providerFor(runtime string) RuntimeProvider {
-	if providerOverrideForTest != nil {
-		return providerOverrideForTest(runtime)
+	if override := getProviderOverrideForTest(); override != nil {
+		return override(runtime)
 	}
 	if os.Getenv("CONDUIT_LOCAL_RUNNER") == "1" && normalizeRuntime(runtime) != "ssh-host" {
 		return processProvider{}

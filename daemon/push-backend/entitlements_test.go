@@ -48,8 +48,8 @@ func setupTestStores(t *testing.T) {
 	// Reset dispatch override so cloud-runtime dispatch is a no-op in tests by
 	// default. Tests that exercise dispatch (dispatch_test.go) override this
 	// themselves and restore it via t.Cleanup.
-	providerOverrideForTest = func(_ string) RuntimeProvider { return nil }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return nil })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 	resetControlPlaneForTests()
 	resetUsageForTests()
 	resetCreditsForTests()

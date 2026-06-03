@@ -73,8 +73,8 @@ func TestDispatchRunEndToEnd(t *testing.T) {
 	// Set the control plane URL and wire up the fake provider.
 	t.Setenv("CONTROL_PLANE_PUBLIC_URL", srv.URL)
 	fp := &fakeProvider{serverURL: srv.URL}
-	providerOverrideForTest = func(_ string) RuntimeProvider { return fp }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return fp })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 
 	// Create an agent with a cloud runtime.
 	agentBody := `{"name":"Dispatch Bot","runtime":"gcp_cloud_run"}`

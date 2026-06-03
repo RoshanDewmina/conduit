@@ -61,8 +61,8 @@ func getRunByID(t *testing.T, id string) AgentRun {
 func TestReaperTimesOutStuckRun(t *testing.T) {
 	setupTestStores(t)
 	rp := &recordingProvider{}
-	providerOverrideForTest = func(_ string) RuntimeProvider { return rp }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return rp })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 
 	now := time.Now().UTC()
 	seedRun(t, AgentRun{
@@ -94,8 +94,8 @@ func TestReaperTimesOutStuckRun(t *testing.T) {
 func TestReaperTearsDownTerminalRunWithHandle(t *testing.T) {
 	setupTestStores(t)
 	rp := &recordingProvider{}
-	providerOverrideForTest = func(_ string) RuntimeProvider { return rp }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return rp })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 
 	now := time.Now().UTC()
 	seedRun(t, AgentRun{
@@ -127,8 +127,8 @@ func TestReaperTearsDownTerminalRunWithHandle(t *testing.T) {
 func TestReaperSkipsSSHHostRuns(t *testing.T) {
 	setupTestStores(t)
 	rp := &recordingProvider{}
-	providerOverrideForTest = func(_ string) RuntimeProvider { return rp }
-	t.Cleanup(func() { providerOverrideForTest = nil })
+	setProviderOverrideForTest(func(_ string) RuntimeProvider { return rp })
+	t.Cleanup(func() { setProviderOverrideForTest(nil) })
 
 	now := time.Now().UTC()
 	seedRun(t, AgentRun{
