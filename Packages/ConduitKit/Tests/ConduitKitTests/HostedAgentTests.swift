@@ -56,13 +56,38 @@ struct HostedAgentTests {
             command: "echo hello",
             startedAt: "2025-06-02T12:01:00Z",
             completedAt: nil,
-            createdAt: "2025-06-02T12:01:00Z"
+            createdAt: "2025-06-02T12:01:00Z",
+            exitCode: nil
         )
         let mapped = HostedAgentAPIClient.mapRun(backend)
         #expect(mapped.id == "run_xyz")
         #expect(mapped.agentID == "agent_abc")
         #expect(mapped.status == .running)
         #expect(mapped.prompt == "echo hello")
+        #expect(mapped.exitCode == nil)
+    }
+
+    @Test("Backend run DTO maps exit code")
+    func backendRunExitCodeMapping() {
+        let backend = HostedAgentAPIClient.BackendRun(
+            id: "run_done",
+            agentId: "agent_abc",
+            status: "succeeded",
+            command: "ls",
+            startedAt: "2025-06-02T12:01:00Z",
+            completedAt: "2025-06-02T12:02:00Z",
+            createdAt: "2025-06-02T12:01:00Z",
+            exitCode: 0
+        )
+        let mapped = HostedAgentAPIClient.mapRun(backend)
+        #expect(mapped.exitCode == 0)
+        #expect(mapped.endedAt != nil)
+    }
+
+    @Test("Lightsail runtime maps correctly")
+    func lightsailRuntimeMapping() {
+        #expect(HostedAgentAPIClient.mapRuntimeKind("lightsail") == .lightsail)
+        #expect(HostedAgentAPIClient.mapRuntime(.lightsail) == "lightsail")
     }
 
     @Test("Fly runtime maps correctly")

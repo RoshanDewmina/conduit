@@ -145,6 +145,40 @@ public struct HostedAgentAPIClient: Sendable {
         return Self.mapSchedule(created)
     }
 
+    /// POST /schedules/{id}/trigger — manual "run now"; returns the created run.
+    public func triggerSchedule(scheduleID: String) async throws -> AgentRun {
+        let response: TriggerScheduleResponse = try await post(
+            "schedules/\(scheduleID)/trigger",
+            body: EmptyBody()
+        )
+        return Self.mapRun(response.run)
+    }
+
+    // MARK: Orgs
+
+    public func listOrgMembers(orgID: String) async throws -> [OrgMember] {
+        let response: OrgMembersListResponse = try await get("orgs/\(orgID)/members")
+        return response.members.map(Self.mapOrgMember)
+    }
+
+    public func inviteOrgMember(orgID: String, email: String, role: String?) async throws -> OrgMember {
+        let body = InviteMemberBody(email: email, role: role)
+        let created: BackendOrgMember = try await post("orgs/\(orgID)/members", body: body)
+        return Self.mapOrgMember(created)
+    }
+
+    // MARK: Billing portal
+
+    /// POST /billing/portal — returns a Stripe customer-portal URL. No bearer auth required.
+    public func billingPortalURL(customerId: String, returnURL: String?) async throws -> URL {
+        let body = PortalBody(customerId: customerId, returnURL: returnURL)
+        let response: PortalResponse = try await post("billing/portal", body: body)
+        guard let url = URL(string: response.url) else {
+            throw ConduitError.invalidResponse(detail: "billing portal returned an invalid URL")
+        }
+        return url
+    }
+
     // MARK: - DTO mapping (testable)
 
     static func mapAgent(_ backend: BackendAgent) -> HostedAgent {
@@ -167,7 +201,8 @@ public struct HostedAgentAPIClient: Sendable {
             status: RunStatus(rawValue: backend.status) ?? .pending,
             prompt: backend.command,
             startedAt: parseRFC3339(backend.startedAt ?? backend.createdAt) ?? .now,
-            endedAt: parseRFC3339(backend.completedAt)
+            endedAt: parseRFC3339(backend.completedAt),
+            exitCode: backend.exitCode
         )
     }
 
@@ -175,6 +210,7 @@ public struct HostedAgentAPIClient: Sendable {
         switch runtime {
         case "fly": .fly
         case "gcp_cloud_run", "gcp-cloud-run": .gcpCloudRun
+        case "lightsail": .lightsail
         default: .sshHost
         }
     }
@@ -184,6 +220,7 @@ public struct HostedAgentAPIClient: Sendable {
         case .sshHost: "ssh-host"
         case .fly: "fly"
         case .gcpCloudRun: "gcp_cloud_run"
+        case .lightsail: "lightsail"
         }
     }
 
@@ -209,6 +246,17 @@ public struct HostedAgentAPIClient: Sendable {
             enabled: backend.enabled,
             nextRunAt: parseRFC3339(backend.nextRunAt),
             lastRunAt: parseRFC3339(backend.lastRunAt)
+        )
+    }
+
+    static func mapOrgMember(_ backend: BackendOrgMember) -> OrgMember {
+        OrgMember(
+            id: backend.id,
+            orgId: backend.orgId,
+            email: backend.email,
+            role: backend.role ?? "member",
+            invitedAt: parseRFC3339(backend.invitedAt),
+            status: backend.status ?? "invited"
         )
     }
 
@@ -251,6 +299,7 @@ public struct HostedAgentAPIClient: Sendable {
         let startedAt: String?
         let completedAt: String?
         let createdAt: String?
+        let exitCode: Int?
     }
 
     private struct CreateAgentBody: Encodable {
@@ -307,6 +356,37 @@ public struct HostedAgentAPIClient: Sendable {
         let cronExpr: String
         let command: String?
         let enabled: Bool
+    }
+
+    private struct EmptyBody: Encodable {}
+
+    private struct TriggerScheduleResponse: Decodable {
+        let run: BackendRun
+    }
+
+    private struct OrgMembersListResponse: Decodable { let members: [BackendOrgMember] }
+
+    struct BackendOrgMember: Decodable, Equatable {
+        let id: String
+        let orgId: String
+        let email: String
+        let role: String?
+        let invitedAt: String?
+        let status: String?
+    }
+
+    private struct InviteMemberBody: Encodable {
+        let email: String
+        let role: String?
+    }
+
+    private struct PortalBody: Encodable {
+        let customerId: String
+        let returnURL: String?
+    }
+
+    private struct PortalResponse: Decodable {
+        let url: String
     }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

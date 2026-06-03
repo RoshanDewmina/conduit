@@ -21,6 +21,7 @@ public final class AgentStore {
     public var quota: HostedQuotaSnapshot = HostedQuotaSnapshot()
     public var artifactsByRun: [String: [AgentArtifact]] = [:]
     public var schedulesByAgent: [String: [AgentSchedule]] = [:]
+    public var orgMembers: [OrgMember] = []
 
     private var apiClient: HostedAgentAPIClient?
     private let apiBaseURL: URL?
@@ -259,6 +260,75 @@ public final class AgentStore {
         var list = schedulesByAgent[agentID] ?? []
         list.append(schedule)
         schedulesByAgent[agentID] = list
+    }
+
+    /// Manually trigger a schedule now (POST /schedules/{id}/trigger).
+    public func triggerSchedule(scheduleID: String, agentID: String) async throws {
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        let run = try await apiClient.triggerSchedule(scheduleID: scheduleID)
+        appendRun(run, for: agentID)
+        await loadSchedules(agentID: agentID)
+        await loadBillingSnapshot()
+    }
+
+    // MARK: - Orgs / team
+
+    /// Loads members for the entitlement's team org; no-op for individual customers.
+    public func loadOrgMembers() async {
+        guard let orgID = teamOrg?.orgId else {
+            orgMembers = []
+            return
+        }
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else { return }
+        do {
+            orgMembers = try await apiClient.listOrgMembers(orgID: orgID)
+        } catch {
+            orgMembers = []
+        }
+    }
+
+    public func inviteMember(email: String, role: String? = nil) async throws {
+        guard let orgID = teamOrg?.orgId else {
+            throw AgentStoreError.entitlementRequired
+        }
+        refreshAPIClientAuth()
+        guard let apiClient, apiClient.isConfigured else {
+            throw AgentStoreError.backendNotConfigured
+        }
+        let member = try await apiClient.inviteOrgMember(orgID: orgID, email: email, role: role)
+        orgMembers.append(member)
+    }
+
+    // MARK: - Run cancel
+
+    /// Cancels an active run. Only ssh-host runtime runs execute locally and can be
+    /// cancelled on-device; cloud runtimes have no control-plane cancel endpoint yet.
+    public func cancelRun(runID: String, agent: HostedAgent) async {
+        guard agent.runtimeKind == .sshHost else { return }
+        do {
+            try await runtime.cancelRun(id: runID)
+            await refreshRun(runID)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Billing portal
+
+    /// Returns a Stripe customer-portal URL for managing the subscription, or nil
+    /// when no customer id is known / backend is unconfigured.
+    public func billingPortalURL() async -> URL? {
+        refreshAPIClientAuth()
+        guard
+            let apiClient, apiClient.isConfigured,
+            let customerId = UserDefaults.standard.string(forKey: PurchaseManager.stripeCustomerIDKey),
+            !customerId.isEmpty
+        else { return nil }
+        return try? await apiClient.billingPortalURL(customerId: customerId, returnURL: nil)
     }
 
     /// POST /usage after managed OpenRouter (or other) AI calls.

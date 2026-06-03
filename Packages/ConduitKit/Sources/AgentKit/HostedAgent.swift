@@ -43,12 +43,14 @@ public enum HostedRuntimeKind: String, Codable, Sendable, Hashable, CaseIterable
     case sshHost
     case fly
     case gcpCloudRun
+    case lightsail
 
     public var displayName: String {
         switch self {
         case .sshHost: "SSH host"
         case .fly: "Fly.io"
         case .gcpCloudRun: "GCP Cloud Run"
+        case .lightsail: "AWS Lightsail"
         }
     }
 
@@ -56,7 +58,7 @@ public enum HostedRuntimeKind: String, Codable, Sendable, Hashable, CaseIterable
     public var requiresHostID: Bool {
         switch self {
         case .sshHost, .fly: true
-        case .gcpCloudRun: false
+        case .gcpCloudRun, .lightsail: false
         }
     }
 }
@@ -71,6 +73,8 @@ public struct AgentRun: Identifiable, Codable, Sendable, Hashable {
     public var prompt: String?
     public var startedAt: Date
     public var endedAt: Date?
+    /// Process exit code reported by the control plane when the run completes.
+    public var exitCode: Int?
     public var logLines: [RunLogLine]
     public var approvals: [RunApproval]
     public var usageRecords: [UsageRecord]
@@ -82,6 +86,7 @@ public struct AgentRun: Identifiable, Codable, Sendable, Hashable {
         prompt: String? = nil,
         startedAt: Date = .now,
         endedAt: Date? = nil,
+        exitCode: Int? = nil,
         logLines: [RunLogLine] = [],
         approvals: [RunApproval] = [],
         usageRecords: [UsageRecord] = []
@@ -92,6 +97,7 @@ public struct AgentRun: Identifiable, Codable, Sendable, Hashable {
         self.prompt = prompt
         self.startedAt = startedAt
         self.endedAt = endedAt
+        self.exitCode = exitCode
         self.logLines = logLines
         self.approvals = approvals
         self.usageRecords = usageRecords
@@ -348,5 +354,65 @@ public struct TeamOrgInfo: Sendable, Equatable {
     public init(orgId: String, displayName: String) {
         self.orgId = orgId
         self.displayName = displayName
+    }
+}
+
+// MARK: - Org members
+
+/// A member of a team org (push-backend `/orgs/{id}/members`).
+public struct OrgMember: Identifiable, Codable, Sendable, Hashable {
+    public let id: String
+    public var orgId: String
+    public var email: String
+    public var role: String
+    public var invitedAt: Date?
+    /// "invited" | "accepted".
+    public var status: String
+
+    public init(
+        id: String,
+        orgId: String,
+        email: String,
+        role: String = "member",
+        invitedAt: Date? = nil,
+        status: String = "invited"
+    ) {
+        self.id = id
+        self.orgId = orgId
+        self.email = email
+        self.role = role
+        self.invitedAt = invitedAt
+        self.status = status
+    }
+}
+
+// MARK: - Managed model catalog
+
+/// Curated OpenRouter model identifiers offered in the create-agent picker.
+/// A "custom" escape hatch lets advanced users type any OpenRouter slug.
+public enum ManagedModel: String, CaseIterable, Sendable, Hashable {
+    case claudeSonnet = "anthropic/claude-sonnet-4"
+    case claudeOpus = "anthropic/claude-opus-4"
+    case claudeHaiku = "anthropic/claude-haiku-4"
+    case gptCodex = "openai/gpt-5-codex"
+    case gpt = "openai/gpt-5"
+    case geminiPro = "google/gemini-2.5-pro"
+
+    public var label: String {
+        switch self {
+        case .claudeSonnet: "Claude Sonnet 4"
+        case .claudeOpus: "Claude Opus 4"
+        case .claudeHaiku: "Claude Haiku 4"
+        case .gptCodex: "GPT-5 Codex"
+        case .gpt: "GPT-5"
+        case .geminiPro: "Gemini 2.5 Pro"
+        }
+    }
+
+    public static let `default`: ManagedModel = .claudeSonnet
+
+    /// True when the slug isn't one of the curated presets (→ show custom field).
+    public static func isCustom(_ slug: String) -> Bool {
+        ManagedModel(rawValue: slug) == nil
     }
 }
