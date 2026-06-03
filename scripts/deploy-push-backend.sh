@@ -29,10 +29,14 @@ STRIPE_SECRET_KEY=sk_test_51TUqs1GoQwzlBwchpjBykaYsoBqmSGZkqzNG8gullH3vJzPsCBjq8
 STRIPE_WEBHOOK_SECRET=whsec_bm7nIlGSgqFc3ZRGY06Qk8t6UOs1xtZf
 STRIPE_PRICE_MONTHLY=price_1TbMv4GoQwzlBwchI0SNIYoT
 STRIPE_PRICE_ANNUAL=price_1TbMv4GoQwzlBwch56tIuaOo
-PUBLIC_BASE_URL=http://35.201.3.231:8080
+# HTTPS is terminated by Caddy on the VM (auto Let's Encrypt cert for the sslip.io
+# host), reverse-proxying :443 -> localhost:8080. iOS App Transport Security blocks
+# cleartext HTTP, so the app MUST use the https URL. Port 8080 is firewalled to
+# localhost only (no public tcp:8080 rule). See docs/cloud-run-production-cutover.md.
+PUBLIC_BASE_URL=https://35.201.3.231.sslip.io
 # Runner callbacks read CONTROL_PLANE_PUBLIC_URL (falls back to PUBLIC_BASE_URL if
 # unset). Must be reachable from the runner network — e.g. a GCP Cloud Run container.
-CONTROL_PLANE_PUBLIC_URL=http://35.201.3.231:8080
+CONTROL_PLANE_PUBLIC_URL=https://35.201.3.231.sslip.io
 WEBSITE_BASE_URL=https://conduit.dev
 PORT=8080
 CORS_ALLOW_ORIGIN=*

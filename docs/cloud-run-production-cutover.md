@@ -86,6 +86,26 @@ backend:
 
 ---
 
+## HTTPS / TLS — REQUIRED for the iOS app (live)
+
+iOS App Transport Security blocks cleartext HTTP, so the app cannot talk to a plain
+`http://…:8080` backend (every request fails with `NSURLErrorDomain -1022`). The VM
+now terminates TLS via **Caddy** (auto Let's Encrypt cert):
+
+- Host: `https://35.201.3.231.sslip.io` (sslip.io wildcard DNS resolves to the VM IP —
+  no domain registrar needed; swap for `api.conduit.dev` later by adding an A record
+  and changing the Caddyfile host).
+- `/etc/caddy/Caddyfile`: `35.201.3.231.sslip.io { reverse_proxy localhost:8080 }`.
+- GCP firewall: opened `tcp:80,443` (rule `conduit-https`, tag `conduit-ssh`); **removed**
+  the public `tcp:8080` rule — 8080 is now localhost-only (Caddy reaches it internally).
+- Backend `.env`: `PUBLIC_BASE_URL` and `CONTROL_PLANE_PUBLIC_URL` set to the https host
+  (runner callbacks use HTTPS too).
+- **App config:** the iOS app's `CONDUIT_PUSH_BACKEND_URL` must be the https host. With
+  HTTPS + a valid cert, no ATS exception is needed (never ship `NSAllowsArbitraryLoads`).
+
+To renew/rotate: Caddy auto-renews. To move to a real domain: add an A record →
+35.201.3.231, change the Caddyfile host, `systemctl reload caddy`, update `.env` + app.
+
 ## OpenRouter (agent model auth) — VERIFIED LIVE
 
 The runner routes the bundled Claude Code CLI through OpenRouter's Anthropic-compatible
