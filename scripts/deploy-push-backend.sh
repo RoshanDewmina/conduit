@@ -30,9 +30,19 @@ STRIPE_WEBHOOK_SECRET=whsec_bm7nIlGSgqFc3ZRGY06Qk8t6UOs1xtZf
 STRIPE_PRICE_MONTHLY=price_1TbMv4GoQwzlBwchI0SNIYoT
 STRIPE_PRICE_ANNUAL=price_1TbMv4GoQwzlBwch56tIuaOo
 PUBLIC_BASE_URL=http://35.201.3.231:8080
+# Runner callbacks read CONTROL_PLANE_PUBLIC_URL (falls back to PUBLIC_BASE_URL if
+# unset). Must be reachable from the runner network — e.g. a GCP Cloud Run container.
+CONTROL_PLANE_PUBLIC_URL=http://35.201.3.231:8080
 WEBSITE_BASE_URL=https://conduit.dev
 PORT=8080
 CORS_ALLOW_ORIGIN=*
+# --- GCP Cloud Run execution (leave GCP_PROJECT blank to keep cloud-run disabled) ---
+# Set GCP_PROJECT + GCP_CLOUD_RUN_IMAGE together to enable. The image MUST be the
+# agent-runner image (build/push via scripts/build-push-runner-image.sh); the sample
+# gcr.io/cloudrun/hello has no runner and the backend will refuse to launch against it.
+GCP_PROJECT=
+GCP_REGION=us-central1
+GCP_CLOUD_RUN_IMAGE=
 ENVEOF'
 
 echo "=== Installing systemd service ==="

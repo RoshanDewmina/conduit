@@ -189,7 +189,7 @@ func submitCloudRunJobIfConfigured(spec map[string]any) error {
 	namespace, _ := meta["namespace"].(string) // = GCP project ID
 	region := gcpRegion()
 	image := cloudRunDefaultImage()
-	controlPlaneURL := strings.TrimRight(strings.TrimSpace(os.Getenv("CONTROL_PLANE_PUBLIC_URL")), "/")
+	controlPlaneURL := controlPlaneBaseURL()
 
 	ctx := context.Background()
 	svc, err := runv2.NewService(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
@@ -246,11 +246,24 @@ func deleteCloudRunJobIfConfigured(jobName string) error {
 	return nil
 }
 
+// placeholderCloudRunImage is the GCP sample image used only as a last-resort
+// default. It has NO agent-runner entrypoint, so a run launched against it never
+// streams logs or PATCHes status — it just hangs until the reaper fails it.
+// gcpCloudRunProvider.Launch refuses to dispatch against it (see imageIsPlaceholder).
+const placeholderCloudRunImage = "gcr.io/cloudrun/hello"
+
 func cloudRunDefaultImage() string {
-	if img := os.Getenv("GCP_CLOUD_RUN_IMAGE"); img != "" {
+	if img := strings.TrimSpace(os.Getenv("GCP_CLOUD_RUN_IMAGE")); img != "" {
 		return img
 	}
-	return "gcr.io/cloudrun/hello"
+	return placeholderCloudRunImage
+}
+
+// imageIsPlaceholder reports whether the configured Cloud Run image is the inert
+// sample placeholder (i.e. GCP_CLOUD_RUN_IMAGE is unset). Dispatching against it
+// is always a misconfiguration.
+func imageIsPlaceholder() bool {
+	return cloudRunDefaultImage() == placeholderCloudRunImage
 }
 
 func sanitizeJobName(name, agentID string) string {

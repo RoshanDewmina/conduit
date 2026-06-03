@@ -122,9 +122,17 @@ func failRun(runID, msg string) {
 	})
 }
 
-// controlPlaneBaseURL returns the public base URL for runner callbacks.
+// controlPlaneBaseURL returns the public base URL for runner callbacks. It prefers
+// CONTROL_PLANE_PUBLIC_URL but falls back to PUBLIC_BASE_URL — the deploy env
+// historically set only the latter, and a mismatch would fail every cloud dispatch
+// with "CONTROL_PLANE_PUBLIC_URL is not set". This must be reachable from the
+// runner's network (e.g. a GCP Cloud Run container calling back in).
 func controlPlaneBaseURL() string {
-	return strings.TrimRight(strings.TrimSpace(os.Getenv("CONTROL_PLANE_PUBLIC_URL")), "/")
+	v := strings.TrimSpace(os.Getenv("CONTROL_PLANE_PUBLIC_URL"))
+	if v == "" {
+		v = strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL"))
+	}
+	return strings.TrimRight(v, "/")
 }
 
 // resolveAgentCommand returns the command to run: run.Command > agent config "command" > "claude".

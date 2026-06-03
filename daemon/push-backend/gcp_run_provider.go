@@ -21,6 +21,12 @@ func (p gcpCloudRunProvider) Launch(agent *Agent, run *AgentRun, env RunnerEnv) 
 	if project == "" {
 		return "", fmt.Errorf("GCP_PROJECT not configured")
 	}
+	// Refuse to launch against the inert sample image — it has no agent-runner, so
+	// the run would hang silently until the reaper fails it. Failing here surfaces
+	// an actionable error via failRun instead of a mystery stuck run.
+	if imageIsPlaceholder() {
+		return "", fmt.Errorf("GCP_CLOUD_RUN_IMAGE is not set; refusing to launch against placeholder image %q (build/push the agent-runner image and set GCP_CLOUD_RUN_IMAGE)", placeholderCloudRunImage)
+	}
 
 	jobName := sanitizeJobName(agent.Name, agent.ID)
 
