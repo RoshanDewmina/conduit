@@ -32,14 +32,7 @@ func main() {
 	client := NewClient(baseURL, runID, token)
 
 	// 2. Build child env (pass model/key if set; never log the token)
-	childEnv := os.Environ()
-	if model := os.Getenv("CONDUIT_MODEL"); model != "" {
-		childEnv = append(childEnv, "ANTHROPIC_MODEL="+model)
-		childEnv = append(childEnv, "OPENROUTER_DEFAULT_MODEL="+model)
-	}
-	if key := os.Getenv("CONDUIT_OPENROUTER_KEY"); key != "" {
-		childEnv = append(childEnv, "OPENROUTER_API_KEY="+key)
-	}
+	childEnv := append(os.Environ(), agentChildEnv()...)
 
 	// 3. Set up context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -185,4 +178,36 @@ func main() {
 	} else {
 		os.Exit(exitCode)
 	}
+}
+
+// agentChildEnv returns the env additions handed to the agent command, derived from
+// the CONDUIT_* env the control plane injects. It is split out from main() so the
+// OpenRouter wiring can be unit-tested.
+//
+// The bundled Claude Code CLI authenticates via the Anthropic env vars, NOT
+// OPENROUTER_API_KEY. Per OpenRouter's docs, routing Claude Code through OpenRouter's
+// Anthropic-compatible API requires:
+//   - ANTHROPIC_BASE_URL = https://openrouter.ai/api   (note: no /v1 suffix)
+//   - ANTHROPIC_AUTH_TOKEN = the OpenRouter key
+//   - ANTHROPIC_API_KEY = ""  (must be explicitly empty so the CLI doesn't prefer a
+//     stale/inherited key over the auth token)
+// OPENROUTER_API_KEY is also exported for any agent command that reads it directly.
+func agentChildEnv() []string {
+	var env []string
+	if model := os.Getenv("CONDUIT_MODEL"); model != "" {
+		env = append(env, "ANTHROPIC_MODEL="+model, "OPENROUTER_DEFAULT_MODEL="+model)
+	}
+	if key := os.Getenv("CONDUIT_OPENROUTER_KEY"); key != "" {
+		base := os.Getenv("CONDUIT_OPENROUTER_BASE_URL")
+		if base == "" {
+			base = "https://openrouter.ai/api"
+		}
+		env = append(env,
+			"OPENROUTER_API_KEY="+key,
+			"ANTHROPIC_BASE_URL="+base,
+			"ANTHROPIC_AUTH_TOKEN="+key,
+			"ANTHROPIC_API_KEY=",
+		)
+	}
+	return env
 }
