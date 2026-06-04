@@ -17,7 +17,7 @@ func agentHookUnreachable(normalizedKind string, dialErr error) error {
 	return nil
 }
 
-func TestMutatingHookNotAutoApprovedWhenDaemonDown(t *testing.T) {
+func TestHookMutatingDeniedWhenDaemonDown(t *testing.T) {
 	t.Setenv("CONDUIT_HOOK_READONLY_FAIL_OPEN", "")
 	dialErr := errors.New("connection refused")
 

@@ -495,9 +495,8 @@ public struct SettingsView: View {
                     .animation(.easeInOut(duration: 0.15), value: autonomyPresetRaw)
 
                 NavigationLink {
-                    PolicyEditorView(cwd: "~", initialYAML: PolicyEditorView.balancedPreset) { yaml in
-                        // Bridge RPC: wire when session DaemonChannel is available in settings.
-                        _ = yaml
+                    PolicyEditorView(cwd: "~", initialYAML: PolicyEditorView.balancedPreset) {
+                        // Bridge RPC: wire agent.policy.reload when DaemonChannel is available in settings.
                     }
                 } label: {
                     Text("Edit bridge policy.yaml")
