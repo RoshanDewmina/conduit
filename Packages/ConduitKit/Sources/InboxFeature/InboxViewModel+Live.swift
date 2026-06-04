@@ -7,13 +7,13 @@ import PersistenceKit
 @MainActor @Observable
 public final class LiveInboxViewModel: InboxViewModel {
     private let repository: ApprovalRepository
-    private let onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)?
+    private let onDecision: (@Sendable (ApprovalID, Approval.Decision, String?) async -> Void)?
     private let onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)?
     @ObservationIgnored nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,
-        onDecision: (@Sendable (ApprovalID, Approval.Decision) async -> Void)? = nil,
+        onDecision: (@Sendable (ApprovalID, Approval.Decision, String?) async -> Void)? = nil,
         onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)? = nil
     ) {
         self.repository = repository
@@ -41,11 +41,16 @@ public final class LiveInboxViewModel: InboxViewModel {
         }
     }
 
-    override public func decide(_ id: ApprovalID, decision: Approval.Decision, choiceIndex: Int? = nil) {
-        super.decide(id, decision: decision, choiceIndex: choiceIndex)  // updates in-memory immediately
+    override public func decide(
+        _ id: ApprovalID,
+        decision: Approval.Decision,
+        choiceIndex: Int? = nil,
+        editedToolInput: String? = nil
+    ) {
+        super.decide(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
         Task {
             try? await repository.decide(id: id, decision: decision)
-            await onDecision?(id, decision)
+            await onDecision?(id, decision, editedToolInput)
         }
     }
 

@@ -44,13 +44,17 @@ type registeredDevice struct {
 // server bridges the iOS DaemonChannel (stdio) and agent hooks (Unix socket).
 type server struct {
 	approvals *approvalStore
+	always    *alwaysRuleStore
 	stdoutMu  sync.Mutex // serialize writes to stdout
 	deviceMu  sync.RWMutex
 	device    *registeredDevice
 }
 
 func runServe() error {
-	s := &server{approvals: newApprovalStore()}
+	s := &server{
+		approvals: newApprovalStore(),
+		always:    newAlwaysRuleStore(),
+	}
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -110,7 +114,10 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		s.approvals.resolve(decision.ApprovalID, decision.Decision)
+		event, ok := s.approvals.resolve(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		if ok && decision.Decision == "approveAlways" {
+			s.always.add(alwaysRuleFromEvent(event))
+		}
 		s.writeResult(msg.ID, "ok")
 
 	case "conduit.device.register":
@@ -152,6 +159,13 @@ func (s *server) handleHook(conn net.Conn) {
 		return
 	}
 
+	// Always-rules short-circuit: skip the phone when the user previously chose Allow Always.
+	if s.always.matches(event) {
+		resp := ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"}
+		json.NewEncoder(conn).Encode(resp)
+		return
+	}
+
 	// Register pending approval and forward to iOS.
 	decisonCh := s.approvals.add(event)
 
@@ -170,9 +184,18 @@ func (s *server) handleHook(conn net.Conn) {
 	}
 
 	// Wait for iOS decision (max 120 s).
-	decision := waitWithTimeout(decisonCh, 120*time.Second)
+	result := waitWithTimeout(decisonCh, 120*time.Second)
+	decision := result.decision
+	if decision == "approveAlways" {
+		s.always.add(alwaysRuleFromEvent(event))
+		decision = "approve"
+	}
 
-	resp := ApprovalDecision{ApprovalID: event.ApprovalID, Decision: decision}
+	resp := ApprovalDecision{
+		ApprovalID:      event.ApprovalID,
+		Decision:        decision,
+		EditedToolInput: result.editedToolInput,
+	}
 	json.NewEncoder(conn).Encode(resp)
 }
 

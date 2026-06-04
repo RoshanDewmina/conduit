@@ -13,11 +13,19 @@ public class InboxViewModel {
         self.approvals = approvals
     }
 
-    open func decide(_ id: ApprovalID, decision: Approval.Decision, choiceIndex: Int? = nil) {
+    open func decide(
+        _ id: ApprovalID,
+        decision: Approval.Decision,
+        choiceIndex: Int? = nil,
+        editedToolInput: String? = nil
+    ) {
         if let idx = approvals.firstIndex(where: { $0.id == id }) {
             approvals[idx].decision = decision
             approvals[idx].decidedAt = .now
             if let ci = choiceIndex { approvals[idx].answeredChoice = ci }
+            if let edited = editedToolInput, !edited.isEmpty {
+                approvals[idx].toolInput = edited
+            }
             Haptics.selection()
         }
     }
@@ -31,6 +39,8 @@ public struct InboxView: View {
     public var onTapStatusHeader: () -> Void = {}
 
     @Environment(\.conduitTokens) private var t
+    @State private var editingApproval: Approval?
+    @State private var editedCommandText = ""
 
     public init(
         viewModel: InboxViewModel,
@@ -97,6 +107,9 @@ public struct InboxView: View {
                 }
             }
         }
+        .sheet(item: $editingApproval) { approval in
+            editSheet(approval)
+        }
     }
 
     // MARK: - Pending card dispatch
@@ -142,9 +155,64 @@ public struct InboxView: View {
                 onViewDiff: approval.patch != nil ? {} : nil,
                 onDeny: { vm.decide(approval.id, decision: .rejected) },
                 onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
+                onEditAndRun: approval.command != nil ? {
+                    editedCommandText = approval.command ?? ""
+                    editingApproval = approval
+                } : nil,
                 onApprove: { vm.decide(approval.id, decision: .approved) }
             )
         }
+    }
+
+    @ViewBuilder
+    private func editSheet(_ approval: Approval) -> some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Edit command before running")
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text2)
+                TextEditor(text: $editedCommandText)
+                    .font(.dsMonoPt(13))
+                    .frame(minHeight: 120)
+                    .padding(8)
+                    .background(t.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3))
+            }
+            .padding(16)
+            .background(t.bg)
+            .navigationTitle("Edit & run")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { editingApproval = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Run") {
+                        let payload = editedToolInputJSON(for: approval, command: editedCommandText)
+                        vm.decide(approval.id, decision: .approved, editedToolInput: payload)
+                        editingApproval = nil
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func editedToolInputJSON(for approval: Approval, command: String) -> String {
+        if let existing = approval.toolInput,
+           let data = existing.data(using: .utf8),
+           var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            object["command"] = command
+            if let out = try? JSONSerialization.data(withJSONObject: object),
+               let str = String(data: out, encoding: .utf8) {
+                return str
+            }
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: ["command": command]),
+           let str = String(data: data, encoding: .utf8) {
+            return str
+        }
+        return command
     }
 
     // MARK: - Decided row (compact)

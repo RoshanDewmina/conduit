@@ -32,7 +32,9 @@
 	<key>CONDUIT_ICLOUD_ENABLED</key>
 	<false/>
 	<key>CONDUIT_PUSH_BACKEND_URL</key>
-	<string>https://35.201.3.231.sslip.io</string>
+	<string>$(CONDUIT_PUSH_BACKEND_URL)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
@@ -45,6 +47,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

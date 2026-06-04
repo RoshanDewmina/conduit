@@ -770,7 +770,7 @@ public struct AppRoot: View {
             let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name)
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
-                onDecision: { [channel] id, decision in
+                onDecision: { [channel] id, decision, editedToolInput in
                     try? await env.auditRepo.record(
                         hostID: host.id,
                         type: .approval,
@@ -780,7 +780,11 @@ public struct AppRoot: View {
                             "source": "inbox",
                         ]
                     )
-                    try? await channel.respond(approvalId: id.uuidString, decision: decision)
+                    try? await channel.respond(
+                        approvalId: id.uuidString,
+                        decision: decision,
+                        editedToolInput: editedToolInput
+                    )
                 },
                 onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, approvalID in
                     await vm?.setLiveActivityPendingApprovals(

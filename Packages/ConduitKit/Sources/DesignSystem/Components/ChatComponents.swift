@@ -158,6 +158,7 @@ public struct DSApprovalCard: View {
     let onViewDiff: (() -> Void)?
     let onDeny: () -> Void
     let onAllowAlways: () -> Void
+    let onEditAndRun: (() -> Void)?
     let onApprove: () -> Void
 
     @Environment(\.conduitTokens) private var t
@@ -173,6 +174,7 @@ public struct DSApprovalCard: View {
         onViewDiff: (() -> Void)? = nil,
         onDeny: @escaping () -> Void,
         onAllowAlways: @escaping () -> Void,
+        onEditAndRun: (() -> Void)? = nil,
         onApprove: @escaping () -> Void
     ) {
         self.agentKey = agentKey
@@ -185,6 +187,7 @@ public struct DSApprovalCard: View {
         self.onViewDiff = onViewDiff
         self.onDeny = onDeny
         self.onAllowAlways = onAllowAlways
+        self.onEditAndRun = onEditAndRun
         self.onApprove = onApprove
     }
 
@@ -226,6 +229,9 @@ public struct DSApprovalCard: View {
             HStack(spacing: 8) {
                 if let viewDiff = onViewDiff {
                     DSButton("VIEW DIFF", variant: .ghost, size: .sm, mono: true, action: viewDiff)
+                }
+                if let edit = onEditAndRun {
+                    DSButton("EDIT & RUN", variant: .secondary, size: .sm, mono: true, action: edit)
                 }
                 Spacer()
                 DSButton("DENY", variant: .destructive, size: .sm, mono: true, action: onDeny)

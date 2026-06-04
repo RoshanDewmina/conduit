@@ -71,10 +71,28 @@ public actor DaemonChannel {
     }
 
     /// Send an approval decision back to conduitd via JSON-RPC over the daemon's stdin.
-    public func respond(approvalId: String, decision: Approval.Decision) async throws {
+    public static func decisionWireValue(for decision: Approval.Decision) -> String {
+        switch decision {
+        case .approved: return "approve"
+        case .approvedAlways: return "approveAlways"
+        case .rejected, .expired: return "deny"
+        }
+    }
+
+    public func respond(
+        approvalId: String,
+        decision: Approval.Decision,
+        editedToolInput: String? = nil
+    ) async throws {
         guard let writer = stdinWriter else { return }
-        let decisionStr = (decision == .approved || decision == .approvedAlways) ? "approve" : "deny"
-        let params: [String: Any] = ["approvalId": approvalId, "decision": decisionStr]
+        let decisionStr = Self.decisionWireValue(for: decision)
+        var params: [String: Any] = [
+            "approvalId": approvalId,
+            "decision": decisionStr,
+        ]
+        if let editedToolInput, !editedToolInput.isEmpty {
+            params["editedToolInput"] = editedToolInput
+        }
         let envelope: [String: Any] = [
             "jsonrpc": "2.0",
             "method": "agent.approval.response",

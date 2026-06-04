@@ -28,14 +28,21 @@ type ApprovalEvent struct {
 
 // ApprovalDecision is the response written back after the user acts on iOS.
 type ApprovalDecision struct {
-	ApprovalID string `json:"approvalId"`
-	Decision   string `json:"decision"` // "approve" | "deny"
+	ApprovalID      string `json:"approvalId"`
+	Decision        string `json:"decision"` // "approve" | "approveAlways" | "deny"
+	EditedToolInput string `json:"editedToolInput,omitempty"`
+}
+
+// hookDecision is delivered to a waiting agent-hook connection.
+type hookDecision struct {
+	decision        string
+	editedToolInput string
 }
 
 // pendingApproval holds the event and a channel for the decision.
 type pendingApproval struct {
 	event    ApprovalEvent
-	decision chan string // receives "approve" or "deny"
+	decision chan hookDecision
 }
 
 // approvalStore is the in-memory registry of approvals awaiting a decision.
@@ -49,9 +56,8 @@ func newApprovalStore() *approvalStore {
 }
 
 // add registers a new pending approval and returns the decision channel.
-// The caller should receive from the channel (with timeout) to get the decision.
-func (s *approvalStore) add(event ApprovalEvent) <-chan string {
-	ch := make(chan string, 1)
+func (s *approvalStore) add(event ApprovalEvent) <-chan hookDecision {
+	ch := make(chan hookDecision, 1)
 	s.mu.Lock()
 	s.pending[event.ApprovalID] = &pendingApproval{event: event, decision: ch}
 	s.mu.Unlock()
@@ -59,8 +65,8 @@ func (s *approvalStore) add(event ApprovalEvent) <-chan string {
 }
 
 // resolve delivers a decision for the given approval ID.
-// Returns true if the approval was found and the decision delivered.
-func (s *approvalStore) resolve(id, decision string) bool {
+// Returns the pending event when found (for always-rule creation).
+func (s *approvalStore) resolve(id, decision, editedToolInput string) (ApprovalEvent, bool) {
 	s.mu.Lock()
 	p, ok := s.pending[id]
 	if ok {
@@ -68,23 +74,22 @@ func (s *approvalStore) resolve(id, decision string) bool {
 	}
 	s.mu.Unlock()
 	if !ok {
-		return false
+		return ApprovalEvent{}, false
 	}
 	select {
-	case p.decision <- decision:
+	case p.decision <- hookDecision{decision: decision, editedToolInput: editedToolInput}:
 	default:
 	}
-	return true
+	return p.event, true
 }
 
 // waitWithTimeout blocks until a decision arrives or the timeout elapses.
-// Returns the decision string ("approve" / "deny") or "deny" on timeout.
-func waitWithTimeout(ch <-chan string, timeout time.Duration) string {
+func waitWithTimeout(ch <-chan hookDecision, timeout time.Duration) hookDecision {
 	select {
 	case d := <-ch:
 		return d
 	case <-time.After(timeout):
-		return "deny"
+		return hookDecision{decision: "deny"}
 	}
 }
 

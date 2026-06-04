@@ -92,7 +92,7 @@ func runAgentHook(args []string) error {
 		return fmt.Errorf("read decision: %w", err)
 	}
 
-	if decision.Decision != "approve" {
+	if decision.Decision != "approve" && decision.Decision != "approveAlways" {
 		return fmt.Errorf("denied by user")
 	}
 	return nil
