@@ -161,15 +161,13 @@ RISK="$(json_get risk)"
 CWD="$(json_get cwd)"
 COMMAND="$(json_get command)"
 
-# Codex PreToolUse hook env vars (present when running inside Codex)
-TOOL_NAME_ARG=""
-TOOL_USE_ID_ARG=""
-SESSION_ID_ARG=""
-TOOL_INPUT_ARG=""
-[ -n "${CODEX_TOOL_NAME:-}" ]   && TOOL_NAME_ARG="--tool-name=$CODEX_TOOL_NAME"
-[ -n "${CODEX_TOOL_USE_ID:-}" ] && TOOL_USE_ID_ARG="--tool-use-id=$CODEX_TOOL_USE_ID"
-[ -n "${CODEX_SESSION_ID:-}" ]  && SESSION_ID_ARG="--session-id=$CODEX_SESSION_ID"
-[ -n "${CODEX_TOOL_INPUT:-}" ]  && TOOL_INPUT_ARG="--tool-input=$CODEX_TOOL_INPUT"
+# Codex PreToolUse structured fields — use a bash array so values with
+# spaces, quotes, or metacharacters in CODEX_TOOL_INPUT cannot inject extra flags.
+EXTRA_ARGS=()
+[ -n "${CODEX_TOOL_NAME:-}" ]   && EXTRA_ARGS+=(--tool-name="$CODEX_TOOL_NAME")
+[ -n "${CODEX_TOOL_USE_ID:-}" ] && EXTRA_ARGS+=(--tool-use-id="$CODEX_TOOL_USE_ID")
+[ -n "${CODEX_SESSION_ID:-}" ]  && EXTRA_ARGS+=(--session-id="$CODEX_SESSION_ID")
+[ -n "${CODEX_TOOL_INPUT:-}" ]  && EXTRA_ARGS+=(--tool-input="$CODEX_TOOL_INPUT")
 
 if "$CONDUITD" agent-hook \
   --agent codex \
@@ -177,7 +175,7 @@ if "$CONDUITD" agent-hook \
   --command "$COMMAND" \
   --cwd "$CWD" \
   --risk "$RISK" \
-  $TOOL_NAME_ARG $TOOL_USE_ID_ARG $SESSION_ID_ARG $TOOL_INPUT_ARG
+  "${EXTRA_ARGS[@]}"
 then
   exit 0
 fi
