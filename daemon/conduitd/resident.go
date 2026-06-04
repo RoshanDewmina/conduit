@@ -25,6 +25,7 @@ func runDaemon() error {
 	if err != nil {
 		return err
 	}
+	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
 	return r.listen()
 }
 

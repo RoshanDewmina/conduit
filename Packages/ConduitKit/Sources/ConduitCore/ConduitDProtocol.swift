@@ -150,6 +150,46 @@ public struct PolicyRule: Codable, Sendable, Hashable {
     }
 }
 
+// Result of an agent.dispatch RPC (WS-B2). Status:
+// running | needs-approval | denied | budget-exceeded | error.
+public struct DispatchResult: Codable, Sendable, Hashable {
+    public let runId: String?
+    public let status: String
+    public let decision: String?
+    public let rule: String?
+    public let message: String?
+
+    public init(runId: String? = nil, status: String, decision: String? = nil, rule: String? = nil, message: String? = nil) {
+        self.runId = runId
+        self.status = status
+        self.decision = decision
+        self.rule = rule
+        self.message = message
+    }
+}
+
+// A recurring interval dispatch on the resident bridge (WS-B2), persisted by
+// conduitd. Distinct from AgentKit.AgentSchedule (the cloud hosted-agent schedule).
+public struct BridgeSchedule: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var agent: String
+    public var cwd: String
+    public var prompt: String
+    public var everySeconds: Int
+    public var budgetUSD: Double
+    public var lastRunUnix: Int
+
+    public init(id: String = "", agent: String, cwd: String, prompt: String, everySeconds: Int, budgetUSD: Double = 0, lastRunUnix: Int = 0) {
+        self.id = id
+        self.agent = agent
+        self.cwd = cwd
+        self.prompt = prompt
+        self.everySeconds = everySeconds
+        self.budgetUSD = budgetUSD
+        self.lastRunUnix = lastRunUnix
+    }
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
     case agentStatus(AgentStatusSnapshot)

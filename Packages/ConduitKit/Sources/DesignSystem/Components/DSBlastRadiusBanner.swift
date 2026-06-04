@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 import ConduitCore
-import DesignSystem
 
 /// Inbox banner summarizing blast radius for an escalated approval.
 public struct DSBlastRadiusBanner: View {

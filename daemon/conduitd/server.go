@@ -130,13 +130,15 @@ func (e *policyEngine) getPolicyDocuments(cwd string) (policyGetResult, error) {
 
 type server struct {
 	approvals *approvalStore
-	policy    *policyEngine
-	audit     *auditLog
-	stdoutMu  sync.Mutex
-	emitMu    sync.Mutex
-	emit      func([]byte) error
-	deviceMu  sync.RWMutex
-	device    *registeredDevice
+	policy     *policyEngine
+	audit      *auditLog
+	dispatcher *dispatcher
+	scheduler  *scheduler
+	stdoutMu   sync.Mutex
+	emitMu     sync.Mutex
+	emit       func([]byte) error
+	deviceMu   sync.RWMutex
+	device     *registeredDevice
 }
 
 func (s *server) setEmitter(emit func([]byte) error) {
@@ -147,10 +149,41 @@ func (s *server) setEmitter(emit func([]byte) error) {
 
 func newServer(home string) *server {
 	return &server{
-		approvals: newApprovalStore(),
-		policy:    newPolicyEngine(home),
-		audit:     newAuditLog(home),
+		approvals:  newApprovalStore(),
+		policy:     newPolicyEngine(home),
+		audit:      newAuditLog(home),
+		dispatcher: newDispatcher(),
+		scheduler:  newScheduler(home),
 	}
+}
+
+// policyEffect adapts the policy engine to the dispatcher's evaluator signature.
+func (s *server) policyEffect(event ApprovalEvent) (string, string) {
+	res := s.policy.evaluate(event)
+	return string(res.Effect), res.MatchedRule
+}
+
+func (s *server) auditEntry(e AuditEntry) { _ = s.audit.append(e) }
+
+// runDispatch applies the policy + budget gate and launches (used by RPC + scheduler).
+func (s *server) runDispatch(p dispatchParams) dispatchResult {
+	return s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
+}
+
+// startScheduler runs the schedule ticker until ctx-like stop; call from daemon/legacy serve.
+func (s *server) startScheduler(stop <-chan struct{}) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case t := <-ticker.C:
+				s.scheduler.tick(t, s.runDispatch)
+			}
+		}
+	}()
 }
 
 // serverHome returns an isolated home directory when CONDUIT_STATE_DIR is set (tests).
@@ -224,6 +257,7 @@ func runServeAttach(conn net.Conn) error {
 
 func runServeLegacy() error {
 	s := newServer(serverHome())
+	s.startScheduler(make(chan struct{}))
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -350,6 +384,39 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.device = &info
 		s.deviceMu.Unlock()
 		s.writeResult(msg.ID, "ok")
+
+	case "agent.dispatch":
+		var p dispatchParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.writeResult(msg.ID, s.runDispatch(p))
+
+	case "agent.cancel":
+		var p struct {
+			RunID string `json:"runId"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"cancelled": s.dispatcher.cancel(p.RunID)})
+
+	case "agent.schedule.add":
+		var sc schedule
+		if err := json.Unmarshal(msg.Params, &sc); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.writeResult(msg.ID, s.scheduler.add(sc))
+
+	case "agent.schedule.list":
+		s.writeResult(msg.ID, map[string]interface{}{"schedules": s.scheduler.list()})
+
+	case "agent.schedule.remove":
+		var p struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"removed": s.scheduler.remove(p.ID)})
 
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
