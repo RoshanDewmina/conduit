@@ -1,93 +1,163 @@
 # conduitd
 
-Remote daemon for Conduit — bridges the iOS app and AI agent hooks on your development machine.
+`conduitd` is the self-host bridge between Conduit iOS and remote AI coding agents.
 
-## Architecture
+It runs on your host/VM, receives pre-tool hook events from agents (Claude Code, Codex),
+and forwards approval requests to the phone over the existing SSH channel.
+
+## Runtime Model
 
 ```
-iOS app ←── SSH stdio (JSON-RPC, length-framed) ──→ conduitd serve
-                                                           ↕  Unix socket
-                                              conduitd agent-hook  (Claude Code pre-tool hook)
+iOS app <-- SSH stdio (JSON-RPC, framed) --> conduitd serve
+                                                 ^
+                                                 | unix socket (~/.conduit/conduitd.sock)
+                                                 |
+                                       conduitd agent-hook (from agent hooks)
 ```
 
-- **`conduitd serve`** — runs on the remote host. The Conduit iOS app connects via SSH and
-  spawns `conduitd serve` as a subprocess. Communication uses 4-byte big-endian length-prefixed
-  JSON-RPC 2.0 frames over stdio.
-- **`conduitd agent-hook`** — called by Claude Code's `~/.claude/hooks/pre-tool.sh`. Sends an
-  approval event to the running `conduitd serve` via a Unix socket (`~/.conduit/conduitd.sock`),
-  then blocks until the user approves or denies on their phone (or 120 s elapses, defaulting to
-  auto-approve).
+- `conduitd serve`: long-running daemon process launched over SSH by the app.
+- `conduitd agent-hook`: short-lived command called by CLI hook scripts.
+- If `serve` is not available, hook mode auto-approves so your local workflow is not blocked.
+
+## Requirements
+
+- Go 1.22+
+- Linux or macOS host
+- SSH access from your iPhone to the host
 
 ## Build
 
-Requires Go 1.22+. Install with `brew install go` on macOS.
-
 ```bash
 cd daemon/conduitd
-
-# Local binary (macOS)
 go build -o conduitd .
-
-# Linux amd64 (most cloud VMs)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conduitd-linux-amd64 .
-
-# Linux arm64 (Raspberry Pi, Graviton, Apple Silicon VMs)
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o conduitd-linux-arm64 .
 ```
 
-## Install on remote host
+Cross-compile examples:
 
 ```bash
-# Build the correct architecture first, e.g.:
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conduitd-linux-amd64 .
-
-# Copy to remote host
-scp conduitd-linux-amd64 user@host:~/conduitd
-ssh user@host "chmod +x ~/conduitd && ~/conduitd version"
+CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -o conduitd-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -o conduitd-linux-arm64 .
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o conduitd-darwin-arm64 .
 ```
 
-## Claude Code hook integration
+## Install (Self-Host)
 
-Add to `~/.claude/hooks/pre-tool.sh` on the remote host:
+### Fast path installer
+
+From repo root:
 
 ```bash
-#!/bin/bash
-~/conduitd agent-hook \
-  --agent "claude-code" \
-  --kind  "$CLAUDE_TOOL_NAME" \
-  --command "$CLAUDE_TOOL_INPUT" \
-  --cwd "$(pwd)" \
-  --risk "medium"
+daemon/conduitd/install.sh --hooks both
 ```
 
-Make it executable: `chmod +x ~/.claude/hooks/pre-tool.sh`
+By default this installs:
+- binary: `~/.conduit/bin/conduitd`
+- Claude hook: `~/.claude/hooks/conduit-hook.sh`
+- Codex hook: `~/.codex/hooks/conduit-hook.sh`
+- Codex hook config: `~/.codex/hooks.json`
 
-When `conduitd serve` is not running (phone disconnected), the hook auto-approves so agents
-are never blocked when you're not actively supervising.
+### Manual install
 
-## Protocol
+```bash
+mkdir -p ~/.conduit/bin
+cp daemon/conduitd/conduitd ~/.conduit/bin/conduitd
+chmod 755 ~/.conduit/bin/conduitd
+~/.conduit/bin/conduitd version
+```
+
+## Hook Setup
+
+### Claude Code
+
+1. Copy `docs/conduit-hook.sh` to `~/.claude/hooks/conduit-hook.sh`
+2. `chmod 700 ~/.claude/hooks/conduit-hook.sh`
+3. Wire it in `~/.claude/settings.json` (see `docs/claude-settings-hook.json`)
+
+### Codex
+
+1. Copy `docs/codex-conduit-hook.sh` to `~/.codex/hooks/conduit-hook.sh`
+2. `chmod 700 ~/.codex/hooks/conduit-hook.sh`
+3. Copy `docs/codex-hooks.json` to `~/.codex/hooks.json`
+4. Trust hook configuration in Codex (`/hooks`)
+
+## Environment Variables
+
+- `CONDUITD`: override path to daemon binary in hook scripts (default `~/.conduit/bin/conduitd`)
+- `INSTALL_DIR`: override install destination for `daemon/conduitd/install.sh`
+
+## Optional Service Snippets
+
+Use these if you want `conduitd serve` managed as a host service. This is optional;
+Conduit can also launch `conduitd serve` over SSH on-demand.
+
+### systemd (`~/.config/systemd/user/conduitd.service`)
+
+```ini
+[Unit]
+Description=Conduit bridge daemon
+
+[Service]
+ExecStart=%h/.conduit/bin/conduitd serve
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+```
+
+Enable:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now conduitd.service
+```
+
+### launchd (`~/Library/LaunchAgents/dev.conduit.conduitd.plist`)
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key><string>dev.conduit.conduitd</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/YOUR_USER/.conduit/bin/conduitd</string>
+      <string>serve</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+  </dict>
+</plist>
+```
+
+Enable:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/dev.conduit.conduitd.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/dev.conduit.conduitd.plist
+```
+
+## Release Packaging
+
+Build tarballs for distribution:
+
+```bash
+scripts/release-conduitd.sh v0.1.0
+```
+
+Artifacts are written to `daemon/conduitd/dist/`.
+
+## Protocol Notes
 
 Frames: `[uint32 big-endian length][JSON body]`
 
-| Method (iOS → daemon) | Description |
-|---|---|
-| `ping` | Keepalive; daemon replies `"pong"` |
-| `agent.approval.response` | User approved/denied; params: `{approvalId, decision}` |
+Daemon receives:
+- `ping`
+- `agent.approval.response`
 
-| Notification (daemon → iOS) | Description |
-|---|---|
-| `agent.approval.pending` | Agent hook is waiting; params: `ApprovalEvent` |
+Daemon emits:
+- `agent.approval.pending`
 
-## Approval event schema
-
-```json
-{
-  "approvalId": "uuid",
-  "agent":      "claude-code",
-  "kind":       "bash",
-  "command":    "rm -rf /tmp/build",
-  "cwd":        "/home/user/project",
-  "risk":       "high",
-  "timestamp":  "2026-05-24T12:00:00Z"
-}
-```
+`ApprovalEvent` includes structured fields (`toolName`, `toolUseID`, `sessionID`, `toolInput`)
+when hooks provide them, enabling richer approval cards and safer rule matching.
