@@ -69,6 +69,10 @@ struct DebugGalleryView: View {
         case "mgmt-commandbar":   CommandBarView(onConnect: { _ in }, onOpenInbox: {}, onRunSnippet: {}, onNewWorkspace: {}, onDismiss: {})
         // Phase 6 state atoms
         case "states":         StatesGalleryScreen()
+        #if os(iOS)
+        case "cc-policy":      CCPolicyGalleryScreen()
+        case "cc-inbox":       CCInboxGalleryScreen()
+        #endif
         case "review":         reviewScreen
         default:               reviewScreen
         }
