@@ -150,6 +150,7 @@ public struct AppRoot: View {
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
     @State private var showingHostedAgents = false
+    @State private var fleetStore = FleetStore()
 
     private var isPro: Bool {
         #if DEBUG
@@ -634,11 +635,16 @@ public struct AppRoot: View {
     /// active-row long-press menu and (indirectly) the in-session menu.
     private func disconnectLiveSession() {
         guard let vm = sessionViewModel else { return }
+        // Capture the fleet slot ID before the async gap so we can remove it.
+        let fleetSlotID = fleetStore.slots.first { $0.sessionViewModel === vm }?.id
         Task {
             await vm.disconnect()
             await MainActor.run {
                 sessionViewModel = nil
                 hudStore.session = nil
+                if let slotID = fleetSlotID {
+                    fleetStore.remove(id: slotID)
+                }
             }
         }
     }
@@ -813,6 +819,17 @@ public struct AppRoot: View {
                 self.approvalIngest = ingest
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
+                // Fleet: register the new slot (additive — single-slot path above
+                // is preserved for backwards compat with the current UI).
+                // When the store is full (maxSlots reached), the add is a no-op.
+                self.fleetStore.add(FleetStore.Slot(
+                    hostID: host.id,
+                    hostName: host.name,
+                    sessionViewModel: vm,
+                    channel: channel,
+                    ingest: ingest,
+                    inboxVM: liveVM
+                ))
                 self.selectedTab = .hosts
                 self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(
