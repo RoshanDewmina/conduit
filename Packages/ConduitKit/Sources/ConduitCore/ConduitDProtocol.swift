@@ -13,7 +13,6 @@ public enum DaemonFraming {
         return out
     }
 
-    // Returns (message, remainder) or nil if not enough bytes
     public static func unframe(_ data: Data) -> (Data, Data)? {
         guard data.count >= 4 else { return nil }
         let b = data
@@ -27,22 +26,52 @@ public enum DaemonFraming {
     }
 }
 
-// Typed params for agent.approval.pending events from conduitd
+/// Blast-radius metadata from conduitd policy escalation (WS-B).
+public struct ApprovalBlastRadius: Codable, Sendable, Hashable {
+    public let files: [String]?
+    public let touchesGit: Bool?
+    public let touchesNetwork: Bool?
+    public let matchedRule: String?
+
+    public init(
+        files: [String]? = nil,
+        touchesGit: Bool? = nil,
+        touchesNetwork: Bool? = nil,
+        matchedRule: String? = nil
+    ) {
+        self.files = files
+        self.touchesGit = touchesGit
+        self.touchesNetwork = touchesNetwork
+        self.matchedRule = matchedRule
+    }
+}
+
 public struct ApprovalPendingParams: Codable, Sendable {
-    public let id: String        // UUID string for this approval
+    public let id: String
     public let sessionId: String?
-    public let agent: String     // matches Approval.AgentSource raw values
-    public let kind: String      // matches Approval.Kind raw values
+    public let agent: String
+    public let kind: String
     public let command: String?
     public let patch: String?
     public let cwd: String
-    public let risk: Int         // 0=low 1=medium 2=high 3=critical
+    public let risk: Int
 
-    // Structured tool-use fields — nil when sent by older conduitd (backwards compat)
     public let toolName: String?
     public let toolUseID: String?
-    public let agentSessionID: String?  // Claude Code / Codex session ID (distinct from Conduit's sessionId)
+    public let agentSessionID: String?
     public let toolInput: String?
+
+    public let files: [String]?
+    public let touchesGit: Bool?
+    public let touchesNetwork: Bool?
+    public let matchedRule: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, sessionId, agent, kind, command, patch, cwd, risk
+        case toolName, toolUseID, toolInput
+        case agentSessionID = "agentSessionID"
+        case files, touchesGit, touchesNetwork, matchedRule
+    }
 
     public var approvalRisk: Approval.Risk {
         Approval.Risk(rawValue: min(risk, 3)) ?? .high
@@ -57,18 +86,78 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public var approvalToolUseID: String? { toolUseID }
     public var approvalAgentSessionID: String? { agentSessionID }
     public var approvalToolInput: String? { toolInput }
+    public var blastRadius: ApprovalBlastRadius {
+        ApprovalBlastRadius(
+            files: files,
+            touchesGit: touchesGit,
+            touchesNetwork: touchesNetwork,
+            matchedRule: matchedRule
+        )
+    }
 }
 
-// Events delivered from conduitd to the iOS client
+public struct AuditLogEntry: Codable, Sendable, Identifiable, Hashable {
+    public let timestamp: String
+    public let action: String
+    public let agent: String?
+    public let kind: String?
+    public let command: String?
+    public let effect: String?
+    public let rule: String?
+    public let approvalId: String?
+
+    public var id: String { "\(timestamp)-\(action)-\(approvalId ?? command ?? "")" }
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp, action, agent, kind, command, effect, rule
+        case approvalId
+    }
+}
+
+public struct AuditTailResult: Codable, Sendable {
+    public let entries: [AuditLogEntry]
+}
+
+/// Legacy single-YAML response (older conduitd); prefer PolicyGetResult.
+public struct PolicyYAMLResult: Codable, Sendable {
+    public let yaml: String
+}
+
+public struct PolicyGetResult: Codable, Sendable {
+    public let documents: [PolicyDocument]?
+    public let `default`: String?
+}
+
+public struct PolicyDocument: Codable, Sendable {
+    public var `default`: String?
+    public var rules: [PolicyRule]?
+}
+
+public struct PolicyRule: Codable, Sendable, Hashable {
+    public var ruleID: String?
+    public var effect: String
+    public var agent: String?
+    public var tool: String?
+    public var kind: String?
+    public var match: String?
+    public var cwd: String?
+    public var minRisk: String?
+    public var maxRisk: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ruleID = "id"
+        case effect, agent, tool, kind, match, cwd, minRisk, maxRisk
+    }
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
-    case pong                                     // keepalive
+    case agentStatus(AgentStatusSnapshot)
+    case pong
     case unknown(method: String)
 }
 
 extension DaemonEvent {
-    // Decode a raw JSON frame into a DaemonEvent.
-    // Uses JSONSerialization for the outer envelope, JSONDecoder for typed params.
     public static func decode(from data: Data) -> DaemonEvent? {
         guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let method = dict["method"] as? String else { return nil }
@@ -79,10 +168,47 @@ extension DaemonEvent {
                   let pending = try? JSONDecoder().decode(ApprovalPendingParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .approvalPending(pending)
+        case "agent.status":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let snapshot = try? JSONDecoder().decode(AgentStatusSnapshot.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .agentStatus(snapshot)
         case "pong":
             return .pong
         default:
             return .unknown(method: method)
         }
+    }
+}
+
+public enum DaemonRPCResponse: Sendable {
+    case agentStatus(AgentStatusSnapshot)
+    case auditTail(AuditTailResult)
+    case policyGet(PolicyGetResult)
+    case policyYAML(PolicyYAMLResult)
+    case pong
+    case ok
+    case error(code: Int, message: String)
+    case unknown
+
+    public static func decode(from data: Data) -> DaemonRPCResponse? {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        if let err = dict["error"] as? [String: Any], let message = err["message"] as? String {
+            return .error(code: err["code"] as? Int ?? -1, message: message)
+        }
+        guard let result = dict["result"] else { return .unknown }
+        if let s = result as? String {
+            if s == "pong" { return .pong }
+            if s == "ok" { return .ok }
+        }
+        guard JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result) else { return .unknown }
+        let dec = JSONDecoder()
+        if let snap = try? dec.decode(AgentStatusSnapshot.self, from: rd) { return .agentStatus(snap) }
+        if let t = try? dec.decode(AuditTailResult.self, from: rd) { return .auditTail(t) }
+        if let pol = try? dec.decode(PolicyGetResult.self, from: rd) { return .policyGet(pol) }
+        if let yaml = try? dec.decode(PolicyYAMLResult.self, from: rd) { return .policyYAML(yaml) }
+        return .unknown
     }
 }

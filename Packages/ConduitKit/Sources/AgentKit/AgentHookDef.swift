@@ -205,6 +205,30 @@ extension AgentHookDef {
         )
     }
 
+    /// OpenCode (`~/.config/opencode/hooks.json`). Claude-compatible hook names
+    /// (`PreToolUse`, etc.) via native hooks or opencode-claude-hooks plugin.
+    public static var opencode: AgentHookDef {
+        AgentHookDef(
+            name: "opencode",
+            displayName: "OpenCode",
+            statusKey: "opencode",
+            configDir: ".config/opencode",
+            configFile: "hooks.json",
+            createConfigDirIfMissing: true,
+            binaryName: "opencode",
+            sessionStoreSuffix: "opencode",
+            disableEnvVar: "CONDUIT_OPENCODE_HOOKS_DISABLED",
+            hookMarker: "conduitd hooks opencode",
+            format: .nested(timeoutMs: 5000),
+            events: [
+                .init(agentEvent: "SessionStart", conduitSubcommand: "session-start"),
+                .init(agentEvent: "UserPromptSubmit", conduitSubcommand: "prompt-submit"),
+                .init(agentEvent: "Stop", conduitSubcommand: "stop"),
+            ],
+            feedHookEvents: ["PreToolUse", "PermissionRequest"]
+        )
+    }
+
     /// Codex (`~/.codex/hooks.json`), honours `CODEX_HOME`.
     public static var codex: AgentHookDef {
         AgentHookDef(
@@ -300,6 +324,7 @@ extension AgentHookDef {
     public static let defaults: [AgentHookDef] = [
         .claude,
         .codex,
+        .opencode,
         .cursor,
         .grok,
         .gemini,

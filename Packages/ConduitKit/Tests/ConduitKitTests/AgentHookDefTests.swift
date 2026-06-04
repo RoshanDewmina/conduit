@@ -5,10 +5,26 @@ import Testing
 @Suite("AgentHookDef")
 struct AgentHookDefTests {
 
-    @Test("defaults cover Claude, Codex, Cursor, Grok, Gemini")
+    @Test("defaults cover Claude, Codex, OpenCode, Cursor, Grok, Gemini")
     func defaultsCoverAllSupportedAgents() {
         let names = Set(AgentHookDef.defaults.map(\.name))
-        #expect(names == ["claude", "codex", "cursor", "grok", "gemini"])
+        #expect(names == ["claude", "codex", "opencode", "cursor", "grok", "gemini"])
+    }
+
+    @Test("OpenCode resolves to ~/.config/opencode/hooks.json")
+    func opencodeConfigPath() {
+        let path = AgentHookDef.opencode.resolvedConfigPath(home: "/Users/me")
+        #expect(path == "/Users/me/.config/opencode/hooks.json")
+    }
+
+    @Test("OpenCode uses nested format with approval feed hooks")
+    func opencodeFormatAndFeedHooks() {
+        if case .nested(let timeout) = AgentHookDef.opencode.format {
+            #expect(timeout == 5000)
+        } else {
+            Issue.record("expected .nested format")
+        }
+        #expect(AgentHookDef.opencode.feedHookEvents.contains("PreToolUse"))
     }
 
     @Test("Claude resolves to ~/.claude/settings.json")

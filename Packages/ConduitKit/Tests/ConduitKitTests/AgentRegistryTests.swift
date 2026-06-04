@@ -5,16 +5,29 @@ import Testing
 @Suite("AgentRegistry")
 struct AgentRegistryTests {
 
-    @Test("defaults contain Claude, Codex, Cursor, Grok, Pi, Gemini")
+    @Test("defaults contain Claude, Codex, OpenCode, Cursor, Grok, Pi, Gemini")
     func defaultsContainBuiltInAgents() {
         let registry = AgentRegistry.defaults
         let ids = Set(registry.registrations.map(\.id))
         #expect(ids.contains(AgentKind.claude.rawValue))
         #expect(ids.contains(AgentKind.codex.rawValue))
+        #expect(ids.contains(AgentKind.opencode.rawValue))
         #expect(ids.contains(AgentKind.cursor.rawValue))
         #expect(ids.contains(AgentKind.grok.rawValue))
         #expect(ids.contains(AgentKind.pi.rawValue))
         #expect(ids.contains(AgentKind.gemini.rawValue))
+    }
+
+    @Test("OpenCode registration resumes with --session")
+    func opencodeResumeCommand() {
+        let opencode = AgentRegistry.defaults.registration(id: AgentKind.opencode.rawValue)
+        #expect(opencode?.name == "OpenCode")
+        #expect(opencode?.resumeCommand.contains("--session {{sessionId}}") == true)
+        if case .argvOption(let flag) = opencode?.sessionIdSource {
+            #expect(flag == "--session")
+        } else {
+            Issue.record("expected argvOption --session")
+        }
     }
 
     @Test("registration(id:) returns the right agent")
