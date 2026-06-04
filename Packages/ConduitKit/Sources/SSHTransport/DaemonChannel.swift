@@ -46,6 +46,30 @@ public actor DaemonChannel {
         }
     }
 
+    /// Inform conduitd of the device's push registration so it can deliver APNs
+    /// alerts when the SSH channel is down. Call after start() succeeds.
+    /// - Parameters:
+    ///   - pushBackendURL: The deployed push-backend HTTPS URL (from CONDUIT_PUSH_BACKEND_URL).
+    ///   - sessionID: The iOS device's identifierForVendor UUID string (matches what was
+    ///     registered with the push backend in AppDelegate.didRegisterForRemoteNotificationsWithDeviceToken).
+    public func registerDevice(pushBackendURL: String, sessionID: String) async throws {
+        guard let writer = stdinWriter else { return }
+        let params: [String: Any] = [
+            "pushBackendURL": pushBackendURL,
+            "sessionID": sessionID,
+        ]
+        let envelope: [String: Any] = [
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "conduit.device.register",
+            "params": params,
+        ]
+        guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
+        let frame = DaemonFraming.frame(json)
+        let buf = ByteBuffer(bytes: frame)
+        try await writer.write(buf)
+    }
+
     /// Send an approval decision back to conduitd via JSON-RPC over the daemon's stdin.
     public func respond(approvalId: String, decision: Approval.Decision) async throws {
         guard let writer = stdinWriter else { return }

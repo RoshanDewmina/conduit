@@ -17,12 +17,66 @@ public extension Notification.Name {
     static let conduitRemoteApprovalReceived = Notification.Name("dev.conduit.remoteApprovalReceived")
 }
 
+/// Controls which approval notifications are delivered.
+/// Stored in UserDefaults so user preferences persist across launches.
+public struct NotificationFilter: Codable, Sendable {
+    public var minRisk: Approval.Risk = .low
+    /// nil = all agents; non-nil = only the listed agent raw values
+    public var enabledAgents: Set<String>? = nil
+    public var quietHoursEnabled: Bool = false
+    /// Hour of day (0–23) when quiet hours begin
+    public var quietHoursStart: Int = 22
+    /// Hour of day (0–23) when quiet hours end (exclusive)
+    public var quietHoursEnd: Int = 8
+
+    public init() {}
+
+    public func shouldDeliver(risk: Approval.Risk, agent: Approval.AgentSource) -> Bool {
+        guard risk.rawValue >= minRisk.rawValue else { return false }
+        if let agents = enabledAgents, !agents.contains(agent.rawValue) { return false }
+        guard !quietHoursEnabled else { return !isCurrentlyQuiet() }
+        return true
+    }
+
+    private func isCurrentlyQuiet() -> Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        // start == end is treated as "all day quiet" (full 24-hour block).
+        if quietHoursStart == quietHoursEnd { return true }
+        if quietHoursStart < quietHoursEnd {
+            return hour >= quietHoursStart && hour < quietHoursEnd
+        }
+        // Spans midnight (e.g. 22:00 → 08:00)
+        return hour >= quietHoursStart || hour < quietHoursEnd
+    }
+}
+
 /// Local + remote notification orchestration. For M3 we use only local
 /// notifications driven by the side-channel WebSocket; APNs registration is
 /// added in M4 alongside the control plane.
 public actor Notifications {
     public static let shared = Notifications()
     private init() {}
+
+    // MARK: - Notification filter
+
+    private static let filterKey = "dev.conduit.notificationFilter"
+
+    private var _filter: NotificationFilter = {
+        guard let data = UserDefaults.standard.data(forKey: filterKey),
+              let f = try? JSONDecoder().decode(NotificationFilter.self, from: data)
+        else { return NotificationFilter() }
+        return f
+    }()
+
+    public var filter: NotificationFilter {
+        get { _filter }
+        set {
+            _filter = newValue
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: Self.filterKey)
+            }
+        }
+    }
 
     public func requestAuthorization() async -> Bool {
         let center = UNUserNotificationCenter.current()
@@ -36,6 +90,7 @@ public actor Notifications {
     /// Schedule a local notification representing a pending approval. The
     /// notification body uses `userInfo` to deep-link into the Inbox tab.
     public func notifyPendingApproval(_ approval: Approval, hostName: String) async {
+        guard _filter.shouldDeliver(risk: approval.risk, agent: approval.agent) else { return }
         let content = UNMutableNotificationContent()
         content.title = "Approval needed · \(hostName)"
         content.body = approval.command ?? approval.patch.map { _ in "Patch ready for review" } ?? "Action pending"
