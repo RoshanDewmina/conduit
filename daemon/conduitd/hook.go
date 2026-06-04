@@ -30,7 +30,7 @@ func runAgentHook(args []string) error {
 	risk := fs.String("risk", "low", "risk band: low|medium|high")
 	timeout := fs.Duration("timeout", 120*time.Second, "max wait for decision")
 	// Structured tool-use fields from Claude Code / Codex PreToolUse hooks.
-	toolName  := fs.String("tool-name", "", "structured tool name from tool_use (e.g. bash, write_file)")
+	toolName := fs.String("tool-name", "", "structured tool name from tool_use (e.g. bash, write_file)")
 	toolUseID := fs.String("tool-use-id", "", "tool_use_id from the agent session")
 	sessionID := fs.String("session-id", "", "agent session ID")
 	toolInput := fs.String("tool-input", "", "raw JSON tool_input from tool_use")
@@ -55,7 +55,7 @@ func runAgentHook(args []string) error {
 
 	event := ApprovalEvent{
 		ApprovalID: newUUID(),
-		Agent:      normalizeAgent(*agent),
+		Agent:      normalizeAgentSource(*agent),
 		Kind:       normalizedKind,
 		Command:    *command,
 		Patch:      patch,
@@ -121,21 +121,6 @@ func riskToInt(r string) int {
 		return 3
 	default:
 		return 0
-	}
-}
-
-func normalizeAgent(agent string) string {
-	switch agent {
-	case "claude-code", "claude_code", "claude", "Claude Code":
-		return "claudeCode"
-	case "codex", "openai-codex", "OpenAI Codex":
-		return "codex"
-	case "opencode":
-		return "opencode"
-	case "":
-		return "unknown"
-	default:
-		return agent
 	}
 }
 
