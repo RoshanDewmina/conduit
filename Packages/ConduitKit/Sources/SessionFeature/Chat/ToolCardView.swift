@@ -23,6 +23,9 @@ public struct ToolCardView<Footer: View>: View {
     let onCollapse: () -> Void
     let onStar: () -> Void
     let footer: Footer
+    /// Optional structured tool name from the agent hook (e.g. "bash", "write_file").
+    /// When non-nil, surfaced alongside the kind label in the card header.
+    let toolName: String?
 
     @State private var searchActive = false
     @State private var searchQuery = ""
@@ -42,7 +45,8 @@ public struct ToolCardView<Footer: View>: View {
         onRerun: @escaping () -> Void,
         onCollapse: @escaping () -> Void,
         onStar: @escaping () -> Void,
-        @ViewBuilder footer: () -> Footer
+        @ViewBuilder footer: () -> Footer,
+        toolName: String? = nil
     ) {
         self.block = block
         self.render = render
@@ -55,6 +59,7 @@ public struct ToolCardView<Footer: View>: View {
         self.onCollapse = onCollapse
         self.onStar = onStar
         self.footer = footer()
+        self.toolName = toolName
     }
 
     // MARK: - Derived state
@@ -240,10 +245,13 @@ public struct ToolCardView<Footer: View>: View {
         .overlay(alignment: .bottom) { Rectangle().fill(t.termBorder).frame(height: 1) }
     }
 
-    /// Kind verb/noun. Shell blocks are always "Run › command"; richer kinds
-    /// (Read/Apply/Write) arrive with agent tool cards (Phase 3).
+    /// Kind verb/noun. Shell blocks show "Run › command"; when a structured
+    /// tool name is provided (from the agent hook), it replaces the noun.
     private var kind: (verb: String, noun: String) {
-        ("Run", "command")
+        if let name = toolName, !name.isEmpty {
+            return ("Run", name)
+        }
+        return ("Run", "command")
     }
 
     private var showsOutputArea: Bool {

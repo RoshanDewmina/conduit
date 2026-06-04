@@ -38,6 +38,12 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public let cwd: String
     public let risk: Int         // 0=low 1=medium 2=high 3=critical
 
+    // Structured tool-use fields — nil when sent by older conduitd (backwards compat)
+    public let toolName: String?
+    public let toolUseID: String?
+    public let agentSessionID: String?  // Claude Code / Codex session ID (distinct from Conduit's sessionId)
+    public let toolInput: String?
+
     public var approvalRisk: Approval.Risk {
         Approval.Risk(rawValue: min(risk, 3)) ?? .high
     }
@@ -47,6 +53,10 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public var approvalAgent: Approval.AgentSource {
         Approval.AgentSource(rawValue: agent) ?? .unknown
     }
+    public var approvalToolName: String? { toolName }
+    public var approvalToolUseID: String? { toolUseID }
+    public var approvalAgentSessionID: String? { agentSessionID }
+    public var approvalToolInput: String? { toolInput }
 }
 
 // Events delivered from conduitd to the iOS client

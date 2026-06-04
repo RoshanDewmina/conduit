@@ -8,21 +8,30 @@
 #
 # Wire in ~/.claude/settings.json — see docs/claude-settings-hook.json
 
-CONDUITD="$HOME/.conduit/bin/conduitd"
+CONDUITD="${CONDUITD:-$HOME/.conduit/bin/conduitd}"
 
 # Read the hook payload from Claude Code
 INPUT=$(cat)
 
-# Parse tool name and the most relevant command/path string
-TOOL=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null || echo "")
-COMMAND=$(echo "$INPUT" | python3 -c "
+# Parse tool name, structured fields, and the most relevant command/path string.
+# Claude Code delivers all PreToolUse data on stdin as JSON — never via env vars.
+IFS=$'\t' read -r TOOL_NAME TOOL_USE_ID SESSION_ID TOOL_INPUT COMMAND < <(
+  echo "$INPUT" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-ti = d.get('tool_input', {})
+ti = d.get('tool_input') or {}
+if not isinstance(ti, dict):
+    ti = {'value': ti}
+tool_name   = str(d.get('tool_name', ''))
+tool_use_id = str(d.get('tool_use_id', '') or '')
+session_id  = str(d.get('session_id', '') or '')
+tool_input  = json.dumps(ti, separators=(',', ':'))
 cmd = (ti.get('command') or ti.get('file_path') or ti.get('path') or
-       ti.get('description') or d.get('tool_name', 'unknown'))
-print(str(cmd)[:500])
-" 2>/dev/null || echo "$TOOL")
+       ti.get('description') or tool_name or 'unknown')
+print('\t'.join([tool_name, tool_use_id, session_id, tool_input, str(cmd)[:500]]))
+" 2>/dev/null || echo -e "\t\t\t{}\t${TOOL_NAME:-unknown}"
+)
+TOOL="$TOOL_NAME"
 
 # Auto-approve read-only tools — no need to interrupt the user for these
 case "$TOOL" in
@@ -42,12 +51,22 @@ esac
 # Send approval request to conduitd (which forwards it to the iOS app).
 # If conduitd is not running (phone not connected), it auto-approves and exits 0.
 # Exit 0 = Claude Code proceeds. Exit 2 = Claude Code sees the message and stops.
+
+# Build structured-field args from stdin-parsed values (bash array prevents
+# injection of extra flags by values containing spaces, quotes, or metacharacters).
+EXTRA_ARGS=()
+[ -n "$TOOL_NAME" ]                              && EXTRA_ARGS+=(--tool-name="$TOOL_NAME")
+[ -n "$TOOL_USE_ID" ]                            && EXTRA_ARGS+=(--tool-use-id="$TOOL_USE_ID")
+[ -n "$SESSION_ID" ]                             && EXTRA_ARGS+=(--session-id="$SESSION_ID")
+[ -n "$TOOL_INPUT" ] && [ "$TOOL_INPUT" != "{}" ] && EXTRA_ARGS+=(--tool-input="$TOOL_INPUT")
+
 if "$CONDUITD" agent-hook \
   --agent "claudeCode" \
   --kind "$KIND" \
   --command "$COMMAND" \
   --cwd "$(pwd)" \
-  --risk "$RISK"
+  --risk "$RISK" \
+  "${EXTRA_ARGS[@]}"
 then
   exit 0
 else
