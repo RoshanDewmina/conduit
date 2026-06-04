@@ -29,6 +29,11 @@ func runAgentHook(args []string) error {
 	cwd := fs.String("cwd", "", "current working directory")
 	risk := fs.String("risk", "low", "risk band: low|medium|high")
 	timeout := fs.Duration("timeout", 120*time.Second, "max wait for decision")
+	// Structured tool-use fields from Claude Code / Codex PreToolUse hooks.
+	toolName  := fs.String("tool-name", "", "structured tool name from tool_use (e.g. bash, write_file)")
+	toolUseID := fs.String("tool-use-id", "", "tool_use_id from the agent session")
+	sessionID := fs.String("session-id", "", "agent session ID")
+	toolInput := fs.String("tool-input", "", "raw JSON tool_input from tool_use")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -57,6 +62,10 @@ func runAgentHook(args []string) error {
 		CWD:        *cwd,
 		Risk:       riskToInt(*risk),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		ToolName:   *toolName,
+		ToolUseID:  *toolUseID,
+		SessionID:  *sessionID,
+		ToolInput:  *toolInput,
 	}
 
 	sockPath, err := socketPath()

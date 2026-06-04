@@ -42,12 +42,24 @@ esac
 # Send approval request to conduitd (which forwards it to the iOS app).
 # If conduitd is not running (phone not connected), it auto-approves and exits 0.
 # Exit 0 = Claude Code proceeds. Exit 2 = Claude Code sees the message and stops.
+
+# Claude Code PreToolUse hook env vars (present when running inside Claude Code)
+TOOL_NAME_ARG=""
+TOOL_USE_ID_ARG=""
+SESSION_ID_ARG=""
+TOOL_INPUT_ARG=""
+[ -n "${CLAUDE_TOOL_NAME:-}" ]   && TOOL_NAME_ARG="--tool-name=$CLAUDE_TOOL_NAME"
+[ -n "${CLAUDE_TOOL_USE_ID:-}" ] && TOOL_USE_ID_ARG="--tool-use-id=$CLAUDE_TOOL_USE_ID"
+[ -n "${CLAUDE_SESSION_ID:-}" ]  && SESSION_ID_ARG="--session-id=$CLAUDE_SESSION_ID"
+[ -n "${CLAUDE_TOOL_INPUT:-}" ]  && TOOL_INPUT_ARG="--tool-input=$CLAUDE_TOOL_INPUT"
+
 if "$CONDUITD" agent-hook \
   --agent "claudeCode" \
   --kind "$KIND" \
   --command "$COMMAND" \
   --cwd "$(pwd)" \
-  --risk "$RISK"
+  --risk "$RISK" \
+  $TOOL_NAME_ARG $TOOL_USE_ID_ARG $SESSION_ID_ARG $TOOL_INPUT_ARG
 then
   exit 0
 else

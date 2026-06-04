@@ -18,6 +18,11 @@ public struct Approval: Identifiable, Sendable, Hashable {
     public let question: String?          // prompt text for .askQuestion
     public let choices: [String]?         // answer options for .askQuestion
     public var answeredChoice: Int?       // user-selected index (0-based)
+    // Structured tool-use fields — nil when received from older conduitd
+    public var toolName: String?
+    public var toolUseID: String?
+    public var agentSessionID: String?    // Claude Code / Codex session ID
+    public var toolInput: String?
 
     public enum AgentSource: String, Sendable, Hashable, Codable {
         case claudeCode, codex, opencode, cursor, devin, unknown
@@ -58,7 +63,11 @@ public struct Approval: Identifiable, Sendable, Hashable {
         decision: Decision? = nil,
         question: String? = nil,
         choices: [String]? = nil,
-        answeredChoice: Int? = nil
+        answeredChoice: Int? = nil,
+        toolName: String? = nil,
+        toolUseID: String? = nil,
+        agentSessionID: String? = nil,
+        toolInput: String? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -74,6 +83,10 @@ public struct Approval: Identifiable, Sendable, Hashable {
         self.question = question
         self.choices = choices
         self.answeredChoice = answeredChoice
+        self.toolName = toolName
+        self.toolUseID = toolUseID
+        self.agentSessionID = agentSessionID
+        self.toolInput = toolInput
     }
 
     public var isPending: Bool { decision == nil }

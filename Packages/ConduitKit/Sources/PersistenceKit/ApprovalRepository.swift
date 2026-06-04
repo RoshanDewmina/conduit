@@ -27,7 +27,11 @@ extension Approval: FetchableRecord {
             risk: Risk(rawValue: row["risk"] ?? 0) ?? .low,
             createdAt: row["createdAt"] ?? .now,
             decidedAt: row["decidedAt"],
-            decision: decisionStr.flatMap(Decision.init(rawValue:))
+            decision: decisionStr.flatMap(Decision.init(rawValue:)),
+            toolName: row["tool_name"],
+            toolUseID: row["tool_use_id"],
+            agentSessionID: row["agent_session_id"],
+            toolInput: row["tool_input"]
         )
     }
 }
@@ -47,6 +51,10 @@ extension Approval: PersistableRecord {
         container["createdAt"] = createdAt
         container["decidedAt"] = decidedAt
         container["decision"] = decision?.rawValue
+        container["tool_name"] = toolName
+        container["tool_use_id"] = toolUseID
+        container["agent_session_id"] = agentSessionID
+        container["tool_input"] = toolInput
     }
 }
 

@@ -17,6 +17,13 @@ type ApprovalEvent struct {
 	CWD        string `json:"cwd"`
 	Risk       int    `json:"risk"` // iOS expects int: 0=low 1=medium 2=high 3=critical
 	Timestamp  string `json:"timestamp"`
+
+	// Structured tool-use fields — populated when conduitd is invoked from a
+	// Claude Code or Codex PreToolUse hook. All optional (omitted when empty).
+	ToolName  string `json:"toolName,omitempty"`
+	ToolUseID string `json:"toolUseID,omitempty"`
+	SessionID string `json:"sessionID,omitempty"`
+	ToolInput string `json:"toolInput,omitempty"`
 }
 
 // ApprovalDecision is the response written back after the user acts on iOS.

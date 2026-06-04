@@ -172,6 +172,16 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // WS-C: structured tool-use fields for approvals (from Claude Code / Codex hooks).
+        m.registerMigration("v7") { db in
+            try db.alter(table: "approvals") { t in
+                t.add(column: "tool_name",        .text)
+                t.add(column: "tool_use_id",      .text)
+                t.add(column: "agent_session_id", .text)
+                t.add(column: "tool_input",       .text)
+            }
+        }
+
         return m
     }
 }

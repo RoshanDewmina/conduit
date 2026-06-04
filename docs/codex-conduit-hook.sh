@@ -161,12 +161,23 @@ RISK="$(json_get risk)"
 CWD="$(json_get cwd)"
 COMMAND="$(json_get command)"
 
+# Codex PreToolUse hook env vars (present when running inside Codex)
+TOOL_NAME_ARG=""
+TOOL_USE_ID_ARG=""
+SESSION_ID_ARG=""
+TOOL_INPUT_ARG=""
+[ -n "${CODEX_TOOL_NAME:-}" ]   && TOOL_NAME_ARG="--tool-name=$CODEX_TOOL_NAME"
+[ -n "${CODEX_TOOL_USE_ID:-}" ] && TOOL_USE_ID_ARG="--tool-use-id=$CODEX_TOOL_USE_ID"
+[ -n "${CODEX_SESSION_ID:-}" ]  && SESSION_ID_ARG="--session-id=$CODEX_SESSION_ID"
+[ -n "${CODEX_TOOL_INPUT:-}" ]  && TOOL_INPUT_ARG="--tool-input=$CODEX_TOOL_INPUT"
+
 if "$CONDUITD" agent-hook \
   --agent codex \
   --kind "$KIND" \
   --command "$COMMAND" \
   --cwd "$CWD" \
-  --risk "$RISK"
+  --risk "$RISK" \
+  $TOOL_NAME_ARG $TOOL_USE_ID_ARG $SESSION_ID_ARG $TOOL_INPUT_ARG
 then
   exit 0
 fi
