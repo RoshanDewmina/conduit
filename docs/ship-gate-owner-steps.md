@@ -90,6 +90,8 @@ Or manually in [AWS Route53](https://console.aws.amazon.com/route53/):
 
 ## Step 5: TestFlight + release
 
+> **Before public TestFlight / App Store:** The `CONDUIT_PUSH_BACKEND_URL` build setting currently contains a Cloud Run sslip.io address (e.g. `https://conduit-push-HASH-ts.a.run.app`). Before distributing publicly, repoint it to a stable domain with a proper certificate — e.g. `https://push.conduit.dev` — and add the corresponding DNS CNAME to `scripts/update-dns.sh`. Using a vanity domain prevents baking a Cloud Run hash URL into a shipped binary that can't easily be updated.
+
 **Via Xcode Organizer (easiest):**
 1. Product → Archive
 2. Xcode Organizer → Distribute App → App Store Connect → Upload
@@ -108,9 +110,10 @@ fastlane release # submit to App Store
 
 ## What this branch already changed (no owner action needed)
 
-| Item | File | Change |
-|------|------|--------|
-| Entitlements | `project.yml` | Points to `Conduit.entitlements` (push + CloudKit declared inline) |
-| Background modes | `project.yml` | `remote-notification` added to `UIBackgroundModes` |
-| ATS compliance | `Conduit/ConduitApp.swift` | Cleartext `http://` fallback removed; returns `""` (skips registration silently) |
-| Export compliance | `project.yml` | `ITSAppUsesNonExemptEncryption: false` added to Info.plist properties |
+| Item | Source | Change |
+|------|--------|--------|
+| Entitlements flip | `feat/hosted-agents-rc` (inherited) | `project.yml` already points to `Conduit.entitlements`; push + CloudKit declared |
+| ATS/HTTPS + http fallback removed | `feat/hosted-agents-rc` (inherited) | Cleartext `http://` fallback gone; `CONDUIT_PUSH_BACKEND_URL` baked into Info.plist |
+| Background modes | This branch (`agent/ws-b-shipgate-rc`) | `remote-notification` added to `UIBackgroundModes` in `project.yml` |
+| Export compliance | This branch (`agent/ws-b-shipgate-rc`) | `ITSAppUsesNonExemptEncryption: false` added to `project.yml` Info.plist properties |
+| Owner checklist | This branch (`agent/ws-b-shipgate-rc`) | `docs/ship-gate-owner-steps.md` created |

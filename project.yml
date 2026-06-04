@@ -65,11 +65,12 @@ targets:
         CONDUIT_ICLOUD_ENABLED: false
         ITSAppUsesNonExemptEncryption: false
     # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
-    # account. While on a free personal team, point at the stripped
-    # `Conduit-DeviceTesting.entitlements` file (Keychain only). Swap back
-    # to `Conduit.entitlements` + restore the properties block below once
-    # enrolled in the paid program — and flip CONDUIT_ICLOUD_ENABLED above
-    # to true at the same time, or CloudKit will error at runtime.
+    # account. Entitlements are already pointing at `Conduit.entitlements`
+    # (push + CloudKit declared). To activate them:
+    # 1. Enroll in the Apple Developer Program ($99/yr) or sign in with a paid Apple ID
+    # 2. Enable Push Notifications + CloudKit container in App Store Connect
+    # 3. Flip CONDUIT_ICLOUD_ENABLED above to true
+    # See docs/ship-gate-owner-steps.md for the complete checklist.
     entitlements:
       path: Conduit/Conduit.entitlements
       properties:
