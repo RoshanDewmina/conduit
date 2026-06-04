@@ -73,6 +73,7 @@ struct DebugGalleryView: View {
         case "cc-policy":      CCPolicyGalleryScreen()
         case "cc-inbox":       CCInboxGalleryScreen()
         case "cc-usage":       CCUsageGalleryScreen()
+        case "cc-dispatch":    DispatchComposerView(channel: nil, agent: "claudeCode", cwd: "~/repos/conduit")
         #endif
         case "review":         reviewScreen
         default:               reviewScreen

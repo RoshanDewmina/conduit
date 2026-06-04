@@ -1,0 +1,152 @@
+package main
+
+import (
+	"fmt"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+)
+
+// agentArgv builds an explicit, shell-free argv for launching an agent with a
+// prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
+func agentArgv(agent, prompt string) ([]string, bool) {
+	switch normalizeAgentSource(agent) {
+	case "claudeCode":
+		return []string{"claude", "-p", prompt}, true
+	case "codex":
+		return []string{"codex", "exec", prompt}, true
+	case "opencode":
+		return []string{"opencode", "run", prompt}, true
+	default:
+		return nil, false
+	}
+}
+
+type dispatchParams struct {
+	Agent     string  `json:"agent"`
+	CWD       string  `json:"cwd"`
+	Prompt    string  `json:"prompt"`
+	BudgetUSD float64 `json:"budgetUSD"`
+}
+
+type dispatchResult struct {
+	RunID    string `json:"runId,omitempty"`
+	Status   string `json:"status"`             // running | needs-approval | denied | budget-exceeded | error
+	Decision string `json:"decision,omitempty"` // allow | ask | deny
+	Rule     string `json:"rule,omitempty"`
+	Message  string `json:"message,omitempty"`
+}
+
+type dispatchRun struct {
+	ID     string
+	Agent  string
+	Prompt string
+	Status string
+	cancel func()
+}
+
+// launchFunc starts an agent process and returns a cancel func. Injectable for tests.
+type launchFunc func(argv []string, cwd string) (cancel func(), err error)
+
+func realLauncher(argv []string, cwd string) (func(), error) {
+	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
+	cmd.Dir = cwd
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	go func() { _ = cmd.Wait() }()
+	return func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+	}, nil
+}
+
+// policyEvalFunc returns the policy effect ("allow"|"ask"|"deny") and matched rule.
+type policyEvalFunc func(ApprovalEvent) (effect string, rule string)
+
+type dispatcher struct {
+	mu       sync.Mutex
+	runs     map[string]*dispatchRun
+	spentUSD float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
+	launch   launchFunc
+}
+
+func newDispatcher() *dispatcher {
+	return &dispatcher{runs: map[string]*dispatchRun{}, launch: realLauncher}
+}
+
+// setSpentUSD updates the tracked daily spend used by the budget gate.
+func (d *dispatcher) setSpentUSD(v float64) {
+	d.mu.Lock()
+	d.spentUSD = v
+	d.mu.Unlock()
+}
+
+// dispatch applies the budget + policy gate, then launches. It NEVER launches a
+// run that policy denies/escalates, and refuses once the budget cap is reached.
+func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
+	argv, ok := agentArgv(p.Agent, p.Prompt)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
+	}
+
+	// Budget gate (hard stop). BudgetUSD <= 0 means "no cap".
+	d.mu.Lock()
+	spent := d.spentUSD
+	d.mu.Unlock()
+	if p.BudgetUSD > 0 && spent >= p.BudgetUSD {
+		audit(AuditEntry{Action: "dispatch-budget-exceeded", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
+		return dispatchResult{Status: "budget-exceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
+	}
+
+	// Policy gate. A dispatched run defaults to medium risk so the bundled policy
+	// escalates it unless a rule explicitly allows — fail-closed by default.
+	event := ApprovalEvent{
+		ApprovalID: newUUID(),
+		Agent:      normalizeAgentSource(p.Agent),
+		Kind:       "command",
+		Command:    "[dispatch] " + strings.Join(argv, " "),
+		CWD:        p.CWD,
+		Risk:       1,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	effect, rule := evalFn(event)
+	switch effect {
+	case "deny":
+		audit(AuditEntry{Action: "dispatch-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
+	case "ask":
+		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		return dispatchResult{Status: "needs-approval", Decision: "ask", Rule: rule}
+	}
+
+	cancel, err := d.launch(argv, p.CWD)
+	if err != nil {
+		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	id := newUUID()
+	d.mu.Lock()
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, Status: "running", cancel: cancel}
+	d.mu.Unlock()
+	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
+	return dispatchResult{RunID: id, Status: "running", Decision: "allow", Rule: rule}
+}
+
+func (d *dispatcher) cancel(runID string) bool {
+	d.mu.Lock()
+	run := d.runs[runID]
+	d.mu.Unlock()
+	if run == nil {
+		return false
+	}
+	if run.cancel != nil {
+		run.cancel()
+	}
+	d.mu.Lock()
+	run.Status = "cancelled"
+	d.mu.Unlock()
+	return true
+}

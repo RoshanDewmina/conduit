@@ -185,6 +185,60 @@ public actor DaemonChannel {
         }
     }
 
+    // MARK: - Proactive dispatch & schedule (WS-B2)
+
+    /// Start an agent run on the host, bounded by policy + budget on the daemon.
+    public func dispatchAgent(agent: String, cwd: String, prompt: String, budgetUSD: Double = 0) async throws -> DispatchResult {
+        var params: [String: Any] = ["agent": agent, "cwd": cwd, "prompt": prompt]
+        if budgetUSD > 0 { params["budgetUSD"] = budgetUSD }
+        let data = try await sendRPC(method: "agent.dispatch", params: params)
+        return try Self.decodeResult(data, as: DispatchResult.self)
+    }
+
+    @discardableResult
+    public func cancelRun(runId: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.cancel", params: ["runId": runId])
+        return (try Self.decodeResultObject(data)["cancelled"] as? Bool) ?? false
+    }
+
+    @discardableResult
+    public func addSchedule(_ schedule: BridgeSchedule) async throws -> BridgeSchedule {
+        let params: [String: Any] = [
+            "agent": schedule.agent, "cwd": schedule.cwd, "prompt": schedule.prompt,
+            "everySeconds": schedule.everySeconds, "budgetUSD": schedule.budgetUSD,
+        ]
+        let data = try await sendRPC(method: "agent.schedule.add", params: params)
+        return try Self.decodeResult(data, as: BridgeSchedule.self)
+    }
+
+    public func listSchedules() async throws -> [BridgeSchedule] {
+        let data = try await sendRPC(method: "agent.schedule.list", params: [:])
+        struct Wrap: Decodable { let schedules: [BridgeSchedule]? }
+        return try Self.decodeResult(data, as: Wrap.self).schedules ?? []
+    }
+
+    @discardableResult
+    public func removeSchedule(id: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.schedule.remove", params: ["id": id])
+        return (try Self.decodeResultObject(data)["removed"] as? Bool) ?? false
+    }
+
+    private static func decodeResultObject(_ data: Data) throws -> [String: Any] {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "rpc error")
+        }
+        return (dict["result"] as? [String: Any]) ?? [:]
+    }
+
+    private static func decodeResult<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
+        let result = try decodeResultObject(data)
+        let rdata = try JSONSerialization.data(withJSONObject: result)
+        return try JSONDecoder().decode(T.self, from: rdata)
+    }
+
     public func stop() {
         readTask?.cancel()
         readTask = nil
