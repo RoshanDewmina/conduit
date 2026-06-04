@@ -131,6 +131,10 @@ try:
 except Exception:
     pass
 
+tool_use_id = str(event.get("tool_use_id") or "")
+session_id  = str(event.get("session_id") or "")
+tool_input_json = json.dumps(tool_input, separators=(",", ":"), sort_keys=True)
+
 print(json.dumps({
     "autoApprove": auto_approve,
     "tool": tool,
@@ -138,6 +142,9 @@ print(json.dumps({
     "kind": kind,
     "risk": risk,
     "command": command[:20000],
+    "tool_use_id": tool_use_id,
+    "session_id": session_id,
+    "tool_input_json": tool_input_json,
 }, separators=(",", ":")))
 ' <<<"$INPUT"
 )"
@@ -160,14 +167,19 @@ KIND="$(json_get kind)"
 RISK="$(json_get risk)"
 CWD="$(json_get cwd)"
 COMMAND="$(json_get command)"
+TOOL_NAME="$(json_get tool)"
+TOOL_USE_ID="$(json_get tool_use_id)"
+SESSION_ID="$(json_get session_id)"
+TOOL_INPUT="$(json_get tool_input_json)"
 
-# Codex PreToolUse structured fields — use a bash array so values with
-# spaces, quotes, or metacharacters in CODEX_TOOL_INPUT cannot inject extra flags.
+# Build structured-field args from stdin-parsed values (bash array prevents
+# injection of extra flags by values containing spaces, quotes, or metacharacters).
+# Codex delivers all PreToolUse data on stdin as JSON — never via env vars.
 EXTRA_ARGS=()
-[ -n "${CODEX_TOOL_NAME:-}" ]   && EXTRA_ARGS+=(--tool-name="$CODEX_TOOL_NAME")
-[ -n "${CODEX_TOOL_USE_ID:-}" ] && EXTRA_ARGS+=(--tool-use-id="$CODEX_TOOL_USE_ID")
-[ -n "${CODEX_SESSION_ID:-}" ]  && EXTRA_ARGS+=(--session-id="$CODEX_SESSION_ID")
-[ -n "${CODEX_TOOL_INPUT:-}" ]  && EXTRA_ARGS+=(--tool-input="$CODEX_TOOL_INPUT")
+[ -n "$TOOL_NAME" ]                              && EXTRA_ARGS+=(--tool-name="$TOOL_NAME")
+[ -n "$TOOL_USE_ID" ]                            && EXTRA_ARGS+=(--tool-use-id="$TOOL_USE_ID")
+[ -n "$SESSION_ID" ]                             && EXTRA_ARGS+=(--session-id="$SESSION_ID")
+[ -n "$TOOL_INPUT" ] && [ "$TOOL_INPUT" != "{}" ] && EXTRA_ARGS+=(--tool-input="$TOOL_INPUT")
 
 if "$CONDUITD" agent-hook \
   --agent codex \

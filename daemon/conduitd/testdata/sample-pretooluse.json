@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_abc123",
+  "session_id": "sess_xyz789",
+  "tool_input": {"command": "ls -la /tmp"},
+  "permission_mode": "default"
+}
