@@ -26,27 +26,7 @@ public actor CloudSync {
         cloudKitEnabled: Bool = false
     ) {
         #if os(iOS) && !targetEnvironment(simulator)
-        // #region agent log
-        CloudSync.debugLog(
-            hypothesisId: "A",
-            location: "CloudSync.swift:init",
-            message: "CloudKit entitlement probe",
-            data: [
-                "cloudKitEnabled": cloudKitEnabled,
-                "containerIdentifier": containerIdentifier,
-                "willCreateContainer": cloudKitEnabled,
-            ]
-        )
-        // #endregion
         self.container = cloudKitEnabled ? CKContainer(identifier: containerIdentifier) : nil
-        // #region agent log
-        CloudSync.debugLog(
-            hypothesisId: "C",
-            location: "CloudSync.swift:init",
-            message: "CloudSync container state",
-            data: ["containerIsNil": container == nil]
-        )
-        // #endregion
         #endif
     }
 
@@ -144,6 +124,21 @@ public actor CloudSync {
     }
 
     #if os(iOS) && !targetEnvironment(simulator)
+    private static func debugLog(
+        hypothesisId: String,
+        location: String,
+        message: String,
+        data: [String: Any] = [:]
+    ) {
+        #if DEBUG
+        let dataString = data
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: ", ")
+        print("[CloudSync][\(hypothesisId)] \(location) - \(message) \(dataString)")
+        #endif
+    }
+
     /// Whether this build is provisioned to use CloudKit.
     ///
     /// iOS has **no public API** to read our own entitlements at runtime

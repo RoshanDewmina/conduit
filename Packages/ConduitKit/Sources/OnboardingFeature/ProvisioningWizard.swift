@@ -67,10 +67,14 @@ public final class ProvisioningWizardViewModel {
                     secretKey: lightsailSecretKey,
                     region: plan.region.isEmpty ? "us-east-1" : plan.region
                 )
-            #if DEBUG
             case .orbstack:
+                #if DEBUG
                 provisioner = OrbstackProvisioner()
-            #endif
+                #else
+                error = "OrbStack provisioning is only available in debug builds."
+                step = .configure
+                return
+                #endif
             }
 
             let host = try await provisioner.create(plan: plan, log: log)
