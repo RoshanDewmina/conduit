@@ -637,6 +637,7 @@ public struct AppRoot: View {
         Task {
             await vm.disconnect()
             await MainActor.run {
+                ApprovalRelay.shared.clearChannel()
                 sessionViewModel = nil
                 hudStore.session = nil
             }
@@ -837,6 +838,10 @@ public struct AppRoot: View {
                 try? await env.hostRepo.touch(id: host.id)
             }
             try? await channel.start()  // launch conduitd serve on remote host
+            // Attach the relay so Live Activity / Dynamic Island decisions are
+            // forwarded to conduitd, and drain any decisions queued while the
+            // channel was absent (e.g. lock-screen tap before app foregrounded).
+            await ApprovalRelay.shared.setChannel(channel)
             await ingest.start()
         }
     }
