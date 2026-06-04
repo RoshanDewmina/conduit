@@ -13,12 +13,12 @@ func TestRunAgentHookWithToolUse(t *testing.T) {
 	//   conduitd agent-hook --agent claudeCode --kind command --command "ls" \
 	//     --cwd /tmp --risk low \
 	//     --tool-name bash --tool-use-id abc --session-id xyz --tool-input '{"command":"ls"}'
-	agent     := "claudeCode"
-	kind      := "command"
-	command   := "ls"
-	cwd       := "/tmp"
-	risk      := "low"
-	toolName  := "bash"
+	agent := "claudeCode"
+	kind := "command"
+	command := "ls"
+	cwd := "/tmp"
+	risk := "low"
+	toolName := "bash"
 	toolUseID := "abc"
 	sessionID := "xyz"
 	toolInput := `{"command":"ls"}`
@@ -31,7 +31,7 @@ func TestRunAgentHookWithToolUse(t *testing.T) {
 
 	event := ApprovalEvent{
 		ApprovalID: newUUID(),
-		Agent:      normalizeAgent(agent),
+		Agent:      normalizeAgentSource(agent),
 		Kind:       normalizedKind,
 		Command:    command,
 		Patch:      patch,
