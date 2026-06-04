@@ -1,0 +1,10 @@
+{
+  "session_id": "ses_opencode_fixture_01",
+  "cwd": "/Users/dev/my-app",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "tu_opencode_01",
+  "tool_input": {
+    "command": "npm test"
+  }
+}
