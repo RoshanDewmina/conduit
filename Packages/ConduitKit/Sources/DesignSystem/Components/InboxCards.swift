@@ -163,9 +163,12 @@ public struct DSMCPCallCard: View {
     let hostLabel: String
     let timeLabel: String
     let toolName: String     // e.g. "read_file" or "bash"
+    let toolUseID: String?
     let args: String?        // one-line summary of arguments
     let risk: Int
     let onDeny: () -> Void
+    let onEditAndRun: () -> Void
+    let onAllowAlways: () -> Void
     let onApprove: () -> Void
 
     @Environment(\.conduitTokens) private var t
@@ -176,9 +179,12 @@ public struct DSMCPCallCard: View {
         hostLabel: String = "",
         timeLabel: String,
         toolName: String,
+        toolUseID: String? = nil,
         args: String? = nil,
         risk: Int,
         onDeny: @escaping () -> Void,
+        onEditAndRun: @escaping () -> Void,
+        onAllowAlways: @escaping () -> Void,
         onApprove: @escaping () -> Void
     ) {
         self.agentKey = agentKey
@@ -186,9 +192,12 @@ public struct DSMCPCallCard: View {
         self.hostLabel = hostLabel
         self.timeLabel = timeLabel
         self.toolName = toolName
+        self.toolUseID = toolUseID
         self.args = args
         self.risk = risk
         self.onDeny = onDeny
+        self.onEditAndRun = onEditAndRun
+        self.onAllowAlways = onAllowAlways
         self.onApprove = onApprove
     }
 
@@ -210,6 +219,16 @@ public struct DSMCPCallCard: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let toolUseID, !toolUseID.isEmpty {
+                HStack(spacing: 6) {
+                    DSChip("tool use", tone: .neutral, variant: .soft, size: .sm)
+                    Text(toolUseID)
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
+            }
+
             // Command well: t.bg background, t.divider border, $ in danger + tool name mono
             HStack(alignment: .top, spacing: 8) {
                 Text("$")
@@ -223,6 +242,7 @@ public struct DSMCPCallCard: View {
                         Text(a)
                             .font(.dsMonoPt(11))
                             .foregroundStyle(t.text3)
+                            .lineLimit(6)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -238,7 +258,7 @@ public struct DSMCPCallCard: View {
             )
 
             // Action buttons: equal width, square, BLOCKS display font
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 Button(action: onDeny) {
                     Text("✕  deny")
                         .font(.dsDisplayPt(12, weight: .semibold))
@@ -254,7 +274,35 @@ public struct DSMCPCallCard: View {
                 }
                 .buttonStyle(.plain)
 
-                Spacer().frame(width: 8)
+                Button(action: onAllowAlways) {
+                    Text("always")
+                        .font(.dsDisplayPt(12, weight: .semibold))
+                        .foregroundStyle(t.text)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(t.surfaceSunk)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onEditAndRun) {
+                    Text("edit & run")
+                        .font(.dsDisplayPt(12, weight: .semibold))
+                        .foregroundStyle(t.text)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(t.surfaceSunk)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .buttonStyle(.plain)
 
                 Button(action: onApprove) {
                     Text("✓  approve")

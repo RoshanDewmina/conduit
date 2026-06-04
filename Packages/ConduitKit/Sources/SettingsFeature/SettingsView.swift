@@ -8,6 +8,7 @@ import KeysFeature
 import PersistenceKit
 import SecurityKit
 import SyncKit
+import NotificationsKit
 
 @MainActor @Observable
 public final class SettingsViewModel {
@@ -154,6 +155,7 @@ public struct SettingsView: View {
     let syncEngine: SyncEngine?
     let backendURL: String
     let auditRepository: AuditRepository?
+    let approvalRepository: ApprovalRepository?
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
 
@@ -164,6 +166,9 @@ public struct SettingsView: View {
     @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
     @AppStorage("flag.autonomyPresets") private var autonomyPresetsEnabled: Bool = true
     @Environment(\.conduitTokens) private var t
+    @State private var notificationFilter = NotificationFilter()
+    @State private var alwaysRules: [AlwaysRuleItem] = []
+    @State private var revokedRuleSignatures: Set<String> = Self.loadRevokedRuleSignatures()
 
     private var autonomyPreset: Binding<AutonomyPreset> {
         Binding(
@@ -185,6 +190,7 @@ public struct SettingsView: View {
         syncEngine: SyncEngine? = nil,
         backendURL: String = "",
         auditRepository: AuditRepository? = nil,
+        approvalRepository: ApprovalRepository? = nil,
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {}
     ) {
@@ -192,6 +198,7 @@ public struct SettingsView: View {
         self.syncEngine = syncEngine
         self.backendURL = backendURL
         self.auditRepository = auditRepository
+        self.approvalRepository = approvalRepository
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
     }
@@ -324,6 +331,9 @@ public struct SettingsView: View {
                         agentApprovalsSection
                     }
 
+                    notificationFilterSection
+                    allowAlwaysRulesSection
+
                     // ── Integrations
                     sectionHead("Integrations")
                     settingsCard {
@@ -392,7 +402,14 @@ public struct SettingsView: View {
                 }
             }
         }
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            await loadNotificationFilter()
+            await refreshAlwaysRules()
+        }
+        .onChange(of: notificationFilter) { _, _ in
+            Task { await persistNotificationFilter() }
+        }
     }
 
     // MARK: - Provider row
@@ -482,6 +499,142 @@ public struct SettingsView: View {
         }
         .padding(.bottom, 16)
         .onChange(of: autonomyPresetRaw) { _, _ in Haptics.selection() }
+    }
+
+    // MARK: - Notifications
+
+    @ViewBuilder
+    private var notificationFilterSection: some View {
+        sectionHead("Notification filters")
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Minimum risk")
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.text2)
+                DSSegmentedPicker(
+                    options: [
+                        (label: "Low+", value: Approval.Risk.low),
+                        (label: "Med+", value: Approval.Risk.medium),
+                        (label: "High+", value: Approval.Risk.high),
+                        (label: "Crit", value: Approval.Risk.critical),
+                    ],
+                    selection: Binding(
+                        get: { notificationFilter.minRisk },
+                        set: { notificationFilter.minRisk = $0 }
+                    )
+                )
+
+                DSDivider(.soft, leadingInset: 0)
+
+                Text("Agent filter")
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.text2)
+                ForEach(approvalAgents, id: \.rawValue) { agent in
+                    Toggle(isOn: Binding(
+                        get: { isAgentEnabled(agent) },
+                        set: { setAgent(agent, enabled: $0) }
+                    )) {
+                        Text(agentLabel(agent))
+                            .font(.dsSansPt(14))
+                            .foregroundStyle(t.text)
+                    }
+                    .tint(t.accent)
+                }
+
+                DSDivider(.soft, leadingInset: 0)
+
+                Toggle(isOn: Binding(
+                    get: { notificationFilter.quietHoursEnabled },
+                    set: { notificationFilter.quietHoursEnabled = $0 }
+                )) {
+                    Text("Quiet hours")
+                        .font(.dsSansPt(14))
+                        .foregroundStyle(t.text)
+                }
+                .tint(t.accent)
+
+                if notificationFilter.quietHoursEnabled {
+                    HStack(spacing: 8) {
+                        Text("From")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                        Picker("Quiet start", selection: Binding(
+                            get: { notificationFilter.quietHoursStart },
+                            set: { notificationFilter.quietHoursStart = $0 }
+                        )) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(Self.hourLabel(hour)).tag(hour)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        Text("to")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                        Picker("Quiet end", selection: Binding(
+                            get: { notificationFilter.quietHoursEnd },
+                            set: { notificationFilter.quietHoursEnd = $0 }
+                        )) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(Self.hourLabel(hour)).tag(hour)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - Allow-always rules
+
+    @ViewBuilder
+    private var allowAlwaysRulesSection: some View {
+        sectionHead("Allow-always rules")
+        settingsCard {
+            if alwaysRules.isEmpty {
+                Text("No persisted allow-always rules yet.")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            } else {
+                ForEach(alwaysRules) { rule in
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(rule.title)
+                                .font(.dsMonoPt(12, weight: .medium))
+                                .foregroundStyle(t.text)
+                            Text(rule.subtitle)
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(t.text3)
+                            if rule.count > 1 {
+                                Text("\(rule.count)x approvals")
+                                    .font(.dsMonoPt(10.5))
+                                    .foregroundStyle(t.text4)
+                            }
+                        }
+                        Spacer()
+                        Button("Revoke") {
+                            revokeRule(rule)
+                        }
+                        .font(.dsSansPt(13, weight: .medium))
+                        .foregroundStyle(t.danger)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    if rule.id != alwaysRules.last?.id {
+                        divider
+                    }
+                }
+            }
+        }
+        .padding(.bottom, 16)
     }
 
     // MARK: - Layout helpers
@@ -574,6 +727,101 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
+
+    // MARK: - Persistence helpers
+
+    private static let revokedRulesKey = "settings.revokedAlwaysRuleSignatures"
+    private static func loadRevokedRuleSignatures() -> Set<String> {
+        let values = UserDefaults.standard.stringArray(forKey: revokedRulesKey) ?? []
+        return Set(values)
+    }
+
+    private static func hourLabel(_ hour: Int) -> String {
+        let normalized = hour % 24
+        return String(format: "%02d:00", normalized)
+    }
+
+    private var approvalAgents: [Approval.AgentSource] {
+        [.claudeCode, .codex, .cursor, .opencode, .devin, .unknown]
+    }
+
+    private func agentLabel(_ source: Approval.AgentSource) -> String {
+        switch source {
+        case .claudeCode: "Claude Code"
+        case .codex: "Codex"
+        case .cursor: "Cursor"
+        case .opencode: "OpenCode"
+        case .devin: "Devin"
+        case .unknown: "Unknown"
+        }
+    }
+
+    private func isAgentEnabled(_ source: Approval.AgentSource) -> Bool {
+        notificationFilter.enabledAgents?.contains(source.rawValue) ?? true
+    }
+
+    private func setAgent(_ source: Approval.AgentSource, enabled: Bool) {
+        var set = notificationFilter.enabledAgents ?? Set(approvalAgents.map(\.rawValue))
+        if enabled { set.insert(source.rawValue) } else { set.remove(source.rawValue) }
+        notificationFilter.enabledAgents = set.count == approvalAgents.count ? nil : set
+    }
+
+    private func loadNotificationFilter() async {
+        notificationFilter = await Notifications.shared.loadFilter()
+    }
+
+    private func persistNotificationFilter() async {
+        await Notifications.shared.saveFilter(notificationFilter)
+    }
+
+    private func refreshAlwaysRules() async {
+        guard let approvalRepository else {
+            alwaysRules = []
+            return
+        }
+        let approvals = (try? await approvalRepository.all()) ?? []
+        let approvedAlways = approvals.filter { $0.decision == .approvedAlways }
+        var grouped: [String: AlwaysRuleItem] = [:]
+        for approval in approvedAlways {
+            let signature = ruleSignature(for: approval)
+            if revokedRuleSignatures.contains(signature) { continue }
+            if var existing = grouped[signature] {
+                existing.count += 1
+                grouped[signature] = existing
+                continue
+            }
+            grouped[signature] = AlwaysRuleItem(
+                id: signature,
+                title: approval.toolName ?? approval.command ?? approval.kind.rawValue,
+                subtitle: approval.cwd,
+                count: 1
+            )
+        }
+        alwaysRules = grouped.values.sorted { $0.title < $1.title }
+    }
+
+    private func ruleSignature(for approval: Approval) -> String {
+        [
+            approval.kind.rawValue,
+            approval.toolName ?? "",
+            approval.command ?? "",
+            approval.cwd,
+            approval.toolInput ?? ""
+        ].joined(separator: "|")
+    }
+
+    private func revokeRule(_ rule: AlwaysRuleItem) {
+        revokedRuleSignatures.insert(rule.id)
+        UserDefaults.standard.set(Array(revokedRuleSignatures), forKey: Self.revokedRulesKey)
+        alwaysRules.removeAll { $0.id == rule.id }
+    }
+}
+
+private struct AlwaysRuleItem: Identifiable, Sendable {
+    let id: String
+    let title: String
+    let subtitle: String
+    var count: Int
 }
 
 #endif

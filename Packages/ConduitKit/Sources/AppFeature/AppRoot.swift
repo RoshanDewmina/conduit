@@ -151,6 +151,7 @@ public struct AppRoot: View {
     @State private var isShowingLiveSession = false
     @State private var showingHostedAgents = false
     @State private var fleetStore = FleetStore()
+    @State private var selectedFleetSlotID: UUID?
 
     private var isPro: Bool {
         #if DEBUG
@@ -299,8 +300,15 @@ public struct AppRoot: View {
         .onReceive(NotificationCenter.default.publisher(for: .conduitApprovalAction)) { note in
             handleApprovalAction(note)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { _ in
-            if sessionViewModel != nil { isShowingLiveSession = true }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { note in
+            if
+                let sessionID = note.userInfo?["sessionId"] as? String,
+                let uuid = UUID(uuidString: sessionID),
+                let slot = fleetStore.slots.first(where: { $0.sessionViewModel.sessionID.raw == uuid })
+            {
+                selectFleetSlot(slot.id)
+            }
+            if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
     }
 
@@ -316,7 +324,13 @@ public struct AppRoot: View {
             let action = info["action"] as? String
         else { return }
         let decision: Approval.Decision = (action == "approve") ? .approved : .rejected
-        activeInboxViewModel.decide(ApprovalID(uuid), decision: decision)
+        let approvalID = ApprovalID(uuid)
+        if let slot = fleetStore.slot(forApprovalID: approvalID) {
+            selectFleetSlot(slot.id)
+            slot.inboxVM.decide(approvalID, decision: decision)
+            return
+        }
+        activeInboxViewModel.decide(approvalID, decision: decision)
     }
 
     private func attemptUnlock() async {
@@ -502,7 +516,27 @@ public struct AppRoot: View {
     }
 
     private var activeInboxViewModel: InboxViewModel {
-        liveInboxVM ?? inboxVM
+        selectedFleetSlot?.inboxVM ?? liveInboxVM ?? inboxVM
+    }
+
+    private var selectedFleetSlot: FleetStore.Slot? {
+        guard let selectedFleetSlotID else { return fleetStore.slots.first }
+        return fleetStore.slots.first { $0.id == selectedFleetSlotID } ?? fleetStore.slots.first
+    }
+
+    private var activeSessionViewModel: SessionViewModel? {
+        selectedFleetSlot?.sessionViewModel ?? sessionViewModel
+    }
+
+    @MainActor
+    private func selectFleetSlot(_ id: UUID) {
+        selectedFleetSlotID = id
+        if let slot = fleetStore.slots.first(where: { $0.id == id }) {
+            sessionViewModel = slot.sessionViewModel
+            daemonChannel = slot.channel
+            approvalIngest = slot.ingest
+            hudStore.session = slot.sessionViewModel
+        }
     }
 
     @MainActor
@@ -551,19 +585,19 @@ public struct AppRoot: View {
             VStack(spacing: 0) {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
-                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
+                    onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
                     // Manual retry after the auto-reconnect engine gives up
                     // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
                     // re-arms a session stuck in `.failed`.
-                    onReconnect: sessionViewModel == nil ? nil : {
-                        Task { await sessionViewModel?.reconnect() }
+                    onReconnect: activeSessionViewModel == nil ? nil : {
+                        Task { await activeSessionViewModel?.reconnect() }
                     }
                 )
                 tabContent(env: env, tabItems: tabItems, tabID: tabID)
             }
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
-            if let vm = sessionViewModel {
+            if let vm = activeSessionViewModel {
                 SessionView(viewModel: vm)
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             }
@@ -606,9 +640,9 @@ public struct AppRoot: View {
             VStack(spacing: 0) {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
-                    onTap: { if sessionViewModel != nil { isShowingLiveSession = true } },
-                    onReconnect: sessionViewModel == nil ? nil : {
-                        Task { await sessionViewModel?.reconnect() }
+                    onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
+                    onReconnect: activeSessionViewModel == nil ? nil : {
+                        Task { await activeSessionViewModel?.reconnect() }
                     }
                 )
                 NavigationSplitView {
@@ -624,30 +658,44 @@ public struct AppRoot: View {
             }
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
-            if let vm = sessionViewModel {
+            if let vm = activeSessionViewModel {
                 SessionView(viewModel: vm)
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             }
         }
     }
 
-    /// Tear down the live session and clear it from the UI. Used by the
-    /// active-row long-press menu and (indirectly) the in-session menu.
-    private func disconnectLiveSession() {
-        guard let vm = sessionViewModel else { return }
-        // Capture the fleet slot ID before the async gap so we can remove it.
-        let fleetSlotID = fleetStore.slots.first { $0.sessionViewModel === vm }?.id
+    /// Tear down a fleet slot and remove it from Hosts ACTIVE.
+    private func disconnectLiveSession(slotID: UUID? = nil) {
+        let resolvedID = slotID ?? selectedFleetSlot?.id
+        guard let resolvedID, let slot = fleetStore.slots.first(where: { $0.id == resolvedID }) else { return }
         Task {
-            await vm.disconnect()
+            await slot.sessionViewModel.disconnect()
+            await slot.ingest.stop()
+            await slot.channel.stop()
             await MainActor.run {
-                ApprovalRelay.shared.clearChannel()
-                sessionViewModel = nil
-                hudStore.session = nil
-                if let slotID = fleetSlotID {
-                    fleetStore.remove(id: slotID)
+                fleetStore.remove(id: resolvedID)
+                if fleetStore.slots.isEmpty {
+                    ApprovalRelay.shared.clearChannel()
+                    selectedFleetSlotID = nil
+                    sessionViewModel = nil
+                    daemonChannel = nil
+                    approvalIngest = nil
+                    hudStore.session = nil
+                    isShowingLiveSession = false
+                } else if let fallback = fleetStore.slots.first {
+                    selectFleetSlot(fallback.id)
                 }
             }
         }
+    }
+
+    private func jumpToUnreadLiveSession() {
+        guard let slot = fleetStore.slots.first(where: { candidate in
+            candidate.inboxVM.approvals.contains { $0.isPending && $0.sessionID == candidate.sessionViewModel.sessionID }
+        }) else { return }
+        selectFleetSlot(slot.id)
+        isShowingLiveSession = true
     }
 
     @ViewBuilder
@@ -655,13 +703,17 @@ public struct AppRoot: View {
         switch tab {
         case .hosts:
             HostsView(
-                liveSession: sessionViewModel,
-                liveInboxVM: liveInboxVM,
+                liveSessions: fleetStore.slots,
+                selectedLiveSessionID: selectedFleetSlotID,
                 hostRepo: env.hostRepo,
                 blockRepo: env.blockRepo,
                 snapshotRepo: env.snapshotRepo,
-                onTapLiveSession: { isShowingLiveSession = true },
-                onDisconnectLiveSession: { disconnectLiveSession() },
+                onTapLiveSession: { slotID in
+                    selectFleetSlot(slotID)
+                    isShowingLiveSession = true
+                },
+                onDisconnectLiveSession: { slotID in disconnectLiveSession(slotID: slotID) },
+                onJumpToUnread: { jumpToUnreadLiveSession() },
                 onAddHost: { addHostPresented = true },
                 onSelect: { host in openSession(host: host, env: env) },
                 onEdit: { host in editingHost = host }
@@ -694,7 +746,8 @@ public struct AppRoot: View {
                 viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
                 syncEngine: env.syncEngine,
                 backendURL: Self.pushBackendURL(),
-                auditRepository: env.auditRepo
+                auditRepository: env.auditRepo,
+                approvalRepository: approvalRepository
             )
         }
     }
@@ -819,24 +872,24 @@ public struct AppRoot: View {
                         try? await channel.respond(approvalId: id.uuidString, decision: decision)
                     }
                 )
-                self.sessionViewModel = vm
-                self.hudStore.session = vm
                 self.approvalRepository = approvalRepo
-                self.daemonChannel = channel
-                self.approvalIngest = ingest
                 self.liveInboxVM = liveVM
                 self.inboxVM = liveVM  // replace static InboxViewModel
                 // Fleet: register the new slot (additive — single-slot path above
                 // is preserved for backwards compat with the current UI).
                 // When the store is full (maxSlots reached), the add is a no-op.
-                self.fleetStore.add(FleetStore.Slot(
+                let slot = FleetStore.Slot(
                     hostID: host.id,
                     hostName: host.name,
                     sessionViewModel: vm,
                     channel: channel,
                     ingest: ingest,
                     inboxVM: liveVM
-                ))
+                )
+                self.fleetStore.add(slot)
+                if self.fleetStore.slots.contains(where: { $0.id == slot.id }) {
+                    self.selectFleetSlot(slot.id)
+                }
                 self.selectedTab = .hosts
                 self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(

@@ -160,7 +160,14 @@ let package = Package(
         ),
         .target(
             name: "InboxFeature",
-            dependencies: ["DesignSystem", "AgentKit", "NotificationsKit", "PersistenceKit"],
+            dependencies: [
+                "DesignSystem",
+                "AgentKit",
+                "NotificationsKit",
+                "PersistenceKit",
+                "DiffKit",
+                "DiffFeature",
+            ],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -185,7 +192,15 @@ let package = Package(
         ),
         .target(
             name: "SettingsFeature",
-            dependencies: ["DesignSystem", "PersistenceKit", "AgentKit", "SecurityKit", "SyncKit", "KeysFeature"],
+            dependencies: [
+                "DesignSystem",
+                "PersistenceKit",
+                "AgentKit",
+                "SecurityKit",
+                "SyncKit",
+                "KeysFeature",
+                "NotificationsKit",
+            ],
             swiftSettings: swiftSettings
         ),
         .target(

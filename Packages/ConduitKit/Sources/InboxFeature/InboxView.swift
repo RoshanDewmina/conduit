@@ -4,6 +4,8 @@ import Observation
 import ConduitCore
 import AgentKit
 import DesignSystem
+import DiffKit
+import DiffFeature
 
 @MainActor @Observable
 public class InboxViewModel {
@@ -40,7 +42,8 @@ public struct InboxView: View {
 
     @Environment(\.conduitTokens) private var t
     @State private var editingApproval: Approval?
-    @State private var editedCommandText = ""
+    @State private var editedToolInputText = ""
+    @State private var diffApproval: Approval?
 
     public init(
         viewModel: InboxViewModel,
@@ -110,6 +113,9 @@ public struct InboxView: View {
         .sheet(item: $editingApproval) { approval in
             editSheet(approval)
         }
+        .sheet(item: $diffApproval) { approval in
+            diffSheet(approval)
+        }
     }
 
     // MARK: - Pending card dispatch
@@ -136,10 +142,16 @@ public struct InboxView: View {
                 agentName: agentName(approval.agent),
                 hostLabel: approval.cwd,
                 timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
-                toolName: approval.command ?? "unknown_tool",
-                args: approval.patch,
+                toolName: approval.toolName ?? approval.command ?? "unknown_tool",
+                toolUseID: approval.toolUseID,
+                args: summarizedToolInput(approval),
                 risk: approval.risk.rawValue,
                 onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onEditAndRun: {
+                    editedToolInputText = editableToolInput(for: approval)
+                    editingApproval = approval
+                },
+                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
                 onApprove: { vm.decide(approval.id, decision: .approved) }
             )
 
@@ -152,11 +164,11 @@ public struct InboxView: View {
                 action: actionPhrase(approval.kind),
                 hostLabel: approval.cwd,
                 command: approval.command,
-                onViewDiff: approval.patch != nil ? {} : nil,
+                onViewDiff: approval.patch != nil ? { diffApproval = approval } : nil,
                 onDeny: { vm.decide(approval.id, decision: .rejected) },
                 onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
-                onEditAndRun: approval.command != nil ? {
-                    editedCommandText = approval.command ?? ""
+                onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
+                    editedToolInputText = editableToolInput(for: approval)
                     editingApproval = approval
                 } : nil,
                 onApprove: { vm.decide(approval.id, decision: .approved) }
@@ -166,17 +178,35 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func editSheet(_ approval: Approval) -> some View {
+        let original = editableToolInput(for: approval)
+        let payload = editedToolInputJSON(for: approval, editedText: editedToolInputText)
+        let preview = toolInputDiff(original: original, edited: payload)
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Edit command before running")
+                Text("Edit tool input JSON before running")
                     .font(.dsSansPt(14))
                     .foregroundStyle(t.text2)
-                TextEditor(text: $editedCommandText)
+                TextEditor(text: $editedToolInputText)
                     .font(.dsMonoPt(13))
                     .frame(minHeight: 120)
                     .padding(8)
                     .background(t.surface)
                     .clipShape(RoundedRectangle(cornerRadius: t.r3))
+
+                if let preview {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Proposed diff")
+                            .font(.dsSansPt(13, weight: .medium))
+                            .foregroundStyle(t.text2)
+                        DiffView(diff: preview)
+                            .frame(minHeight: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3))
+                    }
+                } else {
+                    Text("No changes yet")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
             }
             .padding(16)
             .background(t.bg)
@@ -188,7 +218,6 @@ public struct InboxView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Run") {
-                        let payload = editedToolInputJSON(for: approval, command: editedCommandText)
                         vm.decide(approval.id, decision: .approved, editedToolInput: payload)
                         editingApproval = nil
                     }
@@ -198,21 +227,82 @@ public struct InboxView: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func editedToolInputJSON(for approval: Approval, command: String) -> String {
+    private func diffSheet(_ approval: Approval) -> some View {
+        NavigationStack {
+            if let patch = approval.patch {
+                DiffView(diff: UnifiedDiffParser.parse(patch))
+                    .navigationTitle("Patch Diff")
+                    .navigationBarTitleDisplayMode(.inline)
+            } else {
+                ContentUnavailableView("No diff available", systemImage: "plusminus")
+            }
+        }
+    }
+
+    private func editableToolInput(for approval: Approval) -> String {
+        guard let toolInput = approval.toolInput, !toolInput.isEmpty else {
+            let command = approval.command ?? ""
+            if let data = try? JSONSerialization.data(withJSONObject: ["command": command], options: [.prettyPrinted]),
+               let json = String(data: data, encoding: .utf8) {
+                return json
+            }
+            return command
+        }
+        guard
+            let data = toolInput.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data),
+            let prettyData = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted]),
+            let pretty = String(data: prettyData, encoding: .utf8)
+        else {
+            return toolInput
+        }
+        return pretty
+    }
+
+    private func summarizedToolInput(_ approval: Approval) -> String? {
+        guard let toolInput = approval.toolInput, !toolInput.isEmpty else {
+            return approval.patch ?? approval.command
+        }
+        return toolInput.count > 240 ? String(toolInput.prefix(240)) + "…" : toolInput
+    }
+
+    private func editedToolInputJSON(for approval: Approval, editedText: String) -> String {
+        let trimmed = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return editedText }
+        if let data = trimmed.data(using: .utf8),
+           (try? JSONSerialization.jsonObject(with: data)) != nil {
+            return trimmed
+        }
         if let existing = approval.toolInput,
-           let data = existing.data(using: .utf8),
-           var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-            object["command"] = command
+           let existingData = existing.data(using: .utf8),
+           var object = (try? JSONSerialization.jsonObject(with: existingData)) as? [String: Any] {
+            object["command"] = trimmed
             if let out = try? JSONSerialization.data(withJSONObject: object),
                let str = String(data: out, encoding: .utf8) {
                 return str
             }
         }
-        if let data = try? JSONSerialization.data(withJSONObject: ["command": command]),
+        if let data = try? JSONSerialization.data(withJSONObject: ["command": trimmed]),
            let str = String(data: data, encoding: .utf8) {
             return str
         }
-        return command
+        return editedText
+    }
+
+    private func toolInputDiff(original: String, edited: String) -> UnifiedDiff? {
+        guard original != edited else { return nil }
+        let oldLines = original.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let newLines = edited.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let oldCount = max(oldLines.count, 1)
+        let newCount = max(newLines.count, 1)
+        var lines: [String] = [
+            "--- a/tool_input.json",
+            "+++ b/tool_input.json",
+            "@@ -1,\(oldCount) +1,\(newCount) @@",
+        ]
+        lines.append(contentsOf: oldLines.map { "-\($0)" })
+        lines.append(contentsOf: newLines.map { "+\($0)" })
+        return UnifiedDiffParser.parse(lines.joined(separator: "\n"))
     }
 
     // MARK: - Decided row (compact)

@@ -1135,10 +1135,13 @@ private struct TypedInboxGalleryScreen: View {
                 agentKey: .claudeCode,
                 agentName: "Claude Code",
                 timeLabel: "1m",
-                toolName: approval.command ?? "read_file",
-                args: approval.patch,
+                toolName: approval.toolName ?? approval.command ?? "read_file",
+                toolUseID: approval.toolUseID,
+                args: approval.toolInput ?? approval.patch,
                 risk: approval.risk.rawValue,
                 onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onEditAndRun: {},
+                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
                 onApprove: { vm.decide(approval.id, decision: .approved) }
             )
         default:
@@ -1179,8 +1182,10 @@ private struct TypedInboxGalleryScreen: View {
             Approval(
                 sessionID: sid, agent: .claudeCode, kind: .callMCP,
                 command: "read_file",
-                patch: "path: /etc/nginx/nginx.conf",
-                cwd: "~/infra", risk: .low
+                cwd: "~/infra", risk: .low,
+                toolName: "read_file",
+                toolUseID: "toolu_01GfGYYsQxJ",
+                toolInput: "{\n  \"path\": \"/etc/nginx/nginx.conf\"\n}"
             ),
             Approval(
                 sessionID: sid, agent: .claudeCode, kind: .command,
@@ -1335,9 +1340,12 @@ private struct FeaturesGalleryScreen: View {
             agentName: "Claude Code",
             timeLabel: "30s",
             toolName: "execute_command",
+            toolUseID: "toolu_01DmQxFA8L9",
             args: "cmd: \"docker ps -a\"",
             risk: 1,
             onDeny: {},
+            onEditAndRun: {},
+            onAllowAlways: {},
             onApprove: {}
         )
         .padding(.horizontal, 16)

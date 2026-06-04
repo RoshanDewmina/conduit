@@ -19,7 +19,7 @@ public extension Notification.Name {
 
 /// Controls which approval notifications are delivered.
 /// Stored in UserDefaults so user preferences persist across launches.
-public struct NotificationFilter: Codable, Sendable {
+public struct NotificationFilter: Codable, Sendable, Equatable {
     public var minRisk: Approval.Risk = .low
     /// nil = all agents; non-nil = only the listed agent raw values
     public var enabledAgents: Set<String>? = nil
@@ -76,6 +76,14 @@ public actor Notifications {
                 UserDefaults.standard.set(data, forKey: Self.filterKey)
             }
         }
+    }
+
+    public func loadFilter() -> NotificationFilter {
+        _filter
+    }
+
+    public func saveFilter(_ filter: NotificationFilter) {
+        self.filter = filter
     }
 
     public func requestAuthorization() async -> Bool {

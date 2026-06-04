@@ -14,16 +14,17 @@ public struct HostsView: View {
 
     // MARK: - Inputs
 
-    let liveSession: SessionViewModel?
-    let liveInboxVM: InboxViewModel?
+    let liveSessions: [FleetStore.Slot]
+    let selectedLiveSessionID: UUID?
     let hostRepo: HostRepository
     let blockRepo: BlockRepository
     let snapshotRepo: SessionSnapshotRepository
 
     // MARK: - Callbacks
 
-    let onTapLiveSession: () -> Void
-    let onDisconnectLiveSession: () -> Void
+    let onTapLiveSession: (UUID) -> Void
+    let onDisconnectLiveSession: (UUID) -> Void
+    let onJumpToUnread: () -> Void
     let onAddHost: () -> Void
     let onSelect: (Host) -> Void
     let onEdit: (Host) -> Void
@@ -42,24 +43,26 @@ public struct HostsView: View {
     // MARK: - Init
 
     public init(
-        liveSession: SessionViewModel?,
-        liveInboxVM: InboxViewModel?,
+        liveSessions: [FleetStore.Slot],
+        selectedLiveSessionID: UUID?,
         hostRepo: HostRepository,
         blockRepo: BlockRepository,
         snapshotRepo: SessionSnapshotRepository,
-        onTapLiveSession: @escaping () -> Void,
-        onDisconnectLiveSession: @escaping () -> Void,
+        onTapLiveSession: @escaping (UUID) -> Void,
+        onDisconnectLiveSession: @escaping (UUID) -> Void,
+        onJumpToUnread: @escaping () -> Void,
         onAddHost: @escaping () -> Void,
         onSelect: @escaping (Host) -> Void,
         onEdit: @escaping (Host) -> Void
     ) {
-        self.liveSession = liveSession
-        self.liveInboxVM = liveInboxVM
+        self.liveSessions = liveSessions
+        self.selectedLiveSessionID = selectedLiveSessionID
         self.hostRepo = hostRepo
         self.blockRepo = blockRepo
         self.snapshotRepo = snapshotRepo
         self.onTapLiveSession = onTapLiveSession
         self.onDisconnectLiveSession = onDisconnectLiveSession
+        self.onJumpToUnread = onJumpToUnread
         self.onAddHost = onAddHost
         self.onSelect = onSelect
         self.onEdit = onEdit
@@ -79,7 +82,12 @@ public struct HostsView: View {
                     count: countLabel,
                     spectrumMode: spectrumMode
                 ) {
-                    DSIconButton(.plus) { onAddHost() }
+                    HStack(spacing: 8) {
+                        if hasUnreadLiveSession {
+                            DSButton("UNREAD", variant: .secondary, size: .sm, mono: true, action: onJumpToUnread)
+                        }
+                        DSIconButton(.plus) { onAddHost() }
+                    }
                 }
 
                 DSSearchField(text: $searchText, placeholder: "Search or \"ssh user@host\"")
@@ -142,40 +150,37 @@ public struct HostsView: View {
 
     // MARK: - Computed data
 
-    /// Live session summary, if any.
-    private var liveSummary: SessionSummary? {
-        guard let vm = liveSession else { return nil }
-        let pending = liveInboxVM?.approvals.filter { $0.isPending }.count ?? 0
-        let snap = snapshots.first { $0.hostID == vm.host.id }
-        let key = agentKey(for: snap?.agentID)
-        return SessionSummary(
-            id: vm.sessionID.raw,
-            hostName: vm.host.name,
-            hostname: vm.host.displayAddress,
-            cwd: vm.cwd,
-            lastUsedAt: .now,
-            isLive: true,
-            agentState: agentState(for: vm),
-            agentKey: key == .unknown ? .claudeCode : key,
-            pendingApprovals: pending,
-            unreadCount: pending
-        )
-    }
-
     /// Live summaries filtered by search text (ACTIVE section).
     private var activeSummaries: [SessionSummary] {
-        guard let live = liveSummary else { return [] }
-        guard !searchText.isEmpty else { return [live] }
+        let all = liveSessions.map { slot in
+            let vm = slot.sessionViewModel
+            let pending = slot.inboxVM.approvals.filter { $0.isPending && $0.sessionID == vm.sessionID }.count
+            let snap = snapshots.first { $0.hostID == vm.host.id }
+            let key = agentKey(for: snap?.agentID)
+            return SessionSummary(
+                id: slot.id,
+                hostName: vm.host.name,
+                hostname: vm.host.displayAddress,
+                cwd: vm.cwd,
+                lastUsedAt: .now,
+                isLive: true,
+                agentState: agentState(for: vm),
+                agentKey: key == .unknown ? .claudeCode : key,
+                pendingApprovals: pending,
+                unreadCount: pending
+            )
+        }
+        guard !searchText.isEmpty else { return all }
         let q = searchText.lowercased()
-        return [live].filter {
+        return all.filter {
             $0.hostName.lowercased().contains(q) || $0.hostname.lowercased().contains(q)
         }
     }
 
     /// Saved hosts filtered by search text, de-duped against live session host.
     private var savedHostsFiltered: [Host] {
-        let liveHostID = liveSession?.host.id
-        let base = vm.hosts.filter { $0.id != liveHostID }
+        let liveHostIDs = Set(liveSessions.map(\.hostID))
+        let base = vm.hosts.filter { !liveHostIDs.contains($0.id) }
         guard !searchText.isEmpty else { return base }
         let q = searchText.lowercased()
         return base.filter {
@@ -202,31 +207,51 @@ public struct HostsView: View {
         }
     }
 
+    private var hasUnreadLiveSession: Bool {
+        activeSummaries.contains { $0.unreadCount > 0 }
+    }
+
     private var spectrumMode: SpectrumMode {
-        guard let vm = liveSession else { return .idle }
-        switch vm.status {
-        case .connecting, .reconnecting: return .scan
-        case .connected where vm.isExecutingUnified: return .working
-        default: return .idle
+        if liveSessions.contains(where: { slot in
+            switch slot.sessionViewModel.status {
+            case .connecting, .reconnecting:
+                true
+            default:
+                false
+            }
+        }) {
+            return .scan
         }
+        if liveSessions.contains(where: { $0.sessionViewModel.status == .connected && $0.sessionViewModel.isExecutingUnified }) {
+            return .working
+        }
+        return .idle
     }
 
     // MARK: - Active row (live session)
 
     @ViewBuilder
     private func activeRow(_ s: SessionSummary) -> some View {
+        let isSelected = selectedLiveSessionID == s.id
         Button {
-            if s.isLive { onTapLiveSession() }
+            if s.isLive { onTapLiveSession(s.id) }
         } label: {
             SessionRowView(summary: s)
         }
         .buttonStyle(SessionRowButtonStyle(t: t))
         .padding(.horizontal, 18)
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.accent.opacity(0.4), lineWidth: 1)
+                    .padding(.horizontal, 18)
+            }
+        }
         .accessibilityLabel(sessionRowLabel(s))
         .accessibilityHint("Opens live session")
         .contextMenu {
             Button(role: .destructive) {
-                onDisconnectLiveSession()
+                onDisconnectLiveSession(s.id)
             } label: {
                 Label("Disconnect", systemImage: "bolt.slash")
             }
