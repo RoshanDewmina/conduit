@@ -47,6 +47,7 @@ targets:
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - fetch
+          - remote-notification
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         CFBundleURLTypes:
@@ -62,6 +63,7 @@ targets:
         # entitlements swap below, once the iCloud capability + CloudKit
         # container are enabled in the Apple Developer portal.
         CONDUIT_ICLOUD_ENABLED: false
+        ITSAppUsesNonExemptEncryption: false
     # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
     # account. While on a free personal team, point at the stripped
     # `Conduit-DeviceTesting.entitlements` file (Keychain only). Swap back
