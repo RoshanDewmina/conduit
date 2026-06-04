@@ -155,17 +155,16 @@ public struct AppRoot: View {
 
     private var isPro: Bool {
         #if DEBUG
-        // RELEASE GATE: Pro is force-unlocked in all debug builds for UX evaluation.
-        // Delete this block entirely before submitting to App Store.
-        #warning("isPro always returns true in DEBUG — remove before App Store release")
-        return true
-        #else
+        // Debug builds default to the REAL purchase state so paywall/Pro gates are
+        // exercised exactly as in Release. Opt in to a force-unlock for UX evaluation
+        // with CONDUIT_FORCE_PRO=1. No DEBUG path ever grants free Pro in Release.
+        if ProcessInfo.processInfo.environment["CONDUIT_FORCE_PRO"] == "1" { return true }
+        #endif
         switch pm.purchaseState {
         case .purchased: return true
         // .unknown = purchase state not yet loaded; keep locked rather than granting free Pro.
         default: return false
         }
-        #endif
     }
 
     public enum Tab: Hashable, Sendable {
