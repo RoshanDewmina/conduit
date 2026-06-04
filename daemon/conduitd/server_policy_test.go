@@ -7,6 +7,33 @@ import (
 	"conduit/conduitd/policy"
 )
 
+func TestPolicyEngineFileWriteEscalates(t *testing.T) {
+	home := t.TempDir()
+	globalPath := policy.GlobalPolicyPath(home)
+	doc := policy.Document{
+		Default: string(policy.EffectAsk),
+		Rules: []policy.Rule{
+			{ID: "ask-file-write", Effect: string(policy.EffectAsk), Kind: "fileWrite"},
+		},
+	}
+	if err := policy.SaveFile(globalPath, doc); err != nil {
+		t.Fatal(err)
+	}
+	e := newPolicyEngine(home)
+	event := ApprovalEvent{
+		ApprovalID: "id-1",
+		Agent:      "claudeCode",
+		Kind:       "fileWrite",
+		Command:    "notes.txt",
+		CWD:        "/tmp",
+		Risk:       0,
+	}
+	res := e.evaluate(event)
+	if res.Effect != policy.EffectAsk {
+		t.Fatalf("expected ask for fileWrite, got %v (%s)", res.Effect, res.MatchedRule)
+	}
+}
+
 func TestPolicyEngineAutoAllow(t *testing.T) {
 	home := t.TempDir()
 	globalPath := policy.GlobalPolicyPath(home)

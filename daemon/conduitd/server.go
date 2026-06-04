@@ -17,10 +17,7 @@ import (
 	"conduit/conduitd/policy"
 )
 
-const (
-	maxFrameBytes  = 16 * 1024 * 1024
-	socketFileName = "conduitd.sock"
-)
+const maxFrameBytes = 16 * 1024 * 1024
 
 type rpcMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -136,17 +133,97 @@ type server struct {
 	policy    *policyEngine
 	audit     *auditLog
 	stdoutMu  sync.Mutex
+	emitMu    sync.Mutex
+	emit      func([]byte) error
 	deviceMu  sync.RWMutex
 	device    *registeredDevice
 }
 
-func runServe() error {
-	home, _ := os.UserHomeDir()
-	s := &server{
+func (s *server) setEmitter(emit func([]byte) error) {
+	s.emitMu.Lock()
+	s.emit = emit
+	s.emitMu.Unlock()
+}
+
+func newServer(home string) *server {
+	return &server{
 		approvals: newApprovalStore(),
 		policy:    newPolicyEngine(home),
 		audit:     newAuditLog(home),
 	}
+}
+
+// serverHome returns an isolated home directory when CONDUIT_STATE_DIR is set (tests).
+func serverHome() string {
+	home, _ := os.UserHomeDir()
+	if state := os.Getenv("CONDUIT_STATE_DIR"); state != "" {
+		home = filepath.Join(state, "home")
+		_ = os.MkdirAll(filepath.Join(home, ".conduit"), 0700)
+	}
+	return home
+}
+
+func runServe() error {
+	sockPath, err := socketPath()
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialTimeout("unix", sockPath, 2*time.Second)
+	if err == nil {
+		defer conn.Close()
+		return runServeAttach(conn)
+	}
+
+	fmt.Fprintf(os.Stderr,
+		"conduitd serve: resident daemon not reachable (%v); self-hosting socket (run `conduitd install` + `conduitd daemon` for a persistent bridge)\n",
+		err,
+	)
+	return runServeLegacy()
+}
+
+// runServeAttach relays length-prefixed JSON-RPC between stdin/stdout and the resident daemon.
+func runServeAttach(conn net.Conn) error {
+	hello, _ := json.Marshal(attachHello{Op: "attach"})
+	if err := writeFrame(conn, hello); err != nil {
+		return fmt.Errorf("attach handshake: %w", err)
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		for {
+			frame, err := readFrame(conn)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if err := writeFrame(os.Stdout, frame); err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			frame, err := readFrame(os.Stdin)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if err := writeFrame(conn, frame); err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}()
+	err := <-errCh
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+func runServeLegacy() error {
+	s := newServer(serverHome())
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -160,28 +237,37 @@ func runServe() error {
 	}
 	defer func() { ln.Close(); os.Remove(sockPath) }()
 
-	go s.acceptHooks(ln)
-	return s.readStdio()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				first, framed, err := readFirstMessage(c)
+				if err != nil || framed {
+					c.Close()
+					return
+				}
+				s.handleHook(c, first)
+			}(conn)
+		}
+	}()
+
+	return s.readStdioLoop(os.Stdin)
 }
 
-func (s *server) readStdio() error {
+func (s *server) readStdioLoop(r io.Reader) error {
 	for {
-		var length uint32
-		if err := binary.Read(os.Stdin, binary.BigEndian, &length); err != nil {
+		frame, err := readFrame(r)
+		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
-			return fmt.Errorf("read length: %w", err)
-		}
-		if length == 0 || length > maxFrameBytes {
-			return fmt.Errorf("invalid frame length: %d", length)
-		}
-		buf := make([]byte, length)
-		if _, err := io.ReadFull(os.Stdin, buf); err != nil {
-			return fmt.Errorf("read body: %w", err)
+			return fmt.Errorf("read frame: %w", err)
 		}
 		var msg rpcMessage
-		if err := json.Unmarshal(buf, &msg); err != nil {
+		if err := json.Unmarshal(frame, &msg); err != nil {
 			s.writeError(nil, -32700, "parse error")
 			continue
 		}
@@ -270,22 +356,32 @@ func (s *server) handleMessage(msg *rpcMessage) {
 	}
 }
 
-func (s *server) acceptHooks(ln net.Listener) {
-	for {
-		conn, err := ln.Accept()
+func (s *server) handleHook(conn net.Conn, first []byte) {
+	s.handleHookWithNotify(conn, first, func(event ApprovalEvent) error {
+		notification, err := marshalPendingNotification(event)
 		if err != nil {
-			return
+			return err
 		}
-		go s.handleHook(conn)
-	}
+		s.writeFramed(notification)
+		return nil
+	})
 }
 
-func (s *server) handleHook(conn net.Conn) {
+func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(130 * time.Second))
 
 	var event ApprovalEvent
-	if err := json.NewDecoder(conn).Decode(&event); err != nil {
+	if first != nil {
+		if err := json.Unmarshal(first, &event); err != nil {
+			fmt.Fprintf(conn, `{"error":"bad request"}`)
+			return
+		}
+	} else if err := json.NewDecoder(conn).Decode(&event); err != nil {
+		fmt.Fprintf(conn, `{"error":"bad request"}`)
+		return
+	}
+	if event.ApprovalID == "" {
 		fmt.Fprintf(conn, `{"error":"bad request"}`)
 		return
 	}
@@ -336,8 +432,11 @@ func (s *server) handleHook(conn net.Conn) {
 	})
 
 	decisionCh := s.approvals.add(event)
-	if notification, err := marshalPendingNotification(event); err == nil {
-		s.writeFramed(notification)
+	if notify != nil {
+		if err := notify(event); err != nil {
+			fmt.Fprintf(conn, `{"error":"internal"}`)
+			return
+		}
 	}
 
 	s.deviceMu.RLock()
@@ -391,23 +490,18 @@ func (s *server) writeError(id interface{}, code int, message string) {
 }
 
 func (s *server) writeFramed(data []byte) {
+	s.emitMu.Lock()
+	emit := s.emit
+	s.emitMu.Unlock()
+	if emit != nil {
+		_ = emit(data)
+		return
+	}
 	s.stdoutMu.Lock()
 	defer s.stdoutMu.Unlock()
 	length := uint32(len(data))
 	_ = binary.Write(os.Stdout, binary.BigEndian, length)
 	_, _ = os.Stdout.Write(data)
-}
-
-func socketPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, ".conduit")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, socketFileName), nil
 }
 
 func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {

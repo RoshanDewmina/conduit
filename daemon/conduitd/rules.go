@@ -12,13 +12,17 @@ func policyRequest(event ApprovalEvent) policy.Request {
 	if tool == "" {
 		tool = event.Kind
 	}
+	risk := -1
+	if event.Risk >= 0 {
+		risk = event.Risk
+	}
 	return policy.Request{
 		Agent:   event.Agent,
 		Tool:    tool,
 		Kind:    event.Kind,
 		Command: event.Command,
 		CWD:     event.CWD,
-		Risk:    -1,
+		Risk:    risk,
 	}
 }
 

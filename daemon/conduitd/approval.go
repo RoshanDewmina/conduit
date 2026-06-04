@@ -61,6 +61,16 @@ func (s *approvalStore) add(event ApprovalEvent) <-chan hookDecision {
 	return ch
 }
 
+func (s *approvalStore) pendingEvents() []ApprovalEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]ApprovalEvent, 0, len(s.pending))
+	for _, p := range s.pending {
+		out = append(out, p.event)
+	}
+	return out
+}
+
 func (s *approvalStore) resolve(id, decision, editedToolInput string) (ApprovalEvent, bool) {
 	s.mu.Lock()
 	p, ok := s.pending[id]

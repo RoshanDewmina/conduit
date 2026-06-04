@@ -97,3 +97,25 @@ func TestRunAgentHookToolUseEmptyByDefault(t *testing.T) {
 		t.Errorf("ToolInput should be empty by default, got %q", event.ToolInput)
 	}
 }
+
+func TestHookShouldHoldMutating(t *testing.T) {
+	if !hookShouldHold("patch") {
+		t.Fatal("patch should hold when daemon down")
+	}
+	if !hookShouldHold("fileWrite") {
+		t.Fatal("fileWrite should hold")
+	}
+	if hookShouldHold("command") {
+		t.Fatal("command should not hold by default")
+	}
+}
+
+func TestHookReadOnlyFailOpenWithEnv(t *testing.T) {
+	t.Setenv("CONDUIT_HOOK_READONLY_FAIL_OPEN", "1")
+	if hookShouldHold("grep") {
+		t.Fatal("grep should fail-open with env")
+	}
+	if !hookShouldHold("patch") {
+		t.Fatal("patch should still hold with env")
+	}
+}
