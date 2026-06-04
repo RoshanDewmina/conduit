@@ -80,7 +80,7 @@ func DefaultDocument() Document {
 		Rules: []Rule{
 			{ID: "deny-credential", Effect: "deny", Kind: "credential"},
 			{ID: "deny-network", Effect: "deny", Kind: "network"},
-			{ID: "deny-critical", Effect: "deny", MaxRisk: "critical"},
+			{ID: "deny-critical", Effect: "deny", MinRisk: "critical"},
 			{ID: "allow-low-readonly", Effect: "allow", Kind: "command", MaxRisk: "low"},
 			{ID: "ask-patch", Effect: "ask", Kind: "patch"},
 			{ID: "ask-file-write", Effect: "ask", Kind: "fileWrite"},

@@ -108,3 +108,29 @@ func TestEvaluateDocumentsStrictest(t *testing.T) {
 		t.Fatalf("deny across docs should win, got %v", res.Effect)
 	}
 }
+
+func TestDefaultDocumentBehavior(t *testing.T) {
+	doc := DefaultDocument()
+
+	cases := []struct {
+		name   string
+		kind   string
+		cmd    string
+		want   Effect
+	}{
+		{"low command allow", "command", "ls -la", EffectAllow},
+		{"medium command ask", "command", "npm install", EffectAsk},
+		{"patch ask", "patch", "diff content", EffectAsk},
+		{"critical command deny", "command", "rm -rf /", EffectDeny},
+		{"credential deny", "credential", "export API_KEY=x", EffectDeny},
+		{"network deny", "network", "curl https://example.com", EffectDeny},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := Evaluate(doc, req("claudeCode", tc.kind, tc.cmd, "/repo", ""))
+			if res.Effect != tc.want {
+				t.Fatalf("got %v (%s), want %v", res.Effect, res.MatchedRule, tc.want)
+			}
+		})
+	}
+}
