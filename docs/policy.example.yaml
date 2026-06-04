@@ -1,0 +1,34 @@
+# Example ~/.conduit/policy.yaml — fail-closed default (ask).
+# Among rules that match, strictest effect wins: deny > ask > allow.
+default: ask
+
+rules:
+  - id: deny-credential
+    effect: deny
+    kind: credential
+
+  - id: deny-network
+    effect: deny
+    kind: network
+
+  - id: deny-critical
+    effect: deny
+    maxRisk: critical
+
+  - id: allow-low-shell
+    effect: allow
+    kind: command
+    maxRisk: low
+    match: "ls*"
+
+  - id: ask-patch
+    effect: ask
+    kind: patch
+
+  - id: ask-destructive-git
+    effect: ask
+    match: "git push*"
+    minRisk: medium
+
+# User "always allow" choices are appended to ~/.conduit/policy-always.yaml
+# (migrated from legacy always-rules.json on first serve).

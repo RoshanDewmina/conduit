@@ -1,51 +1,44 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
+
+	"conduit/conduitd/policy"
 )
 
-func TestAlwaysRuleStoreMatches(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "always-rules.json")
-	s := &alwaysRuleStore{path: path}
-	s.add(alwaysRule{Agent: "claudeCode", Tool: "Bash", Prefix: "npm test"})
-
+func TestPolicyRequestUsesToolName(t *testing.T) {
 	event := ApprovalEvent{
-		Agent:     "claudeCode",
-		ToolName:  "Bash",
-		Command:   "npm test -- --filter foo",
-		Kind:      "command",
-	}
-	if !s.matches(event) {
-		t.Fatal("expected rule to match prefixed command")
-	}
-
-	other := ApprovalEvent{
 		Agent:    "claudeCode",
-		ToolName: "Bash",
-		Command:  "rm -rf /",
 		Kind:     "command",
+		Command:  "npm test",
+		ToolName: "Bash",
+		CWD:      "/repo",
 	}
-	if s.matches(other) {
-		t.Fatal("did not expect unrelated command to match")
+	req := policyRequest(event)
+	if req.Tool != "Bash" {
+		t.Fatalf("tool = %q", req.Tool)
 	}
 }
 
-func TestAlwaysRuleStorePersists(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "always-rules.json")
-	s := &alwaysRuleStore{path: path}
-	s.add(alwaysRule{Agent: "codex", Tool: "shell", Prefix: "make"})
+func TestAllowRuleFromEvent(t *testing.T) {
+	event := ApprovalEvent{
+		Agent:    "codex",
+		ToolName: "shell",
+		Command:  "make test",
+	}
+	rule := allowRuleFromEvent(event)
+	if rule.Effect != string(policy.EffectAllow) {
+		t.Fatalf("effect = %q", rule.Effect)
+	}
+	if rule.Match != "make test*" {
+		t.Fatalf("match = %q", rule.Match)
+	}
+}
 
-	reloaded := &alwaysRuleStore{path: path}
-	reloaded.load()
-	if len(reloaded.rules) != 1 {
-		t.Fatalf("expected 1 persisted rule, got %d", len(reloaded.rules))
+func TestAllowRuleFromEventFallsBackToKind(t *testing.T) {
+	event := ApprovalEvent{Agent: "claudeCode", Kind: "patch", Command: "apply diff"}
+	rule := allowRuleFromEvent(event)
+	if rule.Tool != "patch" {
+		t.Fatalf("tool = %q", rule.Tool)
 	}
-	if reloaded.rules[0].Prefix != "make" {
-		t.Fatalf("unexpected prefix %q", reloaded.rules[0].Prefix)
-	}
-	_ = os.Remove(path)
 }

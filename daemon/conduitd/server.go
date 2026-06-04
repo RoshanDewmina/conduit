@@ -13,14 +13,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"conduit/conduitd/policy"
 )
 
 const (
-	maxFrameBytes  = 16 * 1024 * 1024 // 16 MB
+	maxFrameBytes  = 16 * 1024 * 1024
 	socketFileName = "conduitd.sock"
 )
 
-// rpcMessage is the minimal JSON-RPC 2.0 envelope.
 type rpcMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      interface{}     `json:"id,omitempty"`
@@ -35,32 +36,123 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// registeredDevice holds the push routing info sent from the iOS app.
 type registeredDevice struct {
 	PushBackendURL string `json:"pushBackendURL"`
 	SessionID      string `json:"sessionID"`
 }
 
-// server bridges the iOS DaemonChannel (stdio) and agent hooks (Unix socket).
+type policyEngine struct {
+	mu          sync.RWMutex
+	home        string
+	docs        []policy.Document
+	legacyJSON  string
+	migrated    bool
+}
+
+func newPolicyEngine(home string) *policyEngine {
+	e := &policyEngine{
+		home:       home,
+		legacyJSON: filepath.Join(home, ".conduit", "always-rules.json"),
+	}
+	e.reload("")
+	return e
+}
+
+func (e *policyEngine) ensureMigrated() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.migrated {
+		return
+	}
+	if _, err := os.Stat(e.legacyJSON); err == nil {
+		_ = policy.MigrateAlwaysRulesJSON(e.legacyJSON, policy.AlwaysPolicyPath(e.home))
+		_ = os.Rename(e.legacyJSON, e.legacyJSON+".migrated")
+	}
+	e.migrated = true
+}
+
+func (e *policyEngine) reload(cwd string) error {
+	e.ensureMigrated()
+	docs, err := policy.LoadAllForCWD(cwd, e.home)
+	if err != nil {
+		return err
+	}
+	e.mu.Lock()
+	e.docs = docs
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *policyEngine) evaluate(event ApprovalEvent) policy.Result {
+	req := policyRequest(event)
+	// User-approved always rules override stricter default templates when they match.
+	if doc, err := policy.LoadFile(policy.AlwaysPolicyPath(e.home)); err == nil {
+		if res := policy.Evaluate(doc, req); res.Effect == policy.EffectAllow && !res.FromDefault {
+			return res
+		}
+	}
+	e.mu.RLock()
+	docs := append([]policy.Document(nil), e.docs...)
+	e.mu.RUnlock()
+	if len(docs) == 0 {
+		return policy.Evaluate(policy.DefaultDocument(), req)
+	}
+	return policy.EvaluateDocuments(docs, req)
+}
+
+// appendAllowAlways persists approve-always via policy.AppendAllowRule (policy-always.yaml).
+func (e *policyEngine) appendAllowAlways(event ApprovalEvent) error {
+	if err := policy.AppendAllowRule(e.home, allowRuleFromEvent(event)); err != nil {
+		return err
+	}
+	return e.reload(event.CWD)
+}
+
+type policyGetResult struct {
+	Documents []policy.Document `json:"documents"`
+	Default   string            `json:"default"`
+}
+
+func (e *policyEngine) getPolicyDocuments(cwd string) (policyGetResult, error) {
+	e.ensureMigrated()
+	var out policyGetResult
+	if doc, _, err := policy.LoadRepoPolicy(cwd); err == nil {
+		out.Documents = append(out.Documents, doc)
+	}
+	if doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home)); err == nil {
+		out.Documents = append(out.Documents, doc)
+	} else if os.IsNotExist(err) {
+		out.Documents = append(out.Documents, policy.DefaultDocument())
+	}
+	if doc, err := policy.LoadFile(policy.AlwaysPolicyPath(e.home)); err == nil {
+		out.Documents = append(out.Documents, doc)
+	}
+	out.Default = string(policy.EffectAsk)
+	return out, nil
+}
+
 type server struct {
 	approvals *approvalStore
-	always    *alwaysRuleStore
-	stdoutMu  sync.Mutex // serialize writes to stdout
+	policy    *policyEngine
+	audit     *auditLog
+	stdoutMu  sync.Mutex
 	deviceMu  sync.RWMutex
 	device    *registeredDevice
 }
 
 func runServe() error {
+	home, _ := os.UserHomeDir()
 	s := &server{
 		approvals: newApprovalStore(),
-		always:    newAlwaysRuleStore(),
+		policy:    newPolicyEngine(home),
+		audit:     newAuditLog(home),
 	}
 
 	sockPath, err := socketPath()
 	if err != nil {
 		return fmt.Errorf("socket path: %w", err)
 	}
-	_ = os.Remove(sockPath) // remove stale socket
+	_ = os.Remove(sockPath)
 
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {
@@ -68,15 +160,10 @@ func runServe() error {
 	}
 	defer func() { ln.Close(); os.Remove(sockPath) }()
 
-	// Accept agent-hook connections in background.
 	go s.acceptHooks(ln)
-
-	// Read JSON-RPC frames from stdin (iOS DaemonChannel).
 	return s.readStdio()
 }
 
-// readStdio processes length-prefixed JSON-RPC frames from stdin.
-// Each frame: 4-byte big-endian length (uint32) + JSON body.
 func (s *server) readStdio() error {
 	for {
 		var length uint32
@@ -102,7 +189,6 @@ func (s *server) readStdio() error {
 	}
 }
 
-// handleMessage dispatches an incoming JSON-RPC message from the iOS app.
 func (s *server) handleMessage(msg *rpcMessage) {
 	switch msg.Method {
 	case "ping":
@@ -115,10 +201,58 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		event, ok := s.approvals.resolve(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
-		if ok && decision.Decision == "approveAlways" {
-			s.always.add(alwaysRuleFromEvent(event))
+		if ok {
+			s.recordHumanDecision(event, decision.Decision)
+			if decision.Decision == "approveAlways" {
+				_ = s.policy.appendAllowAlways(event)
+			}
 		}
 		s.writeResult(msg.ID, "ok")
+
+	case "agent.audit.tail":
+		var params struct {
+			Limit int `json:"limit"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		entries, err := s.audit.tail(params.Limit)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]interface{}{"entries": entries})
+
+	case "agent.policy.get":
+		var params struct {
+			CWD string `json:"cwd"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		payload, err := s.policy.getPolicyDocuments(params.CWD)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, payload)
+
+	case "agent.policy.reload":
+		var params struct {
+			CWD string `json:"cwd"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		if err := s.policy.reload(params.CWD); err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, "ok")
+
+	case "agent.status":
+		var params agentStatusParams
+		if len(msg.Params) > 0 {
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				s.writeError(msg.ID, -32602, "invalid params")
+				return
+			}
+		}
+		s.writeResult(msg.ID, collectAgentStatus(params.HomeDir))
 
 	case "conduit.device.register":
 		var info registeredDevice
@@ -136,7 +270,6 @@ func (s *server) handleMessage(msg *rpcMessage) {
 	}
 }
 
-// acceptHooks accepts Unix socket connections from agent-hook subprocesses.
 func (s *server) acceptHooks(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
@@ -147,8 +280,6 @@ func (s *server) acceptHooks(ln net.Listener) {
 	}
 }
 
-// handleHook reads a single ApprovalEvent from an agent-hook connection,
-// forwards it to the iOS app, waits for the decision, and writes it back.
 func (s *server) handleHook(conn net.Conn) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(130 * time.Second))
@@ -159,23 +290,56 @@ func (s *server) handleHook(conn net.Conn) {
 		return
 	}
 
-	// Always-rules short-circuit: skip the phone when the user previously chose Allow Always.
-	if s.always.matches(event) {
-		resp := ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"}
-		json.NewEncoder(conn).Encode(resp)
+	eval := s.policy.evaluate(event)
+	switch eval.Effect {
+	case policy.EffectAllow:
+		_ = s.audit.append(AuditEntry{
+			Action:     "auto-allow",
+			Agent:      event.Agent,
+			Kind:       event.Kind,
+			Command:    event.Command,
+			Effect:     string(eval.Effect),
+			Rule:       eval.MatchedRule,
+			ApprovalID: event.ApprovalID,
+		})
+		_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"})
+		return
+	case policy.EffectDeny:
+		_ = s.audit.append(AuditEntry{
+			Action:     "auto-deny",
+			Agent:      event.Agent,
+			Kind:       event.Kind,
+			Command:    event.Command,
+			Effect:     string(eval.Effect),
+			Rule:       eval.MatchedRule,
+			ApprovalID: event.ApprovalID,
+		})
+		_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "deny"})
 		return
 	}
 
-	// Register pending approval and forward to iOS.
-	decisonCh := s.approvals.add(event)
+	br := computeBlastRadius(event, eval.MatchedRule)
+	event.Files = br.Files
+	event.TouchesGit = br.TouchesGit
+	event.TouchesNetwork = br.TouchesNetwork
+	event.MatchedRule = br.MatchedRule
+	event.Risk = eval.ScoredRisk
 
-	notification, err := marshalPendingNotification(event)
-	if err == nil {
+	_ = s.audit.append(AuditEntry{
+		Action:     "escalate",
+		Agent:      event.Agent,
+		Kind:       event.Kind,
+		Command:    event.Command,
+		Effect:     string(eval.Effect),
+		Rule:       eval.MatchedRule,
+		ApprovalID: event.ApprovalID,
+	})
+
+	decisionCh := s.approvals.add(event)
+	if notification, err := marshalPendingNotification(event); err == nil {
 		s.writeFramed(notification)
 	}
 
-	// Attempt APNs push for backgrounded/killed app. Runs in a goroutine so it
-	// doesn't delay the approval wait channel.
 	s.deviceMu.RLock()
 	dev := s.device
 	s.deviceMu.RUnlock()
@@ -183,37 +347,49 @@ func (s *server) handleHook(conn net.Conn) {
 		go s.postApprovalPush(dev, event)
 	}
 
-	// Wait for iOS decision (max 120 s).
-	result := waitWithTimeout(decisonCh, 120*time.Second)
+	result := waitWithTimeout(decisionCh, 120*time.Second)
 	decision := result.decision
 	if decision == "approveAlways" {
-		s.always.add(alwaysRuleFromEvent(event))
+		_ = s.policy.appendAllowAlways(event)
 		decision = "approve"
 	}
+	s.recordHumanDecision(event, result.decision)
 
 	resp := ApprovalDecision{
 		ApprovalID:      event.ApprovalID,
 		Decision:        decision,
 		EditedToolInput: result.editedToolInput,
 	}
-	json.NewEncoder(conn).Encode(resp)
+	_ = json.NewEncoder(conn).Encode(resp)
 }
 
-// writeResult sends a JSON-RPC success response to stdout.
+func (s *server) recordHumanDecision(event ApprovalEvent, decision string) {
+	action := decision
+	if decision != "approve" && decision != "approveAlways" {
+		action = "deny"
+	}
+	_ = s.audit.append(AuditEntry{
+		Action:     action,
+		Agent:      event.Agent,
+		Kind:       event.Kind,
+		Command:    event.Command,
+		Rule:       event.MatchedRule,
+		ApprovalID: event.ApprovalID,
+	})
+}
+
 func (s *server) writeResult(id interface{}, result interface{}) {
 	msg := rpcMessage{JSONRPC: "2.0", ID: id, Result: result}
 	data, _ := json.Marshal(msg)
 	s.writeFramed(data)
 }
 
-// writeError sends a JSON-RPC error response to stdout.
 func (s *server) writeError(id interface{}, code int, message string) {
 	msg := rpcMessage{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message}}
 	data, _ := json.Marshal(msg)
 	s.writeFramed(data)
 }
 
-// writeFramed writes a length-prefixed frame to stdout.
 func (s *server) writeFramed(data []byte) {
 	s.stdoutMu.Lock()
 	defer s.stdoutMu.Unlock()
@@ -234,16 +410,20 @@ func socketPath() (string, error) {
 	return filepath.Join(dir, socketFileName), nil
 }
 
-// postApprovalPush POSTs an approval-pending event to the push backend so the
-// iOS device receives an APNs alert even when the SSH channel is down.
 func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 	hostname, _ := os.Hostname()
+	tool := event.ToolName
+	if tool == "" {
+		tool = event.Kind
+	}
 	payload := map[string]interface{}{
 		"id":        event.ApprovalID,
 		"sessionId": dev.SessionID,
 		"command":   event.Command,
 		"risk":      riskLabel(event.Risk),
 		"hostName":  hostname,
+		"agent":     event.Agent,
+		"toolName":  tool,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -258,7 +438,6 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 	resp.Body.Close()
 }
 
-// riskLabel converts a numeric risk level to a string label.
 func riskLabel(r int) string {
 	switch r {
 	case 1:
