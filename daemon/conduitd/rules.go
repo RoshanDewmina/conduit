@@ -22,8 +22,8 @@ type alwaysRuleStore struct {
 }
 
 func newAlwaysRuleStore() *alwaysRuleStore {
-	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, ".conduit", "always-rules.json")
+	dir, _ := conduitDir()
+	path := filepath.Join(dir, "always-rules.json")
 	s := &alwaysRuleStore{path: path}
 	s.load()
 	return s

@@ -64,6 +64,17 @@ func (s *approvalStore) add(event ApprovalEvent) <-chan hookDecision {
 	return ch
 }
 
+// pendingEvents returns a snapshot of events awaiting a decision.
+func (s *approvalStore) pendingEvents() []ApprovalEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]ApprovalEvent, 0, len(s.pending))
+	for _, p := range s.pending {
+		out = append(out, p.event)
+	}
+	return out
+}
+
 // resolve delivers a decision for the given approval ID.
 // Returns the pending event when found (for always-rule creation).
 func (s *approvalStore) resolve(id, decision, editedToolInput string) (ApprovalEvent, bool) {

@@ -9,7 +9,7 @@ import (
 
 // TestDeviceRegister verifies that conduit.device.register stores the device info.
 func TestDeviceRegister(t *testing.T) {
-	s := &server{approvals: newApprovalStore()}
+	s := newBridge()
 
 	params, _ := json.Marshal(map[string]string{
 		"pushBackendURL": "https://example.com",
@@ -56,7 +56,7 @@ func TestPostApprovalPush(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := &server{approvals: newApprovalStore()}
+	s := newBridge()
 	dev := &registeredDevice{
 		PushBackendURL: srv.URL,
 		SessionID:      "device-session-123",
