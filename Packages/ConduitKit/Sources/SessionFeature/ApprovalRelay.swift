@@ -4,18 +4,22 @@ import ConduitCore
 import PersistenceKit
 import SSHTransport
 
-/// Thread-safe relay between `ApprovalActionIntent` (which runs in an
-/// extension process with no live SSH connection) and the active
-/// `DaemonChannel` in the main app process.
+/// Relay between `ApprovalActionIntent` (which runs in the main app process,
+/// triggered by a lock-screen or Dynamic Island button tap) and the active
+/// `DaemonChannel`.
 ///
 /// Flow:
 ///   1. `ApprovalActionIntent.perform()` calls `ApprovalRelay.shared.enqueue(...)`.
-///   2. The relay writes the decision to the DB + audit log.
-///   3. If a `DaemonChannel` is attached (`channel != nil`), it drains the queue
+///   2. The relay writes the decision to the DB + audit log (always safe).
+///   3. If a `DaemonChannel` is attached (`channel != nil`), it forwards
 ///      immediately via `channel.respond(...)`.
-///   4. When the app becomes active, `AppRoot.startSession()` calls
-///      `setChannel(_:)`, which triggers a drain of any pending decisions that
-///      arrived while the channel was nil.
+///   4. Otherwise the decision is queued. `setChannel(_:)` drains the queue
+///      the next time a session connects.
+///
+/// Cold-launch edge: if the app is never brought to foreground after a
+/// lock-screen decision, the queue is never drained. The DB write (step 2)
+/// and conduitd's 120 s timeout are the backstop — conduitd will mark the
+/// approval timed-out and unblock the agent with an auto-deny.
 @MainActor
 public final class ApprovalRelay {
     public static let shared = ApprovalRelay()
