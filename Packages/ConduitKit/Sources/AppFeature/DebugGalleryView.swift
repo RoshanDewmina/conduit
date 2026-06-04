@@ -72,6 +72,7 @@ struct DebugGalleryView: View {
         #if os(iOS)
         case "cc-policy":      CCPolicyGalleryScreen()
         case "cc-inbox":       CCInboxGalleryScreen()
+        case "cc-usage":       CCUsageGalleryScreen()
         #endif
         case "review":         reviewScreen
         default:               reviewScreen
