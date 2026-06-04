@@ -39,25 +39,21 @@ public struct ApprovalActionIntent: LiveActivityIntent {
     }
 
     public func perform() async throws -> some IntentResult {
-        guard let id = UUID(uuidString: approvalID) else {
+        guard UUID(uuidString: approvalID) != nil else {
             return .result()
         }
         let db = try AppDatabase.openShared()
-        let approvalRepo = ApprovalRepository(db)
-        let auditRepo = AuditRepository(db)
         let selectedDecision: Approval.Decision = (decision == .approve) ? .approved : .rejected
-        let hostUUID = UUID(uuidString: hostID) ?? UUID()
 
-        try? await approvalRepo.decide(id: ApprovalID(id), decision: selectedDecision)
-        try? await auditRepo.record(
-            hostID: HostID(hostUUID),
-            type: .approval,
-            metadata: [
-                "approvalId": approvalID,
-                "hostId": hostID,
-                "decision": selectedDecision.rawValue,
-                "source": "liveActivityIntent",
-            ]
+        // Route through ApprovalRelay so the decision is forwarded to conduitd
+        // (via the active DaemonChannel) in addition to being persisted locally.
+        // If the channel is not yet attached the relay queues the decision for
+        // drain when the app becomes active.
+        await ApprovalRelay.shared.enqueue(
+            approvalID: approvalID,
+            decision: selectedDecision,
+            db: db,
+            hostID: hostID
         )
         return .result()
     }

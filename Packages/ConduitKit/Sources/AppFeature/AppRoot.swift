@@ -637,6 +637,7 @@ public struct AppRoot: View {
         Task {
             await vm.disconnect()
             await MainActor.run {
+                ApprovalRelay.shared.clearChannel()
                 sessionViewModel = nil
                 hudStore.session = nil
             }
@@ -843,6 +844,10 @@ public struct AppRoot: View {
             if !backendURL.isEmpty {
                 try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
             }
+            // Attach the relay so Live Activity / Dynamic Island decisions are
+            // forwarded to conduitd, and drain any decisions queued while the
+            // channel was absent (e.g. lock-screen tap before app foregrounded).
+            await ApprovalRelay.shared.setChannel(channel)
             await ingest.start()
         }
     }
