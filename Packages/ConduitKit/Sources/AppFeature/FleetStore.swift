@@ -4,6 +4,7 @@ import Observation
 import ConduitCore
 import SSHTransport
 import InboxFeature
+import SessionFeature
 
 // NOTE: ApprovalRelay (ws-i) does NOT exist on feat/hosted-agents-rc.
 // FleetStore is designed to work with the RC's direct-DB approval path
