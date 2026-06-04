@@ -117,3 +117,20 @@ fastlane release # submit to App Store
 | Background modes | This branch (`agent/ws-b-shipgate-rc`) | `remote-notification` added to `UIBackgroundModes` in `project.yml` |
 | Export compliance | This branch (`agent/ws-b-shipgate-rc`) | `ITSAppUsesNonExemptEncryption: false` added to `project.yml` Info.plist properties |
 | Owner checklist | This branch (`agent/ws-b-shipgate-rc`) | `docs/ship-gate-owner-steps.md` created |
+
+---
+
+## Owner actions report update (2026-06-04)
+
+- Commit created on `feat/hosted-agents-rc`: `737e5f6`
+  - Message: `fix: Release archive compile blockers in CloudSync and ProvisioningWizard`
+  - Files included:
+    - `Packages/ConduitKit/Sources/SyncKit/CloudSync.swift`
+    - `Packages/ConduitKit/Sources/OnboardingFeature/ProvisioningWizard.swift`
+  - Excluded unrelated untracked `github_*` files.
+- Validation:
+  - `cd Packages/ConduitKit && swift test` passed (`317 tests in 48 suites`).
+- TestFlight export continuation:
+  - Command used: `xcodebuild -exportArchive -archivePath build/Conduit.xcarchive -exportOptionsPlist build/ExportOptions-AppStore.plist -exportPath /tmp/Conduit-TestFlight-export -allowProvisioningUpdates`
+  - Result: `** EXPORT SUCCEEDED **`
+  - Export output: `/tmp/Conduit-TestFlight-export`
