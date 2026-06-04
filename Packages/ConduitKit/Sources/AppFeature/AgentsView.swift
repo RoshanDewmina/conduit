@@ -2,18 +2,21 @@
 import SwiftUI
 import DesignSystem
 import AgentKit
+import SSHTransport
 import SettingsFeature
 
 public struct AgentsView: View {
     @Bindable var store: AgentStore
+    private let statusChannel: DaemonChannel?
     @State private var pm = PurchaseManager.shared
     @State private var showingCreate = false
     @State private var showingBilling = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.conduitTokens) private var t
 
-    public init(store: AgentStore) {
+    public init(store: AgentStore, statusChannel: DaemonChannel? = nil) {
         self.store = store
+        self.statusChannel = statusChannel
     }
 
     public var body: some View {
@@ -53,6 +56,9 @@ public struct AgentsView: View {
             await pm.refreshCloudEntitlement()
             await store.loadAgents()
             await store.loadBillingSnapshot()
+            if let statusChannel {
+                await store.refreshBridgeStatus(using: statusChannel)
+            }
         }
         .sheet(isPresented: $showingCreate) {
             CreateAgentSheet(store: store)

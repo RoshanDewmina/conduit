@@ -409,7 +409,7 @@ public struct AppRoot: View {
         .sheet(isPresented: $showingHostedAgents) {
             if let agentStore {
                 NavigationStack {
-                    AgentsView(store: agentStore)
+                    AgentsView(store: agentStore, statusChannel: fleetStore.slots.first?.channel)
                 }
             }
         }

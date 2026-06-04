@@ -128,9 +128,11 @@ func normalizeKind(kind string) string {
 	switch kind {
 	case "bash", "Bash", "shell", "command":
 		return "command"
-	case "apply_patch", "Patch", "patch", "Edit", "Write", "MultiEdit":
+	case "edit", "multiedit":
 		return "patch"
-	case "write", "file-write", "file_write", "fileWrite":
+	case "apply_patch", "Patch", "patch", "Edit", "Write", "MultiEdit", "write":
+		return "patch"
+	case "file-write", "file_write", "fileWrite":
 		return "fileWrite"
 	case "delete", "file-delete", "file_delete", "fileDelete":
 		return "fileDelete"
