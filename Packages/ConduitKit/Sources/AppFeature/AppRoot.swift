@@ -740,6 +740,8 @@ public struct AppRoot: View {
     ) {
         let sshSession = SSHSession(host: host)
         let snapshotRepo = SessionSnapshotRepository(env.database)
+        let backendURL = Self.pushBackendURL()
+        let deviceSessionID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
         Task {
             let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
             let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { [weak agentStore] record in
@@ -837,6 +839,10 @@ public struct AppRoot: View {
                 try? await env.hostRepo.touch(id: host.id)
             }
             try? await channel.start()  // launch conduitd serve on remote host
+            // Register device with conduitd so APNs alerts reach this device when backgrounded.
+            if !backendURL.isEmpty {
+                try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
+            }
             await ingest.start()
         }
     }

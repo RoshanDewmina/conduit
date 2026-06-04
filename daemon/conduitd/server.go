@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,10 +35,18 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// registeredDevice holds the push routing info sent from the iOS app.
+type registeredDevice struct {
+	PushBackendURL string `json:"pushBackendURL"`
+	SessionID      string `json:"sessionID"`
+}
+
 // server bridges the iOS DaemonChannel (stdio) and agent hooks (Unix socket).
 type server struct {
 	approvals *approvalStore
 	stdoutMu  sync.Mutex // serialize writes to stdout
+	deviceMu  sync.RWMutex
+	device    *registeredDevice
 }
 
 func runServe() error {
@@ -102,6 +113,17 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.approvals.resolve(decision.ApprovalID, decision.Decision)
 		s.writeResult(msg.ID, "ok")
 
+	case "conduit.device.register":
+		var info registeredDevice
+		if err := json.Unmarshal(msg.Params, &info); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.deviceMu.Lock()
+		s.device = &info
+		s.deviceMu.Unlock()
+		s.writeResult(msg.ID, "ok")
+
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
 	}
@@ -136,6 +158,15 @@ func (s *server) handleHook(conn net.Conn) {
 	notification, err := marshalPendingNotification(event)
 	if err == nil {
 		s.writeFramed(notification)
+	}
+
+	// Attempt APNs push for backgrounded/killed app. Runs in a goroutine so it
+	// doesn't delay the approval wait channel.
+	s.deviceMu.RLock()
+	dev := s.device
+	s.deviceMu.RUnlock()
+	if dev != nil && dev.PushBackendURL != "" {
+		go s.postApprovalPush(dev, event)
 	}
 
 	// Wait for iOS decision (max 120 s).
@@ -178,4 +209,42 @@ func socketPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, socketFileName), nil
+}
+
+// postApprovalPush POSTs an approval-pending event to the push backend so the
+// iOS device receives an APNs alert even when the SSH channel is down.
+func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
+	hostname, _ := os.Hostname()
+	payload := map[string]interface{}{
+		"id":        event.ApprovalID,
+		"sessionId": dev.SessionID,
+		"command":   event.Command,
+		"risk":      riskLabel(event.Risk),
+		"hostName":  hostname,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(dev.PushBackendURL, "/") + "/approval"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "push-backend POST failed: %v\n", err)
+		return
+	}
+	resp.Body.Close()
+}
+
+// riskLabel converts a numeric risk level to a string label.
+func riskLabel(r int) string {
+	switch r {
+	case 1:
+		return "medium"
+	case 2:
+		return "high"
+	case 3:
+		return "critical"
+	default:
+		return "low"
+	}
 }
