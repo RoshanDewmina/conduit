@@ -20,7 +20,7 @@ func normalizeAgentSource(agent string) string {
 		return "cursor"
 	case "gemini", "google-gemini":
 		return "gemini"
-	case "opencode":
+	case "opencode", "open-code", "sst-opencode":
 		return "opencode"
 	default:
 		return strings.TrimSpace(agent)

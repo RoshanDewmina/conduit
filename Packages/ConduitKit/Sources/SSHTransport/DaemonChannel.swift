@@ -8,6 +8,8 @@ public actor DaemonChannel {
     private let (eventStream, eventContinuation): (AsyncStream<DaemonEvent>, AsyncStream<DaemonEvent>.Continuation)
     private var readTask: Task<Void, Never>?
     private var stdinWriter: TTYStdinWriter?
+    private var nextRPCID: Int = 10
+    private var pendingRPC: [Int: CheckedContinuation<Data, Error>] = [:]
 
     public var events: AsyncStream<DaemonEvent> { eventStream }
 
@@ -16,10 +18,6 @@ public actor DaemonChannel {
         (eventStream, eventContinuation) = AsyncStream<DaemonEvent>.makeStream()
     }
 
-    /// Start the conduitd daemon on the remote host. Uses a bidirectional exec
-    /// channel (no PTY) so we can both read approval events and write decisions.
-    /// daemonPath may contain $HOME-relative components; it is launched via bash -c
-    /// so that $HOME is expanded correctly in non-interactive SSH exec channels.
     public func start(daemonPath: String = "$HOME/.conduit/bin/conduitd") async throws {
         let (byteStream, byteCont) = AsyncStream<[UInt8]>.makeStream()
         let (writer, task) = try await session.requestExecChannel(
@@ -27,8 +25,6 @@ public actor DaemonChannel {
             dataContinuation: byteCont
         )
         stdinWriter = writer
-        _ = task  // task kept alive by the actor; cancelled in stop()
-        readTask = task
 
         let continuation = eventContinuation
         readTask = Task { [byteStream] in
@@ -37,40 +33,78 @@ public actor DaemonChannel {
                 buffer.append(contentsOf: bytes)
                 while let (msg, rest) = DaemonFraming.unframe(buffer) {
                     buffer = rest
-                    if let event = DaemonEvent.decode(from: msg) {
-                        continuation.yield(event)
-                    }
+                    await self.handleFrame(msg, eventContinuation: continuation)
                 }
             }
             continuation.finish()
+            await self.failPendingRPCs(DaemonChannelError.disconnected)
+        }
+        _ = task
+    }
+
+    private func handleFrame(_ msg: Data, eventContinuation: AsyncStream<DaemonEvent>.Continuation) {
+        if let dict = (try? JSONSerialization.jsonObject(with: msg)) as? [String: Any],
+           dict["method"] == nil,
+           let idNum = dict["id"] as? Int,
+           pendingRPC[idNum] != nil {
+            let cont = pendingRPC.removeValue(forKey: idNum)!
+            cont.resume(returning: msg)
+            return
+        }
+        if let event = DaemonEvent.decode(from: msg) {
+            eventContinuation.yield(event)
         }
     }
 
-    /// Inform conduitd of the device's push registration so it can deliver APNs
-    /// alerts when the SSH channel is down. Call after start() succeeds.
-    /// - Parameters:
-    ///   - pushBackendURL: The deployed push-backend HTTPS URL (from CONDUIT_PUSH_BACKEND_URL).
-    ///   - sessionID: The iOS device's identifierForVendor UUID string (matches what was
-    ///     registered with the push backend in AppDelegate.didRegisterForRemoteNotificationsWithDeviceToken).
+    private func failPendingRPCs(_ error: Error) {
+        for (_, cont) in pendingRPC {
+            cont.resume(throwing: error)
+        }
+        pendingRPC.removeAll()
+    }
+
+    private func sendRPC(method: String, params: [String: Any]) async throws -> Data {
+        guard let writer = stdinWriter else { throw DaemonChannelError.notRunning }
+        let id = nextRPCID
+        nextRPCID += 1
+        let envelope: [String: Any] = [
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        ]
+        guard let json = try? JSONSerialization.data(withJSONObject: envelope) else {
+            throw DaemonChannelError.encodeFailed
+        }
+        return try await withCheckedThrowingContinuation { cont in
+            pendingRPC[id] = cont
+            Task {
+                do {
+                    let frame = DaemonFraming.frame(json)
+                    try await writer.write(ByteBuffer(bytes: frame))
+                } catch {
+                    pendingRPC.removeValue(forKey: id)
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     public func registerDevice(pushBackendURL: String, sessionID: String) async throws {
         guard let writer = stdinWriter else { return }
-        let params: [String: Any] = [
-            "pushBackendURL": pushBackendURL,
-            "sessionID": sessionID,
-        ]
         let envelope: [String: Any] = [
             "jsonrpc": "2.0",
             "id": 1,
             "method": "conduit.device.register",
-            "params": params,
+            "params": [
+                "pushBackendURL": pushBackendURL,
+                "sessionID": sessionID,
+            ],
         ]
         guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-        let frame = DaemonFraming.frame(json)
-        let buf = ByteBuffer(bytes: frame)
-        try await writer.write(buf)
+        try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
     }
 
-    /// Send an approval decision back to conduitd via JSON-RPC over the daemon's stdin.
     public static func decisionWireValue(for decision: Approval.Decision) -> String {
         switch decision {
         case .approved: return "approve"
@@ -85,10 +119,9 @@ public actor DaemonChannel {
         editedToolInput: String? = nil
     ) async throws {
         guard let writer = stdinWriter else { return }
-        let decisionStr = Self.decisionWireValue(for: decision)
         var params: [String: Any] = [
             "approvalId": approvalId,
-            "decision": decisionStr,
+            "decision": Self.decisionWireValue(for: decision),
         ]
         if let editedToolInput, !editedToolInput.isEmpty {
             params["editedToolInput"] = editedToolInput
@@ -99,15 +132,72 @@ public actor DaemonChannel {
             "params": params,
         ]
         guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-        let frame = DaemonFraming.frame(json)
-        let buf = ByteBuffer(bytes: frame)
-        try await writer.write(buf)
+        try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
+    }
+
+    public func tailAudit(limit: Int = 50) async throws -> AuditTailResult {
+        let data = try await sendRPC(method: "agent.audit.tail", params: ["limit": limit])
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .auditTail(let result): return result
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    public func fetchPolicy(cwd: String) async throws -> PolicyGetResult {
+        let data = try await sendRPC(method: "agent.policy.get", params: ["cwd": cwd])
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .policyGet(let result): return result
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    public func reloadPolicy(cwd: String = "") async throws {
+        let data = try await sendRPC(method: "agent.policy.reload", params: ["cwd": cwd])
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .ok, .pong: return
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    public func fetchAgentStatus(homeDir: String = "") async throws -> AgentStatusSnapshot {
+        var params: [String: Any] = [:]
+        if !homeDir.isEmpty { params["homeDir"] = homeDir }
+        let data = try await sendRPC(method: "agent.status", params: params)
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .agentStatus(let snap): return snap
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
     }
 
     public func stop() {
         readTask?.cancel()
         readTask = nil
         stdinWriter = nil
+        failPendingRPCs(DaemonChannelError.disconnected)
         eventContinuation.finish()
     }
+}
+
+public enum DaemonChannelError: Error, Sendable {
+    case notRunning
+    case encodeFailed
+    case badResponse
+    case disconnected
+    case rpc(String)
 }

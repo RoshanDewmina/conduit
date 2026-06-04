@@ -493,6 +493,17 @@ public struct SettingsView: View {
                     .foregroundStyle(t.text3)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.15), value: autonomyPresetRaw)
+
+                NavigationLink {
+                    PolicyEditorView(cwd: "~", initialYAML: PolicyEditorView.balancedPreset) {
+                        // Bridge RPC: wire agent.policy.reload when DaemonChannel is available in settings.
+                    }
+                } label: {
+                    Text("Edit bridge policy.yaml")
+                        .font(.dsSansPt(14, weight: .medium))
+                        .foregroundStyle(t.accent)
+                }
+                .padding(.top, 4)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

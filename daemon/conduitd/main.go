@@ -17,15 +17,26 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Println(version)
 
+	case "daemon":
+		if err := runDaemon(); err != nil {
+			fmt.Fprintln(os.Stderr, "conduitd daemon:", err)
+			os.Exit(1)
+		}
+
 	case "serve":
 		if err := runServe(); err != nil {
 			fmt.Fprintln(os.Stderr, "conduitd serve:", err)
 			os.Exit(1)
 		}
 
+	case "install":
+		if err := runInstall(); err != nil {
+			fmt.Fprintln(os.Stderr, "conduitd install:", err)
+			os.Exit(1)
+		}
+
 	case "agent-hook":
 		if err := runAgentHook(os.Args[2:]); err != nil {
-			// Exit 1 = denied / error (agent hook convention)
 			fmt.Fprintln(os.Stderr, "conduitd agent-hook:", err)
 			os.Exit(1)
 		}
@@ -41,7 +52,9 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `conduitd - Conduit remote daemon
 
 Usage:
-  conduitd serve           Run JSON-RPC server (iOS app connects via SSH stdio)
+  conduitd daemon          Run resident bridge (Unix socket, persistent queue)
+  conduitd serve           Attach to resident; relay JSON-RPC over stdio
+  conduitd install         Install binary + launchd/systemd unit for daemon
   conduitd agent-hook ...  Send approval event from agent pre-tool hook
   conduitd version         Print version`)
 }

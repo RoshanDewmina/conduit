@@ -22,6 +22,7 @@ public final class AgentStore {
     public var artifactsByRun: [String: [AgentArtifact]] = [:]
     public var schedulesByAgent: [String: [AgentSchedule]] = [:]
     public var orgMembers: [OrgMember] = []
+    public var bridgeStatus: AgentStatusSnapshot?
 
     /// Backend-streamed log lines for cloud runs, keyed by runID. ssh-host runs
     /// populate `AgentRun.logLines` on-device instead; `logLines(for:)` merges them.
@@ -122,6 +123,13 @@ public final class AgentStore {
             creditBalance = nil
         }
         recomputeQuota()
+    }
+
+    public func refreshBridgeStatus(using channel: DaemonChannel) async {
+        guard hasCloudEntitlement else { return }
+        guard let snapshot = try? await channel.fetchAgentStatus() else { return }
+        bridgeStatus = snapshot
+        quota = snapshot.mergeIntoQuota(quota)
     }
 
     public func createAgent(

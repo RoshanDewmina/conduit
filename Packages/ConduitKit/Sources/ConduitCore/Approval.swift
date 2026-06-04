@@ -1,43 +1,32 @@
 import Foundation
 
-/// An approval request raised by a remote agent (Claude Code, Codex, etc.)
-/// and surfaced to the user in the Inbox.
 public struct Approval: Identifiable, Sendable, Hashable {
     public let id: ApprovalID
     public let sessionID: SessionID
     public let agent: AgentSource
     public let kind: Kind
-    public let command: String?           // present for `.command` / `.patch`
-    public let patch: String?             // unified diff for `.patch`
+    public let command: String?
+    public let patch: String?
     public let cwd: String
     public let risk: Risk
     public let createdAt: Date
     public var decidedAt: Date?
     public var decision: Decision?
-    // askQuestion fields
-    public let question: String?          // prompt text for .askQuestion
-    public let choices: [String]?         // answer options for .askQuestion
-    public var answeredChoice: Int?       // user-selected index (0-based)
-    // Structured tool-use fields — nil when received from older conduitd
+    public let question: String?
+    public let choices: [String]?
+    public var answeredChoice: Int?
     public var toolName: String?
     public var toolUseID: String?
-    public var agentSessionID: String?    // Claude Code / Codex session ID
+    public var agentSessionID: String?
     public var toolInput: String?
+    public let blastRadius: ApprovalBlastRadius?
 
     public enum AgentSource: String, Sendable, Hashable, Codable {
         case claudeCode, codex, opencode, cursor, devin, unknown
     }
 
     public enum Kind: String, Sendable, Hashable, Codable {
-        case command         // wants to run a shell command
-        case patch           // wants to apply a code change
-        case fileWrite       // wants to overwrite a file
-        case fileDelete
-        case network         // wants to make a network call
-        case credential      // wants a secret / API key
-        case browser         // wants to perform a browser action
-        case callMCP         // wants to invoke an MCP tool
-        case askQuestion     // agent needs user to pick from multiple choices
+        case command, patch, fileWrite, fileDelete, network, credential, browser, callMCP, askQuestion
     }
 
     public enum Risk: Int, Sendable, Hashable, Codable, Comparable {
@@ -67,7 +56,8 @@ public struct Approval: Identifiable, Sendable, Hashable {
         toolName: String? = nil,
         toolUseID: String? = nil,
         agentSessionID: String? = nil,
-        toolInput: String? = nil
+        toolInput: String? = nil,
+        blastRadius: ApprovalBlastRadius? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -87,6 +77,7 @@ public struct Approval: Identifiable, Sendable, Hashable {
         self.toolUseID = toolUseID
         self.agentSessionID = agentSessionID
         self.toolInput = toolInput
+        self.blastRadius = blastRadius
     }
 
     public var isPending: Bool { decision == nil }

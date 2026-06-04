@@ -37,6 +37,7 @@ public struct InboxView: View {
     private var vm: InboxViewModel
     private let sessionID: SessionID?
     private let title: String
+    private let awayAuditEntries: [AuditLogEntry]
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
 
@@ -49,12 +50,14 @@ public struct InboxView: View {
         viewModel: InboxViewModel,
         sessionID: SessionID? = nil,
         title: String = "Inbox",
+        awayAuditEntries: [AuditLogEntry] = [],
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {}
     ) {
         self.vm = viewModel
         self.sessionID = sessionID
         self.title = title
+        self.awayAuditEntries = awayAuditEntries
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
     }
@@ -76,6 +79,14 @@ public struct InboxView: View {
                 }
 
                 Spacer().frame(height: 12)
+
+                if !awayAuditEntries.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        DSListSectionHead("WHILE YOU WERE AWAY", count: awayAuditEntries.count)
+                        BridgeAuditFeedView(entries: awayAuditEntries)
+                            .padding(.horizontal, 16)
+                    }
+                }
 
                 if visibleApprovals.isEmpty {
                     emptyState
@@ -156,24 +167,58 @@ public struct InboxView: View {
             )
 
         default:
-            DSApprovalCard(
-                agentKey: agentKey(approval.agent),
-                risk: approval.risk.rawValue,
-                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
-                agentName: agentName(approval.agent),
-                action: actionPhrase(approval.kind),
-                hostLabel: approval.cwd,
-                command: approval.command,
-                onViewDiff: approval.patch != nil ? { diffApproval = approval } : nil,
-                onDeny: { vm.decide(approval.id, decision: .rejected) },
-                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
-                onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
-                    editedToolInputText = editableToolInput(for: approval)
-                    editingApproval = approval
-                } : nil,
-                onApprove: { vm.decide(approval.id, decision: .approved) }
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                DSApprovalCard(
+                    agentKey: agentKey(approval.agent),
+                    risk: approval.risk.rawValue,
+                    timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                    agentName: agentName(approval.agent),
+                    action: actionPhrase(approval.kind),
+                    hostLabel: approval.cwd,
+                    command: approval.command,
+                    onViewDiff: approval.patch != nil ? { diffApproval = approval } : nil,
+                    onDeny: { vm.decide(approval.id, decision: .rejected) },
+                    onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
+                    onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
+                        editedToolInputText = editableToolInput(for: approval)
+                        editingApproval = approval
+                    } : nil,
+                    onApprove: { vm.decide(approval.id, decision: .approved) }
+                )
+                if let br = approval.blastRadius {
+                    blastRadiusFooter(br)
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func blastRadiusFooter(_ br: ApprovalBlastRadius) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let rule = br.matchedRule, !rule.isEmpty {
+                Text("Policy: \(rule)")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            HStack(spacing: 8) {
+                if br.touchesGit == true {
+                    Label("Git", systemImage: "arrow.triangle.branch")
+                        .font(.caption2)
+                        .foregroundStyle(t.warn)
+                }
+                if br.touchesNetwork == true {
+                    Label("Network", systemImage: "network")
+                        .font(.caption2)
+                        .foregroundStyle(t.danger)
+                }
+            }
+            if let files = br.files, !files.isEmpty {
+                Text("Affected: \(files.prefix(5).joined(separator: ", "))\(files.count > 5 ? "…" : "")")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+        }
+        .padding(.horizontal, 4)
     }
 
     @ViewBuilder

@@ -75,9 +75,10 @@ func runAgentHook(args []string) error {
 
 	conn, err := net.DialTimeout("unix", sockPath, 5*time.Second)
 	if err != nil {
-		// conduitd serve is not running — default-approve so agents aren't blocked
-		// when the phone is not connected.
-		fmt.Fprintf(os.Stderr, "conduitd not running (%v); auto-approving\n", err)
+		if hookShouldHold(normalizedKind, event.Risk) {
+			return fmt.Errorf("conduitd resident not reachable (%v); mutating action held (fail-closed)", err)
+		}
+		fmt.Fprintf(os.Stderr, "conduitd not running (%v); read-only fail-open (CONDUIT_HOOK_READONLY_FAIL_OPEN=1)\n", err)
 		return nil
 	}
 	defer conn.Close()
@@ -128,9 +129,11 @@ func normalizeKind(kind string) string {
 	switch kind {
 	case "bash", "Bash", "shell", "command":
 		return "command"
-	case "apply_patch", "Patch", "patch", "Edit", "Write", "MultiEdit":
+	case "edit", "multiedit":
 		return "patch"
-	case "write", "file-write", "file_write", "fileWrite":
+	case "apply_patch", "Patch", "patch", "Edit", "Write", "MultiEdit", "write":
+		return "patch"
+	case "file-write", "file_write", "fileWrite":
 		return "fileWrite"
 	case "delete", "file-delete", "file_delete", "fileDelete":
 		return "fileDelete"
@@ -142,6 +145,37 @@ func normalizeKind(kind string) string {
 		return "browser"
 	default:
 		return kind
+	}
+}
+
+// hookShouldHold returns true when the hook must block (exit 1) because the resident daemon is down.
+// Mutating tool kinds (including command/bash) always hold. Read-only kinds fail-open only when
+// CONDUIT_HOOK_READONLY_FAIL_OPEN=1. Critical risk always holds regardless of kind.
+func hookShouldHold(kind string, risk int) bool {
+	if risk >= 3 {
+		return true
+	}
+	if isReadOnlyKind(kind) && os.Getenv("CONDUIT_HOOK_READONLY_FAIL_OPEN") == "1" {
+		return false
+	}
+	return isMutatingKind(kind)
+}
+
+func isMutatingKind(kind string) bool {
+	switch kind {
+	case "read", "grep", "list", "search":
+		return false
+	default:
+		return true
+	}
+}
+
+func isReadOnlyKind(kind string) bool {
+	switch kind {
+	case "read", "grep", "list", "search":
+		return true
+	default:
+		return false
 	}
 }
 

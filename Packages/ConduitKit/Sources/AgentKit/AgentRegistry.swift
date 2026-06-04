@@ -217,6 +217,18 @@ public struct AgentRegistration: Codable, Hashable, Sendable {
             sessionDirectory: "~/.gemini/antigravity-cli"
         )
     }
+
+    public static var builtInOpencode: AgentRegistration {
+        AgentRegistration(
+            id: AgentKind.opencode.rawValue,
+            name: "OpenCode",
+            detect: AgentDetectRule(processName: "opencode", argvContains: ["opencode"]),
+            sessionIdSource: .argvOption("--session"),
+            resumeCommand: "{{executable}} --session {{sessionId}}",
+            cwd: .preserve,
+            sessionDirectory: "~/.local/share/opencode"
+        )
+    }
 }
 
 // MARK: - Detection rule
@@ -421,6 +433,7 @@ public struct AgentRegistry: Sendable {
         AgentRegistry(registrations: [
             .builtInClaude,
             .builtInCodex,
+            .builtInOpencode,
             .builtInCursor,
             .builtInGrok,
             .builtInPi,
