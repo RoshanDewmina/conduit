@@ -1,0 +1,31 @@
+# Push backend deploy env (owner-run)
+
+Do not commit secrets (`.p8`, API keys, webhook secrets, tokens) to git.
+Use Secret Manager or deployment-time environment variables.
+
+## Required push/APNs values
+
+- `APNS_KEY_ID=L8LVU9X82W`
+- `APNS_TEAM_ID=39HM2X8GS6`
+- `APNS_BUNDLE_ID=dev.conduit.mobile`
+- `APNS_KEY_PATH=/secrets/apns.p8` (runtime path in container)
+
+## Example Cloud Run deploy flow
+
+```bash
+cd daemon/push-backend
+
+gcloud run deploy conduit-push --source . --region australia-southeast1 \
+  --allow-unauthenticated --min-instances 1 --port 8080
+
+# One-time secret creation (skip if already created):
+printf '%s' "$APNS_KEY_ID" | gcloud secrets create APNS_KEY_ID --data-file=-
+printf '%s' "$APNS_TEAM_ID" | gcloud secrets create APNS_TEAM_ID --data-file=-
+gcloud secrets create APNS_KEY --data-file "/absolute/path/AuthKey_L8LVU9X82W.p8"
+
+# Update service with APNs secrets and runtime env.
+gcloud run services update conduit-push --region australia-southeast1 \
+  --set-secrets APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest \
+  --update-secrets /secrets/apns.p8=APNS_KEY:latest \
+  --set-env-vars APNS_KEY_PATH=/secrets/apns.p8,APNS_BUNDLE_ID=dev.conduit.mobile
+```

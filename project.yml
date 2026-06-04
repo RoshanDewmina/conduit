@@ -19,7 +19,7 @@ settings:
     # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
     # Example: https://conduit-push-HASH-ts.a.run.app
-    CONDUIT_PUSH_BACKEND_URL: ""
+    CONDUIT_PUSH_BACKEND_URL: "https://35.201.3.231.sslip.io"
 
 packages:
   ConduitKit:
@@ -62,7 +62,7 @@ targets:
         # (no icloud-services entitlement). Flip to true together with the
         # entitlements swap below, once the iCloud capability + CloudKit
         # container are enabled in the Apple Developer portal.
-        CONDUIT_ICLOUD_ENABLED: false
+        CONDUIT_ICLOUD_ENABLED: true
         ITSAppUsesNonExemptEncryption: false
     # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
     # account. Entitlements are already pointing at `Conduit.entitlements`
