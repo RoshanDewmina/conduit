@@ -683,6 +683,132 @@ git commit -m "feat(mcp): MCP HTTP handler, auth, tool definitions"
 
 ---
 
+## Task 3.5: Shared APNs + Event Persistence Helpers
+
+**Files:**
+- Modify: `daemon/push-backend/mcp_tools.go` (add `sendAPNS` and `recordAndPushMCPEvent`)
+- Modify: `daemon/push-backend/mcp_test.go` (add shared test helpers used by all later tasks)
+
+The plan calls `sendAPNS(...)` in Tasks 4, 8, and 9, but the existing `main.go` only has `pushApproval()` and `pushRunComplete()`. This task adds the shared helper before any tool implementations reference it. `recordAndPushMCPEvent` ensures every notification that fires APNs is also persisted to the event store — so the mobile inbox never loses history.
+
+- [ ] **Step 1: Verify the actual APNs function name in main.go**
+
+```bash
+grep -n "^func push" daemon/push-backend/main.go
+```
+
+Expected: lines like `func pushApproval(...)` and `func pushRunComplete(...)`. Note the exact signature — `sendAPNS` wraps whichever pattern they use internally (JWT + HTTP/2 to APNs).
+
+- [ ] **Step 2: Append helpers to mcp_tools.go**
+
+Add at the top of `daemon/push-backend/mcp_tools.go`, after the imports:
+
+```go
+// sendAPNS delivers a push notification to an APNs device token.
+// title, body: visible notification text.
+// category: APNs category string (e.g. "CONDUIT_NOTIFY", "CONDUIT_CHECKPOINT").
+// extra: custom payload keys merged into the notification's data dict.
+// This is best-effort — callers must not block on it.
+func sendAPNS(deviceToken, title, body, category string, extra map[string]string) {
+	// Reuse the APNs JWT credentials already loaded at startup.
+	// Look up how pushApproval/pushRunComplete construct their HTTP/2 request
+	// and replicate that pattern here. The function is intentionally a wrapper
+	// so only one place needs to know the APNs wire format.
+	//
+	// Minimum viable implementation: copy the HTTP/2 request construction
+	// from pushApproval, replacing aps.alert, aps.category, and the custom
+	// payload keys with the arguments passed here.
+	//
+	// If the codebase has a sendPush(token, payload) helper already,
+	// delegate to it instead of duplicating the HTTP/2 client setup.
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]string{"title": title, "body": body},
+			"sound":    "default",
+			"category": category,
+		},
+	}
+	for k, v := range extra {
+		payload[k] = v
+	}
+	// TODO: replace the body below with the actual APNs HTTP/2 send logic
+	// from pushApproval / pushRunComplete in main.go.
+	_ = payload
+	_ = deviceToken
+}
+
+// recordAndPushMCPEvent persists evt to the event store then fires APNs best-effort.
+// Use this instead of calling appendEvent + pushMCPNotify separately so that
+// every notification that reaches the phone also appears in the inbox history.
+func recordAndPushMCPEvent(sessionID string, evt MCPEvent) {
+	if err := appendEvent(evt); err != nil {
+		// Log but don't fail — notification is best-effort.
+		return
+	}
+	go pushMCPNotify(sessionID, evt)
+}
+```
+
+- [ ] **Step 3: Add shared test helpers to mcp_test.go**
+
+Insert these functions near the top of `daemon/push-backend/mcp_test.go`, after the import block:
+
+```go
+// setupMCPTestStores points all JSON stores at temp dirs for test isolation.
+// Call at the start of every test that touches stores.
+func setupMCPTestStores(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	apiKeyStore.path = dir + "/apikeys.json"
+	mcpEventStore.path = dir + "/events.json"
+	mcpCheckpointStore.path = dir + "/checkpoints.json"
+	mcpLoopStore.path = dir + "/loops.json"
+	mcpReportStore.path = dir + "/proofs.json"
+}
+
+// assertMCPResult asserts the response has no JSON-RPC error and returns the result map.
+func assertMCPResult(t *testing.T, resp map[string]any) map[string]any {
+	t.Helper()
+	if errObj, ok := resp["error"]; ok {
+		t.Fatalf("unexpected MCP error: %#v", errObj)
+	}
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing result in response: %#v", resp)
+	}
+	return result
+}
+```
+
+Update `newMCPServer` to use the new helper:
+
+```go
+func newMCPServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	setupMCPTestStores(t) // replaces the per-test store path assignments
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /mcp", handleMCP)
+	return httptest.NewServer(mux)
+}
+```
+
+- [ ] **Step 4: Build to confirm no compile errors before proceeding**
+
+```bash
+cd daemon/push-backend && go build ./...
+```
+
+Expected: compiles cleanly. If `sendAPNS` references anything not yet defined (e.g. the APNs HTTP client from `main.go`), move that shared client setup to a package-level var accessible from both files.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add mcp_tools.go mcp_test.go
+git commit -m "feat(mcp): shared sendAPNS helper and recordAndPushMCPEvent, test store helpers"
+```
+
+---
+
 ## Task 4: Tool Implementations (notify + checkpoint + status)
 
 **Files:**
@@ -1259,11 +1385,34 @@ cd daemon/push-backend && go build ./...
 
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Update CORS middleware in main.go**
+
+Find the `corsMiddleware` or equivalent CORS handler in `daemon/push-backend/main.go`:
+
+```bash
+grep -n "CORS\|Access-Control\|cors" daemon/push-backend/main.go | head -10
+```
+
+Add `Authorization`, `X-Session-ID`, and `DELETE` to the allowed methods/headers. The exact location depends on the existing middleware — update the allowed headers list to include:
+
+```go
+w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-ID, X-Customer-Id, X-App-Account-Token, Stripe-Signature")
+```
+
+- [ ] **Step 8: Build and run tests**
+
+```bash
+cd daemon/push-backend && go test -run "TestMCP|TestConduit|TestAPIKey|TestEvent|TestCheckpoint" -v && go build ./...
+```
+
+Expected: all `PASS`, clean build.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add mcp.go main.go mcp_test.go
-git commit -m "feat(mcp): iOS decide endpoint and API key HTTP handlers"
+git commit -m "feat(mcp): iOS decide endpoint, API key HTTP handlers, CORS update"
 ```
 
 ---
@@ -1477,3 +1626,818 @@ If the function is named differently (e.g. `sendPush`, `pushToDevice`), update t
 - Rich notification card UI
 - Notification rule builder
 - Apple Watch app
+
+---
+
+## Task 8: Loop Tracking — conduit_loop_start + conduit_step_complete
+
+**Files:**
+- Modify: `daemon/push-backend/mcp_store.go` (add `MCPLoop` type + store)
+- Modify: `daemon/push-backend/mcp_tools.go` (add tool implementations)
+- Modify: `daemon/push-backend/mcp.go` (add to `mcpToolDefinitions()`)
+- Modify: `daemon/push-backend/mcp_test.go` (append loop tests)
+
+Loops let the mobile app show structured progress ("Step 4/8 — running tests") instead of a flat notification stream. `conduit_loop_start` returns a `loop_id`; each `conduit_step_complete` call advances the progress and fires a notification only when `status` is `"failed"` or `"blocked"`.
+
+- [ ] **Step 1: Append failing test to mcp_test.go**
+
+```go
+// Append to mcp_test.go
+
+func TestLoopLifecycle(t *testing.T) {
+    mcpLoopStore.path = t.TempDir() + "/loops.json"
+    srv := newMCPServer(t)
+    defer srv.Close()
+    key, _ := createAPIKey("session-loop")
+
+    // Start loop
+    startResp := mcpPost(t, srv, key, map[string]any{
+        "jsonrpc": "2.0", "id": 30, "method": "tools/call",
+        "params": map[string]any{
+            "name": "conduit_loop_start",
+            "arguments": map[string]any{
+                "name":        "Deploy Loop",
+                "total_steps": 6,
+                "agent_name":  "DeployBot",
+            },
+        },
+    })
+    content := startResp["result"].(map[string]any)["content"].([]any)[0].(map[string]any)
+    var startObj struct {
+        LoopID     string `json:"loop_id"`
+        TotalSteps int    `json:"total_steps"`
+    }
+    json.Unmarshal([]byte(content["text"].(string)), &startObj)
+    if startObj.LoopID == "" {
+        t.Fatal("no loop_id in response")
+    }
+    if startObj.TotalSteps != 6 {
+        t.Errorf("total_steps = %d, want 6", startObj.TotalSteps)
+    }
+
+    // Complete step 1
+    stepResp := mcpPost(t, srv, key, map[string]any{
+        "jsonrpc": "2.0", "id": 31, "method": "tools/call",
+        "params": map[string]any{
+            "name": "conduit_step_complete",
+            "arguments": map[string]any{
+                "loop_id": startObj.LoopID,
+                "step":    1,
+                "status":  "ok",
+                "summary": "Build passed",
+            },
+        },
+    })
+    stepContent := stepResp["result"].(map[string]any)["content"].([]any)[0].(map[string]any)
+    if !strings.Contains(stepContent["text"].(string), "1") {
+        t.Errorf("step response missing step number: %s", stepContent["text"])
+    }
+
+    // Verify stored
+    loop, err := getLoop(startObj.LoopID)
+    if err != nil {
+        t.Fatalf("getLoop: %v", err)
+    }
+    if loop.CurrentStep != 1 {
+        t.Errorf("current_step = %d, want 1", loop.CurrentStep)
+    }
+    if loop.Steps[0].Status != "ok" {
+        t.Errorf("step status = %q, want ok", loop.Steps[0].Status)
+    }
+}
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+```bash
+cd daemon/push-backend && go test -run TestLoopLifecycle -v
+```
+
+Expected: `FAIL — undefined: mcpLoopStore, conduit_loop_start, getLoop`
+
+- [ ] **Step 3: Add MCPLoop type and store to mcp_store.go**
+
+Append to `daemon/push-backend/mcp_store.go`:
+
+```go
+// --- Loops (progress tracking) ---
+
+type MCPLoopStep struct {
+    Step      int    `json:"step"`
+    Status    string `json:"status"`  // "ok" | "failed" | "blocked" | "skipped"
+    Summary   string `json:"summary"`
+    CreatedAt string `json:"createdAt"`
+}
+
+type MCPLoop struct {
+    ID          string        `json:"id"`
+    SessionID   string        `json:"sessionId"`
+    Name        string        `json:"name"`
+    TotalSteps  int           `json:"totalSteps"`
+    CurrentStep int           `json:"currentStep"`
+    Status      string        `json:"status"`  // "running" | "completed" | "failed" | "blocked"
+    AgentName   string        `json:"agentName,omitempty"`
+    Steps       []MCPLoopStep `json:"steps"`
+    CreatedAt   string        `json:"createdAt"`
+    UpdatedAt   string        `json:"updatedAt"`
+}
+
+type mcpLoopsData struct {
+    Loops []MCPLoop `json:"loops"`
+}
+
+var mcpLoopStore = &jsonFileStore{path: dataFilePath("MCP_LOOPS_PATH", "mcp_loops.json")}
+var mcpLoopsMu sync.Mutex
+
+func createLoop(loop MCPLoop) error {
+    mcpLoopsMu.Lock()
+    defer mcpLoopsMu.Unlock()
+    var d mcpLoopsData
+    _ = mcpLoopStore.load(&d)
+    d.Loops = append(d.Loops, loop)
+    return mcpLoopStore.save(&d)
+}
+
+func getLoop(id string) (MCPLoop, error) {
+    mcpLoopsMu.Lock()
+    defer mcpLoopsMu.Unlock()
+    var d mcpLoopsData
+    if err := mcpLoopStore.load(&d); err != nil {
+        return MCPLoop{}, err
+    }
+    for _, l := range d.Loops {
+        if l.ID == id {
+            return l, nil
+        }
+    }
+    return MCPLoop{}, fmt.Errorf("loop %q not found", id)
+}
+
+func updateLoop(loop MCPLoop) error {
+    // Internal: caller must hold mcpLoopsMu. Used only by updateLoopAtomic.
+    var d mcpLoopsData
+    _ = mcpLoopStore.load(&d)
+    for i, l := range d.Loops {
+        if l.ID == loop.ID {
+            d.Loops[i] = loop
+            return mcpLoopStore.save(&d)
+        }
+    }
+    return fmt.Errorf("loop %q not found", loop.ID)
+}
+
+// updateLoopAtomic loads the loop, verifies sessionID ownership, calls mutate
+// under the same lock, then saves — preventing lost-update races from concurrent
+// conduit_step_complete calls.
+func updateLoopAtomic(loopID, sessionID string, mutate func(*MCPLoop) error) error {
+    mcpLoopsMu.Lock()
+    defer mcpLoopsMu.Unlock()
+    var d mcpLoopsData
+    if err := mcpLoopStore.load(&d); err != nil {
+        return err
+    }
+    for i, l := range d.Loops {
+        if l.ID == loopID {
+            if l.SessionID != sessionID {
+                return fmt.Errorf("loop %q not found", loopID)
+            }
+            if err := mutate(&d.Loops[i]); err != nil {
+                return err
+            }
+            return mcpLoopStore.save(&d)
+        }
+    }
+    return fmt.Errorf("loop %q not found", loopID)
+}
+```
+
+- [ ] **Step 4: Add tool implementations to mcp_tools.go**
+
+Append to `daemon/push-backend/mcp_tools.go`:
+
+```go
+// --- conduit_loop_start ---
+
+type loopStartArgs struct {
+    Name       string `json:"name"`
+    TotalSteps int    `json:"total_steps"`
+    AgentName  string `json:"agent_name"`
+}
+
+func toolLoopStart(raw json.RawMessage, sessionID string) (any, error) {
+    var args loopStartArgs
+    if err := json.Unmarshal(raw, &args); err != nil {
+        return nil, fmt.Errorf("invalid arguments: %w", err)
+    }
+    if args.Name == "" || args.TotalSteps < 1 {
+        return nil, fmt.Errorf("name and total_steps (>=1) are required")
+    }
+    loop := MCPLoop{
+        ID:         newID("loop"),
+        SessionID:  sessionID,
+        Name:       args.Name,
+        TotalSteps: args.TotalSteps,
+        Status:     "running",
+        AgentName:  args.AgentName,
+        CreatedAt:  nowISO(),
+        UpdatedAt:  nowISO(),
+    }
+    if err := createLoop(loop); err != nil {
+        return nil, fmt.Errorf("store loop: %w", err)
+    }
+    return mcpJSONResult(map[string]any{
+        "loop_id":     loop.ID,
+        "total_steps": loop.TotalSteps,
+        "status":      loop.Status,
+    })
+}
+
+// --- conduit_step_complete ---
+
+type stepCompleteArgs struct {
+    LoopID  string `json:"loop_id"`
+    Step    int    `json:"step"`
+    Status  string `json:"status"`
+    Summary string `json:"summary"`
+}
+
+func toolStepComplete(raw json.RawMessage, sessionID string) (any, error) {
+    var args stepCompleteArgs
+    if err := json.Unmarshal(raw, &args); err != nil {
+        return nil, fmt.Errorf("invalid arguments: %w", err)
+    }
+    if args.LoopID == "" || args.Step < 1 {
+        return nil, fmt.Errorf("loop_id and step (>=1) are required")
+    }
+    allowed := map[string]bool{"ok": true, "failed": true, "blocked": true, "skipped": true}
+    if !allowed[args.Status] {
+        return nil, fmt.Errorf("status must be ok|failed|blocked|skipped")
+    }
+
+    // Atomic read-mutate-write under a single lock to avoid lost-update races
+    // when two concurrent conduit_step_complete calls arrive for the same loop.
+    var loopSnapshot MCPLoop
+    err = updateLoopAtomic(args.LoopID, sessionID, func(loop *MCPLoop) error {
+        if args.Step > loop.TotalSteps {
+            return fmt.Errorf("step %d exceeds total_steps %d", args.Step, loop.TotalSteps)
+        }
+        // Guard terminal states: once failed/completed don't silently revert.
+        if loop.Status == "completed" || loop.Status == "failed" {
+            return fmt.Errorf("loop already in terminal state %q", loop.Status)
+        }
+        loop.CurrentStep = args.Step
+        loop.UpdatedAt = nowISO()
+        loop.Steps = append(loop.Steps, MCPLoopStep{
+            Step:      args.Step,
+            Status:    args.Status,
+            Summary:   args.Summary,
+            CreatedAt: nowISO(),
+        })
+        if args.Step >= loop.TotalSteps && args.Status == "ok" {
+            loop.Status = "completed"
+        } else if args.Status == "failed" {
+            loop.Status = "failed"
+        } else if args.Status == "blocked" {
+            loop.Status = "blocked"
+        }
+        loopSnapshot = *loop
+        return nil
+    })
+    if err != nil {
+        return nil, fmt.Errorf("update loop: %w", err)
+    }
+
+    // Only notify on failure or block — not every step.
+    // recordAndPushMCPEvent persists the event before firing APNs so the
+    // inbox history is never missing a notification.
+    if args.Status == "failed" || args.Status == "blocked" {
+        recordAndPushMCPEvent(sessionID, MCPEvent{
+            ID:        newID("evt"),
+            SessionID: sessionID,
+            Message:   fmt.Sprintf("%s: step %d/%d %s — %s", loopSnapshot.Name, args.Step, loopSnapshot.TotalSteps, args.Status, args.Summary),
+            Level:     "warning",
+            AgentName: loopSnapshot.AgentName,
+            CreatedAt: nowISO(),
+        })
+    }
+
+    return mcpJSONResult(map[string]any{
+        "loop_id":      loop.ID,
+        "step":         args.Step,
+        "total_steps":  loop.TotalSteps,
+        "loop_status":  loop.Status,
+    })
+}
+```
+
+- [ ] **Step 5: Update mcpToolDefinitions() in mcp.go**
+
+Add two entries to the slice returned by `mcpToolDefinitions()`:
+
+```go
+{
+    "name":        "conduit_loop_start",
+    "description": "Start a named multi-step loop. Returns a loop_id. Call conduit_step_complete() after each step. The mobile app shows a progress bar.",
+    "inputSchema": map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "name":        map[string]any{"type": "string", "description": "Human-readable loop name, e.g. 'Deploy Loop'"},
+            "total_steps": map[string]any{"type": "integer", "description": "Total number of steps in this loop"},
+            "agent_name":  map[string]any{"type": "string", "description": "Display name for this agent"},
+        },
+        "required": []string{"name", "total_steps"},
+    },
+},
+{
+    "name":        "conduit_step_complete",
+    "description": "Report completion of one step in a loop started with conduit_loop_start(). Fires a push notification only when status is 'failed' or 'blocked'.",
+    "inputSchema": map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "loop_id": map[string]any{"type": "string", "description": "loop_id returned by conduit_loop_start()"},
+            "step":    map[string]any{"type": "integer", "description": "Step number (1-indexed)"},
+            "status":  map[string]any{"type": "string", "enum": []string{"ok", "failed", "blocked", "skipped"}},
+            "summary": map[string]any{"type": "string", "description": "One-line description of what happened"},
+        },
+        "required": []string{"loop_id", "step", "status", "summary"},
+    },
+},
+```
+
+Also add the new cases to the `switch params.Name` block in `handleToolCall` in `mcp_tools.go`:
+
+```go
+case "conduit_loop_start":
+    result, toolErr = toolLoopStart(params.Arguments, sessionID)
+case "conduit_step_complete":
+    result, toolErr = toolStepComplete(params.Arguments, sessionID)
+```
+
+- [ ] **Step 6: Run tests**
+
+```bash
+cd daemon/push-backend && go test -run TestLoopLifecycle -v
+```
+
+Expected: `PASS`
+
+- [ ] **Step 7: Build to confirm no compile errors**
+
+```bash
+cd daemon/push-backend && go build ./...
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add mcp_store.go mcp_tools.go mcp.go mcp_test.go
+git commit -m "feat(mcp): conduit_loop_start and conduit_step_complete for loop progress tracking"
+```
+
+---
+
+## Task 9: Proof-of-Work — conduit_report
+
+**Files:**
+- Modify: `daemon/push-backend/mcp_store.go` (add `MCPReport` type + store)
+- Modify: `daemon/push-backend/mcp_tools.go` (add tool implementation)
+- Modify: `daemon/push-backend/mcp.go` (add to `mcpToolDefinitions()`)
+- Modify: `daemon/push-backend/mcp_test.go` (append proof test)
+
+Every loop completion or significant checkpoint should produce a structured proof card. Forced schema prevents agents from sending prose summaries that can't be trusted.
+
+- [ ] **Step 1: Append failing test to mcp_test.go**
+
+```go
+// Append to mcp_test.go
+
+func TestConduitProof(t *testing.T) {
+    mcpReportStore.path = t.TempDir() + "/proofs.json"
+    srv := newMCPServer(t)
+    defer srv.Close()
+    key, _ := createAPIKey("session-proof")
+
+    resp := mcpPost(t, srv, key, map[string]any{
+        "jsonrpc": "2.0", "id": 40, "method": "tools/call",
+        "params": map[string]any{
+            "name": "conduit_report",
+            "arguments": map[string]any{
+                "goal":          "Fix failing login test",
+                "changed_files": []string{"src/auth/session.ts", "tests/auth.test.ts"},
+                "commands_run":  []string{"npm test", "npm run lint"},
+                "test_status":   "passed",
+                "diff_summary":  "Fixed token refresh race condition",
+                "risks":         []string{"Did not manually test Safari"},
+                "unverified":    []string{"Production OAuth provider not tested"},
+                "recommended_next_action": "approve_pr",
+            },
+        },
+    })
+
+    result, ok := resp["result"].(map[string]any)
+    if !ok {
+        t.Fatalf("expected result, got: %v", resp)
+    }
+    content := result["content"].([]any)[0].(map[string]any)
+    var proofResp struct {
+        ProofID    string `json:"proof_id"`
+        TestStatus string `json:"test_status"`
+    }
+    if err := json.Unmarshal([]byte(content["text"].(string)), &proofResp); err != nil {
+        t.Fatalf("unmarshal proof response: %v", err)
+    }
+    if proofResp.ProofID == "" {
+        t.Fatal("no proof_id in response")
+    }
+    if proofResp.TestStatus != "passed" {
+        t.Errorf("test_status = %q, want passed", proofResp.TestStatus)
+    }
+
+    // Verify stored
+    proof, err := getReport(proofResp.ProofID)
+    if err != nil {
+        t.Fatalf("getReport: %v", err)
+    }
+    if proof.Goal != "Fix failing login test" {
+        t.Errorf("goal = %q", proof.Goal)
+    }
+    if len(proof.ChangedFiles) != 2 {
+        t.Errorf("changed_files len = %d, want 2", len(proof.ChangedFiles))
+    }
+}
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+```bash
+cd daemon/push-backend && go test -run TestConduitProof -v
+```
+
+Expected: `FAIL — undefined: mcpReportStore, getReport`
+
+- [ ] **Step 3: Add MCPReport type and store to mcp_store.go**
+
+Append to `daemon/push-backend/mcp_store.go`:
+
+```go
+// --- Proofs (structured proof-of-work cards) ---
+
+type MCPReport struct {
+    ID                    string   `json:"id"`
+    SessionID             string   `json:"sessionId"`
+    LoopID                string   `json:"loopId,omitempty"`
+    AgentName             string   `json:"agentName,omitempty"`
+    Goal                  string   `json:"goal"`
+    ChangedFiles          []string `json:"changedFiles"`
+    CommandsRun           []string `json:"commandsRun"`
+    TestStatus            string   `json:"testStatus"`  // "passed" | "failed" | "skipped" | "unknown"
+    DiffSummary           string   `json:"diffSummary"`
+    Screenshots           []string `json:"screenshots,omitempty"`
+    Risks                 []string `json:"risks,omitempty"`
+    Unverified            []string `json:"unverified,omitempty"`
+    RecommendedNextAction string   `json:"recommendedNextAction,omitempty"`
+    CreatedAt             string   `json:"createdAt"`
+}
+
+type mcpReportsData struct {
+    Proofs []MCPReport `json:"proofs"`
+}
+
+var mcpReportStore = &jsonFileStore{path: dataFilePath("MCP_PROOFS_PATH", "mcp_proofs.json")}
+var mcpProofsMu sync.Mutex
+
+func saveReport(proof MCPReport) error {
+    mcpProofsMu.Lock()
+    defer mcpProofsMu.Unlock()
+    var d mcpReportsData
+    _ = mcpReportStore.load(&d)
+    d.Proofs = append(d.Proofs, proof)
+    return mcpReportStore.save(&d)
+}
+
+func getReport(id string) (MCPReport, error) {
+    mcpProofsMu.Lock()
+    defer mcpProofsMu.Unlock()
+    var d mcpReportsData
+    if err := mcpReportStore.load(&d); err != nil {
+        return MCPReport{}, err
+    }
+    for _, p := range d.Proofs {
+        if p.ID == id {
+            return p, nil
+        }
+    }
+    return MCPReport{}, fmt.Errorf("proof %q not found", id)
+}
+```
+
+- [ ] **Step 4: Add tool implementation to mcp_tools.go**
+
+Append to `daemon/push-backend/mcp_tools.go`:
+
+```go
+// --- conduit_report ---
+
+type reportArgs struct {
+    LoopID                string   `json:"loop_id"`
+    AgentName             string   `json:"agent_name"`
+    Goal                  string   `json:"goal"`
+    ChangedFiles          []string `json:"changed_files"`
+    CommandsRun           []string `json:"commands_run"`
+    TestStatus            string   `json:"test_status"`
+    DiffSummary           string   `json:"diff_summary"`
+    Screenshots           []string `json:"screenshots"`
+    Risks                 []string `json:"risks"`
+    Unverified            []string `json:"unverified"`
+    RecommendedNextAction string   `json:"recommended_next_action"`
+}
+
+func toolReport(raw json.RawMessage, sessionID string) (any, error) {
+    var args reportArgs
+    if err := json.Unmarshal(raw, &args); err != nil {
+        return nil, fmt.Errorf("invalid arguments: %w", err)
+    }
+    if args.Goal == "" {
+        return nil, fmt.Errorf("goal is required")
+    }
+    validStatus := map[string]bool{"passed": true, "failed": true, "skipped": true, "unknown": true}
+    if args.TestStatus == "" {
+        args.TestStatus = "unknown"
+    }
+    if !validStatus[args.TestStatus] {
+        return nil, fmt.Errorf("test_status must be passed|failed|skipped|unknown")
+    }
+
+    proof := MCPReport{
+        ID:                    newID("proof"),
+        SessionID:             sessionID,
+        LoopID:                args.LoopID,
+        AgentName:             args.AgentName,
+        Goal:                  args.Goal,
+        ChangedFiles:          args.ChangedFiles,
+        CommandsRun:           args.CommandsRun,
+        TestStatus:            args.TestStatus,
+        DiffSummary:           args.DiffSummary,
+        Screenshots:           args.Screenshots,
+        Risks:                 args.Risks,
+        Unverified:            args.Unverified,
+        RecommendedNextAction: args.RecommendedNextAction,
+        CreatedAt:             nowISO(),
+    }
+    if err := saveReport(proof); err != nil {
+        return nil, fmt.Errorf("store proof: %w", err)
+    }
+
+    // recordAndPushMCPEvent persists the event first so the inbox history is
+    // never missing a report notification, then fires APNs best-effort.
+    recordAndPushMCPEvent(sessionID, MCPEvent{
+        ID:        newID("evt"),
+        SessionID: sessionID,
+        Message:   fmt.Sprintf("Task complete: %s — tests %s", args.Goal, args.TestStatus),
+        Level:     map[string]string{"passed": "info", "failed": "critical", "skipped": "warning", "unknown": "warning"}[args.TestStatus],
+        AgentName: args.AgentName,
+        CreatedAt: nowISO(),
+    })
+
+    return mcpJSONResult(map[string]any{
+        "report_id":   proof.ID,
+        "test_status": proof.TestStatus,
+    })
+}
+```
+
+- [ ] **Step 5: Update mcpToolDefinitions() in mcp.go**
+
+Add to the slice:
+
+```go
+{
+    "name":        "conduit_report",
+    "description": "Submit a structured proof-of-work card when a task completes. Creates a rich card in the mobile inbox showing what changed, what was tested, risks, and what could not be verified.",
+    "inputSchema": map[string]any{
+        "type": "object",
+        "properties": map[string]any{
+            "goal":           map[string]any{"type": "string", "description": "One sentence: what was the task?"},
+            "changed_files":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of files modified"},
+            "commands_run":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Commands executed (e.g. npm test, go build)"},
+            "test_status":    map[string]any{"type": "string", "enum": []string{"passed", "failed", "skipped", "unknown"}},
+            "diff_summary":   map[string]any{"type": "string", "description": "One sentence describing what changed and why"},
+            "screenshots":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Base64 or URLs of screenshots/visual verification"},
+            "risks":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Known risks or caveats"},
+            "unverified":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Things the agent could not verify"},
+            "recommended_next_action": map[string]any{"type": "string", "description": "e.g. approve_pr, run_staging, needs_review"},
+            "loop_id":        map[string]any{"type": "string", "description": "Optional: loop_id this proof is associated with"},
+            "agent_name":     map[string]any{"type": "string"},
+        },
+        "required": []string{"goal", "test_status"},
+    },
+},
+```
+
+Add the case to `handleToolCall`:
+
+```go
+case "conduit_report":
+    result, toolErr = toolReport(params.Arguments, sessionID)
+```
+
+- [ ] **Step 6: Run tests**
+
+```bash
+cd daemon/push-backend && go test -run TestConduitProof -v
+```
+
+Expected: `PASS`
+
+- [ ] **Step 7: Build**
+
+```bash
+cd daemon/push-backend && go build ./...
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add mcp_store.go mcp_tools.go mcp.go mcp_test.go
+git commit -m "feat(mcp): conduit_report structured proof-of-work cards"
+```
+
+---
+
+## Task 10: Agent Provenance Metadata
+
+**Files:**
+- Modify: `daemon/push-backend/mcp_store.go` (add `Provenance` struct, embed in `MCPEvent` and `MCPCheckpoint`)
+- Modify: `daemon/push-backend/mcp_tools.go` (populate provenance from tool args)
+- Modify: `daemon/push-backend/mcp.go` (add provenance fields to `conduit_notify` and `conduit_checkpoint` input schemas)
+- Modify: `daemon/push-backend/mcp_test.go` (append provenance test)
+
+Every event and checkpoint must carry agent identity: which agent, on which machine, in which repo/branch, with what permission mode. Without this, the inbox is a notification bucket with no trust signal.
+
+- [ ] **Step 1: Append failing test to mcp_test.go**
+
+```go
+// Append to mcp_test.go
+
+func TestProvenanceStored(t *testing.T) {
+    mcpEventStore.path = t.TempDir() + "/events.json"
+    srv := newMCPServer(t)
+    defer srv.Close()
+    key, _ := createAPIKey("session-prov")
+
+    mcpPost(t, srv, key, map[string]any{
+        "jsonrpc": "2.0", "id": 50, "method": "tools/call",
+        "params": map[string]any{
+            "name": "conduit_notify",
+            "arguments": map[string]any{
+                "message":    "Build passed",
+                "level":      "info",
+                "agent_name": "ClaudeCode",
+                "provenance": map[string]any{
+                    "agent_type":      "claude-code",
+                    "host":            "mac-mini-prod",
+                    "repo":            "command-center",
+                    "branch":          "feat/mcp",
+                    "session_id":      "cc_82fa",
+                    "permission_mode": "cautious",
+                },
+            },
+        },
+    })
+
+    events, _ := listEvents("session-prov", 1)
+    if len(events) == 0 {
+        t.Fatal("no events stored")
+    }
+    p := events[0].Provenance
+    if p.Host != "mac-mini-prod" {
+        t.Errorf("host = %q, want mac-mini-prod", p.Host)
+    }
+    if p.PermissionMode != "cautious" {
+        t.Errorf("permission_mode = %q, want cautious", p.PermissionMode)
+    }
+}
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+```bash
+cd daemon/push-backend && go test -run TestProvenanceStored -v
+```
+
+Expected: `FAIL — MCPEvent has no field Provenance`
+
+- [ ] **Step 3: Add Provenance type to mcp_store.go**
+
+Add the `AgentProvenance` struct and update `MCPEvent` and `MCPCheckpoint` in `mcp_store.go`:
+
+```go
+// AgentProvenance records the identity of the agent that sent an event.
+// All fields are optional — agents fill in what they know.
+type AgentProvenance struct {
+    AgentType      string `json:"agent_type,omitempty"`      // "claude-code" | "codex" | "custom"
+    Host           string `json:"host,omitempty"`            // machine hostname
+    Repo           string `json:"repo,omitempty"`            // git repo name
+    Branch         string `json:"branch,omitempty"`          // git branch
+    SessionID      string `json:"session_id,omitempty"`      // agent session ID
+    PermissionMode string `json:"permission_mode,omitempty"` // "cautious" | "auto" | "bypass"
+}
+// IMPORTANT: JSON tags use snake_case to match what agents send in tool arguments.
+// The test passes {"agent_type": "...", "permission_mode": "..."} — camelCase tags
+// would silently leave those fields empty without any unmarshal error.
+```
+
+In the `MCPEvent` struct, add the field:
+```go
+Provenance AgentProvenance `json:"provenance,omitempty"`
+```
+
+In the `MCPCheckpoint` struct, add the field:
+```go
+Provenance AgentProvenance `json:"provenance,omitempty"`
+```
+
+- [ ] **Step 4: Update notifyArgs and checkpointArgs in mcp_tools.go**
+
+In `mcp_tools.go`, update the arg structs to accept provenance:
+
+```go
+// Replace the existing notifyArgs struct:
+type notifyArgs struct {
+    Message    string          `json:"message"`
+    Level      string          `json:"level"`
+    AgentName  string          `json:"agent_name"`
+    Context    string          `json:"context"`
+    Provenance AgentProvenance `json:"provenance"`
+}
+
+// Replace the existing checkpointArgs struct:
+type checkpointArgs struct {
+    Message    string          `json:"message"`
+    Context    string          `json:"context"`
+    AgentName  string          `json:"agent_name"`
+    Provenance AgentProvenance `json:"provenance"`
+}
+```
+
+In `toolNotify`, set `evt.Provenance = args.Provenance` after setting the other fields.
+In `toolCheckpoint`, set `cp.Provenance = args.Provenance` after setting the other fields.
+
+- [ ] **Step 5: Update input schemas in mcpToolDefinitions()**
+
+Add to the `conduit_notify` and `conduit_checkpoint` properties maps:
+
+```go
+"provenance": map[string]any{
+    "type": "object",
+    "description": "Agent identity metadata",
+    "properties": map[string]any{
+        "agent_type":      map[string]any{"type": "string", "description": "e.g. claude-code, codex, custom"},
+        "host":            map[string]any{"type": "string", "description": "Machine hostname"},
+        "repo":            map[string]any{"type": "string", "description": "Git repository name"},
+        "branch":          map[string]any{"type": "string", "description": "Git branch"},
+        "session_id":      map[string]any{"type": "string", "description": "Agent session identifier"},
+        "permission_mode": map[string]any{"type": "string", "description": "e.g. cautious, auto, bypass"},
+    },
+},
+```
+
+- [ ] **Step 6: Run all tests**
+
+```bash
+cd daemon/push-backend && go test ./... -v 2>&1 | grep -E "^(=== RUN|--- PASS|--- FAIL|FAIL|ok)"
+```
+
+Expected: all `PASS`, zero `FAIL`.
+
+- [ ] **Step 7: Build**
+
+```bash
+cd daemon/push-backend && go build ./...
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add mcp_store.go mcp_tools.go mcp.go mcp_test.go
+git commit -m "feat(mcp): agent provenance metadata on all events and checkpoints"
+```
+
+---
+
+## Updated Self-Review Checklist
+
+**All tools covered:**
+- [x] `conduit_notify` — Task 4
+- [x] `conduit_checkpoint` — Task 4
+- [x] `conduit_checkpoint_status` — Task 4
+- [x] `conduit_loop_start` — Task 8
+- [x] `conduit_step_complete` — Task 8
+- [x] `conduit_report` — Task 9
+- [x] Agent provenance on all events/checkpoints — Task 10
+
+**Type consistency (updated):**
+- `MCPLoop.Status` values: `"running"`, `"completed"`, `"failed"`, `"blocked"` — consistent across Task 8 ✓
+- `MCPLoopStep.Status` values: `"ok"`, `"failed"`, `"blocked"`, `"skipped"` — consistent across Task 8 ✓
+- `MCPReport.TestStatus` values: `"passed"`, `"failed"`, `"skipped"`, `"unknown"` — consistent across Task 9 ✓
+- `AgentProvenance` struct embedded in both `MCPEvent` and `MCPCheckpoint` — consistent across Task 10 ✓
