@@ -44,7 +44,7 @@ export function VariantNav() {
           ⬡ Conduit
         </Link>
         <div className="flex gap-1 flex-wrap">
-          {SCREENS.map((screen) =>
+          {SCREENS.flatMap((screen) =>
             screen.variants.map((v) => (
               <Link
                 key={v.href}

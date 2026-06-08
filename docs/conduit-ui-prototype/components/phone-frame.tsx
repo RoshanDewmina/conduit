@@ -1,7 +1,8 @@
+import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 interface PhoneFrameProps {
-  children: React.ReactNode
+  children: ReactNode
   className?: string
   label?: string
 }
@@ -31,8 +32,8 @@ export function PhoneFrame({ children, className, label }: PhoneFrameProps) {
           </div>
         </div>
 
-        {/* Screen content */}
-        <div className="h-full overflow-hidden">{children}</div>
+        {/* Screen content — pb-6 clears the absolute home indicator */}
+        <div className="h-full overflow-hidden pb-6">{children}</div>
 
         {/* Home indicator */}
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/20 rounded-full" />
