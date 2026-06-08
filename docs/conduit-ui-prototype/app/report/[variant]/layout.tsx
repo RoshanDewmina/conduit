@@ -1,6 +1,7 @@
+import type { ReactNode } from "react"
 import { VariantNav } from "@/components/variant-nav"
 
-export default function ScreenLayout({ children }: { children: React.ReactNode }) {
+export default function ScreenLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <VariantNav />
