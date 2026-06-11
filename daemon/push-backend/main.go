@@ -123,6 +123,9 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// pushApprovalFn is the seam tests swap to avoid real APNs calls.
+var pushApprovalFn = pushApproval
+
 func handleApproval(w http.ResponseWriter, r *http.Request) {
 	var ev approvalEvent
 	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
@@ -139,7 +142,7 @@ func handleApproval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := pushApproval(token, ev); err != nil {
+	if err := pushApprovalFn(token, ev); err != nil {
 		log.Printf("APNs push failed: %v", err)
 		http.Error(w, "push failed", http.StatusInternalServerError)
 		return
