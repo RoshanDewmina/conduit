@@ -120,6 +120,15 @@ fastlane release # submit to App Store
 
 ---
 
+## APNs production push (owner, ~15 min — needs paid Apple account)
+
+1. App Store Connect → Keys → create an **APNs Auth Key (.p8)**; note Key ID + Team ID.
+2. Deploy push-backend with env: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH=/secrets/AuthKey.p8`, `APNS_BUNDLE_ID=dev.conduit.mobile`.
+3. Set the app's `CONDUIT_PUSH_BACKEND_URL` (Info.plist / scheme) to the deployed URL.
+4. On a **physical device** (APNs is no-op in the simulator): connect a host, background the app, trigger an approval on the host → expect a push within ~2s with the command + risk; tapping Approve resolves it via the decision relay even though the app was backgrounded.
+
+---
+
 ## Owner actions report update (2026-06-04)
 
 - Commit created on `feat/hosted-agents-rc`: `737e5f6`
