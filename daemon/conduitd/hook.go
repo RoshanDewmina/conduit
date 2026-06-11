@@ -47,26 +47,7 @@ func runAgentHook(args []string) error {
 		}
 	}
 
-	normalizedKind := normalizeKind(*kind)
-	patch := ""
-	if normalizedKind == "patch" {
-		patch = *command
-	}
-
-	event := ApprovalEvent{
-		ApprovalID: newUUID(),
-		Agent:      normalizeAgentSource(*agent),
-		Kind:       normalizedKind,
-		Command:    *command,
-		Patch:      patch,
-		CWD:        *cwd,
-		Risk:       riskToInt(*risk),
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		ToolName:   *toolName,
-		ToolUseID:  *toolUseID,
-		SessionID:  *sessionID,
-		ToolInput:  *toolInput,
-	}
+	event := buildApprovalEventForTest(*agent, *kind, *command, *cwd, *risk, *toolName, *toolUseID, *sessionID, *toolInput)
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -75,7 +56,7 @@ func runAgentHook(args []string) error {
 
 	conn, err := net.DialTimeout("unix", sockPath, 5*time.Second)
 	if err != nil {
-		if hookShouldHold(normalizedKind, event.Risk) {
+		if hookShouldHold(event.Kind, event.Risk) {
 			return fmt.Errorf("conduitd resident not reachable (%v); mutating action held (fail-closed)", err)
 		}
 		fmt.Fprintf(os.Stderr, "conduitd not running (%v); read-only fail-open (CONDUIT_HOOK_READONLY_FAIL_OPEN=1)\n", err)
@@ -97,6 +78,30 @@ func runAgentHook(args []string) error {
 		return fmt.Errorf("denied by user")
 	}
 	return nil
+}
+
+// buildApprovalEventForTest constructs the ApprovalEvent exactly as runAgentHook
+// does, but without any socket I/O — used by tests and by runAgentHook itself.
+func buildApprovalEventForTest(agent, kind, command, cwd, risk, toolName, toolUseID, sessionID, toolInput string) ApprovalEvent {
+	normalizedKind := normalizeKind(kind)
+	patch := ""
+	if normalizedKind == "patch" {
+		patch = command
+	}
+	return ApprovalEvent{
+		ApprovalID: newUUID(),
+		Agent:      normalizeAgentSource(agent),
+		Kind:       normalizedKind,
+		Command:    command,
+		Patch:      patch,
+		CWD:        cwd,
+		Risk:       riskToInt(risk),
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		ToolName:   toolName,
+		ToolUseID:  toolUseID,
+		SessionID:  sessionID,
+		ToolInput:  toolInput,
+	}
 }
 
 // newUUID returns a random UUID v4 string using crypto/rand.

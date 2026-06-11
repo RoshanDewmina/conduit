@@ -159,11 +159,12 @@ func (e *policyEngine) setPolicyYAML(cwd, yamlText string) error {
 }
 
 type server struct {
-	approvals *approvalStore
+	approvals  *approvalStore
 	policy     *policyEngine
 	audit      *auditLog
 	dispatcher *dispatcher
 	scheduler  *scheduler
+	poller     *decisionPoller
 	stdoutMu   sync.Mutex
 	emitMu     sync.Mutex
 	emit       func([]byte) error
@@ -178,13 +179,15 @@ func (s *server) setEmitter(emit func([]byte) error) {
 }
 
 func newServer(home string) *server {
-	return &server{
+	s := &server{
 		approvals:  newApprovalStore(),
 		policy:     newPolicyEngine(home),
 		audit:      newAuditLog(home),
 		dispatcher: newDispatcher(),
 		scheduler:  newScheduler(home),
 	}
+	s.poller = newDecisionPoller(s.approvals.resolve)
+	return s
 }
 
 // policyEffect adapts the policy engine to the dispatcher's evaluator signature.
@@ -428,6 +431,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.deviceMu.Lock()
 		s.device = &info
 		s.deviceMu.Unlock()
+		s.poller.ensureRunning(info.PushBackendURL, info.SessionID)
 		s.writeResult(msg.ID, "ok")
 
 	case "agent.dispatch":

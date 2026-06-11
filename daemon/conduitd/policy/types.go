@@ -73,6 +73,41 @@ type Result struct {
 	ScoredRiskLabel string
 }
 
+// PresetDocument returns a named, human-recognizable policy preset. These map 1:1
+// to the iOS autonomy quick-set. Unknown names return ok=false.
+func PresetDocument(name string) (Document, bool) {
+	switch name {
+	case "cautious":
+		return Document{
+			Default: string(EffectAsk),
+			Rules: []Rule{
+				{ID: "deny-credential", Effect: "deny", Kind: "credential"},
+				{ID: "deny-network", Effect: "deny", Kind: "network"},
+				{ID: "deny-critical", Effect: "deny", MinRisk: "critical"},
+				{ID: "deny-high", Effect: "deny", MinRisk: "high"},
+				{ID: "ask-rest", Effect: "ask"},
+			},
+		}, true
+	case "balanced":
+		return DefaultDocument(), true
+	case "bypass":
+		return Document{
+			Default: string(EffectAsk),
+			Rules: []Rule{
+				{ID: "deny-credential", Effect: "deny", Kind: "credential"},
+				{ID: "deny-network", Effect: "deny", Kind: "network"},
+				{ID: "deny-critical", Effect: "deny", MinRisk: "critical"},
+				{ID: "allow-command", Effect: "allow", Kind: "command", MaxRisk: "high"},
+				{ID: "allow-patch", Effect: "allow", Kind: "patch"},
+				{ID: "allow-write", Effect: "allow", Kind: "fileWrite"},
+				{ID: "ask-rest", Effect: "ask"},
+			},
+		}, true
+	default:
+		return Document{}, false
+	}
+}
+
 // DefaultDocument is the bundled safe-default policy (fail-closed ask).
 func DefaultDocument() Document {
 	return Document{
