@@ -8,6 +8,41 @@ The resident bridge keeps approval state and the Unix socket alive while your ph
 - macOS or Linux host
 - SSH from Conduit iOS to the host
 
+## Golden path (copy-paste)
+
+```bash
+cd daemon/conduitd && go build -o conduitd .
+./conduitd install
+# macOS:
+launchctl load ~/Library/LaunchAgents/dev.conduit.conduitd.plist
+# Linux:
+systemctl --user enable --now conduitd.service
+test -S ~/.conduit/conduitd.sock && ~/.conduit/bin/conduitd version
+```
+
+Point agent hooks at the installed binary (not a repo-relative path):
+
+| Agent | Hook install |
+|-------|----------------|
+| Claude Code | `cp docs/conduit-hook.sh ~/.claude/hooks/conduit-hook.sh && chmod 700 ~/.claude/hooks/conduit-hook.sh` |
+| Codex | `cp docs/codex-conduit-hook.sh ~/.config/codex/hooks/conduit-hook.sh` (see `docs/codex-hooks.json`) |
+| OpenCode | `mkdir -p ~/.config/opencode/hooks && cp docs/opencode-conduit-hook.sh ~/.config/opencode/hooks/conduit-hook.sh && chmod 700 ~/.config/opencode/hooks/conduit-hook.sh && cp docs/opencode-hooks.json ~/.config/opencode/hooks.json` |
+
+Policy files (bridge evaluates these before asking the phone):
+
+| Path | Purpose |
+|------|---------|
+| `~/.conduit/policy.yaml` | Global default policy |
+| `<repo>/.conduit/policy.yaml` | Repo-local overrides (walked from hook `cwd`) |
+| `~/.conduit/audit.log` | JSONL audit of auto + human decisions (mode 0600) |
+
+Automated smoke (no iOS):
+
+```bash
+cd daemon/conduitd && go build -o conduitd .
+CONDUITD_BINARY=./conduitd ../scripts/validation/resident-bridge-smoke.sh
+```
+
 ## Install binary and service
 
 From the repo (or after copying `conduitd` to the host):
@@ -76,5 +111,5 @@ Only kinds `read`, `grep`, `list`, `search` may fail-open when the flag is set.
 
 ## TODO(owner)
 
-- End-to-end validation with **live SSH + local-sshd fixture** per `docs/validation-playbook.md` (when present on your branch).
-- APNs push while detached is handled in WS-D; resident queue covers bridge persistence now.
+- End-to-end validation with **live SSH + local-sshd fixture** per `docs/validation-playbook.md` (TC-1..TC-7).
+- APNs push while detached requires production push backend + paid Apple account; resident `queue.json` covers bridge persistence when the phone is offline.

@@ -108,6 +108,7 @@ func (e *policyEngine) appendAllowAlways(event ApprovalEvent) error {
 type policyGetResult struct {
 	Documents []policy.Document `json:"documents"`
 	Default   string            `json:"default"`
+	YAML      string            `json:"yaml,omitempty"`
 }
 
 func (e *policyEngine) getPolicyDocuments(cwd string) (policyGetResult, error) {
@@ -125,7 +126,36 @@ func (e *policyEngine) getPolicyDocuments(cwd string) (policyGetResult, error) {
 		out.Documents = append(out.Documents, doc)
 	}
 	out.Default = string(policy.EffectAsk)
+	yaml, err := e.getPolicyYAML(cwd)
+	if err == nil {
+		out.YAML = yaml
+	}
 	return out, nil
+}
+
+// getPolicyYAML returns the editable global policy as YAML text. When no global
+// policy file exists yet, it returns the bundled default document so the editor
+// always has a document to show.
+func (e *policyEngine) getPolicyYAML(cwd string) (string, error) {
+	if data, err := os.ReadFile(policy.GlobalPolicyPath(e.home)); err == nil {
+		return string(data), nil
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	return policy.MarshalYAML(policy.DefaultDocument())
+}
+
+// setPolicyYAML validates and persists the global policy YAML, then reloads so
+// evaluation for cwd picks up the change immediately.
+func (e *policyEngine) setPolicyYAML(cwd, yamlText string) error {
+	doc, err := policy.ParseDocument(yamlText)
+	if err != nil {
+		return err
+	}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(e.home), doc); err != nil {
+		return err
+	}
+	return e.reload(cwd)
 }
 
 type server struct {
@@ -359,6 +389,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		_ = json.Unmarshal(msg.Params, &params)
 		if err := s.policy.reload(params.CWD); err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, "ok")
+
+	case "agent.policy.set":
+		var params struct {
+			CWD  string `json:"cwd"`
+			YAML string `json:"yaml"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil || params.YAML == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if err := s.policy.setPolicyYAML(params.CWD, params.YAML); err != nil {
 			s.writeError(msg.ID, -32000, err.Error())
 			return
 		}

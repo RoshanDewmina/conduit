@@ -125,3 +125,16 @@ func MarshalYAML(doc Document) (string, error) {
 	}
 	return string(data), nil
 }
+
+// ParseDocument parses YAML policy text into a Document, defaulting the
+// fail-closed effect to ask when unspecified.
+func ParseDocument(text string) (Document, error) {
+	var doc Document
+	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
+		return Document{}, err
+	}
+	if doc.Default == "" {
+		doc.Default = string(EffectAsk)
+	}
+	return doc, nil
+}

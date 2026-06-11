@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import StoreKit
+import ConduitCore
 import DesignSystem
 import AgentKit
 

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ConduitCore
 @testable import AgentKit
 
 @Suite("Hosted agents Phase 2/3 models")

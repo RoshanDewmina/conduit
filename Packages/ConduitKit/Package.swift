@@ -193,6 +193,7 @@ let package = Package(
         .target(
             name: "SettingsFeature",
             dependencies: [
+                "ConduitCore",
                 "DesignSystem",
                 "PersistenceKit",
                 "AgentKit",

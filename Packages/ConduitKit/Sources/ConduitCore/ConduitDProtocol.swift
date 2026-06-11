@@ -126,6 +126,7 @@ public struct PolicyYAMLResult: Codable, Sendable {
 public struct PolicyGetResult: Codable, Sendable {
     public let documents: [PolicyDocument]?
     public let `default`: String?
+    public let yaml: String?
 }
 
 public struct PolicyDocument: Codable, Sendable {

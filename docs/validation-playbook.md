@@ -37,6 +37,15 @@ HOOK_SCRIPT=./docs/conduit-hook.sh \
 ./scripts/validation/validate-hook-flow.sh
 ```
 
+### 2b. Resident daemon smoke (command-center)
+```bash
+chmod +x scripts/validation/resident-bridge-smoke.sh
+cd daemon/conduitd && go build -o conduitd .
+CONDUITD_BINARY=./conduitd ../../scripts/validation/resident-bridge-smoke.sh
+```
+
+Covers: fail-closed `command` hook with daemon down, resident socket up, attach client, `agent.audit.tail` RPC.
+
 All automated checks should PASS (or SKIP if tools missing). Any FAIL is a regression.
 
 ### 3. Validate local sshd fixture (for local iOS simulator testing)

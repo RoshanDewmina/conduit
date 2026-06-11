@@ -542,10 +542,56 @@ public struct AppRoot: View {
     private func configureGlobalInbox(env: AppEnvironment) {
         guard liveInboxVM == nil else { return }
         let approvalRepo = ApprovalRepository(env.database)
-        let liveVM = LiveInboxViewModel(repository: approvalRepo)
+        let liveVM = LiveInboxViewModel(repository: approvalRepo) { [weak self] id, decision, edited in
+            guard let self else { return }
+            if let slot = await MainActor.run(body: { self.fleetStore.slot(forApprovalID: id) }) {
+                try? await slot.channel.respond(
+                    approvalId: id.uuidString,
+                    decision: decision,
+                    editedToolInput: edited
+                )
+                return
+            }
+            if let channel = await MainActor.run(body: { self.daemonChannel }) {
+                try? await channel.respond(
+                    approvalId: id.uuidString,
+                    decision: decision,
+                    editedToolInput: edited
+                )
+            }
+        }
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
+    }
+
+    /// Bridge RPC actions for the selected (or first) fleet slot.
+    @MainActor
+    private func bridgeSessionActions() -> BridgeSessionActions {
+        guard let slot = selectedFleetSlot ?? fleetStore.slots.first,
+              slot.sessionViewModel.status == .connected
+        else {
+            return BridgeSessionActions()
+        }
+        let cwd = slot.sessionViewModel.cwd.isEmpty ? "~" : slot.sessionViewModel.cwd
+        return BridgeSessionActions(
+            isConnected: true,
+            policyCWD: cwd,
+            loadPolicyYAML: { try await slot.channel.fetchPolicyYAML(cwd: cwd) },
+            savePolicyYAML: { yaml in try await slot.channel.savePolicyYAML(cwd: cwd, yaml: yaml) },
+            reloadPolicy: { try await slot.channel.reloadPolicy(cwd: cwd) },
+            tailAudit: { limit in
+                let tail = try await slot.channel.tailAudit(limit: limit)
+                return tail.entries
+            },
+            dispatch: { agent, workdir, prompt in
+                try await slot.channel.dispatchAgent(
+                    agent: agent,
+                    cwd: workdir,
+                    prompt: prompt
+                )
+            }
+        )
     }
 
     @Environment(\.conduitTokens) private var t
@@ -690,10 +736,9 @@ public struct AppRoot: View {
     }
 
     private func jumpToUnreadLiveSession() {
-        guard let slot = fleetStore.slots.first(where: { candidate in
-            candidate.inboxVM.approvals.contains { $0.isPending && $0.sessionID == candidate.sessionViewModel.sessionID }
-        }) else { return }
+        guard let slot = fleetStore.firstSlotWithPendingApprovals() else { return }
         selectFleetSlot(slot.id)
+        selectedTab = .inbox
         isShowingLiveSession = true
     }
 

@@ -28,4 +28,10 @@ public struct FleetSlotManager<T: Identifiable> where T.ID == UUID {
     public mutating func remove(id: UUID) {
         slots.removeAll { $0.id == id }
     }
+
+    /// Update a slot in place when `id` matches.
+    public mutating func update(id: UUID, _ body: (inout T) -> Void) {
+        guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
+        body(&slots[index])
+    }
 }

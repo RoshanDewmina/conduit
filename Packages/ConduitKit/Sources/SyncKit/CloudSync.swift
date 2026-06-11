@@ -1,6 +1,4 @@
 import Foundation
-import ConduitCore
-import PersistenceKit
 
 #if os(iOS)
 import CloudKit

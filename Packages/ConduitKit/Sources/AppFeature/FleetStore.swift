@@ -33,6 +33,8 @@ public final class FleetStore {
         public var channel: DaemonChannel
         public var ingest: ApprovalIngest
         public var inboxVM: LiveInboxViewModel
+        /// Latest ``agent.status`` snapshot from the bridge (when refreshed).
+        public var bridgeStatus: AgentStatusSnapshot?
 
         public init(
             id: UUID = UUID(),
@@ -41,7 +43,8 @@ public final class FleetStore {
             sessionViewModel: SessionViewModel,
             channel: DaemonChannel,
             ingest: ApprovalIngest,
-            inboxVM: LiveInboxViewModel
+            inboxVM: LiveInboxViewModel,
+            bridgeStatus: AgentStatusSnapshot? = nil
         ) {
             self.id = id
             self.hostID = hostID
@@ -50,6 +53,22 @@ public final class FleetStore {
             self.channel = channel
             self.ingest = ingest
             self.inboxVM = inboxVM
+            self.bridgeStatus = bridgeStatus
+        }
+    }
+
+    /// Refresh ``agent.status`` for every connected slot.
+    public func refreshBridgeStatus() async {
+        for slot in slots where slot.sessionViewModel.status == .connected {
+            guard let snap = try? await slot.channel.fetchAgentStatus() else { continue }
+            manager.update(id: slot.id) { $0.bridgeStatus = snap }
+        }
+    }
+
+    /// First slot with pending approvals (for jump-to-unread).
+    public func firstSlotWithPendingApprovals() -> Slot? {
+        slots.first { slot in
+            slot.inboxVM.approvals.contains { $0.isPending && $0.sessionID == slot.sessionViewModel.sessionID }
         }
     }
 

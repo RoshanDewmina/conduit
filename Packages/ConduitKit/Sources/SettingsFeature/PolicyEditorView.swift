@@ -6,15 +6,24 @@ import DesignSystem
 /// View/edit remote policy YAML via daemon RPC (presets + raw editor).
 public struct PolicyEditorView: View {
     @State private var yamlText: String
+    @State private var statusMessage: String?
+    @State private var isSaving = false
     private let cwd: String
     private let onReload: () async -> Void
+    private let onSave: ((String) async throws -> Void)?
 
     @Environment(\.conduitTokens) private var t
 
-    public init(cwd: String, initialYAML: String, onReload: @escaping () async -> Void) {
+    public init(
+        cwd: String,
+        initialYAML: String,
+        onReload: @escaping () async -> Void,
+        onSave: ((String) async throws -> Void)? = nil
+    ) {
         self.cwd = cwd
         _yamlText = State(initialValue: initialYAML)
         self.onReload = onReload
+        self.onSave = onSave
     }
 
     public var body: some View {
@@ -34,7 +43,34 @@ public struct PolicyEditorView: View {
             }
             Section {
                 Button("Reload policy on bridge") {
-                    Task { await onReload() }
+                    Task {
+                        await onReload()
+                        statusMessage = "Reloaded on bridge."
+                    }
+                }
+                if let onSave {
+                    Button(isSaving ? "Saving…" : "Save to bridge") {
+                        Task {
+                            isSaving = true
+                            defer { isSaving = false }
+                            do {
+                                try await onSave(yamlText)
+                                statusMessage = "Saved to bridge."
+                            } catch {
+                                statusMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                    .disabled(isSaving)
+                } else {
+                    Text("Connect an SSH session to edit policy on the bridge.")
+                        .font(.caption)
+                        .foregroundStyle(t.text3)
+                }
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(t.text2)
                 }
             }
         }

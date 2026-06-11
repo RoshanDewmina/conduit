@@ -52,4 +52,4 @@ Read-only kinds (`grep`, `read`, …) fail-open only if `CONDUIT_HOOK_READONLY_F
 
 ## Audit
 
-Human/auto decisions are recorded in-memory on the bridge; persistent audit tail RPC is TODO(owner) — wire `agent.audit.tail` when the iOS mux lands.
+Human/auto decisions are appended to `~/.conduit/audit.log`. The attach client forwards JSON-RPC (including `agent.audit.tail`, `agent.policy.get` / `reload` / `set`) through the same framed stdio path as `conduitd serve`.

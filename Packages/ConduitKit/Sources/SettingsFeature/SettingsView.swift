@@ -191,6 +191,7 @@ public struct SettingsView: View {
         backendURL: String = "",
         auditRepository: AuditRepository? = nil,
         approvalRepository: ApprovalRepository? = nil,
+        bridgeActions: BridgeSessionActions = BridgeSessionActions(),
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {}
     ) {
@@ -199,6 +200,7 @@ public struct SettingsView: View {
         self.backendURL = backendURL
         self.auditRepository = auditRepository
         self.approvalRepository = approvalRepository
+        self.bridgeActions = bridgeActions
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
     }
@@ -495,13 +497,13 @@ public struct SettingsView: View {
                     .animation(.easeInOut(duration: 0.15), value: autonomyPresetRaw)
 
                 NavigationLink {
-                    PolicyEditorView(cwd: "~", initialYAML: PolicyEditorView.balancedPreset) {
-                        // Bridge RPC: wire agent.policy.reload when DaemonChannel is available in settings.
-                    }
+                    PolicyEditorBridgeScreen(actions: bridgeActions)
                 } label: {
-                    Text("Edit bridge policy.yaml")
+                    Text(bridgeActions.isConnected
+                         ? "Edit bridge policy.yaml"
+                         : "Edit bridge policy.yaml (connect SSH)")
                         .font(.dsSansPt(14, weight: .medium))
-                        .foregroundStyle(t.accent)
+                        .foregroundStyle(bridgeActions.isConnected ? t.accent : t.text3)
                 }
                 .padding(.top, 4)
             }

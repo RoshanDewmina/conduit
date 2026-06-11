@@ -171,6 +171,28 @@ public actor DaemonChannel {
         }
     }
 
+    public func savePolicyYAML(cwd: String, yaml: String) async throws {
+        let data = try await sendRPC(
+            method: "agent.policy.set",
+            params: ["cwd": cwd, "yaml": yaml]
+        )
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .ok, .pong: return
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    /// Load policy YAML text for the editor (global or repo-local for `cwd`).
+    public func fetchPolicyYAML(cwd: String) async throws -> String {
+        let result = try await fetchPolicy(cwd: cwd)
+        if let yaml = result.yaml, !yaml.isEmpty { return yaml }
+        throw DaemonChannelError.badResponse
+    }
+
     public func fetchAgentStatus(homeDir: String = "") async throws -> AgentStatusSnapshot {
         var params: [String: Any] = [:]
         if !homeDir.isEmpty { params["homeDir"] = homeDir }
