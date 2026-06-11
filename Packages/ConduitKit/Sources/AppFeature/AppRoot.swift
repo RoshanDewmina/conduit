@@ -558,7 +558,15 @@ public struct AppRoot: View {
                     decision: decision,
                     editedToolInput: edited
                 )
+                return
             }
+            // No connected channel anywhere → deliver via the backend relay.
+            await ApprovalRelay.shared.enqueue(
+                approvalID: id.uuidString,
+                decision: decision,
+                db: env.database,
+                hostID: ""
+            )
         }
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
@@ -809,6 +817,10 @@ public struct AppRoot: View {
                 purchaseManager: pm
             )
         }
+        await ApprovalRelay.shared.configureBackend(
+            url: url,
+            sessionID: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        )
     }
 
     private static func pushBackendURL() -> String {
@@ -966,6 +978,7 @@ public struct AppRoot: View {
             // forwarded to conduitd, and drain any decisions queued while the
             // channel was absent (e.g. lock-screen tap before app foregrounded).
             await ApprovalRelay.shared.setChannel(channel)
+            await ApprovalRelay.shared.configureBackend(url: backendURL, sessionID: deviceSessionID)
             await ingest.start()
         }
     }

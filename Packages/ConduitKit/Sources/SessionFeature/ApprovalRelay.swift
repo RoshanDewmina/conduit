@@ -30,6 +30,9 @@ public final class ApprovalRelay {
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
 
+    private var backendURL: String = ""
+    private var sessionID: String = ""
+
     private init() {}
 
     // MARK: - Public API
@@ -64,7 +67,10 @@ public final class ApprovalRelay {
         if let ch = channel {
             try? await ch.respond(approvalId: approvalID, decision: decision)
         } else {
-            // Channel not yet available — queue for later drain.
+            // No live SSH channel: deliver via the backend relay so conduitd can
+            // resolve it without us reconnecting; also queue as a belt-and-suspenders
+            // drain for the next SSH attach.
+            await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: nil)
             queue.append((approvalID: approvalID, decision: decision))
         }
     }
@@ -81,7 +87,40 @@ public final class ApprovalRelay {
         channel = nil
     }
 
+    public func configureBackend(url: String, sessionID: String) {
+        self.backendURL = url
+        self.sessionID = sessionID
+    }
+
+    public static func backendDecisionBody(
+        approvalID: String,
+        decision: Approval.Decision,
+        sessionID: String,
+        editedToolInput: String?
+    ) -> Data {
+        var obj: [String: Any] = [
+            "approvalId": approvalID,
+            "decision": DaemonChannel.decisionWireValue(for: decision),
+            "sessionId": sessionID,
+        ]
+        if let edited = editedToolInput, !edited.isEmpty { obj["editedToolInput"] = edited }
+        return (try? JSONSerialization.data(withJSONObject: obj)) ?? Data()
+    }
+
     // MARK: - Private
+
+    private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?) async {
+        guard !backendURL.isEmpty, !sessionID.isEmpty,
+              let url = URL(string: backendURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/approval/decision")
+        else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = Self.backendDecisionBody(
+            approvalID: approvalID, decision: decision, sessionID: sessionID, editedToolInput: editedToolInput
+        )
+        _ = try? await URLSession.shared.data(for: req)
+    }
 
     private func drainQueue(through ch: DaemonChannel) async {
         guard !queue.isEmpty else { return }
