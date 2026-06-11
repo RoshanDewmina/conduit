@@ -129,6 +129,16 @@ fastlane release # submit to App Store
 
 ---
 
+## Final owner checklist (one action each)
+
+1. Enroll/confirm paid Apple Developer account; set `DEVELOPMENT_TEAM`; run `xcodegen generate`.
+2. App Store Connect: create the app record, enable Push + CloudKit, create the IAP, fill the privacy label, upload screenshots from `docs/screenshots/governed-approvals/`.
+3. Deploy `push-backend` with the APNs `.p8` env (see APNs section) + set `CONDUIT_PUSH_BACKEND_URL`.
+4. Physical-device validation: connect host, background the app, trigger an approval → push → tap Approve → the backend decision-relay resolves it.
+5. `fastlane beta` → TestFlight; after testing, `fastlane release`.
+
+---
+
 ## Owner actions report update (2026-06-04)
 
 - Commit created on `feat/hosted-agents-rc`: `737e5f6`
