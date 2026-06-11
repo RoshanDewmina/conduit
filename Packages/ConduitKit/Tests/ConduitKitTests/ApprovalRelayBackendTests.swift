@@ -1,10 +1,10 @@
 import Testing
 import Foundation
-@testable import SessionFeature
 @testable import ConduitCore
-
 #if os(iOS)
-@Suite struct ApprovalRelayBackendTests {
+@testable import SessionFeature
+
+@Suite @MainActor struct ApprovalRelayBackendTests {
     @Test("Backend decision POST body has approvalId, decision wire value, sessionId")
     func postBody() throws {
         let data = ApprovalRelay.backendDecisionBody(
