@@ -53,3 +53,14 @@ Read-only kinds (`grep`, `read`, …) fail-open only if `CONDUIT_HOOK_READONLY_F
 ## Audit
 
 Human/auto decisions are appended to `~/.conduit/audit.log`. The attach client forwards JSON-RPC (including `agent.audit.tail`, `agent.policy.get` / `reload` / `set`) through the same framed stdio path as `conduitd serve`.
+
+## Decision relay (decide while detached)
+
+When the phone is not attached over SSH, approval decisions reach the resident via push-backend instead of the framed socket:
+
+1. conduitd escalates → `postApprovalPush` POSTs `/approval` (APNs alert) AND the poller is already running (started at `conduit.device.register`).
+2. The phone POSTs `POST /approval/decision { approvalId, decision, sessionId, editedToolInput? }`.
+3. conduitd's `decisionPoller` GETs `/decisions?sessionId=…` every ~3s, draining decisions, and calls `approvalStore.resolve` — unblocking the waiting hook with no SSH session.
+4. The SSH framed `agent.approval.response` path still works when attached; `resolve` is idempotent (first caller wins).
+
+In-memory on the backend is sufficient — a decision only needs to outlive conduitd's 120 s approval wait.
