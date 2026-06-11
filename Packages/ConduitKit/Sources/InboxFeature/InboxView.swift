@@ -173,10 +173,10 @@ public struct InboxView: View {
                     risk: approval.risk.rawValue,
                     timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
                     agentName: agentName(approval.agent),
-                    action: actionPhrase(approval.kind),
+                    action: approval.toolName.map { "run \($0)" } ?? defaultActionVerb(for: approval.kind),
                     hostLabel: approval.cwd,
                     command: approval.command,
-                    onViewDiff: approval.patch != nil ? { diffApproval = approval } : nil,
+                    onViewDiff: (approval.patch != nil || approval.kind == .patch) ? { diffApproval = approval } : nil,
                     onDeny: { vm.decide(approval.id, decision: .rejected) },
                     onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
                     onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
@@ -403,7 +403,7 @@ public struct InboxView: View {
         }
     }
 
-    private func actionPhrase(_ kind: Approval.Kind) -> String {
+    private func defaultActionVerb(for kind: Approval.Kind) -> String {
         switch kind {
         case .command:      "run a command"
         case .patch:        "apply a patch"
@@ -423,7 +423,7 @@ public struct InboxView: View {
            let choices = approval.choices, ci < choices.count {
             return "Answered: \(choices[ci])"
         }
-        return approval.command ?? actionPhrase(approval.kind)
+        return approval.command ?? defaultActionVerb(for: approval.kind)
     }
 }
 

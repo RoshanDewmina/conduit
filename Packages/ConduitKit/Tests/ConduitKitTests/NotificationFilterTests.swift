@@ -1,8 +1,28 @@
+import Testing
 import XCTest
 @testable import NotificationsKit
-import ConduitCore
+@testable import ConduitCore
 
-final class NotificationFilterTests: XCTestCase {
+@Suite struct NotificationFilterTests {
+    @Test("minRisk gates low-risk approvals")
+    func minRisk() {
+        var f = NotificationFilter()
+        f.minRisk = .high
+        #expect(f.shouldDeliver(risk: .low, agent: .claudeCode) == false)
+        #expect(f.shouldDeliver(risk: .high, agent: .claudeCode) == true)
+        #expect(f.shouldDeliver(risk: .critical, agent: .codex) == true)
+    }
+
+    @Test("enabledAgents whitelist excludes others")
+    func agents() {
+        var f = NotificationFilter()
+        f.enabledAgents = ["claudeCode"]
+        #expect(f.shouldDeliver(risk: .high, agent: .claudeCode) == true)
+        #expect(f.shouldDeliver(risk: .high, agent: .codex) == false)
+    }
+}
+
+final class NotificationFilterXCTests: XCTestCase {
 
     func testDefaultFilterAllowsAll() {
         let filter = NotificationFilter()
@@ -34,7 +54,6 @@ final class NotificationFilterTests: XCTestCase {
     func testQuietHoursBlocksDelivery() {
         var filter = NotificationFilter()
         filter.quietHoursEnabled = true
-        // start == end is defined as "all day quiet" — deterministic regardless of current hour.
         filter.quietHoursStart = 0
         filter.quietHoursEnd = 0
         XCTAssertFalse(filter.shouldDeliver(risk: .critical, agent: .claudeCode))
