@@ -29,9 +29,9 @@ public struct PolicyEditorView: View {
     public var body: some View {
         Form {
             Section("Safe presets") {
-                Button("Strict (deny network & secrets)") { yamlText = Self.strictPreset }
-                Button("Balanced (fail-closed ask)") { yamlText = Self.balancedPreset }
-                Button("Permissive reads") { yamlText = Self.permissivePreset }
+                Button("Cautious") { Task { await applyPreset(Self.strictPreset) } }
+                Button("Balanced") { Task { await applyPreset(Self.balancedPreset) } }
+                Button("Bypass") { Task { await applyPreset(Self.permissivePreset) } }
             }
             Section("Policy YAML") {
                 Text("Edit on the bridge host at ~/.conduit/policy.yaml — reload after external edits.")
@@ -76,6 +76,19 @@ public struct PolicyEditorView: View {
         }
         .navigationTitle("Agent policy")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func applyPreset(_ yaml: String) async {
+        yamlText = yaml
+        guard let onSave else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await onSave(yaml)
+            statusMessage = "Preset applied to bridge."
+        } catch {
+            statusMessage = error.localizedDescription
+        }
     }
 
     static let balancedPreset = """
