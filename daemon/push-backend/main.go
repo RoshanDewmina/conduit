@@ -58,6 +58,8 @@ func main() {
 	mux.HandleFunc("POST /register", handleRegister)
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
+	mux.HandleFunc("/approval/decision", handlePostDecision)
+	mux.HandleFunc("/decisions", handlePollDecisions)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
