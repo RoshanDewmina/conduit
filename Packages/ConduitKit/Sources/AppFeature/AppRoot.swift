@@ -106,7 +106,7 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
-    @State private var selectedTab: Tab = .hosts
+    @State private var selectedTab: Tab = .inbox
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
     @State private var editingHost: Host?
@@ -168,27 +168,27 @@ public struct AppRoot: View {
     }
 
     public enum Tab: Hashable, Sendable {
-        case hosts
         case inbox
-        case library
+        case fleet
+        case activity
         case settings
 
-        static let rootTabs: [Tab] = [.hosts, .inbox, .library, .settings]
+        static let rootTabs: [Tab] = [.inbox, .fleet, .activity, .settings]
 
         var title: String {
             switch self {
-            case .hosts:    "Hosts"
             case .inbox:    "Inbox"
-            case .library:  "Library"
+            case .fleet:    "Fleet"
+            case .activity: "Activity"
             case .settings: "Settings"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .hosts:    "server.rack"
             case .inbox:    "tray"
-            case .library:  "square.grid.2x2"
+            case .fleet:    "square.stack.3d.up"
+            case .activity: "clock.arrow.circlepath"
             case .settings: "gear"
             }
         }
@@ -210,11 +210,11 @@ public struct AppRoot: View {
         // UI-audit hook: launch straight into a tab via SIMCTL_CHILD_CONDUIT_TAB.
         if let tab = ProcessInfo.processInfo.environment["CONDUIT_TAB"] {
             switch tab {
-            case "hosts":    _selectedTab = State(initialValue: .hosts)
             case "inbox":    _selectedTab = State(initialValue: .inbox)
-            case "library":  _selectedTab = State(initialValue: .library)
+            case "fleet":    _selectedTab = State(initialValue: .fleet)
+            case "activity": _selectedTab = State(initialValue: .activity)
             case "settings": _selectedTab = State(initialValue: .settings)
-            default:         _selectedTab = State(initialValue: .hosts)
+            default:         _selectedTab = State(initialValue: .inbox)
             }
         }
         #endif
@@ -351,7 +351,7 @@ public struct AppRoot: View {
                     onContinue: {
                         onboardingSeen = true
                         addHostPresented = true
-                        selectedTab = .hosts
+                        selectedTab = .fleet
                     },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
@@ -365,7 +365,7 @@ public struct AppRoot: View {
                 onComplete: { host in
                     showingProvisioningWizard = false
                     onboardingSeen = true
-                    selectedTab = .hosts
+                    selectedTab = .fleet
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         openSession(host: host, env: env)
@@ -510,7 +510,7 @@ public struct AppRoot: View {
     private var splitSelection: Binding<Tab?> {
         Binding(
             get: { selectedTab },
-            set: { selectedTab = $0 ?? .hosts }
+            set: { selectedTab = $0 ?? .inbox }
         )
     }
 
@@ -607,28 +607,28 @@ public struct AppRoot: View {
     private func compactRoot(env: AppEnvironment) -> some View {
         let inboxBadge = activeInboxViewModel.approvals.filter(\.isPending).count > 0
         let tabItems: [DSTabItem] = [
-            DSTabItem(id: "hosts",    icon: .server,   label: "Hosts"),
             DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
-            DSTabItem(id: "library",  icon: .list,     label: "Library"),
+            DSTabItem(id: "fleet",    icon: .server,   label: "Fleet"),
+            DSTabItem(id: "activity", icon: .list,     label: "Activity"),
             DSTabItem(id: "settings", icon: .settings, label: "Settings"),
         ]
 
         let tabID = Binding<String>(
             get: {
                 switch selectedTab {
-                case .hosts:    "hosts"
                 case .inbox:    "inbox"
-                case .library:  "library"
+                case .fleet:    "fleet"
+                case .activity: "activity"
                 case .settings: "settings"
                 }
             },
             set: { id in
                 switch id {
-                case "hosts":    selectedTab = .hosts
                 case "inbox":    selectedTab = .inbox
-                case "library":  selectedTab = .library
+                case "fleet":    selectedTab = .fleet
+                case "activity": selectedTab = .activity
                 case "settings": selectedTab = .settings
-                default:         selectedTab = .hosts
+                default:         selectedTab = .inbox
                 }
             }
         )
@@ -664,19 +664,19 @@ public struct AppRoot: View {
         let bar = DSTabBar(items: tabItems, selectedID: tabID)
 
         switch selectedTab {
-        case .hosts:
-            NavigationStack {
-                rootDestination(.hosts, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
-            }
         case .inbox:
             NavigationStack {
                 rootDestination(.inbox, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-        case .library:
+        case .fleet:
             NavigationStack {
-                rootDestination(.library, env: env)
+                rootDestination(.fleet, env: env)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+            }
+        case .activity:
+            NavigationStack {
+                rootDestination(.activity, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         case .settings:
@@ -753,25 +753,6 @@ public struct AppRoot: View {
     @ViewBuilder
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
         switch tab {
-        case .hosts:
-            HostsView(
-                liveSessions: fleetStore.slots,
-                selectedLiveSessionID: selectedFleetSlotID,
-                hostRepo: env.hostRepo,
-                blockRepo: env.blockRepo,
-                snapshotRepo: env.snapshotRepo,
-                onTapLiveSession: { slotID in
-                    selectFleetSlot(slotID)
-                    isShowingLiveSession = true
-                },
-                onDisconnectLiveSession: { slotID in disconnectLiveSession(slotID: slotID) },
-                onJumpToUnread: { jumpToUnreadLiveSession() },
-                onAddHost: { addHostPresented = true },
-                onSelect: { host in openSession(host: host, env: env) },
-                onEdit: { host in editingHost = host }
-            )
-            .id(workspacesRevision)
-
         case .inbox:
             InboxView(
                 viewModel: activeInboxViewModel,
@@ -779,27 +760,23 @@ public struct AppRoot: View {
                 onTapStatusHeader: {}
             )
 
-        case .library:
-            if let agentStore {
-                LibraryView(
-                    snippetRepo: env.snippetRepo,
-                    keyStore: env.keyStore,
-                    agentStore: agentStore
-                )
-            } else {
-                ProgressView("Loading library…")
-            }
+        case .fleet:
+            FleetView(store: fleetStore, onConnectHost: { addHostPresented = true })
+                .id(workspacesRevision)
+
+        case .activity:
+            ActivityView(actions: bridgeSessionActions())
 
         case .settings:
-            // The Library tab is the single hub for Library / Hosted Agents /
-            // Snippets / SSH Keys — Settings no longer duplicates those routes
-            // via an overflow "Manage" menu.
-            SettingsView(
+            SettingsWithLibraryView(
                 viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
                 syncEngine: env.syncEngine,
                 backendURL: Self.pushBackendURL(),
                 auditRepository: env.auditRepo,
-                approvalRepository: approvalRepository
+                approvalRepository: approvalRepository,
+                agentStore: agentStore,
+                snippetRepo: env.snippetRepo,
+                keyStore: env.keyStore
             )
         }
     }
@@ -946,7 +923,7 @@ public struct AppRoot: View {
                 if self.fleetStore.slots.contains(where: { $0.id == slot.id }) {
                     self.selectFleetSlot(slot.id)
                 }
-                self.selectedTab = .hosts
+                self.selectedTab = .fleet
                 self.isShowingLiveSession = true
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
@@ -1007,6 +984,44 @@ private struct LaunchLockView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(t.surf0)
+    }
+}
+
+/// Settings tab wrapper that surfaces a Library navigation row so the Library
+/// view remains reachable after the dedicated Library tab was removed.
+private struct SettingsWithLibraryView: View {
+    let viewModel: SettingsViewModel
+    let syncEngine: SyncEngine?
+    let backendURL: String
+    let auditRepository: AuditRepository?
+    let approvalRepository: ApprovalRepository?
+    let agentStore: AgentStore?
+    let snippetRepo: SnippetRepository
+    let keyStore: KeyStore
+
+    @State private var libraryPresented = false
+
+    var body: some View {
+        SettingsView(
+            viewModel: viewModel,
+            syncEngine: syncEngine,
+            backendURL: backendURL,
+            auditRepository: auditRepository,
+            approvalRepository: approvalRepository
+        )
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink {
+                    if let store = agentStore {
+                        LibraryView(snippetRepo: snippetRepo, keyStore: keyStore, agentStore: store)
+                    } else {
+                        ProgressView("Loading library…")
+                    }
+                } label: {
+                    Label("Library", systemImage: "square.grid.2x2")
+                }
+            }
+        }
     }
 }
 
