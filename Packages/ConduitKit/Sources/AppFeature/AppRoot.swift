@@ -542,8 +542,7 @@ public struct AppRoot: View {
     private func configureGlobalInbox(env: AppEnvironment) {
         guard liveInboxVM == nil else { return }
         let approvalRepo = ApprovalRepository(env.database)
-        let liveVM = LiveInboxViewModel(repository: approvalRepo) { [weak self] id, decision, edited in
-            guard let self else { return }
+        let liveVM = LiveInboxViewModel(repository: approvalRepo) { id, decision, edited in
             if let slot = await MainActor.run(body: { self.fleetStore.slot(forApprovalID: id) }) {
                 try? await slot.channel.respond(
                     approvalId: id.uuidString,
@@ -794,7 +793,7 @@ public struct AppRoot: View {
                 purchaseManager: pm
             )
         }
-        await ApprovalRelay.shared.configureBackend(
+        ApprovalRelay.shared.configureBackend(
             url: url,
             sessionID: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
         )
@@ -955,7 +954,7 @@ public struct AppRoot: View {
             // forwarded to conduitd, and drain any decisions queued while the
             // channel was absent (e.g. lock-screen tap before app foregrounded).
             await ApprovalRelay.shared.setChannel(channel)
-            await ApprovalRelay.shared.configureBackend(url: backendURL, sessionID: deviceSessionID)
+            ApprovalRelay.shared.configureBackend(url: backendURL, sessionID: deviceSessionID)
             await ingest.start()
         }
     }

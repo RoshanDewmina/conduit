@@ -156,6 +156,7 @@ public struct SettingsView: View {
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
+    let bridgeActions: BridgeSessionActions
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
 

@@ -14,9 +14,13 @@ struct PolicyEditorBridgeScreen: View {
             cwd: actions.policyCWD,
             initialYAML: yamlText,
             onReload: {
-                try await actions.reloadPolicy()
-                if actions.isConnected {
-                    yamlText = try await actions.loadPolicyYAML()
+                do {
+                    try await actions.reloadPolicy()
+                    if actions.isConnected {
+                        yamlText = try await actions.loadPolicyYAML()
+                    }
+                } catch {
+                    loadError = error.localizedDescription
                 }
             },
             onSave: actions.isConnected
