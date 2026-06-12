@@ -776,6 +776,7 @@ private struct FaceIDScreen: View {
     let onContinue: () -> Void
     let currentStep: Int
     @Environment(\.conduitTokens) private var t
+    @AppStorage("appLockEnabled") private var appLockEnabled = false
 
     private var stepDots: some View {
         HStack(spacing: 5) {
@@ -836,7 +837,12 @@ private struct FaceIDScreen: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                     DSButton("use face id", variant: .primary, size: .lg, fullWidth: true) {
                         Task {
-                            try? await BiometricGate.shared.unlock(reason: "Enable Face ID for approvals")
+                            do {
+                                try await BiometricGate.shared.unlock(reason: "Enable Face ID for approvals")
+                                appLockEnabled = true
+                            } catch {
+                                // Face ID failed or was cancelled — don't claim the lock is on.
+                            }
                             onContinue()
                         }
                     }
