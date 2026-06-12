@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestHandleApprovalRoutesToRegisteredToken(t *testing.T) {
 	registry.Lock()
-	registry.tokens["sess-A"] = "device-token-xyz"
+	registry.sessions["sess-A"] = &sessionRecord{apnsToken: "device-token-xyz", seen: time.Now().Unix()}
 	registry.Unlock()
 
 	var gotToken string
@@ -42,7 +43,7 @@ func TestHandleApprovalRoutesToRegisteredToken(t *testing.T) {
 
 func TestHandleApprovalDropsUnknownSession(t *testing.T) {
 	registry.Lock()
-	delete(registry.tokens, "ghost")
+	delete(registry.sessions, "ghost")
 	registry.Unlock()
 	called := false
 	orig := pushApprovalFn

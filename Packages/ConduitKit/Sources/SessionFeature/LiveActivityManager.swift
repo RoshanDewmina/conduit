@@ -153,10 +153,17 @@ public final class ConduitLiveActivityManager {
             guard let base = lastContent[hostID] else { continue }
             // Construct a fresh value (not a mutated copy of stored actor state)
             // so it forms its own isolation region and is safe to send.
+            //
+            // MAJOR-14: preserve `pendingApprovalID` — the Live Activity / Dynamic
+            // Island Approve/Reject buttons only render when it is non-empty, so
+            // dropping it here stripped the buttons exactly when an approval was
+            // pending. Carry it through whenever there's still a pending approval
+            // (clear it only when the count drops to zero).
             let content = ConduitSessionAttributes.ContentState(
                 status: base.status,
                 pendingApprovals: count,
                 agentName: base.agentName,
+                pendingApprovalID: count > 0 ? base.pendingApprovalID : nil,
                 isStreaming: base.isStreaming
             )
             await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppFeature
+import ConduitCore
 import DesignSystem
 import NotificationsKit
 import SettingsFeature
@@ -120,7 +121,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Task {
             await Notifications.shared.registerDeviceToken(
                 deviceToken,
-                sessionID: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString,
+                sessionID: DeviceIdentity.sessionID(),
                 backendURL: pushBackendURL
             )
         }
@@ -175,12 +176,21 @@ final class ConduitNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
 
         switch response.actionIdentifier {
         case "approval.approve":
+            // Buffer first (MAJOR-6): on a cold launch the post below races
+            // AppRoot's subscriber and is dropped; AppRoot drains the buffer once
+            // its graph is ready. The post still drives the warm-launch path.
+            ApprovalActionBuffer.shared.record(
+                PendingApprovalAction(approvalID: approvalId, sessionID: sessionId, action: "approve")
+            )
             NotificationCenter.default.post(
                 name: .conduitApprovalAction,
                 object: nil,
                 userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": "approve"]
             )
         case "approval.reject":
+            ApprovalActionBuffer.shared.record(
+                PendingApprovalAction(approvalID: approvalId, sessionID: sessionId, action: "reject")
+            )
             NotificationCenter.default.post(
                 name: .conduitApprovalAction,
                 object: nil,

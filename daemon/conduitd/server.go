@@ -170,6 +170,11 @@ type server struct {
 	emit       func([]byte) error
 	deviceMu   sync.RWMutex
 	device     *registeredDevice
+	// relayToken is the per-session capability secret minted at session attach
+	// (conduit.device.register), delivered to the app over the DaemonChannel and
+	// presented as `Authorization: Bearer <relayToken>` on the decision relay.
+	// Guarded by deviceMu. TREAT AS SECRET — never log it.
+	relayToken string
 }
 
 func (s *server) setEmitter(emit func([]byte) error) {
@@ -186,8 +191,32 @@ func newServer(home string) *server {
 		dispatcher: newDispatcher(),
 		scheduler:  newScheduler(home),
 	}
-	s.poller = newDecisionPoller(s.approvals.resolve)
+	// The poller applies poll-delivered decisions through applyDecision so they
+	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
+	// policy) — not via a bare resolve that skips both.
+	s.poller = newDecisionPoller(s.applyDecision)
 	return s
+}
+
+// applyDecision resolves a pending approval and persists the outcome IDENTICALLY
+// for every delivery path — the live-SSH `agent.approval.response` RPC and the
+// phone→backend→poll fallback both route through here. resolve is the single
+// delete-under-lock chokepoint, so this records at most once per approvalId.
+// It writes the human-decision audit entry and, for approveAlways, the
+// always-policy. FAIL-SAFE: a failed policy write is logged, never fatal — a
+// dropped always-rule only means more prompting later, never an unintended allow.
+func (s *server) applyDecision(id, decision, editedToolInput string) (ApprovalEvent, bool) {
+	event, ok := s.approvals.resolve(id, decision, editedToolInput)
+	if !ok {
+		return ApprovalEvent{}, false
+	}
+	s.recordHumanDecision(event, decision)
+	if decision == "approveAlways" {
+		if err := s.policy.appendAllowAlways(event); err != nil {
+			fmt.Fprintf(os.Stderr, "appendAllowAlways failed for %s: %v\n", id, err)
+		}
+	}
+	return event, ok
 }
 
 // policyEffect adapts the policy engine to the dispatcher's evaluator signature.
@@ -353,13 +382,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		event, ok := s.approvals.resolve(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
-		if ok {
-			s.recordHumanDecision(event, decision.Decision)
-			if decision.Decision == "approveAlways" {
-				_ = s.policy.appendAllowAlways(event)
-			}
-		}
+		s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
 		s.writeResult(msg.ID, "ok")
 
 	case "agent.audit.tail":
@@ -429,10 +452,33 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		s.deviceMu.Lock()
+		// Reuse the session's existing relayToken across re-registrations
+		// (reconnects) so the app's and backend's stored copies stay valid; mint
+		// a fresh one only for a new/changed session.
+		if s.device == nil || s.device.SessionID != info.SessionID || s.relayToken == "" {
+			tok, err := generateRelayToken()
+			if err != nil {
+				s.deviceMu.Unlock()
+				s.writeError(msg.ID, -32000, "relay token generation failed")
+				return
+			}
+			s.relayToken = tok
+		}
 		s.device = &info
+		relayToken := s.relayToken
 		s.deviceMu.Unlock()
-		s.poller.ensureRunning(info.PushBackendURL, info.SessionID)
-		s.writeResult(msg.ID, "ok")
+
+		// Register sessionId → relayToken with the backend over the control plane
+		// (APPROVAL_RELAY_SECRET). Best-effort + async so we don't block the RPC
+		// loop on a slow backend; if it fails the relay poll/POST simply 401s and
+		// conduitd's ~120s auto-deny remains the backstop.
+		if info.PushBackendURL != "" {
+			go s.postRelayRegistration(info.PushBackendURL, info.SessionID, relayToken)
+		}
+		s.poller.ensureRunning(info.PushBackendURL, info.SessionID, relayToken)
+		// Deliver the relayToken to the app over the (already-authenticated)
+		// DaemonChannel as the `relayToken` field of this handshake's result.
+		s.writeResult(msg.ID, map[string]string{"relayToken": relayToken})
 
 	case "agent.dispatch":
 		var p dispatchParams
@@ -562,13 +608,23 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		go s.postApprovalPush(dev, event)
 	}
 
-	result := waitWithTimeout(decisionCh, 120*time.Second)
+	result, received := waitWithTimeout(decisionCh, 120*time.Second)
 	decision := result.decision
-	if decision == "approveAlways" {
-		_ = s.policy.appendAllowAlways(event)
+	if !received {
+		// Timed out: no resolver (RPC or poll) recorded a decision. Audit the
+		// auto-deny here and retire the orphaned pending so a late relay decision
+		// can't re-resolve it (which would mis-audit an approve / write an
+		// always-rule after the agent was already denied). Fail-safe default-deny.
+		s.approvals.remove(event.ApprovalID)
+		s.recordHumanDecision(event, "deny")
+		decision = "deny"
+	} else if decision == "approveAlways" {
+		// The resolver (applyDecision) already recorded the decision and wrote the
+		// always-policy; collapse to "approve" for the agent, which only
+		// understands approve/deny. Do NOT record again here (avoids a duplicate
+		// audit entry across the resolve + hook-wake paths).
 		decision = "approve"
 	}
-	s.recordHumanDecision(event, result.decision)
 
 	resp := ApprovalDecision{
 		ApprovalID:      event.ApprovalID,
@@ -646,6 +702,39 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 		return
 	}
 	resp.Body.Close()
+}
+
+// postRelayRegistration registers sessionId → relayToken with the backend's
+// control-plane /register endpoint, authenticated by APPROVAL_RELAY_SECRET (when
+// configured). This lets the backend validate the per-session Bearer token the
+// app and conduitd present on the decision relay. Never logs the relayToken.
+func (s *server) postRelayRegistration(backendURL, sessionID, relayToken string) {
+	body, err := json.Marshal(map[string]string{
+		"sessionId":  sessionID,
+		"relayToken": relayToken,
+	})
+	if err != nil {
+		return
+	}
+	endpoint := strings.TrimRight(backendURL, "/") + "/register"
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "relay-token registration POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "relay-token registration rejected: HTTP %d\n", resp.StatusCode)
+	}
 }
 
 func riskLabel(r int) string {

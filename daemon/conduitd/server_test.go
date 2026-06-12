@@ -5,39 +5,91 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
-// TestDeviceRegister verifies that conduit.device.register stores the device info.
+// TestDeviceRegister verifies that conduit.device.register stores the device
+// info, mints a per-session relayToken, returns it to the app in the handshake
+// result, and registers sessionId → relayToken with the backend.
 func TestDeviceRegister(t *testing.T) {
+	gotReg := make(chan map[string]string, 1)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/register" {
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			select {
+			case gotReg <- body:
+			default:
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer backend.Close()
+
 	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	// Capture the RPC result frame via the emitter seam.
+	resultCh := make(chan rpcMessage, 1)
+	s.setEmitter(func(data []byte) error {
+		var m rpcMessage
+		_ = json.Unmarshal(data, &m)
+		select {
+		case resultCh <- m:
+		default:
+		}
+		return nil
+	})
 
 	params, _ := json.Marshal(map[string]string{
-		"pushBackendURL": "https://example.com",
+		"pushBackendURL": backend.URL,
 		"sessionID":      "test-session-id",
 	})
-	msg := &rpcMessage{
-		JSONRPC: "2.0",
-		ID:      1,
-		Method:  "conduit.device.register",
-		Params:  params,
-	}
-
-	// Capture stdout to prevent test noise; handleMessage writes to os.Stdout.
-	// We only care about the stored device, not the RPC response.
-	s.handleMessage(msg)
+	s.handleMessage(&rpcMessage{JSONRPC: "2.0", ID: 1, Method: "conduit.device.register", Params: params})
 
 	s.deviceMu.RLock()
 	dev := s.device
+	storedToken := s.relayToken
 	s.deviceMu.RUnlock()
-
 	if dev == nil {
 		t.Fatal("device not registered")
 	}
-	if dev.PushBackendURL != "https://example.com" {
-		t.Errorf("pushBackendURL = %q, want %q", dev.PushBackendURL, "https://example.com")
+	if dev.PushBackendURL != backend.URL {
+		t.Errorf("pushBackendURL = %q, want %q", dev.PushBackendURL, backend.URL)
 	}
 	if dev.SessionID != "test-session-id" {
 		t.Errorf("sessionID = %q, want %q", dev.SessionID, "test-session-id")
+	}
+	if storedToken == "" {
+		t.Fatal("relayToken not minted")
+	}
+
+	// The handshake result must carry the relayToken under the exact field name.
+	var res rpcMessage
+	select {
+	case res = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no RPC result emitted")
+	}
+	resMap, ok := res.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("result is %T, want object with relayToken", res.Result)
+	}
+	if resMap["relayToken"] != storedToken {
+		t.Fatalf("handshake relayToken = %v, want %q", resMap["relayToken"], storedToken)
+	}
+
+	// conduitd must register sessionId → relayToken with the backend.
+	select {
+	case body := <-gotReg:
+		if body["sessionId"] != "test-session-id" {
+			t.Errorf("registration sessionId = %q", body["sessionId"])
+		}
+		if body["relayToken"] != storedToken {
+			t.Errorf("registration relayToken = %q, want %q", body["relayToken"], storedToken)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("conduitd did not register relayToken with backend")
 	}
 }
 

@@ -17,6 +17,59 @@ public extension Notification.Name {
     static let conduitRemoteApprovalReceived = Notification.Name("dev.conduit.remoteApprovalReceived")
 }
 
+// MARK: - Cold-launch approval action buffer (MAJOR-6)
+
+/// A buffered Approve/Reject action from a notification action button.
+public struct PendingApprovalAction: Sendable, Equatable {
+    public let approvalID: String
+    public let sessionID: String
+    /// "approve" or "reject".
+    public let action: String
+
+    public init(approvalID: String, sessionID: String, action: String) {
+        self.approvalID = approvalID
+        self.sessionID = sessionID
+        self.action = action
+    }
+}
+
+/// Buffers approval action-button taps so a *cold-launched* Approve/Reject is
+/// not lost (MAJOR-6).
+///
+/// `ConduitNotificationDelegate.didReceive` posts `.conduitApprovalAction` to
+/// `NotificationCenter` during launch, but `AppRoot` only subscribes once the
+/// root view is evaluated. `NotificationCenter` does not buffer, so an action
+/// tapped from a killed app's lock-screen banner is delivered before any
+/// subscriber exists and is dropped — never persisted, never sent → 120 s
+/// auto-deny. The delegate also records the action here; `AppRoot` drains the
+/// buffer once the app graph is ready (and on each live receipt) and applies it
+/// durably via `ApprovalRelay`. Replays are safe because the decision write is
+/// first-decision-wins (idempotent).
+public final class ApprovalActionBuffer: @unchecked Sendable {
+    public static let shared = ApprovalActionBuffer()
+
+    private let lock = NSLock()
+    private var pending: [PendingApprovalAction] = []
+
+    private init() {}
+
+    /// Record an action that may not yet have a live subscriber.
+    public func record(_ action: PendingApprovalAction) {
+        lock.lock()
+        defer { lock.unlock() }
+        pending.append(action)
+    }
+
+    /// Return and clear all buffered actions.
+    public func drain() -> [PendingApprovalAction] {
+        lock.lock()
+        defer { lock.unlock() }
+        let snapshot = pending
+        pending.removeAll()
+        return snapshot
+    }
+}
+
 /// Controls which approval notifications are delivered.
 /// Stored in UserDefaults so user preferences persist across launches.
 public struct NotificationFilter: Codable, Sendable, Equatable {
@@ -196,6 +249,17 @@ public actor Notifications {
         )
         do { try await UNUserNotificationCenter.current().add(req) }
         catch { }
+    }
+
+    /// Remove any delivered (and not-yet-delivered) approval notification for a
+    /// resolved gate. The request identifier is the approval id (see
+    /// `notifyPendingApproval`), so a decided approval's lock-screen banner and
+    /// its Approve/Reject actions disappear, closing the window where a stale
+    /// banner could re-resolve an already-decided gate.
+    public nonisolated func clearDeliveredApproval(id: String) {
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: [id])
+        center.removePendingNotificationRequests(withIdentifiers: [id])
     }
 
     public nonisolated func registerCategories() {

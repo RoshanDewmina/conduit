@@ -290,6 +290,15 @@ func handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-check the concurrency quota while holding the write lock. The
+	// enforceQuota call at the top of the handler runs without this lock, so two
+	// simultaneous create-run requests could both pass it and both append; this
+	// recheck inside the critical section closes that TOCTOU window.
+	if countActiveRunsForCustomerLocked(ent.CustomerID) >= quotaMaxConcurrentRuns() {
+		http.Error(w, errQuotaExceeded.Error(), http.StatusTooManyRequests)
+		return
+	}
+
 	status := req.Status
 	if status == "" {
 		status = "pending"

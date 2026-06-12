@@ -98,6 +98,14 @@ func countAgentsForCustomer(customerID string) int {
 func countActiveRunsForCustomer(customerID string) int {
 	controlPlane.mu.RLock()
 	defer controlPlane.mu.RUnlock()
+	return countActiveRunsForCustomerLocked(customerID)
+}
+
+// countActiveRunsForCustomerLocked counts active runs assuming the caller already
+// holds controlPlane.mu (read or write). Used to re-check the concurrency quota
+// inside the create-run critical section, closing the check-then-append TOCTOU
+// window that the top-of-handler enforceQuota call alone leaves open.
+func countActiveRunsForCustomerLocked(customerID string) int {
 	n := 0
 	for _, run := range controlPlane.data.Runs {
 		if run.CustomerID != customerID {

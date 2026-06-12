@@ -24,6 +24,7 @@ public enum SSHConnectPhase: Equatable {
     case connecting             // pixel grid cycles through "working" animations
     case slow(message: String)  // still trying, but taking a while
     case connected              // grid settles to the green "done" state
+    case disconnected           // connect ended without success (cancelled / host-key rejected) — dismissible
     case failed(message: String) // terminal failure, show error
 }
 
@@ -126,6 +127,10 @@ public struct SSHConnectOverlay: View {
             withAnimation(.easeInOut(duration: 0.6)) { displayState = .done }
             labelText = "Connected"
             try? await Task.sleep(for: .seconds(0.9))
+            withAnimation { showDismissHint = true }
+        case .disconnected:
+            withAnimation(.easeInOut(duration: 0.4)) { displayState = .offline }
+            labelText = "Disconnected"
             withAnimation { showDismissHint = true }
         case .failed(let message):
             withAnimation(.easeInOut(duration: 0.3)) { displayState = .error }

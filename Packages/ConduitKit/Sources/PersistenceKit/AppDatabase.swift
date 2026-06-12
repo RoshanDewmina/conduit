@@ -182,6 +182,19 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Governed Approvals: persist the blast-radius escalation context + the
+        // ask-question fields so the governance banner / choice UI survive the
+        // DB round-trip (the live VM re-reads from the DB via observe()).
+        // Previously dropped on encode/decode → banner never rendered (MAJOR-7).
+        m.registerMigration("v8") { db in
+            try db.alter(table: "approvals") { t in
+                t.add(column: "blast_radius",    .text)   // JSON ApprovalBlastRadius
+                t.add(column: "question",        .text)
+                t.add(column: "choices",         .text)   // JSON [String]
+                t.add(column: "answered_choice", .integer)
+            }
+        }
+
         return m
     }
 }

@@ -28,8 +28,35 @@ public actor BiometricGate: Sendable {
                         switch laError.code {
                         case .userCancel, .appCancel, .systemCancel:
                             cont.resume(throwing: ConduitError.cancelled)
-                        case .biometryNotAvailable, .biometryNotEnrolled, .biometryLockout:
-                            cont.resume()  // Degrade gracefully
+                        case .biometryNotAvailable, .biometryNotEnrolled:
+                            // No biometrics configured at all — degrade gracefully
+                            // (mirrors the canEvaluatePolicy early-return above).
+                            cont.resume()
+                        case .biometryLockout:
+                            // Biometry IS enrolled but is locked out (too many failed
+                            // attempts). Silently succeeding here would let anyone who
+                            // deliberately fails Face/Touch ID five times force the gate
+                            // open (app-lock + SSH key use). Require the device passcode
+                            // instead — fail closed if it isn't satisfied.
+                            let passcodeCtx = LAContext()
+                            passcodeCtx.evaluatePolicy(
+                                .deviceOwnerAuthentication,
+                                localizedReason: reason
+                            ) { ok, passcodeError in
+                                if ok {
+                                    cont.resume()
+                                } else if let passcodeError = passcodeError as? LAError,
+                                          passcodeError.code == .userCancel
+                                            || passcodeError.code == .appCancel
+                                            || passcodeError.code == .systemCancel {
+                                    cont.resume(throwing: ConduitError.cancelled)
+                                } else {
+                                    cont.resume(throwing: ConduitError.authFailed(
+                                        reason: passcodeError?.localizedDescription
+                                            ?? "Authentication failed"
+                                    ))
+                                }
+                            }
                         default:
                             cont.resume(throwing: ConduitError.authFailed(
                                 reason: laError.localizedDescription

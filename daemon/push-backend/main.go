@@ -26,16 +26,46 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// DeviceRegistry maps sessionID → APNs device token.
+// sessionRecord holds the per-session relay state the backend learns from its
+// two control-plane registration sources (both hit POST /register, authenticated
+// by APPROVAL_RELAY_SECRET):
+//   - apnsToken:  APNs device token, registered by the iOS app, used to push.
+//   - relayToken: the per-session capability secret minted by conduitd. The app
+//     and conduitd present it as `Authorization: Bearer <relayToken>` on the
+//     decision-relay endpoints (POST /approval/decision, GET /decisions) and the
+//     backend constant-time-compares it here. TREAT AS SECRET — never logged.
+//   - seen:       last-touch unix time (registration or a successful relay auth),
+//     used for TTL eviction so the map stays bounded.
+//
+// The two fields are upserted independently so the app's APNs registration and
+// conduitd's relay-token registration can arrive in any order.
+type sessionRecord struct {
+	apnsToken  string
+	relayToken string
+	seen       int64
+}
+
+// registry maps sessionID → sessionRecord.
 // In production, back this with Redis or DynamoDB.
 var registry = struct {
 	sync.RWMutex
-	tokens map[string]string
-}{tokens: make(map[string]string)}
+	sessions map[string]*sessionRecord
+}{sessions: make(map[string]*sessionRecord)}
+
+const (
+	// deviceTokenTTL evicts session records that haven't been refreshed. The
+	// per-session relayToken shares this TTL (and the janitor sweep) so it stays
+	// bounded; a live, actively-polling session slides past it because a
+	// successful relay auth refreshes `seen`.
+	deviceTokenTTL = 24 * time.Hour
+	// maxRegisteredDevices hard-caps the session registry size.
+	maxRegisteredDevices = 100_000
+)
 
 type registerRequest struct {
 	SessionID   string `json:"sessionId"`
-	DeviceToken string `json:"deviceToken"`
+	DeviceToken string `json:"deviceToken,omitempty"`
+	RelayToken  string `json:"relayToken,omitempty"`
 }
 
 type approvalEvent struct {
@@ -84,6 +114,8 @@ func main() {
 	initOrgsStore()
 	startScheduleTicker()
 	startRunReaper()
+	startRelayJanitor()
+	warnIfRelayUnauthenticated()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -101,7 +133,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -110,33 +142,108 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// handleRegister is the conduitd→backend / app→backend control-plane endpoint.
+// It is guarded by APPROVAL_RELAY_SECRET (the deployment-wide control-plane
+// secret) so conduitd can bootstrap a session's relayToken before any
+// per-session capability exists. It upserts whichever of {deviceToken,
+// relayToken} the caller supplied for the session.
 func handleRegister(w http.ResponseWriter, r *http.Request) {
-	var req registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !relayAuthorized(w, r) {
 		return
 	}
+	var req registerRequest
+	if !decodeRelayJSON(w, r, &req) {
+		return
+	}
+	if req.SessionID == "" || (req.DeviceToken == "" && req.RelayToken == "") {
+		http.Error(w, "sessionId and at least one of deviceToken/relayToken required", http.StatusBadRequest)
+		return
+	}
+	if len(req.SessionID) > maxSessionIDLen ||
+		len(req.DeviceToken) > maxDeviceTokenLen ||
+		len(req.RelayToken) > maxRelayTokenLen {
+		http.Error(w, "field too large", http.StatusBadRequest)
+		return
+	}
+	now := time.Now().Unix()
 	registry.Lock()
-	registry.tokens[req.SessionID] = req.DeviceToken
+	rec := registry.sessions[req.SessionID]
+	if rec == nil {
+		if len(registry.sessions) >= maxRegisteredDevices {
+			registry.Unlock()
+			http.Error(w, "registry capacity reached", http.StatusServiceUnavailable)
+			return
+		}
+		rec = &sessionRecord{}
+		registry.sessions[req.SessionID] = rec
+	}
+	if req.DeviceToken != "" {
+		rec.apnsToken = req.DeviceToken
+	}
+	if req.RelayToken != "" {
+		rec.relayToken = req.RelayToken
+	}
+	rec.seen = now
 	registry.Unlock()
-	log.Printf("registered device token for session %s", req.SessionID)
+	// Log presence only — never the token material itself.
+	log.Printf("registered session %s (apns=%t relay=%t)", req.SessionID, req.DeviceToken != "", req.RelayToken != "")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// startRelayJanitor periodically evicts expired pending decisions and stale
+// device registrations so the in-memory relay maps stay bounded. Started from
+// main(); tests exercise the eviction helpers directly.
+func startRelayJanitor() {
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now().Unix()
+			decisions.Lock()
+			evictExpiredDecisionsLocked(now)
+			decisions.Unlock()
+			evictExpiredDevices(now)
+		}
+	}()
+}
+
+// evictExpiredDevices removes session records (APNs token + relayToken) older
+// than deviceTokenTTL. This is what keeps the per-session relayToken bounded.
+func evictExpiredDevices(now int64) {
+	ttl := int64(deviceTokenTTL / time.Second)
+	registry.Lock()
+	defer registry.Unlock()
+	for sid, rec := range registry.sessions {
+		if now-rec.seen >= ttl {
+			delete(registry.sessions, sid)
+		}
+	}
 }
 
 // pushApprovalFn is the seam tests swap to avoid real APNs calls.
 var pushApprovalFn = pushApproval
 
 func handleApproval(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
 	var ev approvalEvent
-	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
 		return
 	}
 
 	registry.RLock()
-	token, ok := registry.tokens[ev.SessionID]
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
 	registry.RUnlock()
-	if !ok {
+	if !ok || token == "" {
 		log.Printf("no device token for session %s — dropping", ev.SessionID)
 		w.WriteHeader(http.StatusAccepted)
 		return
@@ -151,16 +258,26 @@ func handleApproval(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRunComplete(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
 	var ev runCompleteEvent
-	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
 		return
 	}
 
 	registry.RLock()
-	token, ok := registry.tokens[ev.SessionID]
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
 	registry.RUnlock()
-	if !ok {
+	if !ok || token == "" {
 		log.Printf("no device token for session %s — dropping run-complete", ev.SessionID)
 		w.WriteHeader(http.StatusAccepted)
 		return

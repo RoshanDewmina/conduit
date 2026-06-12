@@ -60,6 +60,26 @@ public struct SessionView: View {
                     }
                 )
             }
+            // TOFU host-key confirmation. Presented from INSIDE SessionView so it
+            // appears above the fullScreenCover (the ancestor `readyRoot` cannot
+            // present a sheet over the cover — that was the B1 hard-hang). Preserves
+            // the production prompt: connect only proceeds on explicit Trust; Cancel
+            // rejects the key and leaves the session escapable via the overlay.
+            .sheet(isPresented: Binding(
+                get: { vm.pendingHostKeyFingerprint != nil },
+                set: { if !$0 { vm.rejectHostKey() } }
+            )) {
+                if let fp = vm.pendingHostKeyFingerprint {
+                    SessionHostKeyConfirmSheet(
+                        hostName: vm.host.name,
+                        fingerprint: fp,
+                        onTrust: { Task { await vm.trustHostKey() } },
+                        onReject: { vm.rejectHostKey() }
+                    )
+                    .presentationDetents([.medium])
+                    .environment(\.conduitTokens, t)
+                }
+            }
     }
 
     // MARK: - Core view (split to keep body type-checkable)
@@ -136,9 +156,7 @@ public struct SessionView: View {
                     .ignoresSafeArea()
                     .onTapGesture {
                         switch connectOverlayPhase {
-                        case .connected:
-                            withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
-                        case .failed:
+                        case .connected, .failed, .disconnected:
                             withAnimation(.easeOut(duration: 0.35)) { showConnectOverlay = false }
                         default:
                             break
@@ -206,6 +224,17 @@ public struct SessionView: View {
             case .failed(let reason):
                 connectOverlayPhase = .failed(message: reason)
                 showConnectOverlay = true
+            case .disconnected:
+                // New-host TOFU transitions to .disconnected with a pending
+                // fingerprint — the host-key sheet handles that, so keep the
+                // connecting overlay for a smooth continue after Trust. Otherwise
+                // the connect was cancelled/rejected: show a dismissible
+                // Disconnected overlay (tap to reveal the Back button) so the
+                // user is never hard-stuck on "Connecting…".
+                if vm.pendingHostKeyFingerprint == nil {
+                    connectOverlayPhase = .disconnected
+                    showConnectOverlay = true
+                }
             default:
                 break
             }
@@ -617,6 +646,73 @@ public struct SessionView: View {
             outgoing[0] = first & 0x1f
         }
         return outgoing
+    }
+}
+
+// MARK: - TOFU host-key confirmation (presented from within SessionView)
+//
+// Self-contained so SessionFeature need not depend on WorkspacesFeature (which
+// would also be linked into the Live Activity widget extension). Mirrors the
+// production `HostKeyConfirmSheet` UX: explicit Trust & Connect / Cancel, no
+// auto-trust, fingerprint shown for out-of-band verification.
+private struct SessionHostKeyConfirmSheet: View {
+    let hostName: String
+    let fingerprint: String
+    let onTrust: () -> Void
+    let onReject: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    DSIconView(.shield, size: 24, color: t.warn)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Unknown Host Key")
+                            .font(.dsSansPt(16, weight: .semibold))
+                            .foregroundStyle(t.text)
+                        Text("The authenticity of \(hostName) cannot be established.")
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Fingerprint (SHA256)")
+                        .font(.dsSansPt(11, weight: .medium))
+                        .foregroundStyle(t.text3)
+                    Text(fingerprint)
+                        .font(.dsMonoPt(12))
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+                        .foregroundStyle(t.text2)
+                }
+
+                Text("If you trust this host, tap **Trust & Connect**. If you are not expecting this fingerprint, tap **Cancel** and verify out-of-band.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+
+                Spacer()
+
+                VStack(spacing: 10) {
+                    DSButton("Trust & Connect", variant: .primary, action: onTrust)
+                    DSButton("Cancel", variant: .secondary, action: onReject)
+                }
+            }
+            .padding()
+            .background(t.bg)
+            .navigationTitle("Verify Host")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onReject)
+                        .foregroundStyle(t.accent)
+                }
+            }
+        }
     }
 }
 

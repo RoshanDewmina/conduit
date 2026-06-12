@@ -16,6 +16,19 @@ extension Approval: FetchableRecord {
         let kindStr: String = row["kind"] ?? "command"
         let decisionStr: String? = row["decision"]
 
+        // Governed-approvals context (MAJOR-7): blast radius + choices are stored
+        // as JSON text columns; decode them back into the model so the governance
+        // banner / ask-question UI survives the DB round-trip. A nil / malformed
+        // value decodes to nil rather than failing the whole row.
+        let blastRadiusJSON: String? = row["blast_radius"]
+        let blastRadius = blastRadiusJSON
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode(ApprovalBlastRadius.self, from: $0) }
+        let choicesJSON: String? = row["choices"]
+        let choices = choicesJSON
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode([String].self, from: $0) }
+
         self.init(
             id: ApprovalID(idUUID),
             sessionID: SessionID(sessionUUID),
@@ -28,10 +41,14 @@ extension Approval: FetchableRecord {
             createdAt: row["createdAt"] ?? .now,
             decidedAt: row["decidedAt"],
             decision: decisionStr.flatMap(Decision.init(rawValue:)),
+            question: row["question"],
+            choices: choices,
+            answeredChoice: row["answered_choice"],
             toolName: row["tool_name"],
             toolUseID: row["tool_use_id"],
             agentSessionID: row["agent_session_id"],
-            toolInput: row["tool_input"]
+            toolInput: row["tool_input"],
+            blastRadius: blastRadius
         )
     }
 }
@@ -55,6 +72,18 @@ extension Approval: PersistableRecord {
         container["tool_use_id"] = toolUseID
         container["agent_session_id"] = agentSessionID
         container["tool_input"] = toolInput
+        // Governed-approvals context (MAJOR-7): persist blast radius + choices as
+        // JSON text so the governance banner / ask-question UI rehydrates from the
+        // DB (the live VM re-reads rows via observe(), discarding the in-memory
+        // ingest object). Without this the banner silently never renders.
+        container["blast_radius"] = blastRadius
+            .flatMap { try? JSONEncoder().encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+        container["question"] = question
+        container["choices"] = choices
+            .flatMap { try? JSONEncoder().encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+        container["answered_choice"] = answeredChoice
     }
 }
 
@@ -81,18 +110,39 @@ public actor ApprovalRepository {
         }
     }
 
+    /// Whether a row exists for `id`. Combined with `decide`'s return value this
+    /// distinguishes "already resolved" (exists && !changed) from "no local row
+    /// yet" (cold-launch push-only) so the relay forwards the latter but never
+    /// re-resolves the former.
+    public func exists(id: ApprovalID) async throws -> Bool {
+        try await db.dbWriter.read { db in
+            try Bool.fetchOne(
+                db,
+                sql: "SELECT EXISTS(SELECT 1 FROM approvals WHERE id = ?)",
+                arguments: [id.uuidString]
+            ) ?? false
+        }
+    }
+
     public func upsert(_ approval: Approval) async throws {
         try await db.dbWriter.write { db in
             try approval.save(db)
         }
     }
 
-    public func decide(id: ApprovalID, decision: Approval.Decision) async throws {
+    /// Apply a first-decision-wins update. The `decision IS NULL` guard makes the
+    /// first decision authoritative: a lingering lock-screen banner (or a
+    /// double-tap) can never flip an already-resolved gate. Returns `true` only
+    /// when this call actually resolved a still-pending row, so callers fire the
+    /// wire `respond(...)` / audit exactly once.
+    @discardableResult
+    public func decide(id: ApprovalID, decision: Approval.Decision) async throws -> Bool {
         try await db.dbWriter.write { db in
             try db.execute(
-                sql: "UPDATE approvals SET decision = ?, decidedAt = ? WHERE id = ?",
+                sql: "UPDATE approvals SET decision = ?, decidedAt = ? WHERE id = ? AND decision IS NULL",
                 arguments: [decision.rawValue, Date(), id.uuidString]
             )
+            return db.changesCount > 0
         }
     }
 

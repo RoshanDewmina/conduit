@@ -15,7 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -28,7 +28,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CONDUIT_ICLOUD_ENABLED</key>
 	<true/>
 	<key>CONDUIT_PUSH_BACKEND_URL</key>
@@ -42,6 +42,10 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Conduit uses the microphone so you can dictate terminal commands and agent prompts by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Conduit transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

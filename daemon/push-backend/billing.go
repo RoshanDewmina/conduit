@@ -208,10 +208,14 @@ func handleBillingStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, entitlement)
 }
 
+// maxWebhookBodyBytes bounds the Stripe webhook payload we will buffer in memory
+// before signature verification. Stripe events are well under 1 MiB.
+const maxWebhookBodyBytes = 1 << 20
+
 func handleBillingWebhook(w http.ResponseWriter, r *http.Request) {
-	payload, err := io.ReadAll(r.Body)
+	payload, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if err := verifyStripeSignature(payload, r.Header.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"), 5*time.Minute); err != nil {

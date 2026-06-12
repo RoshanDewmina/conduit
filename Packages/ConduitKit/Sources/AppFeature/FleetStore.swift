@@ -97,6 +97,15 @@ public final class FleetStore {
         manager.remove(id: id)
     }
 
+    /// Replace a slot's daemon channel + approval ingest after a reconnect
+    /// re-arm (MAJOR-4), keeping the new objects retained by the store.
+    public func rearm(slotID: UUID, channel: DaemonChannel, ingest: ApprovalIngest) {
+        manager.update(id: slotID) { slot in
+            slot.channel = channel
+            slot.ingest = ingest
+        }
+    }
+
     /// Sum of pending approvals across all live inboxes.
     public var allPendingApprovals: Int {
         slots.reduce(0) { $0 + $1.inboxVM.approvals.filter(\.isPending).count }

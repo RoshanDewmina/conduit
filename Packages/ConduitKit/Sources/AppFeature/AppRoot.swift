@@ -298,6 +298,12 @@ public struct AppRoot: View {
         // these names; without an observer the buttons were silently dead.
         .onReceive(NotificationCenter.default.publisher(for: .conduitApprovalAction)) { note in
             handleApprovalAction(note)
+            // Also drain the cold-launch buffer (MAJOR-6) so the decision is
+            // persisted durably and the buffer never accumulates. Idempotent with
+            // the line above (first-decision-wins).
+            if case .ready(let env) = environment {
+                Task { await drainPendingApprovalActions(env: env) }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .conduitRunCompleteAction)) { note in
             if
@@ -330,6 +336,27 @@ public struct AppRoot: View {
             return
         }
         activeInboxViewModel.decide(approvalID, decision: decision)
+    }
+
+    /// Drain buffered cold-launch approval actions (MAJOR-6) and apply each one
+    /// durably. A killed app's lock-screen Approve/Reject is recorded by
+    /// `ConduitNotificationDelegate` into `ApprovalActionBuffer` because the
+    /// `NotificationCenter` post races AppRoot's subscriber. Routing through
+    /// `ApprovalRelay.enqueue` persists the decision (first-decision-wins) and
+    /// forwards it (live channel → backend relay → SSH-drain queue), so a
+    /// cold-launched decision is never silently dropped. Idempotent: replaying an
+    /// already-resolved gate is a no-op.
+    private func drainPendingApprovalActions(env: AppEnvironment) async {
+        for action in ApprovalActionBuffer.shared.drain() {
+            guard UUID(uuidString: action.approvalID) != nil else { continue }
+            let decision: Approval.Decision = (action.action == "approve") ? .approved : .rejected
+            await ApprovalRelay.shared.enqueue(
+                approvalID: action.approvalID,
+                decision: decision,
+                db: env.database,
+                hostID: ""
+            )
+        }
     }
 
     private func attemptUnlock() async {
@@ -452,20 +479,9 @@ public struct AppRoot: View {
                 .preferredColorScheme(preferredScheme)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { sessionViewModel?.pendingHostKeyFingerprint != nil },
-            set: { if !$0 { sessionViewModel?.rejectHostKey() } }
-        )) {
-            if let vm = sessionViewModel, let fp = vm.pendingHostKeyFingerprint {
-                HostKeyConfirmSheet(
-                    hostName: vm.host.name,
-                    fingerprint: fp,
-                    onTrust: { Task { await vm.trustHostKey() } },
-                    onReject: { vm.rejectHostKey() }
-                )
-                .presentationDetents([.medium])
-            }
-        }
+        // NOTE: the TOFU host-key confirmation is presented from INSIDE
+        // `SessionView` (above the fullScreenCover) — see B1. Presenting it here
+        // on `readyRoot` could not appear over the cover and caused a hard hang.
         .alert("Connection unavailable", isPresented: .constant(connectionError != nil), actions: {
             Button("OK") { connectionError = nil }
         }, message: {
@@ -474,6 +490,11 @@ public struct AppRoot: View {
         .task {
             configureGlobalInbox(env: env)
             await configureCloudServices(env: env)
+            // MAJOR-6: replay any approval action tapped from a lock-screen banner
+            // while the app was killed (its NotificationCenter post had no live
+            // subscriber). Done after configureCloudServices so the relay backend
+            // is configured.
+            await drainPendingApprovalActions(env: env)
             await env.syncEngine.start()
         }
         .task {
@@ -543,28 +564,28 @@ public struct AppRoot: View {
         guard liveInboxVM == nil else { return }
         let approvalRepo = ApprovalRepository(env.database)
         let liveVM = LiveInboxViewModel(repository: approvalRepo) { id, decision, edited in
+            // Prefer the channel of the slot that owns this approval (multi-slot
+            // correct). On a dead/absent channel fall back to the relay's single
+            // forwarding chokepoint (backend POST + SSH-drain queue) rather than
+            // `try?`-swallowing the write and silently dropping the decision
+            // (MAJOR-5). LiveInboxViewModel persists the decision before firing
+            // onDecision, so no DB write is needed here.
             if let slot = await MainActor.run(body: { self.fleetStore.slot(forApprovalID: id) }) {
-                try? await slot.channel.respond(
-                    approvalId: id.uuidString,
-                    decision: decision,
-                    editedToolInput: edited
-                )
-                return
+                do {
+                    try await slot.channel.respond(
+                        approvalId: id.uuidString,
+                        decision: decision,
+                        editedToolInput: edited
+                    )
+                    return
+                } catch {
+                    // dead/stopped channel — fall through to the relay
+                }
             }
-            if let channel = await MainActor.run(body: { self.daemonChannel }) {
-                try? await channel.respond(
-                    approvalId: id.uuidString,
-                    decision: decision,
-                    editedToolInput: edited
-                )
-                return
-            }
-            // No connected channel anywhere → deliver via the backend relay.
-            await ApprovalRelay.shared.enqueue(
+            await ApprovalRelay.shared.forwardDecisionOnly(
                 approvalID: id.uuidString,
                 decision: decision,
-                db: env.database,
-                hostID: ""
+                editedToolInput: edited
             )
         }
         approvalRepository = approvalRepo
@@ -795,7 +816,7 @@ public struct AppRoot: View {
         }
         ApprovalRelay.shared.configureBackend(
             url: url,
-            sessionID: UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+            sessionID: DeviceIdentity.sessionID()
         )
     }
 
@@ -833,11 +854,19 @@ public struct AppRoot: View {
         let sshSession = SSHSession(host: host)
         let snapshotRepo = SessionSnapshotRepository(env.database)
         let backendURL = Self.pushBackendURL()
-        let deviceSessionID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        // One stable id everywhere (MAJOR-8): the value sent to
+        // `registerDevice` MUST equal the relay decision POST `sessionId` so the
+        // backend per-session token lookup keys match.
+        let deviceSessionID = DeviceIdentity.sessionID()
+        // Capture the agent store as an explicit local strong reference. It is
+        // owned for the app lifetime by AppRoot's @State and never retains the
+        // session, so there is no cycle; a weak capture here only risked silently
+        // dropping usage records if the optional read deallocated. (#ImplicitStrongCapture)
+        let agentStoreRef = agentStore
         Task {
             let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
-            let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { [weak agentStore] record in
-                await agentStore?.ingestUsage(record, runID: nil, agentID: nil)
+            let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { record in
+                await agentStoreRef?.ingestUsage(record, runID: nil, agentID: nil)
             }
             let vm = SessionViewModel(
                 host: host,
@@ -855,7 +884,7 @@ public struct AppRoot: View {
             let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name)
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
-                onDecision: { [channel] id, decision, editedToolInput in
+                onDecision: { id, decision, editedToolInput in
                     try? await env.auditRepo.record(
                         hostID: host.id,
                         type: .approval,
@@ -865,8 +894,12 @@ public struct AppRoot: View {
                             "source": "inbox",
                         ]
                     )
-                    try? await channel.respond(
-                        approvalId: id.uuidString,
+                    // Route through the relay's single forwarding chokepoint so a
+                    // dead/re-armed channel falls back to the backend relay rather
+                    // than dropping the decision (MAJOR-5). LiveInboxViewModel only
+                    // fires onDecision when the DB row actually changed (B3).
+                    await ApprovalRelay.shared.forwardDecisionOnly(
+                        approvalID: id.uuidString,
                         decision: decision,
                         editedToolInput: editedToolInput
                     )
@@ -891,7 +924,15 @@ public struct AppRoot: View {
                     blockRepo: env.blockRepo,
                     snippetRepo: env.snippetRepo,
                     sessionViewModel: vm,
-                    onDecision: { [channel] id, decision in
+                    onDecision: { id, decision in
+                        // Persist the watch decision to the local DB first
+                        // (first-decision-wins). Only audit + forward when this
+                        // call actually resolved the gate, so the inbox reflects
+                        // watch decisions and a stale watch tap can't flip a
+                        // decided gate (MAJOR-15 + B3).
+                        let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
+                        guard changed else { return }
+                        Notifications.shared.clearDeliveredApproval(id: id.uuidString)
                         try? await env.auditRepo.record(
                             hostID: host.id,
                             type: .approval,
@@ -901,7 +942,11 @@ public struct AppRoot: View {
                                 "source": "watch",
                             ]
                         )
-                        try? await channel.respond(approvalId: id.uuidString, decision: decision)
+                        await ApprovalRelay.shared.forwardDecisionOnly(
+                            approvalID: id.uuidString,
+                            decision: decision,
+                            editedToolInput: nil
+                        )
                     }
                 )
                 self.approvalRepository = approvalRepo
@@ -924,6 +969,29 @@ public struct AppRoot: View {
                 }
                 self.selectedTab = .fleet
                 self.isShowingLiveSession = true
+                // MAJOR-4: re-arm the approval pipeline after a reconnect. The
+                // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
+                // recreate + restart them and re-point the relay so new approvals
+                // are ingested and decisions are delivered post-reconnect. Captures
+                // only Sendable values (no `vm`, so no retain cycle).
+                let fleet = self.fleetStore
+                vm.onReconnected = { [fleet, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
+                    if let existing = await fleet.slots.first(where: { $0.id == slotID }) {
+                        await existing.ingest.stop()
+                        await existing.channel.stop()
+                    }
+                    let newChannel = DaemonChannel(session: sshSession)
+                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name)
+                    await fleet.rearm(slotID: slotID, channel: newChannel, ingest: newIngest)
+                    try? await newChannel.start()
+                    if !backendURL.isEmpty {
+                        // registerDevice stores the per-session relayToken on the channel
+                        // (currentRelayToken); setChannel below refreshes the relay from it.
+                        _ = try? await newChannel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
+                    }
+                    await ApprovalRelay.shared.setChannel(newChannel)
+                    await newIngest.start()
+                }
                 self.scenePhaseObserver = ScenePhaseObserver(
                     onBecomeActive: { [weak vm] in
                         guard let vm else { return }
@@ -946,9 +1014,14 @@ public struct AppRoot: View {
                 try? await env.hostRepo.touch(id: host.id)
             }
             try? await channel.start()  // launch conduitd serve on remote host
-            // Register device with conduitd so APNs alerts reach this device when backgrounded.
+            // Register device with conduitd so APNs alerts reach this device when
+            // backgrounded. The handshake reply carries the per-session relay
+            // capability token — store it so backend-relayed decisions can
+            // authenticate (B2). Same `deviceSessionID` is used here and for the
+            // decision POST body so the backend looks up the right record.
             if !backendURL.isEmpty {
-                try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
+                let token = (try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)) ?? nil
+                if let token { ApprovalRelay.shared.setRelayToken(token) }
             }
             // Attach the relay so Live Activity / Dynamic Island decisions are
             // forwarded to conduitd, and drain any decisions queued while the

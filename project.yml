@@ -13,7 +13,11 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
-    ENABLE_APP_INTENTS_METADATA_EXTRACTION: "NO"
+    # Must stay YES: the Approve/Reject Live Activity & widget buttons are backed
+    # by App Intents (ApprovalActionIntent / ConduitWidgetIntent). With extraction
+    # off, the Metadata.appintents bundle isn't generated and the system can fail
+    # to resolve those intents in Release → lock-screen approvals silently no-op.
+    ENABLE_APP_INTENTS_METADATA_EXTRACTION: "YES"
     SWIFT_STRICT_CONCURRENCY: "complete"
     OTHER_SWIFT_FLAGS: "-warn-implicit-overrides"
     # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
@@ -42,8 +46,15 @@ targets:
     info:
       path: Conduit/Info.plist
       properties:
+        # Drive the bundle version strings from the build settings so a single
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION bump is authoritative
+        # (XcodeGen otherwise hardcodes literal "1.0" / "1").
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchStoryboardName: LaunchScreen
         NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
+        NSMicrophoneUsageDescription: "Conduit uses the microphone so you can dictate terminal commands and agent prompts by voice."
+        NSSpeechRecognitionUsageDescription: "Conduit transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - fetch
@@ -87,7 +98,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         SWIFT_EMIT_LOC_STRINGS: "YES"
         DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
@@ -116,6 +127,8 @@ targets:
     info:
       path: ConduitWatch/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Conduit
         WKApplication: true
         WKCompanionAppBundleIdentifier: dev.conduit.mobile
@@ -127,7 +140,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchkitapp
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         WATCHOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "4"
@@ -154,6 +167,8 @@ targets:
     info:
       path: ConduitWatchWidget/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -164,7 +179,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchkitapp.widget
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         WATCHOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "4"
@@ -185,12 +200,14 @@ targets:
     info:
       path: ConduitLiveActivityWidget/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.liveactivity
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -214,6 +231,8 @@ targets:
     info:
       path: ConduitWidget/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -224,7 +243,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.widget
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "1,2"

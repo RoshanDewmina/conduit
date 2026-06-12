@@ -3,6 +3,7 @@ import Foundation
 import ConduitCore
 import PersistenceKit
 import SSHTransport
+import NotificationsKit
 
 /// Relay between `ApprovalActionIntent` (which runs in the main app process,
 /// triggered by a lock-screen or Dynamic Island button tap) and the active
@@ -25,13 +26,16 @@ public final class ApprovalRelay {
     public static let shared = ApprovalRelay()
 
     // Decisions waiting to be forwarded to conduitd.
-    private var queue: [(approvalID: String, decision: Approval.Decision)] = []
+    private var queue: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?)] = []
 
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
 
     private var backendURL: String = ""
     private var sessionID: String = ""
+    // Per-session capability token (Tier-2 auth) required by the backend
+    // `POST /approval/decision`. Sourced from the DaemonChannel handshake. Secret.
+    private var relayToken: String = ""
 
     private init() {}
 
@@ -45,11 +49,27 @@ public final class ApprovalRelay {
         db: AppDatabase,
         hostID: String
     ) async {
-        // 1. Persist the decision immediately — this is always safe.
+        // 1. Persist the decision immediately — first-decision-wins. The DB
+        //    UPDATE is guarded on `decision IS NULL`, so a stale Live Activity /
+        //    banner tap on an already-resolved gate is a no-op here.
         let approvalRepo = ApprovalRepository(db)
         let auditRepo = AuditRepository(db)
         if let uuid = UUID(uuidString: approvalID) {
-            try? await approvalRepo.decide(id: ApprovalID(uuid), decision: decision)
+            let id = ApprovalID(uuid)
+            let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
+            if !changed {
+                // Not changed: either the gate is already resolved (a local row
+                // exists) — in which case we must NOT re-forward and risk flipping
+                // a decided gate — or there is no local row yet (cold-launch,
+                // push-only) and we should forward so conduitd can resolve it.
+                let alreadyResolved = (try? await approvalRepo.exists(id: id)) ?? false
+                if alreadyResolved {
+                    Notifications.shared.clearDeliveredApproval(id: approvalID)
+                    return
+                }
+            } else {
+                Notifications.shared.clearDeliveredApproval(id: approvalID)
+            }
         }
         let hostUUID = UUID(uuidString: hostID) ?? UUID()
         try? await auditRepo.record(
@@ -63,22 +83,46 @@ public final class ApprovalRelay {
             ]
         )
 
-        // 2. Try to forward to conduitd right now.
+        // 2. Forward to conduitd (live SSH channel → backend relay → SSH-drain queue).
+        await forwardDecisionOnly(approvalID: approvalID, decision: decision, editedToolInput: nil)
+    }
+
+    /// Forward a decision the caller has ALREADY persisted + audited. Tries the
+    /// current live channel first (which may have been re-armed on reconnect),
+    /// falls back to the backend relay, and only queues for the next SSH attach
+    /// if both fail. Does not touch the DB/audit. This is the single forwarding
+    /// chokepoint so the inbox-card, watch, banner and Live Activity paths all
+    /// get the same dead-channel fallback (MAJOR-5) and near-exactly-once
+    /// behaviour (MAJOR-9).
+    public func forwardDecisionOnly(
+        approvalID: String,
+        decision: Approval.Decision,
+        editedToolInput: String?
+    ) async {
         if let ch = channel {
-            try? await ch.respond(approvalId: approvalID, decision: decision)
-        } else {
-            // No live SSH channel: deliver via the backend relay so conduitd can
-            // resolve it without us reconnecting; also queue as a belt-and-suspenders
-            // drain for the next SSH attach.
-            await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: nil)
-            queue.append((approvalID: approvalID, decision: decision))
+            do {
+                try await ch.respond(approvalId: approvalID, decision: decision, editedToolInput: editedToolInput)
+                return
+            } catch {
+                // Attached-but-dead channel (stopped / mid-reconnect) — fall through
+                // to the backend relay rather than silently dropping the decision.
+            }
+        }
+        let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
+        if !delivered {
+            queue.append((approvalID: approvalID, decision: decision, editedToolInput: editedToolInput))
         }
     }
 
     /// Attach (or replace) the active `DaemonChannel` and drain any decisions
-    /// that were queued while the channel was nil.
+    /// that were queued while the channel was nil. Also refreshes the per-session
+    /// relay token from the channel's handshake so cold-launch / backend-relayed
+    /// decisions can authenticate even after a reconnect re-mint.
     public func setChannel(_ ch: DaemonChannel) async {
         channel = ch
+        if let token = await ch.currentRelayToken, !token.isEmpty {
+            relayToken = token
+        }
         await drainQueue(through: ch)
     }
 
@@ -90,6 +134,13 @@ public final class ApprovalRelay {
     public func configureBackend(url: String, sessionID: String) {
         self.backendURL = url
         self.sessionID = sessionID
+    }
+
+    /// Store the per-session relay capability token (from the DaemonChannel
+    /// handshake). Required for the backend `POST /approval/decision` Bearer auth.
+    public func setRelayToken(_ token: String) {
+        guard !token.isEmpty else { return }
+        self.relayToken = token
     }
 
     public static func backendDecisionBody(
@@ -109,26 +160,49 @@ public final class ApprovalRelay {
 
     // MARK: - Private
 
-    private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?) async {
+    /// POST a decision to the backend relay. Returns `true` only on a 2xx
+    /// response so the caller can decide whether to keep the decision queued for
+    /// SSH re-delivery. Fail-safe: a missing token or any non-2xx / transport
+    /// error returns `false` (never assume the gate was resolved).
+    @discardableResult
+    private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?) async -> Bool {
         guard !backendURL.isEmpty, !sessionID.isEmpty,
               let url = URL(string: backendURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/approval/decision")
-        else { return }
+        else { return false }
+        // Tier-2 capability: the backend requires `Authorization: Bearer <relayToken>`.
+        // Without it the POST would 401 with no side effects, so don't bother —
+        // rely on the SSH drain when a channel re-attaches + conduitd's timeout
+        // auto-deny backstop.
+        guard !relayToken.isEmpty else { return false }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(relayToken)", forHTTPHeaderField: "Authorization")
         req.httpBody = Self.backendDecisionBody(
             approvalID: approvalID, decision: decision, sessionID: sessionID, editedToolInput: editedToolInput
         )
-        _ = try? await URLSession.shared.data(for: req)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode)
+        else { return false }
+        return true
     }
 
     private func drainQueue(through ch: DaemonChannel) async {
         guard !queue.isEmpty else { return }
         let pending = queue
         queue.removeAll()
+        // Re-queue anything the (possibly still-stale) channel couldn't deliver,
+        // so we don't lose a decision by clearing it before it's confirmed sent.
+        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?)] = []
         for item in pending {
-            try? await ch.respond(approvalId: item.approvalID, decision: item.decision)
+            do {
+                try await ch.respond(approvalId: item.approvalID, decision: item.decision, editedToolInput: item.editedToolInput)
+            } catch {
+                stillPending.append(item)
+            }
         }
+        queue.append(contentsOf: stillPending)
     }
 }
 #endif

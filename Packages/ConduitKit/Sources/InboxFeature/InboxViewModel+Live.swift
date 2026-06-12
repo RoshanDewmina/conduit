@@ -3,6 +3,7 @@ import SwiftUI
 import Observation
 import ConduitCore
 import PersistenceKit
+import NotificationsKit
 
 @MainActor @Observable
 public final class LiveInboxViewModel: InboxViewModel {
@@ -47,9 +48,21 @@ public final class LiveInboxViewModel: InboxViewModel {
         choiceIndex: Int? = nil,
         editedToolInput: String? = nil
     ) {
+        // First-decision-wins: ignore a tap on an already-resolved gate (stale
+        // row still visible, or a double-tap) so we never flip a decided
+        // approval or double-send to conduitd.
+        if let existing = approvals.first(where: { $0.id == id }), !existing.isPending {
+            return
+        }
         super.decide(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
         Task {
-            try? await repository.decide(id: id, decision: decision)
+            // The DB UPDATE is guarded on `decision IS NULL`; only forward to the
+            // wire + clear the lock-screen banner when this call actually resolved
+            // the row. The Live Activity / badge update follows reactively from the
+            // `observe()` re-emit that this write triggers.
+            let changed = (try? await repository.decide(id: id, decision: decision)) ?? false
+            guard changed else { return }
+            Notifications.shared.clearDeliveredApproval(id: id.uuidString)
             await onDecision?(id, decision, editedToolInput)
         }
     }

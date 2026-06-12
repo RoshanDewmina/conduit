@@ -84,6 +84,25 @@ public final class SessionViewModel {
     /// Bytes are routed to the active block only in this window.
     public private(set) var isExecutingUnified: Bool = false
 
+    // MARK: - Unified-shell integration readiness gate
+    //
+    // `openUnifiedShell()` sets `unifiedShell` immediately but injects the
+    // shell-integration bootstrap + a `\e[2J\e[H` screen-clear from a detached
+    // Task with sleeps. Connect-time sends (startup command, agent-resume) must
+    // wait for that to finish — otherwise the bootstrap text / screen-clear gets
+    // pasted into a just-launched agent's stdin (e.g. `claude`/`codex`). Resolved
+    // on the first OSC 133 prompt or when the injection Task completes, whichever
+    // is first; a timeout backstop guarantees connect never hangs.
+    private var unifiedIntegrationReady = false
+    private var integrationReadyWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Fired after a *re*-connect (auto or manual) completes successfully — never
+    /// on the initial connect. AppRoot uses this to re-arm the approval pipeline
+    /// (`DaemonChannel`/`ApprovalIngest`), which is otherwise created once and
+    /// dies when the SSH client is swapped on reconnect (MAJOR-4). Must not
+    /// capture this view model (no retain cycle).
+    public var onReconnected: (@Sendable () async -> Void)?
+
     // MARK: - Phase 7: OSC 133 fallback
     //
     // If the shell never emits an OSC 133 A marker within `integrationProbeTimeout`
@@ -161,8 +180,16 @@ public final class SessionViewModel {
                 try await tmux.attachOrCreate(name: name)
             }
             await transitionStatus(.connected)
+            // The reconnect swapped the underlying Citadel client, so the old
+            // PTY's byte stream has finished and `unifiedShell` is dead. Tear it
+            // down first — otherwise `openUnifiedShell()`'s `unifiedShell == nil`
+            // guard sees the stale handle and no-ops, leaving a connected-but-dead
+            // terminal.
+            await closeUnifiedShell()
             await openUnifiedShell()
             await refreshCWD()
+            // Re-arm the approval pipeline on the fresh SSH client (MAJOR-4).
+            await onReconnected?()
         } catch {
             await transitionStatus(.failed(reason: "Reconnect failed: \(error.localizedDescription)"))
         }
@@ -360,6 +387,10 @@ public final class SessionViewModel {
     public func reconnect() async {
         await disconnect()
         await connect()
+        // Manual reconnect also swaps the SSH client → re-arm the approval pipeline.
+        if status == .connected {
+            await onReconnected?()
+        }
     }
 
     public func disconnect() async {
@@ -558,6 +589,9 @@ public final class SessionViewModel {
         guard let raw = host.startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty,
               let shell = unifiedShell else { return }
+        // Wait for the integration bootstrap + screen-clear so the command lands
+        // at a clean post-injection prompt, not inside the bootstrap stream.
+        await awaitUnifiedShellReady()
         try? await shell.send(Array((raw + "\n").utf8))
     }
 
@@ -581,6 +615,9 @@ public final class SessionViewModel {
               ),
               let shell = unifiedShell
         else { return }
+        // Same readiness gate as the startup command: never paste the resume
+        // command into the integration bootstrap / a launching agent's stdin.
+        await awaitUnifiedShellReady()
         try? await shell.send(Array((command + "\n").utf8))
     }
 
@@ -650,6 +687,8 @@ public final class SessionViewModel {
     /// Open a long-lived PTY shell.  Called on connect and after reconnect.
     private func openUnifiedShell() async {
         guard status == .connected, unifiedShell == nil else { return }
+        // Re-gate connect-time sends until this shell's integration is injected.
+        unifiedIntegrationReady = false
 
         let storedSize = UserDefaults.standard.double(forKey: "terminalFontSize")
         let fontSize = CGFloat(storedSize > 0 ? storedSize : 13.0)
@@ -701,12 +740,16 @@ public final class SessionViewModel {
                         let data = Data(bytes)
                         let interactiveHint = TUIDetector.shouldEscalate(to: data)
 
-                        // Phase 7 belt-and-suspenders: if cursor-positioning
-                        // bytes arrive while the block is still in promptEditing
-                        // (133;C didn't fire — broken shell integration), flip
-                        // optimistically to executing so interactive input works.
+                        // Phase 7 belt-and-suspenders: if cursor-positioning bytes
+                        // arrive for a *submitted* block (133;C didn't fire — broken
+                        // shell integration), flip optimistically to executing so
+                        // interactive input works. This must NEVER fire for an idle
+                        // .promptEditing prompt: zsh's ZLE (\e[?1h) and the
+                        // integration's own screen-clear (\e[2J\e[H) trip TUIDetector,
+                        // and escalating the idle prompt would capture the bare `~ %`
+                        // as block output and mis-route the next command as raw input.
                         if let block = self.blocks.blocks.first(where: { $0.id == blockID }),
-                           block.state == .promptEditing || block.state == .submitted {
+                           block.state == .submitted {
                             if interactiveHint || self.blocks.pendingTUIEscalation {
                                 self.blocks.setState(.executing, for: blockID)
                                 self.isExecutingUnified = true
@@ -738,6 +781,9 @@ public final class SessionViewModel {
                         // once we know shell integration is working.
                         self.integrationFallbackTask?.cancel()
                         self.integrationFallbackTask = nil
+                        // Integration is live — release any connect-time sends
+                        // waiting on `awaitUnifiedShellReady()`.
+                        self.markUnifiedIntegrationReady()
                         if self.isRaw {
                             // Integration just came alive after fallback.
                             self.isRaw = false
@@ -876,6 +922,9 @@ public final class SessionViewModel {
                     // timeout, degrade to blockless live PTY (Phase 7).
                     await MainActor.run { self.startIntegrationFallback() }
                 }
+                // Integration bootstrap + screen-clear have now been sent — release
+                // any connect-time sends waiting on `awaitUnifiedShellReady()`.
+                await MainActor.run { self.markUnifiedIntegrationReady() }
             }
         } catch {
             // Shell open failed — unified PTY unavailable, fall back silently.
@@ -907,6 +956,46 @@ public final class SessionViewModel {
         unifiedBlockID = nil
         isExecutingUnified = false
         rawFeedHandle = nil
+        // Re-gate the next open and release any stragglers so nothing hangs.
+        unifiedIntegrationReady = false
+        drainIntegrationReadyWaiters()
+    }
+
+    // MARK: - Unified-shell integration readiness gate
+
+    /// Suspend until the shell-integration bootstrap + screen-clear has been sent
+    /// (or the first OSC 133 prompt arrives). Bounded by a timeout so a shell
+    /// without integration never hangs connect.
+    private func awaitUnifiedShellReady() async {
+        if unifiedIntegrationReady { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            if unifiedIntegrationReady {
+                cont.resume()
+                return
+            }
+            integrationReadyWaiters.append(cont)
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                self?.drainIntegrationReadyWaiters()
+            }
+        }
+    }
+
+    /// Mark integration ready and resume all waiters. Idempotent.
+    private func markUnifiedIntegrationReady() {
+        guard !unifiedIntegrationReady else { return }
+        unifiedIntegrationReady = true
+        drainIntegrationReadyWaiters()
+    }
+
+    /// Resume + clear pending waiters exactly once (shared by the ready signal,
+    /// the timeout backstop, and shell teardown). Runs on the actor, so the
+    /// single drain prevents any double-resume of a continuation.
+    private func drainIntegrationReadyWaiters() {
+        guard !integrationReadyWaiters.isEmpty else { return }
+        let waiters = integrationReadyWaiters
+        integrationReadyWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
 
     // MARK: - Alt-screen: de-escalation (Phase 5 — no user-facing escalation)

@@ -10,8 +10,15 @@ public actor DaemonChannel {
     private var stdinWriter: TTYStdinWriter?
     private var nextRPCID: Int = 10
     private var pendingRPC: [Int: CheckedContinuation<Data, Error>] = [:]
+    // Per-session capability token minted by conduitd and returned in the
+    // `conduit.device.register` reply. Sent as `Authorization: Bearer <token>`
+    // on the backend decision relay. Treat as a secret — never log it.
+    private var relayToken: String?
 
     public var events: AsyncStream<DaemonEvent> { eventStream }
+
+    /// The per-session relay capability token, if the handshake delivered one.
+    public var currentRelayToken: String? { relayToken }
 
     public init(session: SSHSession) {
         self.session = session
@@ -33,11 +40,11 @@ public actor DaemonChannel {
                 buffer.append(contentsOf: bytes)
                 while let (msg, rest) = DaemonFraming.unframe(buffer) {
                     buffer = rest
-                    await self.handleFrame(msg, eventContinuation: continuation)
+                    self.handleFrame(msg, eventContinuation: continuation)
                 }
             }
             continuation.finish()
-            await self.failPendingRPCs(DaemonChannelError.disconnected)
+            self.failPendingRPCs(DaemonChannelError.disconnected)
         }
         _ = task
     }
@@ -90,19 +97,32 @@ public actor DaemonChannel {
         }
     }
 
-    public func registerDevice(pushBackendURL: String, sessionID: String) async throws {
-        guard let writer = stdinWriter else { return }
-        let envelope: [String: Any] = [
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "conduit.device.register",
-            "params": [
+    /// Perform the session handshake with conduitd. Goes through `sendRPC` (not a
+    /// fire-and-forget write) so the reply is read: conduitd returns a per-session
+    /// `relayToken` which we store for the backend decision relay. Backward
+    /// compatible — a legacy daemon that replies with the string `"ok"` simply
+    /// leaves `relayToken` nil. Returns the token (if any) for the caller to wire
+    /// into `ApprovalRelay`.
+    @discardableResult
+    public func registerDevice(pushBackendURL: String, sessionID: String) async throws -> String? {
+        let data = try await sendRPC(
+            method: "conduit.device.register",
+            params: [
                 "pushBackendURL": pushBackendURL,
                 "sessionID": sessionID,
-            ],
-        ]
-        guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
-        try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
+            ]
+        )
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return relayToken
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "device.register failed")
+        }
+        if let result = dict["result"] as? [String: Any],
+           let token = result["relayToken"] as? String, !token.isEmpty {
+            relayToken = token
+        }
+        return relayToken
     }
 
     public static func decisionWireValue(for decision: Approval.Decision) -> String {
@@ -118,7 +138,10 @@ public actor DaemonChannel {
         decision: Approval.Decision,
         editedToolInput: String? = nil
     ) async throws {
-        guard let writer = stdinWriter else { return }
+        // Throw (don't silently return) when the channel is dead/stopped — a
+        // reconnect nils `stdinWriter`. Callers treat the throw as "not delivered"
+        // and fall back to the backend relay instead of dropping the decision.
+        guard let writer = stdinWriter else { throw DaemonChannelError.notRunning }
         var params: [String: Any] = [
             "approvalId": approvalId,
             "decision": Self.decisionWireValue(for: decision),

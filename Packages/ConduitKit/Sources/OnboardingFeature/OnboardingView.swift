@@ -331,7 +331,7 @@ public struct OnboardingView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                     DSButton("enable notifications", variant: .primary, size: .lg, fullWidth: true) {
                         Task {
-                            await Notifications.shared.registerCategories()
+                            Notifications.shared.registerCategories()
                             let _ = await Notifications.shared.requestAuthorization()
                             advance()
                         }

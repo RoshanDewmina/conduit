@@ -33,7 +33,7 @@ func TestDecisionPollerResolves(t *testing.T) {
 
 	p := newDecisionPoller(resolve)
 	p.pollIntervalForTest = 20 * time.Millisecond
-	p.ensureRunning(srv.URL, "sess-A")
+	p.ensureRunning(srv.URL, "sess-A", "tok-A")
 	defer p.stopForTest()
 
 	select {
@@ -43,5 +43,36 @@ func TestDecisionPollerResolves(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("poller did not resolve the decision in time")
+	}
+}
+
+// The poll must carry the per-session relayToken as `Authorization: Bearer …`
+// so the backend can authorize conduitd's GET /decisions.
+func TestDecisionPollerSendsBearerToken(t *testing.T) {
+	gotAuth := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case gotAuth <- r.Header.Get("Authorization"):
+		default:
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"decisions": []any{}})
+	}))
+	defer srv.Close()
+
+	p := newDecisionPoller(func(id, decision, edited string) (ApprovalEvent, bool) {
+		return ApprovalEvent{}, false
+	})
+	p.pollIntervalForTest = 20 * time.Millisecond
+	p.ensureRunning(srv.URL, "sess-A", "tok-123")
+	defer p.stopForTest()
+
+	select {
+	case auth := <-gotAuth:
+		if auth != "Bearer tok-123" {
+			t.Fatalf("Authorization = %q, want %q", auth, "Bearer tok-123")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("poller did not poll in time")
 	}
 }
