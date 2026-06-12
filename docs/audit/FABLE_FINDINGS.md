@@ -11,8 +11,8 @@
 - [x] Phase 3 — Exhaustive static review & hardening (governed-approvals path first)
 - [~] Phase 4 — E2E run: builds/tests/relay/idempotency **verified**; HID tooling **fixed** (SimulatorKit symlink); live shell-integration BLOCKER **fixed + verified live**; full approval-card tap still gated on logged-in agent + conduitd (see Continuation §)
 - [x] Phase 5 — UX/UI/perf polish (code-complete, app-target build 0/0; sim-visual pending)
-- [ ] Phase 6 — Submission readiness (go/no-go)
-- [ ] Phase 7 — Final verification & report (`FABLE_REPORT.md`)
+- [~] Phase 6 — Submission readiness: agent items **done** (fastlane metadata synced, PrivacyInfo reconciled); owner items remain (backend deploy+secret, APNs on device, App Store Connect/IAP, store screenshots, vanity domain)
+- [x] Phase 7 — Final report `FABLE_REPORT.md` — verdict **CONDITIONAL GO**
 
 ## Continuation — Phase 4 E2E + Phase 5 (2026-06-12, second session)
 
@@ -124,7 +124,7 @@ Builds: SPM + **337 tests** PASS, app-target `xcodebuild` PASS, Go push-backend 
 |---|----------|------|---------|--------------|--------|
 | 1 | major | build/targets | `Conduit.xcodeproj` (gitignored, generated) was stale vs `project.yml`: the `ConduitWidget` target (added 2026-06-02) was missing, so the home-screen widget was never being built or embedded | any local build since Jun 2 | fixed — ran `xcodegen`; all 5 targets present; `build_sim` clean (0 warn/0 err) |
 | 2 | minor | config | `project.yml` comment says push backend should be a Cloud Run URL (`*.a.run.app`) but the value is `https://35.201.3.231.sslip.io` (third-party wildcard-DNS host pointing at a bare IP) — works (health 200 verified 2026-06-12), but ship-gate says repoint to vanity domain before TestFlight/public | release builds | flagged (owner) |
-| 3 | major | submission | `fastlane/metadata/en-US/*` still carries the OLD terminal-first copy (name "Conduit", subtitle "SSH + AI Agent Control", description leads with SSH/terminal) while `docs/app-store-metadata.md` defines the governed-approvals positioning ("Conduit — Agent Approvals", approvals-led description). fastlane is what `deliver` uploads — must sync | submission | open — fix in Phase 6 |
+| 3 | major | submission | `fastlane/metadata/en-US/*` still carries the OLD terminal-first copy (name "Conduit", subtitle "SSH + AI Agent Control", description leads with SSH/terminal) while `docs/app-store-metadata.md` defines the governed-approvals positioning ("Conduit — Agent Approvals", approvals-led description). fastlane is what `deliver` uploads — must sync | submission | **FIXED** (`23fffec9`) — name/subtitle/keywords/description/release_notes synced + promotional_text added; all within char limits |
 | 4 | major | submission | Store screenshots don't exist at spec: `fastlane/screenshots/en-US/` has 5×1320×2868 PNGs with OLD terminal-first content; the "canonical" `docs/screenshots/governed-approvals/` set is only 368×800 JPG (doc-verification grade, not uploadable). Need fresh 1320×2868 captures of the governed-approvals flow (6.9" simulator) | submission | open — capture in Phase 6 |
 
 ## Phase 1 orientation — current believed state (from docs, 2026-06-12)

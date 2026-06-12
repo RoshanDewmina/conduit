@@ -1,0 +1,102 @@
+# FABLE Report — Governed Approvals v1 Pre-Submission Audit
+
+**Date:** 2026-06-12
+**Branch:** `feat/governed-approvals` (worktree `governed-approvals-audit`)
+**Version:** 1.0.0 (`MARKETING_VERSION`, all 5 targets)
+**Verdict:** 🟡 **CONDITIONAL GO** — engineering is submission-ready and build-green; release is gated on owner infrastructure actions and the remaining tap-interaction verification (needs a full Xcode the owner is installing).
+
+---
+
+## Executive go/no-go
+
+The governed-approvals approval path is **engineering-complete**. All four launch blockers (B1–B4) plus the
+late-surfacing **live shell-integration blocker** are fixed and the fixes are verified by build, unit
+tests, an auth curl-matrix, and — for the shell blocker — a live on-device run. Phase 5 UX polish is done
+with a clean app-target build (0 errors / 0 warnings). What stands between here and the App Store is **not
+engineering**: it is owner-only infrastructure (backend deploy with the relay secret, physical-device APNs,
+App Store Connect record + IAP sandbox, store screenshots) and a final **tap-interaction pass** that this
+machine cannot run (no Simulator.app in the installed Xcode-beta → HID injection unavailable).
+
+**Recommendation:** proceed to TestFlight once the owner items below are done; the tap-interaction checks
+can be completed in parallel on a full-Xcode box or a physical device (Phase 6 needs a device anyway).
+
+---
+
+## What was verified (evidence-backed)
+
+| Area | Status | Evidence |
+|------|--------|----------|
+| ConduitKit `swift build` | ✅ green | every Phase-5 chunk |
+| ConduitKit `swift test` | ✅ **337 tests / 57 suites pass** | incl. `firstDecisionWins` (M9 exactly-once) |
+| App-target `xcodebuild` (5 targets) | ✅ **BUILD SUCCEEDED, 0 err / 0 warn** | `/tmp/ga-*-build.log` |
+| push-backend / conduitd Go | ✅ `go vet` + `go test` + `-race` | relay tests below |
+| **B1** TOFU first-connect | ✅ fixed; code-verified | sheet inside `SessionView` above the cover; `.disconnected` overlay |
+| **B2** relay two-tier auth | ✅ **PASS** | full curl matrix (`relay-curl.txt`): 401-without/200-with secret; per-session token on decision/poll; cross-session token rejected |
+| **B3** idempotency (first-decision-wins) | ✅ **PASS** | `WHERE decision IS NULL`; test `firstDecisionWins`; `TestDecisionRelayDedupeByApprovalID` |
+| **B4** mic/speech usage strings | ✅ fixed | `project.yml` |
+| Relay fallback (no live SSH) | ✅ **PASS** | `TestDecisionPollerResolves` / `TestDecisionPollerSendsBearerToken` |
+| **Live shell-integration blocker** | ✅ **fixed + verified LIVE** | single-line eval injection; `live-session-AFTER-oneline-fix.png` (`✓ exit 0`), `live-session-claude-inblock.png` |
+| Phase 5 rendering | ✅ verified (read path) | `phase5-inbox-typed-accentfg.png`, `phase5-diff-monofont.png` |
+| Gallery dark routes + prod Inbox | ✅ **PASS** | `gallery-*-dark.png`, `prod-inbox-*.png`; **no host-label wrap issue** |
+
+### Phase 5 fixes shipped (commits on `feat/governed-approvals`)
+- `680ee7eb` — 14 token-drift fixes; TextPreview NUL-byte binary guard; SnippetEditor tag-loss; iPad `NavigationStack`.
+- `ab1e8a04` — honest Face ID opt-in (`appLockEnabled` persists only on real success); dead shipped-UI removed.
+- `500c0981` — saved-hosts reconnect list + dedup (upsert by host:port:user; preserves trusted host-key).
+- `3698dd55` — **shell-integration single-line eval fix** (the live-approval blocker).
+- `23fffec9` — fastlane metadata synced to governed-approvals; PrivacyInfo CrashData/SystemBootTime removed.
+
+---
+
+## What remains UNVERIFIED — and why
+
+**Tap-interaction checks (environment-blocked, not code-blocked).** The only installed Xcode is Xcode-beta,
+which is missing `Simulator.app` entirely, so HID tap/typing injection is unavailable through idb,
+XcodeBuildMCP, *and* cliclick (no GUI window). The AX **read** path was restored (a `SimulatorKit.framework`
+symlink) — which is what let the shell-blocker fix be verified by screenshot — but **writes do not land**.
+Still needing a tap on a full-Xcode box or a physical device:
+- Approval-card **Approve → DECIDED** (logic covered by `firstDecisionWins` + relay matrix; rendering verified).
+- Tab navigation, Face ID onboarding toggle, saved-host reconnect tap.
+- B1 TOFU runtime prompt; M6 cold-launch banner tap.
+
+**Full three-way live relay loop** (phone POST → running conduitd poll) was proven link-by-link (curl + Go
+tests) but not stood up end-to-end (needs a running conduitd + a phone-driven POST, i.e. taps).
+
+---
+
+## Owner actions before submission (not agent-doable)
+
+| Item | Why it's owner-only |
+|------|---------------------|
+| Deploy conduitd + push-backend with `APPROVAL_RELAY_SECRET` set | prod infra + secret; without it Tier-1 is open and Tier-2 tokens don't exist server-side |
+| Physical-device APNs validation | real push delivery + notification actions; needs a paid-team device |
+| App Store Connect record + IAP sandbox (`dev.conduit.mobile.pro`, $14.99) | account-level; sandbox test |
+| Store screenshots (1320×2868, governed-approvals flow) | needs the tap-driven flow captured; current fastlane shots are stale terminal-first |
+| Vanity domain for push backend | replace `35.201.3.231.sslip.io` bare-IP host before public |
+| `fastlane deliver` upload | uploads the now-synced metadata — owner's call to publish |
+| Full-Xcode/device for the tap-interaction pass | this machine's Xcode-beta cannot inject taps |
+
+---
+
+## Risk register (App Review)
+
+- **2.5.2 remote-shell:** Conduit drives a *remote* shell over SSH; it does **not** download/execute code
+  locally. App Review notes must state this (drafted in `docs/app-store-metadata.md` §App Review notes).
+- **Copy claim "even when the app was closed":** true **only** with the backend decision-relay enabled.
+  Keep the relay live, or change the promo/description per the caveat in `app-store-metadata.md`.
+- **Privacy label:** PrivacyInfo now declares only DeviceID (APNs) + FileTimestamp (SFTP) + UserDefaults;
+  CrashData removed (Sentry DSN empty). The App Store Connect privacy nutrition label must match.
+- **support_url:** left as `https://conduit.dev` (doc suggests `/support`) — change only if that path resolves.
+
+---
+
+## Open lower-severity items (deferred, non-blocking)
+
+- **MAJOR-5** password-retry sheet present-over-cover (same family as B1; deferred — verify with B1 on a tap-capable box).
+- Security LOW-1/2/3/5 (app-switcher snapshot redaction; biometryLockout; `autoTrustHostKey` DEBUG guard; Redactor PEM/Bearer/JWT) — from the 2026-05-31 security review, pre-existing.
+- Core-kits (CloudKit deletion resurrection, SSHHostRuntime cancel/status) — fix only if E2E surfaces them; iCloud UI stays hidden.
+- Cosmetic: the `\e[2J\e[H` clear echoes into claude's input box (pre-existing §3.3 dynamic; low severity).
+
+---
+
+*Full detail: `FABLE_FINDINGS.md` (scratchpad), `findings/review-*.md` (8 static reviews), `screens/e2e-phase4/` (E2E + Phase-5 evidence).*
