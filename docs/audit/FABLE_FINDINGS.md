@@ -111,6 +111,31 @@ Builds: SPM + **337 tests** PASS, app-target `xcodebuild` PASS, Go push-backend 
    repro on a vanilla host to attribute definitively. Approval/block **UI renders correctly** (Check 6),
    so the fault is isolated to the live zsh-integration handshake, not rendering or the approval layer.
 
+### HID limitation — RESOLVED via XCUITest (2026-06-12, third session)
+
+The "taps don't inject" wall was diagnosed and fixed. **Root cause (two compounding issues):**
+1. The installed Xcode-beta is a **stripped 3.5 GB build** (a full Xcode 27 is ~30 GB) missing
+   `Simulator.app` entirely (`Contents/Developer/Applications/` does not exist) — so the GUI window +
+   HID injection path is gone. The headless build/launch/screenshot path works because CoreSimulator +
+   the iOS 27 runtime cryptex are intact.
+2. `idb_companion` 1.1.8 is **incompatible with macOS 27** — objc class collision (`FBProcess`
+   duplicated between system `FrontBoard.framework` and idb's bundled `FBControlCore.framework`),
+   so HID injection silently no-ops. idb is unmaintained (~2023); a dead end on this OS.
+
+The `SimulatorKit.framework` symlink restored AX **reads** (`snapshot_ui`/`screenshot`/`describe-all`)
+but not HID **writes** — which is why the shell-fix was screenshot-verifiable but taps weren't.
+
+**FIX: XCUITest.** The `XCTest` + `XCUIAutomation` frameworks ARE present in the stripped Xcode, and
+XCUITest runs headlessly via `xcodebuild test` — it needs **neither idb nor Simulator.app GUI**. Added
+the `ConduitUITests` (`bundle.ui-testing`) target (`project.yml` + `ConduitUITests/TapInjectionProofTests.swift`),
+wired into the Conduit scheme. **Verified on this machine (`** TEST SUCCEEDED **`):**
+- `testTapInjectionViaTabSwitch` — tab taps inject; breadcrumb toggles (proves event injection).
+- `testApproveDecisionApplies` — **tapping APPROVE drops the pending count** → the Phase-4 Check-1
+  approval interaction (previously BLOCKED) is now verified, exercising B3 first-decision-wins live in UI.
+
+All remaining tap-gated checks (Face ID toggle, saved-host reconnect, B1 TOFU, M6) are now mechanically
+reachable on this machine via XCUITest — they need only test-authoring, not a different environment.
+
 ## Baselines (2026-06-12, start of audit)
 
 - ConduitKit `swift build`: **clean** (only third-party Package.swift deprecation warnings in GRDB/BigInt checkouts — not ours)

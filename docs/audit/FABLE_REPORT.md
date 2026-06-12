@@ -48,19 +48,20 @@ can be completed in parallel on a full-Xcode box or a physical device (Phase 6 n
 
 ---
 
-## What remains UNVERIFIED — and why
+## Tap-interaction — now UNBLOCKED via XCUITest
 
-**Tap-interaction checks (environment-blocked, not code-blocked).** The only installed Xcode is Xcode-beta,
-which is missing `Simulator.app` entirely, so HID tap/typing injection is unavailable through idb,
-XcodeBuildMCP, *and* cliclick (no GUI window). The AX **read** path was restored (a `SimulatorKit.framework`
-symlink) — which is what let the shell-blocker fix be verified by screenshot — but **writes do not land**.
-Still needing a tap on a full-Xcode box or a physical device:
-- Approval-card **Approve → DECIDED** (logic covered by `firstDecisionWins` + relay matrix; rendering verified).
-- Tab navigation, Face ID onboarding toggle, saved-host reconnect tap.
-- B1 TOFU runtime prompt; M6 cold-launch banner tap.
+The "taps don't inject" wall is **resolved**. The installed Xcode-beta is a stripped 3.5 GB build missing
+`Simulator.app` (so no GUI window for cliclick) and `idb` 1.1.8 is incompatible with macOS 27 (objc class
+collision) — but **XCUITest** runs headlessly via `xcodebuild test`, needs neither, and its frameworks are
+present. A `ConduitUITests` target was added and **verified on this machine** (`** TEST SUCCEEDED **`):
+- `testTapInjectionViaTabSwitch` — event injection works (tab taps toggle the screen).
+- `testApproveDecisionApplies` — **APPROVE → pending count drops**: the Phase-4 Check-1 approval
+  interaction (previously BLOCKED) is verified, exercising B3 first-decision-wins live in the UI.
 
-**Full three-way live relay loop** (phone POST → running conduitd poll) was proven link-by-link (curl + Go
-tests) but not stood up end-to-end (needs a running conduitd + a phone-driven POST, i.e. taps).
+**Remaining tap-gated checks** (Face ID onboarding toggle, saved-host reconnect, B1 TOFU prompt, M6
+cold-launch) are now mechanically reachable here — they need only additional XCUITest authoring, not a
+different machine. **Full three-way live relay loop** (phone POST → running conduitd poll) still needs a
+running conduitd stood up alongside; every link is independently proven (curl matrix + Go poller tests).
 
 ---
 
