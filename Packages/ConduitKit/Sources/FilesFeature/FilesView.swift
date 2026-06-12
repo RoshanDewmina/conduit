@@ -224,7 +224,7 @@ private struct SFTPEntryRow: View {
                 Image(systemName: entry.isDirectory ? "folder" : "doc.text")
                     .foregroundStyle(entry.isDirectory ? t.accent : t.text3)
                 Text(entry.name)
-                    .font(.system(.callout, design: .monospaced))
+                    .font(.dsMonoPt(14))
                     .foregroundStyle(t.text1)
                 Spacer()
                 if let size = entry.sizeBytes, !entry.isDirectory {
@@ -269,7 +269,7 @@ private struct SFTPEntryRow: View {
         Button(action: onRename) {
             Label("Rename", systemImage: "pencil")
         }
-        .tint(.blue)
+        .tint(t.accent)
     }
 }
 

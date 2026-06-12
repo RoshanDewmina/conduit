@@ -130,7 +130,7 @@ public struct DiffView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.system(.caption, design: .monospaced))
+        .font(.dsMono(.caption))
         .padding(.horizontal, 12)
         .padding(.vertical, 1)
         .background(bg)

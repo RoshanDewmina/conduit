@@ -726,7 +726,9 @@ public struct AppRoot: View {
                     }
                     .navigationTitle("Conduit")
                 } detail: {
-                    rootDestination(selectedTab, env: env)
+                    NavigationStack {
+                        rootDestination(selectedTab, env: env)
+                    }
                 }
             }
         }

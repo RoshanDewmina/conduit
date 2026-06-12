@@ -201,7 +201,7 @@ public struct HostEditorView: View {
                         if vm.authChoice == .ed25519 {
                             cardDivider
                             if vm.keyTags.isEmpty {
-                                Text("Generate an Ed25519 key in Settings > SSH Keys, then return here to assign it to this host.")
+                                Text("Generate an Ed25519 key in Library › SSH Keys, then return here to assign it to this host.")
                                     .font(.dsSansPt(13))
                                     .foregroundStyle(t.text3)
                                     .padding(.horizontal, 16)

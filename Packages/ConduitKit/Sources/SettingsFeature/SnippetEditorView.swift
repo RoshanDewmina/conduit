@@ -146,6 +146,8 @@ private struct SnippetEditSheet: View {
     let originalID: SnippetID
     let originalCreatedAt: Date
     let originalUseCount: Int
+    let originalHostTags: [String]
+    let originalTags: [String]
     let onSave: (Snippet) -> Void
     let onCancel: () -> Void
 
@@ -160,6 +162,8 @@ private struct SnippetEditSheet: View {
         originalID = snippet.id
         originalCreatedAt = snippet.createdAt
         originalUseCount = snippet.useCount
+        originalHostTags = snippet.hostTags
+        originalTags = snippet.tags
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -177,6 +181,7 @@ private struct SnippetEditSheet: View {
                     Button {
                         onSave(Snippet(
                             id: originalID, name: name, body: commandBody,
+                            hostTags: originalHostTags, tags: originalTags,
                             arguments: arguments, useCount: originalUseCount,
                             createdAt: originalCreatedAt
                         ))

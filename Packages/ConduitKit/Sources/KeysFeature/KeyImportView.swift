@@ -192,7 +192,7 @@ public struct KeyImportView: View {
                     Section {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(t.ok)
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Key imported successfully")
@@ -211,7 +211,7 @@ public struct KeyImportView: View {
                     Section {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(t.warn)
                                 .padding(.top, 2)
                             Text(msg)
                                 .font(.callout)

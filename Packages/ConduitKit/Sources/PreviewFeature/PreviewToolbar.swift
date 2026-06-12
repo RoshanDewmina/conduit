@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import SSHTransport
+import DesignSystem
 
 public struct PreviewToolbar: View {
     @Binding var vm: PreviewViewModel
@@ -128,7 +129,7 @@ public struct PreviewToolbar: View {
             HStack(spacing: 4) {
                 Image(systemName: "network")
                 Text(verbatim: vm.activePort.map { ":\($0)" } ?? "No port")
-                    .font(.system(.callout, design: .monospaced))
+                    .font(.dsMonoPt(14))
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                     .lineLimit(1)
             }
@@ -139,6 +140,7 @@ public struct PreviewToolbar: View {
 private struct ManualPortSheet: View {
     @Binding var selectedPort: Int?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
     @State private var portText = ""
     @State private var isInvalid = false
 
@@ -152,7 +154,7 @@ private struct ManualPortSheet: View {
                 } footer: {
                     if isInvalid {
                         Text("Enter a number between 1 and 65535.")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(t.danger)
                     }
                 }
             }

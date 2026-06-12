@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 public struct TextPreview: View {
     public let filename: String
@@ -11,7 +12,10 @@ public struct TextPreview: View {
     }
 
     private var text: String? {
-        String(data: data, encoding: .utf8)
+        // A NUL byte means binary content; ISO-Latin-1 decodes every byte, so
+        // without this guard the "Binary file" placeholder below is unreachable.
+        if data.contains(0) { return nil }
+        return String(data: data, encoding: .utf8)
             ?? String(data: data, encoding: .isoLatin1)
     }
 
@@ -20,7 +24,7 @@ public struct TextPreview: View {
             if let text {
                 ScrollView {
                     Text(text)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.dsMono(.caption))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding()

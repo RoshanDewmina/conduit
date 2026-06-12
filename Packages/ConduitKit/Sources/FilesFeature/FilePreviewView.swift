@@ -25,14 +25,14 @@ public struct FilePreviewView: View {
                     HStack(alignment: .top, spacing: 0) {
                         // Line number gutter
                         Text("\(i + 1)")
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(.dsMonoPt(11))
                             .foregroundStyle(t.text4)
                             .frame(width: 36, alignment: .trailing)
                             .padding(.trailing, 10)
 
                         // Line content
                         Text(lines[i].isEmpty ? " " : lines[i])
-                            .font(.system(.footnote, design: .monospaced))
+                            .font(.dsMonoPt(13))
                             .foregroundStyle(t.termText)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: true, vertical: false)

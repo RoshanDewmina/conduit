@@ -38,7 +38,7 @@ public struct PolicyEditorView: View {
                     .font(.caption)
                     .foregroundStyle(t.text3)
                 TextEditor(text: $yamlText)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.dsMono(.caption))
                     .frame(minHeight: 220)
             }
             Section {

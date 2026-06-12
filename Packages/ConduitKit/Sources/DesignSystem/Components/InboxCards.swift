@@ -125,7 +125,7 @@ public struct DSAskQuestionCard: View {
                         )
                     Text(letter)
                         .font(.dsMonoPt(12, weight: .semibold))
-                        .foregroundStyle(isSelected ? .white : t.text2)
+                        .foregroundStyle(isSelected ? t.accentFg : t.text2)
                 }
                 Text(label)
                     .font(.dsMonoPt(13))
@@ -357,7 +357,7 @@ public struct DSAutonomyPresetBar: View {
                         Text(option.shortLabel.uppercased())
                             .font(.dsDisplayPt(10, weight: .semibold))
                             .tracking(10 * 0.08)
-                            .foregroundStyle(isActive ? .white : t.text2)
+                            .foregroundStyle(isActive ? t.accentFg : t.text2)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                             .background(isActive ? t.accent : Color.clear)
