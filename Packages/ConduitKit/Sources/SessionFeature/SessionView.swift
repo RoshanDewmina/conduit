@@ -80,6 +80,24 @@ public struct SessionView: View {
                     .environment(\.conduitTokens, t)
                 }
             }
+            // Password re-entry after repeated auth failures (MAJOR-5). Presented
+            // from INSIDE SessionView for the same reason as the TOFU sheet above:
+            // once the session is live it sits in the fullScreenCover, and the
+            // ancestor root cannot present a sheet over its own cover (the B1
+            // family). The VM raises `awaitingPasswordRetry` after two consecutive
+            // failures; Reconnect retries with the new password, Cancel dismisses.
+            .sheet(isPresented: Binding(
+                get: { vm.awaitingPasswordRetry },
+                set: { if !$0 { vm.cancelPasswordRetry() } }
+            )) {
+                SessionPasswordRetrySheet(
+                    hostName: vm.host.name,
+                    onSubmit: { pw in Task { await vm.retryWithNewPassword(pw) } },
+                    onCancel: { vm.cancelPasswordRetry() }
+                )
+                .presentationDetents([.medium])
+                .environment(\.conduitTokens, t)
+            }
     }
 
     // MARK: - Core view (split to keep body type-checkable)
@@ -655,6 +673,66 @@ public struct SessionView: View {
 // would also be linked into the Live Activity widget extension). Mirrors the
 // production `HostKeyConfirmSheet` UX: explicit Trust & Connect / Cancel, no
 // auto-trust, fingerprint shown for out-of-band verification.
+private struct SessionPasswordRetrySheet: View {
+    let hostName: String
+    let onSubmit: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var password = ""
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    DSIconView(.alertTri, size: 24, color: t.danger)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Authentication Failed")
+                            .font(.dsSansPt(16, weight: .semibold))
+                            .foregroundStyle(t.text)
+                        Text("Couldn't sign in to \(hostName). Re-enter the password to try again.")
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Password")
+                        .font(.dsSansPt(11, weight: .medium))
+                        .foregroundStyle(t.text3)
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                        .submitLabel(.go)
+                        .onSubmit { if !password.isEmpty { onSubmit(password) } }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+                        .foregroundStyle(t.text)
+                }
+
+                Spacer()
+
+                VStack(spacing: 10) {
+                    DSButton("Reconnect", variant: .primary) {
+                        if !password.isEmpty { onSubmit(password) }
+                    }
+                    DSButton("Cancel", variant: .secondary, action: onCancel)
+                }
+            }
+            .padding()
+            .background(t.bg)
+            .navigationTitle("Re-authenticate")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                        .foregroundStyle(t.accent)
+                }
+            }
+        }
+    }
+}
+
 private struct SessionHostKeyConfirmSheet: View {
     let hostName: String
     let fingerprint: String
