@@ -3,7 +3,7 @@
 > Depends on WS-1/2/3/4/5 having merged (it finalizes the build for upload). Several steps are owner-only (Apple Dev portal, Sentry project) — you do all the plumbing + prep; the owner pastes secrets and clicks buttons.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`. Build: `cd Packages/ConduitKit && swift build`. Read `docs/app-store-metadata.md`, `docs/app-store-submission.md`, `ARCHITECTURE.md`, `project.yml`.
+Repo `/Users/roshansilva/Documents/command-center`. Build: `cd Packages/ConduitKit && swift build`. Read `docs/app-store-metadata.md`, `docs/ship-gate-owner-steps.md`, `ARCHITECTURE.md`, `project.yml`.
 
 **Confirmed state:**
 - **Sentry is already wired** in `ConduitApp.swift` (`#if canImport(Sentry)` guard + `configureSentry()` in AppDelegate + SPM dep) — it just needs a DSN at `ConduitApp.swift:20` (currently `""`).

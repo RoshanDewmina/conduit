@@ -9,6 +9,8 @@ function useTypewriter(text: string, speed = 38, startDelay = 600) {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    // Intentional: reset the typewriter to the start whenever the text prop changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDisplayed('')
     setDone(false)
     let i = 0

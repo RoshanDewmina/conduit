@@ -123,10 +123,10 @@ Git: current branch `feat/product-depth-sprint`; its 13 commits are mostly the p
 `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, and `remaining-work.md` list gaps that are **now closed**. Verified against current source:
 - ❌→✅ **"`handleCreateRun` never calls `dispatchRun`"** — it does: `agents.go:315` `go dispatchRun(...)`.
 - ❌→✅ **"`.approvedAlways` collapsed to `approve` in `DaemonChannel.swift`; rule never persisted"** — `DaemonChannel.swift:111` sends `"approveAlways"`; conduitd `appendAllowAlways` writes it to `policy-always.yaml`.
-- ❌→✅ **"conduitd never POSTs approvals to push-backend (APNs loop open)"** — `server.go:532-533` `go s.postApprovalPush()` → `{PushBackendURL}/approval` (`server.go:613`). (Real-device delivery still needs a paid APNs cert — see §11.)
+- ❌→✅ **"conduitd never POSTs approvals to push-backend (APNs loop open)"** — `server.go:532-533` `go s.postApprovalPush()` → `{PushBackendURL}/approval` (`server.go:613`). (APNs key + paid account + deployed backend all exist now; only a real-device delivery smoke test remains — see §10/§11.)
 - ❌→✅ **"no agent-runner binary"** — `daemon/agent-runner/` exists.
 - 🔶→✅ **"single session only; no FleetStore backing"** — `FleetStore` + `FleetSlotManager` exist (≤3 slots) on this branch (still being wired into AppRoot — see §4.4).
-- ✅ **Ship-gate entitlements done in code** — `project.yml:74-80` uses `Conduit.entitlements` with `aps-environment: production` + iCloud/CloudKit; only the **external paid-account** dependency remains.
+- ✅ **Ship-gate external deps mostly met** — `project.yml:74-80` uses `Conduit.entitlements` with `aps-environment: production` + iCloud/CloudKit; paid account (team `39HM2X8GS6`), APNs `.p8` (`L8LVU9X82W`), and a live push-backend (`/health` 200) all exist. Remaining gate is **App Store Connect setup + TestFlight**, not obtaining account/key/backend (see `ship-gate-owner-steps.md`).
 
 ### 4.2 Works today (✅)
 SSH + TOFU auth (password/Ed25519); block terminal + raw PTY + alt-screen TUIs; auto-reconnect + tmux resume; GRDB persistence; ANSI rendering; `DaemonChannel` JSON-RPC; SFTP browser; diff reviewer; snippets (full CRUD); Watch app / Live Activity / widgets scaffolding; biometric gate + audit redaction; **conduitd**: policy engine, audit log, allow-always persistence, blast radius, offline queue, fail-closed, dispatch + schedules, push POST; **push-backend**: Stripe billing + credits + overage + `402`, quotas, orgs, schedules + cron ticker, artifacts, run-logs, **dispatch spine + runner-token auth**; StoreKit IAP ($14.99 lifetime).
@@ -240,10 +240,10 @@ These are unresolved forks where the **code and the written strategy diverge**, 
 
 ## 10. Ship-gate / owner action items (external blockers)
 (`docs/ship-gate-owner-steps.md`, `remaining-work.md`, `PRODUCTION_READINESS_PLAN.md`)
-1. ⏸ **Paid Apple Developer account ($99/yr).** Unblocks CloudKit + Push + App Store submission. Entitlements already wired (`project.yml`); team is `39HM2X8GS6` — confirm whether it's been upgraded to paid.
-2. ⏸ **App Store Connect setup** (app record, enable Push + CloudKit, IAP, privacy nutrition label, screenshots).
-3. ⏸ **Live-host validation** — full hook→policy→inbox→approve→audit round-trip + TUI/Ctrl-C/alt-screen/OSC-133 on a real SSH host (`docs/validation-playbook.md` TC-1..TC-7).
-4. ⏸ **Backend deploy** — `push-backend` to Cloud Run/Fly with live Stripe keys + production APNs `.p8` (`docs/cloud-run-production-cutover.md`, `push-backend-deploy-env.md`).
+1. ✅ **Paid Apple Developer account** (team `39HM2X8GS6`) + **APNs `.p8`** (`L8LVU9X82W`, at `~/Downloads/Personal-Docs/`) — both confirmed present. No longer a blocker.
+2. ⏸ **App Store Connect setup** (app record, enable Push + CloudKit, IAP, privacy nutrition label, screenshots) — the main remaining gate.
+3. ⏸ **Live-host validation** — full hook→policy→inbox→approve→audit round-trip + TUI/Ctrl-C/alt-screen/OSC-133 on a real SSH host (`docs/validation-playbook.md` TC-1..TC-7), plus a physical-device APNs smoke test.
+4. 🔶 **Backend deploy** — `push-backend` is **live** (`https://35.201.3.231.sslip.io/health` 200). Remaining: confirm APNs + live Stripe secrets are set on the running instance, then repoint to a vanity domain (`push.conduit.dev`) before public release (`push-backend-deploy-env.md`, `docs/cloud-run-production-cutover.md`).
 5. **DNS** for conduit.dev (`scripts/update-dns.sh`).
 6. **TestFlight/release** via existing `fastlane/` lanes once creds exist.
 

@@ -1,0 +1,212 @@
+<h2>Conduit — General-Purpose Agent Hub</h2>
+<p class="subtitle">What makes a dedicated app better than Discord/Telegram. Features mapped to what Hermes already does — just without a great mobile home.</p>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+
+  <!-- COLUMN 1 -->
+
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">💬</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Agent Conversations</span>
+        <span style="font-size:10px;background:#1a2e1a;color:#5cb85c;padding:2px 6px;border-radius:10px;margin-left:auto;">Replaces Discord DMs</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Thread-based chat per agent — context persists</div>
+        <div>→ Reply inline to any notification</div>
+        <div>→ Voice message to agent</div>
+        <div>→ Pre-built quick replies (shortcuts, not typing)</div>
+        <div>→ Natural language dispatch: <em>"research TSLA and summarize"</em></div>
+        <div>→ Agent personas — Sakuya, researcher, concise… per agent</div>
+      </div>
+      <div style="margin-top:10px;padding:8px;background:#111;border-radius:6px;font-size:11px;color:#888;">
+        <strong style="color:#fff;">Now:</strong> You DM Hermes in Discord and hope it replies. No history, no context between sessions.
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🗓️</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Scheduling & Automation</span>
+        <span style="font-size:10px;background:#1a2e1a;color:#5cb85c;padding:2px 6px;border-radius:10px;margin-left:auto;">Replaces Hermes cron</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Visual scheduler — "run trading agent at 9am ET weekdays"</div>
+        <div>→ Pause / resume / edit scheduled jobs from phone</div>
+        <div>→ Chain triggers — agent A finishes → agent B starts</div>
+        <div>→ Conditional triggers — "run when market opens"</div>
+        <div>→ Run history with outputs in-app</div>
+      </div>
+      <div style="margin-top:10px;padding:8px;background:#111;border-radius:6px;font-size:11px;color:#888;">
+        <strong style="color:#fff;">Now:</strong> Hermes cron jobs live in <code>jobs.json</code>. Paused Daily AI Briefing has been failing silently for weeks. No mobile visibility.
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🏠</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Daily Rhythm (native)</span>
+        <span style="font-size:10px;background:#1a2e1a;color:#5cb85c;padding:2px 6px;border-radius:10px;margin-left:auto;">Replaces Telegram delivery</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Morning plan as an interactive card — tap to start each item</div>
+        <div>→ Evening review with simple mood + completion input</div>
+        <div>→ Daily briefing as rich in-app cards (not 6 bullets in Telegram)</div>
+        <div>→ Habit/streak widget on lock screen</div>
+        <div>→ "What should I focus on right now?" — natural language</div>
+      </div>
+      <div style="margin-top:10px;padding:8px;background:#111;border-radius:6px;font-size:11px;color:#888;">
+        <strong style="color:#fff;">Now:</strong> Daily AI briefing sends to Telegram. DNS fails → you get nothing. No history, no interaction.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COLUMN 2 -->
+
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <div style="background:#0d1117;border:1px solid #f0ad4e55;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🔔</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Smart Notifications</span>
+        <span style="font-size:10px;background:#2e1a00;color:#f0ad4e;padding:2px 6px;border-radius:10px;margin-left:auto;">Core differentiator</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ <strong style="color:#fff;">No-code rule builder</strong> — if AAPL drops &gt;3% → notify critical</div>
+        <div>→ Per-agent quiet hours (trade alerts never after 10pm)</div>
+        <div>→ Priority tiers — critical / high / digest / silent</div>
+        <div>→ Digest mode — batch hourly for low-priority events</div>
+        <div>→ Smart dedup — suppress repeated similar events</div>
+        <div>→ Rich action buttons — approve / deny / custom per event type</div>
+        <div>→ Live Activity — see agent state without unlocking</div>
+        <div>→ Watch complication — pending count on wrist</div>
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #f0ad4e55;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🃏</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Rich Agent Cards</span>
+        <span style="font-size:10px;background:#2e1a00;color:#f0ad4e;padding:2px 6px;border-radius:10px;margin-left:auto;">Core differentiator</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Agents publish their own card templates (defined in manifest)</div>
+        <div>→ Trading agent: price chart + rationale + 1-tap intervene</div>
+        <div>→ Coding agent: diff view + approve/edit/deny</div>
+        <div>→ Research agent: summary card + source links</div>
+        <div>→ Not "text in a chat bubble" — purpose-built per domain</div>
+        <div>→ Expandable detail panel without leaving the card</div>
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">📊</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Fleet Dashboard</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ All agents: status, current task, last event at a glance</div>
+        <div>→ Cost tracker — tokens / API spend per agent per day</div>
+        <div>→ Activity timeline — what every agent did while you were away</div>
+        <div>→ Health alerts — agent errored / silently failing</div>
+        <div>→ Cross-agent insights: research agent found something for your coding agent</div>
+      </div>
+      <div style="margin-top:10px;padding:8px;background:#111;border-radius:6px;font-size:11px;color:#888;">
+        <strong style="color:#fff;">Now:</strong> Your Hermes daily briefing job has been failing with DNS errors. You wouldn't know unless you checked <code>jobs.json</code>.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COLUMN 3 -->
+
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🧠</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Agent Memory & Context</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ See what each agent remembers about you</div>
+        <div>→ Personal context layer — agents know your goals, portfolio, projects</div>
+        <div>→ Memory editor — correct/add facts agents should know</div>
+        <div>→ Context sharing — let your trading agent see your research agent's notes</div>
+        <div>→ Persistent across sessions — no "who are you again?"</div>
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">🏪</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">Agent Marketplace</span>
+        <span style="font-size:10px;background:#1a1a2e;color:#9b59b6;padding:2px 6px;border-radius:10px;margin-left:auto;">Platform play</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Install pre-built agents: trading, research, home, health…</div>
+        <div>→ Agent config wizard — enter credentials without editing JSON</div>
+        <div>→ One-tap connect to services (IBKR, Notion, GitHub, etc.)</div>
+        <div>→ Credential vault — API keys stored securely on device</div>
+        <div>→ Publish your own agents with event schemas + card templates</div>
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">⚡</span>
+        <span style="font-weight:700;font-size:13px;color:#e8eaf0;">iOS-Native Superpowers</span>
+        <span style="font-size:10px;background:#2e1a00;color:#f0ad4e;padding:2px 6px;border-radius:10px;margin-left:auto;">Discord can't do this</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8;color:#bbb;">
+        <div>→ Dynamic Island — agent state + unread approvals always visible</div>
+        <div>→ Lock Screen Live Activity — act without unlocking phone</div>
+        <div>→ Apple Watch — drain approval queue from wrist</div>
+        <div>→ Siri shortcuts — "Hey Siri, pause my trading agent"</div>
+        <div>→ Home Screen widgets — agent status at a glance</div>
+        <div>→ Shortcuts.app integration — chain agent actions with iOS automations</div>
+        <div>→ Face ID for high-stakes approvals</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- VS DISCORD STRIP -->
+<div style="background:#0d1117;border:1px solid #2a2a2a;border-radius:10px;padding:16px;margin-bottom:16px;">
+  <h3 style="font-size:13px;color:#888;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Why not just use Discord / Telegram / WhatsApp</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;font-size:12px;">
+    <div>
+      <div style="color:#d9534f;font-weight:600;margin-bottom:4px;">Plain text only</div>
+      <div style="color:#888;">A trading agent says "Bought AAPL at $201.50" in a chat bubble. No chart, no rationale, no 1-tap undo.</div>
+    </div>
+    <div>
+      <div style="color:#d9534f;font-weight:600;margin-bottom:4px;">No action buttons</div>
+      <div style="color:#888;">To approve something you type "/approve 4821". In Conduit you tap. On Watch you crown-scroll and tap.</div>
+    </div>
+    <div>
+      <div style="color:#d9534f;font-weight:600;margin-bottom:4px;">No notification control</div>
+      <div style="color:#888;">Discord "mutes" or "unmutes" a channel. No rules, no priority tiers, no digest, no quiet hours per agent.</div>
+    </div>
+    <div>
+      <div style="color:#d9534f;font-weight:600;margin-bottom:4px;">No agent awareness</div>
+      <div style="color:#888;">Discord doesn't know what your agent is doing. Can't show fleet status, cost, health, or cross-agent context.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SUGGESTED PRIORITY -->
+<div style="background:#0d1117;border:1px solid #2a3f5f;border-radius:10px;padding:16px;">
+  <h3 style="font-size:13px;color:#f0ad4e;margin-bottom:12px;">Suggested build order — what makes someone switch from Telegram immediately</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">
+    <div style="background:#1a2e1a;border:1px solid #2a4a2a;border-radius:6px;padding:8px 12px;color:#5cb85c;">1. Rich agent cards + inline actions</div>
+    <div style="background:#1a2e1a;border:1px solid #2a4a2a;border-radius:6px;padding:8px 12px;color:#5cb85c;">2. No-code notification rules</div>
+    <div style="background:#1a2e1a;border:1px solid #2a4a2a;border-radius:6px;padding:8px 12px;color:#5cb85c;">3. Conversation threads per agent</div>
+    <div style="background:#2a1a1a;border:1px solid #4a2a2a;border-radius:6px;padding:8px 12px;color:#e07b7b;">4. Visual scheduler (replace Hermes cron)</div>
+    <div style="background:#2a1a1a;border:1px solid #4a2a2a;border-radius:6px;padding:8px 12px;color:#e07b7b;">5. Daily rhythm + briefing as native cards</div>
+    <div style="background:#2a1a1a;border:1px solid #4a2a2a;border-radius:6px;padding:8px 12px;color:#e07b7b;">6. Agent marketplace</div>
+  </div>
+</div>

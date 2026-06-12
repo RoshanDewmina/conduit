@@ -20,7 +20,7 @@ The source (`~/Downloads/conduit-ship-plan.md`) is three stacked passes written 
 - Untracked key work is real and substantial: `SecurityKit/OpenSSHKeyParser.swift` (706 lines), `KeysFeature/KeyImportView.swift` (267 lines) — point #6 is half-built, not greenfield.
 - Tracked edits sitting uncommitted: `KeysView.swift` (+20), `OnboardingView.swift` (+410), `KeyStore.swift` (+27), `SettingsView.swift` (+2).
 - Repo noise to ignore: ~22 agent dotfiles (`.agents/ .claude/ .codebuddy/ … .zencoder/`), `.dmux/`, `build/`, `.DS_Store`, and a committed-by-accident Linux binary `daemon/push-backend/push-backend-linux`.
-- Assets the plan assumes exist DO exist: `docs/app-store-metadata.md`, `docs/app-store-submission.md`, `fastlane/`, `.gitignore`, `daemon/push-backend/billing.go`, `project.yml` (entitlements swap comment at L57–63).
+- Assets the plan assumes exist DO exist: `docs/app-store-metadata.md`, `docs/ship-gate-owner-steps.md`, `fastlane/`, `.gitignore`, `daemon/push-backend/billing.go`, `project.yml` (entitlements swap comment at L57–63).
 - **The test suite uses Swift Testing (`@Test`), not XCTest** — verify with `swift test`, don't grep for `func test`. Source claims 163 (Part I) / project record says 203; treat the **live `swift test` count** as ground truth and never let it drop.
 - ⚠️ **The source plan's Part I audit is STALE in places.** It says `AutoReconnectEngine` is "declared and never wired" — but commit `dafa6ba` ("…reliability…") + the project record (B4, 2026-05-30, 203 tests) say reconnect/keepalive/history-restore/error-mapping shipped; and `858b688` ("COLORFGBG theme hint, approval-card header, PixelBox glow, a11y guards") already touches WS-2/WS-9/WS-11 territory. WS-1, WS-2, WS-9 are framed as **verify-then-close-gaps.** General rule for every subagent: **verify each "X is missing/not wired" claim against the live code before acting** — the draft predates several committed batches.
 
@@ -84,7 +84,7 @@ Owner-only steps (Apple Dev portal, Stripe dashboard, Sentry project, DNS) are l
 
 ## 5. Read-before-you-touch (per area)
 - Terminal/blocks: `docs/block-terminal-implementation.md`, `docs/agent-contract.md` §5, `CLAUDE.md` "Block terminal".
-- App Store: `docs/app-store-metadata.md`, `docs/app-store-submission.md`.
+- App Store: `docs/app-store-metadata.md`, `docs/ship-gate-owner-steps.md`.
 - Server/deploy: `docs/SERVER.md`. Architecture: `ARCHITECTURE.md`.
 
 ## 6. Post-launch workstreams (now scoped as prompts — owner chose "all 17 + post-launch")

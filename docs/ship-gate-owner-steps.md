@@ -1,155 +1,56 @@
-# Ship Gate — Owner Action Items
+# Ship Gate — what's left to publish
 
-> These steps require human action (Apple Developer portal, App Store Connect).
-> The code/config changes on this branch are already done — this doc tells you what to do next.
+> Single source of truth for getting Conduit onto the App Store.
+> **Engineering is complete.** Everything below is an owner action (App Store Connect, a device, DNS).
+> Last verified: 2026-06-11.
 
----
+## Already done (do not redo)
 
-## Step 1: Enroll in Apple Developer Program ($99/year)
+| Item | State | Evidence |
+|------|-------|----------|
+| Paid Apple Developer account | ✅ | Team `39HM2X8GS6`. (A free team can't mint the APNs key below, so this is confirmed paid.) |
+| APNs Auth Key (`.p8`) | ✅ | `~/Downloads/Personal-Docs/AuthKey_L8LVU9X82W.p8` — Key ID `L8LVU9X82W`, Team `39HM2X8GS6`, bundle `dev.conduit.mobile` |
+| Entitlements wired | ✅ | `project.yml` → `Conduit.entitlements`: `aps-environment: production`, CloudKit `iCloud.dev.conduit.mobile`, App Group `group.dev.conduit.mobile` |
+| Background modes / export compliance | ✅ | `remote-notification` in `UIBackgroundModes`; `ITSAppUsesNonExemptEncryption: false` in Info.plist |
+| push-backend deployed | ✅ | `https://35.201.3.231.sslip.io/health` → HTTP 200 |
+| App points at the backend | ✅ | `CONDUIT_PUSH_BACKEND_URL` set in `project.yml` |
+| Decision relay (decide while away) | ✅ | phone → `/approval/decision` → conduitd poller resolves; ships in this milestone |
+| Code/tests | ✅ | iOS engine + conduitd + push-backend suites green; app target builds |
 
-**Why:** Push Notifications and CloudKit require a paid Apple Developer account. The current account (free personal team `39HM2X8GS6`) cannot use these entitlements.
-
-**Action:**
-1. Go to [developer.apple.com/enroll](https://developer.apple.com/enroll)
-   **OR** — if `sidewhinder2k3@gmail.com` already has a paid program:
-   - Open Xcode → Settings → Accounts → `+` → Sign in with that Apple ID
-2. Note your 10-character Team ID (shown in Xcode Accounts or at [developer.apple.com/account](https://developer.apple.com/account))
-3. Update `project.yml` (all four targets):
-   ```yaml
-   settings:
-     base:
-       DEVELOPMENT_TEAM: "YOURTEAMID"  # replace 39HM2X8GS6 with your paid Team ID
-   ```
-4. Run `xcodegen generate`
+The APNs deploy env values live in **`push-backend-deploy-env.md`** (Key ID, Team ID, bundle, `.p8` path). App Store copy/metadata lives in **`app-store-metadata.md`**.
 
 ---
 
-## Step 2: App Store Connect setup
+## Remaining owner steps
 
-After enrolling (or signing in with paid account):
+### 1. Confirm APNs secrets on the *running* backend (~5 min)
+The instance is up, but health doesn't prove the APNs env is set (push reads env lazily at first send). Confirm the four secrets are present on the live service per `push-backend-deploy-env.md`:
+`APNS_KEY_ID=L8LVU9X82W`, `APNS_TEAM_ID=39HM2X8GS6`, `APNS_BUNDLE_ID=dev.conduit.mobile`, `APNS_KEY_PATH` → the `.p8`.
 
-1. **Create the app record** at [appstoreconnect.apple.com](https://appstoreconnect.apple.com):
-   - Bundle ID: `dev.conduit.mobile`
-   - App name: Conduit
+### 2. App Store Connect setup
+At [appstoreconnect.apple.com](https://appstoreconnect.apple.com):
+1. **Create the app record** — Bundle ID `dev.conduit.mobile`, name *Conduit*.
+2. **Enable capabilities** on the identifier: **Push Notifications**, **CloudKit** (container `iCloud.dev.conduit.mobile`), **App Groups** (`group.dev.conduit.mobile`). Push is already provisioned (the `.p8` exists). After activating CloudKit, set `CONDUIT_ICLOUD_ENABLED: true` in `project.yml` and run `xcodegen generate` (it is already `true` — confirm it matches the activated container).
+3. **Create the IAP** — Product ID `dev.conduit.mobile.pro`, Non-Consumable, $14.99 ("Conduit Pro"). AI credits use the Stripe web flow (US storefront only) — never compare IAP vs web pricing in-app (App Review rejects this).
+4. **Privacy nutrition label** — no tracking; declare the APNs device token (push registration for approval alerts) and subscription data if Stripe billing is on. State plainly: **source code never leaves the device.**
+5. **Age rating** — 4+. **Screenshots** — `docs/screenshots/governed-approvals/` (inbox card, a decision, fleet glance, activity feed, autonomy presets).
+6. **Reviewer notes** — Conduit drives a *remote* shell; it does not download or execute code locally (pre-empts Guideline 2.5.2 scrutiny). Inbox is pre-seeded in DEBUG builds for review. The Billing screen offers a $14.99 StoreKit purchase (use a sandbox account).
 
-2. **Enable capabilities** in Certificates, Identifiers & Profiles → Identifiers → `dev.conduit.mobile`:
-   - **Push Notifications** — required for approval alerts
-   - **CloudKit** — enable container `iCloud.dev.conduit.mobile`
-   - **App Groups** — `group.dev.conduit.mobile` (already declared in entitlements)
+### 3. Physical-device validation (APNs is a no-op in the simulator)
+On a real device: connect a host, background the app, trigger an approval on the host → expect a push within ~2 s with the command + risk → tapping **Approve** resolves it via the decision relay even though the app was backgrounded.
 
-3. **Activate CloudKit container**, then flip `CONDUIT_ICLOUD_ENABLED` to `true` in `project.yml`:
-   ```yaml
-   CONDUIT_ICLOUD_ENABLED: true
-   ```
-   Then run `xcodegen generate`.
+### 4. Pre-public polish (before TestFlight/public)
+- Repoint `CONDUIT_PUSH_BACKEND_URL` off the raw IP `https://35.201.3.231.sslip.io` onto a vanity domain (e.g. `https://push.conduit.dev`) so the shipped binary isn't pinned to an IP. Update `scripts/update-dns.sh` accordingly, then `xcodegen generate`.
+- **DNS for conduit.dev** (Route53, ~2 min): A `conduit.dev → 76.76.21.21`, CNAME `www.conduit.dev → cname.vercel-dns.com`. Or `aws configure && ./scripts/update-dns.sh`.
 
-4. **Create IAP**:
-   - Product ID: `dev.conduit.mobile.pro`
-   - Type: Non-Consumable
-   - Price: $14.99
-   - Display name: "Conduit Pro"
-
-5. **Fill Privacy Nutrition Label**:
-   - No tracking
-   - Declare: optional APNs device identifier (push registration for approval alerts)
-   - Declare: subscription data if Stripe billing is enabled
-
-6. **Age rating**: 4+
-
-7. **Upload screenshots** from `docs/screenshots/` (6 images at 1320×2868 for iPhone 6.9")
+### 5. Archive → TestFlight → release
+**Xcode Organizer:** Product → Archive → Distribute App → App Store Connect → Upload → add testers in TestFlight.
+**Fastlane (if configured):** `fastlane beta` → TestFlight; after testing, `fastlane release`.
 
 ---
 
-## Step 3: Deploy push backend + set URL
-
-1. Follow `daemon/push-backend/README.md` to deploy the push backend (GCP Cloud Run or equivalent)
-2. After deploying, set the HTTPS URL in `project.yml` Info.plist properties:
-   ```yaml
-   CONDUIT_PUSH_BACKEND_URL: "https://your-backend-url.example.com"
-   ```
-3. Run `xcodegen generate`
-
-**Note:** The cleartext `http://` fallback has been removed from `ConduitApp.swift`. If `CONDUIT_PUSH_BACKEND_URL` is not set, push token registration is silently skipped (no ATS violation, no crash).
-
----
-
-## Step 4: DNS for conduit.dev (2 minutes)
-
-Prerequisites: AWS CLI configured with Route53 write access to the `conduit.dev` hosted zone.
-
-```bash
-aws configure  # if not already done
-./scripts/update-dns.sh
-```
-
-Or manually in [AWS Route53](https://console.aws.amazon.com/route53/):
-- **A record**: `conduit.dev` → `76.76.21.21`, TTL 60
-- **CNAME**: `www.conduit.dev` → `cname.vercel-dns.com`, TTL 60
-
----
-
-## Step 5: TestFlight + release
-
-> **Before public TestFlight / App Store:** The `CONDUIT_PUSH_BACKEND_URL` build setting currently contains a Cloud Run sslip.io address (e.g. `https://conduit-push-HASH-ts.a.run.app`). Before distributing publicly, repoint it to a stable domain with a proper certificate — e.g. `https://push.conduit.dev` — and add the corresponding DNS CNAME to `scripts/update-dns.sh`. Using a vanity domain prevents baking a Cloud Run hash URL into a shipped binary that can't easily be updated.
-
-**Via Xcode Organizer (easiest):**
-1. Product → Archive
-2. Xcode Organizer → Distribute App → App Store Connect → Upload
-3. Visit App Store Connect → TestFlight to add internal testers
-
-**Via Fastlane (if configured):**
-```bash
-export APPLE_ID="sidewhinder2k3@gmail.com"
-export APP_STORE_CONNECT_TEAM_ID="<your paid team ID>"
-fastlane beta    # upload to TestFlight
-# or after TestFlight testing:
-fastlane release # submit to App Store
-```
-
----
-
-## What this branch already changed (no owner action needed)
-
-| Item | Source | Change |
-|------|--------|--------|
-| Entitlements flip | `feat/hosted-agents-rc` (inherited) | `project.yml` already points to `Conduit.entitlements`; push + CloudKit declared |
-| ATS/HTTPS + http fallback removed | `feat/hosted-agents-rc` (inherited) | Cleartext `http://` fallback gone; `CONDUIT_PUSH_BACKEND_URL` baked into Info.plist |
-| Background modes | This branch (`agent/ws-b-shipgate-rc`) | `remote-notification` added to `UIBackgroundModes` in `project.yml` |
-| Export compliance | This branch (`agent/ws-b-shipgate-rc`) | `ITSAppUsesNonExemptEncryption: false` added to `project.yml` Info.plist properties |
-| Owner checklist | This branch (`agent/ws-b-shipgate-rc`) | `docs/ship-gate-owner-steps.md` created |
-
----
-
-## APNs production push (owner, ~15 min — needs paid Apple account)
-
-1. App Store Connect → Keys → create an **APNs Auth Key (.p8)**; note Key ID + Team ID.
-2. Deploy push-backend with env: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH=/secrets/AuthKey.p8`, `APNS_BUNDLE_ID=dev.conduit.mobile`.
-3. Set the app's `CONDUIT_PUSH_BACKEND_URL` (Info.plist / scheme) to the deployed URL.
-4. On a **physical device** (APNs is no-op in the simulator): connect a host, background the app, trigger an approval on the host → expect a push within ~2s with the command + risk; tapping Approve resolves it via the decision relay even though the app was backgrounded.
-
----
-
-## Final owner checklist (one action each)
-
-1. Enroll/confirm paid Apple Developer account; set `DEVELOPMENT_TEAM`; run `xcodegen generate`.
-2. App Store Connect: create the app record, enable Push + CloudKit, create the IAP, fill the privacy label, upload screenshots from `docs/screenshots/governed-approvals/`.
-3. Deploy `push-backend` with the APNs `.p8` env (see APNs section) + set `CONDUIT_PUSH_BACKEND_URL`.
-4. Physical-device validation: connect host, background the app, trigger an approval → push → tap Approve → the backend decision-relay resolves it.
-5. `fastlane beta` → TestFlight; after testing, `fastlane release`.
-
----
-
-## Owner actions report update (2026-06-04)
-
-- Commit created on `feat/hosted-agents-rc`: `737e5f6`
-  - Message: `fix: Release archive compile blockers in CloudSync and ProvisioningWizard`
-  - Files included:
-    - `Packages/ConduitKit/Sources/SyncKit/CloudSync.swift`
-    - `Packages/ConduitKit/Sources/OnboardingFeature/ProvisioningWizard.swift`
-  - Excluded unrelated untracked `github_*` files.
-- Validation:
-  - `cd Packages/ConduitKit && swift test` passed (`317 tests in 48 suites`).
-- TestFlight export continuation:
-  - Command used: `xcodebuild -exportArchive -archivePath build/Conduit.xcarchive -exportOptionsPlist build/ExportOptions-AppStore.plist -exportPath /tmp/Conduit-TestFlight-export -allowProvisioningUpdates`
-  - Result: `** EXPORT SUCCEEDED **`
-  - Export output: `/tmp/Conduit-TestFlight-export`
+## Common SSH-app rejection reasons to pre-empt
+- **2.5.2 / remote shell** — make the reviewer notes explicit (remote, not local, execution).
+- **4.2 minimum functionality** — lead screenshots with the approval inbox, the decision, and the diff/policy surfaces.
+- **2.1 completeness** — onboarding must complete cleanly.
+- **3.1.1 IAP** — confirm the StoreKit purchase works in TestFlight.

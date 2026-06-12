@@ -1,5 +1,8 @@
 # Push backend deploy env (owner-run)
 
+> **Status:** deployed and live — `https://35.201.3.231.sslip.io/health` → HTTP 200.
+> Open item: confirm the APNs secrets below are set on the *running* instance (health doesn't prove it — push reads env lazily at first send), then repoint to a vanity domain before public release.
+
 Do not commit secrets (`.p8`, API keys, webhook secrets, tokens) to git.
 Use Secret Manager or deployment-time environment variables.
 
@@ -9,6 +12,8 @@ Use Secret Manager or deployment-time environment variables.
 - `APNS_TEAM_ID=39HM2X8GS6`
 - `APNS_BUNDLE_ID=dev.conduit.mobile`
 - `APNS_KEY_PATH=/secrets/apns.p8` (runtime path in container)
+
+Local source of the `.p8`: `~/Downloads/Personal-Docs/AuthKey_L8LVU9X82W.p8` (never commit it).
 
 ## Example Cloud Run deploy flow
 

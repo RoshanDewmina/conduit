@@ -112,4 +112,4 @@ Only kinds `read`, `grep`, `list`, `search` may fail-open when the flag is set.
 ## TODO(owner)
 
 - End-to-end validation with **live SSH + local-sshd fixture** per `docs/validation-playbook.md` (TC-1..TC-7).
-- APNs push while detached requires production push backend + paid Apple account; resident `queue.json` covers bridge persistence when the phone is offline.
+- APNs push while detached is delivered by the deployed `push-backend` (live; see `push-backend-deploy-env.md`); resident `queue.json` covers bridge persistence when the phone is offline. A real-device smoke test is the only open item — see `ship-gate-owner-steps.md`.

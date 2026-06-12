@@ -1,124 +1,53 @@
 # App Store Metadata — Conduit
 
-## App Name
-Conduit
+> Current positioning: **governed approvals** (mission control for AI coding agents).
+> Owner-step checklist for getting on the store: `ship-gate-owner-steps.md`.
 
-## Subtitle (30 chars max)
-SSH + AI Agent Control
+## Listing fields
 
-## Category
-Primary: Developer Tools
-Secondary: Productivity
+- **Name:** Conduit — Agent Approvals
+- **Subtitle (30):** Approve AI agents from anywhere
+- **Category:** Primary *Developer Tools* · Secondary *Productivity*
+- **Privacy / Support / Marketing URLs:** `https://conduit.dev/privacy` · `https://conduit.dev/support` · `https://conduit.dev`
 
-## Privacy Policy URL
-https://conduit.dev/privacy
+**Promotional text:**
+> Your AI coding agents ask permission on your phone. Decide in one tap — even when you're away. Safe actions auto-handle by your policy; everything's logged.
 
----
+**Description:**
+> Conduit is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app was closed. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+>
+> **Decide fast** — high-risk approvals surface with command, blast radius, and risk band. Allow, deny, allow-always, or edit-then-run.
+> **Stay calm** — autonomy presets (Cautious / Balanced / Bypass) and per-repo policy mean most actions never reach you.
+> **See everything** — a while-you-were-away activity feed logs every autonomous decision; a fleet glance shows cross-vendor status and spend in one place.
+> **Go deep when needed** — a full block-mode terminal, diff review, SFTP browser, and dev-server preview live one tap down.
 
-## Description (4000 chars max)
+- **Keywords (100):** `claude code,codex,opencode,ai agent,approvals,ssh,devops,audit,policy,governance,terminal,fleet`
+- **What's New (first version):** First release. Govern Claude Code, Codex, and opencode from your phone — approve, deny, or edit agent actions in one tap, set policy, and audit every decision.
 
-Conduit is a phone-native control plane for remote AI coding. Not just another SSH client — it is the missing mobile layer between you and the AI agents running on your servers.
+## Screenshots to capture (6.9" 1320×2868 + iPad)
+Canonical set: `docs/screenshots/governed-approvals/`.
+1. Inbox — high-risk approval card (command + blast radius).
+2. A decision being made (Approve / Deny / Edit / Allow-always).
+3. Fleet glance (cross-vendor status + spend).
+4. Activity (while-you-were-away) feed.
+5. Autonomy presets (Cautious / Balanced / Bypass).
 
-**Supervise AI agents from anywhere**
-When Claude Code or another AI agent wants to run a command on your server, Conduit delivers the request to your phone instantly. See exactly what it wants to do, the risk level, and the working directory. Tap Allow or Reject. No laptop required.
+## Age rating → 4+
+Made for kids: No · Unrestricted web: No · Gambling/Contests: No · Violence/Sexual content: None.
 
-**Block-mode terminal**
-Commands and their output appear as discrete, collapsible blocks — the way a modern terminal should work. Swipe to collapse. Long-press to copy, re-run, or ask AI to explain.
+## App Review notes
+Conduit governs AI coding agents on the developer's own remote host. It drives a *remote* shell over SSH — it does **not** download or execute code locally (pre-empts Guideline 2.5.2). The Inbox is pre-seeded in DEBUG builds so reviewers see approval cards without a live host. The Billing screen offers a $14.99 StoreKit non-consumable (`dev.conduit.mobile.pro`); use a sandbox account.
 
-**Raw PTY for TUI apps**
-vim, htop, tmux — anything that needs a real terminal is one tap away. Conduit switches automatically when it detects a TUI program and switches back when you exit.
+## Privacy nutrition label
+No tracking. Declare: APNs device token (push registration for approval alerts) and subscription data if Stripe billing is enabled. State plainly: **source code never leaves the device.** Verify against actual data flows before submission.
 
-**AI in the composer**
-Type `#` before any message and Conduit translates natural language into a shell command. When a command fails, long-press the block and tap "Explain with AI" to get a clear, actionable explanation.
+> **Copy caveat:** the "even when you're away / app was closed" claim is true **only with the backend decision-relay enabled** (it is, as of the Governed Approvals milestone). If that relay is ever disabled, change the promo/description to "Open and decide in a tap" and drop "even when the app was closed."
 
-**Session survival**
-tmux integration means your sessions stay alive when you walk away. Come back hours later, reconnect in seconds, and pick up exactly where you left off — even on a different network.
+## Entitlements (observed in `project.yml`, read-only)
 
-**Dev server preview**
-Port-forward your running app through the SSH connection and browse it in the built-in browser, all without opening a laptop or punching holes in a firewall.
-
-**SFTP file browser**
-Browse, read, and inspect files on your remote server without leaving the app.
-
-**Diff review**
-Review unified diffs with syntax-highlighted additions and deletions. Coming: approve or reject individual hunks directly from your phone.
-
-**Privacy by design**
-Your SSH credentials and API keys never leave your device. All keys are stored in the iOS Keychain. AI requests go directly from your device to your AI provider — Conduit servers never see your prompts.
-
-**Bring your own everything**
-Your server. Your API keys. Your agents. Conduit is the control surface, not the cloud.
-
----
-
-## Keywords (100 chars max — comma-separated)
-SSH,terminal,AI,remote,developer,agent,Claude,server,control,PTY,SFTP,coding,automation
-
----
-
-## What's New (first version)
-First release. Connect to remote SSH servers, supervise AI agents, review diffs, and browse files — all from your phone.
-
----
-
-## Support URL
-https://conduit.dev/support
-
-## Marketing URL
-https://conduit.dev
-
----
-
-## Screenshots — suggested content
-
-### Screen 1: Workspaces list (hero)
-- Show a populated list of hosts (My Dev Server, Staging, Fly.io Worker)
-- Timestamp "2 minutes ago" on the first host
-- Tab bar visible at bottom
-
-### Screen 2: Session — block mode
-- Show 3-4 completed command blocks
-- One block with red failure bar and "Explain with AI" context menu visible
-- Composer with "#" prefix showing "AI: translating…"
-
-### Screen 3: Inbox — approval card
-- Show an approval card with "HIGH RISK" badge
-- Command: `rm -rf ./node_modules && npm ci`
-- Allow / Reject buttons clearly visible
-- Badge count "1" on tab icon
-
-### Screen 4: Preview
-- Dev server running (React or Next.js dev page visible in WKWebView)
-- Port selector toolbar showing "localhost:3000"
-- Viewport selector: iPhone / iPad / Desktop
-
-### Screen 5: Diff view
-- A unified diff with additions (green) and deletions (red)
-- Multiple files shown
-- NavigationBar title: "Diff"
-
----
-
-## Age Rating Questionnaire answers
-- Made For Kids: No
-- Unrestricted Web Access: No
-- Gambling: No
-- Contests: No
-- Violence: None
-- Sexual Content: None
-
-**Resulting rating: 4+**
-
----
-
-## App Review Notes (include in submission)
-Conduit is an SSH client and AI agent supervision tool for software developers.
-
-To test the app:
-1. Tap "Add your first host" on the Workspaces screen
-2. Enter any SSH server's hostname, port, username (22, user@example.com)
-3. The app will attempt to connect; for review purposes you can use a test server at:
-   Host: review-test.conduit.dev | Port: 22 | Username: reviewer | Password: conduit2026
-
-The Inbox tab shows pending AI agent approval requests (pre-seeded in DEBUG builds).
-The Billing screen offers a one-time $14.99 purchase through StoreKit (use sandbox account).
+| Key | Value |
+|-----|-------|
+| `aps-environment` | `production` |
+| `DEVELOPMENT_TEAM` | `39HM2X8GS6` (paid; shared by all four targets) |
+| `com.apple.developer.icloud-services` | `[CloudKit]` |
+| `com.apple.developer.icloud-container-identifiers` | `iCloud.dev.conduit.mobile` |

@@ -45,7 +45,7 @@
 ---
 
 ## 2. STUDY (do this first, in parallel)
-- **Codebase:** `CLAUDE.md`, `ARCHITECTURE.md`, `docs/agent-contract.md`, `docs/block-terminal-implementation.md`, `docs/remaining-work.md`, `docs/ship-gate-owner-steps.md`, `docs/validation-playbook.md`, `docs/SECURITY-REVIEW.md`, `docs/app-store-submission.md`, `docs/BUILD_PLAN_COMMAND_CENTER.md`.
+- **Codebase:** `CLAUDE.md`, `ARCHITECTURE.md`, `docs/agent-contract.md`, `docs/block-terminal-implementation.md`, `docs/remaining-work.md`, `docs/ship-gate-owner-steps.md`, `docs/validation-playbook.md`, `docs/SECURITY-REVIEW.md`, `docs/ship-gate-owner-steps.md`, `docs/BUILD_PLAN_COMMAND_CENTER.md`.
 - **Research + wedge:** `~/Downloads/conduit-execution-briefing-2026-06-04.md` (§2.7 = verified market reality + the wedge), `conduit-deep-market-research-2026-06-04.md`, `deep-research-report.md`, `docs/PRODUCT_RESEARCH.md`. **Our wedge:** the only cockpit where agents run *unattended, safely* — under a policy you control, on infra you own, across every vendor. Every UX decision should reinforce reliability + the autonomy/security story.
 - **Competitors (for parity + polish bar):** READMEs in `github_readmes/` (Happy, Omnara, CC Pocket, cmux, Paseo, …). For deeper reference, clone **opencode** (we integrate it; need its hook/SSE API) and **Happy** (MIT; best E2E + push-on-permission reference) into `~/conduit-refs/` (outside the repo, never commit). Do NOT copy AGPL code (cmux, CloudCLI) — ideas only.
 

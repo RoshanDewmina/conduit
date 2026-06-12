@@ -1,49 +1,47 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Chakra_Petch, Fira_Code } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const chakra = Chakra_Petch({
+  variable: "--font-chakra",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const fira = Fira_Code({
+  variable: "--font-fira",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
+
+const TITLE = "Conduit — Approve your agents. Keep your code.";
+const DESCRIPTION =
+  "Conduit is a phone-first approval, policy, and audit layer for AI coding agents — Claude Code, Codex, and opencode. Risky actions pause and ping your phone; safe actions auto-run by your policy. Your code never leaves your machine.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://conduit.dev"),
-  title: "Conduit — SSH Agent Terminal for iOS",
-  description:
-    "Run AI agents over SSH from your iPhone. Warp-style blocks, Inbox approvals, BYO-host.",
+  title: TITLE,
+  description: DESCRIPTION,
   openGraph: {
-    title: "Conduit — SSH Agent Terminal for iOS",
-    description:
-      "Run AI agents over SSH from your iPhone. Warp-style blocks, Inbox approvals, BYO-host.",
+    title: TITLE,
+    description: DESCRIPTION,
     url: "https://conduit.dev",
     siteName: "Conduit",
     // Add public/og.png (1200x630) before launch — referenced here as the OG image.
-    images: [
-      {
-        url: "/og.png",
-        width: 1200,
-        height: 630,
-        alt: "Conduit — SSH Agent Terminal for iOS",
-      },
-    ],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: TITLE }],
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Conduit — SSH Agent Terminal for iOS",
-    description:
-      "Run AI agents over SSH from your iPhone. Warp-style blocks, Inbox approvals, BYO-host.",
+    title: TITLE,
+    description: DESCRIPTION,
     images: ["/og.png"],
   },
   icons: {
-    // Add public/icon.png (512x512) before launch — referenced here as the app icon.
+    // Add public/icon.png (512x512) before launch.
     icon: "/icon.png",
     apple: "/icon.png",
   },
@@ -57,11 +55,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${chakra.variable} ${fira.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col bg-bg text-fg">{children}</body>
     </html>
   );
 }

@@ -1,0 +1,125 @@
+<h2>3 Approaches — How Conduit Connects to Agents</h2>
+<p class="subtitle">All three support the same end-goal: any agent → Conduit cloud → your phone. The difference is the developer experience and what you're betting on.</p>
+
+<div class="cards" style="grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <div class="label" style="color: #6c8ebf; margin-bottom: 8px;">APPROACH A</div>
+      <h3 style="margin-bottom: 6px;">SDK Platform</h3>
+      <p style="font-size: 13px; color: #888; margin-bottom: 14px;">REST + WebSocket backbone, thin SDKs per language</p>
+
+      <div style="background: #111; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; color: #a8d8a8; margin-bottom: 14px; line-height: 1.6;">
+        <span style="color: #888"># Any agent, any language</span><br>
+        conduit.notify("trade_executed", {<br>
+        &nbsp;&nbsp;ticker: "AAPL",<br>
+        &nbsp;&nbsp;action: "buy",<br>
+        &nbsp;&nbsp;amount: 500<br>
+        })<br><br>
+        <span style="color: #888"># Block until user responds</span><br>
+        decision = conduit.checkpoint({<br>
+        &nbsp;&nbsp;message: "Sell TSLA?",<br>
+        &nbsp;&nbsp;context: news_summary<br>
+        })
+      </div>
+
+      <div style="font-size: 12px; line-height: 1.7;">
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Universal — Python, Go, TypeScript, anything</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Bidirectional — interventions flow back in real-time</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Familiar DX — devs know REST + SDK patterns</div>
+        <div style="color: #d9534f; margin-bottom: 4px;">✗ Need SDKs for each language</div>
+        <div style="color: #d9534f;">✗ Extra plumbing for LLM-native agents</div>
+      </div>
+
+      <div style="margin-top: 14px; padding: 10px; background: #1a1a2e; border-radius: 6px; font-size: 11px; color: #aaa;">
+        <strong style="color: #fff;">Think:</strong> PagerDuty + Pushover + intervention layer + agent marketplace
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="border-color: #6c8ebf; box-shadow: 0 0 0 1px #6c8ebf33;">
+    <div class="card-body">
+      <div class="label" style="color: #f0ad4e; margin-bottom: 8px;">APPROACH B — RECOMMENDED</div>
+      <h3 style="margin-bottom: 6px;">MCP-Native First</h3>
+      <p style="font-size: 13px; color: #888; margin-bottom: 14px;">Conduit exposes a cloud MCP server. Agents add it to their --mcp-server config.</p>
+
+      <div style="background: #111; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; color: #a8d8a8; margin-bottom: 14px; line-height: 1.6;">
+        <span style="color: #888"># claude agent config</span><br>
+        --mcp-server conduit-cloud<br><br>
+        <span style="color: #888"># LLM calls naturally:</span><br>
+        conduit_notify(event="trade",<br>
+        &nbsp;&nbsp;ticker="AAPL", action="buy")<br><br>
+        <span style="color: #888"># Blocks until user taps phone:</span><br>
+        conduit_checkpoint(<br>
+        &nbsp;&nbsp;message="Sell TSLA?",<br>
+        &nbsp;&nbsp;context=news_summary<br>
+        )
+      </div>
+
+      <div style="font-size: 12px; line-height: 1.7;">
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Zero friction for Claude/Codex users (already use MCP)</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ LLM calls tools naturally — no extra SDK import</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Bidirectional — checkpoint() blocks until you tap</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Fits the AI agent ecosystem direction</div>
+        <div style="color: #d9534f; margin-bottom: 4px;">✗ Non-LLM agents need a thin HTTP shim</div>
+        <div style="color: #d9534f;">✗ MCP protocol still evolving</div>
+      </div>
+
+      <div style="margin-top: 14px; padding: 10px; background: #1a2e1a; border-radius: 6px; font-size: 11px; color: #aaa;">
+        <strong style="color: #fff;">Think:</strong> "The MCP server that connects every agent to your phone"
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <div class="label" style="color: #9b59b6; margin-bottom: 8px;">APPROACH C</div>
+      <h3 style="margin-bottom: 6px;">Hybrid (MCP + SDK)</h3>
+      <p style="font-size: 13px; color: #888; margin-bottom: 14px;">Both paths. MCP for AI agents. REST/WebSocket SDK for everything else. Same backend.</p>
+
+      <div style="background: #111; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; color: #a8d8a8; margin-bottom: 14px; line-height: 1.6;">
+        <span style="color: #888"># AI agent → MCP path</span><br>
+        --mcp-server conduit-cloud<br><br>
+        <span style="color: #888"># Python script → SDK path</span><br>
+        from conduit import Agent<br>
+        agent = Agent(api_key="...")<br>
+        agent.notify("portfolio_alert", {...})<br>
+        decision = agent.checkpoint(...)
+      </div>
+
+      <div style="font-size: 12px; line-height: 1.7;">
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Best coverage — nothing excluded</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Natural fit per agent type</div>
+        <div style="color: #5cb85c; margin-bottom: 4px;">✓ Future-proof</div>
+        <div style="color: #d9534f; margin-bottom: 4px;">✗ Double the surface area to build + maintain</div>
+        <div style="color: #d9534f;">✗ Risky to ship both at once</div>
+      </div>
+
+      <div style="margin-top: 14px; padding: 10px; background: #1a1a2e; border-radius: 6px; font-size: 11px; color: #aaa;">
+        <strong style="color: #fff;">Verdict:</strong> Correct end-state, but build B first, then add SDK as a second path. Ship B, not C.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top: 20px; padding: 16px; background: #0d1117; border: 1px solid #2a3f5f; border-radius: 8px;">
+  <h3 style="font-size: 14px; margin-bottom: 8px; color: #e8eaf0;">Why MCP-native first makes sense right now</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; font-size: 12px; color: #aaa; line-height: 1.6;">
+    <div>
+      <div style="color: #f0ad4e; font-weight: 600; margin-bottom: 4px;">Your primary users</div>
+      Developers already running Claude Code / Codex agents. They are MCP users by default. Conduit becomes one more MCP server in their config — no new concept to learn.
+    </div>
+    <div>
+      <div style="color: #f0ad4e; font-weight: 600; margin-bottom: 4px;">The IBKR agent</div>
+      <code style="font-size: 11px; background: #111; padding: 2px 4px; border-radius: 3px;">claude --mcp ibkr-mcp --mcp conduit-cloud</code><br>
+      The agent can now call <code style="font-size: 11px; background: #111; padding: 2px 4px; border-radius: 3px;">conduit_notify()</code> naturally. No Python SDK, no extra process.
+    </div>
+    <div>
+      <div style="color: #f0ad4e; font-weight: 600; margin-bottom: 4px;">Conduit's moat</div>
+      Being "the MCP server for mobile" is a clear, defensible position in the ecosystem. As MCP adoption grows, Conduit grows with it. The SDK path can always be added later.
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="text-align: center; margin-top: 16px;">Click to select an approach. My recommendation is B — start MCP-native, add SDK path once the platform is stable.</p>
