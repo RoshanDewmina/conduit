@@ -1,0 +1,33 @@
+############################################################
+# Conduit approval-relay auth contract — curl transcript
+# backend: push-backend @ http://127.0.0.1:8077  (APPROVAL_RELAY_SECRET=test-secret-123)
+# commit: f6a36a55ce6ca5d32f0e2b6c1eb2c0eed8ec39b6
+# date:   2026-06-12T19:41:25Z
+############################################################
+
+=== (a) CONTROL PLANE: /register WITHOUT secret  -> expect 401 ===
+POST /register (no Authorization): 401 body=[unauthorized]
+POST /register (WRONG secret):     401 body=[unauthorized]
+
+=== (b) CONTROL PLANE: /register WITH secret -> register sessionId->relayToken (expect 204) ===
+POST /register (correct secret):   204 body=[]
+
+=== control-plane /approval guard (expect 401 no-secret, 202 with-secret+no-device-token) ===
+POST /approval (no secret):        401 body=[unauthorized]
+POST /approval (correct secret):   202 body=[]
+
+=== (c) PER-SESSION: POST /approval/decision ===
+decision, NO token            -> expect 401: 401 body=[unauthorized]
+decision, WRONG relayToken    -> expect 401: 401 body=[unauthorized]
+decision, CORRECT relayToken  -> expect 204: 204 body=[]
+decision, bad verb 'frobnicate' (correct token) -> expect 400: 400 body=[decision must be approve, approveAlways, or deny]
+
+=== (d) PER-SESSION: GET /decisions ===
+decisions, NO token           -> expect 401: 401 body=[unauthorized]
+decisions, WRONG token        -> expect 401: 401 body=[unauthorized]
+decisions, CORRECT token      -> expect 200 + drains the ap1 approve decision: 200 body=[{"decisions":[{"approvalId":"ap1","decision":"approve","sessionId":"sess-abc-123","createdAt":1781293285}]}]
+decisions, CORRECT token AGAIN -> expect 200 + EMPTY (already drained): 200 body=[{"decisions":[]}]
+
+=== cross-session isolation: holder of session A's token cannot drain session B ===
+session A's token draining session B's decisions -> expect 401: 401 body=[unauthorized]
+session B's own token draining session B -> expect 200 + apB deny: 200 body=[{"decisions":[{"approvalId":"apB","decision":"deny","sessionId":"sess-other-B","createdAt":1781293285}]}]

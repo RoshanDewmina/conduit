@@ -1,0 +1,5 @@
+=== Check 3 (relay-level idempotency by approvalId) ===
+register session: 204 body=[]
+POST decision approvalId=apX decision=approve  -> 204: 204 body=[]
+POST SECOND (stale) decision SAME approvalId=apX decision=deny -> 204 (replaces, no dup): 204 body=[]
+GET /decisions -> expect EXACTLY ONE record for apX (the latest), not two: 200 body=[{"decisions":[{"approvalId":"apX","decision":"deny","sessionId":"sess-idem-1","createdAt":1781293297}]}]

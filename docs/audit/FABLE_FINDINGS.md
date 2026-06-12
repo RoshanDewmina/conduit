@@ -6,13 +6,69 @@
 
 ## Status
 
-- [ ] Phase 1 — Orient & green baseline
-- [ ] Phase 2 — Feature inventory & coverage matrix (`FEATURE_COVERAGE.md`)
-- [ ] Phase 3 — Exhaustive static review & hardening (governed-approvals path first)
-- [ ] Phase 4 — Full E2E simulator run, every screen screenshotted
-- [ ] Phase 5 — UX/UI/perf polish
+- [x] Phase 1 — Orient & green baseline
+- [x] Phase 2 — Feature inventory & coverage matrix (`FEATURE_COVERAGE.md`)
+- [x] Phase 3 — Exhaustive static review & hardening (governed-approvals path first)
+- [~] Phase 4 — E2E run: builds/tests/relay/idempotency **verified**; live-approval/TOFU/M6 runtime **BLOCKED** by HID tooling (see Continuation §)
+- [x] Phase 5 — UX/UI/perf polish (code-complete, app-target build 0/0; sim-visual pending on HID fix)
 - [ ] Phase 6 — Submission readiness (go/no-go)
 - [ ] Phase 7 — Final verification & report (`FABLE_REPORT.md`)
+
+## Continuation — Phase 4 E2E + Phase 5 (2026-06-12, second session)
+
+Checkpoint commit `f6a36a55` froze all Phase 1–3 work; Phase 4 verification ran against it (in an
+isolated worktree, detached at `f6a36a55`), Phase 5 was implemented on `feat/governed-approvals`.
+
+### Phase 5 — UX polish (DONE, build-verified; sim-visual pending)
+
+Commits on `feat/governed-approvals`:
+- `680ee7eb` — 14 token-drift fixes; `TextPreview` NUL-byte binary guard (MAJOR); `SnippetEditor`
+  preserves `hostTags`/`tags` on edit (MAJOR); iPad `NavigationStack` in `regularRoot` (MAJOR-2).
+- `ab1e8a04` — Face ID opt-in persists `appLockEnabled` only on real success (MAJOR-3); removed dead
+  shipped UI (Library +new, mock Workflows card, RECENT run-rows); deleted orphaned
+  `WorkflowsView`/`HistoryView` (DEBUG gallery views kept).
+- `500c0981` — saved-hosts reconnect list + dedup (MAJOR-4): `AddHostView` upserts by `host:port:user`
+  (no duplicate records, preserves trusted host-key); `FleetView` "Saved hosts" section
+  (tap-reconnect, swipe-delete).
+
+Verification: ConduitKit `swift build` green every chunk; **app-target `xcodebuild` SUCCEEDED, 0
+errors / 0 warnings**. Sim-visual checks (Face ID launch-lock, iPad layout, reconnect/dedup flow,
+dead-UI gone) **pending** — blocked by HID tooling (below).
+
+Deferred deliberately: **MAJOR-5** (password-retry sheet present-over-cover) — same B1 presentation
+path that was under E2E verification; not destabilized mid-pass.
+
+### Phase 4 — E2E verdicts (evidence in `screens/e2e-phase4/`)
+
+| Check | Verdict | Basis |
+|---|---|---|
+| 1 Live-SSH approval happy path | **BLOCKED** | shell-integration wedge + no HID taps |
+| 2 B1 TOFU first-connect | PARTIAL (code-verified) | sheet inside SessionView above cover; runtime needs taps |
+| 3 B3 idempotency (first-decision-wins) | **PASS** | test `firstDecisionWins`; relay dedupe; `WHERE decision IS NULL` |
+| 4 Relay fallback (two-tier auth) | **PASS** | full curl matrix + `TestDecisionPollerResolves`/`SendsBearerToken` |
+| 5 Cold-launch banner (M6) | PARTIAL (code-verified) | buffer drain + `HostedAgentM6Tests`; runtime needs a push tap |
+| 6 Gallery + prod Inbox shots | **PASS** | 3 dark routes + prod Inbox L/D; **no host-label wrap issue** |
+
+Builds: SPM + **337 tests** PASS, app-target `xcodebuild` PASS, Go push-backend + relay tests PASS.
+
+### Two blockers found in Phase 4
+
+1. **HID tap/typing tooling is dead on this machine.** Only `Xcode-beta.app` is installed; it ships
+   `SimulatorKit.framework` under `Contents/SharedFrameworks/` while idb / XcodeBuildMCP hardcode
+   `Contents/Developer/Library/PrivateFrameworks/`. Screenshots + AX-tree reads work; taps/typing
+   fail. Blocks **all** interactive verification — Phase 4 Checks 1/2/5, tab navigation, and the
+   Phase 5 sim-visual pass. Not patched (modifying the Xcode bundle would risk the environment).
+2. **Shell-integration bootstrap leaks into the live block and wedges zsh** (Check 1). The OSC-133
+   bootstrap renders as literal text and the shell wedges at a PS2 continuation
+   (`elif-then function function quote>`); the connect-time autocmd (`claude`, and even `echo`) pastes
+   into the unterminated construct and never runs → session goes Offline. Reproduced twice.
+   **Code finding:** `awaitUnifiedShellReady()` (SessionViewModel.swift:969) has a **3s timeout
+   backstop** that drains connect-time waiters *without* `unifiedIntegrationReady` becoming true. On a
+   heavy login shell (the user's 440-line `~/.zshrc` with a `claude` wrapper + `elif` blocks) where the
+   integration prompt takes >3s or the rc mangles the injection, that timeout releases the autocmd
+   prematurely → the wedge. Plausible product fragility amplified by host config; needs a clean-shell
+   repro on a vanilla host to attribute definitively. Approval/block **UI renders correctly** (Check 6),
+   so the fault is isolated to the live zsh-integration handshake, not rendering or the approval layer.
 
 ## Baselines (2026-06-12, start of audit)
 
