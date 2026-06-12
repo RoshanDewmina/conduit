@@ -905,16 +905,22 @@ public final class SessionViewModel {
                 let probeResult = await bridge.shellProbeResult
                 let isFish = !(probeResult?.isEmpty ?? true)
 
+                // Inject via the single-line base64 `eval` form, NOT the multi-line
+                // script: a multi-line function definition pasted into an interactive
+                // zsh enters PS2 continuation (`function>`/`then>`/`quote>`) and, on a
+                // heavy login shell, tangles so the connect-time autocmd is pasted into
+                // an unterminated construct and never runs (session goes Offline). The
+                // one-line eval arrives as a single logical command — no continuation.
                 if isFish {
                     UserDefaults.standard.set("fish", forKey: "conduitShellDetected")
-                    let bytes = Array((ShellIntegrationScript.script(for: .fish) + "\n").utf8)
+                    let bytes = Array((ShellIntegrationScript.bootstrapForFishOneLine() + "\n").utf8)
                     try? await shell.send(bytes)
                     try? await Task.sleep(for: .milliseconds(300))
                     try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
                     await MainActor.run { self.startIntegrationFallback() }
                 } else {
                     UserDefaults.standard.set("posix", forKey: "conduitShellDetected")
-                    let bytes = Array((ShellIntegrationScript.bootstrapForPOSIXShells() + "\n").utf8)
+                    let bytes = Array((ShellIntegrationScript.bootstrapForPOSIXShellsOneLine() + "\n").utf8)
                     try? await shell.send(bytes)
                     try? await Task.sleep(for: .milliseconds(300))
                     try? await shell.send(Array("printf '\\033[2J\\033[H'\n".utf8))
