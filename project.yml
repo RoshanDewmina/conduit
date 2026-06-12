@@ -258,15 +258,35 @@ targets:
       - sdk: SwiftUI.framework
       - sdk: AppIntents.framework
 
+  ConduitUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: ConduitUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.uitests
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - target: Conduit
+
 schemes:
   Conduit:
     build:
       targets:
         Conduit: all
         ConduitWatch: all
+        ConduitUITests: [test]
     run:
       config: Debug
       storeKitConfiguration: Conduit/Conduit.storekit
+    test:
+      config: Debug
+      targets:
+        - ConduitUITests
     archive:
       config: Release
 
