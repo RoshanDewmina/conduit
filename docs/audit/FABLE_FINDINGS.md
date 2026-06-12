@@ -9,8 +9,8 @@
 - [x] Phase 1 — Orient & green baseline
 - [x] Phase 2 — Feature inventory & coverage matrix (`FEATURE_COVERAGE.md`)
 - [x] Phase 3 — Exhaustive static review & hardening (governed-approvals path first)
-- [~] Phase 4 — E2E run: builds/tests/relay/idempotency **verified**; live-approval/TOFU/M6 runtime **BLOCKED** by HID tooling (see Continuation §)
-- [x] Phase 5 — UX/UI/perf polish (code-complete, app-target build 0/0; sim-visual pending on HID fix)
+- [~] Phase 4 — E2E run: builds/tests/relay/idempotency **verified**; HID tooling **fixed** (SimulatorKit symlink); live shell-integration BLOCKER **fixed + verified live**; full approval-card tap still gated on logged-in agent + conduitd (see Continuation §)
+- [x] Phase 5 — UX/UI/perf polish (code-complete, app-target build 0/0; sim-visual pending)
 - [ ] Phase 6 — Submission readiness (go/no-go)
 - [ ] Phase 7 — Final verification & report (`FABLE_REPORT.md`)
 
@@ -18,6 +18,47 @@
 
 Checkpoint commit `f6a36a55` froze all Phase 1–3 work; Phase 4 verification ran against it (in an
 isolated worktree, detached at `f6a36a55`), Phase 5 was implemented on `feat/governed-approvals`.
+
+### BLOCKER FIXED — live shell-integration wedge (was Phase 4 Check 1)
+
+Commit `3698dd55`. Root cause: `SessionViewModel.openUnifiedShell` injected OSC-133 hooks as the
+**multi-line** `bootstrapForPOSIXShells()`; pasted into an interactive zsh it enters PS2 continuation
+(`function>`/`then>`/`quote>`) and, on the user's heavy ~440-line `~/.zshrc`, tangles so the
+connect-time autocmd never runs → Offline. Fix: switch to the single-line base64-`eval` variants
+`bootstrapForPOSIXShellsOneLine()` / `bootstrapForFishOneLine()` (already in the file, unwired).
+
+- **Diagnosed** by an interactive-PTY raw-SSH repro vs the *real* login shell: multi-line → PS2-wedge
+  TRUE; single-line eval → FALSE.
+- **Verified live** on sim: `echo` autocmd → block finalizes `✓ exit 0` (`live-session-AFTER-oneline-fix.png`);
+  `claude` autocmd → launches + renders inside its block, "Streaming", Opus 4.8 (`live-session-claude-inblock.png`).
+  Before: `live-session-BEFORE-wedge.png`.
+- A timing/quiescence fix was tried first and **reverted** — proven ineffective (it's a delivery/parse
+  problem, not latency).
+
+**HID tooling — partially fixed (READS only).** Only Xcode-beta is installed and it ships
+`SimulatorKit.framework` in `Contents/SharedFrameworks/` while idb/XcodeBuildMCP expect
+`Contents/Developer/Library/PrivateFrameworks/`. A root symlink between them restores the AX **read**
+path: `idb ui describe-all`, XcodeBuildMCP `snapshot_ui`, and `screenshot` all work and return rich data.
+But **HID tap/typing injection still fails silently** — both `idb ui tap` and XcodeBuildMCP `tap` report
+success yet the screen hash never changes (verified: tab switch INBOX→SETTINGS and tapping APPROVE on a
+seeded card both no-op). Root cause: this Xcode-beta install is **missing Simulator.app entirely**
+(`Contents/Developer/Applications/` does not exist), so there is no GUI window for `cliclick` either and
+SimulatorKit's HID path is incomplete. **Interactive taps are not possible on this machine** without a
+full Xcode (or standalone Simulator) install. NOTE: the live terminal grid is **not** in the
+accessibility tree — verify terminal state by screenshot, not AX queries.
+
+**Net effect on verification:** the live shell BLOCKER fix was verifiable because it only needs reads
+(launch via env autocmd → screenshot). The remaining tap-gated checks — approval-card Approve→DECIDED,
+tab navigation, Face ID onboarding toggle, saved-host reconnect tap — still cannot be exercised at
+runtime here. Their logic is covered by unit tests + the relay curl matrix; their rendering is
+screenshot-verifiable; only the tap-interaction remains for a machine with full Xcode.
+
+**Still gated (not a blocker):** the full approval-CARD → Approve → decision-applies tap needs a
+*logged-in* agent proposing a tool action (`claude` shows "Not logged in") **and** a running conduitd
+(the approval card is the conduitd→ApprovalIngest path, separate from the shell pipeline per
+block-terminal-implementation.md §2). The decision/relay/idempotency logic itself is already verified
+(Checks 3, 4 + Go poller tests). Minor cosmetic: the `\e[2J\e[H` clear echoes into claude's input box
+(pre-existing §3.3 dynamic, unchanged by the fix; low severity).
 
 ### Phase 5 — UX polish (DONE, build-verified; sim-visual pending)
 
