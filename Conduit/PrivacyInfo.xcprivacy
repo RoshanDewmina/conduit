@@ -13,7 +13,7 @@
                 <string>C617.1</string>
             </array>
         </dict>
-        <!-- UserDefaults (AppStorage for onboardingSeen flag and Sentry opt-out key) -->
+        <!-- UserDefaults (AppStorage for onboardingSeen, appLockEnabled, and terminal prefs) -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
             <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -22,35 +22,15 @@
                 <string>CA92.1</string>
             </array>
         </dict>
-        <!-- System boot time — Sentry crash reporter uses this for relative crash timestamps -->
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array>
-                <string>35F9.1</string>
-            </array>
-        </dict>
     </array>
-    <!-- Optional APNs approval alerts register a device token for app functionality.
-         Crash data is collected by Sentry for stability diagnostics only — no advertising or tracking. -->
+    <!-- APNs approval alerts register a device token for app functionality.
+         No crash/analytics SDK ships: the Sentry DSN is empty so SentrySDK never
+         starts (ConduitApp.swift), so no crash data is collected — it is not declared. -->
     <key>NSPrivacyCollectedDataTypes</key>
     <array>
         <dict>
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeDeviceID</string>
-            <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
-            <key>NSPrivacyCollectedDataTypeTracking</key>
-            <false/>
-            <key>NSPrivacyCollectedDataTypePurposes</key>
-            <array>
-                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-            </array>
-        </dict>
-        <dict>
-            <key>NSPrivacyCollectedDataType</key>
-            <string>NSPrivacyCollectedDataTypeCrashData</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
             <false/>
             <key>NSPrivacyCollectedDataTypeTracking</key>

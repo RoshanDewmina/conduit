@@ -1,1 +1,1 @@
-SSH,terminal,AI,remote,developer,agent,Claude,server,control,PTY,SFTP,coding,automation
+claude code,codex,opencode,ai agent,approvals,ssh,devops,audit,policy,governance,terminal,fleet
