@@ -841,22 +841,36 @@ public struct AddHostView: View {
             authMethod = .password
         }
 
-        let newHost = Host(
-            id: HostID(),
-            name: p.displayName,
-            hostname: p.host,
-            port: p.port,
-            username: p.user,
-            authMethod: authMethod,
-            tmuxSessionName: nil,
-            lastConnectedAt: nil
-        )
-
         do {
-            try await repository.upsert(newHost)
+            // Reuse an existing saved host (matched by host:port:user) instead of
+            // minting a new id, so re-adding the same host updates it in place and
+            // keeps its trusted host-key fingerprint rather than duplicating it.
+            let existing = try await repository.all().first {
+                $0.hostname.caseInsensitiveCompare(p.host) == .orderedSame
+                    && $0.username == p.user
+                    && $0.port == p.port
+            }
+            let host: Host
+            if var found = existing {
+                found.name = p.displayName
+                found.authMethod = authMethod
+                host = found
+            } else {
+                host = Host(
+                    id: HostID(),
+                    name: p.displayName,
+                    hostname: p.host,
+                    port: p.port,
+                    username: p.user,
+                    authMethod: authMethod,
+                    tmuxSessionName: nil,
+                    lastConnectedAt: nil
+                )
+            }
+            try await repository.upsert(host)
             isSaving = false
             Haptics.success()
-            onConnectAndSave(newHost)
+            onConnectAndSave(host)
         } catch {
             saveError = error.localizedDescription
             isSaving = false

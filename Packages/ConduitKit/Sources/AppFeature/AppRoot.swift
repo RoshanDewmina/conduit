@@ -783,8 +783,14 @@ public struct AppRoot: View {
             )
 
         case .fleet:
-            FleetView(store: fleetStore, onConnectHost: { addHostPresented = true })
-                .id(workspacesRevision)
+            FleetView(
+                store: fleetStore,
+                hostRepo: env.hostRepo,
+                onConnectHost: { addHostPresented = true },
+                onReconnect: { host in openSession(host: host, env: env) },
+                onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } }
+            )
+            .id(workspacesRevision)
 
         case .activity:
             ActivityView(actions: bridgeSessionActions())
