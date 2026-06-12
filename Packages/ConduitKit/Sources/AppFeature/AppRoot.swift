@@ -500,6 +500,7 @@ public struct AppRoot: View {
         .task {
 #if DEBUG
             await DebugSeeder.seedIfNeeded(env: env)
+            await DebugSeeder.resetForUITestIfRequested(env: env)
 #endif
         }
     }

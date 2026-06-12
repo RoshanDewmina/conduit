@@ -21,6 +21,19 @@ public enum DebugSeeder {
         UserDefaults.standard.set(true, forKey: seededKey)
     }
 
+    /// Reset to a deterministic approvals state for UI tests. Gated on
+    /// `CONDUIT_UITEST_RESEED=1` in the launch environment so it never runs in a
+    /// normal session. Wipes existing approvals (so prior decisions don't linger),
+    /// re-seeds the fixed sample set (2 pending + 1 decided), and clears the
+    /// app-lock opt-in so the suite always starts unlocked.
+    public static func resetForUITestIfRequested(env: AppEnvironment) async {
+        guard ProcessInfo.processInfo.environment["CONDUIT_UITEST_RESEED"] == "1" else { return }
+        try? await env.approvalRepo.deleteAll()
+        await seedApprovals(env.approvalRepo)
+        UserDefaults.standard.removeObject(forKey: "appLockEnabled")
+        UserDefaults.standard.set(true, forKey: seededKey)
+    }
+
     private static func seed(env: AppEnvironment) async {
         await seedHosts(env.hostRepo)
         await seedSnippets(env.snippetRepo)

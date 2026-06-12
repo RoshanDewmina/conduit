@@ -53,10 +53,24 @@ can be completed in parallel on a full-Xcode box or a physical device (Phase 6 n
 The "taps don't inject" wall is **resolved**. The installed Xcode-beta is a stripped 3.5 GB build missing
 `Simulator.app` (so no GUI window for cliclick) and `idb` 1.1.8 is incompatible with macOS 27 (objc class
 collision) — but **XCUITest** runs headlessly via `xcodebuild test`, needs neither, and its frameworks are
-present. A `ConduitUITests` target was added and **verified on this machine** (`** TEST SUCCEEDED **`):
-- `testTapInjectionViaTabSwitch` — event injection works (tab taps toggle the screen).
+present. A `ConduitUITests` target was added and the suite is now **fully green on this machine**
+(`** TEST SUCCEEDED **`, 3/3, 0 failures):
+- `testTapInjectionViaTabSwitch` — event injection works (Inbox⇄Settings tab taps toggle the screen).
 - `testApproveDecisionApplies` — **APPROVE → pending count drops**: the Phase-4 Check-1 approval
   interaction (previously BLOCKED) is verified, exercising B3 first-decision-wins live in the UI.
+- `testApproveDecisionVisualEvidence` — captures a before/after screenshot pair of a live decision.
+
+**Determinism:** every test launch sets `CONDUIT_UITEST_RESEED=1`, which (DEBUG-only,
+`DebugSeeder.resetForUITestIfRequested`) wipes the approvals table and re-seeds the fixed sample set
+(2 pending + 1 decided) and clears the app-lock opt-in. Without it the seed is consumed by the first
+APPROVE and persists decided, so re-runs would find no pending cards. This makes the approve-applies
+proof re-runnable.
+
+**Visual evidence captured** (`screens/e2e-phase4/`): `verify-inbox-pending-light.png` /
+`verify-inbox-pending-dark.png` (PENDING · 2 cards with EDIT&RUN / DENY / ALLOW ALWAYS / APPROVE);
+`verify-approve-01-before.png` (PENDING · 2 / DECIDED · 1) → `verify-approve-02-after.png` (PENDING · 1 /
+DECIDED · 2 — the HIGH-risk `rm -rf` card moves PENDING → approved after the live tap). The before/after
+pair is the governed-approvals decision flow demonstrated end-to-end in the simulator.
 
 **Remaining tap-gated checks** (Face ID onboarding toggle, saved-host reconnect, B1 TOFU prompt, M6
 cold-launch) are now mechanically reachable here — they need only additional XCUITest authoring, not a

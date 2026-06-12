@@ -130,6 +130,14 @@ public actor ApprovalRepository {
         }
     }
 
+    /// Remove every approval row. Used to reset to a deterministic state for
+    /// UI-test reseeding; not on any production path.
+    public func deleteAll() async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM approvals")
+        }
+    }
+
     /// Apply a first-decision-wins update. The `decision IS NULL` guard makes the
     /// first decision authoritative: a lingering lock-screen banner (or a
     /// double-tap) can never flip an already-resolved gate. Returns `true` only
