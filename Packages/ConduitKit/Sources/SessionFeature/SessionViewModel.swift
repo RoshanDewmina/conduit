@@ -362,6 +362,14 @@ public final class SessionViewModel {
         try? await hostKeyStore.record(hostID: host.id, fingerprint: fp)
         pendingHostKeyFingerprint = nil
         await connect()
+        // First-connect TOFU: the initial `connect()` threw `hostKeyUnknown`
+        // before the SSH session established, so the daemon channel that
+        // `startSession` tried to launch then failed and was never retried.
+        // Now that the key is trusted and the session is live, re-arm the
+        // approval pipeline (daemon channel + ingest) — same path as reconnect().
+        if status == .connected {
+            await onReconnected?()
+        }
     }
 
     /// Retry connecting with a new password after repeated auth failures.
