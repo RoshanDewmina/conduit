@@ -184,3 +184,36 @@ func TestEvictExpiredDevices(t *testing.T) {
 		t.Fatal("evicted relayToken still authorized")
 	}
 }
+
+// TestRelaySecretStartupCheck pins the production fail-fast guard: an empty
+// APPROVAL_RELAY_SECRET must refuse startup in production (FLY_APP_NAME present)
+// and only warn in dev; a configured secret is always ok.
+func TestRelaySecretStartupCheck(t *testing.T) {
+	cases := []struct {
+		name        string
+		secret      string
+		isProd      bool
+		wantFatal   bool
+		wantWarn    bool
+	}{
+		{"empty+prod => fatal", "", true, true, false},
+		{"empty+dev => warn", "", false, false, true},
+		{"empty+dev whitespace => warn", "   ", false, false, true},
+		{"set+prod => ok", "s3cret", true, false, false},
+		{"set+dev => ok", "s3cret", false, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fatal, warn := relaySecretStartupCheck(c.secret, c.isProd)
+			if (fatal != "") != c.wantFatal {
+				t.Errorf("fatal: got %q, wantFatal=%v", fatal, c.wantFatal)
+			}
+			if (warn != "") != c.wantWarn {
+				t.Errorf("warn: got %q, wantWarn=%v", warn, c.wantWarn)
+			}
+			if c.wantFatal && c.wantWarn {
+				t.Fatal("test invariant: fatal and warn are mutually exclusive")
+			}
+		})
+	}
+}

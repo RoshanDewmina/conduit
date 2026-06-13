@@ -23,6 +23,18 @@ public struct Redactor: Sendable {
         ("OpenRouter key",   #"sk-or-[A-Za-z0-9\-_]{20,}"#),
         ("OpenAI key",       #"sk-[A-Za-z0-9\-]{20,}"#),
         ("GitHub server",    #"ghs_[A-Za-z0-9]+"#),
+        // PEM private-key blocks (any key type: RSA, EC, OPENSSH, etc.).
+        // The [\s\S]*? non-greedy match handles multi-line blocks; the outer
+        // -----BEGIN/END markers are the reliable anchors.
+        ("PEM private key",  #"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"#),
+        // Authorization: Bearer <token> — captures the token value only so
+        // the "Bearer " prefix survives as context. Matches header lines or
+        // inline occurrences. The token chars cover JWT (base64url + dots).
+        ("Bearer token",     #"(?i)bearer\s+([A-Za-z0-9\-_=]+\.?){2,}"#),
+        // Bare JWTs: three dot-separated base64url segments starting with eyJ
+        // (the base64url encoding of {"  — all JWTs begin this way).
+        // Minimum segment lengths keep normal "word.word.word" from matching.
+        ("JWT",              #"eyJ[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}"#),
     ]
 
     public init() {}
