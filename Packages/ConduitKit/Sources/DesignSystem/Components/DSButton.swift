@@ -94,14 +94,17 @@ public struct DSButton: View {
             .frame(minWidth: iconOnly ? minH : nil)
             .frame(maxWidth: fullWidth ? .infinity : nil)
         }
-        .background(bgColor)
-        .foregroundStyle(fgColor)
+        .background(effectiveBgColor)
+        .foregroundStyle(effectiveFgColor)
         .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: hasBorder ? 1 : 0)
         )
-        .opacity(isEnabled ? 1 : 0.45)
+        // Filled CTAs get a neutral "clearly disabled" treatment (sunk surface +
+        // muted text) rather than a 45%-opacity accent that reads as half-tappable.
+        // Non-filled variants keep the simple opacity fade.
+        .opacity(isEnabled || isFilledVariant ? 1 : 0.45)
         .animation(.easeInOut(duration: 0.12), value: isEnabled)
         .disabled(isLoading)
     }
@@ -132,6 +135,20 @@ public struct DSButton: View {
     private var iconSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
 
     // MARK: Colors
+    private var isFilledVariant: Bool {
+        switch variant { case .primary, .accent: return true; default: return false }
+    }
+
+    /// Filled CTAs render a neutral sunk surface when disabled (legible "off"),
+    /// instead of a faded accent that looks half-enabled.
+    private var effectiveBgColor: Color {
+        (!isEnabled && isFilledVariant) ? t.surfaceSunk : bgColor
+    }
+
+    private var effectiveFgColor: Color {
+        (!isEnabled && isFilledVariant) ? t.text4 : fgColor
+    }
+
     private var bgColor: Color {
         switch variant {
         case .primary:     return t.accent         // BLOCKS: the single filled CTA is electric blue

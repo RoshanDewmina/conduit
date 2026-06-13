@@ -11,6 +11,7 @@ public struct BillingView: View {
     @State private var usageTodayUSD: Double = 0
     @State private var billingLoadError: String?
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     private let backendURL: String
 
@@ -19,11 +20,14 @@ public struct BillingView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 0) {
+                DSDetailHeader("billing", onBack: { dismiss() })
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
 
                     // ── Section 1: CONDUIT PRO
                     DSListSectionHead("Conduit Pro")
@@ -105,12 +109,13 @@ public struct BillingView: View {
                     if pm.externalStripeEligible {
                         cloudBillingSection
                     }
+                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             }
         }
-        .navigationTitle("Billing")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await pm.load()
             await loadCloudBilling()
@@ -230,16 +235,16 @@ public struct BillingView: View {
 
     private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0) { content() }
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
             )
             .padding(.horizontal, 16)
     }
 
     private var cardDivider: some View {
-        t.border.frame(height: 0.5).padding(.horizontal, 16)
+        t.border.frame(height: 1).padding(.horizontal, 16)
     }
 }
 #endif

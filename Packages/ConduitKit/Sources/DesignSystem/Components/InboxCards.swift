@@ -263,8 +263,8 @@ public struct DSMCPCallCard: View {
                     Text("✕  deny")
                         .font(.dsDisplayPt(12, weight: .semibold))
                         .foregroundStyle(t.danger)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                         .background(t.bg)
                         .overlay(
                             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
@@ -278,8 +278,8 @@ public struct DSMCPCallCard: View {
                     Text("always")
                         .font(.dsDisplayPt(12, weight: .semibold))
                         .foregroundStyle(t.text)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                         .background(t.surfaceSunk)
                         .overlay(
                             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
@@ -293,8 +293,8 @@ public struct DSMCPCallCard: View {
                     Text("edit & run")
                         .font(.dsDisplayPt(12, weight: .semibold))
                         .foregroundStyle(t.text)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                         .background(t.surfaceSunk)
                         .overlay(
                             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
@@ -308,8 +308,8 @@ public struct DSMCPCallCard: View {
                     Text("✓  approve")
                         .font(.dsDisplayPt(12, weight: .semibold))
                         .foregroundStyle(t.accentFg)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                         .background(t.accent)
                         .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                 }

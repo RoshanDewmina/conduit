@@ -130,7 +130,7 @@ public struct PaywallSheet: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.top, 20)
                     .padding(.bottom, 48)
                 }
