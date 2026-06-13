@@ -1,4 +1,4 @@
-import XCTest
+@preconcurrency import XCTest
 
 /// Proof that XCUITest event injection works on this machine (stripped Xcode-beta,
 /// macOS 27, no Simulator.app GUI, idb broken). If these pass, the tap-gated audit
@@ -9,6 +9,7 @@ import XCTest
 /// clears the app-lock opt-in (see `DebugSeeder.resetForUITestIfRequested`). That
 /// makes `testApproveDecisionApplies` re-runnable — prior runs no longer leave the
 /// inbox fully decided.
+@MainActor
 final class TapInjectionProofTests: XCTestCase {
 
     override func setUp() {
@@ -39,7 +40,11 @@ final class TapInjectionProofTests: XCTestCase {
             let safeBottom = window.frame.height - 140
             let f = element.frame
             if f.minY > 90 && f.maxY < safeBottom { return }
-            if scrollView.exists { scrollView.swipeUp() } else { app.swipeUp() }
+            if f.maxY >= safeBottom {
+                if scrollView.exists { scrollView.swipeUp() } else { app.swipeUp() }
+            } else {
+                return
+            }
             swipes += 1
         }
     }

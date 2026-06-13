@@ -114,7 +114,7 @@ public struct FleetView: View {
                 }
                 Spacer()
                 DSIconView(.refresh, size: 15, color: t.accent)
-                    .frame(width: 28, alignment: .trailing)
+                    .frame(width: 44, height: 44, alignment: .center)
             }
             .contentShape(Rectangle())
         }

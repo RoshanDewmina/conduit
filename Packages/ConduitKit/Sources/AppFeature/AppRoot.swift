@@ -1148,24 +1148,7 @@ private struct PasswordPromptView: View {
             t.bg.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
-                // ── Title row + close
-                HStack {
-                    Text("Connect")
-                        .font(.dsDisplayPt(28, weight: .bold))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(t.text3)
-                            .frame(width: 30, height: 30)
-                            .background(t.surfaceSunk, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 18)
+                DSDetailHeader("connect", onBack: { dismiss() })
 
                 // ── Host identity card
                 card {

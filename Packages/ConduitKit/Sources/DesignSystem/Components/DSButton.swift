@@ -90,8 +90,8 @@ public struct DSButton: View {
             }
             .padding(.horizontal, iconOnly ? vPad : hPad)
             .padding(.vertical, vPad)
-            .frame(minHeight: minH)
-            .frame(minWidth: iconOnly ? minH : nil)
+            .frame(minHeight: visualMinH)
+            .frame(minWidth: iconOnly ? visualMinH : nil)
             .frame(maxWidth: fullWidth ? .infinity : nil)
         }
         .background(effectiveBgColor)
@@ -101,6 +101,8 @@ public struct DSButton: View {
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: hasBorder ? 1 : 0)
         )
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
         // Filled CTAs get a neutral "clearly disabled" treatment (sunk surface +
         // muted text) rather than a 45%-opacity accent that reads as half-tappable.
         // Non-filled variants keep the simple opacity fade.
@@ -130,7 +132,7 @@ public struct DSButton: View {
     // MARK: Sizes
     private var hPad: CGFloat { switch size { case .sm: 10; case .md: 12; case .lg: 16 } }
     private var vPad: CGFloat { switch size { case .sm: 4; case .md: 6; case .lg: 10 } }
-    private var minH: CGFloat { switch size { case .sm: 26; case .md: 32; case .lg: 40 } }
+    private var visualMinH: CGFloat { switch size { case .sm: 26; case .md: 36; case .lg: 44 } }
     private var labelSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
     private var iconSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
 
