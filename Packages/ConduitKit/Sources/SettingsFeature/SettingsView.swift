@@ -159,6 +159,7 @@ public struct SettingsView: View {
     let bridgeActions: BridgeSessionActions
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
+    let onOpenLibrary: (() -> Void)?
 
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
@@ -194,7 +195,8 @@ public struct SettingsView: View {
         approvalRepository: ApprovalRepository? = nil,
         bridgeActions: BridgeSessionActions = BridgeSessionActions(),
         statusHeaderAgents: [AgentInfo] = [],
-        onTapStatusHeader: @escaping () -> Void = {}
+        onTapStatusHeader: @escaping () -> Void = {},
+        onOpenLibrary: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -204,6 +206,7 @@ public struct SettingsView: View {
         self.bridgeActions = bridgeActions
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
+        self.onOpenLibrary = onOpenLibrary
     }
 
     public var body: some View {
@@ -213,7 +216,11 @@ public struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // ── Header (BLOCKS DSScreenHeader pattern)
-                    DSScreenHeader("settings", breadcrumb: "device & agent")
+                    DSScreenHeader("settings", breadcrumb: "device & agent") {
+                        if let onOpenLibrary {
+                            DSIconButton(.folder, action: onOpenLibrary)
+                        }
+                    }
 
                     if !statusHeaderAgents.isEmpty {
                         AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
@@ -653,13 +660,14 @@ public struct SettingsView: View {
 
     // MARK: - Layout helpers
 
-    /// Grouped section label — uppercase Chakra Petch, t.text3, letter-spaced (BLOCKS handoff spec).
+    /// Grouped section label — matches the shared `DSListSectionHead` used by
+    /// Inbox / Fleet (mono 11/medium, 16pt gutter) so section labels align across tabs.
     private func sectionHead(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.dsDisplayPt(10, weight: .semibold))
-            .tracking(1.2)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
             .foregroundStyle(t.text3)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.top, 20)
             .padding(.bottom, 6)
     }

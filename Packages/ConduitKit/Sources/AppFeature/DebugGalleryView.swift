@@ -38,11 +38,6 @@ struct DebugGalleryView: View {
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "chat":           chatGallery
         case "components":     fullComponentCatalog
-        case "pages":          PageReviewScreen()
-        case "hosts":          HostsReviewScreen()
-        case "inbox":          InboxReviewScreen()
-        case "settings":       SettingsReviewScreen()
-        case "settings-about": SettingsAboutGalleryScreen()
         case "blocks":         BlocksReviewScreen()
         case "session":        DebugSessionHarness()
         case "hud":            AgentHUDGalleryScreen()
@@ -50,31 +45,11 @@ struct DebugGalleryView: View {
         case "keyboard":       KeyboardGalleryScreen()
         case "inbox-typed":    TypedInboxGalleryScreen()
         case "features":       FeaturesGalleryScreen()
-        case "library":        LibraryGalleryScreen()
-        case "statusbar":      PersistentStatusBarGalleryScreen()
-        case "addhost":        AddHostGalleryScreen()
         case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
         case "compare":        PremiumComparisonView()
         case "billing":        BillingView()
-        // Phase 5 management screens
-        case "mgmt-hostdetail":   MgmtGalleryHostDetail()
-        case "mgmt-agentpolicy":  AgentPolicyView()
-        case "mgmt-agents":       AgentListView()
-        case "mgmt-vmlist":       VMListView()
-        case "mgmt-vmdetail":     VMDetailView(vm: ManagementMocks.vms[0])
-        case "mgmt-keys":         MgmtGalleryKeys()
-        case "mgmt-snippets":     MgmtGallerySnippets()
-        case "mgmt-workflow":     WorkflowBuilderView()
-        case "mgmt-diagnostics":  DiagnosticsView()
-        case "mgmt-commandbar":   CommandBarView(onConnect: { _ in }, onOpenInbox: {}, onRunSnippet: {}, onNewWorkspace: {}, onDismiss: {})
         // Phase 6 state atoms
         case "states":         StatesGalleryScreen()
-        #if os(iOS)
-        case "cc-policy":      CCPolicyGalleryScreen()
-        case "cc-inbox":       CCInboxGalleryScreen()
-        case "cc-usage":       CCUsageGalleryScreen()
-        case "cc-dispatch":    DispatchComposerView(channel: nil, agent: "claudeCode", cwd: "~/repos/conduit")
-        #endif
         case "review":         reviewScreen
         default:               reviewScreen
         }

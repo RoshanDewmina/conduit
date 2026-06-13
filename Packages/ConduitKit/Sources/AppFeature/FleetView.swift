@@ -36,90 +36,127 @@ public struct FleetView: View {
     }
 
     public var body: some View {
-        List {
-            Section { summaryStrip }
-            if store.slots.isEmpty && reconnectableHosts.isEmpty {
-                Section {
-                    ContentUnavailableView {
-                        Label("No agents connected", systemImage: "server.rack")
-                    } description: {
-                        Text("Connect a host running conduitd to see your agents, their status, and spend.")
-                    } actions: {
-                        Button("Connect a host", action: onConnectHost)
-                    }
-                }
-            } else {
-                ForEach(store.slots) { slot in
-                    Section(slot.hostName) {
-                        if let snap = slot.bridgeStatus {
-                            ForEach(snap.agents) { agent in
-                                agentRow(agent)
-                            }
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // ── BLOCKS header (matches Inbox / Settings)
+                DSScreenHeader(
+                    "fleet",
+                    breadcrumb: "agents & spend",
+                    count: reconnectableHosts.isEmpty && store.slots.isEmpty
+                        ? nil
+                        : "\(store.slots.count + reconnectableHosts.count) hosts"
+                )
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        summaryCard
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+
+                        if store.slots.isEmpty && reconnectableHosts.isEmpty {
+                            emptyState
+                                .padding(.horizontal, 16)
+                                .padding(.top, 4)
                         } else {
-                            Text("Refreshing…").font(.caption).foregroundStyle(t.text3)
-                        }
-                    }
-                }
-                if !reconnectableHosts.isEmpty {
-                    Section("Saved hosts") {
-                        ForEach(reconnectableHosts) { host in
-                            savedHostRow(host)
-                        }
-                        .onDelete { offsets in
-                            let hosts = offsets.map { reconnectableHosts[$0] }
-                            for host in hosts {
-                                onDelete(host)
-                                savedHosts.removeAll { $0.id == host.id }
+                            ForEach(store.slots) { slot in
+                                DSListSectionHead(slot.hostName, count: slot.bridgeStatus?.agents.count)
+                                if let snap = slot.bridgeStatus {
+                                    ForEach(snap.agents) { agent in
+                                        agentRow(agent)
+                                            .padding(.horizontal, 16)
+                                    }
+                                } else {
+                                    Text("Refreshing…")
+                                        .font(.dsMonoPt(12))
+                                        .foregroundStyle(t.text3)
+                                        .padding(.horizontal, 16)
+                                }
+                            }
+
+                            if !reconnectableHosts.isEmpty {
+                                DSListSectionHead("Saved hosts", count: reconnectableHosts.count)
+                                ForEach(reconnectableHosts) { host in
+                                    savedHostRow(host)
+                                        .padding(.horizontal, 16)
+                                }
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
                 }
+                .refreshable { await refresh() }
             }
         }
-        .navigationTitle("Fleet")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await refresh() }
         .task { await refresh() }
         .onChange(of: store.slots.count) { Task { await refresh() } }
     }
 
+    private var emptyState: some View {
+        DSEmptyState(
+            icon: .server,
+            title: "No agents connected",
+            subtitle: "Connect a host running conduitd to see your agents, their status, and spend.",
+            action: (label: "Connect a host", handler: onConnectHost)
+        )
+    }
+
     private func savedHostRow(_ host: Host) -> some View {
         Button { onReconnect(host) } label: {
-            HStack {
+            HStack(spacing: 12) {
+                PixelAvatar(seed: host.name, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(host.name).font(.dsSansPt(14)).foregroundStyle(t.text)
+                    Text(host.name).font(.dsSansPt(14, weight: .semibold)).foregroundStyle(t.text)
                     Text(host.displayAddress).font(.dsMonoPt(11)).foregroundStyle(t.text3)
                 }
                 Spacer()
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 13))
-                    .foregroundStyle(t.accent)
+                DSIconView(.refresh, size: 15, color: t.accent)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .dsCard()
+        .contextMenu {
+            Button(role: .destructive) {
+                onDelete(host)
+                savedHosts.removeAll { $0.id == host.id }
+            } label: {
+                Label("Remove host", systemImage: "trash")
+            }
+        }
     }
 
-    private var summaryStrip: some View {
+    private var summaryCard: some View {
         HStack(spacing: 16) {
             stat("\(summary.loggedInVendors)", "vendors")
+            divider
             stat("\(summary.activeSessions)", "sessions")
+            divider
             stat(String(format: "$%.2f", summary.totalSpendUSD), "today")
+        }
+        .frame(maxWidth: .infinity)
+        .dsCard()
+    }
+
+    private var divider: some View {
+        Rectangle().fill(t.divider).frame(width: 1, height: 28)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value).font(.dsMonoPt(17)).foregroundStyle(t.text)
+            Text(label).font(.dsMonoPt(11)).foregroundStyle(t.text2)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func stat(_ value: String, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.dsMonoPt(16)).foregroundStyle(t.text)
-            Text(label).font(.caption2).foregroundStyle(t.text3)
-        }
-    }
-
     private func agentRow(_ a: AgentVendorStatus) -> some View {
-        HStack {
+        HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(a.displayName).font(.dsSansPt(14)).foregroundStyle(t.text)
+                Text(a.displayName).font(.dsSansPt(14, weight: .semibold)).foregroundStyle(t.text)
                 Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
                     .font(.dsMonoPt(11)).foregroundStyle(t.text3)
             }
@@ -127,10 +164,9 @@ public struct FleetView: View {
             if let usd = a.usageUSD {
                 Text(String(format: "$%.2f", usd)).font(.dsMonoPt(12)).foregroundStyle(t.text2)
             }
-            Circle()
-                .fill(a.loggedIn == true ? t.ok : t.text4)
-                .frame(width: 8, height: 8)
+            DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 8)
         }
+        .dsCard()
     }
 
     @MainActor
