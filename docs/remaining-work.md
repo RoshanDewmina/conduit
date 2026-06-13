@@ -1,5 +1,14 @@
 # Conduit — Remaining Work Before Production
 
+> ⚠️ **SUPERSEDED (2026-06-13).** This file is stale in two material ways:
+> (1) "BLOCKER 1: free Apple team" is **wrong** — the account is the **paid** team
+> `39HM2X8GS6` (a free team cannot mint the APNs `.p8` that already exists). (2) The
+> "v0.1.0 conduitd on GCP" notes describe the **stale Swift** daemon; the canonical
+> daemon is the Go source (policy engine + resident `daemon`). For current state use
+> **`docs/PUBLISH_READINESS_CHECKLIST.md`** + **`docs/CONDUIT_PROJECT_DOSSIER.md`**
+> (and `docs/ship-gate-owner-steps.md` for the owner's App-Store steps). Kept for the
+> code-complete inventory below, which is still useful history.
+
 Last updated: 2026-05-28 (rev — block-model redesign complete)
 
 ## Block-model redesign — status (block-model-redesign-research.md §7)
