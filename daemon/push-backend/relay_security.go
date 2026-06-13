@@ -131,10 +131,40 @@ func decodeRelayJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-// warnIfRelayUnauthenticated logs a single loud warning at startup when the
-// relay has no shared secret configured. Called from main().
+// relaySecretStartupCheck is the pure, testable decision for the startup guard.
+// It returns (fatal, warn): `fatal` non-empty means refuse to start; otherwise
+// `warn` non-empty means log a warning and continue. Inputs are passed in so the
+// behaviour can be unit-tested without touching the process environment or
+// calling os.Exit.
+//
+//   - secret present                      → ("", "")        ok
+//   - secret empty + production (isProd)   → (fatalMsg, "")  refuse to start
+//   - secret empty + non-production        → ("", warnMsg)   warn, continue
+func relaySecretStartupCheck(secret string, isProd bool) (fatal, warn string) {
+	if strings.TrimSpace(secret) != "" {
+		return "", ""
+	}
+	if isProd {
+		return "SECURITY: APPROVAL_RELAY_SECRET is unset in a production deployment " +
+			"(FLY_APP_NAME is present). The control-plane endpoints /register, /approval and " +
+			"/run-complete would be UNAUTHENTICATED — anyone could overwrite a session's " +
+			"relayToken/APNs token. Refusing to start. Set it via: " +
+			"fly secrets set APPROVAL_RELAY_SECRET=<strong-random-value>", ""
+	}
+	return "", "SECURITY WARNING: APPROVAL_RELAY_SECRET is unset — the control-plane endpoints /register, /approval and /run-complete are UNAUTHENTICATED, so anyone can register/overwrite a session's relayToken and APNs token (see docs/audit/findings/fix-backend-relay-auth.md). The per-session relayToken still gates /approval/decision and /decisions, but it is only as trustworthy as the registration that minted it. Set APPROVAL_RELAY_SECRET in production."
+}
+
+// warnIfRelayUnauthenticated guards the control-plane secret at startup.
+// FAIL-CLOSED in production: when APPROVAL_RELAY_SECRET is unset AND the process
+// is a deployed Fly app (FLY_APP_NAME present), it log.Fatal()s rather than
+// serve unauthenticated /register, /approval and /run-complete. In local/dev
+// (no FLY_APP_NAME) it logs one loud warning and continues. Called from main().
 func warnIfRelayUnauthenticated() {
-	if relaySharedSecret() == "" {
-		log.Printf("SECURITY WARNING: APPROVAL_RELAY_SECRET is unset — the control-plane endpoints /register, /approval and /run-complete are UNAUTHENTICATED, so anyone can register/overwrite a session's relayToken and APNs token (see docs/audit/findings/fix-backend-relay-auth.md). The per-session relayToken still gates /approval/decision and /decisions, but it is only as trustworthy as the registration that minted it. Set APPROVAL_RELAY_SECRET in production.")
+	fatal, warn := relaySecretStartupCheck(relaySharedSecret(), flyAppName() != "")
+	if fatal != "" {
+		log.Fatal(fatal)
+	}
+	if warn != "" {
+		log.Printf("%s", warn)
 	}
 }

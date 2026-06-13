@@ -99,8 +99,8 @@ public struct PremiumComparisonView: View {
                     }
                     .background(t.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)

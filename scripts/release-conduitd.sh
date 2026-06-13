@@ -29,8 +29,25 @@ for target in "${TARGETS[@]}"; do
   STAGE_DIR="$DIST_DIR/$OUT_BASENAME"
   mkdir -p "$STAGE_DIR"
 
-  CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-    go build -o "$STAGE_DIR/conduitd" "$DAEMON_DIR"
+  # Build from inside the module dir (the module's go.mod lives in $DAEMON_DIR;
+  # modern Go rejects `go build <abs-dir>` run from a dir with no go.mod).
+  ( cd "$DAEMON_DIR" && CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+      go build -ldflags "-s -w -X main.version=${VERSION#v}" \
+      -o "$STAGE_DIR/conduitd" . )
+
+  # Guard against ever shipping the stale Swift 0.1.0 daemon (which lacked the
+  # policy engine + resident `daemon` command). The Go build's usage banner
+  # lists `conduitd daemon`; verify it on any target we can execute on this host.
+  if [[ "$GOOS" == "$(go env GOHOSTOS)" && "$GOARCH" == "$(go env GOHOSTARCH)" ]]; then
+    # conduitd with no args prints usage to stderr and exits 1 — capture first
+    # (a bare pipe would trip `set -o pipefail` on that expected non-zero exit).
+    USAGE_OUT="$("$STAGE_DIR/conduitd" 2>&1 || true)"
+    if ! grep -q "conduitd daemon" <<<"$USAGE_OUT"; then
+      echo "FATAL: $OUT_BASENAME lacks the 'daemon' command (governance engine missing)" >&2
+      exit 1
+    fi
+    echo "  verified $OUT_BASENAME exposes the daemon/policy surface (version $("$STAGE_DIR/conduitd" version))"
+  fi
 
   cp "$DAEMON_DIR/README.md" "$STAGE_DIR/README.md"
   cp "$DAEMON_DIR/install.sh" "$STAGE_DIR/install.sh"

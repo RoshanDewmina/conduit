@@ -113,13 +113,22 @@ public final class LiveTerminalModel {
     /// `HostKeyStore.record` is called, and a retry connect hits `.match`.
     /// With the flag off (default), `hostKeyUnknown` propagates so real TOFU
     /// confirmation still happens.
+    ///
+    /// Defense-in-depth: the auto-trust branch is compiled ONLY under `#if DEBUG`.
+    /// In a Release build the catch does not exist, so `hostKeyUnknown` always
+    /// propagates and the TOFU prompt is reached — even if `autoTrustHostKey`
+    /// were somehow true. Release is structurally incapable of silent auto-trust.
     private func connect(session: SSHSession, credential: SSHCredential) async throws {
+        #if DEBUG
         do {
             try await session.connect(credential: credential, hostKeyStore: hostKeyStore)
         } catch let ConduitError.hostKeyUnknown(fingerprint) where autoTrustHostKey {
             try await hostKeyStore.record(hostID: host.id, fingerprint: fingerprint)
             try await session.connect(credential: credential, hostKeyStore: hostKeyStore)
         }
+        #else
+        try await session.connect(credential: credential, hostKeyStore: hostKeyStore)
+        #endif
     }
 
     /// Forward keyboard bytes to the remote PTY.

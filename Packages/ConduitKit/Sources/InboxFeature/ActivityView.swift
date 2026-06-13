@@ -16,18 +16,44 @@ public struct ActivityView: View {
     }
 
     public var body: some View {
-        List {
-            if let loadError {
-                Section { Text(loadError).font(.caption).foregroundStyle(t.text3) }
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // ── BLOCKS header (matches Inbox / Settings)
+                DSScreenHeader(
+                    "activity",
+                    breadcrumb: "while you were away",
+                    count: entries.isEmpty ? nil : "\(entries.count)"
+                )
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        if let loadError {
+                            // Disconnected / load failure → a single DS empty state
+                            // (matches Fleet's). Don't also render the feed's own
+                            // "no decisions yet" empty state below it.
+                            DSEmptyState(
+                                icon: .server,
+                                title: "not connected",
+                                subtitle: loadError
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 24)
+                        } else {
+                            BridgeAuditFeedView(entries: entries)
+                                .padding(.horizontal, 16)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+                }
+                .refreshable { await load() }
             }
-            Section {
-                BridgeAuditFeedView(entries: entries)
-            }
+
+            if isLoading && entries.isEmpty { ProgressView() }
         }
-        .navigationTitle("Activity")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
-        .overlay { if isLoading && entries.isEmpty { ProgressView() } }
         .task { await load() }
     }
 

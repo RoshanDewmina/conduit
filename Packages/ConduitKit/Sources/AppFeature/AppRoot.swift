@@ -501,6 +501,7 @@ public struct AppRoot: View {
 #if DEBUG
             await DebugSeeder.seedIfNeeded(env: env)
             await DebugSeeder.resetForUITestIfRequested(env: env)
+            await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
 #endif
         }
     }
@@ -1088,19 +1089,19 @@ private struct SettingsWithLibraryView: View {
             syncEngine: syncEngine,
             backendURL: backendURL,
             auditRepository: auditRepository,
-            approvalRepository: approvalRepository
+            approvalRepository: approvalRepository,
+            onOpenLibrary: { libraryPresented = true }
         )
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink {
-                    if let store = agentStore {
-                        LibraryView(snippetRepo: snippetRepo, keyStore: keyStore, agentStore: store)
-                    } else {
-                        ProgressView("Loading library…")
-                    }
-                } label: {
-                    Label("Library", systemImage: "square.grid.2x2")
-                }
+        // Hide the system nav bar so `DSScreenHeader` sits flush like the other
+        // tabs (the old toolbar item added a top inset that pushed it down) and
+        // present Library via the header's square DSIconButton instead of a
+        // circular SF-symbol toolbar button.
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $libraryPresented) {
+            if let store = agentStore {
+                LibraryView(snippetRepo: snippetRepo, keyStore: keyStore, agentStore: store)
+            } else {
+                ProgressView("Loading library…")
             }
         }
     }
@@ -1226,7 +1227,19 @@ private struct PasswordPromptView: View {
             }
         }
         .presentationDetents([.medium])
-        .onAppear { passwordFocused = true }
+        .onAppear {
+            #if DEBUG
+            // Live-loop E2E (CONDUIT_DAEMON_E2E=1): prefill the localhost password
+            // from the launch env so the real connect flow can be driven without
+            // typing into a secure field. DEBUG-only; never affects shipping.
+            let e = ProcessInfo.processInfo.environment
+            if e["CONDUIT_DAEMON_E2E"] == "1", password.isEmpty,
+               let pw = e["CONDUIT_TEST_PW"], !pw.isEmpty {
+                password = pw
+            }
+            #endif
+            passwordFocused = true
+        }
     }
 
     private func connect() {

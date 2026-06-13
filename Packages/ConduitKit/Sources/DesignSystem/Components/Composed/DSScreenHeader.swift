@@ -61,7 +61,7 @@ public struct DSScreenHeader<Trailing: View>: View {
             SpectrumBar(mode: spectrumMode, height: 3)
                 .opacity(0.75)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 12)
     }
@@ -127,7 +127,7 @@ public struct DSDetailHeader<Trailing: View>: View {
             SpectrumBar(mode: spectrumMode, height: 3)
                 .opacity(0.75)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 12)
     }

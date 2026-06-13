@@ -41,6 +41,30 @@ public enum DebugSeeder {
         UserDefaults.standard.set(true, forKey: seededKey)
     }
 
+    /// Seeds a localhost host pointing at this Mac's sshd for the live-loop E2E
+    /// test, gated on `CONDUIT_DAEMON_E2E=1`. Lets the real production connect
+    /// flow reach the resident conduitd over SSH to 127.0.0.1:22. Idempotent.
+    public static func seedDaemonE2EHostIfRequested(env: AppEnvironment) async {
+        let e = ProcessInfo.processInfo.environment
+        guard e["CONDUIT_DAEMON_E2E"] == "1" else { return }
+        let user = e["CONDUIT_TEST_USER"] ?? "roshansilva"
+        let hostname = e["CONDUIT_TEST_HOST"] ?? "127.0.0.1"
+        let port = Int(e["CONDUIT_TEST_PORT"] ?? "22") ?? 22
+        let existing = (try? await env.hostRepo.all()) ?? []
+        guard !existing.contains(where: {
+            $0.hostname == hostname && $0.port == port && $0.username == user
+        }) else { return }
+        let host = Host(
+            name: "This Mac (e2e)",
+            hostname: hostname,
+            port: port,
+            username: user,
+            authMethod: .password,
+            tags: ["local", "e2e"]
+        )
+        try? await env.hostRepo.upsert(host)
+    }
+
     private static func seed(env: AppEnvironment) async {
         await seedHosts(env.hostRepo)
         await seedSnippets(env.snippetRepo)

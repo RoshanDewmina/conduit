@@ -96,4 +96,84 @@ struct RedactorTests {
         #expect(redacted.contains("[REDACTED]"))
         #expect(!redacted.contains("sk-ant-"))
     }
+
+    // MARK: - LOW-5 regression: PEM blobs and Bearer/JWT tokens
+
+    @Test("OpenSSH PEM private key block is redacted")
+    func pemPrivateKeyOpenSSH() {
+        let pem = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        b3BlbnNzaC1rZXktdjEAAAAA...AAAAAAAAABBBBBBBBBB
+        -----END OPENSSH PRIVATE KEY-----
+        """
+        let (redacted, report) = Redactor.shared.redact(pem)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("BEGIN OPENSSH PRIVATE KEY"))
+        #expect(!redacted.contains("END OPENSSH PRIVATE KEY"))
+        #expect(report.matchedPatterns.contains("PEM private key"))
+    }
+
+    @Test("RSA PEM private key block is redacted")
+    func pemPrivateKeyRSA() {
+        let pem = """
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz
+        ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/==
+        -----END RSA PRIVATE KEY-----
+        """
+        let (redacted, report) = Redactor.shared.redact(pem)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("BEGIN RSA PRIVATE KEY"))
+        #expect(report.matchedPatterns.contains("PEM private key"))
+    }
+
+    @Test("EC PEM private key block is redacted")
+    func pemPrivateKeyEC() {
+        let pem = "-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890==\n-----END EC PRIVATE KEY-----"
+        let (redacted, report) = Redactor.shared.redact(pem)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(report.matchedPatterns.contains("PEM private key"))
+    }
+
+    @Test("Bearer token in Authorization header is redacted")
+    func bearerToken() {
+        let header = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature"
+        let (redacted, report) = Redactor.shared.redact(header)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"))
+        #expect(report.matchedPatterns.contains("JWT") || report.matchedPatterns.contains("Bearer token"))
+    }
+
+    @Test("Bearer token with opaque value is redacted")
+    func bearerOpaqueToken() {
+        let input = "bearer AbCdEfGhIjKlMnOpQrStUvWxYz1234567890ABCDEFGHIJ"
+        let (redacted, report) = Redactor.shared.redact(input)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(report.matchedPatterns.contains("Bearer token"))
+    }
+
+    @Test("bare JWT (three dot-separated base64url segments) is redacted")
+    func bareJWT() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        let input = "token=\(jwt)"
+        let (redacted, report) = Redactor.shared.redact(input)
+        #expect(redacted.contains("[REDACTED]"))
+        #expect(!redacted.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"))
+        #expect(report.matchedPatterns.contains("JWT"))
+    }
+
+    @Test("normal text with dots is not over-redacted")
+    func dotSeparatedTextNotRedacted() {
+        let (redacted, report) = Redactor.shared.redact("hello.world.foo")
+        #expect(redacted == "hello.world.foo")
+        #expect(report.redactedCount == 0)
+    }
+
+    @Test("PEM public key block is NOT redacted (only private keys are sensitive)")
+    func pemPublicKeyNotRedacted() {
+        let pub = "-----BEGIN PUBLIC KEY-----\nMFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAL3jVB\n-----END PUBLIC KEY-----"
+        let (redacted, report) = Redactor.shared.redact(pub)
+        #expect(redacted == pub, "Public key blocks must not be redacted")
+        #expect(report.redactedCount == 0)
+    }
 }

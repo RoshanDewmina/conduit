@@ -16,7 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install the Anthropic Claude Code CLI; tolerate failures if the package name
 # changes in future npm releases (the binary path can be overridden at runtime).
+# Global install requires root — run before dropping privileges.
 RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || true
 
 COPY --from=build /agent-runner /usr/local/bin/agent-runner
+
+# Drop to an unprivileged user. The agent binary and npm-installed CLIs under
+# /usr/local are world-executable so no ownership change is needed there.
+RUN groupadd -r conduit && useradd -r -g conduit -m conduit
+USER conduit
+
 ENTRYPOINT ["/usr/local/bin/agent-runner"]

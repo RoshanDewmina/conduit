@@ -154,7 +154,8 @@ struct FleetStoreTests {
                 agent: .claudeCode,
                 kind: .command,
                 command: "ls",
-                cwd: "/"
+                cwd: "/",
+                risk: .low
             )
             if decided {
                 a.decision = .approved

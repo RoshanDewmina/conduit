@@ -16,32 +16,32 @@ public struct BridgeAuditFeedView: View {
     public var body: some View {
         Group {
             if entries.isEmpty {
-                ContentUnavailableView(
-                    "No autonomous decisions yet",
-                    systemImage: "clock.arrow.circlepath",
-                    description: Text("Auto-allow, auto-deny, and escalations from conduitd appear here.")
+                DSEmptyState(
+                    icon: .hourglass,
+                    title: "no decisions yet",
+                    subtitle: "Auto-allow, auto-deny, and escalations from conduitd appear here."
                 )
             } else {
                 ForEach(entries) { entry in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(entry.effect ?? entry.action)
-                                .font(.caption.weight(.semibold))
+                                .font(.dsMonoPt(12, weight: .semibold))
                                 .foregroundStyle(color(for: entry.effect ?? entry.action))
                             Spacer()
                             Text(entry.timestamp)
-                                .font(.caption2.monospaced())
+                                .font(.dsMonoPt(11))
                                 .foregroundStyle(t.text4)
                         }
                         if let agent = entry.agent {
-                            Text(agent).font(.caption2).foregroundStyle(t.text3)
+                            Text(agent).font(.dsMonoPt(11)).foregroundStyle(t.text3)
                         }
                         if let rule = entry.rule {
-                            Text(rule).font(.caption2.monospaced()).foregroundStyle(t.text4)
+                            Text(rule).font(.dsMonoPt(11)).foregroundStyle(t.text4)
                         }
                         if let cmd = entry.command {
                             Text(cmd)
-                                .font(.caption2.monospaced())
+                                .font(.dsMonoPt(11))
                                 .lineLimit(2)
                                 .foregroundStyle(t.text2)
                         }

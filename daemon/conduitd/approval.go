@@ -2,9 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 )
+
+// normID normalizes an approval ID for case-insensitive lookup. UUIDs are
+// case-insensitive (RFC 4122), but Swift's `UUID.uuidString` is UPPERCASE while
+// Go generates lowercase — so a phone decision keyed by the uppercase form would
+// miss the lowercase-stored pending and the agent would hang to the timeout.
+func normID(id string) string { return strings.ToLower(strings.TrimSpace(id)) }
 
 // ApprovalEvent mirrors ApprovalPendingParams on the iOS side.
 type ApprovalEvent struct {
@@ -56,7 +63,7 @@ func newApprovalStore() *approvalStore {
 func (s *approvalStore) add(event ApprovalEvent) <-chan hookDecision {
 	ch := make(chan hookDecision, 1)
 	s.mu.Lock()
-	s.pending[event.ApprovalID] = &pendingApproval{event: event, decision: ch}
+	s.pending[normID(event.ApprovalID)] = &pendingApproval{event: event, decision: ch}
 	s.mu.Unlock()
 	return ch
 }
@@ -72,10 +79,11 @@ func (s *approvalStore) pendingEvents() []ApprovalEvent {
 }
 
 func (s *approvalStore) resolve(id, decision, editedToolInput string) (ApprovalEvent, bool) {
+	key := normID(id)
 	s.mu.Lock()
-	p, ok := s.pending[id]
+	p, ok := s.pending[key]
 	if ok {
-		delete(s.pending, id)
+		delete(s.pending, key)
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -93,7 +101,7 @@ func (s *approvalStore) resolve(id, decision, editedToolInput string) (ApprovalE
 // decision can't re-resolve (and mis-audit) it after the agent was auto-denied.
 func (s *approvalStore) remove(id string) {
 	s.mu.Lock()
-	delete(s.pending, id)
+	delete(s.pending, normID(id))
 	s.mu.Unlock()
 }
 

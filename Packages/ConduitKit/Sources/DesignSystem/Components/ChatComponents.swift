@@ -251,6 +251,11 @@ public struct DSApprovalCard: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
+    // Canonical risk → tone mapping (single source of truth for risk colour):
+    //   0 → ok (green) · 1 → warn (amber) · 2 → accent (blue) · 3+ → danger (red).
+    // RiskBadge.barColor (DSChip.swift) MUST stay in lockstep with this — it
+    // resolves the same severities to the same tokens (ok / warn / accentInk /
+    // danger), so the pill and the quote-block tint always read identically.
     private var riskTone: DSChipTone {
         switch risk {
         case 0:  return .ok
