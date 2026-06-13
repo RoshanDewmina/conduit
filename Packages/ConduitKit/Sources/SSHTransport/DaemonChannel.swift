@@ -133,6 +133,30 @@ public actor DaemonChannel {
         }
     }
 
+    /// Build the `agent.approval.response` JSON-RPC envelope sent to conduitd.
+    /// Pure + static so the wire contract is unit-testable (the live `respond`
+    /// path needs an SSH channel). `approvalId` is carried verbatim — Swift's
+    /// `UUID.uuidString` is UPPERCASE; the daemon matches it case-insensitively
+    /// (a lowercase/uppercase mismatch here once dropped every decision).
+    public static func responseEnvelope(
+        approvalId: String,
+        decision: Approval.Decision,
+        editedToolInput: String? = nil
+    ) -> [String: Any] {
+        var params: [String: Any] = [
+            "approvalId": approvalId,
+            "decision": decisionWireValue(for: decision),
+        ]
+        if let editedToolInput, !editedToolInput.isEmpty {
+            params["editedToolInput"] = editedToolInput
+        }
+        return [
+            "jsonrpc": "2.0",
+            "method": "agent.approval.response",
+            "params": params,
+        ]
+    }
+
     public func respond(
         approvalId: String,
         decision: Approval.Decision,
@@ -142,18 +166,11 @@ public actor DaemonChannel {
         // reconnect nils `stdinWriter`. Callers treat the throw as "not delivered"
         // and fall back to the backend relay instead of dropping the decision.
         guard let writer = stdinWriter else { throw DaemonChannelError.notRunning }
-        var params: [String: Any] = [
-            "approvalId": approvalId,
-            "decision": Self.decisionWireValue(for: decision),
-        ]
-        if let editedToolInput, !editedToolInput.isEmpty {
-            params["editedToolInput"] = editedToolInput
-        }
-        let envelope: [String: Any] = [
-            "jsonrpc": "2.0",
-            "method": "agent.approval.response",
-            "params": params,
-        ]
+        let envelope = Self.responseEnvelope(
+            approvalId: approvalId,
+            decision: decision,
+            editedToolInput: editedToolInput
+        )
         guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
         try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
     }
