@@ -241,6 +241,10 @@ public struct RiskBadge: View {
         )
     }
 
+    // Canonical risk → colour mapping (mirrors DSApprovalCard.riskTone in
+    // ChatComponents.swift): 0 → ok · 1 → warn · 2 → accent(Ink) · 3+ → danger.
+    // Keep these two in lockstep so the risk pill and the command quote-block
+    // tint never disagree.
     private var barColor: Color {
         switch risk {
         case 0:  return t.ok

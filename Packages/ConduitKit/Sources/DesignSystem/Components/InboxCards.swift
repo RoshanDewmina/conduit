@@ -133,9 +133,7 @@ public struct DSAskQuestionCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(t.accent)
+                    DSIconView(.check, size: 14, color: t.accent)
                 }
             }
             .padding(.horizontal, 11)

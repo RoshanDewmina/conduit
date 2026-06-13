@@ -268,16 +268,15 @@ public struct SettingsView: View {
                             Text(msg)
                                 .font(.dsSansPt(13))
                                 .foregroundStyle(vm.saveIsError ? t.danger : t.accent)
-                                .padding(.horizontal, 20)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                                 .transition(.opacity)
                         }
                         HStack {
                             Spacer()
                             DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
-                                .padding(.trailing, 16)
                         }
                     }
+                    .padding(.horizontal, 16)
                     .animation(.easeInOut(duration: 0.2), value: vm.saveMessage)
                     .padding(.bottom, 16)
 
@@ -719,7 +718,7 @@ public struct SettingsView: View {
                 .foregroundStyle(t.text4)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 13)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
     }
 

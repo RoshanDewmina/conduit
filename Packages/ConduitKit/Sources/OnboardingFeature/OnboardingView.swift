@@ -111,9 +111,10 @@ public struct OnboardingView: View {
     private var screen1Welcome: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                // Full-width SpectrumBar at top
+                // SpectrumBar at top — same 26pt gutter as the wordmark / body /
+                // CTA below so the welcome screen reads as one aligned column.
                 SpectrumBar(mode: .working, height: 10)
-                    .padding(.horizontal, 22)
+                    .padding(.horizontal, 26)
                     .padding(.top, 16)
 
                 // "conduit" wordmark below spectrum bar
