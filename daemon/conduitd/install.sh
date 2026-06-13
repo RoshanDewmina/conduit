@@ -51,6 +51,21 @@ else
 fi
 
 chmod 755 "$TARGET"
+
+# Fail closed if we just installed a stale/incompatible binary. The pre-built
+# copy path (cp $SCRIPT_DIR/conduitd) trusts whatever is on disk; an old Swift
+# 0.1.0 build lacks the policy engine + resident `daemon` command, which would
+# silently ship governance disabled. The Go build's usage banner lists it.
+# conduitd with no args prints usage to stderr and exits 1 — capture the output
+# first so the expected non-zero exit doesn't trip `set -o pipefail`.
+USAGE_OUT="$("$TARGET" 2>&1 || true)"
+if ! grep -q "conduitd daemon" <<<"$USAGE_OUT"; then
+  echo "ERROR: installed conduitd lacks the 'daemon' command — it is a stale or" >&2
+  echo "       incompatible build (no policy engine). Reinstall with --from-source." >&2
+  rm -f "$TARGET"
+  exit 1
+fi
+
 echo "Installed conduitd at $TARGET"
 "$TARGET" version || true
 

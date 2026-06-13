@@ -5,7 +5,10 @@ import (
 	"os"
 )
 
-const version = "0.1.0"
+// version is overridable at build time via -ldflags "-X main.version=<v>"
+// (see scripts/release-conduitd.sh). A var, not a const, so release builds
+// report the real version instead of a misleading hardcoded default.
+var version = "0.1.0-dev"
 
 func main() {
 	if len(os.Args) < 2 {
