@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.0.app || sudo xcode-select -s /Applications/Xcode_16.3.app
+        run: sudo xcode-select -s /Applications/Xcode_26.0.1.app || sudo xcode-select -s /Applications/Xcode_26.0.app || true
       - name: Resolve dependencies
         run: swift package resolve
         working-directory: Packages/ConduitKit
@@ -34,6 +34,10 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
+      # The runner lacks watchOS 26.0 SDK by default, but the Conduit scheme
+      # embeds ConduitWatch, so download the platform first.
+      - name: Install watchOS platform
+        run: xcodebuild -downloadPlatform watchOS
       # The full app target catches strict-concurrency / module-visibility breaks
       # that `swift test` (incremental SPM) silently misses.
       - name: Build app target for simulator
