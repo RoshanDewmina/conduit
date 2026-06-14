@@ -53,6 +53,11 @@ func main() {
 	case "pair":
 		printRelayInstructions()
 
+	case "doctor":
+		if err := runDoctor(); err != nil {
+			os.Exit(1)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		usage()
@@ -100,5 +105,6 @@ Usage:
   conduitd relay           Connect to push-backend relay for E2E messaging
   conduitd pair            Generate a pairing code for relay setup instructions
   conduitd agent-hook ...  Send approval event from agent pre-tool hook
+  conduitd doctor          Run setup/health self-check (✓/⚠/✗ checklist)
   conduitd version         Print version`)
 }
