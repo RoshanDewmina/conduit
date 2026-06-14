@@ -23,6 +23,7 @@ public struct SessionView: View {
     @State private var tickHistory: [Double] = []
     @State private var showConnectOverlay = false
     @State private var connectOverlayPhase: SSHConnectPhase = .connecting
+    @State private var hostKeyTrustInProgress = false
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -67,14 +68,27 @@ public struct SessionView: View {
             // rejects the key and leaves the session escapable via the overlay.
             .sheet(isPresented: Binding(
                 get: { vm.pendingHostKeyFingerprint != nil },
-                set: { if !$0 { vm.rejectHostKey() } }
+                set: {
+                    if !$0, vm.pendingHostKeyFingerprint != nil, !hostKeyTrustInProgress {
+                        vm.rejectHostKey()
+                    }
+                }
             )) {
                 if let fp = vm.pendingHostKeyFingerprint {
                     SessionHostKeyConfirmSheet(
                         hostName: vm.host.name,
                         fingerprint: fp,
-                        onTrust: { Task { await vm.trustHostKey() } },
-                        onReject: { vm.rejectHostKey() }
+                        onTrust: {
+                            hostKeyTrustInProgress = true
+                            Task {
+                                await vm.trustHostKey()
+                                await MainActor.run { hostKeyTrustInProgress = false }
+                            }
+                        },
+                        onReject: {
+                            hostKeyTrustInProgress = false
+                            vm.rejectHostKey()
+                        }
                     )
                     .presentationDetents([.medium])
                     .environment(\.conduitTokens, t)

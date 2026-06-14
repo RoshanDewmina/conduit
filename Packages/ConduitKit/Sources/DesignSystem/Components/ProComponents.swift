@@ -13,6 +13,7 @@ private func toneSoft(_ tone: DSChipTone, _ t: ConduitTokens) -> Color {
     case .accent:  return t.accentSoft
     case .ok:      return t.okSoft
     case .warn:    return t.warnSoft
+    case .orange:  return ConduitTokens.riskOrange.opacity(0.16)
     case .danger:  return t.dangerSoft
     case .info:    return t.infoSoft
     case .neutral: return t.neutralSoft
@@ -24,6 +25,7 @@ private func toneInk(_ tone: DSChipTone, _ t: ConduitTokens) -> Color {
     case .accent:  return t.accentInk
     case .ok:      return t.ok
     case .warn:    return t.warn
+    case .orange:  return ConduitTokens.riskOrange
     case .danger:  return t.danger
     case .info:    return t.info
     case .neutral: return t.text2

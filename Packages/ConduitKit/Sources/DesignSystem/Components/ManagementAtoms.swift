@@ -57,6 +57,7 @@ public struct DSMetricTile: View {
         case .warn:    return t.warn
         case .danger:  return t.danger
         case .accent:  return t.accent
+        case .orange:  return ConduitTokens.riskOrange
         default:       return t.text
         }
     }
@@ -98,7 +99,7 @@ public struct DSRiskRow: View {
         switch level {
         case 0:  return .ok
         case 1:  return .warn
-        case 2:  return .accent
+        case 2:  return .orange
         default: return .danger
         }
     }
@@ -107,7 +108,7 @@ public struct DSRiskRow: View {
         switch level {
         case 0:  return .ok
         case 1:  return .warn
-        case 2:  return .accent
+        case 2:  return .orange
         default: return .danger
         }
     }

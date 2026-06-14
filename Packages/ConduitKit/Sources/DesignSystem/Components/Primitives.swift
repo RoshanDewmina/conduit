@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - DSStatusDot
 // primitives.css:174-193 — 8×8 circle, tone→color, optional pulse ring.
 
-public enum DSStatusDotTone { case ok, warn, danger, info, accent, off }
+public enum DSStatusDotTone { case ok, warn, danger, info, accent, orange, off }
 
 public struct DSStatusDot: View {
     let tone: DSStatusDotTone
@@ -41,6 +41,7 @@ public struct DSStatusDot: View {
         switch tone {
         case .ok:      return t.ok
         case .warn:    return t.warn
+        case .orange:  return ConduitTokens.riskOrange
         case .danger:  return t.danger
         case .info:    return t.info
         case .accent:  return t.accent

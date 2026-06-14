@@ -129,22 +129,22 @@ public struct OnboardingView: View {
 
                 // Big 3-line title
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("attach.")
+                    Text("agents ask.")
                         .foregroundStyle(t.text)
-                    Text("survive.")
+                    Text("you approve.")
                         .foregroundStyle(t.text3)
-                    Text("approve.")
+                    Text("work resumes.")
                         .foregroundStyle(t.accent)
                 }
                 .font(.system(size: 40, weight: .bold, design: .monospaced))
-                .lineSpacing(-1)
-                .tracking(-0.8)
+                .lineSpacing(0)
+                .tracking(0)
                 .padding(.horizontal, 26)
                 .padding(.top, 20)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
                 // Body
-                Text("Six jobs, one cockpit. The phone-native home for your remote coding agents.")
+                Text("Coding agents pause for risky actions. Conduit sends the approval to your phone, then safely resumes the run.")
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text3)
                     .lineSpacing(8.4)
@@ -201,19 +201,19 @@ public struct OnboardingView: View {
                 // 3 feature rows
                 VStack(alignment: .leading, spacing: 0) {
                     howItWorksRow(
-                        icon: .server,
-                        title: "Bring your own host",
-                        body: "Any server you can SSH into — yours forever, free."
-                    )
-                    howItWorksRow(
-                        icon: .key,
-                        title: "Bring your own keys",
-                        body: "API keys + SSH keys live in the Secure Enclave."
-                    )
-                    howItWorksRow(
                         icon: .inbox,
-                        title: "Approve from anywhere",
-                        body: "Agents ask; you approve from the lock screen."
+                        title: "Agent asks permission",
+                        body: "Risky commands, file writes, credentials, and network actions pause first."
+                    )
+                    howItWorksRow(
+                        icon: .check,
+                        title: "Approve from your phone",
+                        body: "Approve or deny from Inbox, the lock screen, or Apple Watch."
+                    )
+                    howItWorksRow(
+                        icon: .server,
+                        title: "Work continues safely",
+                        body: "The remote session keeps running while Conduit waits for your decision."
                     )
                 }
                 .padding(.horizontal, 26)
@@ -714,21 +714,19 @@ private struct SSHScreen: View {
                 .padding(.horizontal, 26)
                 .padding(.top, 10)
 
-                // "Detected" success chip (static, best-effort feel)
+                // Trust note
                 HStack(spacing: 7) {
-                    Circle()
-                        .fill(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 1))
-                        .frame(width: 7, height: 7)
-                    Text("detected on your network")
+                    DSIconView(.key, size: 13, color: t.accent)
+                    Text("First connect asks you to trust the host key. Passwords and keys stay in Keychain.")
                         .font(.dsMonoPt(11, weight: .medium))
-                        .foregroundStyle(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 1))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 0.1))
+                .background(t.accentSoft)
                 .overlay(
-                    Rectangle()
-                        .strokeBorder(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 0.3), lineWidth: 0.5)
+                    Rectangle().strokeBorder(t.border, lineWidth: 0.5)
                 )
                 .padding(.horizontal, 26)
                 .padding(.top, 12)
@@ -820,7 +818,7 @@ private struct FaceIDScreen: View {
                 .padding(.top, 18)
 
                 // Body
-                Text("Require Face ID before approving high-risk actions or opening the app.")
+                Text("Require Face ID before opening Conduit or using stored SSH keys.")
                     .font(.dsMonoPt(11.5))
                     .foregroundStyle(t.text3)
                     .multilineTextAlignment(.center)

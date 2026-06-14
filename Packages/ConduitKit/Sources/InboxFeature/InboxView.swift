@@ -360,8 +360,8 @@ public struct InboxView: View {
             Spacer()
             DSEmptyState(
                 dotMatrix: .idle,
-                title: "inbox zero",
-                subtitle: "Nothing waiting on you. Agents are running clean."
+                title: "No approvals waiting",
+                subtitle: "When a coding agent needs permission, its request appears here and on your lock screen."
             )
             .padding(.horizontal, 24)
             Spacer()

@@ -13,7 +13,7 @@ public enum DSChipVariant {
     case dashed      // transparent, dashed border
 }
 public enum DSChipSize    { case sm, md, lg }
-public enum DSChipTone    { case accent, ok, warn, danger, info, neutral }
+public enum DSChipTone    { case accent, ok, warn, orange, danger, info, neutral }
 
 // Keep old API names for backward compat
 public typealias DSChipStyle = DSChipVariant
@@ -147,6 +147,7 @@ public struct DSChip: View {
         case .accent:  return t.accent
         case .ok:      return t.ok
         case .warn:    return t.warn
+        case .orange:  return ConduitTokens.riskOrange
         case .danger:  return t.danger
         case .info:    return t.info
         case .neutral: return t.text3
@@ -157,6 +158,7 @@ public struct DSChip: View {
         case .accent:  return t.accentSoft
         case .ok:      return t.okSoft
         case .warn:    return t.warnSoft
+        case .orange:  return ConduitTokens.riskOrange.opacity(0.16)
         case .danger:  return t.dangerSoft
         case .info:    return t.infoSoft
         case .neutral: return t.neutralSoft
@@ -167,6 +169,7 @@ public struct DSChip: View {
         case .accent:  return t.accentInk
         case .ok:      return t.ok
         case .warn:    return t.warn
+        case .orange:  return ConduitTokens.riskOrange
         case .danger:  return t.danger
         case .info:    return t.info
         case .neutral: return t.text2
@@ -241,27 +244,12 @@ public struct RiskBadge: View {
         )
     }
 
-    // Canonical risk → colour mapping (mirrors DSApprovalCard.riskTone in
-    // ChatComponents.swift): 0 → ok · 1 → warn · 2 → accent(Ink) · 3+ → danger.
-    // Keep these two in lockstep so the risk pill and the command quote-block
-    // tint never disagree.
-    private var barColor: Color {
-        switch risk {
-        case 0:  return t.ok
-        case 1:  return t.warn
-        case 2:  return t.accentInk
-        default: return t.danger
-        }
-    }
-
-    private var softColor: Color {
-        switch risk {
-        case 0:  return t.okSoft
-        case 1:  return t.warnSoft
-        case 2:  return t.accentSoft
-        default: return t.dangerSoft
-        }
-    }
+    // Canonical risk → colour mapping. Delegates to the token risk ramp (Tokens.risk/riskSoft)
+    // so the pill, the command quote-block tint (DSApprovalCard.riskTone) and every other risk
+    // surface stay in lockstep — and so risk never borrows the brand/CTA accent (R5.1/R5.2):
+    // 0 ok green · 1 warn amber · 2 orange · 3+ danger red.
+    private var barColor: Color { t.risk(risk) }
+    private var softColor: Color { t.riskSoft(risk) }
 
     private var riskLabel: String {
         switch risk {

@@ -215,199 +215,21 @@ public struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // ── Header (BLOCKS DSScreenHeader pattern)
-                    DSScreenHeader("settings", breadcrumb: "device & agent") {
-                        if let onOpenLibrary {
-                            DSIconButton(.folder, action: onOpenLibrary)
-                        }
-                    }
-
-                    if !statusHeaderAgents.isEmpty {
-                        AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
-                            .padding(.bottom, 8)
-                    }
-
-                    // ── AI Provider
-                    // Only providers with a working client are listed, so this
-                    // list stays in sync with the API Keys section below (xAI is
-                    // not wired yet — AppEnvironment.aiClient returns nil for it).
-                    sectionHead("AI Provider")
-                    settingsCard {
-                        ForEach(Self.supportedProviders, id: \.self) { provider in
-                            HStack {
-                                Text(provider.displayName)
-                                    .font(.dsSansPt(15))
-                                    .foregroundStyle(t.text)
-                                Spacer()
-                                if vm.defaultProvider == provider {
-                                    DSIconView(.check, size: 14, color: t.accent)
-                                }
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                            .contentShape(Rectangle())
-                            .onTapGesture { vm.defaultProvider = provider }
-                            if provider != Self.supportedProviders.last {
-                                divider
-                            }
-                        }
-                    }
-                    .padding(.bottom, 16)
-
-                    // ── API Keys
-                    sectionHead("API Keys")
-                    settingsCard {
-                        providerRow(.anthropic, binding: $vm.anthropicKey, hasKey: vm.hasAnthropicKey)
-                        divider
-                        providerRow(.openai, binding: $vm.openaiKey, hasKey: vm.hasOpenAIKey)
-                    }
-                    .padding(.bottom, 4)
-
-                    VStack(alignment: .trailing, spacing: 6) {
-                        if let msg = vm.saveMessage {
-                            Text(msg)
-                                .font(.dsSansPt(13))
-                                .foregroundStyle(vm.saveIsError ? t.danger : t.accent)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                                .transition(.opacity)
-                        }
-                        HStack {
-                            Spacer()
-                            DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .animation(.easeInOut(duration: 0.2), value: vm.saveMessage)
-                    .padding(.bottom, 16)
-
-                    // ── Appearance
-                    sectionHead("Appearance")
-                    settingsCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Theme")
-                                .font(.dsSansPt(13, weight: .medium))
-                                .foregroundStyle(t.text2)
-                            DSSegmentedPicker(
-                                options: [
-                                    (label: "System", value: "system"),
-                                    (label: "Light",  value: "light"),
-                                    (label: "Dark",   value: "dark"),
-                                ],
-                                selection: $colorSchemePref
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                    .padding(.bottom, 16)
-
-                    // ── Security
-                    sectionHead("Security")
-                    settingsCard {
-                        Toggle(isOn: $appLockEnabled) {
-                            Text("Require Face ID on launch")
-                                .font(.dsSansPt(15))
-                                .foregroundStyle(t.text)
-                        }
-                        .tint(t.accent)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-
-                        divider
-
-                        Toggle(isOn: $redactSavedHistory) {
-                            Text("Redact secrets in saved history")
-                                .font(.dsSansPt(15))
-                                .foregroundStyle(t.text)
-                        }
-                        .tint(t.accent)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-
-                        if let auditRepository {
-                            divider
-                            NavigationLink {
-                                AuditView(viewModel: AuditViewModel(repository: auditRepository))
-                            } label: {
-                                settingsNavRow("Security audit log", icon: "lock.shield")
-                            }
-                        }
-                    }
-                    .padding(.bottom, 16)
-
-                    // ── Agent approvals (moved here from the Inbox header)
+                    headerSection
+                    providerPickerSection
+                    apiKeysSection
+                    saveKeysSection
+                    appearanceSection
+                    securitySection
                     if autonomyPresetsEnabled {
                         agentApprovalsSection
                     }
-
                     notificationFilterSection
                     allowAlwaysRulesSection
-
-                    // ── Integrations
-                    sectionHead("Integrations")
-                    settingsCard {
-                        NavigationLink { TerminalSettingsView() } label: {
-                            settingsNavRow("Terminal settings", icon: "terminal")
-                        }
-                        divider
-                        NavigationLink { PremiumComparisonView() } label: {
-                            settingsNavRow("Compare Free vs Pro", icon: "star.circle")
-                        }
-                        // Billing and iCloud sync are not ready for the free beta.
-                        // showPaidSurfaces gates them back in when production-ready.
-                        if Self.showPaidSurfaces {
-                            divider
-                            NavigationLink { BillingView(backendURL: backendURL) } label: {
-                                settingsNavRow("Billing & usage", icon: "creditcard")
-                            }
-                            if let org = PurchaseManager.shared.cloudEntitlement?.teamOrg {
-                                divider
-                                teamOrgRow(org)
-                            }
-                            if let engine = syncEngine {
-                                divider
-                                SyncStatusView(engine: engine)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                            }
-                        }
-                    }
-                    .padding(.bottom, 16)
-
-                    // ── About Conduit
-                    sectionHead("About Conduit")
-                    settingsCard {
-                        VStack(alignment: .leading, spacing: 0) {
-                            aboutRow(icon: "server.rack", title: "BYO host",
-                                     detail: "Connect to any SSH server you own or rent. Conduit does not provision or manage your infrastructure.")
-                            divider
-                            aboutRow(icon: "key", title: "BYO API key",
-                                     detail: "Your Anthropic or OpenAI key is stored in the device Keychain and sent directly to the provider.")
-                            divider
-                            aboutRow(icon: "person.badge.minus", title: "No account required",
-                                     detail: "No Conduit login. No subscription. All session data stays on-device.")
-                        }
-                    }
-                    .padding(.bottom, 16)
-
-                    // ── Privacy note
-                    Text("Keys are stored on-device (Keychain, when-unlocked, device-only) and sent directly to the provider over TLS — never to Conduit servers.")
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(t.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-
-                    // ── Footer: version / build
-                    Group {
-                        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
-                        let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
-                        Text("conduit \(version) (\(build))")
-                            .font(.dsMonoPt(10))
-                            .foregroundStyle(t.text4)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .padding(.bottom, 36)
+                    integrationsSection
+                    aboutConduitSection
+                    privacyNote
+                    versionFooter
                 }
             }
         }
@@ -419,6 +241,212 @@ public struct SettingsView: View {
         .onChange(of: notificationFilter) { _, _ in
             Task { await persistNotificationFilter() }
         }
+    }
+
+    // MARK: - Main sections
+
+    @ViewBuilder
+    private var headerSection: some View {
+        DSScreenHeader("settings", breadcrumb: "device & agent") {
+            if let onOpenLibrary {
+                DSIconButton(.folder, action: onOpenLibrary)
+            }
+        }
+
+        if !statusHeaderAgents.isEmpty {
+            AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                .padding(.bottom, 8)
+        }
+    }
+
+    private var providerPickerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHead("AI Provider")
+            settingsCard {
+                ForEach(Self.supportedProviders, id: \.self) { provider in
+                    HStack {
+                        Text(provider.displayName)
+                            .font(.dsSansPt(15))
+                            .foregroundStyle(t.text)
+                        Spacer()
+                        if vm.defaultProvider == provider {
+                            DSIconView(.check, size: 14, color: t.accent)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
+                    .onTapGesture { vm.defaultProvider = provider }
+                    if provider != Self.supportedProviders.last {
+                        divider
+                    }
+                }
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var apiKeysSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHead("API Keys")
+            settingsCard {
+                providerRow(.anthropic, binding: $vm.anthropicKey, hasKey: vm.hasAnthropicKey)
+                divider
+                providerRow(.openai, binding: $vm.openaiKey, hasKey: vm.hasOpenAIKey)
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var saveKeysSection: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if let msg = vm.saveMessage {
+                Text(msg)
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(vm.saveIsError ? t.danger : t.accent)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .transition(.opacity)
+            }
+            HStack {
+                Spacer()
+                DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
+            }
+        }
+        .padding(.horizontal, 16)
+        .animation(.easeInOut(duration: 0.2), value: vm.saveMessage)
+        .padding(.bottom, 16)
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHead("Appearance")
+            settingsCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Theme")
+                        .font(.dsSansPt(13, weight: .medium))
+                        .foregroundStyle(t.text2)
+                    DSSegmentedPicker(
+                        options: [
+                            (label: "System", value: "system"),
+                            (label: "Light",  value: "light"),
+                            (label: "Dark",   value: "dark"),
+                        ],
+                        selection: $colorSchemePref
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    @ViewBuilder
+    private var securitySection: some View {
+        sectionHead("Security")
+        settingsCard {
+            Toggle(isOn: $appLockEnabled) {
+                Text("Require Face ID on launch")
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text)
+            }
+            .tint(t.accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            divider
+
+            Toggle(isOn: $redactSavedHistory) {
+                Text("Redact secrets in saved history")
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text)
+            }
+            .tint(t.accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            if let auditRepository {
+                divider
+                NavigationLink {
+                    AuditView(viewModel: AuditViewModel(repository: auditRepository))
+                } label: {
+                    settingsNavRow("Security audit log", icon: "lock.shield")
+                }
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private var integrationsSection: some View {
+        sectionHead("Integrations")
+        settingsCard {
+            NavigationLink { TerminalSettingsView() } label: {
+                settingsNavRow("Terminal settings", icon: "terminal")
+            }
+            divider
+            NavigationLink { PremiumComparisonView() } label: {
+                settingsNavRow("Compare Free vs Pro", icon: "star.circle")
+            }
+            if Self.showPaidSurfaces {
+                divider
+                NavigationLink { BillingView(backendURL: backendURL) } label: {
+                    settingsNavRow("Billing & usage", icon: "creditcard")
+                }
+                if let org = PurchaseManager.shared.cloudEntitlement?.teamOrg {
+                    divider
+                    teamOrgRow(org)
+                }
+                if let engine = syncEngine {
+                    divider
+                    SyncStatusView(engine: engine)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    private var aboutConduitSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHead("About Conduit")
+            settingsCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    aboutRow(icon: "server.rack", title: "BYO host",
+                             detail: "Connect to any SSH server you own or rent. Conduit does not provision or manage your infrastructure.")
+                    divider
+                    aboutRow(icon: "key", title: "BYO API key",
+                             detail: "Your Anthropic or OpenAI key is stored in the device Keychain and sent directly to the provider.")
+                    divider
+                    aboutRow(icon: "person.badge.minus", title: "No account required",
+                             detail: "No Conduit login. No subscription. All session data stays on-device.")
+                }
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var privacyNote: some View {
+        Text("Keys are stored on-device (Keychain, when-unlocked, device-only) and sent directly to the provider over TLS — never to Conduit servers.")
+            .font(.dsSansPt(12))
+            .foregroundStyle(t.text3)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+    }
+
+    private var versionFooter: some View {
+        Group {
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+            Text("conduit \(version) (\(build))")
+                .font(.dsMonoPt(10))
+                .foregroundStyle(t.text4)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.bottom, 36)
     }
 
     // MARK: - Provider row
@@ -543,6 +571,10 @@ public struct SettingsView: View {
                         set: { notificationFilter.minRisk = $0 }
                     )
                 )
+                Text("These filters only affect lock-screen notifications. Approval cards still appear in Inbox.")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 DSDivider(.soft, leadingInset: 0)
 

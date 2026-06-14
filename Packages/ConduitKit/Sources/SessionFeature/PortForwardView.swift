@@ -105,134 +105,12 @@ public struct PortForwardView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Title row
-                        HStack {
-                            Text("Port Forwarding")
-                                .font(.dsDisplayPt(22, weight: .bold))
-                                .foregroundStyle(t.text)
-                            Spacer()
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    vm.showAddForm.toggle()
-                                }
-                            } label: {
-                                DSIconView(vm.showAddForm ? .close : .plus, size: 18, color: t.accent)
-                                    .frame(width: 36, height: 36)
-                                    .background(t.surface, in: Circle())
-                                    .overlay(Circle().strokeBorder(t.border, lineWidth: 0.5))
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 16)
-
-                        // Add form
+                        titleRow
                         if vm.showAddForm {
-                            sectionHead("New Tunnel")
-                            editorCard {
-                                // Direction picker
-                                HStack(spacing: 8) {
-                                    directionChip("Local", .local)
-                                    directionChip("Remote", .remote)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-
-                                cardDivider
-
-                                // Ports row
-                                HStack(spacing: 8) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Local port")
-                                            .font(.dsSansPt(11, weight: .medium))
-                                            .foregroundStyle(t.text3)
-                                        TextField("8080", text: $vm.addLocalPort)
-                                            .font(.dsMonoPt(15))
-                                            .foregroundStyle(t.text)
-                                            .keyboardType(.numberPad)
-                                    }
-                                    DSIconView(.arrowRight, size: 14, color: t.text3)
-                                        .padding(.top, 18)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Remote host")
-                                            .font(.dsSansPt(11, weight: .medium))
-                                            .foregroundStyle(t.text3)
-                                        TextField("localhost", text: $vm.addRemoteHost)
-                                            .font(.dsMonoPt(15))
-                                            .foregroundStyle(t.text)
-                                            .textInputAutocapitalization(.never)
-                                    }
-                                    Text(":")
-                                        .font(.dsMonoPt(15))
-                                        .foregroundStyle(t.text3)
-                                        .padding(.top, 18)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Port")
-                                            .font(.dsSansPt(11, weight: .medium))
-                                            .foregroundStyle(t.text3)
-                                        TextField("3000", text: $vm.addRemotePort)
-                                            .font(.dsMonoPt(15))
-                                            .foregroundStyle(t.text)
-                                            .keyboardType(.numberPad)
-                                            .frame(width: 52)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-
-                                cardDivider
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Label (optional)")
-                                        .font(.dsSansPt(11, weight: .medium))
-                                        .foregroundStyle(t.text3)
-                                    TextField("e.g. dev server", text: $vm.addLabel)
-                                        .font(.dsSansPt(15))
-                                        .foregroundStyle(t.text)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                            }
-                            .padding(.bottom, 12)
-
-                            HStack {
-                                Spacer()
-                                DSButton("Start Tunnel", variant: .primary, action: {
-                                    Task { await vm.addForward() }
-                                })
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
+                            addTunnelSection
                         }
 
-                        // Tunnel list
-                        if vm.tunnels.isEmpty && !vm.showAddForm {
-                            DSEmptyState(
-                                icon: .plug,
-                                title: "No forwarded ports",
-                                subtitle: "Tap + to add a port tunnel through this SSH session."
-                            )
-                            .padding(.top, 60)
-                        } else if !vm.tunnels.isEmpty {
-                            sectionHead("Active Tunnels")
-                            VStack(spacing: 0) {
-                                ForEach(Array(vm.tunnels.enumerated()), id: \.element.forward.id) { idx, item in
-                                    tunnelRow(item: item, idx: idx)
-                                    if idx < vm.tunnels.count - 1 {
-                                        cardDivider
-                                    }
-                                }
-                            }
-                            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                                    .strokeBorder(t.border, lineWidth: 0.5)
-                            )
-                            .padding(.horizontal, 16)
-                        }
-
+                        tunnelListSection
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 8)
@@ -244,6 +122,157 @@ public struct PortForwardView: View {
             } message: {
                 Text(vm.errorMessage ?? "")
             }
+        }
+    }
+
+    // MARK: - Main sections
+
+    private var titleRow: some View {
+        HStack {
+            Text("Port Forwarding")
+                .font(.dsDisplayPt(22, weight: .bold))
+                .foregroundStyle(t.text)
+            Spacer()
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    vm.showAddForm.toggle()
+                }
+            } label: {
+                DSIconView(vm.showAddForm ? .close : .plus, size: 18, color: t.accent)
+                    .frame(width: 36, height: 36)
+                    .background(t.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(t.border, lineWidth: 0.5))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private var addTunnelSection: some View {
+        sectionHead("New Tunnel")
+        editorCard {
+            directionPickerSection
+            cardDivider
+            portInputsSection
+            cardDivider
+            labelInputSection
+        }
+        .padding(.bottom, 12)
+
+        HStack {
+            Spacer()
+            DSButton("Start Tunnel", variant: .primary, action: {
+                Task { await vm.addForward() }
+            })
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
+    }
+
+    @ViewBuilder
+    private var directionPickerSection: some View {
+        HStack(spacing: 8) {
+            directionChip("Local", .local)
+            if vm.supportsRemoteForwards {
+                directionChip("Remote", .remote)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, vm.supportsRemoteForwards ? 12 : 6)
+
+        if !vm.supportsRemoteForwards {
+            Text("Remote forwarding is not available in this build.")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text3)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+        }
+    }
+
+    private var portInputsSection: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Local port")
+                    .font(.dsSansPt(11, weight: .medium))
+                    .foregroundStyle(t.text3)
+                TextField("8080", text: $vm.addLocalPort)
+                    .font(.dsMonoPt(15))
+                    .foregroundStyle(t.text)
+                    .keyboardType(.numberPad)
+            }
+            DSIconView(.arrowRight, size: 14, color: t.text3)
+                .padding(.top, 18)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Remote host")
+                    .font(.dsSansPt(11, weight: .medium))
+                    .foregroundStyle(t.text3)
+                TextField("localhost", text: $vm.addRemoteHost)
+                    .font(.dsMonoPt(15))
+                    .foregroundStyle(t.text)
+                    .textInputAutocapitalization(.never)
+            }
+            Text(":")
+                .font(.dsMonoPt(15))
+                .foregroundStyle(t.text3)
+                .padding(.top, 18)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Port")
+                    .font(.dsSansPt(11, weight: .medium))
+                    .foregroundStyle(t.text3)
+                TextField("3000", text: $vm.addRemotePort)
+                    .font(.dsMonoPt(15))
+                    .foregroundStyle(t.text)
+                    .keyboardType(.numberPad)
+                    .frame(width: 52)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var labelInputSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Label (optional)")
+                .font(.dsSansPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+            TextField("e.g. dev server", text: $vm.addLabel)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var tunnelListSection: some View {
+        if vm.tunnels.isEmpty && !vm.showAddForm {
+            DSEmptyState(
+                icon: .plug,
+                title: "No forwarded ports",
+                subtitle: "Tap + to add a port tunnel through this SSH session."
+            )
+            .padding(.top, 60)
+        } else if !vm.tunnels.isEmpty {
+            sectionHead("Active Tunnels")
+            VStack(spacing: 0) {
+                ForEach(Array(vm.tunnels.enumerated()), id: \.element.forward.id) { idx, item in
+                    tunnelRow(item: item, idx: idx)
+                    if idx < vm.tunnels.count - 1 {
+                        cardDivider
+                    }
+                }
+            }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
         }
     }
 

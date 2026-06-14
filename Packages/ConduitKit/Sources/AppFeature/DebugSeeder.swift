@@ -38,6 +38,7 @@ public enum DebugSeeder {
             await seedHosts(env.hostRepo)
         }
         UserDefaults.standard.removeObject(forKey: "appLockEnabled")
+        UserDefaults.standard.set(true, forKey: "onboardingSeen")
         UserDefaults.standard.set(true, forKey: seededKey)
     }
 
@@ -51,6 +52,7 @@ public enum DebugSeeder {
         let hostname = e["CONDUIT_TEST_HOST"] ?? "127.0.0.1"
         let port = Int(e["CONDUIT_TEST_PORT"] ?? "22") ?? 22
         let existing = (try? await env.hostRepo.all()) ?? []
+        UserDefaults.standard.set(true, forKey: "onboardingSeen")
         guard !existing.contains(where: {
             $0.hostname == hostname && $0.port == port && $0.username == user
         }) else { return }

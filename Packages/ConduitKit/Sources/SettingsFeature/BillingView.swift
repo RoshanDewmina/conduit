@@ -152,20 +152,27 @@ public struct BillingView: View {
 
                 cardDivider
 
-                HStack(spacing: 12) {
-                    DSIconView(.list, size: 16, color: t.text3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("AI usage today")
-                            .font(.dsSansPt(14))
-                            .foregroundStyle(t.text)
+                // Spend hero — mirrors the board's billing glance (big mono spend value).
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(String(format: "$%.2f", usageTodayUSD))
+                            .font(.dsMonoPt(30, weight: .bold))
+                            .foregroundStyle(t.text)
+                        Text("today")
                             .font(.dsMonoPt(11))
                             .foregroundStyle(t.text3)
+                        Spacer()
                     }
-                    Spacer()
+                    // Brand spectrum strip (R5.3): the red→blue signature device marks the
+                    // usage/data context. On-brand and decorative — no fabricated quota.
+                    SpectrumBar(mode: .idle, height: 6)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                    Text("AI usage today · metered across vendors")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
 
                 if let creditBalance {
                     cardDivider

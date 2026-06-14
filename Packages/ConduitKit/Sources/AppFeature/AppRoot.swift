@@ -47,7 +47,8 @@ public final class AppEnvironment {
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
         self.tombstoneRepo = SyncTombstoneRepository(database)
-        let cloudSync = CloudSync()
+        let cloudKitEnabled = Bundle.main.object(forInfoDictionaryKey: "CONDUIT_ICLOUD_ENABLED") as? Bool ?? false
+        let cloudSync = CloudSync(cloudKitEnabled: cloudKitEnabled)
         let ks = self.keyStore
         self.syncEngine = SyncEngine(
             cloudSync: cloudSync,
@@ -263,8 +264,14 @@ public struct AppRoot: View {
             }
         }
         .task {
-            Notifications.shared.registerCategories()
-            _ = await Notifications.shared.requestAuthorization()
+            if onboardingSeen {
+                Notifications.shared.registerCategories()
+            }
+        }
+        .onChange(of: onboardingSeen) { _, seen in
+            if seen {
+                Notifications.shared.registerCategories()
+            }
         }
         .sheet(isPresented: $showingPaywall) {
             PaywallSheet(featureName: paywallFeatureName)

@@ -45,6 +45,7 @@ public struct ChatHeaderView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Leave session running")
             }
 
             // BLOCKS host glyph: square bordered server tile (matches session rows).

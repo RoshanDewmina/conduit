@@ -204,7 +204,7 @@ public struct DSApprovalCard: View {
             }
 
             // Action sentence — who + what, uniform font/color, no mid-sentence font switch
-            Text("\(Text(agentName).fontWeight(.semibold))\(Text(" wants to \(action)"))")
+            Text("\(Text(agentName).fontWeight(.semibold))\(Text(" is asking permission to \(action)"))")
                 .font(.dsSansPt(14))
                 .foregroundStyle(t.text)
                 .lineLimit(3)
@@ -238,6 +238,10 @@ public struct DSApprovalCard: View {
                 DSButton("ALLOW ALWAYS", variant: .secondary, size: .sm, mono: true, action: onAllowAlways)
                 DSButton("APPROVE", variant: .primary, size: .sm, mono: true, action: onApprove)
             }
+            Text("Allow always applies to this exact tool, input, and path. Revoke rules in Settings.")
+                .font(.dsMonoPt(10.5))
+                .foregroundStyle(t.text3)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(t.surface)
@@ -252,15 +256,15 @@ public struct DSApprovalCard: View {
     }
 
     // Canonical risk → tone mapping (single source of truth for risk colour):
-    //   0 → ok (green) · 1 → warn (amber) · 2 → accent (blue) · 3+ → danger (red).
-    // RiskBadge.barColor (DSChip.swift) MUST stay in lockstep with this — it
-    // resolves the same severities to the same tokens (ok / warn / accentInk /
-    // danger), so the pill and the quote-block tint always read identically.
+    //   0 → ok (green) · 1 → warn (amber) · 2 → orange · 3+ → danger (red).
+    // The risk ramp is independent of the brand/CTA accent (R5.1/R5.2) — medium risk uses a
+    // dedicated orange tone, never blue. RiskBadge (DSChip.swift) resolves the same severities
+    // via the token risk ramp, so the pill and the quote-block tint always read identically.
     private var riskTone: DSChipTone {
         switch risk {
         case 0:  return .ok
         case 1:  return .warn
-        case 2:  return .accent
+        case 2:  return .orange
         default: return .danger
         }
     }

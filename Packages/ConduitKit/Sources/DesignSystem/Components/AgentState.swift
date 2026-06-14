@@ -15,7 +15,7 @@ public enum AgentState: String, Sendable, Hashable, CaseIterable {
         case .thinking:  "Thinking"
         case .streaming: "Streaming"
         case .approval:  "Needs approval"
-        case .done:      "Done"
+        case .done:      "Connected"
         case .error:     "Error"
         case .offline:   "Offline"
         }

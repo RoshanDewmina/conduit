@@ -211,8 +211,7 @@ public struct DSMCPCallCard: View {
                     .foregroundStyle(t.text3)
             }
 
-            // "claude wants to call a tool" sentence
-            Text("\(Text(agentName).foregroundStyle(t.text))\(Text(" wants to call a tool").foregroundStyle(t.text2))")
+            Text("\(Text(agentName).foregroundStyle(t.text))\(Text(" is asking permission to use \(toolName)").foregroundStyle(t.text2))")
                 .font(.dsMonoPt(12))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -313,6 +312,10 @@ public struct DSMCPCallCard: View {
                 }
                 .buttonStyle(.plain)
             }
+            Text("Allow always applies to this exact tool, input, and path. Revoke rules in Settings.")
+                .font(.dsMonoPt(10.5))
+                .foregroundStyle(t.text3)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(13)
         .background(t.surface)

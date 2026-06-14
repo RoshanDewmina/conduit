@@ -120,6 +120,13 @@ public struct AddHostView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 4)
 
+                Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+
                 // ── Clipboard banner (V3) — BYO only
                 if mode == .byo, showClipboardBanner, let result = clipboardBannerResult {
                     clipboardBanner(result)

@@ -53,6 +53,7 @@ final class TapInjectionProofTests: XCTestCase {
     /// approval-decision wiring — if the tap lands, the Inbox-only breadcrumb leaves.
     func testTapInjectionViaTabSwitch() {
         let app = launchReseeded()
+        defer { app.terminate() }
 
         let inboxBreadcrumb = app.staticTexts["agent approvals"]
         XCTAssertTrue(inboxBreadcrumb.waitForExistence(timeout: 30),
@@ -80,6 +81,7 @@ final class TapInjectionProofTests: XCTestCase {
     /// the decision applies (the card leaves PENDING → APPROVE-button count drops).
     func testApproveDecisionApplies() {
         let app = launchReseeded()
+        defer { app.terminate() }
 
         let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "APPROVE"))
         XCTAssertTrue(app.buttons["APPROVE"].firstMatch.waitForExistence(timeout: 30),
@@ -99,29 +101,11 @@ final class TapInjectionProofTests: XCTestCase {
                           "After tapping APPROVE the pending APPROVE-button count should drop (decision applied)")
     }
 
-    /// Visual before/after of a live approval decision, saved as attachments so the
-    /// audit has a reproducible screenshot pair (the SimulatorKit AX-read bridge is
-    /// unreliable on this machine for live MCP taps; XCUITest is the reliable path).
-    func testApproveDecisionVisualEvidence() {
-        let app = launchReseeded()
-
-        XCTAssertTrue(app.buttons["APPROVE"].firstMatch.waitForExistence(timeout: 30),
-                      "Reseeded inbox should show a pending APPROVE button")
-        attach(app, name: "approve-01-before-pending")
-
-        let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "APPROVE"))
-        let before = approveButtons.count
-        app.buttons["APPROVE"].firstMatch.tap()
-
-        let deadline = Date().addingTimeInterval(10)
-        while approveButtons.count >= before && Date() < deadline { usleep(300_000) }
-        attach(app, name: "approve-02-after-decided")
-    }
-
     /// Phase-5 app-lock opt-in: Settings → Security → "Require Face ID on launch"
     /// starts OFF (reseed clears `appLockEnabled`) and the toggle flips it ON.
     func testFaceIDToggleOptIn() {
         let app = launchReseeded(tab: "settings")
+        defer { app.terminate() }
 
         let toggle = app.switches["Require Face ID on launch"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 30),
@@ -138,6 +122,12 @@ final class TapInjectionProofTests: XCTestCase {
         while (toggle.value as? String) != "1" && Date() < deadline { usleep(200_000) }
         XCTAssertEqual(toggle.value as? String, "1",
                        "Tapping the toggle should enable app lock (opt-in persisted)")
+
+        toggle.tap()
+        let resetDeadline = Date().addingTimeInterval(5)
+        while (toggle.value as? String) != "0" && Date() < resetDeadline { usleep(200_000) }
+        XCTAssertEqual(toggle.value as? String, "0",
+                       "Test cleanup should disable app lock before the next launch")
     }
 
     /// Fleet → "Saved hosts": tapping a seeded host fires onReconnect → openSession,
@@ -145,6 +135,7 @@ final class TapInjectionProofTests: XCTestCase {
     /// wiring without needing a live SSH endpoint.
     func testSavedHostReconnectPresentsPrompt() {
         let app = launchReseeded(tab: "fleet")
+        defer { app.terminate() }
 
         let savedHeader = app.staticTexts["Saved hosts"]
         XCTAssertTrue(savedHeader.waitForExistence(timeout: 30),
@@ -170,11 +161,53 @@ final class TapInjectionProofTests: XCTestCase {
                       "Tapping a saved host should fire onReconnect → present the connect prompt")
     }
 
-    private func attach(_ app: XCUIApplication, name: String) {
-        let shot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: shot)
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+    /// Strict localhost SSH proof, opt-in only because it needs macOS Remote Login
+    /// plus a Keychain-backed password. In simulator-env mode, the password is set
+    /// in the Device Hub app-launch environment; the test runner receives only a
+    /// non-secret flag.
+    func testLocalhostSSHShowsTOFUAndConnects() throws {
+        let runnerEnv = ProcessInfo.processInfo.environment
+        let useSimulatorLaunchEnvironment = runnerEnv["CONDUIT_LIVE_SSH_SIM_ENV"] == "1"
+        guard useSimulatorLaunchEnvironment || runnerEnv["CONDUIT_LIVE_SSH_E2E"] == "1" else {
+            throw XCTSkip("Set CONDUIT_LIVE_SSH_E2E=1 with CONDUIT_TEST_PW to run the live localhost SSH proof")
+        }
+
+        let app: XCUIApplication
+        if useSimulatorLaunchEnvironment {
+            app = XCUIApplication()
+            app.launch()
+        } else {
+            let testPassword = runnerEnv["CONDUIT_TEST_PW"] ?? ""
+            XCTAssertFalse(testPassword.isEmpty, "CONDUIT_TEST_PW must be supplied by the test runner environment")
+            app = XCUIApplication()
+            app.launchEnvironment["CONDUIT_DAEMON_E2E"] = "1"
+            app.launchEnvironment["CONDUIT_TEST_HOST"] = runnerEnv["CONDUIT_TEST_HOST"] ?? "127.0.0.1"
+            app.launchEnvironment["CONDUIT_TEST_PORT"] = runnerEnv["CONDUIT_TEST_PORT"] ?? "22"
+            app.launchEnvironment["CONDUIT_TEST_USER"] = runnerEnv["CONDUIT_TEST_USER"] ?? NSUserName()
+            app.launchEnvironment["CONDUIT_TEST_PW"] = testPassword
+            app.launchEnvironment["CONDUIT_TAB"] = "fleet"
+            app.launch()
+        }
+        defer { app.terminate() }
+
+        let localHost = app.staticTexts["This Mac (e2e)"]
+        XCTAssertTrue(localHost.waitForExistence(timeout: 30), "Live E2E seed should add the localhost host")
+        let hostCell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", "This Mac")).firstMatch
+        if hostCell.exists { hostCell.tap() } else { localHost.tap() }
+
+        let connectButton = app.buttons["Connect"]
+        XCTAssertTrue(connectButton.waitForExistence(timeout: 20), "Localhost password prompt should appear")
+        XCTAssertTrue(connectButton.isEnabled, "DEBUG-only E2E password prefill should enable Connect without typing")
+        connectButton.tap()
+
+        let tofuTitle = app.staticTexts["Unknown Host Key"]
+        XCTAssertTrue(tofuTitle.waitForExistence(timeout: 30), "Production localhost connect should show the TOFU prompt")
+        XCTAssertTrue(app.staticTexts["Fingerprint (SHA256)"].exists, "TOFU prompt should show the SSH fingerprint label")
+        XCTAssertTrue(app.buttons["Trust & Connect"].exists, "TOFU prompt should require explicit trust")
+
+        app.buttons["Trust & Connect"].tap()
+        XCTAssertTrue(app.staticTexts["Connected"].waitForExistence(timeout: 45),
+                      "After trusting the localhost key, the SSH session should connect")
     }
+
 }

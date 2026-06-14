@@ -56,6 +56,13 @@ targets:
         NSMicrophoneUsageDescription: "Conduit uses the microphone so you can dictate terminal commands and agent prompts by voice."
         NSSpeechRecognitionUsageDescription: "Conduit transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
         NSSupportsLiveActivities: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:
           - fetch
           - remote-notification
@@ -111,6 +118,7 @@ targets:
         product: AppFeature
       - package: Sentry
         product: Sentry
+      - sdk: AppIntents.framework
       - target: ConduitWatch
         embed: true
       - target: ConduitLiveActivityWidget
@@ -218,6 +226,7 @@ targets:
     dependencies:
       - package: ConduitKit
         product: SessionFeature
+      - sdk: AppIntents.framework
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: ActivityKit.framework
@@ -272,6 +281,7 @@ targets:
         GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
       - target: Conduit
+      - sdk: AppIntents.framework
 
 schemes:
   Conduit:

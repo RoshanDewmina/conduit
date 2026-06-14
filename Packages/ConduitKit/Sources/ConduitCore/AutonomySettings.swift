@@ -18,7 +18,7 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
         switch self {
         case .autoReads:    return "Auto-approve reads"
         case .alwaysAsk:    return "Always ask"
-        case .agentDecides: return "Agent decides"
+        case .agentDecides: return "Critical only"
         }
     }
 
@@ -26,7 +26,7 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
         switch self {
         case .autoReads:    return "Auto-reads"
         case .alwaysAsk:    return "Always ask"
-        case .agentDecides: return "Agent"
+        case .agentDecides: return "Critical only"
         }
     }
 
@@ -37,7 +37,7 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
         case .alwaysAsk:
             return "Every agent action requires your approval before it runs."
         case .agentDecides:
-            return "Only critical-risk actions require approval. Agent handles low and medium risk automatically."
+            return "Only critical-risk actions ask. Low, medium, and high-risk actions can run automatically."
         }
     }
 

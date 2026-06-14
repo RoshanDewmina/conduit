@@ -82,11 +82,15 @@ public struct ConduitTokens: Sendable {
     public var s9: CGFloat = 48
 
     // MARK: Risk scale
+    // The risk ramp is independent of the brand/CTA `accent` (R5.1/R5.2): green → amber →
+    // orange → red, monotonic. Level 2 uses a dedicated orange — never `accent` — so a
+    // medium-risk badge can't be mistaken for an affirmative CTA.
+    public static let riskOrange = Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1) // #E2662C
     public func risk(_ level: Int) -> Color {
         switch level {
         case 0:  return ok
         case 1:  return warn
-        case 2:  return accent
+        case 2:  return Self.riskOrange
         default: return danger
         }
     }
@@ -95,7 +99,7 @@ public struct ConduitTokens: Sendable {
         switch level {
         case 0:  return okSoft
         case 1:  return warnSoft
-        case 2:  return accentSoft
+        case 2:  return Self.riskOrange.opacity(0.16)
         default: return dangerSoft
         }
     }

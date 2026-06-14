@@ -342,11 +342,14 @@ private struct InlineApproval: View {
     }
 
     private func riskColor(_ r: AgentApproval.Risk) -> Color {
+        // Risk ramp is independent of agent-activity state colors and the brand CTA
+        // (R5.1/R5.2): green → amber → orange → red, monotonic. Conflating risk with the
+        // `.thinking`/approval hues let medium/high risk read as brand/state, not caution.
         switch r {
-        case .low: PixelBox.stateColor(.done)
-        case .medium: DI.approval
-        case .high: PixelBox.stateColor(.thinking)
-        case .critical: PixelBox.stateColor(.error)
+        case .low:      Color(.sRGB, red: 0.247, green: 0.733, blue: 0.404, opacity: 1) // #3FBB67 green
+        case .medium:   Color(.sRGB, red: 0.910, green: 0.659, blue: 0.231, opacity: 1) // #E8A83B amber
+        case .high:     Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1) // #E2662C orange
+        case .critical: Color(.sRGB, red: 0.815, green: 0.255, blue: 0.220, opacity: 1) // #D04138 red
         }
     }
 }

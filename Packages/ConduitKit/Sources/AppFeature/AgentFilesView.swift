@@ -4,6 +4,7 @@ import DesignSystem
 import AgentKit
 import SSHTransport
 import SettingsFeature
+import FilesFeature
 
 /// SFTP file browser for an agent's ssh-host. Browse/preview-only when opened
 /// from the agent detail; when `attachToRunID` is set (opened from a run), a
@@ -28,6 +29,7 @@ struct AgentFilesView: View {
         let id = UUID()
         let name: String
         let text: String
+        let path: String
     }
 
     var body: some View {
@@ -49,7 +51,11 @@ struct AgentFilesView: View {
         }
         .navigationBarHidden(true)
         .task(id: path) { await load() }
-        .sheet(item: $preview) { p in filePreviewSheet(p) }
+        .sheet(item: $preview) { p in
+            FilePreviewView(filename: p.name, content: p.text, path: p.path)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var headerTitle: String {
@@ -131,23 +137,6 @@ struct AgentFilesView: View {
         .disabled(busyPath != nil)
     }
 
-    private func filePreviewSheet(_ p: FilePreview) -> some View {
-        ZStack(alignment: .top) {
-            t.termBg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                DSDetailHeader(p.name, onBack: { preview = nil })
-                ScrollView {
-                    Text(p.text)
-                        .font(.dsMonoPt(12))
-                        .foregroundStyle(t.termText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(12)
-                }
-            }
-        }
-    }
-
     // MARK: - Actions
 
     private func handleTap(_ entry: SFTPEntry) {
@@ -187,7 +176,7 @@ struct AgentFilesView: View {
             do {
                 let data = try await store.readHostFile(agent: agent, path: entry.path, limitBytes: 256 * 1024)
                 let text = String(data: data, encoding: .utf8) ?? "[binary — \(data.count) bytes, not shown]"
-                preview = FilePreview(name: entry.name, text: text)
+                preview = FilePreview(name: entry.name, text: text, path: entry.path)
             } catch {
                 status = error.localizedDescription
             }

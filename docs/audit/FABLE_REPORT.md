@@ -1,137 +1,181 @@
-# FABLE Report — Governed Approvals v1 Pre-Submission Audit
+# FABLE Report - Governed Approvals v1 Pre-Submission Audit
 
-**Date:** 2026-06-12
-**Branch:** `feat/governed-approvals` (worktree `governed-approvals-audit`)
-**Version:** 1.0.0 (`MARKETING_VERSION`, all 5 targets)
-**Verdict:** 🟡 **CONDITIONAL GO** — engineering is submission-ready and build-green; release is gated on owner infrastructure actions and the remaining tap-interaction verification (needs a full Xcode the owner is installing).
+**Date:** 2026-06-13
+**Branch:** `codex/uiux-audit`
+**Device Hub target:** iPhone 17 Pro (`095F8B3A-FEA3-4031-A2A5-561755740730`)
+**Verdict:** **NO-GO** for App Store submission until the owner-only production gates are cleared.
 
----
+## Executive Summary
 
-## Executive go/no-go
+The governed-approvals core loop is materially stronger after this pass. The app now teaches the approval model first, delays notification permission until after onboarding, preserves the production TOFU host-key prompt, fixes a live first-connect race, and fails closed when the relay backend is deployed without its shared secret. Local live SSH, local relay fallback, Swift package tests, Go tests, Xcode build, and archive all passed.
 
-The governed-approvals approval path is **engineering-complete**. All four launch blockers (B1–B4) plus the
-late-surfacing **live shell-integration blocker** are fixed and the fixes are verified by build, unit
-tests, an auth curl-matrix, and — for the shell blocker — a live on-device run. Phase 5 UX polish is done
-with a clean app-target build (0 errors / 0 warnings). What stands between here and the App Store is **not
-engineering**: it is owner-only infrastructure (backend deploy with the relay secret, physical-device APNs,
-App Store Connect record + IAP sandbox, store screenshots) and a final **tap-interaction pass** that this
-machine cannot run (no Simulator.app in the installed Xcode-beta → HID injection unavailable).
+The release is still a strict no-go because several production-only checks cannot be completed by the agent: distribution signing/export, App Store Connect/TestFlight, physical-device APNs delivery, production CloudKit, production backend secret deployment, IAP sandbox, and final store submission. The archive is build-valid but development-signed.
 
-**Recommendation:** proceed to TestFlight once the owner items below are done; the tap-interaction checks
-can be completed in parallel on a full-Xcode box or a physical device (Phase 6 needs a device anyway).
+## What Changed
 
----
+### UX and onboarding
 
-## What was verified (evidence-backed)
+- Reframed onboarding around the mental model: agents ask permission, the user approves, work resumes.
+- Removed misleading "detected network" first-run copy and replaced it with trust/security language.
+- Made Face ID copy honest: biometric unlock protects app launch and secrets on the device.
+- Clarified Inbox empty state, Fleet empty state, Add Host helper text, approval-card copy, allow-always scope, autonomy labels, and connected state.
+- Improved touch target consistency for design-system buttons and fixed a saved-host reconnect icon layout issue.
+- Avoided a first-launch notification prompt; notification categories now register only after onboarding is seen.
 
-| Area | Status | Evidence |
-|------|--------|----------|
-| ConduitKit `swift build` | ✅ green | every Phase-5 chunk |
-| ConduitKit `swift test` | ✅ **337 tests / 57 suites pass** | incl. `firstDecisionWins` (M9 exactly-once) |
-| App-target `xcodebuild` (5 targets) | ✅ **BUILD SUCCEEDED, 0 err / 0 warn** | `/tmp/ga-*-build.log` |
-| push-backend / conduitd Go | ✅ `go vet` + `go test` + `-race` | relay tests below |
-| **B1** TOFU first-connect | ✅ fixed; code-verified | sheet inside `SessionView` above the cover; `.disconnected` overlay |
-| **B2** relay two-tier auth | ✅ **PASS** | full curl matrix (`relay-curl.txt`): 401-without/200-with secret; per-session token on decision/poll; cross-session token rejected |
-| **B3** idempotency (first-decision-wins) | ✅ **PASS** | `WHERE decision IS NULL`; test `firstDecisionWins`; `TestDecisionRelayDedupeByApprovalID` |
-| **B4** mic/speech usage strings | ✅ fixed | `project.yml` |
-| Relay fallback (no live SSH) | ✅ **PASS** | `TestDecisionPollerResolves` / `TestDecisionPollerSendsBearerToken` |
-| **Live shell-integration blocker** | ✅ **fixed + verified LIVE** | single-line eval injection; `live-session-AFTER-oneline-fix.png` (`✓ exit 0`), `live-session-claude-inblock.png` |
-| Phase 5 rendering | ✅ verified (read path) | `phase5-inbox-typed-accentfg.png`, `phase5-diff-monofont.png` |
-| Gallery dark routes + prod Inbox | ✅ **PASS** | `gallery-*-dark.png`, `prod-inbox-*.png`; **no host-label wrap issue** |
+### Correctness and security
 
-### Phase 5 fixes shipped (commits on `feat/governed-approvals`)
-- `680ee7eb` — 14 token-drift fixes; TextPreview NUL-byte binary guard; SnippetEditor tag-loss; iPad `NavigationStack`.
-- `ab1e8a04` — honest Face ID opt-in (`appLockEnabled` persists only on real success); dead shipped-UI removed.
-- `500c0981` — saved-hosts reconnect list + dedup (upsert by host:port:user; preserves trusted host-key).
-- `3698dd55` — **shell-integration single-line eval fix** (the live-approval blocker).
-- `23fffec9` — fastlane metadata synced to governed-approvals; PrivacyInfo CrashData/SystemBootTime removed.
+- Fixed the live SSH TOFU trust race in `SessionView`: tapping "Trust & Connect" no longer causes the sheet dismissal binding to reject the same host key.
+- Kept the production TOFU prompt intact; only the debug/e2e seeded flow prefills the local password for test automation.
+- Made Cloud Sync visibility follow the app's `CONDUIT_ICLOUD_ENABLED` Info.plist flag instead of a hard-coded false path.
+- Added production fail-fast detection in the Go relay backend when `APPROVAL_RELAY_SECRET` is missing.
+- Added `APPROVAL_RELAY_SECRET` to backend examples and deployment docs.
 
----
+### Build, project, and metadata
 
-## Tap-interaction — now UNBLOCKED via XCUITest
+- Updated `project.yml` rather than hand-editing the generated project; regenerated `Conduit.xcodeproj`.
+- Added App Intents framework wiring where needed and fixed iPad orientation metadata that caused archive warnings.
+- Synced fastlane metadata and App Store docs to avoid overclaiming closed-app/lock-screen approvals before physical APNs is verified.
+- Updated support URL metadata to `https://conduit.dev/support`.
 
-The "taps don't inject" wall is **resolved**. The installed Xcode-beta is a stripped 3.5 GB build missing
-`Simulator.app` (so no GUI window for cliclick) and `idb` 1.1.8 is incompatible with macOS 27 (objc class
-collision) — but **XCUITest** runs headlessly via `xcodebuild test`, needs neither, and its frameworks are
-present. A `ConduitUITests` target was added and the suite is now **fully green on this machine**
-(`** TEST SUCCEEDED **`, 5/5, 0 failures):
-- `testTapInjectionViaTabSwitch` — event injection works (Inbox⇄Settings tab taps toggle the screen).
-- `testApproveDecisionApplies` — **APPROVE → pending count drops**: the Phase-4 Check-1 approval
-  interaction (previously BLOCKED) is verified, exercising B3 first-decision-wins live in the UI.
-- `testApproveDecisionVisualEvidence` — captures a before/after screenshot pair of a live decision.
-- `testFaceIDToggleOptIn` — Settings → Security → "Require Face ID on launch" flips OFF→ON (the Phase-5
-  honest app-lock opt-in). Surfaced a real XCUITest gotcha: the toggle sits below the scroll fold but
-  `isHittable` reports true (frame within window bounds, behind the tab bar), so a naive tap lands
-  off-screen — the test scrolls it into the safe viewport first.
-- `testSavedHostReconnectPresentsPrompt` — Fleet → "Saved hosts" → tapping a seeded host fires
-  `onReconnect → openSession`, which presents the connect prompt (proves the reconnect+dedup wiring
-  without needing a live SSH endpoint).
+### Tests and audit artifacts
 
-**Determinism:** every test launch sets `CONDUIT_UITEST_RESEED=1`, which (DEBUG-only,
-`DebugSeeder.resetForUITestIfRequested`) wipes the approvals table and re-seeds the fixed sample set
-(2 pending + 1 decided), seeds the Fleet saved-hosts if the table is empty, and clears the app-lock
-opt-in. Without it the seed is consumed by the first APPROVE and persists decided, so re-runs would find
-no pending cards. This makes every interaction proof re-runnable. Tests launch straight onto a tab via
-`CONDUIT_TAB` (inbox/fleet/activity/settings).
+- Expanded `ConduitUITests/TapInjectionProofTests.swift` with deterministic reseeding, tap-injection proof, approve-decision proof, Face ID opt-in coverage, saved-host reconnect coverage, and a live localhost SSH TOFU test path.
+- Added June 13 Device Hub screenshots under `docs/audit/screens/`.
+- Rewrote `FABLE_REPORT.md`, `FABLE_FINDINGS.md`, `FEATURE_COVERAGE.md`, and the screenshot manifest for this strict pass.
 
-**Visual evidence captured** (`screens/e2e-phase4/`): `verify-inbox-pending-light.png` /
-`verify-inbox-pending-dark.png` (PENDING · 2 cards with EDIT&RUN / DENY / ALLOW ALWAYS / APPROVE);
-`verify-approve-01-before.png` (PENDING · 2 / DECIDED · 1) → `verify-approve-02-after.png` (PENDING · 1 /
-DECIDED · 2 — the HIGH-risk `rm -rf` card moves PENDING → approved after the live tap). The before/after
-pair is the governed-approvals decision flow demonstrated end-to-end in the simulator.
+## Diff Summary
 
-**Now covered by XCUITest:** the Face ID app-lock opt-in and the saved-host reconnect (above). **Still
-infra-gated, assessed honestly — not faked:**
-- **B1 TOFU host-key prompt** — reachable, but needs the live-SSH harness (a reachable host with its key
-  cleared from the trust store so TOFU re-fires); not a pure mock. The fix itself is code-verified (sheet
-  presented inside `SessionView` above the cover) and now exercised by the same presentation mechanism as
-  the MAJOR-5 retry sheet.
-- **M6 cold-launch replay** — `ApprovalActionBuffer` is an in-memory buffer (not persisted), so it can't
-  be pre-seeded via launch env; an automated test needs a small DEBUG seed hook. The drain → relay →
-  first-decision-wins path it feeds is already covered by the Go poller + idempotency tests.
+In-scope work touched the iOS app, XcodeGen config, UI tests, push backend, metadata, and audit docs. The current in-scope code/docs diff is approximately 26 tracked files before the report rewrite, plus new audit screenshots. The unrelated dirty files under `docs/conduit-ui-prototype/**` are explicitly out of scope and were left untouched.
 
-**MAJOR-5 (password re-entry over the live-session cover) — FIXED.** The retry sheet was only wired at the
-app root, where it can't present over the session `fullScreenCover` (the B1 family). Added
-`SessionPasswordRetrySheet`, presented from inside `SessionView` above the cover, mirroring the TOFU sheet.
+Representative changed areas:
 
-**Full three-way live relay loop** (phone POST → running conduitd poll) still needs a running conduitd
-stood up alongside; every link is independently proven (curl matrix + Go poller tests).
+- `Packages/ConduitKit/Sources/AppFeature/**`
+- `Packages/ConduitKit/Sources/OnboardingFeature/**`
+- `Packages/ConduitKit/Sources/InboxFeature/**`
+- `Packages/ConduitKit/Sources/SessionFeature/**`
+- `Packages/ConduitKit/Sources/SettingsFeature/**`
+- `ConduitUITests/TapInjectionProofTests.swift`
+- `daemon/push-backend/**`
+- `project.yml`
+- `docs/**`, `ship-plan/**`, `fastlane/metadata/**`
 
----
+## Verification Evidence
 
-## Owner actions before submission (not agent-doable)
+| Check | Result | Evidence |
+|---|---:|---|
+| Hook hygiene | Pass | No Conduit approval hook found in `~/.codex/` or global Claude settings; md5s recorded during the run. |
+| Tap injection proof | Pass | `testTapInjectionViaTabSwitch` returned `** TEST SUCCEEDED **` in `/tmp/conduit-fable-uitest-testTapInjectionViaTabSwitch-final.log`. |
+| Approval decision UI | Pass | `testApproveDecisionApplies` returned `** TEST SUCCEEDED **` in `/tmp/conduit-fable-uitest-testApproveDecisionApplies-final.log`. |
+| Active UI suite | Pass with beta cleanup caveat | 4 selected tests passed with 0 failures in `/tmp/conduit-fable-uitests-active-final.log`; Xcode 27 beta hung after suite completion during Device Hub shutdown and was killed. |
+| Live localhost SSH TOFU | Pass | `/tmp/conduit-fable-live-ssh-simenv3.log`; real SSH to `127.0.0.1:22`, Keychain-backed password, TOFU prompt, trust, and `Connected`. |
+| Local relay fallback | Pass | Local `daemon/push-backend` handled register, decision, authorized poll, one-time drain, and 401s for missing/wrong tokens. |
+| `swift build` | Pass | `/tmp/conduit-fable-swift-build-final2.log`. |
+| `swift test` | Pass | `/tmp/conduit-fable-swift-test-final2.log`. |
+| XcodeBuildMCP `build_sim` | Pass, 0 warnings | Log under `~/Library/Developer/XcodeBuildMCP/workspaces/command-center-c3ef378ca557/logs/`. |
+| XcodeBuildMCP `test_sim` | Not cleanly returned | Wrapper timed out on the beta environment; raw XCUITest evidence above passed assertions. |
+| Archive | Pass, warning-free | `/tmp/conduit-fable-archive-final3.log`, archive `/tmp/conduit-fable-final3.xcarchive`. Development signing only. |
+| `go vet ./...` push backend | Pass | `/tmp/conduit-fable-pushbackend-govet-final2.log`. |
+| `go test ./...` push backend | Pass | `/tmp/conduit-fable-pushbackend-gotest-final2.log`. |
+| `go vet ./...` conduitd | Pass, read-only | `/tmp/conduit-fable-conduitd-govet-final2.log`. |
+| `go test ./...` conduitd | Pass, read-only | `/tmp/conduit-fable-conduitd-gotest-final2.log`. |
 
-| Item | Why it's owner-only |
-|------|---------------------|
-| Deploy conduitd + push-backend with `APPROVAL_RELAY_SECRET` set | prod infra + secret; without it Tier-1 is open and Tier-2 tokens don't exist server-side |
-| Physical-device APNs validation | real push delivery + notification actions; needs a paid-team device |
-| App Store Connect record + IAP sandbox (`dev.conduit.mobile.pro`, $14.99) | account-level; sandbox test |
-| Store screenshots (1320×2868, governed-approvals flow) | needs the tap-driven flow captured; current fastlane shots are stale terminal-first |
-| Vanity domain for push backend | replace `35.201.3.231.sslip.io` bare-IP host before public |
-| `fastlane deliver` upload | uploads the now-synced metadata — owner's call to publish |
-| Full-Xcode/device for the tap-interaction pass | this machine's Xcode-beta cannot inject taps |
+No long-running `xcodebuild`, backend, Go, or UI-test runner processes were left running.
 
----
+## Findings
 
-## Risk register (App Review)
+### Blockers - fixed
 
-- **2.5.2 remote-shell:** Conduit drives a *remote* shell over SSH; it does **not** download/execute code
-  locally. App Review notes must state this (drafted in `docs/app-store-metadata.md` §App Review notes).
-- **Copy claim "even when the app was closed":** true **only** with the backend decision-relay enabled.
-  Keep the relay live, or change the promo/description per the caveat in `app-store-metadata.md`.
-- **Privacy label:** PrivacyInfo now declares only DeviceID (APNs) + FileTimestamp (SFTP) + UserDefaults;
-  CrashData removed (Sentry DSN empty). The App Store Connect privacy nutrition label must match.
-- **support_url:** left as `https://conduit.dev` (doc suggests `/support`) — change only if that path resolves.
+- **TOFU trust dismissal race:** Fixed. Live first-connect now reaches the TOFU prompt and then a connected session.
+- **Relay backend could start in production without `APPROVAL_RELAY_SECRET`:** Fixed. Cloud Run, Fly, and production env markers now fail fast.
+- **Archive orientation warning:** Fixed through `project.yml`; archive is warning-free.
+- **Metadata overclaiming lock-screen/closed-app approvals:** Fixed. Copy now matches locally verified behavior and flags APNs delivery as owner-only.
 
----
+### Blockers - flagged
 
-## Open lower-severity items (deferred, non-blocking)
+- **Distribution signing/export is not verified:** Owner-only. Current archive uses development signing (`get-task-allow = 1`, `aps-environment = development`).
+- **Physical-device APNs delivery is not verified:** Owner-only. Device Hub cannot prove lock-screen push delivery or notification actions with the production `.p8`.
+- **App Store Connect/TestFlight/upload/submission are not done:** Owner-only and intentionally not attempted.
+- **Production CloudKit is not verified:** Owner-only capability/container/environment gate.
+- **Production backend deployment with real secrets is not verified:** Owner-only; no test traffic was sent to the deployed backend by instruction.
+- **IAP sandbox and privacy nutrition labels are not verified in App Store Connect:** Owner-only.
 
-- **MAJOR-5** password-retry sheet present-over-cover — **FIXED** (`SessionPasswordRetrySheet` presented inside `SessionView` above the cover, mirroring B1's TOFU sheet).
-- Security LOW-1/2/3/5 (app-switcher snapshot redaction; biometryLockout; `autoTrustHostKey` DEBUG guard; Redactor PEM/Bearer/JWT) — from the 2026-05-31 security review, pre-existing.
-- Core-kits (CloudKit deletion resurrection, SSHHostRuntime cancel/status) — fix only if E2E surfaces them; iCloud UI stays hidden.
-- Cosmetic: the `\e[2J\e[H` clear echoes into claude's input box (pre-existing §3.3 dynamic; low severity).
+### Majors - fixed
 
----
+- Onboarding now explains governed approvals before plumbing.
+- First-run notifications no longer interrupt onboarding.
+- Cloud Sync UI follows the configured flag instead of being permanently suppressed.
+- The active UI tests include direct tap proof and approval decision proof.
+- Settings body and port-forward view were split to avoid SwiftUI type-checking pressure.
 
-*Full detail: `FABLE_FINDINGS.md` (scratchpad), `findings/review-*.md` (8 static reviews), `screens/e2e-phase4/` (E2E + Phase-5 evidence).*
+### Majors - flagged
+
+- Several implemented capabilities are still hidden or weakly surfaced: fuller session shell/preview surfaces, SFTP browser, fuller SSH key management, snippet creation/editing paths, OpenRouter provider selection, dispatch composer, and post-onboarding provisioning.
+- Several visible surfaces still contain placeholder or partial behavior: Library run/new snippet paths, workflow add-step, key host counts, watch pending-count freshness, invite email delivery, allow-always revoke scope, and production APNs/Live Activity delivery.
+- Xcode 27 beta Device Hub cleanup is unstable after UI test completion. Assertions pass, but the wrapper can hang while tearing down the runner.
+
+## Feature Coverage
+
+The coverage matrix is in `docs/audit/FEATURE_COVERAGE.md`. Summary:
+
+- Core approvals path: shown and locally verified through Inbox, UI tests, live SSH TOFU, and relay fallback.
+- Local host connection path: shown and locally verified against localhost SSH.
+- Relay fallback: backend route behavior verified locally and by Go tests; deployed delivery remains owner-only.
+- Widgets, Watch, Live Activity, APNs: compiled and code-reviewed, but physical delivery/action verification remains owner-only.
+- Hosted agents, billing, Cloud, CloudKit, IAP: code surfaces exist, but production entitlement/store checks remain owner-only.
+
+## UX/UI
+
+### Screenshot index
+
+See `docs/audit/screens/MANIFEST.md` for the final image list.
+
+Captured June 13:
+
+- Onboarding, light and dark.
+- Inbox, light and dark.
+- Fleet, light and dark.
+- Activity, light and dark.
+- Settings, light and dark.
+- Tab contact sheet / reference screenshot.
+
+### Simplifications made
+
+- The first screen now leads with the approval loop instead of host connection mechanics.
+- The core cards use plain permission language: "is asking permission" and "remember this exact action".
+- The app no longer asks for notifications before the user understands what approvals are.
+- Status vocabulary now says "Connected" rather than "Done".
+- Empty states now tell the user what is true and what to do next, without adding extra feature promises.
+
+### Recommended but not changed unilaterally
+
+- Consider renaming or restructuring Library if snippet/workflow/key management stays partial at submission.
+- Decide whether OpenRouter, Dispatch, SFTP, and Preview are shipping concepts or deferred debug/internal capabilities.
+- Review Watch and Live Activity scope after physical APNs testing; do not market lock-screen actions until proven on device.
+
+## Submission Readiness
+
+**Strict verdict: NO-GO.**
+
+Engineering-local checks are in good shape, but submission is blocked until the owner clears:
+
+- Paid-team distribution signing and App Store export.
+- App Store Connect app record, metadata, screenshots, privacy labels, and TestFlight upload.
+- Physical-device APNs delivery and notification action verification.
+- Production backend deployment with `APPROVAL_RELAY_SECRET` and APNs `.p8`.
+- Production CloudKit container/capability verification.
+- IAP sandbox verification for the pro product.
+- Final App Review notes and submission decision.
+
+## Installed Items and Assumptions
+
+- Installed nothing.
+- Assumed macOS 27 / Xcode 27 beta Device Hub cleanup instability is environmental because individual tests and selected-suite assertions passed before teardown hangs.
+- Assumed localhost SSH on `127.0.0.1:22` and the Keychain item `conduit-localhost-ssh` are the intended live E2E path. The secret value was not printed.
+
+## What I Would Commit
+
+One commit would be appropriate:
+
+`Governed approvals pre-submission hardening`
+
+It would include the onboarding/UX simplifications, TOFU race fix, relay secret hardening, metadata corrections, XcodeGen config updates, UI-test expansion, screenshots, and audit docs. The working tree is intentionally left uncommitted.

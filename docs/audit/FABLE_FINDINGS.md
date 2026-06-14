@@ -1,275 +1,107 @@
-# Fable Findings — Governed Approvals v1 pre-submission audit
+# FABLE Findings - Governed Approvals v1
 
-> Durable scratchpad for the full pre-App-Store-submission pass (2026-06-12).
-> Phases: 1 orient/baseline · 2 feature coverage · 3 exhaustive review · 4 E2E sim run ·
-> 5 UX polish · 6 submission readiness · 7 verify & report.
+**Date:** 2026-06-13
+**Verdict:** **NO-GO** until owner-only production blockers are cleared.
 
-## Status
+This file is the findings ledger for the June 13 strict pre-submission pass. The full narrative report is `docs/audit/FABLE_REPORT.md`; the capability matrix is `docs/audit/FEATURE_COVERAGE.md`.
 
-- [x] Phase 1 — Orient & green baseline
-- [x] Phase 2 — Feature inventory & coverage matrix (`FEATURE_COVERAGE.md`)
-- [x] Phase 3 — Exhaustive static review & hardening (governed-approvals path first)
-- [~] Phase 4 — E2E run: builds/tests/relay/idempotency **verified**; HID tooling **fixed** (SimulatorKit symlink); live shell-integration BLOCKER **fixed + verified live**; full approval-card tap still gated on logged-in agent + conduitd (see Continuation §)
-- [x] Phase 5 — UX/UI/perf polish (code-complete, app-target build 0/0; sim-visual pending)
-- [~] Phase 6 — Submission readiness: agent items **done** (fastlane metadata synced, PrivacyInfo reconciled); owner items remain (backend deploy+secret, APNs on device, App Store Connect/IAP, store screenshots, vanity domain)
-- [x] Phase 7 — Final report `FABLE_REPORT.md` — verdict **CONDITIONAL GO**
+## Phase Status
 
-## Continuation — Phase 4 E2E + Phase 5 (2026-06-12, second session)
+- [x] Orient, scope, and hook hygiene.
+- [x] Source and feature coverage review.
+- [x] UX/UI simplification pass focused on "understand governed approvals fastest."
+- [x] Live Device Hub tap-injection proof.
+- [x] Live localhost SSH TOFU verification.
+- [x] Local relay-fallback verification.
+- [x] Swift package build/test.
+- [x] Xcode build and archive check.
+- [x] Go backend vet/test.
+- [x] Store metadata/readiness reconciliation.
+- [x] Final audit docs and screenshots.
 
-Checkpoint commit `f6a36a55` froze all Phase 1–3 work; Phase 4 verification ran against it (in an
-isolated worktree, detached at `f6a36a55`), Phase 5 was implemented on `feat/governed-approvals`.
+## Blockers
 
-### BLOCKER FIXED — live shell-integration wedge (was Phase 4 Check 1)
+| ID | Finding | Status | Evidence / Recommendation |
+|---|---|---|---|
+| B-001 | TOFU trust flow could reject the host key while the user was tapping "Trust & Connect" because the sheet dismissal binding ran the reject path during explicit trust. | Fixed | `SessionView` now tracks trust-in-progress. Live localhost SSH E2E passed in `/tmp/conduit-fable-live-ssh-simenv3.log`. |
+| B-002 | `daemon/push-backend` could be started in production-like environments without `APPROVAL_RELAY_SECRET`. | Fixed | Production env detection now fails fast for Cloud Run, Fly, and `CONDUIT_ENV` / `APP_ENV` production markers. Go tests pass. |
+| B-003 | App Store metadata overclaimed closed-app / lock-screen approval delivery before physical APNs validation. | Fixed | `docs/app-store-metadata.md` and fastlane description/promotional text now avoid that claim and mark APNs delivery as owner-gated. |
+| B-004 | Archive emitted iPad orientation warning from incomplete metadata. | Fixed | `project.yml` now sets iPhone and iPad supported orientations; archive warning-free. |
+| B-005 | Distribution signing and App Store export are not verified. | Flagged | Owner-only. Archive is development-signed, with development APNs entitlement. |
+| B-006 | Physical-device APNs delivery and notification action routing are not verified. | Flagged | Owner-only. Device Hub cannot prove production push delivery. |
+| B-007 | App Store Connect, TestFlight upload, privacy labels, and final submission are not done. | Flagged | Owner-only and intentionally not attempted. |
+| B-008 | Production CloudKit and production backend deployment are not verified. | Flagged | Owner-only. No deployed backend test traffic was sent by instruction. |
+| B-009 | IAP sandbox purchase and subscription/entitlement reconciliation are not verified in App Store Connect. | Flagged | Owner-only. |
 
-Commit `3698dd55`. Root cause: `SessionViewModel.openUnifiedShell` injected OSC-133 hooks as the
-**multi-line** `bootstrapForPOSIXShells()`; pasted into an interactive zsh it enters PS2 continuation
-(`function>`/`then>`/`quote>`) and, on the user's heavy ~440-line `~/.zshrc`, tangles so the
-connect-time autocmd never runs → Offline. Fix: switch to the single-line base64-`eval` variants
-`bootstrapForPOSIXShellsOneLine()` / `bootstrapForFishOneLine()` (already in the file, unwired).
+## Major Findings
 
-- **Diagnosed** by an interactive-PTY raw-SSH repro vs the *real* login shell: multi-line → PS2-wedge
-  TRUE; single-line eval → FALSE.
-- **Verified live** on sim: `echo` autocmd → block finalizes `✓ exit 0` (`live-session-AFTER-oneline-fix.png`);
-  `claude` autocmd → launches + renders inside its block, "Streaming", Opus 4.8 (`live-session-claude-inblock.png`).
-  Before: `live-session-BEFORE-wedge.png`.
-- A timing/quiescence fix was tried first and **reverted** — proven ineffective (it's a delivery/parse
-  problem, not latency).
+| ID | Finding | Status | Recommendation |
+|---|---|---|---|
+| M-001 | Onboarding led too much with connection setup instead of the governed-approvals mental model. | Fixed | New copy teaches "agents ask permission, you approve, work resumes" before host setup. |
+| M-002 | First launch could request notification authorization before the user understood why approvals matter. | Fixed | Categories register after onboarding is seen; no first-screen notification interruption. |
+| M-003 | Cloud Sync visibility ignored the configured Info.plist gate. | Fixed | Settings now reads `CONDUIT_ICLOUD_ENABLED`. Production CloudKit remains owner-only. |
+| M-004 | Empty states and approval cards used less direct language than the core flow deserves. | Fixed | Inbox, Fleet, Add Host, approval cards, allow-always, autonomy labels, and connected state were clarified. |
+| M-005 | Device Hub tap injection needed proof on macOS/Xcode beta before trusting simulator interaction. | Fixed | `testTapInjectionViaTabSwitch` passed cleanly. |
+| M-006 | Governed approval decision needed real UI interaction proof. | Fixed | `testApproveDecisionApplies` passed cleanly. |
+| M-007 | Live localhost first-connect path needed real SSH, Keychain-backed password, and TOFU prompt verification. | Fixed | Live SSH E2E passed against `127.0.0.1:22`; secret value was not printed. |
+| M-008 | Local relay fallback needed real backend route verification without touching deployed infra. | Fixed | Local backend verified register, decision, one-time poll drain, and auth failures. |
+| M-009 | Implemented capabilities remain hidden or mostly unreachable. | Flagged | Decide whether to ship, surface, or defer: SFTP browser, Preview/SessionShellView, fuller KeysView, snippet editor, OpenRouter, Dispatch, post-onboarding provisioning. |
+| M-010 | Visible surfaces still contain partial behavior. | Flagged | Library run/new snippet, workflow add-step, mock key counts, watch pending-count freshness, invite email, and allow-always revoke semantics need product decisions. |
+| M-011 | Xcode 27 beta can hang after UI tests pass while shutting down the Device Hub runner. | Flagged | Treat as environment/tooling caveat; use individual test logs and selected-suite pass lines as evidence until Xcode stabilizes. |
 
-**HID tooling — partially fixed (READS only).** Only Xcode-beta is installed and it ships
-`SimulatorKit.framework` in `Contents/SharedFrameworks/` while idb/XcodeBuildMCP expect
-`Contents/Developer/Library/PrivateFrameworks/`. A root symlink between them restores the AX **read**
-path: `idb ui describe-all`, XcodeBuildMCP `snapshot_ui`, and `screenshot` all work and return rich data.
-But **HID tap/typing injection still fails silently** — both `idb ui tap` and XcodeBuildMCP `tap` report
-success yet the screen hash never changes (verified: tab switch INBOX→SETTINGS and tapping APPROVE on a
-seeded card both no-op). Root cause: this Xcode-beta install is **missing Simulator.app entirely**
-(`Contents/Developer/Applications/` does not exist), so there is no GUI window for `cliclick` either and
-SimulatorKit's HID path is incomplete. **Interactive taps are not possible on this machine** without a
-full Xcode (or standalone Simulator) install. NOTE: the live terminal grid is **not** in the
-accessibility tree — verify terminal state by screenshot, not AX queries.
+## Minor Findings
 
-**Net effect on verification:** the live shell BLOCKER fix was verifiable because it only needs reads
-(launch via env autocmd → screenshot). The remaining tap-gated checks — approval-card Approve→DECIDED,
-tab navigation, Face ID onboarding toggle, saved-host reconnect tap — still cannot be exercised at
-runtime here. Their logic is covered by unit tests + the relay curl matrix; their rendering is
-screenshot-verifiable; only the tap-interaction remains for a machine with full Xcode.
+| ID | Finding | Status | Recommendation |
+|---|---|---|---|
+| m-001 | Saved-host reconnect icon could shift size. | Fixed | Icon frame is now stable. |
+| m-002 | Back chevron accessibility did not say the session remains running. | Fixed | Accessibility label now says "Leave session running." |
+| m-003 | Port-forward UI showed remote forwarding affordance even when unsupported. | Fixed | Remote chip is hidden/annotated when unavailable. |
+| m-004 | Settings and port-forward SwiftUI bodies were large enough to stress type checking. | Fixed | Split into smaller sections. |
+| m-005 | Metadata support URL differed from the docs. | Fixed | Fastlane support URL now points to `/support`. |
 
-**Still gated (not a blocker):** the full approval-CARD → Approve → decision-applies tap needs a
-*logged-in* agent proposing a tool action (`claude` shows "Not logged in") **and** a running conduitd
-(the approval card is the conduitd→ApprovalIngest path, separate from the shell pipeline per
-block-terminal-implementation.md §2). The decision/relay/idempotency logic itself is already verified
-(Checks 3, 4 + Go poller tests). Minor cosmetic: the `\e[2J\e[H` clear echoes into claude's input box
-(pre-existing §3.3 dynamic, unchanged by the fix; low severity).
+## Feature Coverage Gaps
 
-### Phase 5 — UX polish (DONE, build-verified; sim-visual pending)
+### Implemented but hidden or weakly surfaced
 
-Commits on `feat/governed-approvals`:
-- `680ee7eb` — 14 token-drift fixes; `TextPreview` NUL-byte binary guard (MAJOR); `SnippetEditor`
-  preserves `hostTags`/`tags` on edit (MAJOR); iPad `NavigationStack` in `regularRoot` (MAJOR-2).
-- `ab1e8a04` — Face ID opt-in persists `appLockEnabled` only on real success (MAJOR-3); removed dead
-  shipped UI (Library +new, mock Workflows card, RECENT run-rows); deleted orphaned
-  `WorkflowsView`/`HistoryView` (DEBUG gallery views kept).
-- `500c0981` — saved-hosts reconnect list + dedup (MAJOR-4): `AddHostView` upserts by `host:port:user`
-  (no duplicate records, preserves trusted host-key); `FleetView` "Saved hosts" section
-  (tap-reconnect, swipe-delete).
-
-Verification: ConduitKit `swift build` green every chunk; **app-target `xcodebuild` SUCCEEDED, 0
-errors / 0 warnings**. Sim-visual checks (Face ID launch-lock, iPad layout, reconnect/dedup flow,
-dead-UI gone) **pending** — blocked by HID tooling (below).
-
-Deferred deliberately: **MAJOR-5** (password-retry sheet present-over-cover) — same B1 presentation
-path that was under E2E verification; not destabilized mid-pass.
-
-### Phase 4 — E2E verdicts (evidence in `screens/e2e-phase4/`)
-
-| Check | Verdict | Basis |
+| Capability | Status | Recommendation |
 |---|---|---|
-| 1 Live-SSH approval happy path | **BLOCKED** | shell-integration wedge + no HID taps |
-| 2 B1 TOFU first-connect | PARTIAL (code-verified) | sheet inside SessionView above cover; runtime needs taps |
-| 3 B3 idempotency (first-decision-wins) | **PASS** | test `firstDecisionWins`; relay dedupe; `WHERE decision IS NULL` |
-| 4 Relay fallback (two-tier auth) | **PASS** | full curl matrix + `TestDecisionPollerResolves`/`SendsBearerToken` |
-| 5 Cold-launch banner (M6) | PARTIAL (code-verified) | buffer drain + `HostedAgentM6Tests`; runtime needs a push tap |
-| 6 Gallery + prod Inbox shots | **PASS** | 3 dark routes + prod Inbox L/D; **no host-label wrap issue** |
+| `SessionShellView` / preview / localhost web surfaces | Flagged | Either surface as a clear session tool or keep out of submission claims. |
+| SFTP file browser and file preview | Flagged | Do not market until there is a normal route and E2E coverage. |
+| Fuller SSH key management | Flagged | Replace mock host-counts and verify import flows before treating as complete. |
+| Snippet editor creation/edit paths | Flagged | Wire a clear Library entry or remove the incomplete affordance. |
+| OpenRouter provider support | Flagged | Surface in Settings only if provider testing and usage reporting are ready. |
+| Dispatch composer | Flagged | Keep debug-gallery-only unless Cloud/agent dispatch is part of the submission story. |
+| Post-onboarding provisioning wizard | Flagged | Add a normal entry point only if provisioning is ready for App Review. |
 
-Builds: SPM + **337 tests** PASS, app-target `xcodebuild` PASS, Go push-backend + relay tests PASS.
+### Shown but partial or unimplemented
 
-### Two blockers found in Phase 4
+| Surface | Status | Recommendation |
+|---|---|---|
+| Library new snippet / run actions | Flagged | Wire or remove before submission screenshots. |
+| Workflows add-step | Flagged | Replace mock builder with real behavior or hide. |
+| Key host counts | Flagged | Stop showing mock counts if not backed by data. |
+| Watch pending count / decision freshness | Flagged | Verify on paired hardware and avoid store claims until proven. |
+| Live Activity and lock-screen actions | Flagged | Owner-only physical APNs proof required. |
+| Invite email | Flagged | Do not claim team invite delivery until backend email is enabled. |
+| Allow-always revoke | Flagged | Clarify local-only vs bridge policy behavior before marketing. |
 
-1. **HID tap/typing tooling is dead on this machine.** Only `Xcode-beta.app` is installed; it ships
-   `SimulatorKit.framework` under `Contents/SharedFrameworks/` while idb / XcodeBuildMCP hardcode
-   `Contents/Developer/Library/PrivateFrameworks/`. Screenshots + AX-tree reads work; taps/typing
-   fail. Blocks **all** interactive verification — Phase 4 Checks 1/2/5, tab navigation, and the
-   Phase 5 sim-visual pass. Not patched (modifying the Xcode bundle would risk the environment).
-2. **Shell-integration bootstrap leaks into the live block and wedges zsh** (Check 1). The OSC-133
-   bootstrap renders as literal text and the shell wedges at a PS2 continuation
-   (`elif-then function function quote>`); the connect-time autocmd (`claude`, and even `echo`) pastes
-   into the unterminated construct and never runs → session goes Offline. Reproduced twice.
-   **Code finding:** `awaitUnifiedShellReady()` (SessionViewModel.swift:969) has a **3s timeout
-   backstop** that drains connect-time waiters *without* `unifiedIntegrationReady` becoming true. On a
-   heavy login shell (the user's 440-line `~/.zshrc` with a `claude` wrapper + `elif` blocks) where the
-   integration prompt takes >3s or the rc mangles the injection, that timeout releases the autocmd
-   prematurely → the wedge. Plausible product fragility amplified by host config; needs a clean-shell
-   repro on a vanilla host to attribute definitively. Approval/block **UI renders correctly** (Check 6),
-   so the fault is isolated to the live zsh-integration handshake, not rendering or the approval layer.
+## Verification Notes
 
-### HID limitation — RESOLVED via XCUITest (2026-06-12, third session)
+- `swift build` and `swift test` passed in `Packages/ConduitKit`.
+- XcodeBuildMCP `build_sim` passed warning-free.
+- Archive passed warning-free at `/tmp/conduit-fable-final3.xcarchive`.
+- Push backend `go vet ./...` and `go test ./...` passed.
+- Read-only `daemon/conduitd` `go vet ./...` and `go test ./...` passed.
+- XcodeBuildMCP `test_sim` wrapper timed out in the beta environment; raw XCUITest logs show passing assertions before Device Hub teardown hangs.
+- Local backend relay verification was performed only against a local process, not the deployed backend.
+- No secrets were printed.
 
-The "taps don't inject" wall was diagnosed and fixed. **Root cause (two compounding issues):**
-1. The installed Xcode-beta is a **stripped 3.5 GB build** (a full Xcode 27 is ~30 GB) missing
-   `Simulator.app` entirely (`Contents/Developer/Applications/` does not exist) — so the GUI window +
-   HID injection path is gone. The headless build/launch/screenshot path works because CoreSimulator +
-   the iOS 27 runtime cryptex are intact.
-2. `idb_companion` 1.1.8 is **incompatible with macOS 27** — objc class collision (`FBProcess`
-   duplicated between system `FrontBoard.framework` and idb's bundled `FBControlCore.framework`),
-   so HID injection silently no-ops. idb is unmaintained (~2023); a dead end on this OS.
+## Owner-Only Remainder
 
-The `SimulatorKit.framework` symlink restored AX **reads** (`snapshot_ui`/`screenshot`/`describe-all`)
-but not HID **writes** — which is why the shell-fix was screenshot-verifiable but taps weren't.
-
-**FIX: XCUITest.** The `XCTest` + `XCUIAutomation` frameworks ARE present in the stripped Xcode, and
-XCUITest runs headlessly via `xcodebuild test` — it needs **neither idb nor Simulator.app GUI**. Added
-the `ConduitUITests` (`bundle.ui-testing`) target (`project.yml` + `ConduitUITests/TapInjectionProofTests.swift`),
-wired into the Conduit scheme. **Verified on this machine (`** TEST SUCCEEDED **`):**
-- `testTapInjectionViaTabSwitch` — tab taps inject; breadcrumb toggles (proves event injection).
-- `testApproveDecisionApplies` — **tapping APPROVE drops the pending count** → the Phase-4 Check-1
-  approval interaction (previously BLOCKED) is now verified, exercising B3 first-decision-wins live in UI.
-
-All remaining tap-gated checks (Face ID toggle, saved-host reconnect, B1 TOFU, M6) are now mechanically
-reachable on this machine via XCUITest — they need only test-authoring, not a different environment.
-
-## Baselines (2026-06-12, start of audit)
-
-- ConduitKit `swift build`: **clean** (only third-party Package.swift deprecation warnings in GRDB/BigInt checkouts — not ours)
-- Xcode `Conduit` target `build_sim` (iPhone 17 Pro): **SUCCEEDED, 0 warnings, 0 errors**
-- `daemon/push-backend`: `go vet ./...` clean; `go test ./...` **ok** (conduit/push-backend 0.608s)
-- ConduitKit `swift test`: **331 tests / 54 suites, all pass** (9.5s; docs variously claimed 203/253/292/327 — 331 is current truth)
-
-## Findings log
-
-| # | Severity | Area | Finding | Reachability | Status |
-|---|----------|------|---------|--------------|--------|
-| 1 | major | build/targets | `Conduit.xcodeproj` (gitignored, generated) was stale vs `project.yml`: the `ConduitWidget` target (added 2026-06-02) was missing, so the home-screen widget was never being built or embedded | any local build since Jun 2 | fixed — ran `xcodegen`; all 5 targets present; `build_sim` clean (0 warn/0 err) |
-| 2 | minor | config | `project.yml` comment says push backend should be a Cloud Run URL (`*.a.run.app`) but the value is `https://35.201.3.231.sslip.io` (third-party wildcard-DNS host pointing at a bare IP) — works (health 200 verified 2026-06-12), but ship-gate says repoint to vanity domain before TestFlight/public | release builds | flagged (owner) |
-| 3 | major | submission | `fastlane/metadata/en-US/*` still carries the OLD terminal-first copy (name "Conduit", subtitle "SSH + AI Agent Control", description leads with SSH/terminal) while `docs/app-store-metadata.md` defines the governed-approvals positioning ("Conduit — Agent Approvals", approvals-led description). fastlane is what `deliver` uploads — must sync | submission | **FIXED** (`23fffec9`) — name/subtitle/keywords/description/release_notes synced + promotional_text added; all within char limits |
-| 4 | major | submission | Store screenshots don't exist at spec: `fastlane/screenshots/en-US/` has 5×1320×2868 PNGs with OLD terminal-first content; the "canonical" `docs/screenshots/governed-approvals/` set is only 368×800 JPG (doc-verification grade, not uploadable). Need fresh 1320×2868 captures of the governed-approvals flow (6.9" simulator) | submission | open — capture in Phase 6 |
-
-## Phase 1 orientation — current believed state (from docs, 2026-06-12)
-
-**Where the project thinks it is:** ship-gate doc (latest, 2026-06-11) says "engineering is complete; everything remaining is an owner action" (App Store Connect record + capabilities + IAP, physical-device APNs validation, DNS/vanity domain, archive/upload). Paid team 39HM2X8GS6 + APNs key L8LVU9X82W exist. Backend live at https://35.201.3.231.sslip.io (health 200 claimed). Pricing: free app + $14.99 lifetime IAP `dev.conduit.mobile.pro`; AI credits via Stripe web (US storefront only, never compare prices in-app).
-
-**Doc conflicts to settle in code** (older docs call these bugs; newer docs claim fixed):
-1. `.approvedAlways` collapse (DaemonChannel.swift:52 old → :111 sends `approveAlways` + conduitd persists to policy-always.yaml per dossier) — verify.
-2. Structured tool_use wire protocol (hook flattened tool_input to 500-char string → PROD_PLAN claims structured toolName/toolUseID/input end-to-end) — verify.
-3. conduitd → push-backend `/approval` POST (missing → done at server.go:532-614 per dossier) — verify.
-4. Token routing (identifierForVendor vs agent-session keying mismatch) — verify resolved.
-5. WS-11 approval-card host-label wrap bug (DSApprovalCard) — possibly fixed in 858b688; verify gallery `inbox-typed` + `review`, light/dark/AX3.
-
-**Security-review-blind area (top priority):** the backend-relay decision fallback (commit a552e2d3: app POSTs decision to `/approval/decision` when no live SSH channel; conduitd poller resolves). Postdates SECURITY-REVIEW.md and every planning doc. Must verify: auth, exactly-once delivery, replay/spoof resistance, fail-safe behavior.
-
-**Release-hygiene checks promised by docs:** isPro DEBUG bypass, DebugSeeder, REVIEW pill, debug host auto-trust all compiled out of Release; Sentry DSN empty (SDK never starts; PrivacyInfo SystemBootTime 35F9.1 tied to Sentry); iCloud Sync is push-only — its UI row must stay hidden; swift-nio-ssh is a fork (Wellz26) pinned to a version range, not a SHA (SECURITY LOW-7, open).
-
-**Open security-review items (LOW, from 2026-05-31):** LOW-1 no app-switcher snapshot redaction on key screens; LOW-2 BiometricGate silently succeeds on biometryLockout; LOW-3 `autoTrustHostKey` is a runtime-settable public API with no DEBUG guard; LOW-5 Redactor lacks PEM/Bearer/JWT patterns.
-
-**Known UI gaps from WS docs (verify, then fix in Phase 5):** .system fonts in AgentIsland/AgentStatusHeader/FilesView; "· Done" label should read "Connected"; REVIEW pill gating; safe-area confirmation for DSTabBar (fixed 64pt) + composer inset; empty/error/loading states (WS-4 open).
-
-**App Review risk posture (Guideline 2.5.2):** Conduit drives a *remote* shell, no local code download/execution — reviewer notes must say this. DEBUG-seeded inbox exists for review. Other risks: 4.2 minimum functionality, 2.1 completeness, 3.1.1 IAP works in sandbox.
-
-**Note:** `docs/app-store-submission.md` + `docs/app-store-metadata-governed-approvals.md` were deleted on this branch; `docs/app-store-metadata.md` (modified) is the survivor — cross-check it against the app in Phase 6.
-
-## CONSOLIDATED TRIAGE — Phase 3 results (2026-06-12)
-_Per-area detail in `findings/review-*.md`. 7/8 reviewers done; core-kits [03b2cb3d] pending._
-
-### BLOCKERS
-- **B1 — TOFU first-connect hard-hangs; host-key prompt never appears.** `AppRoot.startSession` raises the `SessionView` `fullScreenCover` *before* `vm.connect()`, so the ancestor `HostKeyConfirmSheet` can't present over the cover and `SessionView`'s connect overlay has no `.disconnected` case → stuck "Connecting…", back button covered, force-quit only. Every new host hits this. (review-app-onboarding) — **breaks the core flow.** Fix: order connect/host-key resolution before/over the cover; add `.disconnected` overlay state + dismissal.
-- **B2 — Approval decision relay has NO AUTH (governance bypass).** Backend (`/approval/decision`, `/decisions`, `/register`, `/approval`) trusts caller-supplied `sessionId` as the capability; anyone who learns a sessionId can forge `approveAlways` or drain decisions. Swift side (`ApprovalRelay.swift:112`) sends no auth header and discards the response → when backend is secured it 401-drops silently; when open it's anonymous + no replay binding. Backend worker shipped partial mitigation (`APPROVAL_RELAY_SECRET` + input hardening) and flagged the real fix = **per-session capability token** (coordinated conduitd↔backend↔app). (review-backend, review-approvals)
-- **B3 — No first-decision-wins / idempotency.** `ApprovalRepository.decide` does an unconditional UPDATE; nothing checks `isPending`; delivered notifications never cleared. Deny on card → tap Approve on lingering banner re-resolves the SAME gate → a reject is flipped to approve. (review-approvals) Fix: guard on `isPending`; clear delivered notifications + Live Activity on decision.
-- **B4 — Missing `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription`.** In-session mic (`ChatInputBar`→`DictationEngine`) requests speech+mic; no purpose strings → iOS crashes on first tap + App Review auto-reject. Not debug-gated. (review-targets) Fix: add to `project.yml` info props + regenerate.
-
-### MAJORS (grouped)
-- **Approval reliability (review-approvals + review-session-ssh):** approvals not re-armed after SSH reconnect (`DaemonChannel`/`ApprovalIngest` created once; events finish, never restart); silent decision drop on dead-but-attached channel (`DaemonChannel.respond` no-ops on nil writer; relay fallback only when `channel==nil`); cold-launch banner Approve/Reject lost (`ConduitApp.swift:167` posts before `AppRoot` subscribes); `blastRadius`/`question`/`choices` dropped on DB round-trip (governance context never renders); divergent `identifierForVendor ?? UUID()` at 4 sites mis-routes push/relay; offline decision double-delivered (relay POST + SSH drain).
-- **Session pipeline (review-session-ssh):** TUI escalation guard permits `.promptEditing` (must be `.submitted` only) → idle prompt escalates; connect-time commands race integration injection (no `unifiedIntegrationReady` gate); auto-reconnect leaves dead terminal (`unifiedShell` never nilled).
-- **Watch / Live Activity (review-targets):** `ENABLE_APP_INTENTS_METADATA_EXTRACTION: NO` risks Approve/Reject buttons not resolving in Release (headline surface!); `LiveActivityManager.updatePendingApprovals` drops `pendingApprovalID` (strips buttons); watch decisions never persist to local DB; watch→phone send is best-effort `sendMessage` (lost when phone unreachable, UI optimistically clears).
-- **Security (review-approvals; confirm w/ core-kits):** BiometricGate silently succeeds on `.biometryLockout` (app-lock + SSH-key bypass); Redactor lacks PEM/Bearer/JWT.
-- **UI features (review-ui-features):** SnippetEditor wipes `tags`/`hostTags` on edit (LWW propagates loss); BillingView "AI usage today" hardcoded `$0.00` stub; TextPreview ISO-Latin-1 fallback makes binary-file guard dead; KeyImportView gates encrypted-key import on English error substring.
-- **Nav/onboarding (review-app-onboarding):** iPad `regularRoot` detail has no `NavigationStack` (in-tab links dead); Face ID onboarding never sets `appLockEnabled` (claims a lock it never enables); no saved-host list/reconnect/edit → re-add mints duplicate hosts; password-retry sheet has same present-over-cover conflict as B1.
-- **Config (review-targets):** `MARKETING_VERSION 0.1.0` vs hard-coded `CFBundleShortVersionString 1.0`; PrivacyInfo over-declares CrashData (Sentry DSN empty), FileTimestamp reason questionable.
-
-### FEATURE-COVERAGE DRIFT (review FEATURE_COVERAGE.md)
-- **Implemented-but-hidden:** saved-hosts list/reconnect, host edit, SFTP browser, web/localhost preview, post-onboarding provisioning wizard.
-- **Shown-but-unimplemented:** Library "+new snippet" no-op, RECENT row no-op, snippets "run" TODO, Workflows mock+dead "add step", paywall sheet never triggered.
-
-### FIX PLAN (build-conflict aware: only one Swift build at a time in this worktree)
-- **FIX-BACKEND worker (Go+conduitd, parallel-safe):** implement per-session capability-token for B2 (conduitd issues token + registers sessionId→token with backend; backend validates on `/approval/decision`+`/decisions`); close conduitd poll audit/`approveAlways` policy gap. Contract defined by coordinator.
-- **FIX-SWIFT worker (owns Swift build, sequential):** B1, B3, Swift side of B2 (send token on relay), approval-reliability majors, session-pipeline majors, watch/LiveActivity, BiometricGate/Redactor, UI-feature majors, nav/onboarding majors, the 5 build warnings. Build + ConduitKit tests + build_sim green before finishing.
-- Coordinator: define the token contract, fold in core-kits findings, then verify end-to-end in Phase 4 sim run (both live-SSH + relay paths).
-
-### Fix workers (in flight)
-- FIX-BACKEND (Go push-backend + conduitd relay-auth capability token; conduitd audit/policy gap) → `findings/fix-backend-relay-auth.md` — [cd710ec6](cd710ec6-c688-4de4-b806-89fc3b54322e)
-- FIX-SWIFT wave 1 (B1 TOFU hang, B3 idempotency, relay-auth Swift side, approval-reliability majors, BiometricGate, session pipeline, watch/LiveActivity, mic/speech usage strings + version, 5 build warnings) → `findings/fix-swift-wave1.md` — [e6717214](e6717214-96fd-457a-a77d-bba2787386ac)
-- Mandated wire contract for B2 (both workers): conduitd issues per-session `relayToken`, delivers it to the app over the DaemonChannel attach/handshake as field `relayToken`; app sends `Authorization: Bearer <relayToken>` on `POST /approval/decision`; backend validates per-session (TOFU-on-token, constant-time).
-
-### Deferred to wave 2 / Phase 5 (after wave 1 verifies)
-- Feature-drift: wire-or-remove dead Library/Workflows/snippet buttons; surface-or-remove hidden saved-hosts/host-edit/SFTP/preview.
-- UI majors: SnippetEditor tag loss, BillingView $0.00 stub, TextPreview binary guard, KeyImportView English-substring gate.
-- Nav/onboarding: iPad NavigationStack, Face ID onboarding honesty, saved-host duplicate-on-readd.
-- core-kits majors: SSHHostRuntime run-status (cancel no-op / always-succeeded / actor reentrancy), CloudKit deletion resurrection + dead `CONDUIT_ICLOUD_ENABLED` gate/contract mismatch.
-- core-kits minors: `nonisolated(unsafe)` usage-counter race, OpenRouter usage under-report, RiskScorer evadable substring rules (can suppress approval push), fire-and-forget device-token registration.
-- Token/theme drift cleanup (14 items, Phase 5).
-
-## Decisions made
-
-- **2026-06-12 (Fable resume) — BRANCH CORRECTION:** the session began with the working tree on `master`, which lacks the governed-approvals feature (old `Hosts/Inbox/Library/Settings` IA, no backend-relay decision fallback, missing dossier/readiness/plan docs). The reflog showed the last action was `checkout: moving from feat/governed-approvals to master`. The audit target is unambiguously **`feat/governed-approvals`** (this branch carries the IA, relay, tests, and the audit prompt itself). Created a dedicated worktree at `/Users/roshansilva/Documents/cc-wt/governed-approvals-audit` and am running the audit there to avoid disturbing the master checkout. An initial fan-out of 9 review agents was launched against master before the discovery — those are **superseded**; only branch-agnostic findings (if any) will be harvested.
-- Worktree build isolation: derivedData at `/tmp/conduit-ga-dd`; regenerated `Conduit.xcodeproj` via `xcodegen 2.45.4` (it's gitignored, absent from a fresh checkout).
-
-### Re-baseline on feat/governed-approvals (2026-06-12)
-- ConduitKit `swift build`: ✅ success (58.5s). **1 ConduitKit warning:** `SSHTransport/DaemonChannel.swift:40` (and likely :36) — "no 'async' operations occur within 'await' expression" (prior notes called build "clean" — this is ours, fix in cleanup pass).
-- `go vet ./...`: ✅ clean · `go test ./...`: ✅ ok (1.09s)
-- Xcode `build_sim` (Conduit app target, Debug, iPhone 17 Pro): ✅ SUCCEEDED (117.8s). **5 warnings to clean for DoD:**
-  1. `SSHTransport/DaemonChannel.swift:36` — await on non-async
-  2. `SSHTransport/DaemonChannel.swift:40` — await on non-async
-  3. `OnboardingFeature/OnboardingView.swift:334` — await on non-async
-  4. `SettingsFeature/ShortcutBarEditor.swift:14` — `body` type-check 323ms (>300ms)
-  5. `AppFeature/AppRoot.swift:839` — `weak` capture of `agentStore` differs from implicit strong capture (#ImplicitStrongCapture) — **investigate (possible capture bug)**
-
-### Phase 2/3 review fan-out (feat/governed-approvals worktree) — IN FLIGHT
-- Phase 2 coverage → `FEATURE_COVERAGE.md` — [4971b51a](4971b51a-1c8c-43ca-8307-f0016cbd6f50)
-- Approvals (Swift, incl. relay fallback) → `findings/review-approvals.md` — [6818f2f6](6818f2f6-e9ab-44ad-acdf-63898330e798)
-- Go backend (review+fix) → `findings/review-backend.md` — [5b792eae](5b792eae-14b4-426d-a65e-c23e54ca653d)
-- Session/SSH/Terminal → `findings/review-session-ssh.md` — [2663f235](2663f235-c827-4f61-8f42-e48af5c5eda8)
-- Core kits → `findings/review-core-kits.md` — [03b2cb3d](03b2cb3d-40d5-4439-9439-9100226bf9cb)
-- App/Workspaces/Onboarding + IA → `findings/review-app-onboarding.md` — [5074bcde](5074bcde-5b0c-4160-8695-b6b618c73ee3)
-- UI features + DesignSystem → `findings/review-ui-features.md` — [bc822808](bc822808-afae-42da-ac5d-4a0fce89d8e6)
-- Targets/widgets/watch + submission → `findings/review-targets-widgets.md` — [25696a38](25696a38-923b-4601-a1aa-26c6d330e418)
-
-## Installed on machine
-
-(nothing installed yet; xcodegen 2.45.4 was already present at /opt/homebrew/bin/xcodegen)
-
-## Fix progress — Phase 3 (2026-06-12, coordinator-verified)
-
-**B2 relay-auth (Go, both modules) — DONE + verified.** [cd710ec6] (+ resume). Two-tier auth: Tier-1 control plane `APPROVAL_RELAY_SECRET` guards `/register`,`/approval`,`/run-complete`; Tier-2 per-session `relayToken` (32-byte base64url, conduitd-minted at attach) guards `POST /approval/decision` + `GET /decisions` (constant-time; missing/wrong → 401, no side effects). conduitd registers `sessionId→relayToken` (control-plane authed), returns it to the app over the `conduit.device.register` RPC reply `result.relayToken` (was `"ok"`), and sends `Authorization: Bearer` on its poll. Poll-gap closed: live-SSH + poll paths now share one `applyDecision` (relayed `approveAlways` audited + written to policy-always.yaml identically; removed a pre-existing double-audit). **Verified by coordinator:** push-backend `go vet` clean / `go test` ok; conduitd `go vet` clean / `go test` ok (conduitd + policy). Report: `findings/fix-backend-relay-auth.md`. Residual: registration is last-writer-wins (no token TOFU); control plane open if secret unset (loud warning).
-  - **Wire contract (pinned, all 3 sides matched):** handshake `conduit.device.register` reply `result.relayToken`; decision POST header `Authorization: Bearer <relayToken>` + body `sessionId` == the register `sessionID`.
-
-**FIX-SWIFT PRIORITY 1 — DONE + verified.** [85d02340] (two no-op "success" runs then a resume that completed P1 before `[resource_exhausted]`; durable because report+edits were written incrementally). Done & **coordinator-verified green** (`swift build` clean = only GRDB/BigInt deprecations; `swift test` **331/54 pass**):
-  - B1 TOFU first-connect hang (host-key prompt now presents from inside SessionView; added `.disconnected` phase + dismissible overlay/back; production TOFU preserved — connect only on explicit Trust & Connect).
-  - B2 Swift side (DaemonChannel.registerDevice parses/stores `result.relayToken` w/ `"ok"` back-compat; ApprovalRelay sends Bearer + checks HTTP status, fail-safe; AppRoot wires token).
-  - B3 idempotency (`UPDATE … WHERE id=? AND decision IS NULL` returns Bool; `exists(id:)`; clear delivered banner + Live Activity; cold-launch still forwards).
-  - B4 mic+speech usage strings; version reconcile (MARKETING_VERSION 0.1.0→1.0.0 all 5 targets; CFBundleShortVersionString/CFBundleVersion now driven from vars).
-  - M16 `ENABLE_APP_INTENTS_METADATA_EXTRACTION: YES`.
-  - B13 BiometricGate `.biometryLockout` → device-passcode fallback, fail-closed (no more silent success).
-  - 5 build warnings (DaemonChannel:36/40, OnboardingView:334, ShortcutBarEditor body split, AppRoot:839 weak→explicit-strong). Report: `findings/fix-swift-wave1.md`.
-
-**FIX-SWIFT PRIORITY 2 — DONE + verified.** [ac461184] fresh worker (clean context, edit-first/incremental-report/build-once). All 11 reliability majors complete: M6 `ApprovalActionBuffer` (cold-launch banner durable), M7 persist+rehydrate blastRadius/question/choices (Approval.encode/init(row:) JSON), M8 new `ConduitCore/DeviceIdentity` (persist-once id; guarantees registerDevice sessionID == relay decision sessionId — the B2 key), M14 LiveActivity preserve pendingApprovalID, M5 residual (global-inbox onDecision falls back to relay on dead channel). Verified-already-present: M4 (onReconnected/FleetStore.rearm), M9 (single forwardDecisionOnly chokepoint), M10 (.submitted-only guard), M11 (awaitUnifiedShellReady), M12 (closeUnifiedShell on reconnect), M15 (watch decisions persisted). New files: `ConduitCore/DeviceIdentity.swift`, `Tests/.../ApprovalReliabilityWave2Tests.swift`. Report: `findings/fix-swift-wave2.md`.
-
-**Coordinator-caught app-target breaks (SPM-vs-Xcode footgun).** Package `swift build` was clean but `build_sim` (app target, stricter isolation inference) flagged: (1) `AppRoot.swift:989` `ApprovalRelay.shared.setRelayToken(token)` missing `await` — fixed by removing the redundant explicit set (setChannel already refreshes relayToken from channel.currentRelayToken after registerDevice populates it; registerDevice kept for push registration); (2) `SessionViewModel.swift:979` redundant `await self?.drainIntegrationReadyWaiters()` — dropped.
-
-**FINAL VERIFICATION (coordinator, 2026-06-12) — ALL GREEN:**
-- ConduitKit `swift build`: ✅ clean (only GRDB/BigInt third-party deprecations)
-- ConduitKit `swift test`: ✅ **337 tests / 57 suites pass**
-- `xcodegen generate` + Xcode `build_sim` (Conduit scheme = app + widget/live-activity/watch/watch-widget, iPhone 17 Pro, Debug): ✅ **SUCCEEDED, 0 errors / 0 warnings**
-- push-backend `go vet`/`go test`/`-race`: ✅ · conduitd `go vet`/`go test`/`-race`: ✅
-- DoD warnings target met: the 5 baseline Swift warnings cleared; no new warnings introduced.
-
-**Subagent reliability note:** background workers here repeatedly returned `status: success` with only an intermediate "let me check…" detail and ZERO edits/report; one later failed with `[resource_exhausted]`. Mitigation that worked: resume (preserve understanding) + edit-before-build + write the report incrementally + run heavy `build_sim` from the coordinator. Always verify worker output against `git status` + a real build, never trust the success flag alone.
-
-## TODO / open threads
-
+- Distribution signing and App Store export.
+- App Store Connect record, metadata finalization, privacy labels, screenshots, TestFlight upload, and submission.
+- Physical-device APNs delivery and lock-screen action verification.
+- Production backend deployment with secrets.
+- Production CloudKit verification.
+- IAP sandbox verification.
+- Any destructive cloud/backend operation or secret rotation.

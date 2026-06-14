@@ -99,7 +99,7 @@ public struct FleetView: View {
         DSEmptyState(
             icon: .server,
             title: "No agents connected",
-            subtitle: "Connect a host running conduitd to see your agents, their status, and spend.",
+            subtitle: "Connect the SSH host where your agents work. Conduit will attach the approval bridge so risky actions pause on this phone.",
             action: (label: "Connect a host", handler: onConnectHost)
         )
     }
