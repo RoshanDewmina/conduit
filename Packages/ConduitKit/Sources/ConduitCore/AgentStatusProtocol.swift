@@ -37,6 +37,28 @@ public struct AgentVendorStatus: Codable, Sendable, Equatable, Identifiable {
         self.dataLeavesHost = dataLeavesHost
     }
 
+    enum CodingKeys: String, CodingKey {
+        case agent, loggedIn, model, sessionCount, runningCount
+        case usageUSD, usagePeriod, local, isLocalModel, dataLeavesHost
+    }
+
+    // Custom decode so daemons that omit the newer/optional-with-default fields
+    // (local, sessionCount) still decode — synthesized Decodable ignores the
+    // memberwise-init defaults and would throw keyNotFound on a missing "local".
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        agent = try c.decode(String.self, forKey: .agent)
+        loggedIn = try c.decodeIfPresent(Bool.self, forKey: .loggedIn)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        sessionCount = try c.decodeIfPresent(Int.self, forKey: .sessionCount) ?? 0
+        runningCount = try c.decodeIfPresent(Int.self, forKey: .runningCount)
+        usageUSD = try c.decodeIfPresent(Double.self, forKey: .usageUSD)
+        usagePeriod = try c.decodeIfPresent(String.self, forKey: .usagePeriod)
+        local = try c.decodeIfPresent(Bool.self, forKey: .local) ?? false
+        isLocalModel = try c.decodeIfPresent(Bool.self, forKey: .isLocalModel)
+        dataLeavesHost = try c.decodeIfPresent(Bool.self, forKey: .dataLeavesHost)
+    }
+
     public var displayName: String {
         switch agent {
         case "claudeCode": return "Claude Code"
