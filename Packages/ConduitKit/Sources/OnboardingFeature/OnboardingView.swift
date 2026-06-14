@@ -1,9 +1,8 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
-import SecurityKit
-import NotificationsKit
 import AgentKit
+import ConduitCore
 
 // MARK: - SSH platform enum (shared)
 
@@ -14,20 +13,20 @@ private enum SSHPlatform: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-// MARK: - OnboardingView (public — Hero C dark, 7 screens)
+// MARK: - OnboardingView (public — BLOCKS dark, 4 screens)
 
-/// Dark onboarding walkthrough. 7 screens: Hero C welcome → how it works →
-/// SSH setup → notification priming → Face ID priming → first-session coach →
-/// managed-compute escape hatch.
+/// Dark onboarding walkthrough. 4 screens: hero → connect host → caution preset → done.
+/// Notifications, Face ID, and session coaching are deferred to contextual prompts.
 public struct OnboardingView: View {
     public let onContinue: () -> Void
     public let onSetupWorkspace: () -> Void
 
     @State private var step: Int = 0
     @State private var animationDirection: Int = 1
+    @State private var selectedPreset: AutonomyPreset = .autoReads
     @Environment(\.conduitTokens) private var t
 
-    fileprivate static let totalSteps = 7
+    fileprivate static let totalSteps = 4
 
     public init(
         onContinue: @escaping () -> Void,
@@ -38,32 +37,23 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Slide content fills the middle
-                ZStack {
-                    switch step {
-                    case 0:  screen1Welcome.id("s0")
-                    case 1:  screen2HowItWorks.id("s1")
-                    case 2:  screen3SSH.id("s2")
-                    case 3:  screen4Notifications.id("s3")
-                    case 4:  screen5FaceID.id("s4")
-                    case 5:  screen6Coach.id("s5")
-                    default: screen7Compute.id("s6")
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: animationDirection > 0 ? .trailing : .leading)
-                            .combined(with: .opacity),
-                        removal:   .move(edge: animationDirection > 0 ? .leading : .trailing)
-                            .combined(with: .opacity)
+                scrollContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: animationDirection > 0 ? .trailing : .leading)
+                                .combined(with: .opacity),
+                            removal:   .move(edge: animationDirection > 0 ? .leading : .trailing)
+                                .combined(with: .opacity)
+                        )
                     )
-                )
-                .animation(.spring(response: 0.38, dampingFraction: 0.88), value: step)
+                    .animation(.spring(response: 0.38, dampingFraction: 0.88), value: step)
+
+                ctaFooter
             }
         }
         .gesture(
@@ -74,6 +64,74 @@ public struct OnboardingView: View {
                     else if value.translation.width > threshold { goBack() }
                 }
         )
+    }
+
+    // MARK: Scroll content switcher
+
+    @ViewBuilder
+    private var scrollContent: some View {
+        switch step {
+        case 0:  screen1Welcome.id("s0")
+        case 1:  screen2SSH.id("s1")
+        case 2:  screen3Preset.id("s2")
+        default: screen4Compute.id("s3")
+        }
+    }
+
+    // MARK: Solid footer CTA (R1.1 — never a gradient)
+
+    private var ctaFooter: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(t.border)
+                .frame(height: 1)
+
+            ctaButtons
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 16)
+        }
+        .background(t.bg.ignoresSafeArea(edges: .bottom))
+    }
+
+    @ViewBuilder
+    private var ctaButtons: some View {
+        switch step {
+        case 0:
+            VStack(spacing: 10) {
+                DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
+                Button {
+                    onContinue()
+                } label: {
+                    Text("i already use conduit")
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+            }
+
+        case 1:
+            DSButton("i've enabled ssh", variant: .primary, size: .lg, fullWidth: true, action: advance)
+
+        case 2:
+            HStack(spacing: 10) {
+                stepDots
+                Spacer()
+                DSButton("continue", variant: .primary, size: .md, action: advance)
+            }
+
+        default:
+            HStack(spacing: 10) {
+                DSButton("use my own host", variant: .ghost, size: .lg, fullWidth: true) {
+                    onContinue()
+                }
+                DSButton("create workspace", variant: .primary, size: .lg, fullWidth: true) {
+                    onSetupWorkspace()
+                }
+            }
+        }
     }
 
     // MARK: Navigation helpers
@@ -105,29 +163,25 @@ public struct OnboardingView: View {
     }
 
     // ================================================================
-    // MARK: Screen 1 — Hero C (Welcome)
+    // MARK: Screen 1 — Hero (Welcome)
     // ================================================================
 
     private var screen1Welcome: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                // SpectrumBar at top — same 26pt gutter as the wordmark / body /
-                // CTA below so the welcome screen reads as one aligned column.
                 SpectrumBar(mode: .working, height: 10)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 18)
                     .padding(.top, 16)
 
-                // "conduit" wordmark below spectrum bar
                 Text("conduit")
                     .font(.dsMonoPt(10, weight: .bold))
                     .foregroundStyle(t.text3)
                     .kerning(2.5)
                     .textCase(.uppercase)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 18)
                     .padding(.top, 10)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // Big 3-line title
                 VStack(alignment: .leading, spacing: 2) {
                     Text("agents ask.")
                         .foregroundStyle(t.text)
@@ -139,39 +193,20 @@ public struct OnboardingView: View {
                 .font(.system(size: 40, weight: .bold, design: .monospaced))
                 .lineSpacing(0)
                 .tracking(0)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 20)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // Body
                 Text("Coding agents pause for risky actions. Conduit sends the approval to your phone, then safely resumes the run.")
-                    .font(.dsMonoPt(12))
+                    .font(.dsSansPt(15))
                     .foregroundStyle(t.text3)
-                    .lineSpacing(8.4)
-                    .frame(maxWidth: 230, alignment: .leading)
+                    .lineSpacing(6)
+                    .frame(maxWidth: 300, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 26)
-                    .padding(.top, 18)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                // CTAs
-                VStack(spacing: 10) {
-                    DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
-                    Button {
-                        // Already uses Conduit — skip to completion
-                        onContinue()
-                    } label: {
-                        Text("i already use conduit")
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text3)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 26)
-                .padding(.top, 32)
-                .padding(.bottom, 40)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -179,379 +214,103 @@ public struct OnboardingView: View {
     }
 
     // ================================================================
-    // MARK: Screen 2 — How it works
+    // MARK: Screen 2 — Connect host (SSH + bridge)
     // ================================================================
 
-    private var screen2HowItWorks: some View {
+    private var screen2SSH: some View {
+        SSHScreen()
+    }
+
+    // ================================================================
+    // MARK: Screen 3 — Caution preset
+    // ================================================================
+
+    private var screen3Preset: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 40)
+                Spacer(minLength: 32)
 
-                // Title with _ in accent
                 HStack(spacing: 0) {
-                    Text("how it works")
+                    Text("approval policy")
                         .foregroundStyle(t.text)
                     Text("_")
                         .foregroundStyle(t.accent)
                 }
                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
 
-                // 3 feature rows
-                VStack(alignment: .leading, spacing: 0) {
-                    howItWorksRow(
-                        icon: .inbox,
-                        title: "Agent asks permission",
-                        body: "Risky commands, file writes, credentials, and network actions pause first."
-                    )
-                    howItWorksRow(
-                        icon: .check,
-                        title: "Approve from your phone",
-                        body: "Approve or deny from Inbox, the lock screen, or Apple Watch."
-                    )
-                    howItWorksRow(
-                        icon: .server,
-                        title: "Work continues safely",
-                        body: "The remote session keeps running while Conduit waits for your decision."
-                    )
-                }
-                .padding(.horizontal, 26)
-                .padding(.top, 28)
-
-                Spacer(minLength: 24)
-
-                // Step dots + continue button
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    DSButton("continue", variant: .primary, size: .lg, fullWidth: true, action: advance)
-                }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
-            }
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func howItWorksRow(icon: DSIcon, title: String, body: String) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            // 40×40 square icon tile
-            ZStack {
-                Rectangle()
-                    .fill(t.accentSoft)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(t.border, lineWidth: 1)
-                    )
-                DSIconView(icon, size: 18, color: t.accent)
-            }
-            .frame(width: 40, height: 40)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.dsMonoPt(13, weight: .bold))
-                    .foregroundStyle(t.text)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                Text(body)
-                    .font(.dsMonoPt(12))
+                Text("How much should the agent pause and ask? You can change this per-session later.")
+                    .font(.dsSansPt(14.5))
                     .foregroundStyle(t.text3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-            }
-            .padding(.top, 4)
-        }
-        .padding(.vertical, 12)
-    }
-
-    // ================================================================
-    // MARK: Screen 3 — Enable SSH
-    // ================================================================
-
-    private var screen3SSH: some View {
-        SSHScreen(onContinue: advance, currentStep: step)
-    }
-
-    // ================================================================
-    // MARK: Screen 4 — Notification priming
-    // ================================================================
-
-    private var screen4Notifications: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                Spacer(minLength: 40)
-
-                // Icon tile 58×58
-                ZStack {
-                    Rectangle()
-                        .fill(t.accentSoft)
-                        .overlay(
-                            Rectangle()
-                                .strokeBorder(t.accent, lineWidth: 1)
-                        )
-                    DSIconView(.inbox, size: 26, color: t.accent)
-                }
-                .frame(width: 58, height: 58)
-                .frame(maxWidth: .infinity, alignment: .center)
-
-                // Title
-                HStack(spacing: 0) {
-                    Text("get approval pings")
-                        .foregroundStyle(t.text)
-                    Text("_")
-                        .foregroundStyle(t.accent)
-                }
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
-                .padding(.top, 18)
-
-                // Body
-                Text("When an agent needs you, Conduit notifies you instantly — approve right from the lock screen.")
-                    .font(.dsMonoPt(11.5))
-                    .foregroundStyle(t.text3)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 320)
-                    .padding(.horizontal, 26)
-                    .padding(.top, 12)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                // Fake lock-screen notification card
-                fakeLockScreenCard
-                    .padding(.horizontal, 26)
-                    .padding(.top, 24)
-
-                Spacer(minLength: 24)
-
-                // Step dots + buttons
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    DSButton("enable notifications", variant: .primary, size: .lg, fullWidth: true) {
-                        Task {
-                            Notifications.shared.registerCategories()
-                            let _ = await Notifications.shared.requestAuthorization()
-                            advance()
-                        }
-                    }
-                    Button { advance() } label: {
-                        Text("not now")
-                            .font(.dsMonoPt(12))
-                            .foregroundStyle(t.text3)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
-            }
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var fakeLockScreenCard: some View {
-        HStack(spacing: 12) {
-            // App icon — blue square with bolt
-            ZStack {
-                Rectangle()
-                    .fill(t.accent)
-                    .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text("claude")
-                        .font(.system(size: 11.5, weight: .semibold, design: .default))
-                        .foregroundStyle(t.text)
-                    Text("·")
-                        .foregroundStyle(t.text3)
-                    Text("needs approval")
-                        .font(.system(size: 11.5, weight: .semibold, design: .default))
-                        .foregroundStyle(t.text)
-                }
-                Text("npm run deploy --prod")
-                    .font(.dsMonoPt(10))
-                    .foregroundStyle(t.text3)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background(t.surface)
-        .overlay(
-            Rectangle()
-                .strokeBorder(t.border, lineWidth: 0.5)
-        )
-    }
-
-    // ================================================================
-    // MARK: Screen 5 — Face ID priming
-    // ================================================================
-
-    private var screen5FaceID: some View {
-        FaceIDScreen(onContinue: advance, currentStep: step)
-    }
-
-    // ================================================================
-    // MARK: Screen 6 — First-session coach (static/coached)
-    // ================================================================
-
-    private var screen6Coach: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 24)
-
-                // Header row — breadcrumb style
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("first session")
-                        .font(.dsMonoPt(10))
-                        .foregroundStyle(t.text3)
-                        .textCase(.uppercase)
-                        .kerning(1.5)
-                    HStack(spacing: 0) {
-                        Text("prod-api")
-                            .foregroundStyle(t.text)
-                        Text("_")
-                            .foregroundStyle(t.accent)
-                    }
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
-                }
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
-
-                // Connected status row
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 1))
-                        .frame(width: 7, height: 7)
-                    Text("connected — you're in.")
-                        .font(.dsMonoPt(12, weight: .bold))
-                        .foregroundStyle(Color(.sRGB, red: 0.2, green: 0.8, blue: 0.4, opacity: 1))
-                }
-                .padding(.horizontal, 26)
-                .padding(.top, 12)
-
-                // Body
-                Text("Try one of these to feel the two modes — $ runs a command, # talks to the agent:")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 18)
                     .padding(.top, 10)
+                    .padding(.bottom, 16)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // 3 command cards
                 VStack(spacing: 8) {
-                    commandCard(
-                        command: "$ ls -la",
-                        description: "list files",
-                        highlighted: true
-                    )
-                    commandCard(
-                        command: "# explain this repo",
-                        description: "ask the agent",
-                        highlighted: false,
-                        hashInAccent: true
-                    )
-                    commandCard(
-                        command: "$ npm run dev",
-                        description: "start dev server → preview",
-                        highlighted: false
-                    )
+                    ForEach(AutonomyPreset.allCases, id: \.self) { preset in
+                        presetRow(preset)
+                    }
                 }
-                .padding(.horizontal, 26)
-                .padding(.top, 16)
-
-                // Static input bar
-                HStack(spacing: 0) {
-                    Text("$ command or # ask…")
-                        .font(.dsMonoPt(12))
-                        .foregroundStyle(t.text4)
-                        .padding(.leading, 14)
-                    Spacer()
-                }
-                .padding(.vertical, 11)
-                .background(t.surfaceSunk)
-                .overlay(
-                    Rectangle()
-                        .strokeBorder(t.border, lineWidth: 1)
-                )
-                .padding(.horizontal, 26)
-                .padding(.top, 16)
-
-                // Step dots + CTA
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
-                }
-                .padding(.horizontal, 26)
-                .padding(.top, 20)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private func commandCard(command: String, description: String, highlighted: Bool, hashInAccent: Bool = false) -> some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                if hashInAccent, command.hasPrefix("#") {
-                    HStack(spacing: 0) {
-                        Text("#")
-                            .foregroundStyle(t.accent)
-                        Text(command.dropFirst())
-                            .foregroundStyle(t.text)
-                    }
-                    .font(.dsMonoPt(13, weight: .bold))
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                } else {
-                    Text(command)
+    private func presetRow(_ preset: AutonomyPreset) -> some View {
+        let selected = selectedPreset == preset
+        return Button {
+            withAnimation(.easeInOut(duration: 0.12)) { selectedPreset = preset }
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                Rectangle()
+                    .fill(selected ? t.accent : t.border)
+                    .frame(width: 3)
+                    .frame(height: 52)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(preset.label)
                         .font(.dsMonoPt(13, weight: .bold))
-                        .foregroundStyle(t.text)
+                        .foregroundStyle(selected ? t.text : t.text2)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                    Text(preset.description)
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
                 }
-                Text(description)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                .padding(.vertical, 12)
+
+                Spacer()
             }
-            Spacer()
+            .padding(.horizontal, 14)
+            .background(selected ? t.surface : Color.clear)
+            .overlay(
+                Rectangle()
+                    .strokeBorder(selected ? t.borderStrong : t.border, lineWidth: selected ? 1 : 0.5)
+            )
         }
-        .padding(14)
-        .background(t.surface)
-        .overlay(
-            Rectangle()
-                .strokeBorder(highlighted ? t.accent : t.border, lineWidth: highlighted ? 1.5 : 0.5)
-        )
+        .buttonStyle(.plain)
     }
 
     // ================================================================
-    // MARK: Screen 7 — Managed compute escape hatch
+    // MARK: Screen 4 — Done / compute escape hatch
     // ================================================================
 
-    private var screen7Compute: some View {
+    private var screen4Compute: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
                 Spacer(minLength: 40)
 
-                // DotMatrix at center-top
                 DotMatrixView(state: .working, cols: 20, rows: 6, cell: 9, dot: 4)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // Title
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         Text("no server?")
@@ -567,47 +326,28 @@ public struct OnboardingView: View {
                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 20)
 
-                // Body
                 Text("Launch a managed cloud workspace in ~30s. Pay only for what you use — no subscription to use your own host.")
-                    .font(.dsMonoPt(11.5))
+                    .font(.dsSansPt(14.5))
                     .foregroundStyle(t.text3)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 320)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 18)
                     .padding(.top, 14)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // Chips row
                 HStack(spacing: 8) {
                     DSChip("fly.io", tone: .accent, variant: .default)
                     DSChip("4 vCPU", tone: .neutral, variant: .default)
                     DSChip("metered", tone: .neutral, variant: .default)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 20)
-
-                Spacer(minLength: 32)
-
-                // Step dots + CTAs
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    VStack(spacing: 12) {
-                        DSButton("create a workspace", variant: .primary, size: .lg, fullWidth: true) {
-                            onSetupWorkspace()
-                        }
-                        DSButton("i'll use my own host", variant: .ghost, size: .lg, fullWidth: true) {
-                            onContinue()
-                        }
-                    }
-                }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
@@ -620,55 +360,40 @@ public struct OnboardingView: View {
 // ================================================================
 
 private struct SSHScreen: View {
-    let onContinue: () -> Void
-    let currentStep: Int
     @State private var selectedPlatform: SSHPlatform = .macOS
     @State private var copyFeedback = false
     @Environment(\.conduitTokens) private var t
-
-    private var stepDots: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<OnboardingView.totalSteps, id: \.self) { i in
-                Rectangle()
-                    .fill(i == currentStep ? t.accent : t.border)
-                    .frame(width: i == currentStep ? 16 : 6, height: 4)
-            }
-        }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 32)
 
-                // Title
                 HStack(spacing: 0) {
-                    Text("enable ssh")
+                    Text("connect a host")
                         .foregroundStyle(t.text)
                     Text("_")
                         .foregroundStyle(t.accent)
                 }
                 .font(.system(size: 24, weight: .bold, design: .monospaced))
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
 
-                // Body
-                Text("On the machine you want to control:")
-                    .font(.dsMonoPt(11))
+                Text("Connecting installs the bridge (conduitd) that enforces your policy and survives disconnects. Enable SSH on the machine you want to control:")
+                    .font(.dsSansPt(14.5))
                     .foregroundStyle(t.text3)
-                    .padding(.horizontal, 26)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
                     .padding(.top, 10)
+                    .padding(.bottom, 16)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                // Segmented platform picker
                 DSSegmentedPicker(
                     options: SSHPlatform.allCases.map { (label: $0.rawValue, value: $0) },
                     selection: $selectedPlatform
                 )
-                .padding(.horizontal, 26)
-                .padding(.top, 20)
+                .padding(.horizontal, 18)
 
-                // Code block
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(codeLines, id: \.self) { line in
                         Text(line)
@@ -684,11 +409,10 @@ private struct SSHScreen: View {
                     Rectangle()
                         .strokeBorder(t.border, lineWidth: 1)
                 )
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 12)
                 .animation(.easeInOut(duration: 0.15), value: selectedPlatform)
 
-                // Copy button
                 Button {
                     UIPasteboard.general.string = codeLines.joined(separator: "\n")
                     withAnimation { copyFeedback = true }
@@ -711,10 +435,9 @@ private struct SSHScreen: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 10)
 
-                // Trust note
                 HStack(spacing: 7) {
                     DSIconView(.key, size: 13, color: t.accent)
                     Text("First connect asks you to trust the host key. Passwords and keys stay in Keychain.")
@@ -728,18 +451,9 @@ private struct SSHScreen: View {
                 .overlay(
                     Rectangle().strokeBorder(t.border, lineWidth: 0.5)
                 )
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 18)
                 .padding(.top, 12)
-
-                Spacer(minLength: 24)
-
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    DSButton("i've enabled it", variant: .primary, size: .lg, fullWidth: true, action: onContinue)
-                }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -763,102 +477,6 @@ private struct SSHScreen: View {
                 "# PowerShell (as admin)",
                 "Add-WindowsCapability -Online -Name OpenSSH.Server"
             ]
-        }
-    }
-}
-
-// ================================================================
-// MARK: - Face ID Screen (extracted for @State isolation)
-// ================================================================
-
-private struct FaceIDScreen: View {
-    let onContinue: () -> Void
-    let currentStep: Int
-    @Environment(\.conduitTokens) private var t
-    @AppStorage("appLockEnabled") private var appLockEnabled = false
-
-    private var stepDots: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<OnboardingView.totalSteps, id: \.self) { i in
-                Rectangle()
-                    .fill(i == currentStep ? t.accent : t.border)
-                    .frame(width: i == currentStep ? 16 : 6, height: 4)
-            }
-        }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-    }
-
-    var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                Spacer(minLength: 40)
-
-                // Face ID icon: 64×64 square border with face glyph
-                ZStack {
-                    Rectangle()
-                        .strokeBorder(t.text, lineWidth: 2)
-                        .frame(width: 64, height: 64)
-                    Image(systemName: "faceid")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(t.text)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-
-                // Title
-                HStack(spacing: 0) {
-                    Text("lock it down")
-                        .foregroundStyle(t.text)
-                    Text("_")
-                        .foregroundStyle(t.accent)
-                }
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 26)
-                .padding(.top, 18)
-
-                // Body
-                Text("Require Face ID before opening Conduit or using stored SSH keys.")
-                    .font(.dsMonoPt(11.5))
-                    .foregroundStyle(t.text3)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 300)
-                    .padding(.horizontal, 26)
-                    .padding(.top, 12)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                Spacer(minLength: 24)
-
-                // Step dots + buttons
-                VStack(spacing: 14) {
-                    stepDots
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    DSButton("use face id", variant: .primary, size: .lg, fullWidth: true) {
-                        Task {
-                            do {
-                                try await BiometricGate.shared.unlock(reason: "Enable Face ID for approvals")
-                                appLockEnabled = true
-                            } catch {
-                                // Face ID failed or was cancelled — don't claim the lock is on.
-                            }
-                            onContinue()
-                        }
-                    }
-                    Button { onContinue() } label: {
-                        Text("skip")
-                            .font(.dsMonoPt(12))
-                            .foregroundStyle(t.text3)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 40)
-            }
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity)
         }
     }
 }
