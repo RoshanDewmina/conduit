@@ -198,9 +198,12 @@ type server struct {
 	// loops is an in-memory store of loop state pushed by the app via
 	// agent.loop.update, keyed by loop id. The app's GRDB store is the durable
 	// source of truth; this mirror lets the daemon answer agent.loop.list and
-	// (later) rebroadcast to other connected clients. Guarded by loopsMu.
-	loopsMu sync.Mutex
-	loops   map[string]loopState
+	// (later) rebroadcast to other connected clients. The map is the fast path;
+	// loopsPath (~/.conduit/loops.json) is the durable mirror that survives
+	// restarts — written on every upsert, loaded at startup. Guarded by loopsMu.
+	loopsMu   sync.Mutex
+	loops     map[string]loopState
+	loopsPath string
 }
 
 type loopState struct {
@@ -228,7 +231,9 @@ func newServer(home string) *server {
 		dispatcher: newDispatcher(),
 		scheduler:  newScheduler(home),
 		loops:      map[string]loopState{},
+		loopsPath:  filepath.Join(home, ".conduit", "loops.json"),
 	}
+	s.loadLoops()
 	// The poller applies poll-delivered decisions through applyDecision so they
 	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
 	// policy) — not via a bare resolve that skips both.
@@ -277,6 +282,7 @@ func (s *server) upsertLoop(payload map[string]interface{}) bool {
 	status, _ := payload["status"].(string)
 	s.loopsMu.Lock()
 	s.loops[id] = loopState{ID: id, Status: status, Payload: payload}
+	s.persistLoopsLocked()
 	s.loopsMu.Unlock()
 	return true
 }
@@ -290,6 +296,48 @@ func (s *server) listLoops() []loopState {
 		out = append(out, l)
 	}
 	return out
+}
+
+// loadLoops hydrates the in-memory loop map from the on-disk mirror at startup.
+// A missing or malformed file is non-fatal — the daemon simply starts empty.
+func (s *server) loadLoops() {
+	if s.loopsPath == "" {
+		return
+	}
+	data, err := os.ReadFile(s.loopsPath)
+	if err != nil {
+		return
+	}
+	var stored []loopState
+	if json.Unmarshal(data, &stored) != nil {
+		return
+	}
+	s.loopsMu.Lock()
+	for _, l := range stored {
+		if l.ID == "" {
+			continue
+		}
+		s.loops[l.ID] = l
+	}
+	s.loopsMu.Unlock()
+}
+
+// persistLoopsLocked writes the loop map to ~/.conduit/loops.json. Mirrors
+// secretsStore.persistLocked (0700 dir, 0600 file). The caller must hold loopsMu.
+func (s *server) persistLoopsLocked() {
+	if s.loopsPath == "" {
+		return
+	}
+	out := make([]loopState, 0, len(s.loops))
+	for _, l := range s.loops {
+		out = append(out, l)
+	}
+	_ = os.MkdirAll(filepath.Dir(s.loopsPath), 0700)
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(s.loopsPath, data, 0600)
 }
 
 // runDispatch applies the policy + budget gate and launches (used by RPC + scheduler).

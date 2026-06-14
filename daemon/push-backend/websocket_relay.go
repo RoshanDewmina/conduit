@@ -75,6 +75,8 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			pair = newRelayPair(code, publicKey)
+			pair.DaemonConn = conn
+			pair.DaemonSeen = time.Now()
 			hub.pairs[code] = pair
 			hub.mu.Unlock()
 			log.Printf("relay: daemon connected with code %s", code)
