@@ -34,6 +34,15 @@ public final class RunControlStore {
         self.status = status
     }
 
+    /// Stop is available while a run is live (running or paused).
+    public var canStop: Bool { status == .running || status == .paused }
+    /// Pause only applies to a currently running run.
+    public var canPause: Bool { status == .running }
+    /// Resume only applies to a paused run.
+    public var canResume: Bool { status == .paused }
+    /// Budget can be adjusted while the run is live.
+    public var canSetBudget: Bool { status == .running || status == .paused }
+
     public func pause() async {
         await run {
             if try await channel.pauseRun(runId: runId) { status = .paused }

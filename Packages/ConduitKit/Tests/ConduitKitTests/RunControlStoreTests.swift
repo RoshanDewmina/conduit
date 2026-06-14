@@ -40,6 +40,21 @@ struct RunControlStoreTests {
         #expect(store.status == .running)
         #expect(store.lastError != nil)
     }
+
+    @Test @MainActor func controlAvailabilityTracksStatus() {
+        let fake = FakeRunChannel()
+        let running = RunControlStore(channel: fake, runId: "r1", status: .running)
+        #expect(running.canStop && running.canPause && !running.canResume)
+
+        let paused = RunControlStore(channel: fake, runId: "r1", status: .paused)
+        #expect(paused.canStop && !paused.canPause && paused.canResume)
+
+        let stopped = RunControlStore(channel: fake, runId: "r1", status: .stopped)
+        #expect(!stopped.canStop && !stopped.canPause && !stopped.canResume)
+
+        let exceeded = RunControlStore(channel: fake, runId: "r1", status: .budgetExceeded)
+        #expect(!exceeded.canStop && !exceeded.canPause && !exceeded.canResume && !exceeded.canSetBudget)
+    }
 }
 
 // Throwing fake: exercises RunControlStore's catch branch (the only error path).
