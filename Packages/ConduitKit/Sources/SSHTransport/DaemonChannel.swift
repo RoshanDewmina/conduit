@@ -263,6 +263,28 @@ public actor DaemonChannel {
         return (try Self.decodeResultObject(data)["cancelled"] as? Bool) ?? false
     }
 
+    /// Alias for `cancelRun` — the run-control surface uses "stop" terminology.
+    @discardableResult
+    public func stopRun(runId: String) async throws -> Bool { try await cancelRun(runId: runId) }
+
+    @discardableResult
+    public func pauseRun(runId: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.pause", params: ["runId": runId])
+        return (try Self.decodeResultObject(data)["paused"] as? Bool) ?? false
+    }
+
+    @discardableResult
+    public func resumeRun(runId: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.resume", params: ["runId": runId])
+        return (try Self.decodeResultObject(data)["resumed"] as? Bool) ?? false
+    }
+
+    @discardableResult
+    public func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.budget.set", params: ["runId": runId, "budgetUSD": budgetUSD])
+        return (try Self.decodeResultObject(data)["ok"] as? Bool) ?? false
+    }
+
     @discardableResult
     public func addSchedule(_ schedule: BridgeSchedule) async throws -> BridgeSchedule {
         let params: [String: Any] = [
