@@ -308,7 +308,15 @@ func (d *dispatcher) setProviderCap(provider string, dailyUSD, monthlyUSD float6
 func (d *dispatcher) checkProviderQuotas() []QuotaAlert {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	return d.checkProviderQuotasLocked()
+}
 
+// checkProviderQuotasLocked is the lock-free body. The caller MUST already hold
+// d.mu. Split out so getQuotaGuard (which holds the lock) can reuse it without
+// re-locking the non-reentrant mutex — re-locking deadlocked the resident
+// daemon's single-threaded attach loop, silently breaking every approval that
+// arrived after the phone's connect-time agent.quota.status call.
+func (d *dispatcher) checkProviderQuotasLocked() []QuotaAlert {
 	var alerts []QuotaAlert
 	now := time.Now()
 
@@ -390,7 +398,7 @@ func (d *dispatcher) getQuotaGuard() QuotaGuardResult {
 		}
 		result.Providers = append(result.Providers, p)
 	}
-	result.Alerts = d.checkProviderQuotas()
+	result.Alerts = d.checkProviderQuotasLocked()
 	_ = now
 	return result
 }
