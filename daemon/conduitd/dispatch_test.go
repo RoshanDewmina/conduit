@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,11 +12,35 @@ func denyEval(ApprovalEvent) (string, string)  { return "deny", "deny-network" }
 
 func noAudit(AuditEntry) {}
 
+func TestProcHandlePauseResumeRecorded(t *testing.T) {
+	var events []string
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{
+			kill:   func() { events = append(events, "kill") },
+			pause:  func() { events = append(events, "pause") },
+			resume: func() { events = append(events, "resume") },
+		}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi"},
+		func(ApprovalEvent) (string, string) { return "allow", "test-allow" },
+		func(AuditEntry) {})
+	if res.Status != "running" {
+		t.Fatalf("want running, got %q (%s)", res.Status, res.Message)
+	}
+	if !d.pause(res.RunID) || !d.resume(res.RunID) {
+		t.Fatal("pause/resume returned false for a live run")
+	}
+	if got := strings.Join(events, ","); got != "pause,resume" {
+		t.Fatalf("want pause,resume; got %q", got)
+	}
+}
+
 func TestDispatchDeniedByPolicyDoesNotLaunch(t *testing.T) {
 	launched := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (func(), error) {
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
 		launched = true
-		return func() {}, nil
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", Prompt: "do x"}, denyEval, noAudit)
 	if res.Status != "denied" {
@@ -28,9 +53,9 @@ func TestDispatchDeniedByPolicyDoesNotLaunch(t *testing.T) {
 
 func TestDispatchBudgetExceededDoesNotLaunch(t *testing.T) {
 	launched := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (func(), error) {
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
 		launched = true
-		return func() {}, nil
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}}
 	d.setSpentUSD(10)
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", Prompt: "do x", BudgetUSD: 5}, allowEval, noAudit)
@@ -44,8 +69,8 @@ func TestDispatchBudgetExceededDoesNotLaunch(t *testing.T) {
 
 func TestDispatchAllowLaunchesAndCancels(t *testing.T) {
 	cancelled := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (func(), error) {
-		return func() { cancelled = true }, nil
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
+		return &procHandle{kill: func() { cancelled = true }, pause: func() {}, resume: func() {}}, nil
 	}}
 	res := d.dispatch(dispatchParams{Agent: "codex", Prompt: "run tests"}, allowEval, noAudit)
 	if res.Status != "running" || res.RunID == "" {

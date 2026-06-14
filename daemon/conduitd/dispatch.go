@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -38,29 +39,50 @@ type dispatchResult struct {
 	Message  string `json:"message,omitempty"`
 }
 
-type dispatchRun struct {
-	ID     string
-	Agent  string
-	Prompt string
-	Status string
-	cancel func()
+// procHandle controls a launched agent process. Injectable for tests.
+type procHandle struct {
+	kill   func()
+	pause  func()
+	resume func()
 }
 
-// launchFunc starts an agent process and returns a cancel func. Injectable for tests.
-type launchFunc func(argv []string, cwd string) (cancel func(), err error)
+// launchFunc starts an agent process and returns its control handle.
+type launchFunc func(argv []string, cwd string) (*procHandle, error)
 
-func realLauncher(argv []string, cwd string) (func(), error) {
+func realLauncher(argv []string, cwd string) (*procHandle, error) {
 	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
 	cmd.Dir = cwd
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	go func() { _ = cmd.Wait() }()
-	return func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
+	proc := cmd.Process
+	return &procHandle{
+		kill: func() {
+			if proc != nil {
+				_ = proc.Kill()
+			}
+		},
+		pause: func() {
+			if proc != nil {
+				_ = proc.Signal(syscall.SIGSTOP)
+			}
+		},
+		resume: func() {
+			if proc != nil {
+				_ = proc.Signal(syscall.SIGCONT)
+			}
+		},
 	}, nil
+}
+
+type dispatchRun struct {
+	ID        string
+	Agent     string
+	Prompt    string
+	Status    string // running | paused | cancelled | budget-exceeded
+	BudgetUSD float64
+	handle    *procHandle
 }
 
 // policyEvalFunc returns the policy effect ("allow"|"ask"|"deny") and matched rule.
@@ -122,14 +144,14 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "needs-approval", Decision: "ask", Rule: rule}
 	}
 
-	cancel, err := d.launch(argv, p.CWD)
+	handle, err := d.launch(argv, p.CWD)
 	if err != nil {
 		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 	id := newUUID()
 	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, Status: "running", cancel: cancel}
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "running", Decision: "allow", Rule: rule}
@@ -137,16 +159,42 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 
 func (d *dispatcher) cancel(runID string) bool {
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	run := d.runs[runID]
-	d.mu.Unlock()
 	if run == nil {
 		return false
 	}
-	if run.cancel != nil {
-		run.cancel()
+	if run.handle != nil && run.Status != "cancelled" {
+		run.handle.kill()
 	}
-	d.mu.Lock()
 	run.Status = "cancelled"
-	d.mu.Unlock()
+	return true
+}
+
+func (d *dispatcher) pause(runID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	run := d.runs[runID]
+	if run == nil || run.Status != "running" {
+		return false
+	}
+	if run.handle != nil {
+		run.handle.pause()
+	}
+	run.Status = "paused"
+	return true
+}
+
+func (d *dispatcher) resume(runID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	run := d.runs[runID]
+	if run == nil || run.Status != "paused" {
+		return false
+	}
+	if run.handle != nil {
+		run.handle.resume()
+	}
+	run.Status = "running"
 	return true
 }
