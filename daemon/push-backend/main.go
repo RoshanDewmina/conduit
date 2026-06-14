@@ -85,6 +85,7 @@ type runCompleteEvent struct {
 
 func main() {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/relay", handleWebSocketRelay)
 	mux.HandleFunc("POST /register", handleRegister)
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
@@ -102,6 +103,7 @@ func main() {
 	registerScheduleRoutes(mux)
 	registerRunLogRoutes(mux)
 	registerOrgRoutes(mux)
+	initWebhookRoutes(mux)
 
 	initEntitlementStore()
 	initControlPlaneStore()

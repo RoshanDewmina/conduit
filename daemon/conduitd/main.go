@@ -44,11 +44,50 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "relay":
+		if err := runRelay(); err != nil {
+			fmt.Fprintln(os.Stderr, "conduitd relay:", err)
+			os.Exit(1)
+		}
+
+	case "pair":
+		printRelayInstructions()
+
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		usage()
 		os.Exit(1)
 	}
+}
+
+func runRelay() error {
+	relayURL := os.Getenv("CONDUIT_RELAY_URL")
+	if relayURL == "" {
+		relayURL = "wss://relay.conduit.dev"
+	}
+	pairingCode := os.Getenv("CONDUIT_PAIRING_CODE")
+	if pairingCode == "" {
+		return fmt.Errorf("CONDUIT_PAIRING_CODE required")
+	}
+
+	// Build a server so incoming approvalResponse messages route through the same
+	// applyDecision chokepoint as every other delivery path.
+	srv := newServer(serverHome())
+
+	// The router is installed on the client as its messageHandler via
+	// newE2ERouter, so the initial handler here is only a placeholder until the
+	// router replaces it on construction.
+	client := newE2ERelayClient(relayURL, pairingCode, nil)
+	if client == nil {
+		return fmt.Errorf("failed to create relay client")
+	}
+
+	router := newE2ERouter(client, srv)
+	srv.setE2ERouter(router)
+
+	client.start()
+
+	select {}
 }
 
 func usage() {
@@ -58,6 +97,8 @@ Usage:
   conduitd daemon          Run resident bridge (Unix socket, persistent queue)
   conduitd serve           Attach to resident; relay JSON-RPC over stdio
   conduitd install         Install binary + launchd/systemd unit for daemon
+  conduitd relay           Connect to push-backend relay for E2E messaging
+  conduitd pair            Generate a pairing code for relay setup instructions
   conduitd agent-hook ...  Send approval event from agent pre-tool hook
   conduitd version         Print version`)
 }

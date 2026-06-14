@@ -3,6 +3,7 @@ package policy
 import (
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // globMatch matches pattern against value using path-style globs (* and **).
@@ -29,6 +30,15 @@ func globMatch(pattern, value string) bool {
 }
 
 func ruleMatches(rule Rule, req Request, riskLabel string, paths []string) bool {
+	// Check expiry — skip expired rules
+	if rule.ExpiresAt != "" {
+		if exp, err := time.Parse(time.RFC3339, rule.ExpiresAt); err == nil {
+			if time.Now().After(exp) {
+				return false
+			}
+		}
+	}
+
 	if rule.Agent != "" && rule.Agent != "*" && rule.Agent != req.Agent {
 		return false
 	}
@@ -44,6 +54,23 @@ func ruleMatches(rule Rule, req Request, riskLabel string, paths []string) bool 
 	}
 	if rule.CWD != "" && !globMatch(rule.CWD, req.CWD) {
 		return false
+	}
+	// Repo scope: match against CWD (which typically contains the repo path)
+	if rule.Repo != "" && !globMatch(rule.Repo, req.CWD) {
+		return false
+	}
+	// Path pattern: match against extracted paths from the command
+	if rule.PathPattern != "" {
+		matched := false
+		for _, p := range paths {
+			if globMatch(rule.PathPattern, p) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 	if rule.MinRisk != "" && riskOrder(riskLabel) < riskOrder(rule.MinRisk) {
 		return false

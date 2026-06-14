@@ -51,6 +51,12 @@ type Rule struct {
 	CWD     string `yaml:"cwd,omitempty" json:"cwd,omitempty"`
 	MinRisk string `yaml:"minRisk,omitempty" json:"minRisk,omitempty"`
 	MaxRisk string `yaml:"maxRisk,omitempty" json:"maxRisk,omitempty"`
+	// Scoped fields for allow-always rules with expiry
+	Repo        string `yaml:"repo,omitempty" json:"repo,omitempty"`
+	PathPattern string `yaml:"pathPattern,omitempty" json:"pathPattern,omitempty"`
+	ExpiresAt   string `yaml:"expiresAt,omitempty" json:"expiresAt,omitempty"`
+	TimeWindow  string `yaml:"timeWindow,omitempty" json:"timeWindow,omitempty"`
+	CreatedAt   string `yaml:"createdAt,omitempty" json:"createdAt,omitempty"`
 }
 
 // Request carries fields needed to evaluate a hook / approval event.

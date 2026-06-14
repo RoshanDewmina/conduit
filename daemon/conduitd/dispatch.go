@@ -88,16 +88,76 @@ type dispatchRun struct {
 // policyEvalFunc returns the policy effect ("allow"|"ask"|"deny") and matched rule.
 type policyEvalFunc func(ApprovalEvent) (effect string, rule string)
 
+// providerSpend tracks per-provider spend with daily/monthly caps and burn rate.
+type providerSpend struct {
+	todayUSD           float64
+	monthUSD           float64
+	dailyCap           float64
+	monthlyCap         float64
+	burnRate           float64 // USD per hour
+	projectedDailyTotal float64
+	lastUpdate         time.Time
+	// currentMonth is the calendar month (year*100+month) monthUSD accumulates
+	// within; a sample from a different month resets monthUSD.
+	currentMonth int
+	// lastDailyUSD is the previous cumulative-daily sample, used to derive the
+	// month-to-month delta since todayUSD itself resets at the day boundary.
+	lastDailyUSD float64
+	// burnSamples tracks (timestamp, cumulativeUSD) pairs for burn rate calculation.
+	burnSamples []burnSample
+}
+
+type burnSample struct {
+	at         time.Time
+	cumulative float64
+}
+
+// QuotaAlert is the daemon-side counterpart of QuotaGuard.SpendAlert.
+type QuotaAlert struct {
+	ID        string  `json:"id"`
+	Provider  string  `json:"provider"`
+	Type      string  `json:"type"`
+	Message   string  `json:"message"`
+	Threshold float64 `json:"threshold"`
+	Actual    float64 `json:"actual"`
+	CreatedAt string  `json:"createdAt"`
+}
+
+// QuotaProviderResult is the daemon-side counterpart of QuotaGuard.ProviderQuota.
+type QuotaProviderResult struct {
+	ID                  string   `json:"id"`
+	DailyCapUSD         *float64 `json:"dailyCapUSD"`
+	MonthlyCapUSD       *float64 `json:"monthlyCapUSD"`
+	SpentTodayUSD       float64  `json:"spentTodayUSD"`
+	SpentThisMonthUSD   float64  `json:"spentThisMonthUSD"`
+	BurnRateUSDPerHour  float64  `json:"burnRateUSDPerHour"`
+	ProjectedDailyTotal float64  `json:"projectedDailyTotal"`
+	QuotaRemainingUSD   *float64 `json:"quotaRemainingUSD"`
+	LastUpdated         string   `json:"lastUpdated"`
+}
+
+// QuotaGuardResult is the daemon-side response for agent.quota.status.
+type QuotaGuardResult struct {
+	Providers []QuotaProviderResult `json:"providers"`
+	Alerts    []QuotaAlert          `json:"alerts"`
+}
+
 type dispatcher struct {
-	mu       sync.Mutex
-	runs     map[string]*dispatchRun
-	spentUSD float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
-	launch   launchFunc
-	audit    func(AuditEntry) // run-control audit sink; no-op until wired by the server
+	mu             sync.Mutex
+	runs           map[string]*dispatchRun
+	spentUSD       float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
+	providerSpend  map[string]*providerSpend
+	launch         launchFunc
+	audit          func(AuditEntry) // run-control audit sink; no-op until wired by the server
 }
 
 func newDispatcher() *dispatcher {
-	return &dispatcher{runs: map[string]*dispatchRun{}, launch: realLauncher, audit: func(AuditEntry) {}}
+	return &dispatcher{
+		runs:          map[string]*dispatchRun{},
+		providerSpend: map[string]*providerSpend{},
+		launch:        realLauncher,
+		audit:         func(AuditEntry) {},
+	}
 }
 
 // emitAudit forwards to the audit sink, tolerating a nil sink (a dispatcher built
@@ -163,6 +223,176 @@ func (d *dispatcher) enforceBudgets() {
 	for _, s := range stopped {
 		d.emitAudit(AuditEntry{Action: "run-budget-exceeded", Agent: s.agent, Kind: "run-control", ApprovalID: s.id})
 	}
+}
+
+// updateProviderSpend records cumulative spend for a provider and recomputes burn rate.
+func (d *dispatcher) updateProviderSpend(provider string, usd float64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	now := time.Now()
+	ps, ok := d.providerSpend[provider]
+	if !ok {
+		ps = &providerSpend{lastUpdate: now}
+		d.providerSpend[provider] = ps
+	}
+
+	ps.todayUSD = usd
+	ps.lastUpdate = now
+
+	// Monthly accumulation mirrors daily tracking: usd is the cumulative daily
+	// spend, so add the delta since the last sample. On a month rollover, reset
+	// the monthly total to the current sample's spend.
+	month := now.Year()*100 + int(now.Month())
+	if ps.currentMonth != month {
+		ps.currentMonth = month
+		ps.monthUSD = usd
+		ps.lastDailyUSD = usd
+	} else {
+		delta := usd - ps.lastDailyUSD
+		if delta < 0 {
+			// usd reset (new day): the full sample is new monthly spend.
+			delta = usd
+		}
+		ps.monthUSD += delta
+		ps.lastDailyUSD = usd
+	}
+
+	// Append burn sample (keep last 60 minutes).
+	ps.burnSamples = append(ps.burnSamples, burnSample{at: now, cumulative: usd})
+	cutoff := now.Add(-60 * time.Minute)
+	filtered := ps.burnSamples[:0]
+	for _, s := range ps.burnSamples {
+		if s.at.After(cutoff) {
+			filtered = append(filtered, s)
+		}
+	}
+	ps.burnSamples = filtered
+
+	// Compute burn rate from oldest sample in window.
+	if len(ps.burnSamples) >= 2 {
+		oldest := ps.burnSamples[0]
+		elapsed := now.Sub(oldest.at).Hours()
+		if elapsed > 0 {
+			ps.burnRate = (usd - oldest.cumulative) / elapsed
+		}
+	}
+
+	// Project daily total: current spend + (burnRate * hours remaining today).
+	hoursRemaining := 24.0 - float64(now.Hour()) - float64(now.Minute())/60.0
+	if hoursRemaining < 0 {
+		hoursRemaining = 0
+	}
+	ps.projectedDailyTotal = usd + ps.burnRate*hoursRemaining
+}
+
+// setProviderCap sets daily and/or monthly caps for a provider. Pass 0 to leave unchanged.
+func (d *dispatcher) setProviderCap(provider string, dailyUSD, monthlyUSD float64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	ps, ok := d.providerSpend[provider]
+	if !ok {
+		ps = &providerSpend{lastUpdate: time.Now()}
+		d.providerSpend[provider] = ps
+	}
+	if dailyUSD > 0 {
+		ps.dailyCap = dailyUSD
+	}
+	if monthlyUSD > 0 {
+		ps.monthlyCap = monthlyUSD
+	}
+}
+
+// checkProviderQuotas scans all providers and returns alerts for caps/thresholds.
+func (d *dispatcher) checkProviderQuotas() []QuotaAlert {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	var alerts []QuotaAlert
+	now := time.Now()
+
+	for name, ps := range d.providerSpend {
+		if ps.dailyCap > 0 {
+			pct := ps.todayUSD / ps.dailyCap
+			if pct >= 1.0 {
+				alerts = append(alerts, QuotaAlert{
+					ID:        newUUID(),
+					Provider:  name,
+					Type:      "overLimit",
+					Message:   name + " daily spend $" + fmt.Sprintf("%.2f", ps.todayUSD) + " exceeds cap $" + fmt.Sprintf("%.2f", ps.dailyCap),
+					Threshold: ps.dailyCap,
+					Actual:    ps.todayUSD,
+					CreatedAt: now.UTC().Format(time.RFC3339),
+				})
+			} else if pct >= 0.8 {
+				alerts = append(alerts, QuotaAlert{
+					ID:        newUUID(),
+					Provider:  name,
+					Type:      "nearLimit",
+					Message:   name + " daily spend at " + fmt.Sprintf("%.0f", pct*100) + "% of cap",
+					Threshold: ps.dailyCap,
+					Actual:    ps.todayUSD,
+					CreatedAt: now.UTC().Format(time.RFC3339),
+				})
+			}
+		}
+		if ps.dailyCap > 0 && ps.projectedDailyTotal > ps.dailyCap {
+			alerts = append(alerts, QuotaAlert{
+				ID:        newUUID(),
+				Provider:  name,
+				Type:      "projectedExceed",
+				Message:   name + " projected $" + fmt.Sprintf("%.2f", ps.projectedDailyTotal) + " exceeds daily cap",
+				Threshold: ps.dailyCap,
+				Actual:    ps.projectedDailyTotal,
+				CreatedAt: now.UTC().Format(time.RFC3339),
+			})
+		}
+		if ps.burnRate > 5.0 {
+			alerts = append(alerts, QuotaAlert{
+				ID:        newUUID(),
+				Provider:  name,
+				Type:      "burnRateHigh",
+				Message:   name + " burn rate $" + fmt.Sprintf("%.2f", ps.burnRate) + "/hr",
+				Threshold: 5.0,
+				Actual:    ps.burnRate,
+				CreatedAt: now.UTC().Format(time.RFC3339),
+			})
+		}
+	}
+	return alerts
+}
+
+// getQuotaGuard returns the full quota status for all tracked providers.
+func (d *dispatcher) getQuotaGuard() QuotaGuardResult {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	result := QuotaGuardResult{}
+	now := time.Now()
+
+	for name, ps := range d.providerSpend {
+		p := QuotaProviderResult{
+			ID:                  name,
+			SpentTodayUSD:       ps.todayUSD,
+			SpentThisMonthUSD:   ps.monthUSD,
+			BurnRateUSDPerHour:  ps.burnRate,
+			ProjectedDailyTotal: ps.projectedDailyTotal,
+			LastUpdated:         ps.lastUpdate.UTC().Format(time.RFC3339),
+		}
+		if ps.dailyCap > 0 {
+			p.DailyCapUSD = &ps.dailyCap
+			remaining := ps.dailyCap - ps.todayUSD
+			p.QuotaRemainingUSD = &remaining
+		}
+		if ps.monthlyCap > 0 {
+			p.MonthlyCapUSD = &ps.monthlyCap
+		}
+		result.Providers = append(result.Providers, p)
+	}
+	result.Alerts = d.checkProviderQuotas()
+	_ = now
+	return result
 }
 
 // dispatch applies the budget + policy gate, then launches. It NEVER launches a

@@ -145,6 +145,24 @@ func (e *policyEngine) getPolicyYAML(cwd string) (string, error) {
 	return policy.MarshalYAML(policy.DefaultDocument())
 }
 
+func (s *server) simulatePolicy(yamlText string, periodDays int) policy.SimulationResult {
+	doc, err := policy.ParseDocument(yamlText)
+	if err != nil {
+		return policy.SimulationResult{
+			GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+			PeriodDays:  periodDays,
+		}
+	}
+	entries, err := policy.LoadAuditEntries(serverHome(), periodDays)
+	if err != nil {
+		return policy.SimulationResult{
+			GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+			PeriodDays:  periodDays,
+		}
+	}
+	return policy.Simulate(doc, entries, periodDays)
+}
+
 // setPolicyYAML validates and persists the global policy YAML, then reloads so
 // evaluation for cwd picks up the change immediately.
 func (e *policyEngine) setPolicyYAML(cwd, yamlText string) error {
@@ -162,9 +180,11 @@ type server struct {
 	approvals  *approvalStore
 	policy     *policyEngine
 	audit      *auditLog
+	secrets    *secretsStore
 	dispatcher *dispatcher
 	scheduler  *scheduler
 	poller     *decisionPoller
+	e2e        *e2eRouter
 	stdoutMu   sync.Mutex
 	emitMu     sync.Mutex
 	emit       func([]byte) error
@@ -175,6 +195,22 @@ type server struct {
 	// presented as `Authorization: Bearer <relayToken>` on the decision relay.
 	// Guarded by deviceMu. TREAT AS SECRET — never log it.
 	relayToken string
+	// loops is an in-memory store of loop state pushed by the app via
+	// agent.loop.update, keyed by loop id. The app's GRDB store is the durable
+	// source of truth; this mirror lets the daemon answer agent.loop.list and
+	// (later) rebroadcast to other connected clients. Guarded by loopsMu.
+	loopsMu sync.Mutex
+	loops   map[string]loopState
+}
+
+type loopState struct {
+	ID      string                 `json:"id"`
+	Status  string                 `json:"status"`
+	Payload map[string]interface{} `json:"payload"`
+}
+
+func (s *server) setE2ERouter(e2e *e2eRouter) {
+	s.e2e = e2e
 }
 
 func (s *server) setEmitter(emit func([]byte) error) {
@@ -188,8 +224,10 @@ func newServer(home string) *server {
 		approvals:  newApprovalStore(),
 		policy:     newPolicyEngine(home),
 		audit:      newAuditLog(home),
+		secrets:    newSecretsStore(home),
 		dispatcher: newDispatcher(),
 		scheduler:  newScheduler(home),
+		loops:      map[string]loopState{},
 	}
 	// The poller applies poll-delivered decisions through applyDecision so they
 	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
@@ -228,6 +266,31 @@ func (s *server) policyEffect(event ApprovalEvent) (string, string) {
 }
 
 func (s *server) auditEntry(e AuditEntry) { _ = s.audit.append(e) }
+
+// upsertLoop stores or replaces a loop by id. An empty id is rejected so a
+// malformed payload can't collide under the "" key.
+func (s *server) upsertLoop(payload map[string]interface{}) bool {
+	id, _ := payload["id"].(string)
+	if id == "" {
+		return false
+	}
+	status, _ := payload["status"].(string)
+	s.loopsMu.Lock()
+	s.loops[id] = loopState{ID: id, Status: status, Payload: payload}
+	s.loopsMu.Unlock()
+	return true
+}
+
+// listLoops returns a snapshot of the in-memory loop store.
+func (s *server) listLoops() []loopState {
+	s.loopsMu.Lock()
+	defer s.loopsMu.Unlock()
+	out := make([]loopState, 0, len(s.loops))
+	for _, l := range s.loops {
+		out = append(out, l)
+	}
+	return out
+}
 
 // runDispatch applies the policy + budget gate and launches (used by RPC + scheduler).
 func (s *server) runDispatch(p dispatchParams) dispatchResult {
@@ -387,6 +450,9 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
 		s.writeResult(msg.ID, "ok")
 
+	case "agent.doctor":
+		s.writeResult(msg.ID, s.collectDoctorReport())
+
 	case "agent.audit.tail":
 		var params struct {
 			Limit int `json:"limit"`
@@ -398,6 +464,14 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		s.writeResult(msg.ID, map[string]interface{}{"entries": entries})
+
+	case "agent.audit.verify":
+		result := s.audit.Verify()
+		s.writeResult(msg.ID, result)
+
+	case "agent.audit.export":
+		data := s.audit.exportJSONL()
+		s.writeResult(msg.ID, map[string]string{"data": data})
 
 	case "agent.policy.get":
 		var params struct {
@@ -437,6 +511,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, "ok")
 
+	case "agent.policy.simulate":
+		var p struct {
+			YAML       string `json:"yaml"`
+			PeriodDays int    `json:"periodDays"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.YAML == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if p.PeriodDays <= 0 {
+			p.PeriodDays = 7
+		}
+		result := s.simulatePolicy(p.YAML, p.PeriodDays)
+		s.writeResult(msg.ID, result)
+
 	case "agent.status":
 		var params agentStatusParams
 		if len(msg.Params) > 0 {
@@ -446,6 +535,10 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			}
 		}
 		s.writeResult(msg.ID, collectAgentStatus(params.HomeDir))
+
+	case "agent.host.health":
+		health := collectHostHealth()
+		s.writeResult(msg.ID, health)
 
 	case "conduit.device.register":
 		var info registeredDevice
@@ -524,6 +617,53 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, map[string]bool{"ok": s.dispatcher.setBudget(p.RunID, p.BudgetUSD)})
 
+	case "agent.quota.status":
+		result := s.dispatcher.getQuotaGuard()
+		s.writeResult(msg.ID, result)
+
+	case "agent.quota.setCap":
+		var p struct {
+			Provider   string  `json:"provider"`
+			DailyUSD   float64 `json:"dailyUSD"`
+			MonthlyUSD float64 `json:"monthlyUSD"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Provider == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.dispatcher.setProviderCap(p.Provider, p.DailyUSD, p.MonthlyUSD)
+		s.writeResult(msg.ID, map[string]bool{"ok": true})
+
+	case "agent.quota.updateSpend":
+		var p struct {
+			Provider string  `json:"provider"`
+			USD      float64 `json:"usd"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Provider == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.dispatcher.updateProviderSpend(p.Provider, p.USD)
+		s.writeResult(msg.ID, map[string]bool{"ok": true})
+
+	case "agent.loop.update":
+		// Accept a Loop JSON object from the app and upsert it into the in-memory
+		// loop store. The app's GRDB store remains the durable source of truth;
+		// this mirror lets the daemon answer agent.loop.list.
+		var loopPayload map[string]interface{}
+		if err := json.Unmarshal(msg.Params, &loopPayload); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if !s.upsertLoop(loopPayload) {
+			s.writeError(msg.ID, -32602, "loop id required")
+			return
+		}
+		s.writeResult(msg.ID, map[string]bool{"ok": true})
+
+	case "agent.loop.list":
+		s.writeResult(msg.ID, map[string]interface{}{"loops": s.listLoops()})
+
 	case "agent.schedule.add":
 		var sc schedule
 		if err := json.Unmarshal(msg.Params, &sc); err != nil {
@@ -541,6 +681,79 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		_ = json.Unmarshal(msg.Params, &p)
 		s.writeResult(msg.ID, map[string]bool{"removed": s.scheduler.remove(p.ID)})
+
+	case "agent.secret.store":
+		var p struct {
+			Name   string `json:"name"`
+			Type   string `json:"type"`
+			Scope  string `json:"scope"`
+			Value  string `json:"value"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Name == "" || p.Value == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		id := s.secrets.store(p.Name, p.Type, p.Scope, p.Value)
+		s.writeResult(msg.ID, map[string]string{"id": id})
+
+	case "agent.secret.request":
+		var req SecretRequestParams
+		if err := json.Unmarshal(msg.Params, &req); err != nil || req.ID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.secrets.addPending(req)
+		// Escalate to phone if device is connected.
+		s.deviceMu.RLock()
+		dev := s.device
+		s.deviceMu.RUnlock()
+		if dev != nil && dev.PushBackendURL != "" {
+			go s.postSecretRequestPush(dev, req)
+		}
+		s.writeResult(msg.ID, map[string]bool{"pending": true})
+
+	case "agent.secret.authorize":
+		var p struct {
+			RequestID string  `json:"requestId"`
+			Scope     string  `json:"scope"`
+			ExpiresAt *string `json:"expiresAt,omitempty"`
+			OneTime   bool    `json:"oneTime"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.RequestID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		var expiresAt *time.Time
+		if p.ExpiresAt != nil {
+			if t, err := time.Parse(time.RFC3339, *p.ExpiresAt); err == nil {
+				expiresAt = &t
+			}
+		}
+		s.secrets.authorize(p.RequestID, p.Scope, expiresAt, p.OneTime, "user")
+		s.secrets.removePending(p.RequestID)
+		s.writeResult(msg.ID, map[string]bool{"ok": true})
+
+	case "agent.secret.revoke":
+		var p struct {
+			RequestID string `json:"requestId"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"removed": s.secrets.revoke(p.RequestID)})
+
+	case "agent.secret.delete":
+		var p struct {
+			SecretID string `json:"secretId"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"removed": s.secrets.delete(p.SecretID)})
+
+	case "agent.secret.list":
+		secrets := s.secrets.list()
+		pending := s.secrets.listPending()
+		s.writeResult(msg.ID, map[string]interface{}{
+			"secrets": secrets,
+			"pending": pending,
+		})
 
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
@@ -628,6 +841,11 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 			fmt.Fprintf(conn, `{"error":"internal"}`)
 			return
 		}
+	}
+
+	// Send through E2E relay when paired (primary path over push backend)
+	if s.e2e != nil {
+		s.e2e.sendApproval(event)
 	}
 
 	s.deviceMu.RLock()
@@ -733,6 +951,30 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 	resp.Body.Close()
 }
 
+func (s *server) postSecretRequestPush(dev *registeredDevice, req SecretRequestParams) {
+	hostname, _ := os.Hostname()
+	payload := map[string]interface{}{
+		"id":             req.ID,
+		"sessionId":      dev.SessionID,
+		"agent":          req.Agent,
+		"toolName":       req.ToolName,
+		"credentialType": req.CredentialType,
+		"requestedScope": req.RequestedScope,
+		"hostName":       hostname,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(dev.PushBackendURL, "/") + "/secret-request"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "push-backend secret-request POST failed: %v\n", err)
+		return
+	}
+	resp.Body.Close()
+}
+
 // postRelayRegistration registers sessionId → relayToken with the backend's
 // control-plane /register endpoint, authenticated by APPROVAL_RELAY_SECRET (when
 // configured). This lets the backend validate the per-session Bearer token the
@@ -776,5 +1018,234 @@ func riskLabel(r int) string {
 		return "critical"
 	default:
 		return "low"
+	}
+}
+
+// doctorCheckResult mirrors the Swift DoctorCheckResult struct.
+type doctorCheckResult struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Passed   bool   `json:"passed"`
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
+}
+
+// doctorReport mirrors the Swift DoctorReport struct.
+type doctorReport struct {
+	DaemonVersion string              `json:"daemonVersion"`
+	Checks        []doctorCheckResult `json:"checks"`
+	GeneratedAt   string              `json:"generatedAt"`
+}
+
+// collectDoctorReport runs all health checks and returns a doctorReport.
+func (s *server) collectDoctorReport() doctorReport {
+	home, _ := os.UserHomeDir()
+	report := doctorReport{
+		DaemonVersion: version,
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+	}
+	report.Checks = append(report.Checks, s.checkDaemonVersion())
+	report.Checks = append(report.Checks, s.checkHooksInstalled(home))
+	report.Checks = append(report.Checks, s.checkAgentAuth(home))
+	report.Checks = append(report.Checks, s.checkPolicyParseable())
+	report.Checks = append(report.Checks, s.checkFilesystemPermissions(home))
+	report.Checks = append(report.Checks, s.checkLocalModelEndpoints())
+	return report
+}
+
+func (s *server) checkDaemonVersion() doctorCheckResult {
+	if version == "0.1.0-dev" {
+		return doctorCheckResult{
+			ID:       "daemon-version",
+			Name:     "Daemon version",
+			Passed:   false,
+			Message:  "Running development build (" + version + ")",
+			Severity: "warning",
+		}
+	}
+	return doctorCheckResult{
+		ID:       "daemon-version",
+		Name:     "Daemon version",
+		Passed:   true,
+		Message:  "conduitd " + version,
+		Severity: "info",
+	}
+}
+
+func (s *server) checkHooksInstalled(home string) doctorCheckResult {
+	agents := []struct {
+		name string
+		path string
+	}{
+		{"claude", filepath.Join(home, ".claude", "settings.json")},
+		{"codex", filepath.Join(home, ".codex", "config.json")},
+		{"opencode", filepath.Join(home, ".config", "opencode", "config.json")},
+	}
+	var missing []string
+	for _, a := range agents {
+		if _, err := os.Stat(a.path); os.IsNotExist(err) {
+			missing = append(missing, a.name)
+		}
+	}
+	if len(missing) > 0 {
+		return doctorCheckResult{
+			ID:       "hooks-installed",
+			Name:     "Agent hooks installed",
+			Passed:   false,
+			Message:  "Missing config for: " + strings.Join(missing, ", "),
+			Severity: "warning",
+		}
+	}
+	return doctorCheckResult{
+		ID:       "hooks-installed",
+		Name:     "Agent hooks installed",
+		Passed:   true,
+		Message:  "All agent configs found",
+		Severity: "info",
+	}
+}
+
+func (s *server) checkAgentAuth(home string) doctorCheckResult {
+	type keyCheck struct {
+		envKey string
+		name   string
+	}
+	keys := []keyCheck{
+		{"ANTHROPIC_API_KEY", "Anthropic"},
+		{"OPENAI_API_KEY", "OpenAI"},
+	}
+	var configured []string
+	var missing []string
+	for _, k := range keys {
+		if v := os.Getenv(k.envKey); v != "" {
+			configured = append(configured, k.name)
+		} else {
+			missing = append(missing, k.name)
+		}
+	}
+	if len(configured) == 0 {
+		return doctorCheckResult{
+			ID:       "agent-auth",
+			Name:     "Agent authentication",
+			Passed:   false,
+			Message:  "No API keys found in environment",
+			Severity: "error",
+		}
+	}
+	msg := "Configured: " + strings.Join(configured, ", ")
+	if len(missing) > 0 {
+		msg += " | Missing: " + strings.Join(missing, ", ")
+	}
+	return doctorCheckResult{
+		ID:       "agent-auth",
+		Name:     "Agent authentication",
+		Passed:   true,
+		Message:  msg,
+		Severity: "info",
+	}
+}
+
+func (s *server) checkPolicyParseable() doctorCheckResult {
+	_, err := s.policy.getPolicyDocuments("")
+	if err != nil {
+		return doctorCheckResult{
+			ID:       "policy-parseable",
+			Name:     "Policy parseable",
+			Passed:   false,
+			Message:  "Policy load error: " + err.Error(),
+			Severity: "error",
+		}
+	}
+	return doctorCheckResult{
+		ID:       "policy-parseable",
+		Name:     "Policy parseable",
+		Passed:   true,
+		Message:  "Policy loaded successfully",
+		Severity: "info",
+	}
+}
+
+func (s *server) checkFilesystemPermissions(home string) doctorCheckResult {
+	conduitDir := filepath.Join(home, ".conduit")
+	info, err := os.Stat(conduitDir)
+	if os.IsNotExist(err) {
+		return doctorCheckResult{
+			ID:       "fs-permissions",
+			Name:     "Filesystem permissions",
+			Passed:   false,
+			Message:  "~/.conduit/ does not exist",
+			Severity: "error",
+		}
+	}
+	if err != nil {
+		return doctorCheckResult{
+			ID:       "fs-permissions",
+			Name:     "Filesystem permissions",
+			Passed:   false,
+			Message:  "Cannot stat ~/.conduit/: " + err.Error(),
+			Severity: "error",
+		}
+	}
+	// Check writable by testing a temp file
+	testFile := filepath.Join(conduitDir, ".doctor-test")
+	f, err := os.OpenFile(testFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return doctorCheckResult{
+			ID:       "fs-permissions",
+			Name:     "Filesystem permissions",
+			Passed:   false,
+			Message:  "~/.conduit/ is not writable: " + err.Error(),
+			Severity: "error",
+		}
+	}
+	f.Close()
+	os.Remove(testFile)
+
+	mode := info.Mode().String()
+	return doctorCheckResult{
+		ID:       "fs-permissions",
+		Name:     "Filesystem permissions",
+		Passed:   true,
+		Message:  "~/.conduit/ exists and is writable (" + mode + ")",
+		Severity: "info",
+	}
+}
+
+func (s *server) checkLocalModelEndpoints() doctorCheckResult {
+	type endpoint struct {
+		name string
+		host string
+		port string
+	}
+	endpoints := []endpoint{
+		{"Ollama", "127.0.0.1", "11434"},
+		{"LM Studio", "127.0.0.1", "1234"},
+	}
+	var reachable []string
+	var unreachable []string
+	for _, ep := range endpoints {
+		conn, err := net.DialTimeout("tcp", ep.host+":"+ep.port, 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			reachable = append(reachable, ep.name)
+		} else {
+			unreachable = append(unreachable, ep.name)
+		}
+	}
+	if len(reachable) == 0 {
+		return doctorCheckResult{
+			ID:       "local-models",
+			Name:     "Local model endpoints",
+			Passed:   false,
+			Message:  "No local model servers detected (checked: " + strings.Join(unreachable, ", ") + ")",
+			Severity: "info",
+		}
+	}
+	return doctorCheckResult{
+		ID:       "local-models",
+		Name:     "Local model endpoints",
+		Passed:   true,
+		Message:  "Reachable: " + strings.Join(reachable, ", "),
+		Severity: "info",
 	}
 }
