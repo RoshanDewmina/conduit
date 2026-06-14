@@ -39,11 +39,11 @@ type registeredDevice struct {
 }
 
 type policyEngine struct {
-	mu          sync.RWMutex
-	home        string
-	docs        []policy.Document
-	legacyJSON  string
-	migrated    bool
+	mu         sync.RWMutex
+	home       string
+	docs       []policy.Document
+	legacyJSON string
+	migrated   bool
 }
 
 func newPolicyEngine(home string) *policyEngine {
@@ -494,6 +494,33 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		_ = json.Unmarshal(msg.Params, &p)
 		s.writeResult(msg.ID, map[string]bool{"cancelled": s.dispatcher.cancel(p.RunID)})
+
+	case "agent.pause":
+		var p struct {
+			RunID string `json:"runId"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"paused": s.dispatcher.pause(p.RunID)})
+
+	case "agent.resume":
+		var p struct {
+			RunID string `json:"runId"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		s.writeResult(msg.ID, map[string]bool{"resumed": s.dispatcher.resume(p.RunID)})
+
+	case "agent.budget.set":
+		var p struct {
+			RunID     string  `json:"runId"`
+			BudgetUSD float64 `json:"budgetUSD"`
+		}
+		// Validate here (unlike the simple runId-only cases): a malformed budgetUSD
+		// would silently zero the cap, which setBudget reads as "remove cap".
+		if err := json.Unmarshal(msg.Params, &p); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.writeResult(msg.ID, map[string]bool{"ok": s.dispatcher.setBudget(p.RunID, p.BudgetUSD)})
 
 	case "agent.schedule.add":
 		var sc schedule

@@ -93,6 +93,55 @@ func TestDeviceRegister(t *testing.T) {
 	}
 }
 
+// TestRunControlRPCs verifies agent.pause, agent.resume, and agent.budget.set RPCs.
+func TestRunControlRPCs(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	s.dispatcher.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	run := s.dispatcher.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
+		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+	if run.RunID == "" {
+		t.Fatalf("dispatch did not start a run: %+v", run)
+	}
+
+	// call drives one RPC and asserts the boolean it returns under `key`.
+	call := func(method, key, runID string, want bool) {
+		t.Helper()
+		resultCh := make(chan rpcMessage, 1)
+		s.setEmitter(func(data []byte) error {
+			var m rpcMessage
+			_ = json.Unmarshal(data, &m)
+			select {
+			case resultCh <- m:
+			default:
+			}
+			return nil
+		})
+		params, _ := json.Marshal(map[string]interface{}{"runId": runID, "budgetUSD": 1.0})
+		s.handleMessage(&rpcMessage{JSONRPC: "2.0", ID: 1, Method: method, Params: params})
+		select {
+		case res := <-resultCh:
+			m, ok := res.Result.(map[string]interface{})
+			if !ok || m[key] != want {
+				t.Fatalf("%s: result = %#v, want %s=%v", method, res.Result, key, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: no result emitted", method)
+		}
+	}
+
+	// Ordering matters: pause must precede resume (the dispatcher state machine
+	// only resumes a paused run). budgetUSD is ignored by pause/resume.
+	call("agent.pause", "paused", run.RunID, true)
+	call("agent.resume", "resumed", run.RunID, true)
+	call("agent.budget.set", "ok", run.RunID, true)
+
+	// An absent runId returns false through the RPC layer (not an error frame).
+	call("agent.pause", "paused", "no-such-run", false)
+}
+
 // TestPostApprovalPush verifies that postApprovalPush POSTs to /approval with the correct payload.
 func TestPostApprovalPush(t *testing.T) {
 	var received []byte
