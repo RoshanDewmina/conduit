@@ -285,6 +285,7 @@ public struct SettingsView: View {
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
+    let sshKeyStore: KeyStore?
     let bridgeActions: BridgeSessionActions
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
@@ -314,6 +315,7 @@ public struct SettingsView: View {
         backendURL: String = "",
         auditRepository: AuditRepository? = nil,
         approvalRepository: ApprovalRepository? = nil,
+        sshKeyStore: KeyStore? = nil,
         bridgeActions: BridgeSessionActions = BridgeSessionActions(),
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {}
@@ -323,6 +325,7 @@ public struct SettingsView: View {
         self.backendURL = backendURL
         self.auditRepository = auditRepository
         self.approvalRepository = approvalRepository
+        self.sshKeyStore = sshKeyStore
         self.bridgeActions = bridgeActions
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
@@ -659,6 +662,15 @@ public struct SettingsView: View {
             .tint(t.accent)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+
+            if let sshKeyStore {
+                divider
+                NavigationLink {
+                    KeysView(viewModel: KeysViewModel(store: sshKeyStore), store: sshKeyStore)
+                } label: {
+                    settingsNavRow("SSH keys", icon: "key")
+                }
+            }
 
             if let auditRepository {
                 divider

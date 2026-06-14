@@ -859,7 +859,8 @@ public struct AppRoot: View {
                 syncEngine: env.syncEngine,
                 backendURL: Self.pushBackendURL(),
                 auditRepository: env.auditRepo,
-                approvalRepository: approvalRepository
+                approvalRepository: approvalRepository,
+                sshKeyStore: env.keyStore
             )
         }
     }
@@ -1128,6 +1129,7 @@ private struct SettingsWithLibraryView: View {
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
+    var sshKeyStore: KeyStore? = nil
 
     var body: some View {
         SettingsView(
@@ -1135,7 +1137,8 @@ private struct SettingsWithLibraryView: View {
             syncEngine: syncEngine,
             backendURL: backendURL,
             auditRepository: auditRepository,
-            approvalRepository: approvalRepository
+            approvalRepository: approvalRepository,
+            sshKeyStore: sshKeyStore
         )
         .toolbar(.hidden, for: .navigationBar)
     }
