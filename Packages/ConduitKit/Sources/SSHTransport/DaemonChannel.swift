@@ -357,9 +357,10 @@ public actor DaemonChannel {
     // MARK: - Proactive dispatch & schedule (WS-B2)
 
     /// Start an agent run on the host, bounded by policy + budget on the daemon.
-    public func dispatchAgent(agent: String, cwd: String, prompt: String, budgetUSD: Double = 0) async throws -> DispatchResult {
+    public func dispatchAgent(agent: String, cwd: String, prompt: String, budgetUSD: Double = 0, model: String? = nil) async throws -> DispatchResult {
         var params: [String: Any] = ["agent": agent, "cwd": cwd, "prompt": prompt]
         if budgetUSD > 0 { params["budgetUSD"] = budgetUSD }
+        if let model, !model.isEmpty { params["model"] = model }
         let data = try await sendRPC(method: "agent.dispatch", params: params)
         return try Self.decodeResult(data, as: DispatchResult.self)
     }

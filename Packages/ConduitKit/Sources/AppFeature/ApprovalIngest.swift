@@ -9,18 +9,28 @@ public actor ApprovalIngest {
     private let channel: DaemonChannel
     private let repository: ApprovalRepository
     private let hostName: String
+    private let runOutputStore: RunOutputStore?
     private var task: Task<Void, Never>?
 
-    public init(channel: DaemonChannel, repository: ApprovalRepository, hostName: String) {
+    public init(channel: DaemonChannel, repository: ApprovalRepository, hostName: String, runOutputStore: RunOutputStore? = nil) {
         self.channel = channel
         self.repository = repository
         self.hostName = hostName
+        self.runOutputStore = runOutputStore
     }
 
     public func start() {
-        task = Task { [channel, repository, hostName] in
+        task = Task { [channel, repository, hostName, runOutputStore] in
             for await event in await channel.events {
                 guard !Task.isCancelled else { break }
+                if case .runOutput(let params) = event {
+                    await runOutputStore?.appendOutput(params)
+                    continue
+                }
+                if case .runStatus(let params) = event {
+                    await runOutputStore?.updateStatus(params)
+                    continue
+                }
                 if case .approvalPending(let params) = event {
                     let sessionID = params.sessionId.flatMap { UUID(uuidString: $0) }.map(SessionID.init) ?? SessionID()
                     let approval = Approval(

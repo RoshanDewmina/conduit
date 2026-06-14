@@ -22,19 +22,28 @@ public struct DispatchAgent: Identifiable {
 
 public struct DispatchView: View {
     let agents: [DispatchAgent]
-    let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?) -> Void
+    let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) -> Void
 
     @State private var selectedAgentID: String?
     @State private var cwd: String = ""
     @State private var prompt: String = ""
     @State private var budgetText: String = ""
+    @State private var selectedModel: String = ""
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
+    // Empty slug == the agent's own configured default (no --model flag passed).
+    private let modelOptions: [(label: String, slug: String)] = [
+        ("Agent default", ""),
+        ("Claude Opus 4", "claude-opus-4"),
+        ("Claude Sonnet 4", "claude-sonnet-4"),
+        ("Claude Haiku 4", "claude-haiku-4"),
+    ]
+
     public init(
         agents: [DispatchAgent],
-        onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?) -> Void
+        onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) -> Void
     ) {
         self.agents = agents
         self.onDispatch = onDispatch
@@ -99,6 +108,7 @@ public struct DispatchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 agentPickerSection
+                modelSection
                 cwdSection
                 promptSection
                 budgetSection
@@ -219,6 +229,36 @@ public struct DispatchView: View {
         }
     }
 
+    // MARK: - Model
+
+    private var modelSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DSListSectionHead("Model")
+            Menu {
+                ForEach(modelOptions, id: \.slug) { option in
+                    Button(option.label) { selectedModel = option.slug }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(modelOptions.first { $0.slug == selectedModel }?.label ?? "Agent default")
+                        .font(.dsMonoPt(14))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                    DSIconView(.chevronDown, size: 13, color: t.text3)
+                }
+                .padding(12)
+                .background(t.surfaceSunk)
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
+            }
+            Text("Overrides the agent's configured model for this run.")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text4)
+        }
+    }
+
     // MARK: - Budget
 
     private var budgetSection: some View {
@@ -260,7 +300,8 @@ public struct DispatchView: View {
                         agent.id,
                         cwd.trimmingCharacters(in: .whitespacesAndNewlines),
                         prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-                        parsedBudget
+                        parsedBudget,
+                        selectedModel.isEmpty ? nil : selectedModel
                     )
                 }
                 .disabled(!canDispatch)
@@ -283,8 +324,8 @@ public struct DispatchView: View {
             DispatchAgent(id: "a2", name: "ci-runner", cwd: "~/ci", isOffline: false),
             DispatchAgent(id: "a3", name: "staging-01", cwd: "~/deploy", isOffline: true),
         ],
-        onDispatch: { agentID, cwd, prompt, budget in
-            print("dispatch → \(agentID) cwd=\(cwd) budget=\(budget.map { "$\($0)" } ?? "nil")")
+        onDispatch: { agentID, cwd, prompt, budget, model in
+            print("dispatch → \(agentID) cwd=\(cwd) budget=\(budget.map { "$\($0)" } ?? "nil") model=\(model ?? "default")")
         }
     )
     .environment(\.conduitTokens, .dark)

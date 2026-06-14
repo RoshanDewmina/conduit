@@ -128,6 +128,8 @@ public struct AppRoot: View {
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
+    @State private var runOutputStore = RunOutputStore()
+    @State private var dispatchFeedback: String?
     @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -463,11 +465,16 @@ public struct AppRoot: View {
             NavigationStack {
                 DispatchView(
                     agents: dispatchAgents(),
-                    onDispatch: { agentID, cwd, prompt, budget in
-                        performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget)
+                    onDispatch: { agentID, cwd, prompt, budget, model in
+                        performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                     }
                 )
             }
+        }
+        .alert("Dispatch", isPresented: Binding(get: { dispatchFeedback != nil }, set: { if !$0 { dispatchFeedback = nil } })) {
+            Button("OK", role: .cancel) { dispatchFeedback = nil }
+        } message: {
+            Text(dispatchFeedback ?? "")
         }
         .sheet(item: $editingHost) { host in
             NavigationStack {
@@ -676,7 +683,7 @@ public struct AppRoot: View {
     }
 
     @MainActor
-    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?) {
+    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2,
               let slotUUID = UUID(uuidString: parts[0]),
@@ -685,12 +692,34 @@ public struct AppRoot: View {
         let vendor = parts[1]
         dispatchPresented = false
         Task {
-            try? await slot.channel.dispatchAgent(
-                agent: vendor,
-                cwd: cwd,
-                prompt: prompt,
-                budgetUSD: budgetUSD ?? 0
-            )
+            do {
+                let result = try await slot.channel.dispatchAgent(
+                    agent: vendor,
+                    cwd: cwd,
+                    prompt: prompt,
+                    budgetUSD: budgetUSD ?? 0,
+                    model: model
+                )
+                await MainActor.run {
+                    switch result.status {
+                    case "started":
+                        if let runId = result.runId {
+                            runOutputStore.register(runId: runId)
+                            dispatchFeedback = "Run started — output is streaming to this session."
+                        }
+                    case "denied":
+                        dispatchFeedback = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
+                    case "needsApproval":
+                        dispatchFeedback = "Awaiting your approval — check the Inbox."
+                    case "budgetExceeded":
+                        dispatchFeedback = result.message ?? "Daily budget cap reached."
+                    default:
+                        dispatchFeedback = result.message ?? "Couldn't start the run."
+                    }
+                }
+            } catch {
+                await MainActor.run { dispatchFeedback = "Dispatch failed: \(error.localizedDescription)" }
+            }
         }
     }
 
@@ -1036,7 +1065,7 @@ public struct AppRoot: View {
             )
             let approvalRepo = ApprovalRepository(env.database)
             let channel = DaemonChannel(session: sshSession)
-            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name)
+            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore)
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
                 onDecision: { id, decision, editedToolInput in
@@ -1131,13 +1160,13 @@ public struct AppRoot: View {
                 // only Sendable values (no `vm`, so no retain cycle).
                 let fleet = self.fleetStore
                 let quotaGuard = env.quotaGuardStore
-                vm.onReconnected = { [fleet, quotaGuard, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
+                vm.onReconnected = { [fleet, quotaGuard, runOutputStore, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
                     if let existing = await fleet.slots.first(where: { $0.id == slotID }) {
                         await existing.ingest.stop()
                         await existing.channel.stop()
                     }
                     let newChannel = DaemonChannel(session: sshSession)
-                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name)
+                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore)
                     await fleet.rearm(slotID: slotID, channel: newChannel, ingest: newIngest)
                     try? await newChannel.start()
                     if !backendURL.isEmpty {

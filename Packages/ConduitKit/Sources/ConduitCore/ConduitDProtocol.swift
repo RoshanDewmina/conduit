@@ -218,10 +218,63 @@ public struct SecretsListResult: Codable, Sendable {
     public let pending: [PendingSecretRequest]?
 }
 
+// Streamed stdout/stderr from a dispatched run (close-the-loop).
+// Wire: {"method":"agent.run.output","params":{"runId","stream","chunk","seq"}}.
+public struct RunOutputParams: Codable, Sendable, Hashable {
+    public let runId: String
+    public let stream: String
+    public let chunk: String
+    public let seq: Int
+
+    public init(runId: String, stream: String, chunk: String, seq: Int) {
+        self.runId = runId
+        self.stream = stream
+        self.chunk = chunk
+        self.seq = seq
+    }
+
+    enum CodingKeys: String, CodingKey { case runId, stream, chunk, seq }
+
+    // Cross-module footgun: synthesized Decodable ignores memberwise defaults, so
+    // decode defensively for forward-compat with daemons that omit a field.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        runId = try c.decodeIfPresent(String.self, forKey: .runId) ?? ""
+        stream = try c.decodeIfPresent(String.self, forKey: .stream) ?? "stdout"
+        chunk = try c.decodeIfPresent(String.self, forKey: .chunk) ?? ""
+        seq = try c.decodeIfPresent(Int.self, forKey: .seq) ?? 0
+    }
+}
+
+// Run lifecycle transition from the daemon (close-the-loop).
+// Wire: {"method":"agent.run.status","params":{"runId","status","exitCode"?}}.
+public struct RunStatusParams: Codable, Sendable, Hashable {
+    public let runId: String
+    public let status: String
+    public let exitCode: Int?
+
+    public init(runId: String, status: String, exitCode: Int? = nil) {
+        self.runId = runId
+        self.status = status
+        self.exitCode = exitCode
+    }
+
+    enum CodingKeys: String, CodingKey { case runId, status, exitCode }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        runId = try c.decodeIfPresent(String.self, forKey: .runId) ?? ""
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? ""
+        exitCode = try c.decodeIfPresent(Int.self, forKey: .exitCode)
+    }
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
     case agentStatus(AgentStatusSnapshot)
     case secretRequest(SecretRequestEvent)
+    case runOutput(RunOutputParams)
+    case runStatus(RunStatusParams)
     case pong
     case unknown(method: String)
 }
@@ -249,6 +302,18 @@ extension DaemonEvent {
                   let event = try? JSONDecoder().decode(SecretRequestEvent.self, from: paramsData)
             else { return .unknown(method: method) }
             return .secretRequest(event)
+        case "agent.run.output":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(RunOutputParams.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .runOutput(p)
+        case "agent.run.status":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(RunStatusParams.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .runStatus(p)
         case "pong":
             return .pong
         default:
