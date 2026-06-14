@@ -2,24 +2,55 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
-  test:
-    name: Swift Tests (ConduitKit)
+  conduitkit-spm:
+    name: ConduitKit (SPM build + test)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.0.app || sudo xcode-select -s /Applications/Xcode_16.3.app
-
       - name: Resolve dependencies
         run: swift package resolve
         working-directory: Packages/ConduitKit
-
       - name: Run tests
         run: swift test --configuration debug
         working-directory: Packages/ConduitKit
+
+  conduit-app:
+    name: Conduit app target (build_sim)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app || sudo xcode-select -s /Applications/Xcode_16.3.app
+      # The full app target catches strict-concurrency / module-visibility breaks
+      # that `swift test` (incremental SPM) silently misses.
+      - name: Build app target for simulator
+        run: >
+          xcodebuild build
+          -project Conduit.xcodeproj
+          -scheme Conduit
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+
+  daemon-go:
+    name: Daemon (Go build + test + vet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Build, test, vet
+        run: |
+          set -e
+          for mod in conduitd push-backend conduit-mcp; do
+            echo "::group::$mod"
+            (cd daemon/$mod && go build ./... && go vet ./... && go test ./...)
+            echo "::endgroup::"
+          done
