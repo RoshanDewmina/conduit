@@ -124,3 +124,52 @@ func TestScheduleDueTickAndPersistence(t *testing.T) {
 		t.Fatal("remove should delete the schedule")
 	}
 }
+
+func TestSetBudgetKillsRunOverCap(t *testing.T) {
+	var killed bool
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{kill: func() { killed = true }, pause: func() {}, resume: func() {}}, nil
+	}
+	// dispatch with no cap so it always admits; the cap is set after spend accrues.
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi"},
+		func(ApprovalEvent) (string, string) { return "allow", "test-allow" },
+		func(AuditEntry) {})
+
+	// Lowering the cap below current spend must kill the run immediately.
+	d.setSpentUSD(4.00)
+	if !d.setBudget(res.RunID, 2.00) {
+		t.Fatal("setBudget returned false for a live run")
+	}
+	if !killed {
+		t.Fatal("run over its new cap was not killed")
+	}
+	if st := d.runStatus(res.RunID); st != "budget-exceeded" {
+		t.Fatalf("want budget-exceeded, got %q", st)
+	}
+}
+
+func TestSpendUpdateEnforcesPerRunCap(t *testing.T) {
+	var killed bool
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{kill: func() { killed = true }, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", BudgetUSD: 5.00},
+		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+	d.setSpentUSD(4.99) // under cap — still running
+	if killed {
+		t.Fatal("killed under cap")
+	}
+	d.setSpentUSD(5.00) // exactly at cap — the >= boundary must enforce
+	if !killed || d.runStatus(res.RunID) != "budget-exceeded" {
+		t.Fatal("spend reaching the cap did not stop the run")
+	}
+}
+
+func TestSetBudgetAbsentRunReturnsFalse(t *testing.T) {
+	d := newDispatcher()
+	if d.setBudget("no-such-id", 5.00) {
+		t.Fatal("setBudget on absent run should return false")
+	}
+}

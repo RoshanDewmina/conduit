@@ -99,11 +99,54 @@ func newDispatcher() *dispatcher {
 	return &dispatcher{runs: map[string]*dispatchRun{}, launch: realLauncher}
 }
 
-// setSpentUSD updates the tracked daily spend used by the budget gate.
+// setSpentUSD updates the tracked daily spend and enforces per-run caps.
 func (d *dispatcher) setSpentUSD(v float64) {
 	d.mu.Lock()
 	d.spentUSD = v
 	d.mu.Unlock()
+	d.enforceBudgets()
+}
+
+func (d *dispatcher) runStatus(runID string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if run := d.runs[runID]; run != nil {
+		return run.Status
+	}
+	return ""
+}
+
+// setBudget updates a run's cap and enforces it immediately. usd <= 0 removes the
+// cap (the run continues unconstrained).
+func (d *dispatcher) setBudget(runID string, usd float64) bool {
+	d.mu.Lock()
+	run := d.runs[runID]
+	if run == nil {
+		d.mu.Unlock()
+		return false
+	}
+	run.BudgetUSD = usd
+	d.mu.Unlock()
+	d.enforceBudgets()
+	return true
+}
+
+// enforceBudgets kills any running/paused run whose accumulated spend meets its cap.
+func (d *dispatcher) enforceBudgets() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, run := range d.runs {
+		if run.Status != "running" && run.Status != "paused" {
+			continue
+		}
+		// spentUSD is a shared daily total; any run whose cap the total has reached is stopped.
+		if run.BudgetUSD > 0 && d.spentUSD >= run.BudgetUSD {
+			if run.handle != nil {
+				run.handle.kill()
+			}
+			run.Status = "budget-exceeded"
+		}
+	}
 }
 
 // dispatch applies the budget + policy gate, then launches. It NEVER launches a
