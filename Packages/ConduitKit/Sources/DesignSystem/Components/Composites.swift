@@ -114,6 +114,7 @@ public struct DSBlockCard<Header: View, Output: View>: View {
                         .fill(t.termAccent)
                         .frame(width: 8, height: 16)
                         .blinking()
+                        .accessibilityHidden(true)
                 } else {
                     Text(command)
                         .font(.dsMonoPt(14))

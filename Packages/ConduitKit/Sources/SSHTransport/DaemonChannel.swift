@@ -175,6 +175,19 @@ public actor DaemonChannel {
         try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
     }
 
+    /// Run health checks on the remote daemon
+    public func runDoctor() async throws -> DoctorReport {
+        let data = try await sendRPC(method: "agent.doctor", params: [String: String]())
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .doctorReport(let report): return report
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
     public func tailAudit(limit: Int = 50) async throws -> AuditTailResult {
         let data = try await sendRPC(method: "agent.audit.tail", params: ["limit": limit])
         guard let response = DaemonRPCResponse.decode(from: data) else {
@@ -182,6 +195,34 @@ public actor DaemonChannel {
         }
         switch response {
         case .auditTail(let result): return result
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    public func verifyAudit() async throws -> AuditVerification {
+        let data = try await sendRPC(method: "agent.audit.verify", params: [String: String]())
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .auditVerification(let result): return result
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    public func exportAudit() async throws -> Data {
+        let data = try await sendRPC(method: "agent.audit.export", params: [String: String]())
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .auditExport(let jsonl):
+            guard let jsonData = jsonl.data(using: .utf8) else {
+                throw DaemonChannelError.badResponse
+            }
+            return jsonData
         case .error(_, let message): throw DaemonChannelError.rpc(message)
         default: throw DaemonChannelError.badResponse
         }
@@ -226,6 +267,26 @@ public actor DaemonChannel {
         }
     }
 
+    public func simulatePolicy(yaml: String, periodDays: Int = 7) async throws -> PolicySimulation {
+        let data = try await sendRPC(
+            method: "agent.policy.simulate",
+            params: ["yaml": yaml, "periodDays": periodDays]
+        )
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "policy.simulate failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            throw DaemonChannelError.badResponse
+        }
+        return try JSONDecoder().decode(PolicySimulation.self, from: rd)
+    }
+
     /// Load policy YAML text for the editor (global or repo-local for `cwd`).
     public func fetchPolicyYAML(cwd: String) async throws -> String {
         let result = try await fetchPolicy(cwd: cwd)
@@ -245,6 +306,52 @@ public actor DaemonChannel {
         case .error(_, let message): throw DaemonChannelError.rpc(message)
         default: throw DaemonChannelError.badResponse
         }
+    }
+
+    public func getHostHealth() async throws -> HostHealth {
+        let data = try await sendRPC(method: "agent.host.health", params: [String: String]())
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .hostHealth(let health): return health
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    // MARK: - CI Events
+
+    /// Fetch recent CI/PR events for a repository from the push-backend.
+    /// The daemon proxies this request to the webhook store.
+    public func recentCIEvents(repo: String, limit: Int = 50) async throws -> [CIEvent] {
+        var params: [String: Any] = ["repo": repo]
+        if limit != 50 { params["limit"] = limit }
+        let data = try await sendRPC(method: "agent.ci.recent", params: params)
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "ci.recent failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            return []
+        }
+        return try JSONDecoder().decode([CIEvent].self, from: rd)
+    }
+
+    // MARK: - Loop updates
+
+    /// Push a loop update to the daemon for persistence and broadcast.
+    public func updateLoop(_ loop: Loop) async throws {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(loop),
+              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return }
+        _ = try await sendRPC(method: "agent.loop.update", params: dict)
     }
 
     // MARK: - Proactive dispatch & schedule (WS-B2)
@@ -306,6 +413,137 @@ public actor DaemonChannel {
         let data = try await sendRPC(method: "agent.schedule.remove", params: ["id": id])
         return (try Self.decodeResultObject(data)["removed"] as? Bool) ?? false
     }
+
+    // MARK: - E2E Relay
+
+    /// Fetch the current E2E relay connection state from the daemon.
+    public func fetchRelayState() async throws -> Session.RelayState {
+        let data = try await sendRPC(method: "conduit.relay.state", params: [:])
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if dict["error"] != nil {
+            return .none
+        }
+        if let result = dict["result"] as? [String: Any],
+           let raw = result["state"] as? String,
+           let state = Session.RelayState(rawValue: raw) {
+            return state
+        }
+        return .none
+    }
+
+    // MARK: - Quota / Spend Guardrails
+
+    /// Fetch per-provider quota status and alerts from the daemon.
+    public func getQuotaStatus() async throws -> QuotaGuard {
+        let data = try await sendRPC(method: "agent.quota.status", params: [String: Any]())
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "quota.status failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            throw DaemonChannelError.badResponse
+        }
+        return try JSONDecoder().decode(QuotaGuard.self, from: rd)
+    }
+
+    /// Set daily and/or monthly USD caps for a provider. Pass 0 to leave unchanged.
+    @discardableResult
+    public func setProviderCap(provider: String, dailyUSD: Double, monthlyUSD: Double) async throws -> Bool {
+        let data = try await sendRPC(
+            method: "agent.quota.setCap",
+            params: ["provider": provider, "dailyUSD": dailyUSD, "monthlyUSD": monthlyUSD]
+        )
+        return (try Self.decodeResultObject(data)["ok"] as? Bool) ?? false
+    }
+
+    /// Update cumulative spend for a provider (called by the bridge when usage data arrives).
+    @discardableResult
+    public func updateProviderSpend(provider: String, usd: Double) async throws -> Bool {
+        let data = try await sendRPC(
+            method: "agent.quota.updateSpend",
+            params: ["provider": provider, "usd": usd]
+        )
+        return (try Self.decodeResultObject(data)["ok"] as? Bool) ?? false
+    }
+
+    // MARK: - Secrets Broker
+
+    /// Store a secret on the daemon (called from phone after manual entry or import).
+    @discardableResult
+    public func storeSecret(name: String, type: String, scope: String, value: String) async throws -> String {
+        let data = try await sendRPC(
+            method: "agent.secret.store",
+            params: ["name": name, "type": type, "scope": scope, "value": value]
+        )
+        return (try Self.decodeResultObject(data)["id"] as? String) ?? ""
+    }
+
+    /// Agent requests access to a secret — escalates to phone if not already authorized.
+    public func requestSecret(request: SecretRequest) async throws -> Bool {
+        let encoder = JSONEncoder()
+        guard let requestData = try? encoder.encode(request),
+              let dict = (try? JSONSerialization.jsonObject(with: requestData)) as? [String: Any]
+        else { return false }
+        let data = try await sendRPC(method: "agent.secret.request", params: dict)
+        return (try Self.decodeResultObject(data)["pending"] as? Bool) ?? false
+    }
+
+    /// Phone authorizes a secret for a specific scope.
+    @discardableResult
+    public func authorizeSecret(requestID: String, scope: String, expiresAt: Date? = nil, oneTime: Bool = false) async throws -> Bool {
+        var params: [String: Any] = [
+            "requestId": requestID,
+            "scope": scope,
+            "oneTime": oneTime,
+        ]
+        if let expiresAt {
+            let formatter = ISO8601DateFormatter()
+            params["expiresAt"] = formatter.string(from: expiresAt)
+        }
+        let data = try await sendRPC(method: "agent.secret.authorize", params: params)
+        return (try Self.decodeResultObject(data)["ok"] as? Bool) ?? false
+    }
+
+    /// Revoke a secret authorization.
+    @discardableResult
+    public func revokeSecret(requestID: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.secret.revoke", params: ["requestId": requestID])
+        return (try Self.decodeResultObject(data)["removed"] as? Bool) ?? false
+    }
+
+    /// Delete a stored secret.
+    @discardableResult
+    public func deleteSecret(secretID: String) async throws -> Bool {
+        let data = try await sendRPC(method: "agent.secret.delete", params: ["secretId": secretID])
+        return (try Self.decodeResultObject(data)["removed"] as? Bool) ?? false
+    }
+
+    /// List all stored secrets (metadata only) and pending requests.
+    public func listSecrets() async throws -> SecretsListResult {
+        let data = try await sendRPC(method: "agent.secret.list", params: [String: Any]())
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "secret.list failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            throw DaemonChannelError.badResponse
+        }
+        return try JSONDecoder().decode(SecretsListResult.self, from: rd)
+    }
+
+    // MARK: - Private helpers
 
     private static func decodeResultObject(_ data: Data) throws -> [String: Any] {
         guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {

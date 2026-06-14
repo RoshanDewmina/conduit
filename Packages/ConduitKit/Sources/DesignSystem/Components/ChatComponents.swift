@@ -46,6 +46,7 @@ public struct DSMessageBubble: View {
                             .frame(width: 2, height: 16)
                             .padding(.leading, 2)
                             .blinkingCaret()
+                            .accessibilityHidden(true)
                     }
                 }
                 .padding(.horizontal, 14)

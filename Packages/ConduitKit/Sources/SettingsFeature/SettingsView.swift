@@ -8,6 +8,7 @@ import KeysFeature
 import PersistenceKit
 import SecurityKit
 import SyncKit
+import SSHTransport
 import NotificationsKit
 
 @MainActor @Observable
@@ -222,6 +223,25 @@ struct TrustPrivacyView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 18)
                         .padding(.top, 20)
+
+                    sectionHead("CONNECTIVITY")
+                    card {
+                        connRow(active: true, title: "Conduit relay", detail: "End-to-end encrypted (default). The relay forwards ciphertext it can't read.")
+                        hairline
+                        connRow(active: false, title: "Self-hosted relay", detail: "Run the relay container yourself for full control.")
+                        hairline
+                        connRow(active: false, title: "Direct / same network", detail: "Skip the relay entirely when on the same LAN.")
+                    }
+
+                    sectionHead("HOW IT COMPARES")
+                    comparisonTable
+
+                    Text("Vendor- and model-agnostic, with a thin E2E relay — a stance no single-vendor app can match.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 16)
                         .padding(.bottom, 36)
                 }
             }
@@ -275,6 +295,84 @@ struct TrustPrivacyView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
+
+    private func connRow(active: Bool, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .strokeBorder(active ? t.accent : t.text4, lineWidth: 2)
+                .frame(width: 18, height: 18)
+                .overlay(
+                    Circle()
+                        .fill(active ? t.accent : Color.clear)
+                        .frame(width: 8, height: 8)
+                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsSansPt(12.5))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var comparisonTable: some View {
+        let vendors: [(name: String, code: String, model: String, relay: String, good: Bool)] = [
+            ("Omnara", "yes", "yes", "yes", false),
+            ("Anthropic", "yes", "yes", "yes", false),
+            ("Conduit", "no", "no", "no", true),
+        ]
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Text("")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("code\nleaves?")
+                    .frame(width: 55, alignment: .center)
+                Text("model\ncloud?")
+                    .frame(width: 55, alignment: .center)
+                Text("relay\nreads?")
+                    .frame(width: 55, alignment: .center)
+            }
+            .font(.dsMonoPt(9))
+            .foregroundStyle(t.text4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+
+            ForEach(Array(vendors.enumerated()), id: \.offset) { _, v in
+                VStack(spacing: 0) {
+                    DSDivider(.soft, leadingInset: 16)
+                    HStack(spacing: 4) {
+                        Text(v.name)
+                            .font(.dsSansPt(13, weight: v.good ? .bold : .medium))
+                            .foregroundStyle(v.good ? t.risk(0) : t.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(v.code)
+                            .frame(width: 55, alignment: .center)
+                        Text(v.model)
+                            .frame(width: 55, alignment: .center)
+                        Text(v.relay)
+                            .frame(width: 55, alignment: .center)
+                    }
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(v.good ? t.risk(0) : t.text3)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+            }
+        }
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 18)
+    }
 }
 
 // MARK: - SettingsView
@@ -287,24 +385,16 @@ public struct SettingsView: View {
     let approvalRepository: ApprovalRepository?
     let sshKeyStore: KeyStore?
     let bridgeActions: BridgeSessionActions
+    let daemonChannel: DaemonChannel?
+    let e2eRelayClient: E2ERelayClient?
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
     @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
-    @AppStorage("flag.autonomyPresets") private var autonomyPresetsEnabled: Bool = true
-    @Environment(\.conduitTokens) private var t
     @State private var notificationFilter = NotificationFilter()
-    @State private var alwaysRules: [AlwaysRuleItem] = []
-    @State private var revokedRuleSignatures: Set<String> = Self.loadRevokedRuleSignatures()
-
-    private var autonomyPreset: Binding<AutonomyPreset> {
-        Binding(
-            get: { AutonomyPreset(rawValue: autonomyPresetRaw) ?? .alwaysAsk },
-            set: { autonomyPresetRaw = $0.rawValue }
-        )
-    }
+    @Environment(\.conduitTokens) private var t
 
     private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
     private static let showPaidSurfaces = true
@@ -317,6 +407,8 @@ public struct SettingsView: View {
         approvalRepository: ApprovalRepository? = nil,
         sshKeyStore: KeyStore? = nil,
         bridgeActions: BridgeSessionActions = BridgeSessionActions(),
+        daemonChannel: DaemonChannel? = nil,
+        e2eRelayClient: E2ERelayClient? = nil,
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {}
     ) {
@@ -327,6 +419,8 @@ public struct SettingsView: View {
         self.approvalRepository = approvalRepository
         self.sshKeyStore = sshKeyStore
         self.bridgeActions = bridgeActions
+        self.daemonChannel = daemonChannel
+        self.e2eRelayClient = e2eRelayClient
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
     }
@@ -343,16 +437,15 @@ public struct SettingsView: View {
                     bridgeAndHostsSection
 
                     // (2) APPROVALS
-                    if autonomyPresetsEnabled {
-                        agentApprovalsSection
-                    }
-                    notificationFilterSection
-                    allowAlwaysRulesSection
+                    approvalsSection
 
                     // (3) SECURITY
                     securitySection
 
-                    // (4) ACCOUNT
+                    // (4) TRUST & PRIVACY
+                    trustPrivacySection
+
+                    // (5) ACCOUNT
                     accountSection
 
                     versionFooter
@@ -362,10 +455,6 @@ public struct SettingsView: View {
         .task {
             await vm.load()
             await loadNotificationFilter()
-            await refreshAlwaysRules()
-        }
-        .onChange(of: notificationFilter) { _, _ in
-            Task { await persistNotificationFilter() }
         }
     }
 
@@ -373,6 +462,12 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
+        DSStatusHeader(
+            connected: bridgeActions.isConnected,
+            policy: autonomyPresetRaw,
+            todaySpend: "$0.00"
+        )
+
         DSScreenHeader("settings", breadcrumb: "device & agent")
 
         if !statusHeaderAgents.isEmpty {
@@ -388,121 +483,33 @@ public struct SettingsView: View {
             sectionHead("BRIDGE & HOSTS")
             settingsCard {
                 NavigationLink { TerminalSettingsView() } label: {
-                    settingsNavRow("Terminal settings", icon: "terminal")
+                    settingsNavRow("Open terminal", icon: "terminal", detail: "power-user · live session")
                 }
                 divider
-                providerPickerInline
+                settingsInfoRow("Bridge status", icon: "shield", detail: bridgeActions.isConnected ? "running · attached" : "not connected")
+                divider
+                NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
+                    settingsNavRow("Relay Pairing", icon: "lock.rotation", detail: "E2E encrypted relay connection")
+                }
             }
             .padding(.bottom, 16)
-
-            apiKeysSection
-            saveKeysSection
         }
-    }
-
-    private var providerPickerInline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("AI provider")
-                .font(.dsSansPt(13, weight: .medium))
-                .foregroundStyle(t.text2)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-            ForEach(Self.supportedProviders, id: \.self) { provider in
-                HStack {
-                    Text(provider.displayName)
-                        .font(.dsSansPt(15))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    if vm.defaultProvider == provider {
-                        DSIconView(.check, size: 14, color: t.accent)
-                    }
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 16)
-                .contentShape(Rectangle())
-                .onTapGesture { vm.defaultProvider = provider }
-                if provider != Self.supportedProviders.last {
-                    divider
-                }
-            }
-            Spacer().frame(height: 4)
-        }
-    }
-
-    private var apiKeysSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionSubhead("API KEYS")
-            settingsCard {
-                providerRow(.anthropic, binding: $vm.anthropicKey, hasKey: vm.hasAnthropicKey)
-                divider
-                providerRow(.openai, binding: $vm.openaiKey, hasKey: vm.hasOpenAIKey)
-            }
-            .padding(.bottom, 4)
-        }
-    }
-
-    @ViewBuilder
-    private var saveKeysSection: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            if let msg = vm.saveMessage {
-                Text(msg)
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(vm.saveIsError ? t.danger : t.accent)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .transition(.opacity)
-            }
-            HStack {
-                Spacer()
-                DSButton("Save keys", variant: .primary, action: { Task { await vm.save() } })
-            }
-        }
-        .padding(.horizontal, 16)
-        .animation(.easeInOut(duration: 0.2), value: vm.saveMessage)
-        .padding(.bottom, 16)
     }
 
     // MARK: - (2) APPROVALS
 
     @ViewBuilder
-    private var agentApprovalsSection: some View {
+    private var approvalsSection: some View {
         sectionHead("APPROVALS")
         settingsCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Approval policy")
-                    .font(.dsSansPt(13, weight: .medium))
-                    .foregroundStyle(t.text2)
-                DSSegmentedPicker(
-                    options: AutonomyPreset.allCases.map {
-                        (label: $0.shortLabel, value: $0)
-                    },
-                    selection: autonomyPreset
-                )
-                Text(autonomyPreset.wrappedValue.description)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .animation(.easeInOut(duration: 0.15), value: autonomyPresetRaw)
-
-                NavigationLink {
-                    PolicyEditorBridgeScreen(actions: bridgeActions)
-                } label: {
-                    Text(bridgeActions.isConnected
-                         ? "Edit bridge policy.yaml"
-                         : "Edit bridge policy.yaml (connect SSH)")
-                        .font(.dsSansPt(14, weight: .medium))
-                        .foregroundStyle(bridgeActions.isConnected ? t.accent : t.text3)
-                }
-                .padding(.top, 4)
+            NavigationLink {
+                PolicyEditorBridgeScreen(actions: bridgeActions, daemonChannel: daemonChannel)
+            } label: {
+                settingsNavRow("Policy", icon: "shield", detail: "\(autonomyPresetRaw) · edit rules")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
-        .padding(.bottom, 16)
-        .onChange(of: autonomyPresetRaw) { _, _ in Haptics.selection() }
-    }
+        .padding(.bottom, 10)
 
-    @ViewBuilder
-    private var notificationFilterSection: some View {
         sectionSubhead("NOTIFICATION FILTERS")
         settingsCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -521,29 +528,7 @@ public struct SettingsView: View {
                         set: { notificationFilter.minRisk = $0 }
                     )
                 )
-                Text("These filters only affect lock-screen notifications. Approval cards still appear in Inbox.")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                DSDivider(.soft, leadingInset: 0)
-
-                Text("Agent filter")
-                    .font(.dsSansPt(13, weight: .medium))
-                    .foregroundStyle(t.text2)
-                ForEach(approvalAgents, id: \.rawValue) { agent in
-                    Toggle(isOn: Binding(
-                        get: { isAgentEnabled(agent) },
-                        set: { setAgent(agent, enabled: $0) }
-                    )) {
-                        Text(agentLabel(agent))
-                            .font(.dsSansPt(14))
-                            .foregroundStyle(t.text)
-                    }
-                    .tint(t.accent)
-                }
-
-                DSDivider(.soft, leadingInset: 0)
+                .padding(.bottom, 4)
 
                 Toggle(isOn: Binding(
                     get: { notificationFilter.quietHoursEnabled },
@@ -593,50 +578,6 @@ public struct SettingsView: View {
         .padding(.bottom, 16)
     }
 
-    @ViewBuilder
-    private var allowAlwaysRulesSection: some View {
-        sectionSubhead("ALLOW-ALWAYS RULES")
-        settingsCard {
-            if alwaysRules.isEmpty {
-                Text("No persisted allow-always rules yet.")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-            } else {
-                ForEach(alwaysRules) { rule in
-                    HStack(alignment: .top, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(rule.title)
-                                .font(.dsMonoPt(12, weight: .medium))
-                                .foregroundStyle(t.text)
-                            Text(rule.subtitle)
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(t.text3)
-                            if rule.count > 1 {
-                                Text("\(rule.count)x approvals")
-                                    .font(.dsMonoPt(10.5))
-                                    .foregroundStyle(t.text4)
-                            }
-                        }
-                        Spacer()
-                        Button("Revoke") {
-                            revokeRule(rule)
-                        }
-                        .font(.dsSansPt(13, weight: .medium))
-                        .foregroundStyle(t.danger)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    if rule.id != alwaysRules.last?.id {
-                        divider
-                    }
-                }
-            }
-        }
-        .padding(.bottom, 16)
-    }
-
     // MARK: - (3) SECURITY
 
     @ViewBuilder
@@ -672,25 +613,59 @@ public struct SettingsView: View {
                 }
             }
 
+            if let daemonChannel {
+                divider
+                NavigationLink {
+                    SecretsView(viewModel: {
+                        let vm = SecretsViewModel()
+                        vm.attach(channel: daemonChannel)
+                        return vm
+                    }())
+                } label: {
+                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                }
+            }
+
             if let auditRepository {
                 divider
                 NavigationLink {
-                    AuditView(viewModel: AuditViewModel(repository: auditRepository))
+                    AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
                 } label: {
                     settingsNavRow("On-device audit log", icon: "lock.shield")
                 }
             }
 
             divider
+            NavigationLink {
+                DoctorView(viewModel: DoctorViewModel(actions: bridgeActions))
+            } label: {
+                settingsNavRow("Health check", icon: "stethoscope", detail: "diagnose daemon setup")
+            }
 
-            NavigationLink { TrustPrivacyView() } label: {
-                settingsNavRow("Trust & privacy", icon: "checkmark.shield")
+            divider
+            NavigationLink {
+                ProviderKeysView(viewModel: vm)
+            } label: {
+                settingsNavRow("Provider keys", icon: "key.horizontal", detail: "Anthropic · OpenAI — sent direct to provider")
             }
         }
         .padding(.bottom, 16)
     }
 
-    // MARK: - (4) ACCOUNT
+    // MARK: - (4) TRUST & PRIVACY
+
+    @ViewBuilder
+    private var trustPrivacySection: some View {
+        sectionHead("TRUST & PRIVACY")
+        settingsCard {
+            NavigationLink { TrustPrivacyView() } label: {
+                settingsNavRow("Trust & Privacy", icon: "checkmark.shield", detail: "host-key TOFU · Keychain · keys go direct to provider")
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - (5) ACCOUNT
 
     @ViewBuilder
     private var accountSection: some View {
@@ -870,6 +845,50 @@ public struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
+    private func settingsNavRow(_ label: String, icon: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.text2)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private func settingsInfoRow(_ label: String, icon: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.text2)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
     private var divider: some View {
         DSDivider(.soft, leadingInset: 16)
     }
@@ -886,42 +905,9 @@ public struct SettingsView: View {
         .padding(.bottom, 36)
     }
 
-    // MARK: - Persistence helpers
-
-    private static let revokedRulesKey = "settings.revokedAlwaysRuleSignatures"
-    private static func loadRevokedRuleSignatures() -> Set<String> {
-        let values = UserDefaults.standard.stringArray(forKey: revokedRulesKey) ?? []
-        return Set(values)
-    }
-
     private static func hourLabel(_ hour: Int) -> String {
         let normalized = hour % 24
         return String(format: "%02d:00", normalized)
-    }
-
-    private var approvalAgents: [Approval.AgentSource] {
-        [.claudeCode, .codex, .cursor, .opencode, .devin, .unknown]
-    }
-
-    private func agentLabel(_ source: Approval.AgentSource) -> String {
-        switch source {
-        case .claudeCode: "Claude Code"
-        case .codex: "Codex"
-        case .cursor: "Cursor"
-        case .opencode: "OpenCode"
-        case .devin: "Devin"
-        case .unknown: "Unknown"
-        }
-    }
-
-    private func isAgentEnabled(_ source: Approval.AgentSource) -> Bool {
-        notificationFilter.enabledAgents?.contains(source.rawValue) ?? true
-    }
-
-    private func setAgent(_ source: Approval.AgentSource, enabled: Bool) {
-        var set = notificationFilter.enabledAgents ?? Set(approvalAgents.map(\.rawValue))
-        if enabled { set.insert(source.rawValue) } else { set.remove(source.rawValue) }
-        notificationFilter.enabledAgents = set.count == approvalAgents.count ? nil : set
     }
 
     private func loadNotificationFilter() async {
@@ -932,54 +918,6 @@ public struct SettingsView: View {
         await Notifications.shared.saveFilter(notificationFilter)
     }
 
-    private func refreshAlwaysRules() async {
-        guard let approvalRepository else {
-            alwaysRules = []
-            return
-        }
-        let approvals = (try? await approvalRepository.all()) ?? []
-        let approvedAlways = approvals.filter { $0.decision == .approvedAlways }
-        var grouped: [String: AlwaysRuleItem] = [:]
-        for approval in approvedAlways {
-            let signature = ruleSignature(for: approval)
-            if revokedRuleSignatures.contains(signature) { continue }
-            if var existing = grouped[signature] {
-                existing.count += 1
-                grouped[signature] = existing
-                continue
-            }
-            grouped[signature] = AlwaysRuleItem(
-                id: signature,
-                title: approval.toolName ?? approval.command ?? approval.kind.rawValue,
-                subtitle: approval.cwd,
-                count: 1
-            )
-        }
-        alwaysRules = grouped.values.sorted { $0.title < $1.title }
-    }
-
-    private func ruleSignature(for approval: Approval) -> String {
-        [
-            approval.kind.rawValue,
-            approval.toolName ?? "",
-            approval.command ?? "",
-            approval.cwd,
-            approval.toolInput ?? ""
-        ].joined(separator: "|")
-    }
-
-    private func revokeRule(_ rule: AlwaysRuleItem) {
-        revokedRuleSignatures.insert(rule.id)
-        UserDefaults.standard.set(Array(revokedRuleSignatures), forKey: Self.revokedRulesKey)
-        alwaysRules.removeAll { $0.id == rule.id }
-    }
-}
-
-private struct AlwaysRuleItem: Identifiable, Sendable {
-    let id: String
-    let title: String
-    let subtitle: String
-    var count: Int
 }
 
 #endif

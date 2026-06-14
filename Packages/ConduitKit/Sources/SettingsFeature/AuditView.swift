@@ -4,12 +4,21 @@ import UniformTypeIdentifiers
 import Observation
 import ConduitCore
 import PersistenceKit
+import SSHTransport
 
 @MainActor @Observable
 public final class AuditViewModel {
     public var events: [AuditEvent] = []
     public var isLoading = false
     public var errorMessage: String?
+
+    public var verification: AuditVerification?
+    public var isVerifying = false
+    public var verificationError: String?
+
+    public var entryCount: Int = 0
+    public var lastTimestamp: String?
+    public var chainValid: Bool?
 
     private let repository: AuditRepository
 
@@ -25,6 +34,38 @@ public final class AuditViewModel {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    public func verifyChain(daemonChannel: DaemonChannel?) async {
+        isVerifying = true
+        verificationError = nil
+        defer { isVerifying = false }
+        guard let channel = daemonChannel else {
+            verificationError = "No daemon connection"
+            return
+        }
+        do {
+            let result = try await channel.verifyAudit()
+            verification = result
+            chainValid = result.valid
+            entryCount = result.entryCount
+            lastTimestamp = result.lastTimestamp
+        } catch {
+            verificationError = error.localizedDescription
+        }
+    }
+
+    public func exportJSONL(daemonChannel: DaemonChannel?) async -> Data? {
+        guard let channel = daemonChannel else {
+            errorMessage = "No daemon connection"
+            return nil
+        }
+        do {
+            return try await channel.exportAudit()
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -59,13 +100,68 @@ public struct AuditView: View {
     @State private var vm: AuditViewModel
     @State private var exportDocument: AuditExportDocument?
     @State private var isExporting = false
+    @State private var isExportingJSONL = false
+    private let daemonChannel: DaemonChannel?
 
-    public init(viewModel: AuditViewModel) {
+    public init(viewModel: AuditViewModel, daemonChannel: DaemonChannel? = nil) {
         _vm = State(initialValue: viewModel)
+        self.daemonChannel = daemonChannel
     }
 
     public var body: some View {
         List {
+            Section {
+                HStack(spacing: 12) {
+                    chainStatusIcon
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Audit Chain")
+                            .font(.headline)
+                        if let count = vm.verification?.entryCount ?? (vm.entryCount > 0 ? vm.entryCount : nil) {
+                            Text("\(count) entries")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let ts = vm.verification?.lastTimestamp ?? vm.lastTimestamp {
+                            Text("Last: \(ts)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if vm.isVerifying {
+                        ProgressView()
+                    } else {
+                        Button {
+                            Task { await vm.verifyChain(daemonChannel: daemonChannel) }
+                        } label: {
+                            Label("Verify", systemImage: "checkmark.shield")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(vm.chainValid == true ? .green : vm.chainValid == false ? .red : .secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Chain Status")
+            }
+
+            if let err = vm.verificationError {
+                Section {
+                    Label(err, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+
+            if let verification = vm.verification, !verification.valid, let brokenAt = verification.brokenAt {
+                Section {
+                    Label("Chain broken at entry #\(brokenAt)", systemImage: "link.badge.xmark")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+
             if vm.events.isEmpty, !vm.isLoading {
                 ContentUnavailableView(
                     "No audit events yet",
@@ -101,22 +197,44 @@ public struct AuditView: View {
         .navigationTitle("Security Audit Log")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task {
-                        if let data = await vm.exportJSON() {
-                            exportDocument = AuditExportDocument(data: data)
-                            isExporting = true
+                Menu {
+                    Button {
+                        Task {
+                            if let data = await vm.exportJSON() {
+                                exportDocument = AuditExportDocument(data: data)
+                                isExporting = true
+                            }
                         }
+                    } label: {
+                        Label("Export JSON", systemImage: "square.and.arrow.up")
                     }
+                    Button {
+                        isExportingJSONL = true
+                        Task {
+                            if let data = await vm.exportJSONL(daemonChannel: daemonChannel) {
+                                exportDocument = AuditExportDocument(data: data)
+                                isExporting = true
+                            }
+                            isExportingJSONL = false
+                        }
+                    } label: {
+                        Label("Export JSONL (hash-chained)", systemImage: "link.badge.plus")
+                    }
+                    .disabled(isExportingJSONL || daemonChannel == nil)
                 } label: {
-                    Label("Export JSON", systemImage: "square.and.arrow.up")
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
             }
         }
         .overlay {
             if vm.isLoading { ProgressView() }
         }
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            if let channel = daemonChannel {
+                await vm.verifyChain(daemonChannel: channel)
+            }
+        }
         .refreshable { await vm.load() }
         .fileExporter(
             isPresented: $isExporting,
@@ -131,6 +249,22 @@ public struct AuditView: View {
         }, message: {
             Text(vm.errorMessage ?? "")
         })
+    }
+
+    private var chainStatusIcon: some View {
+        Group {
+            if vm.chainValid == true {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundStyle(.green)
+            } else if vm.chainValid == false {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundStyle(.red)
+            } else {
+                Image(systemName: "shield")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.title2)
     }
 
     private static func metadataText(_ metadata: [String: String]) -> String {

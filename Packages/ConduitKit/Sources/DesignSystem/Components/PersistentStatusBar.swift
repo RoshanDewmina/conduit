@@ -7,11 +7,13 @@ import SwiftUI
 /// per-tab content. Reconnect/expand actions are surfaced via the closures.
 public struct PersistentStatusBar: View {
     let agents: [AgentInfo]
+    var relayState: E2ERelayStatusBadge.State?
     var onTap: () -> Void
     var onReconnect: (() -> Void)?
 
-    public init(agents: [AgentInfo], onTap: @escaping () -> Void = {}, onReconnect: (() -> Void)? = nil) {
+    public init(agents: [AgentInfo], relayState: E2ERelayStatusBadge.State? = nil, onTap: @escaping () -> Void = {}, onReconnect: (() -> Void)? = nil) {
         self.agents = agents
+        self.relayState = relayState
         self.onTap = onTap
         self.onReconnect = onReconnect
     }
@@ -44,6 +46,9 @@ public struct PersistentStatusBar: View {
                     Text("no active session").font(DI.mono(12)).foregroundStyle(DI.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
+                if let relayState {
+                    E2ERelayStatusBadge(state: relayState)
+                }
                 if isFailed, let onReconnect {
                     Button("reconnect", action: onReconnect)
                         .font(DI.mono(11, weight: .bold))

@@ -9,6 +9,9 @@ public struct AgentVendorStatus: Codable, Sendable, Equatable, Identifiable {
     public let runningCount: Int?
     public let usageUSD: Double?
     public let usagePeriod: String?
+    public let local: Bool
+    public let isLocalModel: Bool?
+    public let dataLeavesHost: Bool?
 
     public init(
         agent: String,
@@ -17,7 +20,10 @@ public struct AgentVendorStatus: Codable, Sendable, Equatable, Identifiable {
         sessionCount: Int = 0,
         runningCount: Int? = nil,
         usageUSD: Double? = nil,
-        usagePeriod: String? = nil
+        usagePeriod: String? = nil,
+        local: Bool = false,
+        isLocalModel: Bool? = nil,
+        dataLeavesHost: Bool? = nil
     ) {
         self.agent = agent
         self.loggedIn = loggedIn
@@ -26,6 +32,9 @@ public struct AgentVendorStatus: Codable, Sendable, Equatable, Identifiable {
         self.runningCount = runningCount
         self.usageUSD = usageUSD
         self.usagePeriod = usagePeriod
+        self.local = local
+        self.isLocalModel = isLocalModel
+        self.dataLeavesHost = dataLeavesHost
     }
 
     public var displayName: String {

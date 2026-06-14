@@ -24,6 +24,7 @@ public struct OnboardingView: View {
     @State private var step: Int = 0
     @State private var animationDirection: Int = 1
     @State private var selectedPreset: AutonomyPreset = .autoReads
+    @State private var showPairing = false
     @Environment(\.conduitTokens) private var t
 
     fileprivate static let totalSteps = 4
@@ -64,6 +65,9 @@ public struct OnboardingView: View {
                     else if value.translation.width > threshold { goBack() }
                 }
         )
+        .sheet(isPresented: $showPairing) {
+            BridgePairingView(onUseSSH: { showPairing = false })
+        }
     }
 
     // MARK: Scroll content switcher
@@ -218,7 +222,7 @@ public struct OnboardingView: View {
     // ================================================================
 
     private var screen2SSH: some View {
-        SSHScreen()
+        SSHScreen(showPairing: $showPairing)
     }
 
     // ================================================================
@@ -362,6 +366,7 @@ public struct OnboardingView: View {
 private struct SSHScreen: View {
     @State private var selectedPlatform: SSHPlatform = .macOS
     @State private var copyFeedback = false
+    @Binding var showPairing: Bool
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
@@ -385,8 +390,31 @@ private struct SSHScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 18)
                     .padding(.top, 10)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 10)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+                Button {
+                    showPairing = true
+                } label: {
+                    HStack(spacing: 10) {
+                        DSIconView(.plus, size: 15, color: t.accent)
+                        Text("Pair the bridge")
+                            .font(.dsMonoPt(13))
+                            .foregroundStyle(t.text)
+                        Spacer()
+                        DSIconView(.chevronRight, size: 15, color: t.text3)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(t.surface)
+                    .overlay(
+                        Rectangle()
+                            .strokeBorder(t.borderStrong, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 16)
 
                 DSSegmentedPicker(
                     options: SSHPlatform.allCases.map { (label: $0.rawValue, value: $0) },

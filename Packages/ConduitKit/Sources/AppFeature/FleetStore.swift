@@ -35,6 +35,8 @@ public final class FleetStore {
         public var inboxVM: LiveInboxViewModel
         /// Latest ``agent.status`` snapshot from the bridge (when refreshed).
         public var bridgeStatus: AgentStatusSnapshot?
+        /// Current E2E relay state for this slot's daemon connection.
+        public var relayState: Session.RelayState
 
         public init(
             id: UUID = UUID(),
@@ -44,7 +46,8 @@ public final class FleetStore {
             channel: DaemonChannel,
             ingest: ApprovalIngest,
             inboxVM: LiveInboxViewModel,
-            bridgeStatus: AgentStatusSnapshot? = nil
+            bridgeStatus: AgentStatusSnapshot? = nil,
+            relayState: Session.RelayState = .none
         ) {
             self.id = id
             self.hostID = hostID
@@ -54,6 +57,7 @@ public final class FleetStore {
             self.ingest = ingest
             self.inboxVM = inboxVM
             self.bridgeStatus = bridgeStatus
+            self.relayState = relayState
         }
     }
 
@@ -103,6 +107,14 @@ public final class FleetStore {
         manager.update(id: slotID) { slot in
             slot.channel = channel
             slot.ingest = ingest
+        }
+    }
+
+    /// Set the E2E relay state on every slot. The relay client is app-wide
+    /// (one pairing), so its pairing/connection state applies to all live slots.
+    public func setRelayStateOnAllSlots(_ state: Session.RelayState) {
+        for slot in slots {
+            manager.update(id: slot.id) { $0.relayState = state }
         }
     }
 

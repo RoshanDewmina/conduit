@@ -201,6 +201,7 @@ let package = Package(
                 "SyncKit",
                 "KeysFeature",
                 "NotificationsKit",
+                "SSHTransport",
             ],
             swiftSettings: swiftSettings
         ),

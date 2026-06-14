@@ -46,10 +46,13 @@ public final class KeysViewModel {
     public func generate() async {
         let tag = KeyID().uuidString
         do {
+            try await BiometricGate.shared.unlock(reason: "Authenticate to generate SSH key")
             let info = try await store.generateEd25519(tag: String(tag))
             lastGeneratedPublic = info.openSSH
             await reload()
             Haptics.success()
+        } catch ConduitError.cancelled {
+            return
         } catch let err {
             self.error = err.localizedDescription
             Haptics.error()
@@ -58,8 +61,11 @@ public final class KeysViewModel {
 
     public func delete(_ tag: String) async {
         do {
+            try await BiometricGate.shared.unlock(reason: "Authenticate to delete SSH key")
             try await store.delete(tag: tag)
             await reload()
+        } catch ConduitError.cancelled {
+            return
         } catch let err { self.error = err.localizedDescription }
     }
 
@@ -68,9 +74,12 @@ public final class KeysViewModel {
         guard !trimmed.isEmpty else { return }
         let tag = KeyID().uuidString
         do {
+            try await BiometricGate.shared.unlock(reason: "Authenticate to import SSH key")
             _ = try await store.importPrivateKey(tag: tag, keyString: trimmed, comment: tag)
             await reload()
             Haptics.success()
+        } catch ConduitError.cancelled {
+            return
         } catch {
             self.error = error.localizedDescription
             Haptics.error()
@@ -79,11 +88,14 @@ public final class KeysViewModel {
 
     public func importFromFile(_ url: URL) async {
         do {
+            try await BiometricGate.shared.unlock(reason: "Authenticate to import SSH key")
             let data = try Data(contentsOf: url)
             let tag = KeyID().uuidString
             _ = try await store.importPrivateKey(tag: tag, keyData: data, comment: tag)
             await reload()
             Haptics.success()
+        } catch ConduitError.cancelled {
+            return
         } catch {
             self.error = error.localizedDescription
             Haptics.error()
@@ -94,6 +106,7 @@ public final class KeysViewModel {
 public struct KeysView: View {
     @State private var vm: KeysViewModel
     @State private var showImportSheet = false
+    @State private var keyToDelete: String?
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -165,11 +178,32 @@ public struct KeysView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .task { await vm.reload() }
+        .task {
+            try? await BiometricGate.shared.unlock(reason: "Authenticate to access SSH keys")
+            await vm.reload()
+        }
         .sheet(isPresented: $showImportSheet) {
             KeyImportView(store: store) {
                 showImportSheet = false
                 Task { await vm.reload() }
+            }
+        }
+        .confirmationDialog("Delete SSH key", isPresented: .init(
+            get: { keyToDelete != nil },
+            set: { if !$0 { keyToDelete = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let tag = keyToDelete {
+                    Task { await vm.delete(tag) }
+                    keyToDelete = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { keyToDelete = nil }
+        } message: {
+            if let tag = keyToDelete {
+                Text("This permanently deletes the key \"\(tag)\" from the Keychain. This action cannot be undone.")
+            } else {
+                Text("This action cannot be undone.")
             }
         }
         .alert("Error", isPresented: .constant(vm.error != nil)) {
@@ -217,7 +251,7 @@ public struct KeysView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 14) {
                     copyButton("copy public key") { copy(key.openSSH) }
-                    Button("delete") { Task { await vm.delete(key.tag) } }
+                    Button("delete") { keyToDelete = key.tag }
                         .font(.dsMonoPt(11, weight: .medium))
                         .foregroundStyle(t.danger)
                         .buttonStyle(.plain)

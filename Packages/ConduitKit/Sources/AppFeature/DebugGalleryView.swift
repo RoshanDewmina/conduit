@@ -24,6 +24,7 @@ struct DebugGalleryView: View {
     @State private var showAgentHUD = false
     @State private var showTypedInbox = false
     @State private var showFeatures = false
+    @State private var showProofCard = false
 
     var body: some View {
         switch route {
@@ -45,6 +46,7 @@ struct DebugGalleryView: View {
         case "keyboard":       KeyboardGalleryScreen()
         case "inbox-typed":    TypedInboxGalleryScreen()
         case "features":       FeaturesGalleryScreen()
+        case "proof":          ProofCardGalleryScreen()
         case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
         case "compare":        PremiumComparisonView()
         case "billing":        BillingView()
@@ -146,6 +148,17 @@ struct DebugGalleryView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showProofCard) {
+            ZStack(alignment: .topTrailing) {
+                ProofCardGalleryScreen()
+                Button { showProofCard = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(12)
+                }
+            }
+        }
     }
 
     private var reviewHeader: some View {
@@ -206,6 +219,16 @@ struct DebugGalleryView: View {
                     size: .sm,
                     mono: true
                 ) { showFeatures = true }
+
+                DSButton(
+                    "Proof Card",
+                    systemImage: "checkmark.seal",
+                    variant: .secondary,
+                    size: .sm,
+                    mono: true
+                ) {
+                    showProofCard = true
+                }
               }
             }
             .padding(.top, 6)
@@ -1434,4 +1457,124 @@ private struct KeyboardGalleryScreen: View {
         }.joined()
     }
 }
+
+// MARK: - Proof Card gallery (CONDUIT_GALLERY=proof)
+//
+// Showcases the ProofCardView with mock data: all-passing tests, failures, no PR, and with PR.
+
+private struct ProofCardGalleryScreen: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Proof Card")
+                        .font(.dsDisplayPt(28, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Text("Run completion summary — all sections")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+
+                VStack(spacing: 16) {
+                    proofBlock("All passing · with PR") {
+                        ProofCardView(model: Self.allPassingModel)
+                    }
+
+                    proofBlock("Some failures · no PR") {
+                        ProofCardView(model: Self.someFailuresModel)
+                    }
+
+                    proofBlock("Cancelled · minimal") {
+                        ProofCardView(model: Self.cancelledModel)
+                    }
+
+                    proofBlock("With policy exceptions") {
+                        ProofCardView(model: Self.policyModel)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(t.bg.ignoresSafeArea())
+    }
+
+    private func proofBlock<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title.uppercased())
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(1.2)
+                .foregroundStyle(t.text3)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 8)
+            content()
+            Rectangle().fill(t.border).frame(height: 1).padding(.top, 16)
+        }
+    }
+
+    // MARK: - Mock data
+
+    private static let allPassingModel = ProofCardModel(
+        agent: .claudeCode,
+        agentName: "Claude Code",
+        status: .completed,
+        duration: "4m 12s",
+        tests: .init(passed: 12, failed: 0),
+        diff: .init(filesChanged: 3, insertions: 42, deletions: 18, fileNames: [
+            "Sources/App.swift", "Sources/Models/User.swift", "Tests/UserTests.swift"
+        ]),
+        commands: ["swift build", "swift test", "git diff --stat"],
+        approvals: .init(asked: 8, approved: 7, denied: 1),
+        policyExceptions: 0,
+        spend: .init(totalUSD: 2.47, inputTokens: 14_200, outputTokens: 3_800),
+        prNumber: 123
+    )
+
+    private static let someFailuresModel = ProofCardModel(
+        agent: .codex,
+        agentName: "Codex",
+        status: .failed,
+        duration: "1m 03s",
+        tests: .init(passed: 10, failed: 2, failedNames: ["testAuthFlow", "testTokenRefresh"]),
+        diff: .init(filesChanged: 1, insertions: 8, deletions: 3, fileNames: ["src/auth.ts"]),
+        commands: ["npm test"],
+        approvals: .init(asked: 2, approved: 2, denied: 0),
+        policyExceptions: 0,
+        spend: .init(totalUSD: 0.34)
+    )
+
+    private static let cancelledModel = ProofCardModel(
+        agent: .cursor,
+        agentName: "Cursor",
+        status: .cancelled,
+        duration: "12s",
+        tests: nil,
+        diff: nil,
+        commands: [],
+        approvals: nil,
+        policyExceptions: 0,
+        spend: nil
+    )
+
+    private static let policyModel = ProofCardModel(
+        agent: .claudeCode,
+        agentName: "Claude Code",
+        status: .completed,
+        duration: "2m 45s",
+        tests: .init(passed: 6, failed: 0),
+        diff: .init(filesChanged: 2, insertions: 15, deletions: 4, fileNames: ["config.yml", "deploy.sh"]),
+        commands: ["kubectl apply -f deploy.yml", "kubectl rollout status deployment/api"],
+        approvals: .init(asked: 3, approved: 3, denied: 0),
+        policyExceptions: 2,
+        spend: .init(totalUSD: 0.89, inputTokens: 5_400, outputTokens: 1_200),
+        prNumber: 45
+    )
+}
+
 #endif

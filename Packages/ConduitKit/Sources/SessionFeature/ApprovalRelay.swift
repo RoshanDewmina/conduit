@@ -5,6 +5,42 @@ import PersistenceKit
 import SSHTransport
 import NotificationsKit
 
+/// Tracks pending decision delivery attempts for staleness detection.
+public struct DecisionDeliveryTracker: Sendable {
+    public struct PendingDelivery: Sendable {
+        public let approvalID: String
+        public let decision: Approval.Decision
+        public let postedAt: Date
+        public var attemptCount: Int
+    }
+
+    public var pendingDeliveries: [PendingDelivery] = []
+
+    public init() {}
+
+    public mutating func recordPost(approvalID: String, decision: Approval.Decision) {
+        if let idx = pendingDeliveries.firstIndex(where: { $0.approvalID == approvalID }) {
+            pendingDeliveries[idx].attemptCount += 1
+        } else {
+            pendingDeliveries.append(PendingDelivery(
+                approvalID: approvalID,
+                decision: decision,
+                postedAt: Date(),
+                attemptCount: 1
+            ))
+        }
+    }
+
+    public mutating func recordAcknowledgement(approvalID: String) {
+        pendingDeliveries.removeAll { $0.approvalID == approvalID }
+    }
+
+    public func staleDeliveries(timeout: TimeInterval = 10) -> [PendingDelivery] {
+        let now = Date()
+        return pendingDeliveries.filter { now.timeIntervalSince($0.postedAt) > timeout }
+    }
+}
+
 /// Relay between `ApprovalActionIntent` (which runs in the main app process,
 /// triggered by a lock-screen or Dynamic Island button tap) and the active
 /// `DaemonChannel`.
@@ -31,11 +67,17 @@ public final class ApprovalRelay {
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
 
+    /// Optional E2E relay bridge — when paired, decisions route through E2E first.
+    public var e2eBridge: E2ERelayBridge?
+
     private var backendURL: String = ""
     private var sessionID: String = ""
     // Per-session capability token (Tier-2 auth) required by the backend
     // `POST /approval/decision`. Sourced from the DaemonChannel handshake. Secret.
     private var relayToken: String = ""
+
+    /// Tracks pending decision deliveries for staleness detection.
+    public private(set) var deliveryTracker = DecisionDeliveryTracker()
 
     private init() {}
 
@@ -99,17 +141,36 @@ public final class ApprovalRelay {
         decision: Approval.Decision,
         editedToolInput: String?
     ) async {
+        deliveryTracker.recordPost(approvalID: approvalID, decision: decision)
+
+        // 1. Try E2E relay first (primary path when paired)
+        if let bridge = e2eBridge, await bridge.sendDecision(
+            approvalID: approvalID,
+            decision: DaemonChannel.decisionWireValue(for: decision),
+            editedToolInput: editedToolInput
+        ) {
+            deliveryTracker.recordAcknowledgement(approvalID: approvalID)
+            return
+        }
+
+        // 2. Fall back to live SSH channel
         if let ch = channel {
             do {
                 try await ch.respond(approvalId: approvalID, decision: decision, editedToolInput: editedToolInput)
+                deliveryTracker.recordAcknowledgement(approvalID: approvalID)
                 return
             } catch {
                 // Attached-but-dead channel (stopped / mid-reconnect) — fall through
                 // to the backend relay rather than silently dropping the decision.
             }
         }
+
+        // 3. Try backend relay
         let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
-        if !delivered {
+        if delivered {
+            deliveryTracker.recordAcknowledgement(approvalID: approvalID)
+        } else {
+            // 4. Queue for next SSH attach
             queue.append((approvalID: approvalID, decision: decision, editedToolInput: editedToolInput))
         }
     }
@@ -198,6 +259,7 @@ public final class ApprovalRelay {
         for item in pending {
             do {
                 try await ch.respond(approvalId: item.approvalID, decision: item.decision, editedToolInput: item.editedToolInput)
+                deliveryTracker.recordAcknowledgement(approvalID: item.approvalID)
             } catch {
                 stillPending.append(item)
             }

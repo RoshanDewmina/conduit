@@ -36,6 +36,10 @@ public final class AppEnvironment {
     public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
+    public let loopStore: LoopStore
+    public let quotaGuardStore: QuotaGuardStore
+    public let hostHealthStore: HostHealthStore
+    public let e2eRelayClient: E2ERelayClient
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -59,6 +63,13 @@ public final class AppEnvironment {
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
+        self.loopStore = LoopStore(loopRepo: LoopRepository(database))
+        self.quotaGuardStore = QuotaGuardStore()
+        self.hostHealthStore = HostHealthStore()
+        self.e2eRelayClient = E2ERelayClient(
+            relayURL: URL(string: "https://relay.conduit.dev")!,
+            pairingCode: "000000"
+        )
     }
 
     public func aiClient(provider: AIProvider? = nil, managedOpenRouterKey: String? = nil) async -> (any AIClient)? {
@@ -154,6 +165,7 @@ public struct AppRoot: View {
     @State private var showingHostedAgents = false
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
+    @State private var e2eBridge: E2ERelayBridge?
 
     private var isPro: Bool {
         #if DEBUG
@@ -638,6 +650,9 @@ public struct AppRoot: View {
                     cwd: workdir,
                     prompt: prompt
                 )
+            },
+            runDoctor: {
+                try await slot.channel.runDoctor()
             }
         )
     }
@@ -715,6 +730,7 @@ public struct AppRoot: View {
             VStack(spacing: 0) {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
+                    relayState: selectedFleetSlot.map { .init(relayState: $0.relayState) },
                     onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
                     // Manual retry after the auto-reconnect engine gives up
                     // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
@@ -770,6 +786,7 @@ public struct AppRoot: View {
             VStack(spacing: 0) {
                 PersistentStatusBar(
                     agents: isShowingLiveSession ? [] : hudStore.agents,
+                    relayState: selectedFleetSlot.map { .init(relayState: $0.relayState) },
                     onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
                     onReconnect: activeSessionViewModel == nil ? nil : {
                         Task { await activeSessionViewModel?.reconnect() }
@@ -833,20 +850,28 @@ public struct AppRoot: View {
     private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
         switch tab {
         case .inbox:
+            let actions = bridgeSessionActions()
             InboxView(
                 viewModel: activeInboxViewModel,
                 statusHeaderAgents: [],
-                onTapStatusHeader: {}
+                onTapStatusHeader: {},
+                bridgeConnected: actions.isConnected,
+                bridgePolicy: "balanced",
+                todaySpend: "$0.00"
             )
 
         case .fleet:
             FleetView(
                 store: fleetStore,
                 hostRepo: env.hostRepo,
+                loopStore: env.loopStore,
+                quotaGuardStore: env.quotaGuardStore,
+                hostHealthStore: env.hostHealthStore,
                 onConnectHost: { addHostPresented = true },
                 onReconnect: { host in openSession(host: host, env: env) },
                 onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
-                onNewTask: { dispatchPresented = true }
+                onNewTask: { dispatchPresented = true },
+                onQuotaGuard: nil
             )
             .id(workspacesRevision)
 
@@ -860,7 +885,9 @@ public struct AppRoot: View {
                 backendURL: Self.pushBackendURL(),
                 auditRepository: env.auditRepo,
                 approvalRepository: approvalRepository,
-                sshKeyStore: env.keyStore
+                sshKeyStore: env.keyStore,
+                daemonChannel: daemonChannel,
+                e2eRelayClient: env.e2eRelayClient
             )
         }
     }
@@ -882,6 +909,70 @@ public struct AppRoot: View {
             url: url,
             sessionID: DeviceIdentity.sessionID()
         )
+        configureE2ERelayBridge(env: env)
+    }
+
+    /// Activate the E2E relay decision path. Builds a single `E2ERelayBridge`
+    /// over the app-wide `E2ERelayClient`, hands it to `ApprovalRelay` so paired
+    /// decisions route through E2E first, and mirrors the client's pairing /
+    /// connection state onto the selected fleet slot so `E2ERelayStatusBadge`
+    /// reflects live state. Idempotent — only the first call builds the bridge.
+    @MainActor
+    private func configureE2ERelayBridge(env: AppEnvironment) {
+        guard e2eBridge == nil else { return }
+        let bridge = E2ERelayBridge(
+            relayClient: env.e2eRelayClient,
+            approvalRelay: ApprovalRelay.shared
+        )
+        bridge.start()
+        ApprovalRelay.shared.e2eBridge = bridge
+        e2eBridge = bridge
+
+        // These Tasks inherit @MainActor isolation, so client reads and the
+        // fleet mutation are already main-actor-confined.
+        let client = env.e2eRelayClient
+        let fleet = fleetStore
+        Task { @MainActor in
+            for await pairing in client.$pairingState.values {
+                fleet.setRelayStateOnAllSlots(
+                    Self.relayState(pairing: pairing, connection: client.connectionState)
+                )
+            }
+        }
+        Task { @MainActor in
+            for await connection in client.$connectionState.values {
+                fleet.setRelayStateOnAllSlots(
+                    Self.relayState(pairing: client.pairingState, connection: connection)
+                )
+            }
+        }
+    }
+
+    /// Maps the E2E relay client's pairing + connection state onto the
+    /// `Session.RelayState` the status badge renders. Paired wins; otherwise an
+    /// active (connecting / reconnecting) socket reads as `.connecting`; a
+    /// pairing failure reads as `.error`; everything else is `.none`.
+    private static func relayState(
+        pairing: E2ERelayClient.PairingState,
+        connection: E2ERelayClient.ConnectionState
+    ) -> Session.RelayState {
+        switch pairing {
+        case .paired:
+            return .paired
+        case .pairingFailed:
+            return .error
+        case .waitingForPeer:
+            return .connecting
+        case .unpaired:
+            switch connection {
+            case .connecting, .reconnecting:
+                return .connecting
+            case .connected:
+                return .connecting
+            case .disconnected:
+                return .none
+            }
+        }
     }
 
     private static func pushBackendURL() -> String {
@@ -1039,7 +1130,8 @@ public struct AppRoot: View {
                 // are ingested and decisions are delivered post-reconnect. Captures
                 // only Sendable values (no `vm`, so no retain cycle).
                 let fleet = self.fleetStore
-                vm.onReconnected = { [fleet, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
+                let quotaGuard = env.quotaGuardStore
+                vm.onReconnected = { [fleet, quotaGuard, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
                     if let existing = await fleet.slots.first(where: { $0.id == slotID }) {
                         await existing.ingest.stop()
                         await existing.channel.stop()
@@ -1054,6 +1146,7 @@ public struct AppRoot: View {
                         _ = try? await newChannel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
                     }
                     await ApprovalRelay.shared.setChannel(newChannel)
+                    await quotaGuard.setChannel(newChannel)
                     await newIngest.start()
                 }
                 self.scenePhaseObserver = ScenePhaseObserver(
@@ -1077,7 +1170,8 @@ public struct AppRoot: View {
             if vm.status == .connected {
                 try? await env.hostRepo.touch(id: host.id)
             }
-            try? await channel.start()  // launch conduitd serve on remote host
+            let daemonPath = (try? await DaemonBootstrap.ensureInstalled(session: sshSession, manifest: DaemonBootstrap.loadManifest())) ?? "$HOME/.conduit/bin/conduitd"
+            try? await channel.start(daemonPath: daemonPath)  // launch conduitd serve on remote host
             // Register device with conduitd so APNs alerts reach this device when
             // backgrounded. The handshake reply carries the per-session relay
             // capability token — store it so backend-relayed decisions can
@@ -1093,6 +1187,11 @@ public struct AppRoot: View {
             await ApprovalRelay.shared.setChannel(channel)
             ApprovalRelay.shared.configureBackend(url: backendURL, sessionID: deviceSessionID)
             await ingest.start()
+            await MainActor.run {
+                env.quotaGuardStore.setChannel(channel)
+                env.hostHealthStore.startPolling(fleetStore: self.fleetStore)
+            }
+            await env.quotaGuardStore.refresh()
         }
     }
 }
@@ -1130,6 +1229,8 @@ private struct SettingsWithLibraryView: View {
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
     var sshKeyStore: KeyStore? = nil
+    var daemonChannel: DaemonChannel? = nil
+    var e2eRelayClient: E2ERelayClient? = nil
 
     var body: some View {
         SettingsView(
@@ -1138,7 +1239,9 @@ private struct SettingsWithLibraryView: View {
             backendURL: backendURL,
             auditRepository: auditRepository,
             approvalRepository: approvalRepository,
-            sshKeyStore: sshKeyStore
+            sshKeyStore: sshKeyStore,
+            daemonChannel: daemonChannel,
+            e2eRelayClient: e2eRelayClient
         )
         .toolbar(.hidden, for: .navigationBar)
     }

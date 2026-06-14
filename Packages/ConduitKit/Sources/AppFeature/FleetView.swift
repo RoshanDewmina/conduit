@@ -7,10 +7,14 @@ import PersistenceKit
 public struct FleetView: View {
     private let store: FleetStore
     private let hostRepo: HostRepository
+    private let loopStore: LoopStore?
+    private let quotaGuardStore: QuotaGuardStore?
+    private let hostHealthStore: HostHealthStore?
     private let onConnectHost: () -> Void
     private let onReconnect: (Host) -> Void
     private let onDelete: (Host) -> Void
     private let onNewTask: () -> Void
+    private let onQuotaGuard: (() -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
 
@@ -19,17 +23,25 @@ public struct FleetView: View {
     public init(
         store: FleetStore,
         hostRepo: HostRepository,
+        loopStore: LoopStore? = nil,
+        quotaGuardStore: QuotaGuardStore? = nil,
+        hostHealthStore: HostHealthStore? = nil,
         onConnectHost: @escaping () -> Void,
         onReconnect: @escaping (Host) -> Void,
         onDelete: @escaping (Host) -> Void,
-        onNewTask: @escaping () -> Void = {}
+        onNewTask: @escaping () -> Void = {},
+        onQuotaGuard: (() -> Void)? = nil
     ) {
         self.store = store
         self.hostRepo = hostRepo
+        self.loopStore = loopStore
+        self.quotaGuardStore = quotaGuardStore
+        self.hostHealthStore = hostHealthStore
         self.onConnectHost = onConnectHost
         self.onReconnect = onReconnect
         self.onDelete = onDelete
         self.onNewTask = onNewTask
+        self.onQuotaGuard = onQuotaGuard
     }
 
     private var reconnectableHosts: [Host] {
@@ -63,11 +75,24 @@ public struct FleetView: View {
         return agentDisplayName(approval.agent)
     }
 
+    private var localAgentCount: Int {
+        store.slots.compactMap(\.bridgeStatus)
+            .flatMap(\.agents)
+            .filter(\.local)
+            .count
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                DSStatusHeader(
+                    connected: !store.slots.isEmpty,
+                    policy: "balanced",
+                    todaySpend: String(format: "$%.2f", summary.totalSpendUSD)
+                )
+
                 DSScreenHeader(
                     "fleet",
                     breadcrumb: "agents & spend",
@@ -92,9 +117,55 @@ public struct FleetView: View {
                         )
                         .padding(.top, 4)
 
+                        if let quotaGuardStore {
+                            NavigationLink {
+                                QuotaGuardView(store: quotaGuardStore)
+                            } label: {
+                                quotaGuardEntry
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 18)
+                            .simultaneousGesture(TapGesture().onEnded { Haptics.selection() })
+                        } else if let onQuotaGuard {
+                            Button {
+                                Haptics.selection()
+                                onQuotaGuard()
+                            } label: {
+                                quotaGuardEntry
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 18)
+                        }
+
+                        if localAgentCount > 0 {
+                            localAgentBanner
+                                .padding(.horizontal, 18)
+                        }
+
                         if let agentName = pendingAgentName {
                             attentionBanner(agentName: agentName)
                                 .padding(.horizontal, 18)
+                        }
+
+                        NavigationLink {
+                            WorktreeBoardView(store: WorktreeStore(fleetStore: store))
+                        } label: {
+                            worktreesLink
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 18)
+
+                        if let loopStore, !loopStore.activeLoops.isEmpty {
+                            DSListSectionHead("Active Loops", count: loopStore.activeLoops.count)
+                            ForEach(loopStore.activeLoops) { loop in
+                                NavigationLink {
+                                    LoopDetailView(loop: loop, ciEventLoader: ciEventLoader(for: loop))
+                                } label: {
+                                    loopRow(loop)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 18)
+                            }
                         }
 
                         if store.slots.isEmpty && reconnectableHosts.isEmpty {
@@ -103,7 +174,13 @@ public struct FleetView: View {
                                 .padding(.top, 4)
                         } else {
                             ForEach(store.slots) { slot in
-                                DSListSectionHead(slot.hostName, count: slot.bridgeStatus?.agents.count)
+                                HStack(spacing: 6) {
+                                    DSListSectionHead(slot.hostName, count: slot.bridgeStatus?.agents.count)
+                                    E2ERelayStatusBadge(state: .init(relayState: slot.relayState))
+                                    if let health = hostHealthStore?.health(for: slot.hostID) {
+                                        HostHealthBadge(health: health)
+                                    }
+                                }
                                 if let snap = slot.bridgeStatus {
                                     ForEach(snap.agents) { agent in
                                         agentRow(agent)
@@ -133,8 +210,89 @@ public struct FleetView: View {
                 .refreshable { await refresh() }
             }
         }
-        .task { await refresh() }
-        .onChange(of: store.slots.count) { Task { await refresh() } }
+        .task {
+            startLiveStores()
+            await refresh()
+        }
+        .onChange(of: store.slots.count) {
+            startLiveStores()
+            Task { await refresh() }
+        }
+    }
+
+    /// Attach a daemon channel to the quota-guard store and start host-health
+    /// polling once a connected slot exists. Both calls are idempotent.
+    private func startLiveStores() {
+        if let channel = store.slots.first?.channel {
+            quotaGuardStore?.setChannel(channel)
+        }
+        if let hostHealthStore, !store.slots.isEmpty {
+            hostHealthStore.startPolling(fleetStore: store)
+        }
+    }
+
+    private var quotaGuardEntry: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "shield.checkered")
+                .font(.system(size: 13))
+                .foregroundStyle(t.accent)
+            Text("Quota Guard")
+                .font(.dsMonoPt(12, weight: .medium))
+                .foregroundStyle(t.accent)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(t.accent.opacity(0.06))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(t.accent.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private var worktreesLink: some View {
+        HStack(spacing: 12) {
+            DSIconView(.folder, size: 18, color: t.accent)
+                .frame(width: 36, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Branches & Worktrees")
+                    .font(.dsSansPt(14, weight: .medium))
+                    .foregroundStyle(t.text)
+                Text("Multi-branch supervision")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .dsCard()
+    }
+
+    private var localAgentBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 13))
+                .foregroundStyle(t.risk(0))
+            Text("\(localAgentCount) agent\(localAgentCount == 1 ? "" : "s") run\(localAgentCount == 1 ? "s" : "") a local model — prompts and code never leave the host.")
+                .font(.dsSansPt(12.5))
+                .foregroundStyle(t.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(t.risk(0).opacity(0.06))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(t.risk(0).opacity(0.2), lineWidth: 1)
+        )
     }
 
     private func attentionBanner(agentName: String) -> some View {
@@ -203,24 +361,116 @@ public struct FleetView: View {
     }
 
     private func agentRow(_ a: AgentVendorStatus) -> some View {
+        Button { onNewTask() } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(a.displayName)
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                    HStack(spacing: 6) {
+                        DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 7)
+                        Text(a.loggedIn == true ? "running" : "idle")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text3)
+                        if let badge = privacyVariant(a) {
+                            PrivacyBadge(badge)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                Spacer()
+                if let usd = a.usageUSD {
+                    Text(String(format: "$%.2f", usd))
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text2)
+                }
+            }
+            .dsCard()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func privacyVariant(_ a: AgentVendorStatus) -> PrivacyBadgeVariant? {
+        if let isLocalModel = a.isLocalModel {
+            return isLocalModel ? .local : (a.dataLeavesHost == true ? .cloud(provider: a.displayName) : .e2eRelay)
+        }
+        if a.local {
+            return .local
+        }
+        return nil
+    }
+
+    private func loopRow(_ loop: Loop) -> some View {
         HStack(spacing: 12) {
+            DSStatusDot(
+                tone: loopStatusDotTone(loop.status),
+                pulse: loop.status == .running,
+                size: 8
+            )
             VStack(alignment: .leading, spacing: 2) {
-                Text(a.displayName)
-                    .font(.dsSansPt(14, weight: .semibold))
+                Text(loop.goal)
+                    .font(.dsSansPt(14, weight: .medium))
                     .foregroundStyle(t.text)
-                Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(loop.agent)
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                    if let model = loop.model {
+                        Text("· \(model)")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text4)
+                    }
+                }
             }
             Spacer()
-            if let usd = a.usageUSD {
-                Text(String(format: "$%.2f", usd))
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text2)
+            VStack(alignment: .trailing, spacing: 2) {
+                DSChip(loop.status.rawValue, tone: loopChipTone(loop.status), variant: .outlined, size: .sm)
+                if loop.spendUSD > 0 {
+                    Text(String(format: "$%.2f", loop.spendUSD))
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
             }
-            DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 8)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .dsCard()
+    }
+
+    /// Build a CI-event loader for a loop, sourced from the daemon channel of
+    /// the slot hosting it (or the first slot as a fallback). Returns nil when
+    /// the loop has no repo or no channel is available.
+    private func ciEventLoader(for loop: Loop) -> (@Sendable () async -> [CIEvent])? {
+        guard let repo = loop.repo, !repo.isEmpty else { return nil }
+        let slot = store.slots.first { $0.hostID.uuidString == loop.hostID } ?? store.slots.first
+        guard let channel = slot?.channel else { return nil }
+        return { (try? await channel.recentCIEvents(repo: repo)) ?? [] }
+    }
+
+    private func loopStatusDotTone(_ status: Loop.Status) -> DSStatusDotTone {
+        switch status {
+        case .running:   return .ok
+        case .blocked:   return .warn
+        case .paused:    return .info
+        case .completed: return .ok
+        case .failed:    return .danger
+        case .cancelled: return .off
+        }
+    }
+
+    private func loopChipTone(_ status: Loop.Status) -> DSChipTone {
+        switch status {
+        case .running:   return .ok
+        case .blocked:   return .warn
+        case .paused:    return .info
+        case .completed: return .ok
+        case .failed:    return .danger
+        case .cancelled: return .neutral
+        }
     }
 
     @MainActor
@@ -228,6 +478,8 @@ public struct FleetView: View {
         await store.refreshBridgeStatus()
         summary = FleetSummary(snapshots: store.slots.compactMap(\.bridgeStatus))
         savedHosts = (try? await hostRepo.all()) ?? []
+        await loopStore?.refresh()
+        await hostHealthStore?.refresh(fleetStore: store)
     }
 
     private func agentDisplayName(_ source: Approval.AgentSource) -> String {

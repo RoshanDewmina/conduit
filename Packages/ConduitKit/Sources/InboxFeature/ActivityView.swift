@@ -20,6 +20,12 @@ public struct ActivityView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                DSStatusHeader(
+                    connected: actions.isConnected,
+                    policy: "balanced",
+                    todaySpend: "$0.00"
+                )
+
                 // ── BLOCKS header (matches Inbox / Settings)
                 DSScreenHeader(
                     "activity",

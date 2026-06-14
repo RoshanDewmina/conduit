@@ -270,7 +270,7 @@ public struct DSMCPCallCard: View {
             }
 
             Text("Allow always applies to this exact tool, input, and path. Revoke rules in Settings.")
-                .font(.dsMonoPt(10.5))
+                .font(.dsMonoPt(11))
                 .foregroundStyle(t.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -366,6 +366,122 @@ public struct DSAutonomyPresetBar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(t.border).frame(height: 1)
         }
+    }
+}
+
+// MARK: - DSCredentialRequestCard
+//
+// Inbox card for Approval.Kind.credential: shows which agent wants access
+// to a credential, the requested scope, and offers scoped authorization.
+
+public struct DSCredentialRequestCard: View {
+    let agentKey: AgentKey
+    let agentName: String
+    let hostLabel: String
+    let timeLabel: String
+    let toolName: String
+    let credentialHint: String
+    let risk: Int
+    let onDeny: () -> Void
+    let onApprove: () -> Void
+    let onAuthorizeScope: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(
+        agentKey: AgentKey,
+        agentName: String,
+        hostLabel: String = "",
+        timeLabel: String,
+        toolName: String,
+        credentialHint: String,
+        risk: Int,
+        onDeny: @escaping () -> Void,
+        onApprove: @escaping () -> Void,
+        onAuthorizeScope: @escaping () -> Void
+    ) {
+        self.agentKey = agentKey
+        self.agentName = agentName
+        self.hostLabel = hostLabel
+        self.timeLabel = timeLabel
+        self.toolName = toolName
+        self.credentialHint = credentialHint
+        self.risk = risk
+        self.onDeny = onDeny
+        self.onApprove = onApprove
+        self.onAuthorizeScope = onAuthorizeScope
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                AgentIdentityBadge(agent: agentKey, label: agentName)
+                RiskBadge(risk: risk)
+                Spacer()
+                Text(timeLabel)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(.orange)
+                    .frame(width: 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("CREDENTIAL REQUEST")
+                        .font(.dsDisplayPt(9, weight: .semibold))
+                        .tracking(9 * 0.12)
+                        .foregroundStyle(.orange)
+                    Text("\(Text(agentName).foregroundStyle(t.text))\(Text(" wants to access a credential via \(toolName)").foregroundStyle(t.text2))")
+                        .font(.dsMonoPt(12))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.leading, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 6) {
+                DSIconView(.key, size: 12, color: .orange)
+                Text(credentialHint)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text2)
+                    .lineLimit(2)
+            }
+
+            HStack(spacing: 8) {
+                Button { onDeny() } label: {
+                    Label("Deny", systemImage: "xmark")
+                        .font(.dsSansPt(13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+
+                Button { onAuthorizeScope() } label: {
+                    Label("Scope", systemImage: "scope")
+                        .font(.dsSansPt(13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(t.accent)
+
+                Button { onApprove() } label: {
+                    Label("Approve", systemImage: "checkmark")
+                        .font(.dsSansPt(13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(t.accent)
+            }
+        }
+        .padding(16)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
     }
 }
 

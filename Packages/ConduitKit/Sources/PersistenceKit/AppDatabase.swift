@@ -195,6 +195,40 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Loop Object — first-class record of agent work sessions.
+        m.registerMigration("v9") { db in
+            try db.create(table: "loops") { t in
+                t.column("id",                 .text).primaryKey()
+                t.column("goal",               .text).notNull()
+                t.column("plan",               .text)
+                t.column("current_step",       .text)
+                t.column("blocked_reason",     .text)
+                t.column("agent",              .text).notNull()
+                t.column("vendor",             .text)
+                t.column("model",              .text)
+                t.column("host_id",            .text).notNull()
+                t.column("repo",               .text)
+                t.column("branch",             .text)
+                t.column("worktree",           .text)
+                t.column("files_changed",      .text).notNull().defaults(to: "[]")
+                t.column("commands_run",       .text).notNull().defaults(to: "[]")
+                t.column("tests_run",          .text).notNull().defaults(to: "[]")
+                t.column("approvals_asked",    .integer).notNull().defaults(to: 0)
+                t.column("approvals_decided",  .integer).notNull().defaults(to: 0)
+                t.column("policy_exceptions",  .integer).notNull().defaults(to: 0)
+                t.column("spend_usd",          .real).notNull().defaults(to: 0)
+                t.column("input_tokens",       .integer).notNull().defaults(to: 0)
+                t.column("output_tokens",      .integer).notNull().defaults(to: 0)
+                t.column("status",             .text).notNull().defaults(to: "running")
+                t.column("started_at",         .datetime).notNull()
+                t.column("completed_at",       .datetime)
+                t.column("last_activity_at",   .datetime)
+                t.column("proof",              .text)
+                t.column("created_at",         .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("updated_at",         .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+            }
+        }
+
         return m
     }
 }

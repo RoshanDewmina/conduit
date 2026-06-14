@@ -21,6 +21,9 @@ struct AgentRunDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         statusSection
+                        if liveRun.status.isTerminal, let proofModel = buildProofModel() {
+                            ProofCardView(model: proofModel)
+                        }
                         logsSection
                         artifactsSection
                         if !run.approvals.isEmpty {
@@ -242,6 +245,67 @@ struct AgentRunDetailView: View {
                 }
             }
         }
+    }
+
+    private func buildProofModel() -> ProofCardModel? {
+        let agent = store.agents.first { $0.id == agentID }
+        let agentKey: AgentKey = {
+            switch agent?.runtimeKind {
+            case .sshHost: return .claudeCode
+            case .fly, .gcpCloudRun, .lightsail: return .codex
+            case .none:    return .unknown
+            }
+        }()
+        let agentName = agent?.name ?? "Agent"
+
+        let status: ProofCardModel.Status = {
+            switch liveRun.status {
+            case .succeeded: return .completed
+            case .failed:    return .failed
+            case .cancelled: return .cancelled
+            default:         return .completed
+            }
+        }()
+
+        var duration: String?
+        let end = liveRun.endedAt ?? Date()
+        let secs = Int(end.timeIntervalSince(liveRun.startedAt))
+        if secs >= 60 {
+            duration = "\(secs / 60)m \(secs % 60)s"
+        } else {
+            duration = "\(secs)s"
+        }
+
+        let approvals = store.selectedRun?.approvals ?? run.approvals
+        let approved = approvals.filter { $0.status == .approved }.count
+        let denied = approvals.filter { $0.status == .rejected }.count
+        let approvalSummary = approvals.isEmpty ? nil : ProofCardModel.ApprovalSummary(
+            asked: approvals.count,
+            approved: approved,
+            denied: denied
+        )
+
+        let totalCost = displayUsageRecords.compactMap(\.costUSD).reduce(0, +)
+        let totalInput = displayUsageRecords.map(\.inputTokens).reduce(0, +)
+        let totalOutput = displayUsageRecords.map(\.outputTokens).reduce(0, +)
+        let spend: ProofCardModel.SpendSummary? = totalCost > 0 ? ProofCardModel.SpendSummary(
+            totalUSD: totalCost,
+            inputTokens: totalInput,
+            outputTokens: totalOutput
+        ) : nil
+
+        return ProofCardModel(
+            agent: agentKey,
+            agentName: agentName,
+            status: status,
+            duration: duration,
+            tests: nil,
+            diff: nil,
+            commands: [],
+            approvals: approvalSummary,
+            policyExceptions: 0,
+            spend: spend
+        )
     }
 }
 #endif

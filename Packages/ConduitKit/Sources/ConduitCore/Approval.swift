@@ -20,6 +20,7 @@ public struct Approval: Identifiable, Sendable, Hashable {
     public var agentSessionID: String?
     public var toolInput: String?
     public let blastRadius: ApprovalBlastRadius?
+    public let lastStateChangeAt: Date?
 
     public enum AgentSource: String, Sendable, Hashable, Codable {
         case claudeCode, codex, opencode, cursor, devin, unknown
@@ -57,7 +58,8 @@ public struct Approval: Identifiable, Sendable, Hashable {
         toolUseID: String? = nil,
         agentSessionID: String? = nil,
         toolInput: String? = nil,
-        blastRadius: ApprovalBlastRadius? = nil
+        blastRadius: ApprovalBlastRadius? = nil,
+        lastStateChangeAt: Date? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -78,6 +80,7 @@ public struct Approval: Identifiable, Sendable, Hashable {
         self.agentSessionID = agentSessionID
         self.toolInput = toolInput
         self.blastRadius = blastRadius
+        self.lastStateChangeAt = lastStateChangeAt
     }
 
     public var isPending: Bool { decision == nil }

@@ -1,4 +1,5 @@
 import SwiftUI
+import ConduitCore
 
 // Mirrors STATE_META from agent-chat-v2.css — drives badge color + label
 // across the HUD strip, session rows, and tool card headers.
@@ -54,5 +55,25 @@ public enum AgentState: String, Sendable, Hashable, CaseIterable {
         case "failed":       return .error
         default:             return isExecuting ? .streaming : .done
         }
+    }
+}
+
+/// Rich agent state that includes blocking context.
+public struct AgentStateContext: Sendable, Equatable {
+    public let state: AgentState
+    public let blockedReason: BlockedReason?
+    public let lastActivity: Date?
+    public let lastBytesReceived: Date?
+
+    public init(
+        state: AgentState,
+        blockedReason: BlockedReason? = nil,
+        lastActivity: Date? = nil,
+        lastBytesReceived: Date? = nil
+    ) {
+        self.state = state
+        self.blockedReason = blockedReason
+        self.lastActivity = lastActivity
+        self.lastBytesReceived = lastBytesReceived
     }
 }

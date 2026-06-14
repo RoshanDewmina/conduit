@@ -81,6 +81,10 @@ public struct NotificationFilter: Codable, Sendable, Equatable {
     public var quietHoursStart: Int = 22
     /// Hour of day (0–23) when quiet hours end (exclusive)
     public var quietHoursEnd: Int = 8
+    /// Per-event-kind toggles
+    public var approvalNotifications: Bool = true
+    public var runCompleteNotifications: Bool = true
+    public var errorNotifications: Bool = true
 
     public init() {}
 
@@ -90,6 +94,16 @@ public struct NotificationFilter: Codable, Sendable, Equatable {
         guard !quietHoursEnabled else { return !isCurrentlyQuiet() }
         return true
     }
+
+    public func shouldDeliver(kind: NotificationKind) -> Bool {
+        switch kind {
+        case .approval: return approvalNotifications
+        case .runComplete: return runCompleteNotifications
+        case .error: return errorNotifications
+        }
+    }
+
+    public enum NotificationKind: Sendable { case approval, runComplete, error }
 
     private func isCurrentlyQuiet() -> Bool {
         let hour = Calendar.current.component(.hour, from: Date())

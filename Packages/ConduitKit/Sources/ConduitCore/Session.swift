@@ -17,6 +17,14 @@ public struct Session: Identifiable, Sendable, Hashable {
         case failed(reason: String)
     }
 
+    public enum RelayState: String, Sendable, Codable {
+        case none
+        case connecting
+        case paired
+        case degraded
+        case error
+    }
+
     public init(
         id: SessionID = .init(),
         hostID: HostID,

@@ -105,12 +105,14 @@ public struct AuditLogEntry: Codable, Sendable, Identifiable, Hashable {
     public let effect: String?
     public let rule: String?
     public let approvalId: String?
+    public let hash: String?
+    public let prevHash: String?
 
     public var id: String { "\(timestamp)-\(action)-\(approvalId ?? command ?? "")" }
 
     enum CodingKeys: String, CodingKey {
         case timestamp, action, agent, kind, command, effect, rule
-        case approvalId
+        case approvalId, hash, prevHash
     }
 }
 
@@ -191,9 +193,35 @@ public struct BridgeSchedule: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// An agent's request for a secret, pushed to the phone for authorization.
+public struct SecretRequestEvent: Codable, Sendable {
+    public let id: String
+    public let agent: String
+    public let toolName: String
+    public let credentialType: String
+    public let requestedScope: String
+    public let hostName: String
+
+    public init(id: String, agent: String, toolName: String, credentialType: String, requestedScope: String, hostName: String) {
+        self.id = id
+        self.agent = agent
+        self.toolName = toolName
+        self.credentialType = credentialType
+        self.requestedScope = requestedScope
+        self.hostName = hostName
+    }
+}
+
+/// Result of listing secrets and pending requests from the daemon.
+public struct SecretsListResult: Codable, Sendable {
+    public let secrets: [SecretEntry]?
+    public let pending: [PendingSecretRequest]?
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
     case agentStatus(AgentStatusSnapshot)
+    case secretRequest(SecretRequestEvent)
     case pong
     case unknown(method: String)
 }
@@ -215,6 +243,12 @@ extension DaemonEvent {
                   let snapshot = try? JSONDecoder().decode(AgentStatusSnapshot.self, from: paramsData)
             else { return .unknown(method: method) }
             return .agentStatus(snapshot)
+        case "agent.secret.request":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let event = try? JSONDecoder().decode(SecretRequestEvent.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .secretRequest(event)
         case "pong":
             return .pong
         default:
@@ -226,8 +260,13 @@ extension DaemonEvent {
 public enum DaemonRPCResponse: Sendable {
     case agentStatus(AgentStatusSnapshot)
     case auditTail(AuditTailResult)
+    case auditVerification(AuditVerification)
+    case auditExport(String)
     case policyGet(PolicyGetResult)
     case policyYAML(PolicyYAMLResult)
+    case doctorReport(DoctorReport)
+    case secretsList(SecretsListResult)
+    case hostHealth(HostHealth)
     case pong
     case ok
     case error(code: Int, message: String)
@@ -248,8 +287,15 @@ public enum DaemonRPCResponse: Sendable {
         let dec = JSONDecoder()
         if let snap = try? dec.decode(AgentStatusSnapshot.self, from: rd) { return .agentStatus(snap) }
         if let t = try? dec.decode(AuditTailResult.self, from: rd) { return .auditTail(t) }
+        if let v = try? dec.decode(AuditVerification.self, from: rd) { return .auditVerification(v) }
+        if let d = try? dec.decode([String: String].self, from: rd), let data = d["data"] {
+            return .auditExport(data)
+        }
         if let pol = try? dec.decode(PolicyGetResult.self, from: rd) { return .policyGet(pol) }
         if let yaml = try? dec.decode(PolicyYAMLResult.self, from: rd) { return .policyYAML(yaml) }
+        if let doc = try? dec.decode(DoctorReport.self, from: rd) { return .doctorReport(doc) }
+        if let secrets = try? dec.decode(SecretsListResult.self, from: rd) { return .secretsList(secrets) }
+        if let health = try? dec.decode(HostHealth.self, from: rd) { return .hostHealth(health) }
         return .unknown
     }
 }

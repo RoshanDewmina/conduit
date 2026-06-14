@@ -6,10 +6,49 @@ import AgentKit
 import DesignSystem
 import DiffKit
 import DiffFeature
+import SecurityKit
 
 @MainActor @Observable
 public class InboxViewModel {
     public var approvals: [Approval] = []
+
+    public var demoDismissed: Bool {
+        get { UserDefaults.standard.bool(forKey: "inbox.demoDismissed") }
+        set { UserDefaults.standard.set(newValue, forKey: "inbox.demoDismissed") }
+    }
+
+    public var demoApproval: Approval {
+        Approval(
+            id: ApprovalID(),
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "npm install && npm run build",
+            patch: nil,
+            cwd: "~/projects/my-app",
+            risk: .medium,
+            createdAt: .now,
+            toolName: "bash",
+            toolInput: nil,
+            blastRadius: ApprovalBlastRadius(
+                files: ["package.json"],
+                touchesGit: false,
+                touchesNetwork: true,
+                matchedRule: "auto-allow-safe-commands"
+            )
+        )
+    }
+
+    public var effectiveApprovals: [Approval] {
+        if approvals.isEmpty && !demoDismissed {
+            return [demoApproval]
+        }
+        return approvals
+    }
+
+    public func dismissDemo() {
+        demoDismissed = true
+    }
 
     public init(approvals: [Approval] = []) {
         self.approvals = approvals
@@ -28,6 +67,9 @@ public class InboxViewModel {
             if let edited = editedToolInput, !edited.isEmpty {
                 approvals[idx].toolInput = edited
             }
+            if decision == .approvedAlways {
+                persistAllowAlwaysRule(for: approvals[idx])
+            }
             Haptics.selection()
         }
     }
@@ -40,11 +82,16 @@ public struct InboxView: View {
     private let awayAuditEntries: [AuditLogEntry]
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
+    public var bridgeConnected: Bool = false
+    public var bridgePolicy: String = "balanced"
+    public var todaySpend: String = "$0.00"
 
     @Environment(\.conduitTokens) private var t
     @State private var editingApproval: Approval?
     @State private var editedToolInputText = ""
     @State private var diffApproval: Approval?
+    @State private var decisionSheetApproval: Approval?
+    @State private var scopeSheetApproval: Approval?
 
     public init(
         viewModel: InboxViewModel,
@@ -52,7 +99,10 @@ public struct InboxView: View {
         title: String = "Inbox",
         awayAuditEntries: [AuditLogEntry] = [],
         statusHeaderAgents: [AgentInfo] = [],
-        onTapStatusHeader: @escaping () -> Void = {}
+        onTapStatusHeader: @escaping () -> Void = {},
+        bridgeConnected: Bool = false,
+        bridgePolicy: String = "balanced",
+        todaySpend: String = "$0.00"
     ) {
         self.vm = viewModel
         self.sessionID = sessionID
@@ -60,6 +110,9 @@ public struct InboxView: View {
         self.awayAuditEntries = awayAuditEntries
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
+        self.bridgeConnected = bridgeConnected
+        self.bridgePolicy = bridgePolicy
+        self.todaySpend = todaySpend
     }
 
     public var body: some View {
@@ -67,6 +120,12 @@ public struct InboxView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                DSStatusHeader(
+                    connected: bridgeConnected,
+                    policy: bridgePolicy,
+                    todaySpend: todaySpend
+                )
+
                 // ── BLOCKS header
                 DSScreenHeader(
                     "inbox",
@@ -88,8 +147,30 @@ public struct InboxView: View {
                     }
                 }
 
-                if visibleApprovals.isEmpty {
-                    emptyState
+                if visibleApprovals.isEmpty && !vm.demoDismissed {
+                    VStack {
+                        Spacer()
+                        DSEmptyState(
+                            dotMatrix: .thinking,
+                            title: "Your first approval",
+                            subtitle: "This is a demo. When you connect a coding agent, its permission requests appear here. Tap the card to see the full decision sheet."
+                        )
+                        .padding(.horizontal, 24)
+                        pendingCard(vm.demoApproval)
+                            .padding(.horizontal, 16)
+                        Spacer()
+                    }
+                } else if visibleApprovals.isEmpty {
+                    VStack {
+                        Spacer()
+                        DSEmptyState(
+                            dotMatrix: .idle,
+                            title: "No approvals waiting",
+                            subtitle: "When a coding agent needs permission, its request will appear here."
+                        )
+                        .padding(.horizontal, 24)
+                        Spacer()
+                    }
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -110,7 +191,7 @@ public struct InboxView: View {
                                     decidedRow(approval)
                                 }
                             }
-                        }
+        }
                         // BUG-4: constrain scroll content to the viewport width so wide
                         // rows at large Dynamic Type wrap instead of overflowing and being
                         // centre-clipped on the leading edge by the ScrollView.
@@ -127,12 +208,23 @@ public struct InboxView: View {
         .sheet(item: $diffApproval) { approval in
             diffSheet(approval)
         }
+        .sheet(item: $decisionSheetApproval) { approval in
+            decisionSheetContent(approval)
+        }
+        .sheet(item: $scopeSheetApproval) { approval in
+            AllowAlwaysScopeSheet(approval: approval) { scopedRule in
+                persistScopedAllowAlwaysRule(for: approval, rule: scopedRule)
+                vm.decide(approval.id, decision: .approvedAlways)
+            }
+        }
     }
 
     // MARK: - Pending card dispatch
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
+        let isDemo = vm.approvals.isEmpty && !vm.demoDismissed
+
         switch approval.kind {
         case .askQuestion:
             DSAskQuestionCard(
@@ -143,7 +235,8 @@ public struct InboxView: View {
                 question: approval.question ?? "What should I do next?",
                 choices: approval.choices ?? [],
                 onAnswer: { idx in
-                    vm.decide(approval.id, decision: .approved, choiceIndex: idx)
+                    if isDemo { vm.dismissDemo() }
+                    else { vm.decide(approval.id, decision: .approved, choiceIndex: idx) }
                 }
             )
 
@@ -157,13 +250,31 @@ public struct InboxView: View {
                 toolUseID: approval.toolUseID,
                 args: summarizedToolInput(approval),
                 risk: approval.risk.rawValue,
-                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
                 onEditAndRun: {
-                    editedToolInputText = editableToolInput(for: approval)
-                    editingApproval = approval
+                    if isDemo { vm.dismissDemo() }
+                    else {
+                        editedToolInputText = editableToolInput(for: approval)
+                        editingApproval = approval
+                    }
                 },
-                onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
-                onApprove: { vm.decide(approval.id, decision: .approved) }
+                onAllowAlways: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } },
+                onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } }
+            )
+            .onTapGesture { decisionSheetApproval = approval }
+
+        case .credential:
+            DSCredentialRequestCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                toolName: approval.toolName ?? approval.command ?? "unknown",
+                credentialHint: approval.command ?? "credential",
+                risk: approval.risk.rawValue,
+                onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
+                onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } },
+                onAuthorizeScope: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } }
             )
 
         default:
@@ -177,19 +288,91 @@ public struct InboxView: View {
                     hostLabel: approval.cwd,
                     command: approval.command,
                     onViewDiff: (approval.patch != nil || approval.kind == .patch) ? { diffApproval = approval } : nil,
-                    onDeny: { vm.decide(approval.id, decision: .rejected) },
-                    onAllowAlways: { vm.decide(approval.id, decision: .approvedAlways) },
-                    onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
+                    onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
+                    onAllowAlways: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } },
+                    onEditAndRun: isDemo ? nil : ((approval.toolInput != nil || approval.command != nil) ? {
                         editedToolInputText = editableToolInput(for: approval)
                         editingApproval = approval
-                    } : nil,
-                    onApprove: { vm.decide(approval.id, decision: .approved) }
+                    } : nil),
+                    onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } }
                 )
                 if let br = approval.blastRadius {
                     DSBlastRadiusBanner(blastRadius: br)
                 }
             }
+            .onTapGesture { decisionSheetApproval = approval }
         }
+    }
+
+    @ViewBuilder
+    private func decisionSheetContent(_ approval: Approval) -> some View {
+        let br = approval.blastRadius ?? ApprovalBlastRadius(matchedRule: "policy rule")
+        let requiresBiometric = approval.risk.rawValue >= 3
+        let agentNameStr = agentName(approval.agent)
+        let actionStr: String = {
+            if let tn = approval.toolName { return "run \(tn)" }
+            return defaultActionVerb(for: approval.kind)
+        }()
+        let cmdStr = approval.command ?? approval.toolName ?? "Unknown command"
+        let whyStr = br.matchedRule.map { "Matched policy rule \"\($0)\" requiring human approval." }
+            ?? "This action requires human approval per your policy settings."
+        let isDemo = vm.approvals.isEmpty && !vm.demoDismissed
+
+        DSDecisionSheet(
+            risk: approval.risk.rawValue,
+            agentName: agentNameStr,
+            action: actionStr,
+            command: cmdStr,
+            whyText: isDemo ? "This is a demo approval. In a real scenario, this text explains which policy rule matched the agent's action." : whyStr,
+            requiresBiometric: requiresBiometric && !isDemo,
+            diff: nil,
+            blastRadius: br,
+            onDeny: {
+                if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) }
+                decisionSheetApproval = nil
+            },
+            onApprove: {
+                Task {
+                    if requiresBiometric && !isDemo {
+                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
+                        catch {
+                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                            return
+                        }
+                    }
+                    if isDemo { vm.dismissDemo() } else {
+                        vm.decide(approval.id, decision: .approved)
+                        Haptics.success()
+                    }
+                    decisionSheetApproval = nil
+                }
+            },
+            onEditAndRun: {
+                if isDemo { vm.dismissDemo() }
+                else {
+                    editedToolInputText = editableToolInput(for: approval)
+                    editingApproval = approval
+                }
+                decisionSheetApproval = nil
+            },
+            onAllowAlways: {
+                Task {
+                    if requiresBiometric && !isDemo {
+                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
+                        catch {
+                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                            return
+                        }
+                    }
+                    if isDemo { vm.dismissDemo() } else {
+                        decisionSheetApproval = nil
+                        scopeSheetApproval = approval
+                    }
+                }
+            }
+        )
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     @ViewBuilder
@@ -371,8 +554,8 @@ public struct InboxView: View {
     // MARK: - Computed
 
     private var visibleApprovals: [Approval] {
-        guard let sessionID else { return vm.approvals }
-        return vm.approvals.filter { $0.sessionID == sessionID }
+        guard let sessionID else { return vm.effectiveApprovals }
+        return vm.effectiveApprovals.filter { $0.sessionID == sessionID }
     }
 
     private var pendingCount: Int {
@@ -425,6 +608,100 @@ public struct InboxView: View {
         }
         return approval.command ?? defaultActionVerb(for: approval.kind)
     }
+}
+
+private func persistAllowAlwaysRule(for approval: Approval) {
+    let key = "inbox.allowAlwaysRules"
+    var rules: [[String: String]] = (UserDefaults.standard.array(forKey: key) as? [[String: String]]) ?? []
+    let entry: [String: String] = [
+        "command": approval.command ?? "",
+        "toolName": approval.toolName ?? "",
+        "cwd": approval.cwd,
+        "risk": String(approval.risk.rawValue),
+        "agent": String(describing: approval.agent),
+    ]
+    rules.append(entry)
+    UserDefaults.standard.set(rules, forKey: key)
+}
+
+private func persistScopedAllowAlwaysRule(for approval: Approval, rule: ScopedAllowRule) {
+    let key = "inbox.allowAlwaysRules"
+    var rules: [[String: String]] = (UserDefaults.standard.array(forKey: key) as? [[String: String]]) ?? []
+
+    var entry: [String: String] = [
+        "command": approval.command ?? "",
+        "toolName": approval.toolName ?? "",
+        "cwd": approval.cwd,
+        "risk": String(approval.risk.rawValue),
+        "agent": String(describing: approval.agent),
+        "scope": rule.scope.rawValue,
+    ]
+
+    if let pathPattern = rule.pathPattern {
+        entry["pathPattern"] = pathPattern
+    }
+    if let repoPattern = rule.repoPattern {
+        entry["repoPattern"] = repoPattern
+    }
+
+    switch rule.timeWindow {
+    case .untilRevoke:
+        break
+    case .hours(let h):
+        let expiry = Calendar.current.date(byAdding: .hour, value: h, to: Date()) ?? Date()
+        entry["expiresAt"] = ISO8601DateFormatter().string(from: expiry)
+    case .days(let d):
+        let expiry = Calendar.current.date(byAdding: .day, value: d, to: Date()) ?? Date()
+        entry["expiresAt"] = ISO8601DateFormatter().string(from: expiry)
+    }
+
+    rules.append(entry)
+    UserDefaults.standard.set(rules, forKey: key)
+}
+
+private func buildPolicyYAML(for approval: Approval, rule: ScopedAllowRule) -> String {
+    var lines: [String] = []
+    lines.append("rules:")
+
+    let ruleID = "allow-\(approval.kind.rawValue)-\(UUID().uuidString.prefix(8))"
+    lines.append("  - id: \"\(ruleID)\"")
+    lines.append("    effect: allow")
+    lines.append("    agent: \"\(approval.agent.rawValue)\"")
+    lines.append("    kind: \"\(approval.kind.rawValue)\"")
+
+    switch rule.scope {
+    case .thisCommand:
+        if let cmd = approval.command {
+            lines.append("    match: \"\(cmd)\"")
+        }
+    case .thisCommandInRepo:
+        lines.append("    cwd: \"\(approval.cwd)\"")
+        if let cmd = approval.command {
+            lines.append("    match: \"\(cmd)\"")
+        }
+    case .thisCommandMatchingPath:
+        if let pattern = rule.pathPattern {
+            lines.append("    pathPattern: \"\(pattern)\"")
+        }
+        if let cmd = approval.command {
+            lines.append("    match: \"\(cmd)\"")
+        }
+    case .thisKindFromAgent:
+        break
+    }
+
+    switch rule.timeWindow {
+    case .untilRevoke:
+        break
+    case .hours(let h):
+        let expiry = Calendar.current.date(byAdding: .hour, value: h, to: Date()) ?? Date()
+        lines.append("    expiresAt: \"\(ISO8601DateFormatter().string(from: expiry))\"")
+    case .days(let d):
+        let expiry = Calendar.current.date(byAdding: .day, value: d, to: Date()) ?? Date()
+        lines.append("    expiresAt: \"\(ISO8601DateFormatter().string(from: expiry))\"")
+    }
+
+    return lines.joined(separator: "\n")
 }
 
 #endif

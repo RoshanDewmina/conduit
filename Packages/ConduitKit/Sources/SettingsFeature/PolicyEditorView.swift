@@ -8,9 +8,11 @@ public struct PolicyEditorView: View {
     @State private var preset: AutonomyPreset
     @State private var statusMessage: String?
     @State private var isSaving = false
+    @State private var activeAllowRules: [ActiveAllowRule] = []
     private let cwd: String
     private let onReload: () async -> Void
     private let onSave: ((String) async throws -> Void)?
+    private let simulate: (@Sendable (_ yaml: String, _ periodDays: Int) async throws -> PolicySimulation)?
 
     @Environment(\.conduitTokens) private var t
 
@@ -18,18 +20,21 @@ public struct PolicyEditorView: View {
         cwd: String,
         initialYAML: String,
         onReload: @escaping () async -> Void,
-        onSave: ((String) async throws -> Void)? = nil
+        onSave: ((String) async throws -> Void)? = nil,
+        simulate: (@Sendable (_ yaml: String, _ periodDays: Int) async throws -> PolicySimulation)? = nil
     ) {
         self.cwd = cwd
         _yamlText = State(initialValue: initialYAML)
         _preset = State(initialValue: Self.detectPreset(from: initialYAML))
         self.onReload = onReload
         self.onSave = onSave
+        self.simulate = simulate
     }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                allowAlwaysRulesSection
                 presetSection
                 rulesSection
                 yamlSection
@@ -39,6 +44,159 @@ public struct PolicyEditorView: View {
         .background(t.bg)
         .navigationTitle("Agent policy")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            loadActiveAllowRules()
+        }
+    }
+
+    // MARK: - Active allow-always rules
+
+    private var allowAlwaysRulesSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("ACTIVE ALLOW-ALWAYS RULES")
+                .font(.dsMonoPt(10, weight: .semibold))
+                .tracking(10 * 0.12)
+                .foregroundStyle(t.text3)
+                .padding(.horizontal, 18)
+                .padding(.top, 22)
+                .padding(.bottom, 8)
+
+            if activeAllowRules.isEmpty {
+                VStack(spacing: 6) {
+                    Text("No active allow-always rules")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                    Text("Rules created from the inbox will appear here.")
+                        .font(.dsSansPt(11))
+                        .foregroundStyle(t.text4)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(t.surface)
+                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r1, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
+                .padding(.horizontal, 18)
+                .padding(.bottom, 8)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(activeAllowRules.enumerated()), id: \.element.id) { idx, rule in
+                        if idx > 0 {
+                            Rectangle()
+                                .fill(t.divider)
+                                .frame(height: 1)
+                                .padding(.leading, 18)
+                        }
+                        allowAlwaysRuleRow(rule)
+                    }
+                }
+                .background(t.surface)
+                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r1, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
+                .padding(.horizontal, 18)
+                .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private func allowAlwaysRuleRow(_ rule: ActiveAllowRule) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(rule.description)
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    if let scope = rule.scopeLabel {
+                        DSChip(scope, tone: .accent, variant: .soft, size: .sm)
+                    }
+                    if let timeLeft = rule.timeRemaining {
+                        DSChip(timeLeft, tone: rule.isExpired ? .danger : .ok, variant: .soft, size: .sm)
+                    }
+                }
+            }
+            Spacer()
+            Button {
+                revokeRule(rule)
+                Haptics.selection()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(t.danger)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private func loadActiveAllowRules() {
+        let key = "inbox.allowAlwaysRules"
+        guard let entries = UserDefaults.standard.array(forKey: key) as? [[String: String]] else {
+            activeAllowRules = []
+            return
+        }
+
+        activeAllowRules = entries.compactMap { entry in
+            let id = entry["command", default: ""] + entry["toolName", default: ""]
+            let description = entry["command"] ?? entry["toolName"] ?? "Unknown rule"
+            let scopeLabel: String? = {
+                if let scope = entry["scope"] {
+                    switch scope {
+                    case "thisCommandInRepo": return "in repo"
+                    case "thisCommandMatchingPath": return "path"
+                    case "thisKindFromAgent": return "all actions"
+                    default: return nil
+                    }
+                }
+                return nil
+            }()
+
+            let timeRemaining: String? = {
+                guard let expiresAt = entry["expiresAt"] else { return nil }
+                guard let expiry = ISO8601DateFormatter().date(from: expiresAt) else { return nil }
+                let now = Date()
+                if now > expiry { return "expired" }
+                let interval = expiry.timeIntervalSince(now)
+                if interval < 3600 {
+                    return "\(Int(interval / 60))m left"
+                } else if interval < 86400 {
+                    return "\(Int(interval / 3600))h left"
+                } else {
+                    return "\(Int(interval / 86400))d left"
+                }
+            }()
+
+            let isExpired: Bool = {
+                guard let expiresAt = entry["expiresAt"],
+                      let expiry = ISO8601DateFormatter().date(from: expiresAt) else {
+                    return false
+                }
+                return Date() > expiry
+            }()
+
+            return ActiveAllowRule(
+                id: id,
+                description: description,
+                scopeLabel: scopeLabel,
+                timeRemaining: timeRemaining,
+                isExpired: isExpired,
+                entry: entry
+            )
+        }.filter { !$0.isExpired }
+    }
+
+    private func revokeRule(_ rule: ActiveAllowRule) {
+        let key = "inbox.allowAlwaysRules"
+        guard var entries = UserDefaults.standard.array(forKey: key) as? [[String: String]] else { return }
+        entries.removeAll { $0["command"] == rule.entry["command"] && $0["toolName"] == rule.entry["toolName"] }
+        UserDefaults.standard.set(entries, forKey: key)
+        loadActiveAllowRules()
     }
 
     // MARK: - Preset bar
@@ -171,6 +329,18 @@ public struct PolicyEditorView: View {
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
+            NavigationLink {
+                PolicySimulatorView(yaml: yamlText, simulate: simulate)
+            } label: {
+                DSButton(
+                    "Simulate policy",
+                    variant: .accent,
+                    size: .md,
+                    mono: true,
+                    fullWidth: true
+                ) {}
+            }
+
             DSButton(
                 "Reload policy on bridge",
                 variant: .secondary,
@@ -354,6 +524,17 @@ struct PolicyRule {
         default:      return .neutral
         }
     }
+}
+
+// MARK: - ActiveAllowRule
+
+struct ActiveAllowRule: Identifiable {
+    let id: String
+    let description: String
+    let scopeLabel: String?
+    let timeRemaining: String?
+    let isExpired: Bool
+    let entry: [String: String]
 }
 
 #endif

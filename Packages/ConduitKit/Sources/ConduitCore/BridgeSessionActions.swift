@@ -9,6 +9,7 @@ public struct BridgeSessionActions: Sendable {
     public var reloadPolicy: @Sendable () async throws -> Void
     public var tailAudit: @Sendable (Int) async throws -> [AuditLogEntry]
     public var dispatch: @Sendable (String, String, String) async throws -> DispatchResult
+    public var runDoctor: @Sendable () async throws -> DoctorReport
 
     public init(
         isConnected: Bool = false,
@@ -19,7 +20,8 @@ public struct BridgeSessionActions: Sendable {
         tailAudit: @escaping @Sendable (Int) async throws -> [AuditLogEntry] = { _ in throw BridgeSessionError.noChannel },
         dispatch: @escaping @Sendable (String, String, String) async throws -> DispatchResult = { _, _, _ in
             throw BridgeSessionError.noChannel
-        }
+        },
+        runDoctor: @escaping @Sendable () async throws -> DoctorReport = { throw BridgeSessionError.noChannel }
     ) {
         self.isConnected = isConnected
         self.policyCWD = policyCWD
@@ -28,6 +30,7 @@ public struct BridgeSessionActions: Sendable {
         self.reloadPolicy = reloadPolicy
         self.tailAudit = tailAudit
         self.dispatch = dispatch
+        self.runDoctor = runDoctor
     }
 }
 

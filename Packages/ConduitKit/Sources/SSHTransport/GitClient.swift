@@ -111,6 +111,65 @@ public actor GitClient {
         try await runGit(workdir: workdir, ["--no-pager", "log", "--oneline", "-n", String(limit)])
     }
 
+    // MARK: - Worktree / branch operations
+
+    /// Lists local branches in `workdir`, one per line of `git branch` output.
+    public func listBranches(workdir: String) async throws -> [String] {
+        let out = try await runGit(workdir: workdir, ["branch", "--format=%(refname:short)"])
+        return out.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Returns changed files between `baseBranch` (or current) and `branch`.
+    /// Uses `git diff --name-status` for compact file-status pairs.
+    public func changedFiles(
+        workdir: String,
+        baseBranch: String? = nil,
+        branch: String? = nil
+    ) async throws -> [Worktree.ChangedFile] {
+        var args = ["diff", "--name-status"]
+        if let base = baseBranch {
+            args.append(base)
+        }
+        if let target = branch {
+            args.append(target)
+        }
+        let out = try await runGit(workdir: workdir, args)
+        return Self.parseNameStatus(out)
+    }
+
+    /// Returns the latest commit info for `branch`.
+    public func latestCommit(workdir: String, branch: String? = nil) async throws -> Worktree.CommitInfo? {
+        var args = ["log", "-1", "--pretty=format:%H%n%s%n%an%n%aI"]
+        if let branch { args.append(branch) }
+        let out = try await runGit(workdir: workdir, args)
+        let lines = out.split(separator: "\n").map(String.init)
+        guard lines.count >= 4 else { return nil }
+        let date = ISO8601DateFormatter().date(from: lines[3]) ?? Date.distantPast
+        return Worktree.CommitInfo(hash: lines[0], message: lines[1], author: lines[2], date: date)
+    }
+
+    /// Parses `git diff --name-status` output into ChangedFile values.
+    nonisolated static func parseNameStatus(_ output: String) -> [Worktree.ChangedFile] {
+        output.split(separator: "\n").compactMap { line -> Worktree.ChangedFile? in
+            let parts = line.split(separator: "\t")
+            guard parts.count >= 2 else { return nil }
+            let code = String(parts[0]).trimmingCharacters(in: .whitespaces)
+            let path = String(parts[1])
+            let status: Worktree.ChangedFile.FileStatus
+            if code.hasPrefix("A") {
+                status = .added
+            } else if code.hasPrefix("D") {
+                status = .deleted
+            } else if code.hasPrefix("R") {
+                status = .renamed
+            } else {
+                status = .modified
+            }
+            return Worktree.ChangedFile(path: path, status: status)
+        }
+    }
+
     // MARK: - Write operations
 
     /// Creates and checks out a new branch.

@@ -1,10 +1,12 @@
 #if os(iOS)
 import SwiftUI
 import ConduitCore
+import SSHTransport
 
 /// Loads live policy YAML from the bridge before showing ``PolicyEditorView``.
 struct PolicyEditorBridgeScreen: View {
     let actions: BridgeSessionActions
+    var daemonChannel: DaemonChannel? = nil
     @State private var yamlText = PolicyEditorView.balancedPreset
     @State private var editorGeneration = 0
     @State private var loadError: String?
@@ -25,7 +27,10 @@ struct PolicyEditorBridgeScreen: View {
             },
             onSave: actions.isConnected
                 ? { body in try await actions.savePolicyYAML(body) }
-                : nil
+                : nil,
+            simulate: daemonChannel.map { ch in
+                { @Sendable yaml, days in try await ch.simulatePolicy(yaml: yaml, periodDays: days) }
+            }
         )
         .id(editorGeneration)
         .overlay(alignment: .top) {
