@@ -12,10 +12,9 @@ import DesignSystem
 /// `@Observable` tracking is transitive, any view reading `store.agents`
 /// re-renders when the session mutates (`status`, `isExecutingUnified`, `cwd`).
 ///
-/// The **primary** agent is the real live session; the progress stats and the
-/// "other agents" roster are **mock/demo data** (`AgentDemoData`) because the
-/// app runs one session at a time and has no per-step/token telemetry yet.
-/// `AgentDemoData` is the single seam to replace with real data later.
+/// `agents` surfaces **only** the real live session (see below) — no demo data
+/// ships. The expandable multi-agent island with its `AgentDemoData` roster
+/// exists only in the DEBUG gallery; it is never read here.
 @MainActor
 @Observable
 public final class AgentHUDStore {
