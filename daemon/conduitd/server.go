@@ -195,6 +195,8 @@ func newServer(home string) *server {
 	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
 	// policy) — not via a bare resolve that skips both.
 	s.poller = newDecisionPoller(s.applyDecision)
+	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
+	s.dispatcher.audit = s.auditEntry
 	return s
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -171,5 +172,49 @@ func TestSetBudgetAbsentRunReturnsFalse(t *testing.T) {
 	d := newDispatcher()
 	if d.setBudget("no-such-id", 5.00) {
 		t.Fatal("setBudget on absent run should return false")
+	}
+}
+
+func TestRunControlActionsAreAudited(t *testing.T) {
+	var actions []string
+	d := newDispatcher()
+	d.audit = func(e AuditEntry) { actions = append(actions, e.Action) }
+	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
+		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+
+	d.pause(res.RunID)
+	d.resume(res.RunID)
+	d.cancel(res.RunID)
+
+	// Exact-order assertion: each control action audits once, in sequence. Also
+	// guards against a duplicate "run-stopped" if cancel ever loses idempotency.
+	want := []string{"run-paused", "run-resumed", "run-stopped"}
+	if !reflect.DeepEqual(actions, want) {
+		t.Fatalf("want %v; got %v", want, actions)
+	}
+}
+
+func TestBudgetExceededIsAudited(t *testing.T) {
+	var actions []string
+	d := newDispatcher()
+	d.audit = func(e AuditEntry) { actions = append(actions, e.Action) }
+	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x", BudgetUSD: 5.00},
+		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+	d.setSpentUSD(5.00) // hits the cap → enforceBudgets stops the run
+
+	found := false
+	for _, a := range actions {
+		if a == "run-budget-exceeded" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("budget-exceeded stop was not audited; got %v (run %s)", actions, res.RunID)
 	}
 }

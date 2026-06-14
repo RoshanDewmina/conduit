@@ -93,10 +93,19 @@ type dispatcher struct {
 	runs     map[string]*dispatchRun
 	spentUSD float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
 	launch   launchFunc
+	audit    func(AuditEntry) // run-control audit sink; no-op until wired by the server
 }
 
 func newDispatcher() *dispatcher {
-	return &dispatcher{runs: map[string]*dispatchRun{}, launch: realLauncher}
+	return &dispatcher{runs: map[string]*dispatchRun{}, launch: realLauncher, audit: func(AuditEntry) {}}
+}
+
+// emitAudit forwards to the audit sink, tolerating a nil sink (a dispatcher built
+// directly in tests has no sink wired).
+func (d *dispatcher) emitAudit(e AuditEntry) {
+	if d.audit != nil {
+		d.audit(e)
+	}
 }
 
 // setSpentUSD updates the tracked daily spend and enforces per-run caps.
@@ -133,8 +142,9 @@ func (d *dispatcher) setBudget(runID string, usd float64) bool {
 
 // enforceBudgets kills any running/paused run whose accumulated spend meets its cap.
 func (d *dispatcher) enforceBudgets() {
+	type stoppedRun struct{ id, agent string }
+	var stopped []stoppedRun
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	for _, run := range d.runs {
 		if run.Status != "running" && run.Status != "paused" {
 			continue
@@ -145,7 +155,13 @@ func (d *dispatcher) enforceBudgets() {
 				run.handle.kill()
 			}
 			run.Status = "budget-exceeded"
+			stopped = append(stopped, stoppedRun{run.ID, run.Agent})
 		}
+	}
+	d.mu.Unlock()
+	// Audit outside the lock so the file write never blocks the dispatcher mutex.
+	for _, s := range stopped {
+		d.emitAudit(AuditEntry{Action: "run-budget-exceeded", Agent: s.agent, Kind: "run-control", ApprovalID: s.id})
 	}
 }
 
@@ -202,42 +218,52 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 
 func (d *dispatcher) cancel(runID string) bool {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	run := d.runs[runID]
-	if run == nil {
+	// Idempotent: a second cancel returns false and emits no duplicate audit entry.
+	if run == nil || run.Status == "cancelled" {
+		d.mu.Unlock()
 		return false
 	}
-	if run.handle != nil && run.Status != "cancelled" {
+	if run.handle != nil {
 		run.handle.kill()
 	}
 	run.Status = "cancelled"
+	agent := run.Agent
+	d.mu.Unlock()
+	d.emitAudit(AuditEntry{Action: "run-stopped", Agent: agent, Kind: "run-control", ApprovalID: runID})
 	return true
 }
 
 func (d *dispatcher) pause(runID string) bool {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	run := d.runs[runID]
 	if run == nil || run.Status != "running" {
+		d.mu.Unlock()
 		return false
 	}
 	if run.handle != nil {
 		run.handle.pause()
 	}
 	run.Status = "paused"
+	agent := run.Agent
+	d.mu.Unlock()
+	d.emitAudit(AuditEntry{Action: "run-paused", Agent: agent, Kind: "run-control", ApprovalID: runID})
 	return true
 }
 
 func (d *dispatcher) resume(runID string) bool {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	run := d.runs[runID]
 	if run == nil || run.Status != "paused" {
+		d.mu.Unlock()
 		return false
 	}
 	if run.handle != nil {
 		run.handle.resume()
 	}
 	run.Status = "running"
+	agent := run.Agent
+	d.mu.Unlock()
+	d.emitAudit(AuditEntry{Action: "run-resumed", Agent: agent, Kind: "run-control", ApprovalID: runID})
 	return true
 }
