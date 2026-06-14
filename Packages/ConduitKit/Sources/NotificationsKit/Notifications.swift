@@ -165,6 +165,7 @@ public actor Notifications {
     /// Schedule a local notification representing a pending approval. The
     /// notification body uses `userInfo` to deep-link into the Inbox tab.
     public func notifyPendingApproval(_ approval: Approval, hostName: String) async {
+        guard _filter.shouldDeliver(kind: .approval) else { return }
         guard _filter.shouldDeliver(risk: approval.risk, agent: approval.agent) else { return }
         let content = UNMutableNotificationContent()
         content.title = "Approval needed · \(hostName)"
@@ -245,6 +246,7 @@ public actor Notifications {
         sessionID: String
     ) async {
         let ok = exitCode == 0
+        guard _filter.shouldDeliver(kind: ok ? .runComplete : .error) else { return }
         let content = UNMutableNotificationContent()
         content.title = ok ? "Run complete · \(hostName)" : "Run failed · \(hostName)"
         content.body = "\(command) — exit \(exitCode)"

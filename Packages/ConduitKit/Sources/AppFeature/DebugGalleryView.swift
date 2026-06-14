@@ -384,6 +384,7 @@ struct DebugGalleryView: View {
                 catalogSection("Buttons") { buttonsPanel }
                 catalogSection("Chips & Badges") { chipsPanel }
                 catalogSection("Status & Progress") { statusPanel }
+                catalogSection("Blocked Reason") { blockedReasonPanel }
                 catalogSection("Avatars & Pixel") { avatarsPanel }
                 catalogSection("Block Cards") { blockCardsPanel }
                 catalogSection("Chat Bubbles") { chatBubblesPanel }
@@ -515,6 +516,24 @@ struct DebugGalleryView: View {
         }
     }
 
+    // MARK: - Blocked Reason ("why am I blocked?")
+
+    private var blockedReasonPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // info → neutral
+            DSBlockedReasonRow(.awaitingPolicyEvaluation)
+            DSBlockedReasonRow(.pausedByUser)
+            // warning → amber
+            DSBlockedReasonRow(.awaitingApproval(
+                approvalID: "a1", command: "rm -rf ./build", agent: "Claude Code"
+            ))
+            DSBlockedReasonRow(.watchdogTimeout(secondsSinceLastActivity: 42))
+            // critical → red
+            DSBlockedReasonRow(.daemonUnreachable(lastContact: Date()))
+            DSBlockedReasonRow(.budgetExceeded(spentUSD: 12.40, capUSD: 10.0))
+        }
+    }
+
     // MARK: - Avatars & Pixel
 
     private var avatarsPanel: some View {
@@ -590,10 +609,15 @@ struct DebugGalleryView: View {
     private var chatGallery: some View {
         VStack(spacing: 0) {
             AgentStatusBar(
-                state: .streaming,
+                state: .approval,
                 message: "running build",
                 pendingApprovals: 1,
-                tickValues: [0.2, 0.6, 0.9, 0.4, 0.7, 1.0, 0.3, 0.5]
+                tickValues: [0.2, 0.6, 0.9, 0.4, 0.7, 1.0, 0.3, 0.5],
+                blockedReason: .awaitingApproval(
+                    approvalID: "demo",
+                    command: "rm -rf ./build && npm run deploy",
+                    agent: "Claude Code"
+                )
             )
             ChatHeaderView(hostName: "ubuntu@dev", cwd: "~/repo/conduit", state: .streaming, onBack: {})
             ScrollView {
@@ -1176,12 +1200,15 @@ private struct TypedInboxGalleryScreen: View {
 
     private static func mockApprovals() -> [Approval] {
         let sid = SessionID()
+        let now = Date()
         return [
             Approval(
                 sessionID: sid, agent: .claudeCode, kind: .askQuestion,
                 cwd: "~/repo/api", risk: .low,
+                createdAt: now.addingTimeInterval(-90),
                 question: "Which branch should I target for this PR?",
-                choices: ["main", "develop", "staging", "hotfix/auth"]
+                choices: ["main", "develop", "staging", "hotfix/auth"],
+                lastStateChangeAt: now.addingTimeInterval(-90)
             ),
             Approval(
                 sessionID: sid, agent: .claudeCode, kind: .callMCP,
@@ -1194,12 +1221,16 @@ private struct TypedInboxGalleryScreen: View {
             Approval(
                 sessionID: sid, agent: .claudeCode, kind: .command,
                 command: "rm -rf ./dist && npm run build",
-                cwd: "~/repo/web", risk: .medium
+                cwd: "~/repo/web", risk: .medium,
+                createdAt: now.addingTimeInterval(-8 * 60),
+                lastStateChangeAt: now.addingTimeInterval(-8 * 60)
             ),
             Approval(
                 sessionID: sid, agent: .codex, kind: .fileWrite,
                 command: "src/auth/middleware.ts",
-                cwd: "~/repo/api", risk: .high
+                cwd: "~/repo/api", risk: .high,
+                createdAt: now.addingTimeInterval(-75 * 60),
+                lastStateChangeAt: now.addingTimeInterval(-75 * 60)
             ),
         ]
     }

@@ -231,7 +231,7 @@ public struct InboxView: View {
                 agentKey: agentKey(approval.agent),
                 agentName: agentName(approval.agent),
                 hostLabel: approval.cwd,
-                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                timeLabel: pendingTimeLabel(approval),
                 question: approval.question ?? "What should I do next?",
                 choices: approval.choices ?? [],
                 onAnswer: { idx in
@@ -245,7 +245,7 @@ public struct InboxView: View {
                 agentKey: agentKey(approval.agent),
                 agentName: agentName(approval.agent),
                 hostLabel: approval.cwd,
-                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                timeLabel: pendingTimeLabel(approval),
                 toolName: approval.toolName ?? approval.command ?? "unknown_tool",
                 toolUseID: approval.toolUseID,
                 args: summarizedToolInput(approval),
@@ -268,7 +268,7 @@ public struct InboxView: View {
                 agentKey: agentKey(approval.agent),
                 agentName: agentName(approval.agent),
                 hostLabel: approval.cwd,
-                timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                timeLabel: pendingTimeLabel(approval),
                 toolName: approval.toolName ?? approval.command ?? "unknown",
                 credentialHint: approval.command ?? "credential",
                 risk: approval.risk.rawValue,
@@ -282,7 +282,7 @@ public struct InboxView: View {
                 DSApprovalCard(
                     agentKey: agentKey(approval.agent),
                     risk: approval.risk.rawValue,
-                    timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+                    timeLabel: pendingTimeLabel(approval),
                     agentName: agentName(approval.agent),
                     action: approval.toolName.map { "run \($0)" } ?? defaultActionVerb(for: approval.kind),
                     hostLabel: approval.cwd,
@@ -598,6 +598,27 @@ public struct InboxView: View {
         case .callMCP:      "call an MCP tool"
         case .askQuestion:  "ask a question"
         }
+    }
+
+    /// Absolute time-of-day plus a relative "waiting Nm" staleness hint for
+    /// pending approvals, derived from `lastStateChangeAt` (falling back to
+    /// `createdAt` when the daemon never stamped a state-change time).
+    private func pendingTimeLabel(_ approval: Approval) -> String {
+        let absolute = approval.createdAt.formatted(date: .omitted, time: .shortened)
+        guard approval.isPending else { return absolute }
+        let since = approval.lastStateChangeAt ?? approval.createdAt
+        let elapsed = max(0, Date().timeIntervalSince(since))
+        guard let waited = waitingHint(elapsed) else { return absolute }
+        return "\(absolute) · waiting \(waited)"
+    }
+
+    private func waitingHint(_ seconds: TimeInterval) -> String? {
+        guard seconds >= 60 else { return nil }
+        let minutes = Int(seconds) / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        let remMin = minutes % 60
+        return remMin == 0 ? "\(hours)h" : "\(hours)h \(remMin)m"
     }
 
     private func decidedLabel(_ approval: Approval) -> String {

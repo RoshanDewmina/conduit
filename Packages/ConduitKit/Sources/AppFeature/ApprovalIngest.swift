@@ -36,7 +36,8 @@ public actor ApprovalIngest {
                         toolUseID: params.approvalToolUseID,
                         agentSessionID: params.approvalAgentSessionID,
                         toolInput: params.approvalToolInput,
-                        blastRadius: params.blastRadius
+                        blastRadius: params.blastRadius,
+                        lastStateChangeAt: Date()
                     )
                     try? await repository.upsert(approval)
                     await Notifications.shared.notifyPendingApproval(approval, hostName: hostName)

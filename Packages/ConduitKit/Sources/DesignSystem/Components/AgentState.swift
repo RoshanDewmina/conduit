@@ -77,3 +77,70 @@ public struct AgentStateContext: Sendable, Equatable {
         self.lastBytesReceived = lastBytesReceived
     }
 }
+
+extension BlockedReason.Severity {
+    /// Map severity onto the risk-ramp tone used across DSChip / status surfaces:
+    /// info → neutral, warning → amber/orange, critical → red.
+    public func color(tokens: ConduitTokens) -> Color {
+        switch self {
+        case .info:     return tokens.text3
+        case .warning:  return tokens.warn
+        case .critical: return tokens.danger
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .info:     return "clock"
+        case .warning:  return "exclamationmark.triangle.fill"
+        case .critical: return "exclamationmark.octagon.fill"
+        }
+    }
+}
+
+/// "Why am I blocked?" line — renders a `BlockedReason` with severity-appropriate
+/// styling (risk ramp: info → neutral, warning → amber, critical → red). Designed
+/// to sit on the always-dark HUD strip, so it reads colors against `hudText`.
+public struct DSBlockedReasonRow: View {
+    let reason: BlockedReason
+    let onDark: Bool
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(_ reason: BlockedReason, onDark: Bool = false) {
+        self.reason = reason
+        self.onDark = onDark
+    }
+
+    /// Convenience: render only when an `AgentStateContext` carries a blocked reason.
+    public init?(context: AgentStateContext, onDark: Bool = false) {
+        guard let reason = context.blockedReason else { return nil }
+        self.reason = reason
+        self.onDark = onDark
+    }
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: reason.severity.systemImage)
+                .font(.caption2)
+                .foregroundStyle(accent)
+            Text(reason.displayReason)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(textColor)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(accent.opacity(onDark ? 0.16 : 0.10))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(accent).frame(width: 2)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+    }
+
+    private var accent: Color { reason.severity.color(tokens: t) }
+    private var textColor: Color { onDark ? t.hudText : t.text }
+}

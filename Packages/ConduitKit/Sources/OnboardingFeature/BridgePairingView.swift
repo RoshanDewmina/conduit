@@ -86,7 +86,6 @@ public struct BridgePairingView: View {
 
     private var pairingCodeGrid: some View {
         let gridSize = 7
-        let cells = Array(0..<(gridSize * gridSize))
         return VStack(spacing: 2) {
             ForEach(0..<gridSize, id: \.self) { row in
                 HStack(spacing: 2) {

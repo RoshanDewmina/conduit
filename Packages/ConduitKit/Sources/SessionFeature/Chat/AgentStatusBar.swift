@@ -11,25 +11,38 @@ public struct AgentStatusBar: View {
     let message: String?
     let pendingApprovals: Int
     let tickValues: [Double]   // normalized 0–1 for TickBars
+    let blockedReason: BlockedReason?
 
     @State private var isExpanded = false
     @Environment(\.conduitTokens) private var t
+
+    /// Rich state bundling the lifecycle state with any active blocking context.
+    private var context: AgentStateContext {
+        AgentStateContext(state: state, blockedReason: blockedReason)
+    }
 
     public init(
         state: AgentState,
         message: String? = nil,
         pendingApprovals: Int = 0,
-        tickValues: [Double] = []
+        tickValues: [Double] = [],
+        blockedReason: BlockedReason? = nil
     ) {
         self.state = state
         self.message = message
         self.pendingApprovals = pendingApprovals
         self.tickValues = tickValues
+        self.blockedReason = blockedReason
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             strip
+            if !isExpanded, let row = DSBlockedReasonRow(context: context, onDark: true) {
+                row
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+            }
             if isExpanded { expandedSheet }
         }
         .background(t.hudBg)
@@ -112,6 +125,10 @@ public struct AgentStatusBar: View {
                         .font(.caption)
                         .foregroundStyle(t.hudText)
                 }
+            }
+
+            if let row = DSBlockedReasonRow(context: context, onDark: true) {
+                row
             }
         }
         .padding(.horizontal, 14)
