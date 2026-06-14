@@ -110,6 +110,7 @@ public struct AppRoot: View {
     @State private var selectedTab: Tab = .inbox
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
+    @State private var dispatchPresented = false
     @State private var editingHost: Host?
     @State private var workspacesRevision = UUID()
     @State private var passwordPromptHost: Host?
@@ -446,6 +447,16 @@ public struct AppRoot: View {
                 }
             }
         }
+        .sheet(isPresented: $dispatchPresented) {
+            NavigationStack {
+                DispatchView(
+                    agents: dispatchAgents(),
+                    onDispatch: { agentID, cwd, prompt, budget in
+                        performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget)
+                    }
+                )
+            }
+        }
         .sheet(item: $editingHost) { host in
             NavigationStack {
                 HostEditorView(
@@ -631,6 +642,43 @@ public struct AppRoot: View {
         )
     }
 
+    /// Dispatchable agents across all connected fleet slots. Each id encodes
+    /// `slotUUID|vendor` so `performDispatch` can route back to the right channel.
+    @MainActor
+    private func dispatchAgents() -> [DispatchAgent] {
+        fleetStore.slots.flatMap { slot -> [DispatchAgent] in
+            let offline = slot.sessionViewModel.status != .connected
+            let cwd = slot.sessionViewModel.cwd.isEmpty ? "~" : slot.sessionViewModel.cwd
+            return (slot.bridgeStatus?.agents ?? []).map { agent in
+                DispatchAgent(
+                    id: "\(slot.id.uuidString)|\(agent.agent)",
+                    name: "\(agent.displayName) · \(slot.hostName)",
+                    cwd: cwd,
+                    isOffline: offline || !(agent.loggedIn ?? true)
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?) {
+        let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2,
+              let slotUUID = UUID(uuidString: parts[0]),
+              let slot = fleetStore.slots.first(where: { $0.id == slotUUID })
+        else { return }
+        let vendor = parts[1]
+        dispatchPresented = false
+        Task {
+            try? await slot.channel.dispatchAgent(
+                agent: vendor,
+                cwd: cwd,
+                prompt: prompt,
+                budgetUSD: budgetUSD ?? 0
+            )
+        }
+    }
+
     @Environment(\.conduitTokens) private var t
 
     private func compactRoot(env: AppEnvironment) -> some View {
@@ -797,7 +845,8 @@ public struct AppRoot: View {
                 hostRepo: env.hostRepo,
                 onConnectHost: { addHostPresented = true },
                 onReconnect: { host in openSession(host: host, env: env) },
-                onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } }
+                onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
+                onNewTask: { dispatchPresented = true }
             )
             .id(workspacesRevision)
 
