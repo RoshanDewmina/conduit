@@ -34,17 +34,10 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
-      # CI runner (macos-15, Xcode 26.0.1) lacks watchOS 26.0 SDK.
-      # The Conduit scheme embeds ConduitWatch, so strip that dependency
-      # from the generated pbxproj before building.
-      - name: Remove watchOS dependency from project
-        run: |
-          # Remove the ConduitWatch embed dependency from the Conduit target
-          sed -i '' '/ConduitWatch.*embed.*true/d' Conduit.xcodeproj/project.pbxproj
-          # Also remove any remaining watch target references from the scheme
-          sed -i '' '/ConduitWatch/d' Conduit.xcodeproj/xcshareddata/xcschemes/Conduit.xcscheme 2>/dev/null || true
       # The full app target catches strict-concurrency / module-visibility breaks
-      # that `swift test` (incremental SPM) silently misses.
+      # that `swift test` (incremental SPM) silently misses. The watchOS app is
+      # not part of v1 (no watch targets in project.yml), so no watchOS SDK is
+      # needed on the runner.
       - name: Build app target for simulator
         run: >
           xcodebuild build
