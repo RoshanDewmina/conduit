@@ -137,34 +137,61 @@ func decodeRelayJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 // behaviour can be unit-tested without touching the process environment or
 // calling os.Exit.
 //
-//   - secret present                      → ("", "")        ok
-//   - secret empty + production (isProd)   → (fatalMsg, "")  refuse to start
-//   - secret empty + non-production        → ("", warnMsg)   warn, continue
+//   - secret present                    → ("", "")        ok
+//   - secret empty + production         → (fatalMsg, "")  refuse to start
+//   - secret empty + non-production     → ("", warnMsg)   warn, continue
 func relaySecretStartupCheck(secret string, isProd bool) (fatal, warn string) {
 	if strings.TrimSpace(secret) != "" {
 		return "", ""
 	}
 	if isProd {
 		return "SECURITY: APPROVAL_RELAY_SECRET is unset in a production deployment " +
-			"(FLY_APP_NAME is present). The control-plane endpoints /register, /approval and " +
+			"(Fly.io, Cloud Run, or CONDUIT_ENV=production). The control-plane endpoints /register, /approval and " +
 			"/run-complete would be UNAUTHENTICATED — anyone could overwrite a session's " +
-			"relayToken/APNs token. Refusing to start. Set it via: " +
-			"fly secrets set APPROVAL_RELAY_SECRET=<strong-random-value>", ""
+			"relayToken/APNs token. Refusing to start. Set APPROVAL_RELAY_SECRET to a strong random value.", ""
 	}
 	return "", "SECURITY WARNING: APPROVAL_RELAY_SECRET is unset — the control-plane endpoints /register, /approval and /run-complete are UNAUTHENTICATED, so anyone can register/overwrite a session's relayToken and APNs token (see docs/audit/findings/fix-backend-relay-auth.md). The per-session relayToken still gates /approval/decision and /decisions, but it is only as trustworthy as the registration that minted it. Set APPROVAL_RELAY_SECRET in production."
 }
 
 // warnIfRelayUnauthenticated guards the control-plane secret at startup.
 // FAIL-CLOSED in production: when APPROVAL_RELAY_SECRET is unset AND the process
-// is a deployed Fly app (FLY_APP_NAME present), it log.Fatal()s rather than
-// serve unauthenticated /register, /approval and /run-complete. In local/dev
-// (no FLY_APP_NAME) it logs one loud warning and continues. Called from main().
+// is running as a deployed Fly app, Cloud Run service, or explicit production
+// env, it log.Fatal()s rather than serve unauthenticated /register, /approval
+// and /run-complete. In local/dev it logs one loud warning and continues.
+// Called from main().
 func warnIfRelayUnauthenticated() {
-	fatal, warn := relaySecretStartupCheck(relaySharedSecret(), flyAppName() != "")
+	fatal, warn := relaySecretStartupCheck(relaySharedSecret(), relayProductionDeployment())
 	if fatal != "" {
 		log.Fatal(fatal)
 	}
 	if warn != "" {
 		log.Printf("%s", warn)
+	}
+}
+
+func relayProductionDeployment() bool {
+	return relayProductionDeploymentFromEnv(os.Getenv)
+}
+
+func relayProductionDeploymentFromEnv(getenv func(string) string) bool {
+	for _, key := range []string{
+		"FLY_APP_NAME",
+		"K_SERVICE",
+		"K_REVISION",
+		"K_CONFIGURATION",
+	} {
+		if strings.TrimSpace(getenv(key)) != "" {
+			return true
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("CONDUIT_ENV"))) {
+	case "prod", "production":
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("APP_ENV"))) {
+	case "prod", "production":
+		return true
+	default:
+		return false
 	}
 }

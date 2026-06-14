@@ -186,15 +186,15 @@ func TestEvictExpiredDevices(t *testing.T) {
 }
 
 // TestRelaySecretStartupCheck pins the production fail-fast guard: an empty
-// APPROVAL_RELAY_SECRET must refuse startup in production (FLY_APP_NAME present)
-// and only warn in dev; a configured secret is always ok.
+// APPROVAL_RELAY_SECRET must refuse startup in production and only warn in dev;
+// a configured secret is always ok.
 func TestRelaySecretStartupCheck(t *testing.T) {
 	cases := []struct {
-		name        string
-		secret      string
-		isProd      bool
-		wantFatal   bool
-		wantWarn    bool
+		name      string
+		secret    string
+		isProd    bool
+		wantFatal bool
+		wantWarn  bool
 	}{
 		{"empty+prod => fatal", "", true, true, false},
 		{"empty+dev => warn", "", false, false, true},
@@ -213,6 +213,30 @@ func TestRelaySecretStartupCheck(t *testing.T) {
 			}
 			if c.wantFatal && c.wantWarn {
 				t.Fatal("test invariant: fatal and warn are mutually exclusive")
+			}
+		})
+	}
+}
+
+func TestRelayProductionDeploymentFromEnv(t *testing.T) {
+	cases := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"local", map[string]string{}, false},
+		{"fly", map[string]string{"FLY_APP_NAME": "conduit-push"}, true},
+		{"cloud run service", map[string]string{"K_SERVICE": "conduit-push"}, true},
+		{"cloud run revision", map[string]string{"K_REVISION": "conduit-push-0001"}, true},
+		{"explicit production", map[string]string{"CONDUIT_ENV": "production"}, true},
+		{"app env prod", map[string]string{"APP_ENV": "prod"}, true},
+		{"staging", map[string]string{"CONDUIT_ENV": "staging"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := relayProductionDeploymentFromEnv(func(key string) string { return c.env[key] })
+			if got != c.want {
+				t.Fatalf("relayProductionDeploymentFromEnv() = %v, want %v", got, c.want)
 			}
 		})
 	}

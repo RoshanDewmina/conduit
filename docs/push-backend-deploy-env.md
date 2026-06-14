@@ -8,6 +8,7 @@ Use Secret Manager or deployment-time environment variables.
 
 ## Required push/APNs values
 
+- `APPROVAL_RELAY_SECRET=<strong random value>` (required; production startup fails closed without it)
 - `APNS_KEY_ID=L8LVU9X82W`
 - `APNS_TEAM_ID=39HM2X8GS6`
 - `APNS_BUNDLE_ID=dev.conduit.mobile`
@@ -26,11 +27,12 @@ gcloud run deploy conduit-push --source . --region australia-southeast1 \
 # One-time secret creation (skip if already created):
 printf '%s' "$APNS_KEY_ID" | gcloud secrets create APNS_KEY_ID --data-file=-
 printf '%s' "$APNS_TEAM_ID" | gcloud secrets create APNS_TEAM_ID --data-file=-
+printf '%s' "$APPROVAL_RELAY_SECRET" | gcloud secrets create APPROVAL_RELAY_SECRET --data-file=-
 gcloud secrets create APNS_KEY --data-file "/absolute/path/AuthKey_L8LVU9X82W.p8"
 
 # Update service with APNs secrets and runtime env.
 gcloud run services update conduit-push --region australia-southeast1 \
-  --set-secrets APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest \
+  --set-secrets APPROVAL_RELAY_SECRET=APPROVAL_RELAY_SECRET:latest,APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest \
   --update-secrets /secrets/apns.p8=APNS_KEY:latest \
   --set-env-vars APNS_KEY_PATH=/secrets/apns.p8,APNS_BUNDLE_ID=dev.conduit.mobile
 ```

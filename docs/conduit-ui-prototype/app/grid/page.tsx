@@ -1,5 +1,4 @@
 "use client"
-import { useEffect, useRef } from "react"
 
 const SCREENS = [
   { label: "Checkpoint A — Risk Card", href: "/checkpoint/a" },

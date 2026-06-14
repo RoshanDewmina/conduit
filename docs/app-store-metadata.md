@@ -11,13 +11,13 @@
 - **Privacy / Support / Marketing URLs:** `https://conduit.dev/privacy` · `https://conduit.dev/support` · `https://conduit.dev`
 
 **Promotional text:**
-> Your AI coding agents ask permission on your phone. Decide in one tap — even when you're away. Safe actions auto-handle by your policy; everything's logged.
+> Your AI coding agents ask permission on your phone. Decide in one tap while you're away from the terminal. Safe actions auto-handle by your policy; everything's logged.
 
 **Description:**
-> Conduit is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app was closed. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+> Conduit is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 >
 > **Decide fast** — high-risk approvals surface with command, blast radius, and risk band. Allow, deny, allow-always, or edit-then-run.
-> **Stay calm** — autonomy presets (Cautious / Balanced / Bypass) and per-repo policy mean most actions never reach you.
+> **Stay calm** — autonomy presets (Always ask / Auto-approve reads / Critical only) and per-repo policy mean most actions never reach you.
 > **See everything** — a while-you-were-away activity feed logs every autonomous decision; a fleet glance shows cross-vendor status and spend in one place.
 > **Go deep when needed** — a full block-mode terminal, diff review, SFTP browser, and dev-server preview live one tap down.
 
@@ -30,7 +30,7 @@ Canonical set: `docs/screenshots/governed-approvals/`.
 2. A decision being made (Approve / Deny / Edit / Allow-always).
 3. Fleet glance (cross-vendor status + spend).
 4. Activity (while-you-were-away) feed.
-5. Autonomy presets (Cautious / Balanced / Bypass).
+5. Autonomy presets (Always ask / Auto-approve reads / Critical only).
 
 ## Age rating → 4+
 Made for kids: No · Unrestricted web: No · Gambling/Contests: No · Violence/Sexual content: None.
@@ -41,7 +41,7 @@ Conduit governs AI coding agents on the developer's own remote host. It drives a
 ## Privacy nutrition label
 No tracking. Declare: APNs device token (push registration for approval alerts) and subscription data if Stripe billing is enabled. State plainly: **source code never leaves the device.** Verify against actual data flows before submission.
 
-> **Copy caveat:** the "even when you're away / app was closed" claim is true **only with the backend decision-relay enabled** (it is, as of the Governed Approvals milestone). If that relay is ever disabled, change the promo/description to "Open and decide in a tap" and drop "even when the app was closed."
+> **Copy caveat:** do not claim closed-app lock-screen approval until physical-device APNs delivery and notification actions are verified. Simulator runs can verify relay decision logic, but APNs delivery is owner-gated.
 
 ## Entitlements (observed in `project.yml`, read-only)
 

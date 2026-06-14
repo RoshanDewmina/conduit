@@ -19,10 +19,10 @@ Repo `/Users/roshansilva/Documents/command-center`. Backend: `daemon/push-backen
      --allow-unauthenticated --min-instances 1 --port 8080
    ```
    Capture the printed `https://conduit-push-…-ts.a.run.app` URL.
-2. **Secret Manager** — create `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APNS_KEY` (the `.p8` file), `APNS_KEY_ID`, `APNS_TEAM_ID`, `PUBLIC_BASE_URL`, `WEBSITE_BASE_URL`. Wire into the service and **mount the `.p8` as a volume file** at `/secrets/apns.p8` matching `APNS_KEY_PATH`:
+2. **Secret Manager** — create `APPROVAL_RELAY_SECRET` (strong random value; backend refuses production startup without it), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APNS_KEY` (the `.p8` file), `APNS_KEY_ID`, `APNS_TEAM_ID`, `PUBLIC_BASE_URL`, `WEBSITE_BASE_URL`. Wire into the service and **mount the `.p8` as a volume file** at `/secrets/apns.p8` matching `APNS_KEY_PATH`:
    ```bash
    gcloud run services update conduit-push --region australia-southeast1 \
-     --set-secrets STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,STRIPE_PRICE_MONTHLY=STRIPE_PRICE_MONTHLY:latest,STRIPE_PRICE_ANNUAL=STRIPE_PRICE_ANNUAL:latest,APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest,PUBLIC_BASE_URL=PUBLIC_BASE_URL:latest,WEBSITE_BASE_URL=WEBSITE_BASE_URL:latest \
+     --set-secrets APPROVAL_RELAY_SECRET=APPROVAL_RELAY_SECRET:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,STRIPE_PRICE_MONTHLY=STRIPE_PRICE_MONTHLY:latest,STRIPE_PRICE_ANNUAL=STRIPE_PRICE_ANNUAL:latest,APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest,PUBLIC_BASE_URL=PUBLIC_BASE_URL:latest,WEBSITE_BASE_URL=WEBSITE_BASE_URL:latest \
      --update-secrets /secrets/apns.p8=APNS_KEY:latest \
      --set-env-vars APNS_KEY_PATH=/secrets/apns.p8,APNS_BUNDLE_ID=dev.conduit.mobile,CORS_ALLOW_ORIGIN=https://conduit.dev
    ```

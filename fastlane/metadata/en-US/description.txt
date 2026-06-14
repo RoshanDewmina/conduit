@@ -1,10 +1,10 @@
-Conduit is mission control for the AI coding agents running on your own machine. A small bridge on your host enforces the policy you set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app was closed. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+Conduit is mission control for the AI coding agents running on your own machine. A small bridge on your host enforces the policy you set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 
 DECIDE FAST
 High-risk approvals surface with the command, blast radius, and risk band. Allow, deny, allow-always, or edit-then-run.
 
 STAY CALM
-Autonomy presets (Cautious / Balanced / Bypass) and per-repo policy mean most actions never reach you.
+Autonomy presets (Always ask / Auto-approve reads / Critical only) and per-repo policy mean most actions never reach you.
 
 SEE EVERYTHING
 A while-you-were-away activity feed logs every autonomous decision; a fleet glance shows cross-vendor status and spend in one place.

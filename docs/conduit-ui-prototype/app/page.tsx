@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 
 const SECTIONS = [
   {
@@ -49,10 +50,30 @@ export default function Home() {
           </p>
           <h1 className="text-4xl font-bold text-white mb-3">Conduit UI</h1>
           <p className="text-white/50 text-base">
-            Review these variants and give feedback before we write Swift code.
-            Each screen has 2–3 distinct design directions.
+            Review the fully interactive prototype first, then use the older
+            static variants below for screen-by-screen comparison.
           </p>
         </div>
+
+        <Link
+          href="/interactive"
+          className="group mb-12 flex items-center justify-between border border-blue-500/35 bg-blue-500/10 px-5 py-5 transition-all hover:bg-blue-500/15"
+        >
+          <div>
+            <span className="font-mono text-xs uppercase tracking-widest text-blue-300">
+              Full prototype
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Interactive Conduit command center
+            </h2>
+            <p className="mt-1 text-sm text-white/45">
+              Switch between Approval Core, Fleet Control, and Session Cockpit;
+              click through approvals, fleet, terminal, files, diff, preview,
+              activity, settings, library, onboarding, and watch handoff.
+            </p>
+          </div>
+          <ArrowRight className="size-6 text-blue-300 transition-transform group-hover:translate-x-1" />
+        </Link>
 
         <div className="flex flex-col gap-10">
           {SECTIONS.map((section) => (
