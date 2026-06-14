@@ -240,6 +240,9 @@ func newServer(home string) *server {
 	s.poller = newDecisionPoller(s.applyDecision)
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
+	// Dispatched runs stream stdout/stderr + status back to the phone through the
+	// same serialized writer the approval-pending notification uses.
+	s.dispatcher.emit = s.emitNotification
 	return s
 }
 
@@ -956,6 +959,16 @@ func (s *server) writeResult(id interface{}, result interface{}) {
 func (s *server) writeError(id interface{}, code int, message string) {
 	msg := rpcMessage{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message}}
 	data, _ := json.Marshal(msg)
+	s.writeFramed(data)
+}
+
+// emitNotification marshals a JSON-RPC notification (no id) and writes it on the
+// serialized writeFramed path, so concurrent run-output goroutines are safe.
+func (s *server) emitNotification(method string, params any) {
+	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
+	if err != nil {
+		return
+	}
 	s.writeFramed(data)
 }
 

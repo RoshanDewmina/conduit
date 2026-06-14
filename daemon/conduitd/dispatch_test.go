@@ -16,7 +16,7 @@ func noAudit(AuditEntry) {}
 func TestProcHandlePauseResumeRecorded(t *testing.T) {
 	var events []string
 	d := newDispatcher()
-	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{
 			kill:   func() { events = append(events, "kill") },
 			pause:  func() { events = append(events, "pause") },
@@ -26,8 +26,8 @@ func TestProcHandlePauseResumeRecorded(t *testing.T) {
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi"},
 		func(ApprovalEvent) (string, string) { return "allow", "test-allow" },
 		func(AuditEntry) {})
-	if res.Status != "running" {
-		t.Fatalf("want running, got %q (%s)", res.Status, res.Message)
+	if res.Status != "started" {
+		t.Fatalf("want started, got %q (%s)", res.Status, res.Message)
 	}
 	if !d.pause(res.RunID) || !d.resume(res.RunID) {
 		t.Fatal("pause/resume returned false for a live run")
@@ -39,7 +39,7 @@ func TestProcHandlePauseResumeRecorded(t *testing.T) {
 
 func TestDispatchDeniedByPolicyDoesNotLaunch(t *testing.T) {
 	launched := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string, string, emitFunc) (*procHandle, error) {
 		launched = true
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}}
@@ -54,14 +54,14 @@ func TestDispatchDeniedByPolicyDoesNotLaunch(t *testing.T) {
 
 func TestDispatchBudgetExceededDoesNotLaunch(t *testing.T) {
 	launched := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string, string, emitFunc) (*procHandle, error) {
 		launched = true
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}}
 	d.setSpentUSD(10)
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", Prompt: "do x", BudgetUSD: 5}, allowEval, noAudit)
-	if res.Status != "budget-exceeded" {
-		t.Fatalf("want budget-exceeded, got %q", res.Status)
+	if res.Status != "budgetExceeded" {
+		t.Fatalf("want budgetExceeded, got %q", res.Status)
 	}
 	if launched {
 		t.Fatal("an over-budget dispatch must NOT launch")
@@ -70,12 +70,12 @@ func TestDispatchBudgetExceededDoesNotLaunch(t *testing.T) {
 
 func TestDispatchAllowLaunchesAndCancels(t *testing.T) {
 	cancelled := false
-	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string) (*procHandle, error) {
+	d := &dispatcher{runs: map[string]*dispatchRun{}, launch: func([]string, string, string, emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() { cancelled = true }, pause: func() {}, resume: func() {}}, nil
 	}}
 	res := d.dispatch(dispatchParams{Agent: "codex", Prompt: "run tests"}, allowEval, noAudit)
-	if res.Status != "running" || res.RunID == "" {
-		t.Fatalf("want running with runID, got %+v", res)
+	if res.Status != "started" || res.RunID == "" {
+		t.Fatalf("want started with runID, got %+v", res)
 	}
 	if !d.cancel(res.RunID) {
 		t.Fatal("cancel should find the run")
@@ -129,7 +129,7 @@ func TestScheduleDueTickAndPersistence(t *testing.T) {
 func TestSetBudgetKillsRunOverCap(t *testing.T) {
 	var killed bool
 	d := newDispatcher()
-	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() { killed = true }, pause: func() {}, resume: func() {}}, nil
 	}
 	// dispatch with no cap so it always admits; the cap is set after spend accrues.
@@ -153,7 +153,7 @@ func TestSetBudgetKillsRunOverCap(t *testing.T) {
 func TestSpendUpdateEnforcesPerRunCap(t *testing.T) {
 	var killed bool
 	d := newDispatcher()
-	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() { killed = true }, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", BudgetUSD: 5.00},
@@ -179,7 +179,7 @@ func TestRunControlActionsAreAudited(t *testing.T) {
 	var actions []string
 	d := newDispatcher()
 	d.audit = func(e AuditEntry) { actions = append(actions, e.Action) }
-	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
@@ -201,7 +201,7 @@ func TestBudgetExceededIsAudited(t *testing.T) {
 	var actions []string
 	d := newDispatcher()
 	d.audit = func(e AuditEntry) { actions = append(actions, e.Action) }
-	d.launch = func(argv []string, cwd string) (*procHandle, error) {
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x", BudgetUSD: 5.00},

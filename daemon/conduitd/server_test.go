@@ -97,7 +97,7 @@ func TestDeviceRegister(t *testing.T) {
 func TestRunControlRPCs(t *testing.T) {
 	s := newServer(t.TempDir())
 	defer s.poller.stopForTest()
-	s.dispatcher.launch = func(argv []string, cwd string) (*procHandle, error) {
+	s.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	run := s.dispatcher.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},

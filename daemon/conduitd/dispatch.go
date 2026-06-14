@@ -1,24 +1,40 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
 
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
-func agentArgv(agent, prompt string) ([]string, bool) {
+func agentArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		return []string{"claude", "-p", prompt}, true
+		argv := []string{"claude", "-p", prompt}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
 	case "codex":
-		return []string{"codex", "exec", prompt}, true
+		argv := []string{"codex", "exec"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return append(argv, prompt), true
 	case "opencode":
-		return []string{"opencode", "run", prompt}, true
+		argv := []string{"opencode", "run"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return append(argv, prompt), true
 	default:
 		return nil, false
 	}
@@ -29,11 +45,12 @@ type dispatchParams struct {
 	CWD       string  `json:"cwd"`
 	Prompt    string  `json:"prompt"`
 	BudgetUSD float64 `json:"budgetUSD"`
+	Model     string  `json:"model"`
 }
 
 type dispatchResult struct {
 	RunID    string `json:"runId,omitempty"`
-	Status   string `json:"status"`             // running | needs-approval | denied | budget-exceeded | error
+	Status   string `json:"status"`             // started | needsApproval | denied | budgetExceeded | error
 	Decision string `json:"decision,omitempty"` // allow | ask | deny
 	Rule     string `json:"rule,omitempty"`
 	Message  string `json:"message,omitempty"`
@@ -46,16 +63,47 @@ type procHandle struct {
 	resume func()
 }
 
-// launchFunc starts an agent process and returns its control handle.
-type launchFunc func(argv []string, cwd string) (*procHandle, error)
+// emitFunc sends a JSON-RPC notification (method + params) to the attached phone.
+type emitFunc func(method string, params any)
 
-func realLauncher(argv []string, cwd string) (*procHandle, error) {
+// launchFunc starts an agent process, streaming its stdout/stderr + status to
+// emit (tagged with runID), and returns its control handle. Injectable for tests.
+type launchFunc func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error)
+
+func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
 	cmd.Dir = cwd
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	go func() { _ = cmd.Wait() }()
+	emitRunStatus(emit, runID, "running", nil)
+
+	var seq int64
+	var streams sync.WaitGroup
+	streams.Add(2)
+	go streamOutput(emit, runID, "stdout", stdout, &seq, &streams)
+	go streamOutput(emit, runID, "stderr", stderr, &seq, &streams)
+
+	go func() {
+		// Drain both pipes before reaping so no chunk is dropped (cmd.Wait closes
+		// the pipes after exit, ending the readers), then report final status.
+		streams.Wait()
+		code := exitCode(cmd.Wait())
+		if code == 0 {
+			emitRunStatus(emit, runID, "exited", &code)
+		} else {
+			emitRunStatus(emit, runID, "failed", &code)
+		}
+	}()
+
 	proc := cmd.Process
 	return &procHandle{
 		kill: func() {
@@ -74,6 +122,47 @@ func realLauncher(argv []string, cwd string) (*procHandle, error) {
 			}
 		},
 	}, nil
+}
+
+func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, done *sync.WaitGroup) {
+	defer done.Done()
+	if emit == nil {
+		_, _ = io.Copy(io.Discard, r)
+		return
+	}
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		n := atomic.AddInt64(seq, 1)
+		emit("agent.run.output", map[string]any{
+			"runId":  runID,
+			"stream": stream,
+			"chunk":  sc.Text() + "\n",
+			"seq":    int(n),
+		})
+	}
+}
+
+func emitRunStatus(emit emitFunc, runID, status string, code *int) {
+	if emit == nil {
+		return
+	}
+	params := map[string]any{"runId": runID, "status": status}
+	if code != nil {
+		params["exitCode"] = *code
+	}
+	emit("agent.run.status", params)
+}
+
+func exitCode(waitErr error) int {
+	if waitErr == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(waitErr, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
 }
 
 type dispatchRun struct {
@@ -149,6 +238,7 @@ type dispatcher struct {
 	providerSpend  map[string]*providerSpend
 	launch         launchFunc
 	audit          func(AuditEntry) // run-control audit sink; no-op until wired by the server
+	emit           emitFunc         // run-output/status notifier; nil until wired by the server
 }
 
 func newDispatcher() *dispatcher {
@@ -406,7 +496,7 @@ func (d *dispatcher) getQuotaGuard() QuotaGuardResult {
 // dispatch applies the budget + policy gate, then launches. It NEVER launches a
 // run that policy denies/escalates, and refuses once the budget cap is reached.
 func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, ok := agentArgv(p.Agent, p.Prompt)
+	argv, ok := agentArgv(p.Agent, p.Prompt, p.Model)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
@@ -417,7 +507,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	d.mu.Unlock()
 	if p.BudgetUSD > 0 && spent >= p.BudgetUSD {
 		audit(AuditEntry{Action: "dispatch-budget-exceeded", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
-		return dispatchResult{Status: "budget-exceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
+		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
 	}
 
 	// Policy gate. A dispatched run defaults to medium risk so the bundled policy
@@ -438,20 +528,22 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
-		return dispatchResult{Status: "needs-approval", Decision: "ask", Rule: rule}
+		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
-	handle, err := d.launch(argv, p.CWD)
+	// Allocate the runId before launch so streamed output/status events can be
+	// tagged with it from the first byte.
+	id := newUUID()
+	handle, err := d.launch(argv, p.CWD, id, d.emit)
 	if err != nil {
 		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
-	id := newUUID()
 	d.mu.Lock()
 	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
-	return dispatchResult{RunID: id, Status: "running", Decision: "allow", Rule: rule}
+	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }
 
 func (d *dispatcher) cancel(runID string) bool {
