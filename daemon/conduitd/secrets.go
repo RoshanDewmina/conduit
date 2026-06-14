@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -186,8 +187,15 @@ func (s *secretsStore) requestAccess(requestID, scope string) (string, error) {
 	return "", fmt.Errorf("no secret matching scope %q", auth.Scope)
 }
 
-// authorize stores an authorization for a secret request.
-func (s *secretsStore) authorize(requestID, scope string, expiresAt *time.Time, oneTime bool, allowedBy string) {
+// authorize stores an authorization for a secret request. A concrete scope is
+// required: empty or "*" scopes are rejected so a phone tap can never silently
+// grant access to every stored secret (fail-closed — broad access must be an
+// explicit, named scope).
+func (s *secretsStore) authorize(requestID, scope string, expiresAt *time.Time, oneTime bool, allowedBy string) error {
+	scope = strings.TrimSpace(scope)
+	if scope == "" || scope == "*" {
+		return fmt.Errorf("a concrete scope is required to authorize a secret")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.authorizations[requestID] = &secretAuth{
@@ -198,6 +206,7 @@ func (s *secretsStore) authorize(requestID, scope string, expiresAt *time.Time, 
 		AllowedBy: allowedBy,
 	}
 	s.persistLocked()
+	return nil
 }
 
 // revoke removes an authorization.
@@ -271,18 +280,32 @@ func (s *secretsStore) listPending() []pendingSecretRequest {
 	return out
 }
 
-// scopeMatches checks if the authorized scope covers the requested scope.
-// An empty authorized scope matches everything (full access).
-// Otherwise the authorized scope must be a prefix of (or equal to) the secret's scope.
+// scopeMatches checks if the authorized scope covers the secret's scope.
+// Matching is segment-wise on ":" boundaries: an authorized scope covers a
+// secret scope only when it equals it, or is a strict segment-prefix of it
+// (e.g. "api" covers "api:github" but never "api-admin"). Empty/wildcard
+// scopes match nothing — they are rejected at authorize() time, and this
+// function fails closed if one ever reaches it.
 func scopeMatches(authorized, secretScope string) bool {
-	if authorized == "" || authorized == "*" {
-		return true
+	if authorized == "" || authorized == "*" || secretScope == "" {
+		return false
 	}
 	if authorized == secretScope {
 		return true
 	}
-	// Prefix match: "read:" matches "read:repo"
-	return len(secretScope) > len(authorized) && secretScope[:len(authorized)] == authorized
+	authSegs := strings.Split(authorized, ":")
+	secretSegs := strings.Split(secretScope, ":")
+	// The authorized scope must be broader (fewer segments) to cover the secret;
+	// an equal or greater segment count that isn't an exact match cannot broaden.
+	if len(authSegs) >= len(secretSegs) {
+		return false
+	}
+	for i := range authSegs {
+		if authSegs[i] != secretSegs[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // generateSecretValue creates a random 32-byte secret, base64url-encoded.

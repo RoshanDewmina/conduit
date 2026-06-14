@@ -729,7 +729,10 @@ func (s *server) handleMessage(msg *rpcMessage) {
 				expiresAt = &t
 			}
 		}
-		s.secrets.authorize(p.RequestID, p.Scope, expiresAt, p.OneTime, "user")
+		if err := s.secrets.authorize(p.RequestID, p.Scope, expiresAt, p.OneTime, "user"); err != nil {
+			s.writeError(msg.ID, -32602, err.Error())
+			return
+		}
 		s.secrets.removePending(p.RequestID)
 		s.writeResult(msg.ID, map[string]bool{"ok": true})
 
