@@ -10,6 +10,7 @@ public enum DSButtonVariant {
     case secondary    // bg=surface, border=borderStrong, fg=text
     case ghost        // transparent, fg=text2, hover=surfaceSunk
     case destructive  // bg=surface, border=danger, fg=danger
+    case quiet        // demoted secondary: no fill, 0.5px hairline, fg=text2; h=40 (R3.4)
 }
 
 public enum DSButtonSize { case sm, md, lg }
@@ -99,7 +100,7 @@ public struct DSButton: View {
         .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                .strokeBorder(borderColor, lineWidth: hasBorder ? 1 : 0)
+                .strokeBorder(borderColor, lineWidth: hasBorder ? borderLineWidth : 0)
         )
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
@@ -130,9 +131,18 @@ public struct DSButton: View {
     }
 
     // MARK: Sizes
-    private var hPad: CGFloat { switch size { case .sm: 10; case .md: 12; case .lg: 16 } }
-    private var vPad: CGFloat { switch size { case .sm: 4; case .md: 6; case .lg: 10 } }
-    private var visualMinH: CGFloat { switch size { case .sm: 26; case .md: 36; case .lg: 44 } }
+    private var hPad: CGFloat {
+        guard variant != .quiet else { return 8 }
+        switch size { case .sm: return 10; case .md: return 12; case .lg: return 16 }
+    }
+    private var vPad: CGFloat {
+        guard variant != .quiet else { return 4 }
+        switch size { case .sm: return 4; case .md: return 6; case .lg: return 10 }
+    }
+    private var visualMinH: CGFloat {
+        guard variant != .quiet else { return 40 }
+        switch size { case .sm: return 26; case .md: return 36; case .lg: return 44 }
+    }
     private var labelSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
     private var iconSize: CGFloat { switch size { case .sm: 12; case .md: 13; case .lg: 14 } }
 
@@ -153,21 +163,23 @@ public struct DSButton: View {
 
     private var bgColor: Color {
         switch variant {
-        case .primary:     return t.accent         // BLOCKS: the single filled CTA is electric blue
+        case .primary:     return t.accent
         case .accent:      return t.accent
         case .secondary:   return t.surface
         case .ghost:       return .clear
         case .destructive: return t.surface
+        case .quiet:       return .clear
         }
     }
 
     private var fgColor: Color {
         switch variant {
-        case .primary:     return t.accentFg       // white on blue
+        case .primary:     return t.accentFg
         case .accent:      return t.accentFg
         case .secondary:   return t.text
         case .ghost:       return t.text2
         case .destructive: return t.danger
+        case .quiet:       return t.text2
         }
     }
 
@@ -175,9 +187,18 @@ public struct DSButton: View {
         switch variant {
         case .secondary:   return t.borderStrong
         case .destructive: return t.danger
+        case .quiet:       return t.border
         default:           return .clear
         }
     }
 
-    private var hasBorder: Bool { variant == .secondary || variant == .destructive }
+    private var hasBorder: Bool {
+        switch variant {
+        case .secondary, .destructive: return true
+        case .quiet:                   return true
+        default:                       return false
+        }
+    }
+
+    private var borderLineWidth: CGFloat { variant == .quiet ? 0.5 : 1 }
 }

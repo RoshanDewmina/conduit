@@ -646,7 +646,7 @@ public struct AddHostView: View {
             }
 
             // Footer note
-            Text("Stored in the Keychain. Manage it in Library › SSH Keys.")
+            Text("Stored in the Keychain. Manage keys in Settings › Security.")
                 .font(.dsSansPt(11))
                 .foregroundStyle(t.text4)
         }

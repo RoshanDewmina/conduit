@@ -225,18 +225,21 @@ public struct DSApprovalCard: View {
                 DSQuoteBlock(title: "bash", tags: riskTags, message: cmd, tone: riskTone)
             }
 
-            // Actions row
+            // ONE-TAP ROW (R3.1–R3.3): Deny LEFT (destructive outline), Approve RIGHT (primary filled).
+            HStack(spacing: 8) {
+                DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
+                DSButton("Approve", variant: .primary, size: .md, mono: true, fullWidth: true, action: onApprove)
+            }
+
+            // SECOND ROW: demoted secondary actions (quiet variant, R3.3)
             HStack(spacing: 8) {
                 if let viewDiff = onViewDiff {
-                    DSButton("VIEW DIFF", variant: .ghost, size: .sm, mono: true, action: viewDiff)
+                    DSButton("View diff", variant: .quiet, size: .md, mono: true, fullWidth: true, action: viewDiff)
                 }
                 if let edit = onEditAndRun {
-                    DSButton("EDIT & RUN", variant: .secondary, size: .sm, mono: true, action: edit)
+                    DSButton("Edit & run", variant: .quiet, size: .md, mono: true, fullWidth: true, action: edit)
                 }
-                Spacer()
-                DSButton("DENY", variant: .destructive, size: .sm, mono: true, action: onDeny)
-                DSButton("ALLOW ALWAYS", variant: .secondary, size: .sm, mono: true, action: onAllowAlways)
-                DSButton("APPROVE", variant: .primary, size: .sm, mono: true, action: onApprove)
+                DSButton("Allow always…", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onAllowAlways)
             }
             Text("Allow always applies to this exact tool, input, and path. Revoke rules in Settings.")
                 .font(.dsMonoPt(10.5))

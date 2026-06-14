@@ -226,6 +226,9 @@ public struct DSMCPCallCard: View {
                 }
             }
 
+            // Inline blast-radius chips (risk ramp — never brand blue per R5.1/R5.2)
+            blastRadiusChips
+
             // Command well: t.bg background, t.divider border, $ in danger + tool name mono
             HStack(alignment: .top, spacing: 8) {
                 Text("$")
@@ -254,64 +257,18 @@ public struct DSMCPCallCard: View {
                     .strokeBorder(t.divider, lineWidth: 1)
             )
 
-            // Action buttons: equal width, square, BLOCKS display font
+            // ONE-TAP ROW (R3.1–R3.3): Deny LEFT (destructive outline), Approve RIGHT (primary filled).
             HStack(spacing: 8) {
-                Button(action: onDeny) {
-                    Text("✕  deny")
-                        .font(.dsDisplayPt(12, weight: .semibold))
-                        .foregroundStyle(t.danger)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .background(t.bg)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(t.danger.opacity(0.6), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onAllowAlways) {
-                    Text("always")
-                        .font(.dsDisplayPt(12, weight: .semibold))
-                        .foregroundStyle(t.text)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .background(t.surfaceSunk)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onEditAndRun) {
-                    Text("edit & run")
-                        .font(.dsDisplayPt(12, weight: .semibold))
-                        .foregroundStyle(t.text)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .background(t.surfaceSunk)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onApprove) {
-                    Text("✓  approve")
-                        .font(.dsDisplayPt(12, weight: .semibold))
-                        .foregroundStyle(t.accentFg)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                        .background(t.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                }
-                .buttonStyle(.plain)
+                DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
+                DSButton("Approve", variant: .primary, size: .md, mono: true, fullWidth: true, action: onApprove)
             }
+
+            // SECOND ROW: demoted secondary actions (quiet variant, R3.3)
+            HStack(spacing: 8) {
+                DSButton("Edit & run", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onEditAndRun)
+                DSButton("Allow always…", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onAllowAlways)
+            }
+
             Text("Allow always applies to this exact tool, input, and path. Revoke rules in Settings.")
                 .font(.dsMonoPt(10.5))
                 .foregroundStyle(t.text3)
@@ -326,6 +283,16 @@ public struct DSMCPCallCard: View {
         )
         .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+    }
+
+    @ViewBuilder
+    private var blastRadiusChips: some View {
+        let riskTone: DSChipTone = risk >= 3 ? .danger : risk == 2 ? .orange : risk == 1 ? .warn : .ok
+        let riskLabel: String = risk >= 3 ? "critical" : risk == 2 ? "high" : risk == 1 ? "medium" : "low"
+        HStack(spacing: 6) {
+            DSChip(riskLabel, systemImage: "exclamationmark.triangle", tone: riskTone, variant: .soft, size: .sm)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

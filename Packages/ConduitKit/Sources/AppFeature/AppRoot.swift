@@ -810,10 +810,7 @@ public struct AppRoot: View {
                 syncEngine: env.syncEngine,
                 backendURL: Self.pushBackendURL(),
                 auditRepository: env.auditRepo,
-                approvalRepository: approvalRepository,
-                agentStore: agentStore,
-                snippetRepo: env.snippetRepo,
-                keyStore: env.keyStore
+                approvalRepository: approvalRepository
             )
         }
     }
@@ -1076,19 +1073,12 @@ private struct LaunchLockView: View {
     }
 }
 
-/// Settings tab wrapper that surfaces a Library navigation row so the Library
-/// view remains reachable after the dedicated Library tab was removed.
 private struct SettingsWithLibraryView: View {
     let viewModel: SettingsViewModel
     let syncEngine: SyncEngine?
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
-    let agentStore: AgentStore?
-    let snippetRepo: SnippetRepository
-    let keyStore: KeyStore
-
-    @State private var libraryPresented = false
 
     var body: some View {
         SettingsView(
@@ -1096,21 +1086,9 @@ private struct SettingsWithLibraryView: View {
             syncEngine: syncEngine,
             backendURL: backendURL,
             auditRepository: auditRepository,
-            approvalRepository: approvalRepository,
-            onOpenLibrary: { libraryPresented = true }
+            approvalRepository: approvalRepository
         )
-        // Hide the system nav bar so `DSScreenHeader` sits flush like the other
-        // tabs (the old toolbar item added a top inset that pushed it down) and
-        // present Library via the header's square DSIconButton instead of a
-        // circular SF-symbol toolbar button.
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(isPresented: $libraryPresented) {
-            if let store = agentStore {
-                LibraryView(snippetRepo: snippetRepo, keyStore: keyStore, agentStore: store)
-            } else {
-                ProgressView("Loading library…")
-            }
-        }
     }
 }
 

@@ -159,8 +159,6 @@ public struct SettingsView: View {
     let bridgeActions: BridgeSessionActions
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
-    let onOpenLibrary: (() -> Void)?
-
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
@@ -195,8 +193,7 @@ public struct SettingsView: View {
         approvalRepository: ApprovalRepository? = nil,
         bridgeActions: BridgeSessionActions = BridgeSessionActions(),
         statusHeaderAgents: [AgentInfo] = [],
-        onTapStatusHeader: @escaping () -> Void = {},
-        onOpenLibrary: (() -> Void)? = nil
+        onTapStatusHeader: @escaping () -> Void = {}
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -206,7 +203,6 @@ public struct SettingsView: View {
         self.bridgeActions = bridgeActions
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
-        self.onOpenLibrary = onOpenLibrary
     }
 
     public var body: some View {
@@ -247,11 +243,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
-        DSScreenHeader("settings", breadcrumb: "device & agent") {
-            if let onOpenLibrary {
-                DSIconButton(.folder, action: onOpenLibrary)
-            }
-        }
+        DSScreenHeader("settings", breadcrumb: "device & agent")
 
         if !statusHeaderAgents.isEmpty {
             AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)

@@ -2,14 +2,16 @@
 import SwiftUI
 import ConduitCore
 
-/// Inbox banner summarizing blast radius for an escalated approval.
+/// Full-width blast-radius banner for the inbox approval flow.
 public struct DSBlastRadiusBanner: View {
     let blastRadius: ApprovalBlastRadius
+    let touchesCredential: Bool?
 
     @Environment(\.conduitTokens) private var t
 
-    public init(blastRadius: ApprovalBlastRadius) {
+    public init(blastRadius: ApprovalBlastRadius, touchesCredential: Bool? = nil) {
         self.blastRadius = blastRadius
+        self.touchesCredential = touchesCredential
     }
 
     public var body: some View {
@@ -37,6 +39,12 @@ public struct DSBlastRadiusBanner: View {
                 if blastRadius.touchesNetwork == true {
                     DSChip("network", tone: .danger, variant: .soft, size: .sm)
                 }
+                if touchesCredential == true {
+                    DSChip("credentials", systemImage: "key.fill", tone: .orange, variant: .soft, size: .sm)
+                }
+                if let count = blastRadius.files?.count, count > 0 {
+                    DSChip("\(count) file\(count == 1 ? "" : "s")", systemImage: "doc.fill", tone: .warn, variant: .soft, size: .sm)
+                }
             }
             if let files = blastRadius.files, !files.isEmpty {
                 Text(files.prefix(5).joined(separator: " · "))
@@ -52,6 +60,40 @@ public struct DSBlastRadiusBanner: View {
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(t.warn.opacity(0.35), lineWidth: 1)
         )
+    }
+}
+
+/// Compact inline variant for embedding inside an approval card body.
+public struct DSBlastRadiusInline: View {
+    let blastRadius: ApprovalBlastRadius
+    let touchesCredential: Bool?
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(blastRadius: ApprovalBlastRadius, touchesCredential: Bool? = nil) {
+        self.blastRadius = blastRadius
+        self.touchesCredential = touchesCredential
+    }
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "scope")
+                .font(.system(size: 10))
+                .foregroundStyle(t.warn)
+            if blastRadius.touchesGit == true {
+                DSChip("git", tone: .warn, variant: .soft, size: .sm)
+            }
+            if blastRadius.touchesNetwork == true {
+                DSChip("network", tone: .danger, variant: .soft, size: .sm)
+            }
+            if touchesCredential == true {
+                DSChip("credentials", systemImage: "key.fill", tone: .orange, variant: .soft, size: .sm)
+            }
+            if let count = blastRadius.files?.count, count > 0 {
+                DSChip("\(count) file\(count == 1 ? "" : "s")", systemImage: "doc.fill", tone: .warn, variant: .soft, size: .sm)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
