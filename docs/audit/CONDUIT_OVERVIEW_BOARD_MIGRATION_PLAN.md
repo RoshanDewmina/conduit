@@ -165,16 +165,27 @@ No persistence/schema changes. No SSH/terminal pipeline changes.
 
 ## 8. Phasing & sequencing
 
-- **Phase 0 — credibility cleanup:** delete `SessionShellView`/`SessionSurface`, `mockHostCounts`,
-  dissolve Library (hub + folder-icon + nav), de-Library Add Host copy. Build green.
-- **Phase 1 — design system:** risk-ramp tokens + `risk()` rewrite; `DSDecisionSheet`,
-  `DSStatusHeader`, `DSButton` quiet variant; approval-card re-rank + inline blast chips.
-- **Phase 2 — screen restyles:** Fleet (`DSSpendHero` + `+ task`), Activity chips, Settings regroup +
-  Trust & Privacy + Security/SSH-keys, Policy restyle, Onboarding restyle.
-- **Phase 3 — activation + dispatch:** demo approval, first-run checklist, `DispatchView` wired to RPC.
-- **Phase 4 — QA:** every `DebugGalleryView` route, light **and** dark, contrast + Dynamic Type +
-  VoiceOver (hide decorative cursor), tap targets ≥44pt; re-shoot App Store screenshots.
-- **Phase B (separate, infra-gated):** manual bridge install + QR-pair onboarding.
+> **Status (2026-06-14):** Phases 0–3 **implemented & in-sim verified** on `codex/uiux-audit`
+> (commits `62e4b94a` Wave 1, `55b15981` Wave 2, `bd01e164` Dispatch wiring, `924c040f` SSH-keys).
+> ConduitKit + full app target build green. Remaining open items called out inline below.
+
+- **Phase 0 — credibility cleanup:** ✅ done — deleted `SessionShellView`/`SessionSurface`,
+  removed `mockHostCounts`, dissolved Library (hub + folder-icon + nav), de-Library Add Host copy.
+- **Phase 1 — design system:** ✅ done — risk-ramp tokens + `risk()` rewrite (prior commit);
+  new `DSDecisionSheet`, `DSStatusHeader`, `DSSpendHero`; `DSButton` `quiet` variant;
+  approval-card re-rank (`DSMCPCallCard` + `DSApprovalCard`) + inline blast chips;
+  `DSBlastRadiusBanner` files/credentials chips + `DSBlastRadiusInline`.
+  ↳ **Open:** `DSDecisionSheet` is built but not yet presented on card-tap (Inbox routing, §7.1).
+- **Phase 2 — screen restyles:** ✅ done — Fleet (`DSSpendHero` + `+ task`), Activity action-type
+  chips, Settings regroup (Bridge&Hosts / Approvals / Security / Account) + `TrustPrivacyView` +
+  Security·SSH-keys row, Policy preset bar + effect chips, Onboarding 7→4 + solid-footer CTA (R1.1).
+  ↳ **Verify-when-connected:** Policy rules-list + Activity rows need a live SSH bridge to populate;
+  verified at component/tone level in-sim (both gate on a connection the audit sim doesn't have).
+- **Phase 3 — activation + dispatch:** ⏳ partial — `DispatchView` built + wired Fleet `+ task` →
+  `agent.dispatch` RPC (verified). **Open:** demo-approval local state + first-run inbox checklist.
+- **Phase 4 — QA:** ⏳ in progress — migrated screens screenshotted light **and** dark this pass;
+  still to do: contrast/Dynamic-Type/VoiceOver audit, tap-target sweep, re-shoot App Store screenshots.
+- **Phase B (separate, infra-gated):** ⛔ not started — manual bridge install + QR-pair onboarding.
 
 **Build loop:** `cd Packages/ConduitKit && swift build` after each change; XcodeBuildMCP
 `build_sim` for the full app target at phase boundaries (catches strict-concurrency breaks SPM misses).
