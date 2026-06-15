@@ -10,6 +10,11 @@ public struct DispatchAgent: Identifiable {
     public let cwd: String
     public let isOffline: Bool
 
+    /// The agent kind after the "|" separator in id, e.g. "opencode", "claudeCode", "codex".
+    public var vendor: String {
+        id.split(separator: "|", maxSplits: 1).dropFirst().first.map(String.init) ?? ""
+    }
+
     public init(id: String, name: String, cwd: String, isOffline: Bool) {
         self.id = id
         self.name = name
@@ -33,13 +38,25 @@ public struct DispatchView: View {
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
-    // Empty slug == the agent's own configured default (no --model flag passed).
-    private let modelOptions: [(label: String, slug: String)] = [
-        ("Agent default", ""),
-        ("Claude Opus 4", "claude-opus-4"),
-        ("Claude Sonnet 4", "claude-sonnet-4"),
-        ("Claude Haiku 4", "claude-haiku-4"),
-    ]
+    private var modelOptions: [(label: String, slug: String)] {
+        switch selectedAgent?.vendor ?? "" {
+        case "claudeCode":
+            [
+                ("Agent default", ""),
+                ("Claude Sonnet 4", "claude-sonnet-4"),
+                ("Claude Haiku 4", "claude-haiku-4"),
+            ]
+        case "opencode":
+            [
+                ("Agent default", ""),
+                ("DeepSeek V4 Flash (free)", "opencode/deepseek-v4-flash-free"),
+                ("MiMo V2.5 (free)", "opencode/mimo-v2.5-free"),
+                ("North Mini Code (free)", "opencode/north-mini-code-free"),
+            ]
+        default:
+            [("Agent default", "")]
+        }
+    }
 
     public init(
         agents: [DispatchAgent],
@@ -84,6 +101,9 @@ public struct DispatchView: View {
                 selectedAgentID = first.id
                 cwd = first.cwd
             }
+        }
+        .onChange(of: selectedAgentID) { _, _ in
+            selectedModel = ""
         }
     }
 
