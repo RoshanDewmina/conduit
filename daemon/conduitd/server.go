@@ -204,6 +204,9 @@ type server struct {
 	loopsMu   sync.Mutex
 	loops     map[string]loopState
 	loopsPath string
+	// git runs git/gh subcommands for the agent.git.* / agent.worktree.* RPCs.
+	// nil ⇒ realGitRunner; injectable in tests.
+	git gitRunner
 }
 
 type loopState struct {
@@ -809,6 +812,102 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			"pending": pending,
 		})
 
+	case "agent.git.status":
+		var p struct {
+			Workdir string `json:"workdir"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" {
+			s.writeError(msg.ID, -32602, "workdir required")
+			return
+		}
+		status, err := s.gitStatus(p.Workdir)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, status)
+
+	case "agent.git.diff":
+		var p struct {
+			Workdir string `json:"workdir"`
+			Path    string `json:"path"`
+			Staged  bool   `json:"staged"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" {
+			s.writeError(msg.ID, -32602, "workdir required")
+			return
+		}
+		diff, err := s.gitDiff(p.Workdir, p.Path, p.Staged)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]string{"diff": diff})
+
+	case "agent.git.changedFiles":
+		var p struct {
+			Workdir    string `json:"workdir"`
+			BaseBranch string `json:"baseBranch"`
+			Branch     string `json:"branch"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" {
+			s.writeError(msg.ID, -32602, "workdir required")
+			return
+		}
+		files, err := s.gitChangedFiles(p.Workdir, p.BaseBranch, p.Branch)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]interface{}{"files": files})
+
+	case "agent.git.ship":
+		var p shipParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" || p.Message == "" {
+			s.writeError(msg.ID, -32602, "workdir and message required")
+			return
+		}
+		// A phone-triggered push/PR is a privileged write — audit it (the hash-chained
+		// log is conduitd's source of truth for who shipped what).
+		s.auditEntry(AuditEntry{Action: "git-ship", Kind: "git", Command: "ship " + p.Workdir})
+		res, err := s.gitShip(p)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
+	case "agent.worktree.list":
+		var p struct {
+			Workdir string `json:"workdir"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		if p.Workdir == "" {
+			// No workdir supplied: nothing to enumerate. Empty (not error) so the
+			// board degrades gracefully on hosts without a configured workspace.
+			s.writeResult(msg.ID, map[string]interface{}{"worktrees": []worktreeResult{}})
+			return
+		}
+		trees, err := s.listWorktrees(p.Workdir)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]interface{}{"worktrees": trees})
+
+	case "agent.ci.recent":
+		var p struct {
+			Repo  string `json:"repo"`
+			Limit int    `json:"limit"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		events, err := s.recentCIEvents(p.Repo, p.Limit)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, events)
+
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
 	}
@@ -1169,7 +1268,36 @@ func (s *server) collectDoctorReport() doctorReport {
 	report.Checks = append(report.Checks, s.checkPolicyParseable())
 	report.Checks = append(report.Checks, s.checkFilesystemPermissions(home))
 	report.Checks = append(report.Checks, s.checkLocalModelEndpoints())
+	report.Checks = append(report.Checks, s.checkGitHubCLI())
 	return report
+}
+
+// checkGitHubCLI reports whether `gh` is installed and authenticated — the
+// prerequisite for the "Ship it" PR-create flow. A miss is a warning (not an
+// error): commit + push still work; only PR creation is blocked.
+func (s *server) checkGitHubCLI() doctorCheckResult {
+	out, err := s.gitRun("", "gh", "auth", "status")
+	if err != nil {
+		low := strings.ToLower(out + " " + err.Error())
+		msg := "gh not installed — install GitHub CLI to open PRs from Conduit"
+		if !strings.Contains(low, "executable file not found") && !strings.Contains(low, "not found") {
+			msg = "gh installed but not authenticated — run `gh auth login` (or set GH_TOKEN) to open PRs"
+		}
+		return doctorCheckResult{
+			ID:       "github-cli",
+			Name:     "GitHub CLI (Ship it / PR)",
+			Passed:   false,
+			Message:  msg,
+			Severity: "warning",
+		}
+	}
+	return doctorCheckResult{
+		ID:       "github-cli",
+		Name:     "GitHub CLI (Ship it / PR)",
+		Passed:   true,
+		Message:  "gh authenticated — PR creation available",
+		Severity: "info",
+	}
 }
 
 func (s *server) checkDaemonVersion() doctorCheckResult {

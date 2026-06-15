@@ -3,12 +3,16 @@ import SwiftUI
 import DesignSystem
 import AgentKit
 import SettingsFeature
+import SSHTransport
 
 // MARK: - Agent detail + run history
 
 struct AgentDetailView: View {
     @Bindable var store: AgentStore
     let agent: HostedAgent
+    /// Daemon channel for the agent's host, used to build a GitStore for the
+    /// run-detail "Changes" / "Ship it" flow. nil ⇒ git section hidden.
+    var gitChannel: DaemonChannel? = nil
 
     @State private var prompt = ""
     @State private var isRunning = false
@@ -262,6 +266,15 @@ struct AgentDetailView: View {
         }
     }
 
+    /// Build a GitStore for this agent's workspace (SSH host + configured path +
+    /// connected channel). nil ⇒ the run detail hides its "Changes" section.
+    private func makeGitStore() -> GitStore? {
+        guard agent.runtimeKind == .sshHost,
+              let workdir = agent.workspacePath, !workdir.isEmpty,
+              let gitChannel else { return nil }
+        return GitStore(channel: gitChannel, workdir: workdir)
+    }
+
     private var runHistorySection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSListSectionHead("RUN HISTORY")
@@ -274,7 +287,7 @@ struct AgentDetailView: View {
             } else {
                 ForEach(runs) { run in
                     NavigationLink {
-                        AgentRunDetailView(store: store, run: run, agentID: agent.id)
+                        AgentRunDetailView(store: store, run: run, agentID: agent.id, gitStore: makeGitStore())
                     } label: {
                         runRow(run)
                     }

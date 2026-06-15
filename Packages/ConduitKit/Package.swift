@@ -218,6 +218,8 @@ let package = Package(
                 "OnboardingFeature",
                 "SettingsFeature",
                 "DiffFeature",
+                "DiffKit",
+                "SSHTransport",
                 "PreviewFeature",
                 "FilesFeature",
                 "KeysFeature",

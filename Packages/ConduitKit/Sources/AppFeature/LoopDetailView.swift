@@ -2,6 +2,9 @@
 import SwiftUI
 import ConduitCore
 import DesignSystem
+import DiffFeature
+import DiffKit
+import SSHTransport
 
 public struct LoopDetailView: View {
     let loop: Loop
@@ -9,19 +12,27 @@ public struct LoopDetailView: View {
     let ciEventLoader: (@Sendable () async -> [CIEvent])?
 
     @State private var ciEvents: [CIEvent]
+    /// Git review/ship store for this loop's worktree. nil when the loop has no
+    /// worktree path or no connected host — the "Changes" section is then hidden.
+    @State private var gitStore: GitStore?
+    @State private var showShipSheet = false
+    @State private var diffToReview: IdentifiableDiff?
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.openURL) private var openURL
 
     public init(
         loop: Loop,
         onDismiss: @escaping () -> Void = {},
         ciEvents: [CIEvent] = [],
-        ciEventLoader: (@Sendable () async -> [CIEvent])? = nil
+        ciEventLoader: (@Sendable () async -> [CIEvent])? = nil,
+        gitStore: GitStore? = nil
     ) {
         self.loop = loop
         self.onDismiss = onDismiss
         _ciEvents = State(initialValue: ciEvents)
         self.ciEventLoader = ciEventLoader
+        _gitStore = State(initialValue: gitStore)
     }
 
     public var body: some View {
@@ -34,6 +45,9 @@ public struct LoopDetailView: View {
                     statusSection
                     identitySection
                     locationSection
+                    if gitStore != nil {
+                        changesSection
+                    }
                     progressSection
                     approvalsSection
                     spendSection
@@ -55,6 +69,93 @@ public struct LoopDetailView: View {
             guard let ciEventLoader else { return }
             let fetched = await ciEventLoader()
             if !fetched.isEmpty { ciEvents = fetched }
+        }
+        .task(id: loop.id) {
+            await gitStore?.refresh()
+        }
+        .sheet(item: $diffToReview) { wrapped in
+            NavigationStack { DiffView(diff: wrapped.diff) }
+        }
+        .sheet(isPresented: $showShipSheet) {
+            if let gitStore {
+                ShipItSheet(store: gitStore, loop: loop) { openURL($0) }
+            }
+        }
+    }
+
+    // MARK: - Changes (review + ship the agent's git work)
+
+    @ViewBuilder
+    private var changesSection: some View {
+        if let git = gitStore {
+            VStack(alignment: .leading, spacing: 8) {
+                DSListSectionHead("Changes")
+
+                if let status = git.status {
+                    HStack(spacing: 8) {
+                        DSChip(status.branch, systemImage: "arrow.triangle.branch", tone: .accent, variant: .outlined, size: .sm)
+                        if status.ahead > 0 {
+                            DSChip("↑\(status.ahead)", tone: .info, variant: .soft, size: .sm)
+                        }
+                        if status.behind > 0 {
+                            DSChip("↓\(status.behind)", tone: .warn, variant: .soft, size: .sm)
+                        }
+                        DSChip(status.isClean ? "clean" : "\(status.changes.count) changed",
+                               tone: status.isClean ? .ok : .warn, variant: .soft, size: .sm)
+                        Spacer()
+                    }
+                }
+
+                if !git.changedFiles.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(git.changedFiles.prefix(8)) { file in
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(t.text3)
+                                Text(file.path)
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text2)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(file.status.rawValue)
+                                    .font(.dsMonoPt(9))
+                                    .foregroundStyle(t.text3)
+                            }
+                        }
+                        if git.changedFiles.count > 8 {
+                            Text("+\(git.changedFiles.count - 8) more")
+                                .font(.dsMonoPt(10))
+                                .foregroundStyle(t.text3)
+                        }
+                    }
+                }
+
+                if let err = git.error, !err.isEmpty {
+                    Text(err)
+                        .font(.dsMonoPt(10))
+                        .foregroundStyle(t.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 8) {
+                    DSButton("Review diff", variant: .secondary, size: .sm, mono: true) {
+                        Task {
+                            if let diff = await git.loadDiff() {
+                                diffToReview = IdentifiableDiff(diff: diff)
+                            }
+                        }
+                    }
+                    DSButton("Ship it", variant: .primary, size: .sm, mono: true) {
+                        showShipSheet = true
+                    }
+                    .disabled(git.isShipping)
+                    Spacer()
+                    if git.isLoading || git.isShipping {
+                        ProgressView().scaleEffect(0.7)
+                    }
+                }
+            }
         }
     }
 
@@ -436,6 +537,140 @@ public struct LoopDetailView: View {
                 }
             }
         }
+    }
+}
+
+/// Wrapper so a `UnifiedDiff` (Hashable, not Identifiable) can drive `.sheet(item:)`.
+struct IdentifiableDiff: Identifiable {
+    let id = UUID()
+    let diff: UnifiedDiff
+}
+
+// MARK: - Ship It confirmation sheet
+
+/// The decisive supervision action: stage + commit + push (+ open PR), gated by
+/// a confirmation sheet showing the change summary and a prefilled commit message.
+/// Mirrors the approval-decision flow (review → decide → ship). The ship RPC is
+/// idempotent on the daemon, so a retry after a partial failure is safe.
+struct ShipItSheet: View {
+    let store: GitStore
+    let loop: Loop
+    let onOpenPR: (URL) -> Void
+
+    @State private var message: String
+    @State private var openPR = true
+    @State private var result: GitShipResult?
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+
+    init(store: GitStore, loop: Loop, onOpenPR: @escaping (URL) -> Void) {
+        self.store = store
+        self.loop = loop
+        self.onOpenPR = onOpenPR
+        // Prefill the commit message from the loop's goal.
+        _message = State(initialValue: loop.goal)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                t.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        summary
+                        commitField
+                        Toggle("Open pull request", isOn: $openPR)
+                            .font(.dsSansPt(13))
+                            .tint(t.accent)
+                        if let result {
+                            resultView(result)
+                        } else if let err = store.error, !err.isEmpty {
+                            Text(err)
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(t.danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        shipButton
+                        Spacer(minLength: 0)
+                    }
+                    .padding(18)
+                }
+            }
+            .navigationTitle("Ship it")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let status = store.status {
+                HStack(spacing: 6) {
+                    DSChip(status.branch, systemImage: "arrow.triangle.branch", tone: .accent, variant: .outlined, size: .sm)
+                    DSChip("\(status.changes.count) changed", tone: .warn, variant: .soft, size: .sm)
+                }
+            }
+            if let repo = loop.repo {
+                Text(repo).font(.dsMonoPt(11)).foregroundStyle(t.text3)
+            }
+        }
+    }
+
+    private var commitField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Commit message")
+                .font(.dsMonoPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+            TextEditor(text: $message)
+                .font(.dsMonoPt(13))
+                .frame(minHeight: 80)
+                .padding(8)
+                .background(t.surfaceSunk)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private func resultView(_ r: GitShipResult) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                DSChip(r.committed ? "committed ✓" : "not committed",
+                       tone: r.committed ? .ok : .danger, variant: .soft, size: .sm)
+                DSChip(r.pushed ? "pushed ✓" : "not pushed",
+                       tone: r.pushed ? .ok : .warn, variant: .soft, size: .sm)
+            }
+            if let url = r.prURL, let parsed = URL(string: url) {
+                DSButton("Open PR", variant: .secondary, size: .sm, mono: true) {
+                    onOpenPR(parsed)
+                }
+            }
+            if let msg = r.message, !msg.isEmpty {
+                Text(msg)
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(r.isShipped ? t.warn : t.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var shipButton: some View {
+        DSButton(result == nil ? "Ship it" : "Retry", variant: .primary, mono: true) {
+            Task {
+                result = await store.ship(
+                    message: message,
+                    openPR: openPR,
+                    base: loop.branch == nil ? nil : "main",
+                    title: message,
+                    body: ""
+                )
+            }
+        }
+        .disabled(store.isShipping || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 }
 #endif

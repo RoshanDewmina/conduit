@@ -51,6 +51,28 @@ public struct GitStatus: Sendable, Equatable {
     public var hasStagedChanges: Bool { changes.contains(where: \.staged) }
 }
 
+/// Result of the conduitd `agent.git.ship` RPC (stage+commit+push+PR).
+/// Idempotent: `committed`/`pushed` report exactly which stages completed so a
+/// partial failure (e.g. commit ok, push rejected) is safely retryable.
+public struct GitShipResult: Sendable, Equatable {
+    public let committed: Bool
+    public let pushed: Bool
+    public let prURL: String?
+    /// Human-readable detail when a stage did not fully complete (push rejected,
+    /// PR auth missing, etc.). Empty on full success.
+    public let message: String?
+
+    public init(committed: Bool, pushed: Bool, prURL: String? = nil, message: String? = nil) {
+        self.committed = committed
+        self.pushed = pushed
+        self.prURL = prURL
+        self.message = message
+    }
+
+    /// True when commit + push both succeeded (PR is best-effort / optional).
+    public var isShipped: Bool { committed && pushed }
+}
+
 /// Error raised when a git/gh command exits non-zero. Carries the combined
 /// stdout+stderr so callers can surface the real failure reason.
 public struct GitCommandError: Error, Sendable, Equatable {
