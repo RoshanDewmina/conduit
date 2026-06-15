@@ -97,27 +97,45 @@ public struct RunDetailView: View {
         (currentRun?.chunks.isEmpty).map { !$0 } ?? false
     }
 
+    // The run is actively producing output: drives the blinking caret. False once
+    // the process exits/fails or is stopped, so the caret disappears when done.
+    private var isStreaming: Bool {
+        store.status == .running && agentState != .done && agentState != .error
+    }
+
+    private static let bottomAnchor = "run-output-bottom"
+
     // MARK: - Body
 
     public var body: some View {
         VStack(spacing: 0) {
             hudStrip
             SpectrumBar(mode: spectrumMode, height: 6, gap: 1.5)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let err = store.lastError {
-                        Text(err)
-                            .font(.dsMonoPt(12))
-                            .foregroundStyle(t.termErr)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let err = store.lastError {
+                            Text(err)
+                                .font(.dsMonoPt(12))
+                                .foregroundStyle(t.termErr)
+                        }
+                        if hasOutput, let run = currentRun {
+                            outputContent(for: run)
+                        } else if currentRun != nil {
+                            thinkingPlaceholder
+                        }
+                        // Bottom anchor: the view auto-scrolls here as output streams
+                        // in so the freshest tokens stay visible (terminal-tail feel).
+                        Color.clear.frame(height: 1).id(Self.bottomAnchor)
                     }
-                    if hasOutput, let run = currentRun {
-                        outputContent(for: run)
-                    } else if currentRun != nil {
-                        thinkingPlaceholder
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
+                }
+                .onChange(of: currentRun?.chunks.count ?? 0) { _, _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
             }
         }
         .navigationTitle("run")
@@ -190,16 +208,12 @@ public struct RunDetailView: View {
     // MARK: - Output Content
 
     private func outputContent(for run: RunOutputStore.Run) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(run.chunks.sorted(by: { $0.seq < $1.seq }).enumerated()), id: \.element.seq) { _, chunk in
-                Text(chunk.chunk)
-                    .font(.dsMonoPt(13))
-                    .foregroundStyle(t.termText)
-                    .textSelection(.enabled)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeIn(duration: 0.12), value: run.chunks.count)
+        // One flowing mono block, not one Text per chunk: token-level deltas (which
+        // arrive without trailing newlines) must concatenate inline, exactly like a
+        // terminal, rather than each landing on its own line.
+        StreamingOutputText(text: run.text, isStreaming: isStreaming)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.easeIn(duration: 0.1), value: run.chunks.count)
     }
 
     // Destructive-left ordering per CONDUIT_UI_CONSISTENCY_RULES R3.3; equal-width row.
@@ -271,6 +285,46 @@ public struct RunDetailView: View {
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .background(.bar)
+    }
+}
+
+// MARK: - Streaming output
+
+/// Renders accumulated run output as a single flowing monospace block with a
+/// blinking block caret while the agent is still writing. Concatenating the text
+/// (rather than one Text per chunk) lets sub-line token deltas flow inline like a
+/// real terminal; the caret is appended via Text composition so it sits right
+/// after the last glyph and wraps with the text.
+private struct StreamingOutputText: View {
+    let text: String
+    let isStreaming: Bool
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        Group {
+            if isStreaming {
+                // 0.55s blink phase, no per-frame state — TimelineView re-renders the
+                // composed Text and we flip the caret's opacity from the wall clock.
+                TimelineView(.periodic(from: .now, by: 0.55)) { ctx in
+                    let on = Int(ctx.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
+                    composed(caretOpacity: on ? 1 : 0.12)
+                }
+            } else {
+                composed(caretOpacity: 0)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func composed(caretOpacity: Double) -> Text {
+        let body = Text(text)
+            .font(.dsMonoPt(13))
+            .foregroundColor(t.termText)
+        let caret = Text(isStreaming ? "▋" : "")
+            .font(.dsMonoPt(13))
+            .foregroundColor(t.termPrompt.opacity(caretOpacity))
+        return Text("\(body)\(caret)")
     }
 }
 

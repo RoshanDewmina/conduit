@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ func expandHome(cwd string) string {
 func agentArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "-p", prompt}
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "-p", prompt}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -100,11 +101,21 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	}
 	emitRunStatus(emit, runID, "running", nil)
 
+	// Detect whether the agent was launched in stream-json mode so the stdout
+	// reader can parse per-line JSON deltas instead of line-buffered chunks.
+	streamJSON := false
+	for i, a := range argv {
+		if a == "--output-format" && i+1 < len(argv) && argv[i+1] == "stream-json" {
+			streamJSON = true
+			break
+		}
+	}
+
 	var seq int64
 	var streams sync.WaitGroup
 	streams.Add(2)
-	go streamOutput(emit, runID, "stdout", stdout, &seq, &streams)
-	go streamOutput(emit, runID, "stderr", stderr, &seq, &streams)
+	go streamOutput(emit, runID, "stdout", stdout, &seq, &streams, streamJSON)
+	go streamOutput(emit, runID, "stderr", stderr, &seq, &streams, false)
 
 	go func() {
 		// Drain both pipes before reaping so no chunk is dropped (cmd.Wait closes
@@ -138,7 +149,11 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	}, nil
 }
 
-func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, done *sync.WaitGroup) {
+func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, done *sync.WaitGroup, streamJSON bool) {
+	if stream == "stdout" && streamJSON {
+		streamJSONOutput(emit, runID, r, seq, done)
+		return
+	}
 	defer done.Done()
 	if emit == nil {
 		_, _ = io.Copy(io.Discard, r)
@@ -154,6 +169,66 @@ func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, 
 			"chunk":  sc.Text() + "\n",
 			"seq":    int(n),
 		})
+	}
+}
+
+func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done *sync.WaitGroup) {
+	defer done.Done()
+	if emit == nil {
+		_, _ = io.Copy(io.Discard, r)
+		return
+	}
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for sc.Scan() {
+		line := sc.Text()
+
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			n := atomic.AddInt64(seq, 1)
+			emit("agent.run.output", map[string]any{
+				"runId": runID, "stream": "stdout", "chunk": line + "\n", "seq": int(n),
+			})
+			continue
+		}
+		typ, _ := obj["type"].(string)
+		switch typ {
+		case "stream_event":
+			event, _ := obj["event"].(map[string]any)
+			if event == nil {
+				continue
+			}
+			eTyp, _ := event["type"].(string)
+			if eTyp != "content_block_delta" {
+				continue
+			}
+			delta, _ := event["delta"].(map[string]any)
+			if delta == nil {
+				continue
+			}
+			dTyp, _ := delta["type"].(string)
+			if dTyp != "text_delta" {
+				continue
+			}
+			text, _ := delta["text"].(string)
+			if text == "" {
+				continue
+			}
+			n := atomic.AddInt64(seq, 1)
+			emit("agent.run.output", map[string]any{
+				"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
+			})
+		case "system", "assistant", "result":
+			// Recognised types we do not emit text from:
+			//   system   – session init (reserved for future resume).
+			//   assistant – whole-message fallback (superseded by deltas).
+			//   result   – run completion metadata.
+		default:
+			n := atomic.AddInt64(seq, 1)
+			emit("agent.run.output", map[string]any{
+				"runId": runID, "stream": "stdout", "chunk": line + "\n", "seq": int(n),
+			})
+		}
 	}
 }
 
@@ -185,6 +260,7 @@ type dispatchRun struct {
 	Prompt    string
 	Status    string // running | paused | cancelled | budget-exceeded
 	BudgetUSD float64
+	SessionID string // reserved for future session-resume support
 	handle    *procHandle
 }
 
