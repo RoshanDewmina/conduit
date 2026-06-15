@@ -161,8 +161,8 @@ public struct ConduitTokens: Sendable {
         // Text — cool near-black
         text:          Color(.sRGB, red: 0.078, green: 0.086, blue: 0.106, opacity: 1), // #14161b
         text2:         Color(.sRGB, red: 0.290, green: 0.302, blue: 0.333, opacity: 1), // #4a4d55
-        text3:         Color(.sRGB, red: 0.502, green: 0.514, blue: 0.549, opacity: 1), // #80838c
-        text4:         Color(.sRGB, red: 0.682, green: 0.694, blue: 0.722, opacity: 1), // #aeb1b8
+        text3:         Color(.sRGB, red: 0.357, green: 0.369, blue: 0.400, opacity: 1), // #5b5e66
+        text4:         Color(.sRGB, red: 0.431, green: 0.443, blue: 0.478, opacity: 1), // #6e717a
         textOnDark:    Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
 
         // Accent — electric blue
