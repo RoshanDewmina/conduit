@@ -74,8 +74,26 @@ public final class E2ERelayClient: ObservableObject {
         self.keyPair = PairingCrypto.generateKeyPair()
     }
 
-    public func connect() {
+    /// The phone's current ephemeral public key (Base64URL). This is the key the
+    /// relay forwards to the daemon as `peerPublicKey`; it must be the same key
+    /// encoded into the QR the daemon scans, so callers should read this *after*
+    /// `beginPairingSession()` and *before* `connect()`.
+    public var publicKeyBase64URL: String { keyPair.publicKeyBase64URL }
+
+    /// Rotate to a fresh keypair + single-use pairing code for a new pairing
+    /// attempt, and return the new code. Call this before rendering the QR so the
+    /// encoded `(code, publicKey)` matches what `connect()` will present. Unlike
+    /// the old behaviour, `connect()` no longer rotates the keypair — that would
+    /// invalidate a QR already on screen.
+    @discardableResult
+    public func beginPairingSession() -> String {
         keyPair = PairingCrypto.generateKeyPair()
+        let code = PairingCrypto.generatePairingCode()
+        pairingCode = code
+        return code
+    }
+
+    public func connect() {
         connectionState = .connecting
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
@@ -238,17 +256,23 @@ public final class E2ERelayClient: ObservableObject {
         }
     }
 
+    /// Derive the session key from the daemon's public key.
+    ///
+    /// MUST match the Go daemon's `deriveSessionKey` in `e2e_client.go`, which on
+    /// `peer_joined` calls it with `helperID = "conduit-relay"`,
+    /// `helperKeyB64 = <daemon public key>` (its own key) and
+    /// `appKeyB64 = <phone public key>`. `PairingCrypto.deriveSessionKey`
+    /// reproduces the identical HKDF salt (`SHA256("conduit-pairing:conduit-relay")`)
+    /// and info (`"conduit-v1:<daemonKey>:<phoneKey>"`), so both ends derive the
+    /// same 32-byte key. The previous bespoke salt/info here did NOT match the
+    /// daemon and would silently fail every decrypt.
     private func deriveSessionKey(withPeerPublicKey peerKey: String) throws {
-        let peerData = try Base64URL.decode(peerKey)
-        let peerPub = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: peerData)
-        let shared = try keyPair.privateKey.sharedSecretFromKeyAgreement(with: peerPub)
-
-        let salt = SHA256.hash(data: Data("conduit-relay-salt".utf8))
-        sessionKey = shared.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data(salt),
-            sharedInfo: Data("conduit-relay-v1".utf8),
-            outputByteCount: 32
+        sessionKey = try PairingCrypto.deriveSessionKey(
+            privateKey: keyPair.privateKey,
+            peerPublicKeyBase64URL: peerKey,
+            helperID: "conduit-relay",
+            helperPublicKeyBase64URL: peerKey,
+            appPublicKeyBase64URL: keyPair.publicKeyBase64URL
         )
     }
 

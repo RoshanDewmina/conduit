@@ -36,6 +36,13 @@ public enum PairingCrypto {
         KeyPair(privateKey: Curve25519.KeyAgreement.PrivateKey())
     }
 
+    /// Generate a fresh, single-use 6-digit pairing code. The relay keys its
+    /// pairing slot on this exact 6-character string (see `websocket_relay.go`,
+    /// which rejects anything other than `len(code) == 6`).
+    public static func generatePairingCode() -> String {
+        (0..<6).map { _ in String(Int.random(in: 0...9)) }.joined()
+    }
+
     public static func deriveSessionKey(
         privateKey: Curve25519.KeyAgreement.PrivateKey,
         peerPublicKeyBase64URL: String,

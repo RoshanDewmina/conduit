@@ -3,6 +3,7 @@ import SwiftUI
 import DesignSystem
 import AgentKit
 import ConduitCore
+import SSHTransport
 
 // MARK: - SSH platform enum (shared)
 
@@ -20,6 +21,7 @@ private enum SSHPlatform: String, CaseIterable, Identifiable {
 public struct OnboardingView: View {
     public let onContinue: () -> Void
     public let onSetupWorkspace: () -> Void
+    public let relayClient: E2ERelayClient?
 
     @State private var step: Int = 0
     @State private var animationDirection: Int = 1
@@ -31,10 +33,12 @@ public struct OnboardingView: View {
 
     public init(
         onContinue: @escaping () -> Void,
-        onSetupWorkspace: @escaping () -> Void = {}
+        onSetupWorkspace: @escaping () -> Void = {},
+        relayClient: E2ERelayClient? = nil
     ) {
         self.onContinue = onContinue
         self.onSetupWorkspace = onSetupWorkspace
+        self.relayClient = relayClient
     }
 
     public var body: some View {
@@ -66,7 +70,14 @@ public struct OnboardingView: View {
                 }
         )
         .sheet(isPresented: $showPairing) {
-            BridgePairingView(onUseSSH: { showPairing = false })
+            BridgePairingView(
+                client: relayClient,
+                onUseSSH: { showPairing = false },
+                onPaired: { _, _ in
+                    showPairing = false
+                    onContinue()
+                }
+            )
         }
     }
 

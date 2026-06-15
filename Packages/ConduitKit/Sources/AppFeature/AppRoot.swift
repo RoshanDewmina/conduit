@@ -66,9 +66,13 @@ public final class AppEnvironment {
         self.loopStore = LoopStore(loopRepo: LoopRepository(database))
         self.quotaGuardStore = QuotaGuardStore()
         self.hostHealthStore = HostHealthStore()
+        // Start with the configured relay URL and a freshly generated, single-use
+        // pairing code. The pairing view regenerates the code per session and the
+        // relay URL can be overridden in Settings; the old hardcoded "000000" is
+        // gone (it could never actually pair).
         self.e2eRelayClient = E2ERelayClient(
-            relayURL: URL(string: "https://relay.conduit.dev")!,
-            pairingCode: "000000"
+            relayURL: RelaySettings.url(),
+            pairingCode: PairingCrypto.generatePairingCode()
         )
     }
 
@@ -404,7 +408,8 @@ public struct AppRoot: View {
                     },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
-                    }
+                    },
+                    relayClient: env.e2eRelayClient
                 )
             }
         }
