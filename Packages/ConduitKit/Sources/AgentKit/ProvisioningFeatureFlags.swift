@@ -17,4 +17,15 @@ public enum ProvisioningFeatureFlags {
     public static func setLightsailEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: lightsailKey)
     }
+
+    private static let managedCloudKey = "conduitManagedCloudEnabled"
+
+    /// When true, the Conduit Cloud (hosted runtime) option appears in the add-host flow.
+    public static var managedCloudEnabled: Bool {
+        UserDefaults.standard.bool(forKey: managedCloudKey)
+    }
+
+    public static func setManagedCloudEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: managedCloudKey)
+    }
 }

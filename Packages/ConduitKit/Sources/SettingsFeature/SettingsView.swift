@@ -462,12 +462,6 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
-        DSStatusHeader(
-            connected: bridgeActions.isConnected,
-            policy: autonomyPresetRaw,
-            todaySpend: "$0.00"
-        )
-
         DSScreenHeader("settings", breadcrumb: "device & agent")
 
         if !statusHeaderAgents.isEmpty {

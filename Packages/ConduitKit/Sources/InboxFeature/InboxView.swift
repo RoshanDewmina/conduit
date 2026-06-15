@@ -82,9 +82,6 @@ public struct InboxView: View {
     private let awayAuditEntries: [AuditLogEntry]
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
-    public var bridgeConnected: Bool = false
-    public var bridgePolicy: String = "balanced"
-    public var todaySpend: String = "$0.00"
     public var onSetPolicy: ((String) async -> Void)?
 
     @Environment(\.conduitTokens) private var t
@@ -101,9 +98,6 @@ public struct InboxView: View {
         awayAuditEntries: [AuditLogEntry] = [],
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
-        bridgeConnected: Bool = false,
-        bridgePolicy: String = "balanced",
-        todaySpend: String = "$0.00",
         onSetPolicy: ((String) async -> Void)? = nil
     ) {
         self.vm = viewModel
@@ -112,9 +106,6 @@ public struct InboxView: View {
         self.awayAuditEntries = awayAuditEntries
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
-        self.bridgeConnected = bridgeConnected
-        self.bridgePolicy = bridgePolicy
-        self.todaySpend = todaySpend
         self.onSetPolicy = onSetPolicy
     }
 
@@ -123,12 +114,6 @@ public struct InboxView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                DSStatusHeader(
-                    connected: bridgeConnected,
-                    policy: bridgePolicy,
-                    todaySpend: todaySpend
-                )
-
                 // ── BLOCKS header
                 DSScreenHeader(
                     "inbox",

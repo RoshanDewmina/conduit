@@ -91,12 +91,6 @@ public struct FleetView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                DSStatusHeader(
-                    state: store.connectionState,
-                    policy: "balanced",
-                    todaySpend: String(format: "$%.2f", summary.totalSpendUSD)
-                )
-
                 DSScreenHeader(
                     "fleet",
                     breadcrumb: "agents & spend",
@@ -112,35 +106,6 @@ public struct FleetView: View {
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        DSSpendHero(
-                            todayUSD: summary.totalSpendUSD,
-                            vendors: vendorSpend,
-                            runs: summary.activeSessions,
-                            concurrent: concurrentCount,
-                            capUSD: nil
-                        )
-                        .padding(.top, 4)
-
-                        if let quotaGuardStore {
-                            NavigationLink {
-                                QuotaGuardView(store: quotaGuardStore)
-                            } label: {
-                                quotaGuardEntry
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 18)
-                            .simultaneousGesture(TapGesture().onEnded { Haptics.selection() })
-                        } else if let onQuotaGuard {
-                            Button {
-                                Haptics.selection()
-                                onQuotaGuard()
-                            } label: {
-                                quotaGuardEntry
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 18)
-                        }
-
                         if localAgentCount > 0 {
                             localAgentBanner
                                 .padding(.horizontal, 18)
@@ -150,14 +115,6 @@ public struct FleetView: View {
                             attentionBanner(agentName: agentName)
                                 .padding(.horizontal, 18)
                         }
-
-                        NavigationLink {
-                            WorktreeBoardView(store: WorktreeStore(fleetStore: store))
-                        } label: {
-                            worktreesLink
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 18)
 
                         if let loopStore, !loopStore.activeLoops.isEmpty {
                             DSListSectionHead("Active Loops", count: loopStore.activeLoops.count)

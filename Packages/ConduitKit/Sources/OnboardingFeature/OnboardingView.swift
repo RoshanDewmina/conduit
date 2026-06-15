@@ -20,6 +20,7 @@ private enum SSHPlatform: String, CaseIterable, Identifiable {
 /// Notifications, Face ID, and session coaching are deferred to contextual prompts.
 public struct OnboardingView: View {
     public let onContinue: () -> Void
+    public let onAlreadyUseConduit: () -> Void
     public let onSetupWorkspace: () -> Void
     public let relayClient: E2ERelayClient?
 
@@ -33,10 +34,12 @@ public struct OnboardingView: View {
 
     public init(
         onContinue: @escaping () -> Void,
+        onAlreadyUseConduit: @escaping () -> Void = {},
         onSetupWorkspace: @escaping () -> Void = {},
         relayClient: E2ERelayClient? = nil
     ) {
         self.onContinue = onContinue
+        self.onAlreadyUseConduit = onAlreadyUseConduit
         self.onSetupWorkspace = onSetupWorkspace
         self.relayClient = relayClient
     }
@@ -116,7 +119,7 @@ public struct OnboardingView: View {
             VStack(spacing: 10) {
                 DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
                 Button {
-                    onContinue()
+                    onAlreadyUseConduit()
                 } label: {
                     Text("i already use conduit")
                         .font(.dsMonoPt(13))

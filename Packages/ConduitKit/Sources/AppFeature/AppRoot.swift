@@ -406,6 +406,10 @@ public struct AppRoot: View {
                         addHostPresented = true
                         selectedTab = .fleet
                     },
+                    onAlreadyUseConduit: {
+                        onboardingSeen = true
+                        selectedTab = .fleet
+                    },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
                     },
@@ -762,17 +766,6 @@ public struct AppRoot: View {
         return ZStack {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                PersistentStatusBar(
-                    agents: isShowingLiveSession ? [] : hudStore.agents,
-                    relayState: selectedFleetSlot.map { .init(relayState: $0.relayState) },
-                    onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
-                    // Manual retry after the auto-reconnect engine gives up
-                    // (maxAttempts). `reconnect()` rebuilds a fresh engine, so this
-                    // re-arms a session stuck in `.failed`.
-                    onReconnect: activeSessionViewModel == nil ? nil : {
-                        Task { await activeSessionViewModel?.reconnect() }
-                    }
-                )
                 tabContent(env: env, tabItems: tabItems, tabID: tabID)
             }
         }
@@ -818,14 +811,6 @@ public struct AppRoot: View {
         ZStack {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                PersistentStatusBar(
-                    agents: isShowingLiveSession ? [] : hudStore.agents,
-                    relayState: selectedFleetSlot.map { .init(relayState: $0.relayState) },
-                    onTap: { if activeSessionViewModel != nil { isShowingLiveSession = true } },
-                    onReconnect: activeSessionViewModel == nil ? nil : {
-                        Task { await activeSessionViewModel?.reconnect() }
-                    }
-                )
                 NavigationSplitView {
                     List(selection: splitSelection) {
                         ForEach(Tab.rootTabs, id: \.self) { tab in
@@ -889,9 +874,6 @@ public struct AppRoot: View {
                 viewModel: activeInboxViewModel,
                 statusHeaderAgents: [],
                 onTapStatusHeader: {},
-                bridgeConnected: actions.isConnected,
-                bridgePolicy: "balanced",
-                todaySpend: "$0.00",
                 onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) }
             )
 

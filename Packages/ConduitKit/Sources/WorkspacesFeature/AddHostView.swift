@@ -6,6 +6,7 @@ import ConduitCore
 import DesignSystem
 import PersistenceKit
 import SecurityKit
+import AgentKit
 
 // MARK: - AddHostView
 // Paste-first "Fast Add-Host" sheet. Three fused UX modes:
@@ -211,11 +212,12 @@ public struct AddHostView: View {
     // MARK: - Source mode picker
 
     private var modePicker: some View {
-        DSSegmentedPicker(
-            options: [
-                (label: "bring your own", value: SourceMode.byo),
-                (label: "conduit cloud", value: SourceMode.hosted),
-            ],
+        let options: [(label: String, value: SourceMode)] = ProvisioningFeatureFlags.managedCloudEnabled
+            ? [(label: "bring your own", value: SourceMode.byo),
+               (label: "conduit cloud", value: SourceMode.hosted)]
+            : [(label: "bring your own", value: SourceMode.byo)]
+        return DSSegmentedPicker(
+            options: options,
             selection: $mode
         )
         .onChange(of: mode) { _, _ in Haptics.selection() }
