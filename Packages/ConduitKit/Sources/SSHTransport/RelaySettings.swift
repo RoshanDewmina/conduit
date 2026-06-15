@@ -8,7 +8,11 @@ import Foundation
 /// be exercised against your own `push-backend` deployment.
 public enum RelaySettings {
 
-    public static let defaultURLString = "wss://relay.conduit.dev"
+    // TODO: swap for wss://relay.conduit.dev once the production relay is deployed
+    // (Task #6). Temporary: points at the hermes-box Tailscale Funnel relay so
+    // pairing is zero-config — users never set this; the Settings override is for
+    // self-hosters running their own relay.
+    public static let defaultURLString = "wss://hermes-box.tail8c17ee.ts.net:8443"
     private static let overrideKey = "conduit.relayURL"
 
     /// The configured relay URL string (override → env → default).
