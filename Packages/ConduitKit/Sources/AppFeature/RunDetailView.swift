@@ -105,6 +105,13 @@ public struct RunDetailView: View {
 
     private static let bottomAnchor = "run-output-bottom"
 
+    // The run has finished (exited/failed) per streamed status. Once terminal, the
+    // control bar collapses to a single done/failed indicator — no dead Stop/Pause
+    // buttons that would error against an already-finished process.
+    private var runIsTerminal: Bool {
+        currentRun?.isTerminal ?? false
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -217,7 +224,37 @@ public struct RunDetailView: View {
     }
 
     // Destructive-left ordering per CONDUIT_UI_CONSISTENCY_RULES R3.3; equal-width row.
+    @ViewBuilder
     private var controlBar: some View {
+        if runIsTerminal {
+            finishedBar
+        } else {
+            liveControlBar
+        }
+    }
+
+    // Shown once the run has exited/failed: a calm status line, not live controls.
+    private var finishedBar: some View {
+        let failed = currentRun?.status == "failed"
+        return HStack(spacing: 8) {
+            Image(systemName: failed ? "xmark.circle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(failed ? t.termErr : t.termPrompt)
+            Text(failed
+                 ? "Run failed\(currentRun?.exitCode.map { " · exit \($0)" } ?? "")"
+                 : "Run complete")
+                .font(.dsMonoPt(13, weight: .semibold))
+                .foregroundStyle(t.text)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 28)
+        .background(.bar)
+        .overlay(Divider(), alignment: .top)
+    }
+
+    private var liveControlBar: some View {
         HStack(spacing: 8) {
             DSButton("Stop", systemImage: "stop.fill", variant: .destructive, fullWidth: true) {
                 Haptics.warning()

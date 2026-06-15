@@ -253,7 +253,7 @@ public final class E2ERelayClient: ObservableObject {
                 let inner = try JSONDecoder().decode(E2EInnerMessageDecoded.self, from: plaintext)
                 messageContinuation?.yield(ReceivedMessage(type: inner.type, payload: plaintext))
             } catch {
-                print("E2E relay decrypt failed: \(error)")
+                Self.logger.error("relay message decode failed: \(error.localizedDescription, privacy: .public)")
             }
 
         case "pong":
@@ -347,9 +347,14 @@ struct E2EInnerMessage<T: Codable>: Codable {
     let payload: T
 }
 
+// Only `type` is decoded here: the relay client yields the FULL inner plaintext
+// ({type, payload:{…}}) as ReceivedMessage.payload, and consumers re-decode the
+// typed params via RelayInnerEnvelope<T>. A `payload: Data` field here was a bug —
+// JSONDecoder reads Data from a base64 string, but the daemon sends payload as a
+// JSON object, so every daemon→phone message failed to decode. Extra JSON keys
+// (the payload object) are ignored, so decoding just `type` is correct and robust.
 struct E2EInnerMessageDecoded: Codable {
     let type: String
-    let payload: Data
 }
 
 // MARK: - Errors

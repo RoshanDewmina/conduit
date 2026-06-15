@@ -351,6 +351,19 @@ func (s *server) runDispatch(p dispatchParams) dispatchResult {
 	return s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
 }
 
+// applyRunControl applies a relay-delivered run-control action to a dispatched
+// run, routing through the same dispatcher methods the local RPC path uses.
+func (s *server) applyRunControl(runID, action string) {
+	switch action {
+	case "stop":
+		s.dispatcher.cancel(runID)
+	case "pause":
+		s.dispatcher.pause(runID)
+	case "resume":
+		s.dispatcher.resume(runID)
+	}
+}
+
 // startScheduler runs the schedule ticker until ctx-like stop; call from daemon/legacy serve.
 func (s *server) startScheduler(stop <-chan struct{}) {
 	go func() {

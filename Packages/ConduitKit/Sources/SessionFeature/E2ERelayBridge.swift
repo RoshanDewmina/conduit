@@ -80,6 +80,25 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Sends a run-control action (stop / pause / resume) for a dispatched relay
+    /// run. Fire-and-forget: the daemon applies it via dispatcher.cancel/pause/resume
+    /// and the resulting status streams back over agent.run.status. Returns false
+    /// only if the relay isn't active.
+    @discardableResult
+    public func sendRunControl(runId: String, action: String) async -> Bool {
+        guard isActive else { return false }
+        struct ControlParams: Codable, Sendable { let runId: String; let action: String }
+        do {
+            try await relayClient.send(
+                type: "agentRunControl",
+                payload: ControlParams(runId: runId, action: action)
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Sends a follow-up prompt to an already-running relay dispatch so the agent
     /// continues the same run. Output streams back via the existing
     /// `agent.run.output` path into the same runId. Fire-and-forget.
@@ -134,17 +153,25 @@ public final class E2ERelayBridge: ObservableObject {
             }
 
         case "agentRunOutput":
+            // message.payload is the full inner plaintext {type, payload:{…}}, so
+            // unwrap the envelope to the typed params — same pattern as dispatchResult.
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<RunOutputParams>.self, from: message.payload
+            ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("conduitE2ERunOutput"),
                 object: nil,
-                userInfo: ["payload": message.payload]
+                userInfo: ["params": env.payload]
             )
 
         case "agentRunStatus":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<RunStatusParams>.self, from: message.payload
+            ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("conduitE2ERunStatus"),
                 object: nil,
-                userInfo: ["payload": message.payload]
+                userInfo: ["params": env.payload]
             )
 
         default:

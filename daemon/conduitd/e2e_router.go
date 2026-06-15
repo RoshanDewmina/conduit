@@ -128,6 +128,17 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("dispatchResult", data)
 
+	case "agentRunControl":
+		var p struct {
+			RunID  string `json:"runId"`
+			Action string `json:"action"` // stop | pause | resume
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			log.Printf("e2e: unmarshal agentRunControl failed: %v", err)
+			return
+		}
+		r.server.applyRunControl(p.RunID, p.Action)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
 	}

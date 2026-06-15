@@ -134,6 +134,9 @@ public struct AppRoot: View {
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var runOutputStore = RunOutputStore()
     @State private var dispatchFeedback: String?
+    // The relay run currently presented in the streaming RunDetailView (set on a
+    // successful relay dispatch so output has a screen to stream into).
+    @State private var activeRelayRun: ActiveRelayRun?
     @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -340,6 +343,33 @@ public struct AppRoot: View {
                 selectFleetSlot(slot.id)
             }
             if activeSessionViewModel != nil { isShowingLiveSession = true }
+        }
+        // Relay run output/status: the E2ERelayBridge posts these as typed params.
+        // Feed them into runOutputStore so the presented RunDetailView streams live.
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2ERunOutput"))) { note in
+            guard let params = note.userInfo?["params"] as? RunOutputParams else { return }
+            runOutputStore.appendOutput(params)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2ERunStatus"))) { note in
+            guard let params = note.userInfo?["params"] as? RunStatusParams else { return }
+            runOutputStore.updateStatus(params)
+        }
+        .sheet(item: $activeRelayRun) { run in
+            let bridge = e2eBridge
+            NavigationStack {
+                RunDetailView(
+                    channel: RelayRunControl(send: { runId, action in
+                        await bridge?.sendRunControl(runId: runId, action: action) ?? false
+                    }),
+                    runId: run.runId,
+                    title: run.title,
+                    subtitle: run.subtitle,
+                    outputStore: runOutputStore,
+                    onSendFollowUp: { prompt in
+                        Task { try? await bridge?.sendRunContinue(runId: run.runId, prompt: prompt) }
+                    }
+                )
+            }
         }
     }
 
@@ -727,7 +757,12 @@ public struct AppRoot: View {
                         case "started":
                             if let runId = result.runId {
                                 runOutputStore.register(runId: runId)
-                                dispatchFeedback = "Run started on relay host."
+                                // Open the streaming run view so output appears live.
+                                activeRelayRun = ActiveRelayRun(
+                                    runId: runId,
+                                    title: "Relay · \(parts[1])",
+                                    subtitle: prompt
+                                )
                             }
                         case "denied":
                             dispatchFeedback = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
@@ -1474,6 +1509,25 @@ private struct PasswordPromptView: View {
                     .strokeBorder(t.border, lineWidth: 1)
             )
     }
+}
+
+/// Identifies the relay run currently presented in the streaming RunDetailView.
+struct ActiveRelayRun: Identifiable {
+    let runId: String
+    let title: String
+    let subtitle: String
+    var id: String { runId }
+}
+
+/// RunControlling for relay-dispatched runs. Stop/pause/resume route over the
+/// relay to the daemon's dispatcher; the resulting status streams back over
+/// agent.run.status. Budget-over-relay isn't wired yet (returns false).
+struct RelayRunControl: RunControlling {
+    let send: @Sendable (_ runId: String, _ action: String) async -> Bool
+    func pauseRun(runId: String) async throws -> Bool { await send(runId, "pause") }
+    func resumeRun(runId: String) async throws -> Bool { await send(runId, "resume") }
+    func stopRun(runId: String) async throws -> Bool { await send(runId, "stop") }
+    func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { false }
 }
 
 #endif
