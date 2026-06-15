@@ -73,4 +73,27 @@ public enum E2ERelayMessage: Codable, Sendable {
             self.spendUSD = spendUSD
         }
     }
+
+    /// Dispatch params sent phone → daemon over the relay.
+    public struct DispatchParams: Codable, Sendable {
+        public let agent: String
+        public let cwd: String
+        public let prompt: String
+        public let model: String?
+        public let budgetUSD: Double
+
+        public init(agent: String, cwd: String, prompt: String, model: String? = nil, budgetUSD: Double = 0) {
+            self.agent = agent
+            self.cwd = cwd
+            self.prompt = prompt
+            self.model = model
+            self.budgetUSD = budgetUSD
+        }
+    }
+
+    /// Wrapper for an inner relay message with a typed payload field.
+    struct RelayInnerEnvelope<T: Codable & Sendable>: Codable, Sendable {
+        let type: String
+        let payload: T
+    }
 }

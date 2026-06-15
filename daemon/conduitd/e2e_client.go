@@ -44,6 +44,20 @@ func newE2ERelayClient(relayURL, pairingCode string, handler func(msgType string
 	}
 }
 
+// newE2ERelayClientWithKey creates a client using a specific keypair (from a
+// persisted relay pairing) rather than generating a fresh one.
+func newE2ERelayClientWithKey(relayURL, pairingCode string, handler func(msgType string, payload []byte), privKey, pubKey [32]byte) *e2eRelayClient {
+	return &e2eRelayClient{
+		relayURL:       relayURL,
+		pairingCode:    pairingCode,
+		privateKey:     privKey,
+		publicKey:      pubKey,
+		messageHandler: handler,
+		stopCh:         make(chan struct{}),
+		reconnectDelay: 1 * time.Second,
+	}
+}
+
 func (c *e2eRelayClient) start() {
 	go c.connectLoop()
 	go c.keepaliveLoop()

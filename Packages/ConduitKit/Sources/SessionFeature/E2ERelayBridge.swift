@@ -3,8 +3,8 @@ import Foundation
 import ConduitCore
 import SSHTransport
 
-/// Bridges E2E relay messages to the approval flow.
-/// When the relay is paired, approvals come through E2E instead of SSH.
+/// Bridges E2E relay messages to the approval flow and dispatch.
+/// When the relay is paired, approvals and dispatch go through E2E instead of SSH.
 @MainActor
 public final class E2ERelayBridge: ObservableObject {
 
@@ -12,6 +12,7 @@ public final class E2ERelayBridge: ObservableObject {
     private let relayClient: E2ERelayClient
     private let approvalRelay: ApprovalRelay
     private var messageTask: Task<Void, Never>?
+    private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -58,6 +59,22 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Dispatch an agent run through the E2E relay.
+    /// Returns the dispatch result, or nil if the relay is not active.
+    public func sendDispatch(agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?) async throws -> DispatchResult {
+        guard isActive else {
+            throw E2EError.notPaired
+        }
+        let params = E2ERelayMessage.DispatchParams(
+            agent: agent, cwd: cwd, prompt: prompt,
+            model: model, budgetUSD: budgetUSD ?? 0
+        )
+        try await relayClient.send(type: "agentDispatch", payload: params)
+        return try await withCheckedThrowingContinuation { c in
+            self.dispatchContinuation = c
+        }
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
@@ -87,6 +104,30 @@ public final class E2ERelayBridge: ObservableObject {
                 name: Notification.Name("conduitE2ELoopUpdate"),
                 object: nil,
                 userInfo: ["loopData": loopData]
+            )
+
+        case "dispatchResult":
+            let envelope = try? JSONDecoder().decode(E2ERelayMessage.RelayInnerEnvelope<DispatchResult>.self, from: message.payload)
+            if let result = envelope?.payload {
+                dispatchContinuation?.resume(returning: result)
+                dispatchContinuation = nil
+            } else {
+                dispatchContinuation?.resume(throwing: E2EError.decryptFailed)
+                dispatchContinuation = nil
+            }
+
+        case "agentRunOutput":
+            NotificationCenter.default.post(
+                name: Notification.Name("conduitE2ERunOutput"),
+                object: nil,
+                userInfo: ["payload": message.payload]
+            )
+
+        case "agentRunStatus":
+            NotificationCenter.default.post(
+                name: Notification.Name("conduitE2ERunStatus"),
+                object: nil,
+                userInfo: ["payload": message.payload]
             )
 
         default:

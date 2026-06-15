@@ -675,9 +675,10 @@ public struct AppRoot: View {
 
     /// Dispatchable agents across all connected fleet slots. Each id encodes
     /// `slotUUID|vendor` so `performDispatch` can route back to the right channel.
+    /// When the E2E relay is paired, a relay-mediated agent is also surfaced.
     @MainActor
     private func dispatchAgents() -> [DispatchAgent] {
-        fleetStore.slots.flatMap { slot -> [DispatchAgent] in
+        var agents: [DispatchAgent] = fleetStore.slots.flatMap { slot -> [DispatchAgent] in
             let offline = slot.sessionViewModel.status != .connected
             let cwd = slot.sessionViewModel.cwd.isEmpty ? "~" : slot.sessionViewModel.cwd
             return (slot.bridgeStatus?.agents ?? []).map { agent in
@@ -689,17 +690,65 @@ public struct AppRoot: View {
                 )
             }
         }
+        if e2eBridge?.isActive == true {
+            agents.append(DispatchAgent(
+                id: "relay|opencode",
+                name: "Relay Agent",
+                cwd: "~",
+                isOffline: false
+            ))
+        }
+        return agents
     }
 
     @MainActor
     private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
-        guard parts.count == 2,
-              let slotUUID = UUID(uuidString: parts[0]),
+        guard parts.count == 2 else { return }
+
+        dispatchPresented = false
+
+        // Relay-paired dispatch: send through the E2E relay bridge.
+        if parts[0] == "relay" {
+            Task {
+                do {
+                    guard let bridge = e2eBridge else {
+                        dispatchFeedback = "Relay bridge not available."
+                        return
+                    }
+                    let result = try await bridge.sendDispatch(
+                        agent: parts[1], cwd: cwd, prompt: prompt,
+                        budgetUSD: budgetUSD, model: model
+                    )
+                    await MainActor.run {
+                        switch result.status {
+                        case "started":
+                            if let runId = result.runId {
+                                runOutputStore.register(runId: runId)
+                                dispatchFeedback = "Run started on relay host."
+                            }
+                        case "denied":
+                            dispatchFeedback = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
+                        case "needsApproval":
+                            dispatchFeedback = "Awaiting your approval — check the Inbox."
+                        case "budgetExceeded":
+                            dispatchFeedback = result.message ?? "Daily budget cap reached."
+                        default:
+                            dispatchFeedback = result.message ?? "Couldn't start the run."
+                        }
+                    }
+                } catch {
+                    await MainActor.run { dispatchFeedback = "Relay dispatch failed: \(error.localizedDescription)" }
+                }
+            }
+            return
+        }
+
+        // SSH dispatch: route through the fleet slot's daemon channel.
+        guard let slotUUID = UUID(uuidString: parts[0]),
               let slot = fleetStore.slots.first(where: { $0.id == slotUUID })
         else { return }
         let vendor = parts[1]
-        dispatchPresented = false
         Task {
             do {
                 let result = try await slot.channel.dispatchAgent(

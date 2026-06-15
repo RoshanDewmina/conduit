@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,6 +27,13 @@ func runDaemon() error {
 		return err
 	}
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
+
+	// Wire E2E relay if a pairing config exists.
+	r.wireRelayFromPairing()
+
+	// Watch for relay-pairing.json changes (pair command or relay-attach).
+	r.startRelayWatch()
+
 	return r.listen()
 }
 
@@ -206,4 +214,57 @@ func (r *resident) writeToAttach(data []byte) error {
 	r.writeMu.Lock()
 	defer r.writeMu.Unlock()
 	return writeFrame(conn, data)
+}
+
+// wireRelayFromPairing reads relay-pairing.json and, if present, creates the
+// E2E relay client + router and installs them on the resident's server.
+func (r *resident) wireRelayFromPairing() {
+	cfg, err := readRelayPairing()
+	if err != nil {
+		return // no pairing file yet — daemon runs without relay
+	}
+	r.connectRelay(cfg)
+}
+
+// connectRelay creates an E2E relay client for the given config, wires the
+// router to the server, and starts the client.
+func (r *resident) connectRelay(cfg *relayPairConfig) {
+	// Decode the persisted keypair.
+	privRaw, err := base64.RawURLEncoding.DecodeString(cfg.PrivateKey)
+	if err != nil || len(privRaw) != 32 {
+		fmt.Fprintf(os.Stderr, "conduitd daemon: invalid private key in relay pairing\n")
+		return
+	}
+	pubRaw, err := base64.RawURLEncoding.DecodeString(cfg.PublicKey)
+	if err != nil || len(pubRaw) != 32 {
+		fmt.Fprintf(os.Stderr, "conduitd daemon: invalid public key in relay pairing\n")
+		return
+	}
+	var privKey, pubKey [32]byte
+	copy(privKey[:], privRaw)
+	copy(pubKey[:], pubRaw)
+
+	client := newE2ERelayClientWithKey(cfg.RelayURL, cfg.Code, nil, privKey, pubKey)
+	if client == nil {
+		fmt.Fprintf(os.Stderr, "conduitd daemon: failed to create relay client\n")
+		return
+	}
+
+	router := newE2ERouter(client, r.core)
+	r.core.setE2ERouter(router)
+	client.start()
+	fmt.Fprintf(os.Stderr, "conduitd daemon: E2E relay started for code %s\n", cfg.Code)
+}
+
+// startRelayWatch monitors relay-pairing.json for changes and (re)connects the
+// E2E relay when a new pairing is written (e.g. by conduitd pair).
+func (r *resident) startRelayWatch() {
+	w := newRelayPairWatcher(func(cfg *relayPairConfig) {
+		// If a router already exists, stop its client and reconnect.
+		if r.core.e2e != nil {
+			r.core.e2e.client.stop()
+		}
+		r.connectRelay(cfg)
+	})
+	w.start()
 }

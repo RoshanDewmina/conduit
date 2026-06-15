@@ -5,12 +5,20 @@ import (
 	"log"
 )
 
+// relayClient is the minimal interface the e2eRouter needs from a relay
+// client. The production *e2eRelayClient satisfies it; tests can inject fakes.
+type relayClient interface {
+	isPaired() bool
+	sendMessage(msgType string, payload []byte) error
+	stop()
+}
+
 // e2eRouter bridges daemon events to the E2E relay.
 // When the relay is connected, it sends approval events and status
 // updates through the encrypted channel. It also handles incoming
 // messages from the phone (approval responses).
 type e2eRouter struct {
-	client *e2eRelayClient
+	client relayClient
 	server *server
 }
 
@@ -88,7 +96,72 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		}
 		r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
 
+	case "agentDispatch":
+		var params struct {
+			Agent     string  `json:"agent"`
+			CWD       string  `json:"cwd"`
+			Prompt    string  `json:"prompt"`
+			Model     string  `json:"model,omitempty"`
+			BudgetUSD float64 `json:"budgetUSD,omitempty"`
+		}
+		if err := json.Unmarshal(payload, &params); err != nil {
+			log.Printf("e2e: unmarshal agentDispatch failed: %v", err)
+			return
+		}
+		dp := dispatchParams{
+			Agent:     params.Agent,
+			CWD:       params.CWD,
+			Prompt:    params.Prompt,
+			Model:     params.Model,
+			BudgetUSD: params.BudgetUSD,
+		}
+		result := r.server.runDispatch(dp)
+
+		// Send the dispatch result back over the relay. Streaming output/status
+		// from the launched process flows through r.server.emitNotification,
+		// which fans out to the relay via sendRelayNotification — no explicit
+		// stream handling needed here.
+		msg := map[string]interface{}{
+			"type":    "dispatchResult",
+			"payload": result,
+		}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("dispatchResult", data)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
+	}
+}
+
+// sendRelayNotification forwards a JSON-RPC-style notification through the E2E
+// relay as an encrypted message. The iOS side maps these back to their original
+// meaning (e.g. agentRunOutput → agent.run.output).
+func (r *e2eRouter) sendRelayNotification(method string, params any) {
+	if r.client == nil || !r.client.isPaired() {
+		return
+	}
+	relayType := methodToRelayType(method)
+	if relayType == "" {
+		return
+	}
+	msg := map[string]interface{}{
+		"type":    relayType,
+		"payload": params,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	_ = r.client.sendMessage(relayType, data)
+}
+
+func methodToRelayType(method string) string {
+	switch method {
+	case "agent.run.output":
+		return "agentRunOutput"
+	case "agent.run.status":
+		return "agentRunStatus"
+	default:
+		return ""
 	}
 }

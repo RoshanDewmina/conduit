@@ -1134,12 +1134,18 @@ func (s *server) writeError(id interface{}, code int, message string) {
 
 // emitNotification marshals a JSON-RPC notification (no id) and writes it on the
 // serialized writeFramed path, so concurrent run-output goroutines are safe.
+// When the E2E relay is active it also fans out the notification over the relay.
 func (s *server) emitNotification(method string, params any) {
 	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 	if err != nil {
 		return
 	}
 	s.writeFramed(data)
+
+	// Fan-out to E2E relay when paired.
+	if s.e2e != nil {
+		s.e2e.sendRelayNotification(method, params)
+	}
 }
 
 func (s *server) writeFramed(data []byte) {

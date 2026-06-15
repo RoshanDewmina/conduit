@@ -59,21 +59,24 @@ func printRelayInstructions() {
 
 	relayURL := resolveRelayURL()
 
-	// Generate an ephemeral X25519 keypair so the QR carries the daemon's
-	// public key — the phone uses it to derive the shared session key.
+	// Generate an X25519 keypair so the QR carries the daemon's public key —
+	// the phone uses it to derive the shared session key. Persist the keypair
+	// alongside the code so the resident daemon can connect to the relay with
+	// the same identity the phone scanned.
 	priv, pub, err := generateKeyPair()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
 		return
 	}
-	_ = priv // retained until the relay session starts; the pair subcommand
-	// is ephemeral (it prints once and exits), so the key is scoped to the
+
+	pubB64 := base64URLEncode(pub[:])
+	privB64 := base64URLEncode(priv[:])
 
 	payload := qrPairingPayload{
 		V:     1,
 		Relay: relayURL,
 		Code:  code,
-		PK:    base64URLEncode(pub[:]),
+		PK:    pubB64,
 	}
 	qrData, err := json.Marshal(payload)
 	if err != nil {
@@ -85,6 +88,16 @@ func printRelayInstructions() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error generating QR code: %v\n", err)
 		return
+	}
+
+	// Persist the pairing config so the resident daemon connects to the relay.
+	if err := writeRelayPairing(&relayPairConfig{
+		RelayURL:   relayURL,
+		Code:       code,
+		PrivateKey: privB64,
+		PublicKey:  pubB64,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to persist relay pairing: %v\n", err)
 	}
 
 	// ANSI QR (inverted for dark terminals).
@@ -115,6 +128,9 @@ func printRelayInstructions() {
 ║                                          ║
 ║   Open Conduit on your phone, tap        ║
 ║   "Relay Pairing" and scan this QR.      ║
+║                                          ║
+║   After scanning, the daemon will        ║
+║   connect to the relay automatically.    ║
 ║                                          ║
 ╚══════════════════════════════════════════╝
 

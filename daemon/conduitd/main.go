@@ -53,6 +53,30 @@ func main() {
 	case "pair":
 		printRelayInstructions()
 
+	case "relay-attach":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: conduitd relay-attach <pairing-code>")
+			os.Exit(1)
+		}
+		code := os.Args[2]
+		relayURL := resolveRelayURL()
+		priv, pub, err := generateKeyPair()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
+			os.Exit(1)
+		}
+		if err := writeRelayPairing(&relayPairConfig{
+			RelayURL:   relayURL,
+			Code:       code,
+			PrivateKey: base64URLEncode(priv[:]),
+			PublicKey:  base64URLEncode(pub[:]),
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing relay pairing: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Relay pairing saved for code %s at %s.\n", code, relayURL)
+		fmt.Fprintf(os.Stderr, "Restart conduitd daemon (or it will auto-detect within 5s).\n")
+
 	case "doctor":
 		if err := runDoctor(); err != nil {
 			os.Exit(1)
@@ -101,6 +125,7 @@ Usage:
   conduitd install         Install binary + launchd/systemd unit for daemon
   conduitd relay           Connect to push-backend relay for E2E messaging
   conduitd pair            Generate a pairing code for relay setup instructions
+  conduitd relay-attach    Save an existing pairing code for the resident daemon
   conduitd agent-hook ...  Send approval event from agent pre-tool hook
   conduitd doctor          Run setup/health self-check (✓/⚠/✗ checklist)
   conduitd version         Print version`)
