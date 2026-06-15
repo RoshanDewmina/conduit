@@ -216,26 +216,44 @@ func checkPython(look lookPathFunc) checkResult {
 	return checkResult{name: "python3", status: statusOK, message: "python3 on PATH"}
 }
 
+// checkHooks verifies the Claude PreToolUse hook is BOTH dropped as a script AND
+// wired into ~/.claude/settings.json. The script alone is a false positive: if
+// settings.json does not register the command, Claude Code never calls it and the
+// interactive approval path silently never fires (Finding #10).
 func checkHooks(home string) checkResult {
-	claudeHook := filepath.Join(home, ".claude", "hooks", "conduit-hook.sh")
-	codexHook := filepath.Join(home, ".codex", "hooks", "conduit-hook.sh")
-	opencodeHook := filepath.Join(home, ".config", "opencode", "hooks", "conduit-hook.sh")
-
-	var present []string
-	for label, path := range map[string]string{"claude": claudeHook, "codex": codexHook, "opencode": opencodeHook} {
-		if _, err := os.Stat(path); err == nil {
-			present = append(present, label)
-		}
+	scriptPath := claudeHookScriptPath(home)
+	settingsPath := claudeSettingsPath(home)
+	scriptPresent := false
+	if _, err := os.Stat(scriptPath); err == nil {
+		scriptPresent = true
 	}
-	if _, err := os.Stat(claudeHook); err != nil {
+	wired := claudeHookWired(settingsPath)
+
+	switch {
+	case scriptPresent && wired:
+		return checkResult{name: "hooks", status: statusOK, message: "claude PreToolUse hook installed and wired"}
+	case !scriptPresent && !wired:
 		return checkResult{
 			name:    "hooks",
 			status:  statusWarn,
-			message: "Claude hook missing (~/.claude/hooks/conduit-hook.sh)",
-			hint:    "run: conduitd install or copy docs/conduit-hook.sh",
+			message: "Claude hook not installed (script + settings.json wiring both missing)",
+			hint:    "run: conduitd install",
+		}
+	case scriptPresent && !wired:
+		return checkResult{
+			name:    "hooks",
+			status:  statusWarn,
+			message: "Claude hook script present but NOT wired in settings.json — Claude Code never calls it",
+			hint:    "run: conduitd install (merges hooks.PreToolUse into ~/.claude/settings.json)",
+		}
+	default: // wired but script missing
+		return checkResult{
+			name:    "hooks",
+			status:  statusWarn,
+			message: "settings.json references the hook but the script is missing",
+			hint:    "run: conduitd install (rewrites ~/.claude/hooks/conduit-hook.sh)",
 		}
 	}
-	return checkResult{name: "hooks", status: statusOK, message: fmt.Sprintf("installed: %s", joinComma(present))}
 }
 
 func checkAuditLog(conduitDir string) checkResult {

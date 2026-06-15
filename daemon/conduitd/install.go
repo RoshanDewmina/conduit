@@ -33,6 +33,16 @@ func runInstall() error {
 		fmt.Fprintf(os.Stderr, "Installed %s\n", target)
 	}
 
+	if err := installClaudeHook(home); err != nil {
+		// Hook wiring is best-effort: a failure here must not abort the daemon
+		// install. Surface it so the owner can wire the hook by hand.
+		fmt.Fprintf(os.Stderr, "warning: could not wire Claude PreToolUse hook: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/claude-settings-hook.json")
+	}
+	// TODO(opencode): wire the OpenCode PreToolUse hook (docs/opencode-hooks.json,
+	// ~/.config/opencode/hooks/conduit-hook.sh) the same way once OpenCode
+	// settings-merge is in scope. Finding #10 covers the Claude path above.
+
 	switch runtime.GOOS {
 	case "darwin":
 		return installLaunchd(target, home)
@@ -42,6 +52,32 @@ func runInstall() error {
 		fmt.Fprintf(os.Stderr, "Unsupported OS %s — install binary only.\n", runtime.GOOS)
 		return nil
 	}
+}
+
+// installClaudeHook drops the PreToolUse hook script to ~/.claude/hooks and
+// idempotently wires it into ~/.claude/settings.json so Claude Code actually
+// calls it. Without the settings wiring the interactive approval path never
+// fires (Finding #10).
+func installClaudeHook(home string) error {
+	scriptPath := claudeHookScriptPath(home)
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(scriptPath, []byte(claudeHookScript), 0755); err != nil {
+		return fmt.Errorf("write hook script: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Wrote %s\n", scriptPath)
+
+	changed, err := wireClaudeHookSettings(home)
+	if err != nil {
+		return err
+	}
+	if changed {
+		fmt.Fprintf(os.Stderr, "Wired PreToolUse hook into %s\n", claudeSettingsPath(home))
+	} else {
+		fmt.Fprintf(os.Stderr, "PreToolUse hook already wired in %s\n", claudeSettingsPath(home))
+	}
+	return nil
 }
 
 func installLaunchd(binary, home string) error {

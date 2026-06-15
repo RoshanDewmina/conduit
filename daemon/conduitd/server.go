@@ -822,10 +822,33 @@ func (s *server) handleHook(conn net.Conn, first []byte) {
 		}
 		s.writeFramed(notification)
 		return nil
-	})
+	}, s.deviceRegistered)
 }
 
-func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error) {
+// deviceRegistered reports whether a phone has registered for push, i.e. there
+// is some path by which a human could answer an escalated approval. Used as the
+// reachability predicate for the legacy (non-resident) serve path.
+func (s *server) deviceRegistered() bool {
+	s.deviceMu.RLock()
+	defer s.deviceMu.RUnlock()
+	return s.device != nil
+}
+
+// noClientGrace is how long an escalated approval waits for a client to appear
+// when none is currently reachable. Short enough that a host's normal `claude`
+// runs are not stalled (Finding #10), long enough to absorb a phone reconnect
+// that is already in flight.
+const noClientGrace = 8 * time.Second
+
+// handleHookWithNotify processes one PreToolUse approval over conn. clientReachable
+// reports whether a human can answer right now (attach client connected and/or a
+// push device registered). When it returns false on an escalation, the hook waits
+// only noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking
+// the full 120s — otherwise wiring the hook would stall normal on-host `claude`
+// runs whenever no phone is attached (Finding #10; the host runs bypassPermissions,
+// so the hook is the only gate and must not hang). When a client IS reachable the
+// full 120s human-decision window applies, with fail-safe auto-deny on timeout.
+func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error, clientReachable func() bool) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(130 * time.Second))
 
@@ -907,6 +930,38 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	s.deviceMu.RUnlock()
 	if dev != nil && dev.PushBackendURL != "" {
 		go s.postApprovalPush(dev, event)
+	}
+
+	// No reachable client (no attach + no registered push device): nobody can
+	// answer. Wait only a short grace in case one is mid-reconnect, then fail OPEN
+	// (auto-approve) so the host's normal `claude` runs aren't stalled for 120s.
+	if clientReachable != nil && !clientReachable() {
+		result, received := waitWithTimeout(decisionCh, noClientGrace)
+		if !received {
+			s.approvals.remove(event.ApprovalID)
+			_ = s.audit.append(AuditEntry{
+				Action:     "auto-allow-no-client",
+				Agent:      event.Agent,
+				Kind:       event.Kind,
+				Command:    event.Command,
+				Effect:     string(policy.EffectAsk),
+				Rule:       event.MatchedRule,
+				ApprovalID: event.ApprovalID,
+			})
+			_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"})
+			return
+		}
+		// A client appeared within the grace and recorded a decision — honor it.
+		decision := result.decision
+		if decision == "approveAlways" {
+			decision = "approve"
+		}
+		_ = json.NewEncoder(conn).Encode(ApprovalDecision{
+			ApprovalID:      event.ApprovalID,
+			Decision:        decision,
+			EditedToolInput: result.editedToolInput,
+		})
+		return
 	}
 
 	result, received := waitWithTimeout(decisionCh, 120*time.Second)

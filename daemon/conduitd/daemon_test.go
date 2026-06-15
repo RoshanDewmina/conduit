@@ -187,6 +187,106 @@ func TestHookQueuesWithoutAttachDrainsOnAttach(t *testing.T) {
 	}
 }
 
+// TestHookFastAutoApprovesWithNoClient is the Finding #10 regression: when the
+// daemon is up but NO client can answer (no attach + no registered push device),
+// an escalated approval must fast-auto-approve after the short grace, NOT block
+// the full 120s. If the grace ever regresses to the 120s window this test's
+// deadline (noClientGrace + slack, well under 120s) trips.
+func TestHookFastAutoApprovesWithNoClient(t *testing.T) {
+	withStateDir(t)
+	installTestPolicy(t) // fileWrite → ask (escalate)
+
+	s := newServer(serverHome())
+	srv, cli := net.Pipe()
+
+	event := ApprovalEvent{
+		ApprovalID: "noclient-1",
+		Agent:      "claudeCode",
+		Kind:       "fileWrite",
+		Command:    "notes.txt",
+		CWD:        "/tmp",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	first, _ := json.Marshal(event)
+
+	done := make(chan struct{})
+	go func() {
+		// clientReachable=false → no attach client and no registered push device.
+		s.handleHookWithNotify(srv, first, nil, func() bool { return false })
+		close(done)
+	}()
+
+	var decision ApprovalDecision
+	_ = cli.SetReadDeadline(time.Now().Add(noClientGrace + 5*time.Second))
+	if err := json.NewDecoder(cli).Decode(&decision); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if decision.Decision != "approve" {
+		t.Fatalf("no-client escalation should fast-auto-approve, got %q", decision.Decision)
+	}
+	cli.Close()
+	<-done
+
+	// The fast-approve must be audited distinctly so it is auditable after the fact.
+	entries, err := s.audit.tail(10)
+	if err != nil {
+		t.Fatalf("audit tail: %v", err)
+	}
+	var sawAutoAllow bool
+	for _, e := range entries {
+		if e.Action == "auto-allow-no-client" && e.ApprovalID == "noclient-1" {
+			sawAutoAllow = true
+		}
+	}
+	if !sawAutoAllow {
+		t.Fatalf("expected auto-allow-no-client audit entry, got %+v", entries)
+	}
+}
+
+// TestHookWaitsWhenClientReachable confirms the fast-approve does NOT fire when a
+// client is reachable: with clientReachable=true the hook takes the full 120s
+// human-decision path, so a phone decision delivered after the grace window still
+// wins. We deliver an approve shortly AFTER noClientGrace to prove the short
+// window was not used.
+func TestHookWaitsWhenClientReachable(t *testing.T) {
+	withStateDir(t)
+	installTestPolicy(t)
+
+	s := newServer(serverHome())
+	srv, cli := net.Pipe()
+
+	event := ApprovalEvent{
+		ApprovalID: "reachable-1",
+		Agent:      "claudeCode",
+		Kind:       "fileWrite",
+		Command:    "notes.txt",
+		CWD:        "/tmp",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	first, _ := json.Marshal(event)
+
+	go s.handleHookWithNotify(srv, first, nil, func() bool { return true })
+
+	// Resolve via the RPC path slightly after the grace would have expired; if the
+	// hook had wrongly used the short grace it would already have auto-approved and
+	// removed the pending, so this resolve would be a no-op and the decode below
+	// would read a fast-approve instead of our explicit deny.
+	time.Sleep(noClientGrace + 500*time.Millisecond)
+	if _, ok := s.applyDecision("reachable-1", "deny", ""); !ok {
+		t.Fatal("pending approval missing — hook did not keep waiting past the grace window")
+	}
+
+	var decision ApprovalDecision
+	_ = cli.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewDecoder(cli).Decode(&decision); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if decision.Decision != "deny" {
+		t.Fatalf("reachable-client decision should honor the user's deny, got %q", decision.Decision)
+	}
+	cli.Close()
+}
+
 func TestServeAttachRelaysPing(t *testing.T) {
 	withStateDir(t)
 	startResident(t)

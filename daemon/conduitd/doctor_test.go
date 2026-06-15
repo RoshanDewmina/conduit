@@ -127,9 +127,13 @@ func TestCheckPython(t *testing.T) {
 
 func TestCheckHooks(t *testing.T) {
 	home := t.TempDir()
+	// Nothing installed → warn.
 	if r := checkHooks(home); r.status != statusWarn {
-		t.Fatalf("missing hook: status = %v", r.status)
+		t.Fatalf("nothing installed: status = %v", r.status)
 	}
+
+	// Script present but settings.json NOT wired → still warn (Finding #10: the
+	// script alone is a false positive; Claude never calls it without wiring).
 	hookDir := filepath.Join(home, ".claude", "hooks")
 	if err := os.MkdirAll(hookDir, 0700); err != nil {
 		t.Fatal(err)
@@ -137,8 +141,16 @@ func TestCheckHooks(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hookDir, "conduit-hook.sh"), []byte("#!/bin/sh\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	if r := checkHooks(home); r.status != statusWarn {
+		t.Fatalf("script-only (unwired): status = %v (%s)", r.status, r.message)
+	}
+
+	// Wire it (script already exists) → OK.
+	if _, err := wireClaudeHookSettings(home); err != nil {
+		t.Fatal(err)
+	}
 	if r := checkHooks(home); r.status != statusOK {
-		t.Fatalf("present hook: status = %v (%s)", r.status, r.message)
+		t.Fatalf("script + wired: status = %v (%s)", r.status, r.message)
 	}
 }
 
