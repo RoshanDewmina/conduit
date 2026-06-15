@@ -40,7 +40,10 @@ public struct AddHostView: View {
 
     // MARK: - Advanced disclosure (V6)
     @State private var advancedExpanded = false
-    @State private var authChoice: AuthChoice = .password
+    // Default to key auth (Finding #12): most agent hosts are key-only, and a
+    // phone-first signup must be able to make + authorize a key inline without
+    // digging into Settings. Password stays available but secondary.
+    @State private var authChoice: AuthChoice = .ed25519
     @State private var keyTags: [String] = []
     @State private var selectedKeyTag: String?
 
@@ -78,9 +81,11 @@ public struct AddHostView: View {
         !clipboardBannerDismissed && clipboardBannerResult != nil
     }
 
-    // Whether the key-gen card should be shown
+    // Whether the key-gen card should be shown. Surfaced INLINE (Finding #12) —
+    // no longer gated behind the "advanced" disclosure — so a new user can make
+    // + authorize a key without leaving the connect flow.
     private var showKeyGenCard: Bool {
-        advancedExpanded && authChoice == .ed25519 && keyTags.isEmpty
+        authChoice == .ed25519 && keyTags.isEmpty
     }
 
     // CTA enabled when we have a valid parse
@@ -144,7 +149,12 @@ public struct AddHostView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, 8)
 
-                            // ── Advanced disclosure (V6)
+                            // ── Authentication (inline — Finding #12)
+                            authSection
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
+
+                            // ── Advanced disclosure (tmux · startup · full editor)
                             advancedSection
                                 .padding(.horizontal, 16)
                                 .padding(.top, 16)
@@ -499,7 +509,7 @@ public struct AddHostView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(t.text3)
                         .frame(width: 16)
-                    Text("advanced  (auth · tmux · startup)  —  optional")
+                    Text("advanced  (tmux · startup)  —  optional")
                         .font(.dsMonoPt(12))
                         .foregroundStyle(t.text3)
                     Spacer()
@@ -516,13 +526,17 @@ public struct AddHostView: View {
         }
     }
 
+    // MARK: - Authentication section (inline — Finding #12)
+    // Auth no longer lives behind "advanced": key gen + the pubkey + the one-tap
+    // ssh-copy-id affordance are surfaced directly in the connect flow so a new
+    // user can authorize a key on the host without digging into Settings.
     @ViewBuilder
-    private var advancedContent: some View {
+    private var authSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Auth segmented control
+            // Auth segmented control (Ed25519 default, Password secondary)
             authSegmentedControl
 
-            // V6 key-gen card
+            // V6 key-gen card — make + show + copy/ssh-copy-id the key inline
             if showKeyGenCard {
                 keyGenCard
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -530,13 +544,18 @@ public struct AddHostView: View {
                 // Key picker (existing keys)
                 existingKeyPicker
             } else if authChoice == .password {
-                Text("Password is requested at connect time and is not stored.")
+                Text("Password is requested at connect time and is not stored. If this host only accepts keys, switch to Ed25519 above.")
                     .font(.dsSansPt(13))
                     .foregroundStyle(t.text3)
                     .padding(.horizontal, 4)
             }
+        }
+    }
 
-            // "Full editor" push row
+    @ViewBuilder
+    private var advancedContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // "Full editor" push row — tmux, startup command, and more
             fullEditorRow
         }
         .padding(.top, 4)
