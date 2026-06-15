@@ -92,8 +92,12 @@ public enum E2ERelayMessage: Codable, Sendable {
     }
 
     /// Wrapper for an inner relay message with a typed payload field.
-    struct RelayInnerEnvelope<T: Codable & Sendable>: Codable, Sendable {
-        let type: String
-        let payload: T
+    public struct RelayInnerEnvelope<T: Codable & Sendable>: Codable, Sendable {
+        public let type: String
+        public let payload: T
+        public init(type: String, payload: T) {
+            self.type = type
+            self.payload = payload
+        }
     }
 }
