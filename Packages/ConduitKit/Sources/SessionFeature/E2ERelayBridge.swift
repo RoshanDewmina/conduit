@@ -48,11 +48,16 @@ public final class E2ERelayBridge: ObservableObject {
     @discardableResult
     public func sendDecision(approvalID: String, decision: String, editedToolInput: String?) async -> Bool {
         guard isActive else { return false }
-        let decisionMsg = E2ERelayMessage.approvalResponse(
-            .init(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
+        // Send the raw DecisionData as the payload (NOT the E2ERelayMessage enum):
+        // send() already wraps it as {type, payload}, and the daemon handler
+        // unmarshals the typed params directly from payload. Passing the enum
+        // double-nests it as {"approvalResponse":{…}}, which the daemon can't read —
+        // mirror sendDispatch, which passes its raw DispatchParams struct.
+        let decisionData = E2ERelayMessage.DecisionData(
+            approvalID: approvalID, decision: decision, editedToolInput: editedToolInput
         )
         do {
-            try await relayClient.send(type: "approvalResponse", payload: decisionMsg)
+            try await relayClient.send(type: "approvalResponse", payload: decisionData)
             return true
         } catch {
             return false

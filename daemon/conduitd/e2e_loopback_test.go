@@ -247,11 +247,15 @@ func TestE2ELoopbackThroughBlindRelay(t *testing.T) {
 		t.Fatalf("phone decrypted plaintext missing marker: %s", plain)
 	}
 
-	// Phone → daemon: seal an approvalResponse and send it back.
+	// Phone → daemon: seal an approvalResponse and send it back. The phone wraps
+	// app messages as {type, payload:{…typed params…}} (matching E2ERelayClient.send),
+	// so the typed fields live under "payload", not at the top level.
 	resp := map[string]any{
-		"type":       "approvalResponse",
-		"approvalID": "appr-1",
-		"decision":   "approve",
+		"type": "approvalResponse",
+		"payload": map[string]any{
+			"approvalID": "appr-1",
+			"decision":   "approve",
+		},
 	}
 	respJSON, _ := json.Marshal(resp)
 	respFrame, err := encryptFrame(respJSON, phoneKey)
