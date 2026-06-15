@@ -138,6 +138,15 @@ public final class SessionViewModel {
     private var livePendingApprovals: Int = 0
     private var liveAgentName: String?
     private var livePendingApprovalID: String?
+
+    /// A blocked reason derived from the session's live state.
+    /// When approvals are pending, reports awaitingApproval with available context.
+    public var blockedReason: BlockedReason? {
+        if livePendingApprovals > 0, let aid = livePendingApprovalID {
+            return .awaitingApproval(approvalID: aid, command: "", agent: liveAgentName ?? "Agent")
+        }
+        return nil
+    }
     private var historyOffset: Int = 0
     public private(set) var hasOlderScrollback: Bool = false
     private static let scrollbackPageSize = 200

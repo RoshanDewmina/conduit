@@ -65,7 +65,7 @@ func TestAgentStatusRPCHandler(t *testing.T) {
 	t.Parallel()
 	home := testdataHome(t, "claude-home")
 	params, _ := json.Marshal(agentStatusParams{HomeDir: home})
-	s := &server{approvals: newApprovalStore()}
+	s := &server{approvals: newApprovalStore(), dispatcher: newDispatcher()}
 	s.handleMessage(&rpcMessage{JSONRPC: "2.0", ID: 1, Method: "agent.status", Params: params})
 	if len(collectAgentStatus(home).Agents) != 3 { t.Fatal("want 3 agents") }
 }

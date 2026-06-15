@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -61,60 +62,77 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	websocket.Handler(func(conn *websocket.Conn) {
+	websocket.Server{
+		Handler: func(conn *websocket.Conn) {
 		defer conn.Close()
 		conn.PayloadType = websocket.TextFrame
 
 		hub.mu.Lock()
 		pair, ok := hub.pairs[code]
 		if !ok {
-			if role == "phone" {
-				hub.mu.Unlock()
-				sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for daemon"})
-				_ = conn.Close()
-				return
+			// First peer for this code (either role). Create the pair, record
+			// this side, and hold the connection open until the peer joins.
+			// Order-independent: phone-first and daemon-first both work.
+			pair = newRelayPair(code, "")
+			if role == "daemon" {
+				pair.DaemonConn = conn
+				pair.DaemonKey = publicKey
+				pair.DaemonSeen = time.Now()
+			} else {
+				pair.PhoneConn = conn
+				pair.PhoneKey = publicKey
+				pair.PhoneSeen = time.Now()
 			}
-			pair = newRelayPair(code, publicKey)
-			pair.DaemonConn = conn
-			pair.DaemonSeen = time.Now()
 			hub.pairs[code] = pair
 			hub.mu.Unlock()
-			log.Printf("relay: daemon connected with code %s", code)
-			sendJSON(conn, map[string]interface{}{"type": "paired", "role": "daemon"})
+			log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
+			sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
 		} else {
-			if role == "daemon" {
+			// Second peer — must be the opposite role of whoever is already here.
+			pair.mu.Lock()
+			dup := (role == "daemon" && pair.DaemonConn != nil) ||
+				(role == "phone" && pair.PhoneConn != nil)
+			if dup {
+				pair.mu.Unlock()
 				hub.mu.Unlock()
-				sendJSON(conn, map[string]interface{}{"type": "error", "message": "daemon already connected"})
+				sendJSON(conn, map[string]interface{}{"type": "error", "message": role + " already connected"})
 				return
 			}
-
-			pair.mu.Lock()
-			pair.PhoneConn = conn
-			pair.PhoneKey = publicKey
-			pair.PhoneSeen = time.Now()
+			if role == "daemon" {
+				pair.DaemonConn = conn
+				pair.DaemonKey = publicKey
+				pair.DaemonSeen = time.Now()
+			} else {
+				pair.PhoneConn = conn
+				pair.PhoneKey = publicKey
+				pair.PhoneSeen = time.Now()
+			}
+			daemonConn := pair.DaemonConn
+			phoneConn := pair.PhoneConn
+			daemonKey := pair.DaemonKey
+			phoneKey := pair.PhoneKey
+			buffered := pair.Buffer
+			pair.Buffer = nil
 			pair.mu.Unlock()
 			hub.mu.Unlock()
 
-			log.Printf("relay: phone connected with code %s", code)
+			log.Printf("relay: %s connected with code %s (paired)", role, code)
 
-			pair.mu.Lock()
-			if pair.DaemonConn != nil {
-				sendJSON(pair.DaemonConn, map[string]interface{}{
-					"type":          "peer_joined",
-					"role":          "phone",
-					"peerPublicKey": publicKey,
-				})
-			}
-			sendJSON(conn, map[string]interface{}{
+			// Notify each peer of the other's public key (order-independent).
+			sendJSON(daemonConn, map[string]interface{}{
+				"type":          "peer_joined",
+				"role":          "phone",
+				"peerPublicKey": phoneKey,
+			})
+			sendJSON(phoneConn, map[string]interface{}{
 				"type":          "peer_joined",
 				"role":          "daemon",
-				"peerPublicKey": pair.DaemonKey,
+				"peerPublicKey": daemonKey,
 			})
-			for _, msg := range pair.Buffer {
+			// Flush any buffered messages to the peer that just joined.
+			for _, msg := range buffered {
 				sendJSON(conn, msg)
 			}
-			pair.Buffer = nil
-			pair.mu.Unlock()
 		}
 
 		for {
@@ -179,7 +197,22 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 		}
 		pair.mu.Unlock()
 		hub.mu.Unlock()
-	}).ServeHTTP(w, r)
+	},
+		Handshake: func(config *websocket.Config, req *http.Request) error {
+			// Allow only native clients: iOS URLSession sends no Origin header;
+			// the Go daemon (e2e_client) sends "http://localhost/". A browser
+			// page sends its own origin — reject it to prevent cross-site
+			// WebSocket hijacking (CSWSH). Defense-in-depth: pairing also
+			// requires the single-use code + X25519 ECDH, so an unknown origin
+			// gains nothing, but we close the vector anyway.
+			switch req.Header.Get("Origin") {
+			case "", "http://localhost/", "http://localhost":
+				return nil
+			default:
+				return fmt.Errorf("origin not allowed: %s", req.Header.Get("Origin"))
+			}
+		},
+	}.ServeHTTP(w, r)
 }
 
 func sendJSON(conn *websocket.Conn, v interface{}) {

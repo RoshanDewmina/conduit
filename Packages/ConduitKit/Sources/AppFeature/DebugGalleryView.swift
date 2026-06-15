@@ -35,6 +35,7 @@ struct DebugGalleryView: View {
         case "orb-phases":     OrbPhasesDemo()
         case "onboarding":     OnboardingView(onContinue: {}, onSetupWorkspace: {})
         case "onboarding-b":   OnboardingView(onContinue: {}, onSetupWorkspace: {})
+        case "onboarding-redesign": OnboardingRedesignGalleryView()
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "chat":           chatGallery

@@ -359,6 +359,14 @@ func (s *server) startScheduler(stop <-chan struct{}) {
 				return
 			case t := <-ticker.C:
 				s.scheduler.tick(t, s.runDispatch)
+				// Feed periodic agent status spend into quota guardrails so the
+				// iOS dashboard shows real data even when the app isn't polling.
+				status := collectAgentStatus(serverHome())
+				for _, ag := range status.Agents {
+					if ag.UsageUSD != nil {
+						s.dispatcher.updateProviderSpend(ag.Agent, *ag.UsageUSD)
+					}
+				}
 			}
 		}
 	}()
@@ -585,7 +593,15 @@ func (s *server) handleMessage(msg *rpcMessage) {
 				return
 			}
 		}
-		s.writeResult(msg.ID, collectAgentStatus(params.HomeDir))
+		result := collectAgentStatus(params.HomeDir)
+		// Feed cumulative usage into quota guardrails so the spend/burn-rate
+		// dashboard shows real data rather than empty cards.
+		for _, ag := range result.Agents {
+			if ag.UsageUSD != nil {
+				s.dispatcher.updateProviderSpend(ag.Agent, *ag.UsageUSD)
+			}
+		}
+		s.writeResult(msg.ID, result)
 
 	case "agent.host.health":
 		health := collectHostHealth()

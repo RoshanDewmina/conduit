@@ -45,7 +45,7 @@ public actor LoopRepository {
                 loop.goal,
                 loop.plan,
                 loop.currentStep,
-                loop.blockedReason.map { $0.displayReason },
+                loop.blockedReason.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) },
                 loop.agent,
                 loop.vendor,
                 loop.model,
@@ -131,12 +131,15 @@ public actor LoopRepository {
         let statusStr: String = row["status"] ?? "running"
         let status = Loop.Status(rawValue: statusStr) ?? .running
 
+        let blockedReasonStr: String? = row["blocked_reason"]
+        let blockedReason = blockedReasonStr.flatMap { try? JSONDecoder().decode(BlockedReason.self, from: Data($0.utf8)) }
+
         return Loop(
             id: row["id"] ?? "",
             goal: row["goal"] ?? "",
             plan: row["plan"],
             currentStep: row["current_step"],
-            blockedReason: nil,
+            blockedReason: blockedReason,
             agent: row["agent"] ?? "",
             vendor: row["vendor"],
             model: row["model"],

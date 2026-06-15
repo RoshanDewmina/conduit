@@ -2,11 +2,14 @@ import Foundation
 import CryptoKit
 import ConduitCore
 import SecurityKit
+import OSLog
 
 /// E2E encrypted relay connection between the iOS app and the daemon via a
 /// blind WebSocket relay. The relay forwards ciphertext it cannot decrypt.
 @MainActor
 public final class E2ERelayClient: ObservableObject {
+
+    private nonisolated static let logger = Logger(subsystem: "dev.conduit.mobile", category: "E2ERelayClient")
 
     @Published public private(set) var connectionState: ConnectionState = .disconnected
     @Published public private(set) var pairingState: PairingState = .unpaired
@@ -94,6 +97,7 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     public func connect() {
+        Self.logger.info("connect() called, relayHost=\(self.relayURL.host ?? "", privacy: .public) code=\(self.pairingCode, privacy: .private)")
         connectionState = .connecting
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
@@ -102,6 +106,7 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     public func disconnect() {
+        Self.logger.info("disconnect() called")
         reconnectTask?.cancel()
         reconnectTask = nil
         keepaliveTask?.cancel()
@@ -142,6 +147,10 @@ public final class E2ERelayClient: ObservableObject {
 
     private func doConnect() async {
         var components = URLComponents(url: relayURL, resolvingAgainstBaseURL: false)!
+        // The relay endpoint lives at /ws/relay; relayURL is a base with no path
+        // (matches the daemon's `<base>/ws/relay` and the relay's registered route).
+        let base = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = base.isEmpty ? "/ws/relay" : "/" + base + "/ws/relay"
         components.queryItems = [
             URLQueryItem(name: "role", value: "phone"),
             URLQueryItem(name: "code", value: pairingCode),
@@ -149,13 +158,18 @@ public final class E2ERelayClient: ObservableObject {
         ]
 
         guard let wsURL = components.url else {
+            Self.logger.error("doConnect: failed to construct wsURL from components, path=\(components.path, privacy: .public)")
             connectionState = .disconnected
             return
         }
 
+        // Log host+path only — the query string carries the single-use pairing
+        // code and the ephemeral public key, which must not leak to device logs.
+        Self.logger.info("doConnect: connecting to \(wsURL.host ?? "", privacy: .public)\(wsURL.path, privacy: .public) role=phone")
         let session = URLSession.shared
         webSocketTask = session.webSocketTask(with: wsURL)
         webSocketTask?.resume()
+        Self.logger.info("doConnect: task state after resume: \(self.webSocketTask?.state.rawValue ?? -1, privacy: .public)")
 
         connectionState = .connected
         pairingState = .waitingForPeer
@@ -182,10 +196,23 @@ public final class E2ERelayClient: ObservableObject {
 
                 Task { @MainActor in
                     self.handleMessage(text)
+                    // URLSessionWebSocketTask.receive is one-shot — re-arm to
+                    // read the next frame (e.g. peer_joined after waiting).
+                    self.listenForMessages()
                 }
 
-            case .failure:
+            case .failure(let error):
+                // Don't log the raw error object — its userInfo embeds the full
+                // URL (NSErrorFailingURLStringKey), which carries the pairing code.
+                if let urlError = error as? URLError {
+                    Self.logger.error("receive URLError: code=\(urlError.code.rawValue, privacy: .public) description=\(urlError.localizedDescription, privacy: .public)")
+                } else {
+                    Self.logger.error("receive failed: \(error.localizedDescription, privacy: .public)")
+                }
                 Task { @MainActor in
+                    if let code = self.webSocketTask?.closeCode, code != .invalid {
+                        Self.logger.error("receive: ws closeCode=\(code.rawValue, privacy: .public)")
+                    }
                     self.handleDisconnect()
                 }
             }
@@ -200,16 +227,20 @@ public final class E2ERelayClient: ObservableObject {
 
         switch msg.type {
         case "peer_joined":
+            Self.logger.info("handleMessage: peer_joined received, deriving session key")
             guard let peerKey = msg.peerPublicKey else { return }
             do {
                 try deriveSessionKey(withPeerPublicKey: peerKey)
+                Self.logger.info("handleMessage: session key derived, pairing complete")
                 pairingState = .paired
                 reconnectDelay = 1.0
             } catch {
+                Self.logger.error("handleMessage: key derivation failed: \(error.localizedDescription, privacy: .public)")
                 pairingState = .pairingFailed("Key derivation failed: \(error.localizedDescription)")
             }
 
         case "peer_left":
+            Self.logger.info("handleMessage: peer_left")
             sessionKey = nil
             pairingState = .unpaired
 
@@ -229,6 +260,7 @@ public final class E2ERelayClient: ObservableObject {
             break
 
         case "error":
+            Self.logger.error("handleMessage: relay error: \(msg.message ?? "none", privacy: .public)")
             pairingState = .pairingFailed(msg.message ?? "Relay error")
 
         default:
@@ -237,6 +269,9 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     private func handleDisconnect() {
+        let cc = webSocketTask?.closeCode
+        let cr = webSocketTask?.closeReason
+        Self.logger.info("handleDisconnect: connection lost, scheduling reconnect in \(self.reconnectDelay)s closeCode=\(cc?.rawValue ?? -1, privacy: .public) closeReason=\(cr?.base64EncodedString() ?? "nil", privacy: .public)")
         connectionState = .disconnected
         pairingState = .unpaired
         sessionKey = nil

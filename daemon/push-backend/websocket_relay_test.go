@@ -24,7 +24,7 @@ func dialRelay(t *testing.T, srv *httptest.Server, role, code, publicKey string)
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") +
 		"/ws/relay?role=" + role + "&code=" + code + "&publicKey=" + publicKey
-	conn, err := websocket.Dial(wsURL, "", srv.URL)
+	conn, err := websocket.Dial(wsURL, "", "http://localhost/")
 	if err != nil {
 		t.Fatalf("dial %s: %v", role, err)
 	}
@@ -73,8 +73,8 @@ func TestRelayRoundTrip(t *testing.T) {
 	// Daemon connects first → gets a "paired" ack.
 	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
 	defer daemon.Close()
-	if got := recvJSON(t, daemon); got["type"] != "paired" {
-		t.Fatalf("daemon first message type = %v, want paired", got["type"])
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
 	}
 
 	// Phone connects → both sides receive peer_joined with the peer's key.
@@ -123,8 +123,8 @@ func TestRelayBuffersUntilPeerJoins(t *testing.T) {
 	code := "buf999"
 	daemon := dialRelay(t, srv, "daemon", code, "daemon-key")
 	defer daemon.Close()
-	if got := recvJSON(t, daemon); got["type"] != "paired" {
-		t.Fatalf("daemon first message type = %v, want paired", got["type"])
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
 	}
 
 	// Daemon sends before the phone is present → relay buffers it.
@@ -141,5 +141,57 @@ func TestRelayBuffersUntilPeerJoins(t *testing.T) {
 	replay := recvJSON(t, phone)
 	if replay["type"] != "message" || replay["payload"] != buffered {
 		t.Fatalf("replayed buffered message = %+v, want payload=%s", replay, buffered)
+	}
+}
+
+// Regression: the PHONE may connect BEFORE the daemon (the real-world order —
+// the app's pairing screen auto-dials, then the user runs `conduitd pair`).
+// The relay must hold the phone open and pair on the daemon's later join,
+// rather than dropping the phone with a "waiting"+close. (Pre-fix, phone-first
+// was closed immediately and pairing never completed.)
+func TestRelayPhoneFirstPairs(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "ph0ne1"
+	phoneKey := "phone-pub-key"
+	daemonKey := "daemon-pub-key"
+
+	// Phone connects first → held with a "waiting" ack (connection stays open).
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	if got := recvJSON(t, phone); got["type"] != "waiting" {
+		t.Fatalf("phone first message type = %v, want waiting", got["type"])
+	}
+
+	// Daemon connects second → both sides receive peer_joined with peer keys.
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	defer daemon.Close()
+
+	daemonJoined := recvJSON(t, daemon)
+	if daemonJoined["type"] != "peer_joined" || daemonJoined["peerPublicKey"] != phoneKey {
+		t.Fatalf("daemon peer_joined = %+v, want peerPublicKey=%s", daemonJoined, phoneKey)
+	}
+	phoneJoined := recvJSON(t, phone)
+	if phoneJoined["type"] != "peer_joined" || phoneJoined["peerPublicKey"] != daemonKey {
+		t.Fatalf("phone peer_joined = %+v, want peerPublicKey=%s", phoneJoined, daemonKey)
+	}
+}
+
+// Security regression (CSWSH): a browser-style Origin header must be rejected.
+// Native clients (iOS = no Origin, daemon = http://localhost/) are allowed; a
+// cross-site page origin must not be able to open the relay socket.
+func TestRelayRejectsBrowserOrigin(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") +
+		"/ws/relay?role=phone&code=evil01&publicKey=attacker-key"
+	// Origin of a malicious web page.
+	_, err := websocket.Dial(wsURL, "", "https://evil.example.com")
+	if err == nil {
+		t.Fatal("expected dial to be rejected for a browser Origin, but it succeeded")
 	}
 }
