@@ -78,7 +78,9 @@ public struct OnboardingView: View {
                 onUseSSH: { showPairing = false },
                 onPaired: { _, _ in
                     showPairing = false
-                    onContinue()
+                    // Pairing succeeded — land in the app (monitoring), NOT the
+                    // Add Host sheet that onContinue() opens.
+                    onAlreadyUseConduit()
                 }
             )
         }

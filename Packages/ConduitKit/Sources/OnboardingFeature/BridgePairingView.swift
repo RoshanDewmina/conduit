@@ -198,7 +198,9 @@ public struct BridgePairingView: View {
                     showScanner = false
                     scanError = reason + " Enter the code manually."
                     manualCode = ""
-                    showManualEntry = true
+                    // Present the alert AFTER the scanner sheet finishes dismissing —
+                    // SwiftUI swallows an alert raised during a sheet dismiss.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showManualEntry = true }
                 }
             )
             .ignoresSafeArea()
@@ -211,7 +213,7 @@ public struct BridgePairingView: View {
                 Button("Type code") {
                     showScanner = false
                     manualCode = ""
-                    showManualEntry = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showManualEntry = true }
                 }
                 .font(.dsSansPt(15, weight: .medium))
                 .foregroundStyle(.white)
