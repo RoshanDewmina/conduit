@@ -493,6 +493,8 @@ function DecisionsLegend(){
 function MigrationBoard(){
   return (
     <DesignCanvas>
+      <PlatformSurfacesSection/>
+
       <DCSection id="loop" title="Core loop" subtitle="The daily heartbeat — agents ask, you decide in seconds, the bridge audits the rest.">
         <DCArtboard id="inbox" label="Inbox · approval queue" width={320} height={660}>
           <TabFrame tag="redesign" tab="inbox"><InboxScreen approvals={APPROVALS} onApprove={()=>{}} onDeny={()=>{}} onOpen={()=>{}}/></TabFrame>

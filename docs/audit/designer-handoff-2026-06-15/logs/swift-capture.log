@@ -1,0 +1,24 @@
+skip onboarding
+skip onboarding-b
+capture inbox-typed -> gallery-inbox-typed.jpg
+capture diff -> gallery-diff.jpg
+capture filepreview -> gallery-filepreview.jpg
+capture blocks -> gallery-blocks.jpg
+capture chat -> gallery-chat.jpg
+capture session -> gallery-session.jpg
+capture hud -> gallery-hud.jpg
+capture statusheader -> gallery-statusheader.jpg
+capture keyboard -> gallery-keyboard.jpg
+capture proof -> gallery-proof.jpg
+capture billing -> gallery-billing.jpg
+capture paywall -> gallery-paywall.jpg
+capture compare -> gallery-compare.jpg
+capture states -> gallery-states.jpg
+capture review -> gallery-review.jpg
+capture components -> gallery-components.jpg
+capture features -> gallery-features.jpg
+capture orb-connecting -> gallery-orb-connecting.jpg
+capture orb-connected -> gallery-orb-connected.jpg
+capture orb-slow -> gallery-orb-slow.jpg
+capture orb-failed -> gallery-orb-failed.jpg
+capture orb-phases -> gallery-orb-phases.jpg
