@@ -12,47 +12,16 @@ import SecurityKit
 public class InboxViewModel {
     public var approvals: [Approval] = []
 
-    public var demoDismissed: Bool {
-        get { UserDefaults.standard.bool(forKey: "inbox.demoDismissed") }
-        set { UserDefaults.standard.set(newValue, forKey: "inbox.demoDismissed") }
-    }
-
-    public var demoApproval: Approval {
-        Approval(
-            id: ApprovalID(),
-            sessionID: SessionID(),
-            agent: .claudeCode,
-            kind: .command,
-            command: "npm install && npm run build",
-            patch: nil,
-            cwd: "~/projects/my-app",
-            risk: .medium,
-            createdAt: .now,
-            toolName: "bash",
-            toolInput: nil,
-            blastRadius: ApprovalBlastRadius(
-                files: ["package.json"],
-                touchesGit: false,
-                touchesNetwork: true,
-                matchedRule: "auto-allow-safe-commands"
-            )
-        )
-    }
-
-    public var effectiveApprovals: [Approval] {
-        if approvals.isEmpty && !demoDismissed {
-            return [demoApproval]
-        }
-        return approvals
-    }
-
-    public func dismissDemo() {
-        demoDismissed = true
-    }
+    public var effectiveApprovals: [Approval] { approvals }
 
     public init(approvals: [Approval] = []) {
         self.approvals = approvals
     }
+
+    // Vestigial: the first-run demo teaser was removed. `isDemo` is now always
+    // false at the call sites, so this never runs — kept only so those dead
+    // branches compile. TODO: strip the `isDemo` branches and delete this.
+    func dismissDemo() {}
 
     open func decide(
         _ id: ApprovalID,
@@ -135,20 +104,7 @@ public struct InboxView: View {
                     }
                 }
 
-                if visibleApprovals.isEmpty && !vm.demoDismissed {
-                    VStack {
-                        Spacer()
-                        DSEmptyState(
-                            dotMatrix: .thinking,
-                            title: "Your first approval",
-                            subtitle: "This is a demo. When you connect a coding agent, its permission requests appear here. Tap the card to see the full decision sheet."
-                        )
-                        .padding(.horizontal, 24)
-                        pendingCard(vm.demoApproval)
-                            .padding(.horizontal, 16)
-                        Spacer()
-                    }
-                } else if visibleApprovals.isEmpty {
+                if visibleApprovals.isEmpty {
                     VStack {
                         Spacer()
                         DSEmptyState(
@@ -213,7 +169,7 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
-        let isDemo = vm.approvals.isEmpty && !vm.demoDismissed
+        let isDemo = false
 
         switch approval.kind {
         case .askQuestion:
@@ -306,7 +262,7 @@ public struct InboxView: View {
         let cmdStr = approval.command ?? approval.toolName ?? "Unknown command"
         let whyStr = br.matchedRule.map { "Matched policy rule \"\($0)\" requiring human approval." }
             ?? "This action requires human approval per your policy settings."
-        let isDemo = vm.approvals.isEmpty && !vm.demoDismissed
+        let isDemo = false
 
         DSDecisionSheet(
             risk: approval.risk.rawValue,
