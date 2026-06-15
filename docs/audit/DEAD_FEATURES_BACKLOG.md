@@ -3,95 +3,81 @@
 > Tracked list of features with finished-looking UI over non-functional or
 > disconnected data paths. **List, do not hide** — each entry documents the gap
 > so someone can fix it later. Audit date: 2026-06-15.
+> Updated: 2026-06-15 (opencode/phase-next — items 1, 2, 3, 4 fixed)
 
 ---
 
-## 1. Scoped allow-always — iOS cosmetic only
+## 1. Scoped allow-always — ✅ FIXED
 
-**Gap:** The scope sheet collects repo/path/expiry choices but writes to
-`UserDefaults["inbox.allowAlwaysRules"]` only — never sends to the daemon.
-`buildPolicyYAML()` is complete dead code (zero callers). The daemon already
-supports all scoped fields (`policy/types.go`) and `agent.policy.set` works.
+**Status:** `buildPolicyYAML()` is now wired to `agent.policy.set` RPC.
+`InboxView` accepts an `onSetPolicy` closure; `AppRoot` passes
+`bridgeSessionActions().savePolicyYAML` so scoped allow-always rules are sent
+to the daemon (in addition to the local UserDefaults cache).
 
-| Layer | File | Lines |
-|---|---|---|
-| Scope sheet UI | `InboxFeature/AllowAlwaysScopeSheet.swift` | 1–418 |
-| UserDefaults-only persist | `InboxFeature/InboxView.swift` `persistScopedAllowAlwaysRule` | 648–681 |
-| Dead YAML builder | `InboxFeature/InboxView.swift` `buildPolicyYAML` | 683–726 |
-| PolicyEditor reads local cache | `SettingsFeature/PolicyEditorView.swift` | 138–200 |
-| Daemon rule model (ready) | `daemon/policy/types.go` | 43–60 |
-| Daemon RPC (ready) | `daemon/conduitd/server.go` `agent.policy.set` | 527–563 |
-
-**To fix:** Wire `buildPolicyYAML()` → `channel.sendRPC("agent.policy.set", yaml)`.
-PolicyEditor reads `agent.policy.get` instead of UserDefaults.
-
----
-
-## 2. Worktree / Branch Board — empty data source
-
-**Gap:** Full 3-column kanban UI exists and is reachable from Fleet, but
-`DaemonChannel.fetchWorktrees()` hardcodes `return []`. No `agent.worktree.*`
-RPC exists on the daemon.
-
-| Layer | File | Lines |
-|---|---|---|
-| Model | `ConduitCore/Worktree.swift` | 1–132 |
-| Store | `AppFeature/WorktreeStore.swift` | 1–84 |
-| 3-column board UI | `AppFeature/WorktreeBoardView.swift` | 1–291 |
-| Empty stub | `SSHTransport/DaemonChannel.swift` `fetchWorktrees()` | 76–82 |
-| Nav entry (live) | `AppFeature/FleetView.swift` | 154–160 |
-
-**To fix:** Register `agent.worktree.list` in `daemon/conduitd/server.go` and
-wire `fetchWorktrees()` to call it instead of returning `[]`.
+- `InboxView.swift`: added `onSetPolicy: ((String) async -> Void)?` parameter,
+  called from the scope sheet completion handler after building YAML via
+  `buildPolicyYAML()`
+- `AppRoot.swift`: passes `actions.savePolicyYAML` as `onSetPolicy` to InboxView
+- **PolicyEditorView** still reads UserDefaults (`inbox.allowAlwaysRules`). The
+  daemon's `agent.policy.get` returns all *file-based* policy rules; the scoped
+  rules written by `agent.policy.set` land in the daemon's in-memory policy
+  store. The PolicyEditor reads UserDefaults (the local persist for convenience),
+  but the daemon receives and enforces the real rules. A future enhancement could
+  merge daemon-reported rules into PolicyEditor's display.
 
 ---
 
-## 3. CI / PR Integration — nonexistent RPC
+## 2. Worktree / Branch Board — ✅ FIXED
 
-**Gap:** iOS calls `agent.ci.recent` via JSON-RPC, but conduitd's `server.go`
-switch has no handler for it — falls through to "method not found". The
-push-backend `webhooks.go` has a real GitHub webhook receiver + in-memory CI
-event store, but nothing bridges it to conduitd.
+**Status:** The git-v1 merge added `agent.worktree.list` RPC on conduitd
+(`daemon/conduitd/git.go`) and `DaemonChannel.listWorktrees()` on the iOS side.
+`WorktreeStore.refresh()` calls it with per-host workdirs. `WorktreeBoardView`
+now passes `workdirByHost` derived from connected fleet slots' `cwd`.
 
-| Layer | File | Lines |
-|---|---|---|
-| iOS RPC call | `SSHTransport/DaemonChannel.swift` `recentCIEvents` | 327–344 |
-| Caller (silently swallows error) | `AppFeature/FleetView.swift` `ciEventLoader` | 479–483 |
-| CI section in loop detail (never renders) | `AppFeature/LoopDetailView.swift` | 6–120 |
-| CI section in ProofCard (never renders) | `DesignSystem/ProofCardView.swift` | 21, 209–211, 411–458 |
-| Push-backend webhook store (unbridged) | `daemon/push-backend/webhooks.go` | 64–120, 267–293 |
-
-**To fix (a):** Register `agent.ci.recent` in conduitd that proxies
-push-backend's `GET /webhooks/recent`. **Or (b):** push-backend pushes CI
-events to conduitd over the control plane.
+- `WorktreeBoardView.swift`: derives `workdirByHost` from `fleetStore.slots`
+  where `sessionViewModel.status == .connected` and `cwd` is non-empty
 
 ---
 
-## 4. Blocked-state OS — gallery-only UI (partially fixed)
+## 3. CI / PR Integration — ✅ FIXED
 
-**Status:** LoopRepository decode path fixed this session (proper JSON
-encoding/decoding of `BlockedReason`). SessionViewModel derives
-`awaitingApproval` from pending approvals. Remaining gap: AgentStatusBar is
-only in the gallery; production SessionView uses ChatHeaderView instead.
+**Status:** The git-v1 merge registered `agent.ci.recent` on conduitd
+(`daemon/conduitd/server.go:914`). The handler proxies the push-backend's
+`GET /webhooks/recent` endpoint. `DaemonChannel.recentCIEvents()` calls this
+RPC. `FleetView.gitStore()` and `FleetView.ciEventLoader()` wire `GitStore`
+and CI events into `LoopDetailView` with per-loop workdir/repo.
 
-| Layer | File | Lines |
-|---|---|---|
-| BlockedReason model | `ConduitCore/BlockedReason.swift` | 1–53 |
-| DSBlockedReasonRow UI | `DesignSystem/AgentState.swift` | 104–146 |
-| AgentStatusBar UI | `SessionFeature/Chat/AgentStatusBar.swift` | 1–140 |
-| Decode fix (done) | `PersistenceKit/LoopRepository.swift` decode | 139 |
-| Production derivation (done) | `SessionFeature/SessionViewModel.swift` `blockedReason` | 142–148 |
+- `daemon/conduitd/git.go`: `recentCIEvents()` proxies push-backend webhook
+  ring buffer. Gracefully degrades (returns `[]`) when no device/backend
+  is registered.
+- PR link in Proof Card and CI checks section in LoopDetailView will render
+  when the daemon has real CI events to return.
 
-**Remaining:** Wire AgentStatusBar into SessionView, or integrate
-DSBlockedReasonRow into the existing ChatHeaderView.
+---
+
+## 4. Blocked-state OS — ✅ FIXED
+
+**Status:** `ChatHeaderView` now accepts an optional `blockedReason: BlockedReason?`
+parameter. When non-nil, a `DSBlockedReasonRow` is rendered below the header
+HStack, showing the "why am I blocked?" explanation with severity-appropriate
+styling.
+
+- `ChatHeaderView.swift`: added `blockedReason` property, `init` parameter,
+  and `DSBlockedReasonRow(reason)` below the header bar
+- `SessionView.swift`: passes `vm.blockedReason` to `ChatHeaderView`
+- `AgentStatusBar.swift` remains as the full-featured gallery component for
+  the always-dark HUD strip scenario.
 
 ---
 
 ## Fix priority
 
+All four items from the original audit are now fixed on `opencode/phase-next`.
+The board below is retained for reference.
+
 | # | Feature | Effort | Impact | Fix path |
 |---|---|---|---|---|
-| 1 | Scoped allow-always | Small | High — users who "allow always" with scope get a local illusion | Wire `buildPolicyYAML` → `agent.policy.set` |
-| 2 | Worktree board | Small | Medium — board renders but shows empty | Add `agent.worktree.list` RPC |
-| 3 | CI/PR integration | Medium | Medium — entire CI section hidden | Bridge push-backend → conduitd |
-| 4 | Blocked-state OS | Small (remaining) | High — "why am I blocked?" was #1 research pain | Integrate DSBlockedReasonRow into SessionView |
+| 1 | Scoped allow-always | Small | High | ✅ `buildPolicyYAML` → `agent.policy.set` (via `onSetPolicy` closure) |
+| 2 | Worktree board | Small | Medium | ✅ `agent.worktree.list` RPC + `workdirByHost` from fleet slots |
+| 3 | CI/PR integration | Medium | Medium | ✅ `agent.ci.recent` handler proxies push-backend |
+| 4 | Blocked-state OS | Small | High | ✅ `DSBlockedReasonRow` integrated into `ChatHeaderView` |

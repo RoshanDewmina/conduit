@@ -85,6 +85,7 @@ public struct InboxView: View {
     public var bridgeConnected: Bool = false
     public var bridgePolicy: String = "balanced"
     public var todaySpend: String = "$0.00"
+    public var onSetPolicy: ((String) async -> Void)?
 
     @Environment(\.conduitTokens) private var t
     @State private var editingApproval: Approval?
@@ -102,7 +103,8 @@ public struct InboxView: View {
         onTapStatusHeader: @escaping () -> Void = {},
         bridgeConnected: Bool = false,
         bridgePolicy: String = "balanced",
-        todaySpend: String = "$0.00"
+        todaySpend: String = "$0.00",
+        onSetPolicy: ((String) async -> Void)? = nil
     ) {
         self.vm = viewModel
         self.sessionID = sessionID
@@ -113,6 +115,7 @@ public struct InboxView: View {
         self.bridgeConnected = bridgeConnected
         self.bridgePolicy = bridgePolicy
         self.todaySpend = todaySpend
+        self.onSetPolicy = onSetPolicy
     }
 
     public var body: some View {
@@ -214,6 +217,8 @@ public struct InboxView: View {
         .sheet(item: $scopeSheetApproval) { approval in
             AllowAlwaysScopeSheet(approval: approval) { scopedRule in
                 persistScopedAllowAlwaysRule(for: approval, rule: scopedRule)
+                let policyYAML = buildPolicyYAML(for: approval, rule: scopedRule)
+                Task { await onSetPolicy?(policyYAML) }
                 vm.decide(approval.id, decision: .approvedAlways)
             }
         }

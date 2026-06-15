@@ -891,7 +891,8 @@ public struct AppRoot: View {
                 onTapStatusHeader: {},
                 bridgeConnected: actions.isConnected,
                 bridgePolicy: "balanced",
-                todaySpend: "$0.00"
+                todaySpend: "$0.00",
+                onSetPolicy: actions.savePolicyYAML
             )
 
         case .fleet:

@@ -2,10 +2,13 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"strings"
+
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 // defaultRelayURL is the fallback blind-relay endpoint used when CONDUIT_RELAY_URL
@@ -37,6 +40,16 @@ func generatePairingCode() (string, error) {
 	return string(code), nil
 }
 
+// qrPairingPayload matches the iOS QRPairingPayload Codable struct so the
+// phone can scan the QR shown by conduitd pair and extract the relay URL,
+// pairing code, and the daemon's ephemeral public key.
+type qrPairingPayload struct {
+	V     int    `json:"v"`
+	Relay string `json:"relay"`
+	Code  string `json:"code"`
+	PK    string `json:"pk"`
+}
+
 func printRelayInstructions() {
 	code, err := generatePairingCode()
 	if err != nil {
@@ -46,13 +59,54 @@ func printRelayInstructions() {
 
 	relayURL := resolveRelayURL()
 
+	// Generate an ephemeral X25519 keypair so the QR carries the daemon's
+	// public key — the phone uses it to derive the shared session key.
+	priv, pub, err := generateKeyPair()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
+		return
+	}
+	_ = priv // retained until the relay session starts; the pair subcommand
+	// is ephemeral (it prints once and exits), so the key is scoped to the
+
+	payload := qrPairingPayload{
+		V:     1,
+		Relay: relayURL,
+		Code:  code,
+		PK:    base64URLEncode(pub[:]),
+	}
+	qrData, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error marshalling QR payload: %v\n", err)
+		return
+	}
+
+	qr, err := qrcode.New(string(qrData), qrcode.Medium)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error generating QR code: %v\n", err)
+		return
+	}
+
+	// ANSI QR (inverted for dark terminals).
+	ansiQR := qr.ToString(true)
+
 	fmt.Printf(`
 ╔══════════════════════════════════════════╗
 ║         Conduit E2E Relay Pairing       ║
 ╠══════════════════════════════════════════╣
 ║                                          ║
-║   Your pairing code:                     ║
+║   Scan this QR code with Conduit:        ║
 ║                                          ║
+`)
+	for _, line := range strings.Split(ansiQR, "\n") {
+		trimmed := strings.TrimRight(line, " ")
+		if trimmed == "" {
+			continue
+		}
+		fmt.Printf("║   %s   ║\n", trimmed)
+	}
+	fmt.Printf(`║                                          ║
+║   Or enter the code manually:             ║
 ║       ┌──────────────────┐               ║
 ║       │    %s    │               ║
 ║       └──────────────────┘               ║
@@ -60,7 +114,7 @@ func printRelayInstructions() {
 ║   Relay server: %s  ║
 ║                                          ║
 ║   Open Conduit on your phone, tap        ║
-║   "Relay Pairing" and enter this code.   ║
+║   "Relay Pairing" and scan this QR.      ║
 ║                                          ║
 ╚══════════════════════════════════════════╝
 

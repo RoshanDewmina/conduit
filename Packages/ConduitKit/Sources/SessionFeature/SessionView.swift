@@ -127,6 +127,7 @@ public struct SessionView: View {
                     hostName: vm.host.name,
                     cwd: vm.cwd,
                     state: agentState,
+                    blockedReason: vm.blockedReason,
                     // Back is pure navigation — it must NOT disconnect. The session
                     // (and its SSH connection) stays alive in the background so the
                     // active-session list + global HUD keep working; re-opening the

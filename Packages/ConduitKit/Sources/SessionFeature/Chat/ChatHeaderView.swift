@@ -9,6 +9,7 @@ public struct ChatHeaderView: View {
     let hostName: String
     let cwd: String
     let state: AgentState
+    let blockedReason: BlockedReason?
     let onBack: (() -> Void)?
     let onDisconnect: (() -> Void)?
     let onPortForward: (() -> Void)?
@@ -20,6 +21,7 @@ public struct ChatHeaderView: View {
         hostName: String,
         cwd: String,
         state: AgentState,
+        blockedReason: BlockedReason? = nil,
         onBack: (() -> Void)? = nil,
         onDisconnect: (() -> Void)? = nil,
         onPortForward: (() -> Void)? = nil,
@@ -28,6 +30,7 @@ public struct ChatHeaderView: View {
         self.hostName = hostName
         self.cwd = cwd
         self.state = state
+        self.blockedReason = blockedReason
         self.onBack = onBack
         self.onDisconnect = onDisconnect
         self.onPortForward = onPortForward
@@ -118,6 +121,12 @@ public struct ChatHeaderView: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+
+        if let reason = blockedReason {
+            DSBlockedReasonRow(reason)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+        }
     }
 }
 

@@ -32,7 +32,15 @@ public struct WorktreeBoardView: View {
                 }
             }
         }
-        .task { await store.refresh() }
+        .task {
+            let workdirByHost: [HostID: String] = store.fleetStore.slots.reduce(into: [:]) { dict, slot in
+                let cwd = slot.sessionViewModel.cwd
+                if slot.sessionViewModel.status == .connected, cwd != "~", !cwd.isEmpty {
+                    dict[slot.hostID] = cwd
+                }
+            }
+            await store.refresh(workdirByHost: workdirByHost)
+        }
     }
 
     // MARK: - Board
@@ -64,7 +72,15 @@ public struct WorktreeBoardView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
         }
-        .refreshable { await store.refresh() }
+        .refreshable {
+            let workdirByHost: [HostID: String] = store.fleetStore.slots.reduce(into: [:]) { dict, slot in
+                let cwd = slot.sessionViewModel.cwd
+                if slot.sessionViewModel.status == .connected, cwd != "~", !cwd.isEmpty {
+                    dict[slot.hostID] = cwd
+                }
+            }
+            await store.refresh(workdirByHost: workdirByHost)
+        }
     }
 
     private func columnSection(
