@@ -334,13 +334,105 @@ public actor DaemonChannel {
         if let err = dict["error"] as? [String: Any] {
             throw DaemonChannelError.rpc(err["message"] as? String ?? "ci.recent failed")
         }
-        guard let result = dict["result"],
-              JSONSerialization.isValidJSONObject(result),
-              let rd = try? JSONSerialization.data(withJSONObject: result)
+        // conduitd returns the event array directly as the result (not wrapped).
+        let raw: Any = dict["result"] ?? []
+        guard JSONSerialization.isValidJSONObject(raw) || raw is [Any],
+              let rd = try? JSONSerialization.data(withJSONObject: raw)
         else {
             return []
         }
-        return try JSONDecoder().decode([CIEvent].self, from: rd)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601 // Go time.Time marshals as RFC3339.
+        return (try? decoder.decode([CIEvent].self, from: rd)) ?? []
+    }
+
+    // MARK: - Git (review + ship the agent's work; routed through conduitd for audit/policy)
+
+    /// Current branch + ahead/behind + dirty/clean for the agent's workdir.
+    public func gitStatus(workdir: String) async throws -> GitStatus {
+        let data = try await sendRPC(method: "agent.git.status", params: ["workdir": workdir])
+        let result = try Self.gitResultObject(data)
+        let branch = result["branch"] as? String ?? "HEAD"
+        let upstream = result["upstream"] as? String
+        let ahead = result["ahead"] as? Int ?? 0
+        let behind = result["behind"] as? Int ?? 0
+        let changes: [GitFileChange] = (result["changes"] as? [[String: Any]] ?? []).map {
+            GitFileChange(
+                path: $0["path"] as? String ?? "",
+                code: $0["code"] as? String ?? "",
+                staged: $0["staged"] as? Bool ?? false
+            )
+        }
+        return GitStatus(branch: branch, upstream: upstream, ahead: ahead, behind: behind, changes: changes)
+    }
+
+    /// Unified diff text for the workdir (optionally scoped to a path / the index).
+    public func gitDiff(workdir: String, path: String? = nil, staged: Bool = false) async throws -> String {
+        var params: [String: Any] = ["workdir": workdir, "staged": staged]
+        if let path { params["path"] = path }
+        let data = try await sendRPC(method: "agent.git.diff", params: params)
+        return try Self.gitResultObject(data)["diff"] as? String ?? ""
+    }
+
+    /// Changed files between base and branch (name-status), for the "Changes" list.
+    public func gitChangedFiles(workdir: String, baseBranch: String? = nil, branch: String? = nil) async throws -> [Worktree.ChangedFile] {
+        var params: [String: Any] = ["workdir": workdir]
+        if let baseBranch { params["baseBranch"] = baseBranch }
+        if let branch { params["branch"] = branch }
+        let data = try await sendRPC(method: "agent.git.changedFiles", params: params)
+        let files = try Self.gitResultObject(data)["files"] as? [[String: Any]] ?? []
+        return files.compactMap { f in
+            guard let path = f["path"] as? String else { return nil }
+            let status = Worktree.ChangedFile.FileStatus(rawValue: f["status"] as? String ?? "modified") ?? .modified
+            return Worktree.ChangedFile(path: path, status: status)
+        }
+    }
+
+    /// One-tap "Ship it": stage + commit + push (+ open PR). Idempotent on partial
+    /// failure — `committed`/`pushed` report exactly which stages completed so the
+    /// caller can surface a precise state and retry safely.
+    public func gitShip(
+        workdir: String,
+        message: String,
+        openPR: Bool,
+        base: String? = nil,
+        title: String? = nil,
+        body: String? = nil
+    ) async throws -> GitShipResult {
+        var params: [String: Any] = ["workdir": workdir, "message": message, "openPR": openPR]
+        if let base { params["base"] = base }
+        if let title { params["title"] = title }
+        if let body { params["body"] = body }
+        let data = try await sendRPC(method: "agent.git.ship", params: params)
+        let result = try Self.gitResultObject(data)
+        return GitShipResult(
+            committed: result["committed"] as? Bool ?? false,
+            pushed: result["pushed"] as? Bool ?? false,
+            prURL: result["prURL"] as? String,
+            message: result["message"] as? String
+        )
+    }
+
+    /// Real worktree list for the host (replaces the old `return []` stub).
+    public func listWorktrees(workdir: String) async throws -> [Worktree] {
+        let data = try await sendRPC(method: "agent.worktree.list", params: ["workdir": workdir])
+        let result = try Self.gitResultObject(data)
+        guard let trees = result["worktrees"],
+              let rd = try? JSONSerialization.data(withJSONObject: trees) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([Worktree].self, from: rd)) ?? []
+    }
+
+    /// Unwrap a JSON-RPC `result` object or throw the daemon's error message.
+    private static func gitResultObject(_ data: Data) throws -> [String: Any] {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "git rpc error")
+        }
+        return (dict["result"] as? [String: Any]) ?? [:]
     }
 
     // MARK: - Loop updates

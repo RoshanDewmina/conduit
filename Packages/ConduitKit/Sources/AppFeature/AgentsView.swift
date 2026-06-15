@@ -139,7 +139,7 @@ public struct AgentsView: View {
             LazyVStack(spacing: 0) {
                 ForEach(store.agents) { agent in
                     NavigationLink {
-                        AgentDetailView(store: store, agent: agent)
+                        AgentDetailView(store: store, agent: agent, gitChannel: statusChannel)
                     } label: {
                         agentRow(agent)
                     }

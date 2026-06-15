@@ -3,11 +3,21 @@ import SwiftUI
 import DesignSystem
 import AgentKit
 import SettingsFeature
+import DiffFeature
+import DiffKit
+import SSHTransport
 
 struct AgentRunDetailView: View {
     @Bindable var store: AgentStore
     let run: AgentRun
     let agentID: String
+    /// Git review/ship store for the agent's workspace. nil ⇒ Changes hidden.
+    var gitStore: GitStore?
+
+    @State private var showShipSheet = false
+    @State private var diffToReview: RunDiff?
+    /// PR shipped from this run (drives the ProofCard PR link + persists across redraws).
+    @State private var shippedPRURL: String?
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.openURL) private var openURL
@@ -22,7 +32,12 @@ struct AgentRunDetailView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         statusSection
                         if liveRun.status.isTerminal, let proofModel = buildProofModel() {
-                            ProofCardView(model: proofModel)
+                            ProofCardView(model: proofModel, onPRTap: {
+                                if let url = (shippedPRURL).flatMap(URL.init) { openURL(url) }
+                            })
+                        }
+                        if gitStore != nil {
+                            changesSection
                         }
                         logsSection
                         artifactsSection
@@ -46,6 +61,65 @@ struct AgentRunDetailView: View {
                 await store.refreshRun(run.id)
                 if liveRun.status.isTerminal { break }
                 try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .task(id: run.id) { await gitStore?.refresh() }
+        .sheet(item: $diffToReview) { wrapped in
+            NavigationStack { DiffView(diff: wrapped.diff) }
+        }
+        .sheet(isPresented: $showShipSheet) {
+            if let gitStore {
+                RunShipSheet(store: gitStore, defaultMessage: run.prompt ?? "Ship agent changes") { url in
+                    shippedPRURL = url.absoluteString
+                }
+            }
+        }
+    }
+
+    // MARK: - Changes (review + ship the agent's git work)
+
+    @ViewBuilder
+    private var changesSection: some View {
+        if let git = gitStore {
+            VStack(alignment: .leading, spacing: 8) {
+                DSListSectionHead("CHANGES")
+                if let status = git.status {
+                    HStack(spacing: 8) {
+                        DSChip(status.branch, systemImage: "arrow.triangle.branch", tone: .accent, variant: .outlined, size: .sm)
+                        if status.ahead > 0 { DSChip("↑\(status.ahead)", tone: .info, variant: .soft, size: .sm) }
+                        if status.behind > 0 { DSChip("↓\(status.behind)", tone: .warn, variant: .soft, size: .sm) }
+                        DSChip(status.isClean ? "clean" : "\(status.changes.count) changed",
+                               tone: status.isClean ? .ok : .warn, variant: .soft, size: .sm)
+                        Spacer()
+                    }
+                }
+                if !git.changedFiles.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(git.changedFiles.prefix(8)) { file in
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc").font(.system(size: 10)).foregroundStyle(t.text3)
+                                Text(file.path).font(.dsMonoPt(11)).foregroundStyle(t.text2).lineLimit(1)
+                                Spacer()
+                                Text(file.status.rawValue).font(.dsMonoPt(9)).foregroundStyle(t.text3)
+                            }
+                        }
+                        if git.changedFiles.count > 8 {
+                            Text("+\(git.changedFiles.count - 8) more").font(.dsMonoPt(10)).foregroundStyle(t.text3)
+                        }
+                    }
+                }
+                if let err = git.error, !err.isEmpty {
+                    Text(err).font(.dsMonoPt(10)).foregroundStyle(t.danger).fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    DSButton("Review diff", variant: .secondary, size: .sm, mono: true) {
+                        Task { if let d = await git.loadDiff() { diffToReview = RunDiff(diff: d) } }
+                    }
+                    DSButton("Ship it", variant: .primary, size: .sm, mono: true) { showShipSheet = true }
+                        .disabled(git.isShipping)
+                    Spacer()
+                    if git.isLoading || git.isShipping { ProgressView().scaleEffect(0.7) }
+                }
             }
         }
     }
@@ -294,18 +368,132 @@ struct AgentRunDetailView: View {
             outputTokens: totalOutput
         ) : nil
 
+        // Surface the diff summary + shipped PR link in the run's terminal artifact.
+        let diffSummary: ProofCardModel.DiffSummary? = {
+            let files = gitStore?.changedFiles ?? []
+            guard !files.isEmpty else { return nil }
+            return ProofCardModel.DiffSummary(
+                filesChanged: files.count,
+                insertions: 0,
+                deletions: 0,
+                fileNames: files.map(\.path)
+            )
+        }()
+
+        let prNumber = shippedPRURL.flatMap(Self.prNumber(fromURL:))
+
         return ProofCardModel(
             agent: agentKey,
             agentName: agentName,
             status: status,
             duration: duration,
             tests: nil,
-            diff: nil,
+            diff: diffSummary,
             commands: [],
             approvals: approvalSummary,
             policyExceptions: 0,
-            spend: spend
+            spend: spend,
+            prURL: shippedPRURL,
+            prNumber: prNumber
         )
+    }
+
+    /// Extract the PR number from a GitHub PR URL (…/pull/123) for the card label.
+    private static func prNumber(fromURL url: String) -> Int? {
+        guard let range = url.range(of: "/pull/") else { return nil }
+        let tail = url[range.upperBound...].prefix { $0.isNumber }
+        return Int(tail)
+    }
+}
+
+/// Wrapper so a `UnifiedDiff` can drive `.sheet(item:)` in the run detail.
+private struct RunDiff: Identifiable {
+    let id = UUID()
+    let diff: UnifiedDiff
+}
+
+/// "Ship it" confirmation sheet for a run — stage + commit + push (+ PR), gated
+/// by a prefilled commit message. Idempotent ship RPC ⇒ safe retry.
+private struct RunShipSheet: View {
+    let store: GitStore
+    let defaultMessage: String
+    let onOpenPR: (URL) -> Void
+
+    @State private var message: String
+    @State private var openPR = true
+    @State private var result: GitShipResult?
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+
+    init(store: GitStore, defaultMessage: String, onOpenPR: @escaping (URL) -> Void) {
+        self.store = store
+        self.defaultMessage = defaultMessage
+        self.onOpenPR = onOpenPR
+        _message = State(initialValue: defaultMessage)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                t.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let status = store.status {
+                            HStack(spacing: 6) {
+                                DSChip(status.branch, systemImage: "arrow.triangle.branch", tone: .accent, variant: .outlined, size: .sm)
+                                DSChip("\(status.changes.count) changed", tone: .warn, variant: .soft, size: .sm)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Commit message").font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.text3)
+                            TextEditor(text: $message)
+                                .font(.dsMonoPt(13))
+                                .frame(minHeight: 80)
+                                .padding(8)
+                                .background(t.surfaceSunk)
+                                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        }
+                        Toggle("Open pull request", isOn: $openPR).font(.dsSansPt(13)).tint(t.accent)
+                        if let r = result {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 6) {
+                                    DSChip(r.committed ? "committed ✓" : "not committed",
+                                           tone: r.committed ? .ok : .danger, variant: .soft, size: .sm)
+                                    DSChip(r.pushed ? "pushed ✓" : "not pushed",
+                                           tone: r.pushed ? .ok : .warn, variant: .soft, size: .sm)
+                                }
+                                if let url = r.prURL, let parsed = URL(string: url) {
+                                    DSButton("Open PR", variant: .secondary, size: .sm, mono: true) { onOpenPR(parsed) }
+                                }
+                                if let msg = r.message, !msg.isEmpty {
+                                    Text(msg).font(.dsMonoPt(10))
+                                        .foregroundStyle(r.isShipped ? t.warn : t.danger)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        } else if let err = store.error, !err.isEmpty {
+                            Text(err).font(.dsMonoPt(11)).foregroundStyle(t.danger).fixedSize(horizontal: false, vertical: true)
+                        }
+                        DSButton(result == nil ? "Ship it" : "Retry", variant: .primary, mono: true) {
+                            Task {
+                                let r = await store.ship(message: message, openPR: openPR, base: "main", title: message, body: "")
+                                result = r
+                                if let url = r?.prURL, let parsed = URL(string: url) { onOpenPR(parsed) }
+                            }
+                        }
+                        .disabled(store.isShipping || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(18)
+                }
+            }
+            .navigationTitle("Ship it")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+            }
+        }
     }
 }
 #endif

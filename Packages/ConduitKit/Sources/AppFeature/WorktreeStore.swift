@@ -47,7 +47,13 @@ public final class WorktreeStore {
     }
 
     /// Refresh worktrees from all connected hosts.
-    public func refresh() async {
+    /// Refresh worktrees from all connected hosts.
+    ///
+    /// `workdirByHost` maps a hostID to the repo/workspace path conduitd should
+    /// enumerate worktrees under. Hosts without an entry are skipped (the daemon
+    /// returns `[]` for an empty workdir, so the board simply shows nothing for
+    /// that host rather than erroring).
+    public func refresh(workdirByHost: [HostID: String] = [:]) async {
         isLoading = true
         defer { isLoading = false }
         error = nil
@@ -56,9 +62,9 @@ public final class WorktreeStore {
 
         for slot in fleetStore.slots {
             guard slot.sessionViewModel.status == .connected else { continue }
-            let channel = slot.channel
+            guard let workdir = workdirByHost[slot.hostID], !workdir.isEmpty else { continue }
             do {
-                let items = try await channel.fetchWorktrees()
+                let items = try await slot.channel.listWorktrees(workdir: workdir)
                 collected.append(contentsOf: items)
             } catch {
                 // Non-fatal — other slots still load.
@@ -66,19 +72,6 @@ public final class WorktreeStore {
         }
 
         worktrees = collected
-    }
-}
-
-// MARK: - DaemonChannel worktree helpers
-
-extension DaemonChannel {
-    /// Fetches worktrees for this host via the bridge.
-    func fetchWorktrees() async throws -> [Worktree] {
-        // Bridge protocol: request worktrees over the SSH channel.
-        // For now, delegate to the git client via the session.
-        // This will be wired to the daemon protocol when the
-        // bridge-side worktree endpoint is implemented.
-        return []
     }
 }
 #endif

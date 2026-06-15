@@ -163,7 +163,7 @@ public struct FleetView: View {
                             DSListSectionHead("Active Loops", count: loopStore.activeLoops.count)
                             ForEach(loopStore.activeLoops) { loop in
                                 NavigationLink {
-                                    LoopDetailView(loop: loop, ciEventLoader: ciEventLoader(for: loop))
+                                    LoopDetailView(loop: loop, ciEventLoader: ciEventLoader(for: loop), gitStore: gitStore(for: loop))
                                 } label: {
                                     loopRow(loop)
                                 }
@@ -481,6 +481,18 @@ public struct FleetView: View {
         let slot = store.slots.first { $0.hostID.uuidString == loop.hostID } ?? store.slots.first
         guard let channel = slot?.channel else { return nil }
         return { (try? await channel.recentCIEvents(repo: repo)) ?? [] }
+    }
+
+    /// Build a GitStore for a loop's worktree so the Loop detail can review +
+    /// ship the agent's git work. Returns nil when the loop has no worktree path
+    /// or no host channel — the "Changes" section is then hidden.
+    private func gitStore(for loop: Loop) -> GitStore? {
+        // The worktree field carries the agent's actual on-host path; loop.repo is
+        // a slug ("owner/name"), not a workdir, so it can't seed git ops.
+        guard let workdir = loop.worktree, !workdir.isEmpty else { return nil }
+        let slot = store.slots.first { $0.hostID.uuidString == loop.hostID } ?? store.slots.first
+        guard let channel = slot?.channel else { return nil }
+        return GitStore(channel: channel, workdir: workdir)
     }
 
     private func loopStatusDotTone(_ status: Loop.Status) -> DSStatusDotTone {
