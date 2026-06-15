@@ -66,10 +66,7 @@ func main() {
 }
 
 func runRelay() error {
-	relayURL := os.Getenv("CONDUIT_RELAY_URL")
-	if relayURL == "" {
-		relayURL = "wss://relay.conduit.dev"
-	}
+	relayURL := resolveRelayURL()
 	pairingCode := os.Getenv("CONDUIT_PAIRING_CODE")
 	if pairingCode == "" {
 		return fmt.Errorf("CONDUIT_PAIRING_CODE required")
