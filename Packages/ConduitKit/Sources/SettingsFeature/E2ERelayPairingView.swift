@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import SSHTransport
+import SecurityKit
 import DesignSystem
 
 public struct E2ERelayPairingView: View {
@@ -17,11 +18,12 @@ public struct E2ERelayPairingView: View {
     /// self-owned client (no live bridge) — kept for standalone/preview use.
     public init(client: E2ERelayClient? = nil) {
         let resolved = client ?? E2ERelayClient(
-            relayURL: URL(string: "https://relay.conduit.dev")!,
-            pairingCode: "000000"
+            relayURL: RelaySettings.url(),
+            pairingCode: PairingCrypto.generatePairingCode()
         )
         _client = ObservedObject(initialValue: resolved)
         _ownedClient = State(initialValue: client == nil ? resolved : nil)
+        _relayURL = State(initialValue: RelaySettings.urlString())
     }
 
     public var body: some View {
@@ -209,7 +211,9 @@ public struct E2ERelayPairingView: View {
     // MARK: - Actions
 
     private func connect() {
-        guard let url = URL(string: relayURL) else { return }
+        let normalized = RelaySettings.setURLString(relayURL)
+        relayURL = normalized
+        guard let url = URL(string: normalized) else { return }
         let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard code.count == 6 else { return }
 

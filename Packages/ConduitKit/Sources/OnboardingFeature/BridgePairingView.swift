@@ -1,27 +1,53 @@
 #if os(iOS)
 import SwiftUI
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import DesignSystem
 import SecurityKit
+import SSHTransport
 import ConduitCore
 
+/// Keyless QR + blind-relay pairing screen.
+///
+/// The phone is the source of trust: it generates an ephemeral X25519 keypair
+/// and a single-use 6-digit pairing code, encodes `{ v, relay, code, pk }` into
+/// a real QR, and dials the blind relay. The host runs the installer + scans the
+/// QR (or types the code); when the relay reports `peer_joined`, both ends derive
+/// the same AES/ChaCha session key via `PairingCrypto` and the screen flips to
+/// "paired". No private key ever leaves the phone.
+///
+/// The decorative grid + fake 1-second success are gone — the status reflects the
+/// real `E2ERelayClient.connectionState` / `pairingState`.
 public struct BridgePairingView: View {
-    @State private var pairingCode = PairingCrypto.generatePairingCode()
-    @State private var pairingState: PairingState = .waiting
+    @StateObject private var client: E2ERelayClient
+    @State private var pairingCode: String
+    @State private var qrImage: Image?
+    @State private var showScanner = false
+    @State private var showManualEntry = false
+    @State private var manualCode = ""
+    @State private var scanError: String?
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
     public var onUseSSH: () -> Void
     public var onPaired: ((String, String) -> Void)?
 
-    public init(onUseSSH: @escaping () -> Void, onPaired: ((String, String) -> Void)? = nil) {
+    /// - Parameter client: the app-wide `E2ERelayClient` so a successful pair
+    ///   drives the live `ApprovalRelay.e2eBridge`. When nil, a self-owned client
+    ///   is used (previews / standalone) and no live bridge is wired.
+    public init(
+        client: E2ERelayClient? = nil,
+        onUseSSH: @escaping () -> Void,
+        onPaired: ((String, String) -> Void)? = nil
+    ) {
+        let resolved = client ?? E2ERelayClient(
+            relayURL: RelaySettings.url(),
+            pairingCode: PairingCrypto.generatePairingCode()
+        )
+        _client = StateObject(wrappedValue: resolved)
+        _pairingCode = State(initialValue: resolved.pairingCode)
         self.onUseSSH = onUseSSH
         self.onPaired = onPaired
-    }
-
-    private enum PairingState {
-        case waiting
-        case paired
-        case error(String)
     }
 
     public var body: some View {
@@ -40,29 +66,13 @@ public struct BridgePairingView: View {
                         DSQuoteBlock(
                             title: "INSTALL",
                             tags: [],
-                            message: "curl -fsSL conduit.dev/install | sh",
+                            message: "curl -fsSL conduit.dev/install | sh && conduitd pair",
                             tone: .ok
                         )
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("PAIRING CODE")
-                                .font(.dsMonoPt(10, weight: .medium))
-                                .tracking(10 * 0.12)
-                                .foregroundStyle(t.text3)
-
-                            pairingCodeGrid
-
-                            Text(pairingCode)
-                                .font(.dsMonoPt(26, weight: .bold))
-                                .foregroundStyle(t.text)
-                                .kerning(4)
-
-                            Text("scan, or it auto-pairs on install")
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(t.text3)
-                        }
-
+                        qrSection
                         pairingStatusCard
+                        scanFallbackRow
 
                         Button(action: onUseSSH) {
                             HStack {
@@ -81,32 +91,137 @@ public struct BridgePairingView: View {
                 }
             }
         }
-        .task { startPairingListener() }
-    }
-
-    private var pairingCodeGrid: some View {
-        let gridSize = 7
-        return VStack(spacing: 2) {
-            ForEach(0..<gridSize, id: \.self) { row in
-                HStack(spacing: 2) {
-                    ForEach(0..<gridSize, id: \.self) { col in
-                        let idx = row * gridSize + col
-                        let seed = pairingCode + String(idx)
-                        let filled = seed.stableHash % 10 < 4
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(filled ? t.text2 : Color.clear)
-                            .frame(width: 8, height: 8)
-                    }
-                }
+        .sheet(isPresented: $showScanner) { scannerSheet }
+        .alert("Enter pairing code", isPresented: $showManualEntry) {
+            TextField("6-digit code", text: $manualCode)
+                .keyboardType(.numberPad)
+            Button("Pair") { applyManualCode() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("If the host printed its own code, type it here to pair against it instead.")
+        }
+        .task { startPairing() }
+        .onChange(of: client.pairingState) { _, state in
+            if case .paired = state {
+                onPaired?(client.publicKeyBase64URL, pairingCode)
             }
         }
-        .padding(12)
-        .background(t.surface)
-        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-            .strokeBorder(t.border, lineWidth: 1))
-        .frame(maxWidth: 120)
+        .onDisappear { client.disconnect() }
     }
+
+    // MARK: - QR
+
+    private var qrSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SCAN ON THE HOST")
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(10 * 0.12)
+                .foregroundStyle(t.text3)
+
+            HStack {
+                Spacer()
+                Group {
+                    if let qrImage {
+                        qrImage
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(width: 188, height: 188)
+                .padding(14)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1))
+                Spacer()
+            }
+
+            HStack {
+                Spacer()
+                Text(pairingCode)
+                    .font(.dsMonoPt(26, weight: .bold))
+                    .foregroundStyle(t.text)
+                    .kerning(4)
+                Spacer()
+            }
+
+            HStack {
+                Spacer()
+                Text("`conduitd pair` scans this — or type the code on the host")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .multilineTextAlignment(.center)
+                Spacer()
+            }
+        }
+    }
+
+    private var scanFallbackRow: some View {
+        VStack(spacing: 10) {
+            Button {
+                scanError = nil
+                showScanner = true
+            } label: {
+                HStack(spacing: 8) {
+                    DSIconView(.chevronRight, size: 14, color: t.accent)
+                    Text("scan a code shown by the host instead")
+                        .font(.dsMonoPt(12.5))
+                        .foregroundStyle(t.accent)
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+
+            if let scanError {
+                Text(scanError)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    // MARK: - Scanner sheet
+
+    private var scannerSheet: some View {
+        ZStack(alignment: .top) {
+            Color.black.ignoresSafeArea()
+            QRScannerView(
+                onScan: { payload in
+                    showScanner = false
+                    applyScannedPayload(payload)
+                },
+                onUnavailable: { reason in
+                    showScanner = false
+                    scanError = reason + " Enter the code manually."
+                    manualCode = ""
+                    showManualEntry = true
+                }
+            )
+            .ignoresSafeArea()
+
+            HStack {
+                Button("Cancel") { showScanner = false }
+                    .font(.dsSansPt(15, weight: .medium))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button("Type code") {
+                    showScanner = false
+                    manualCode = ""
+                    showManualEntry = true
+                }
+                .font(.dsSansPt(15, weight: .medium))
+                .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+        }
+    }
+
+    // MARK: - Status
 
     @ViewBuilder
     private var pairingStatusCard: some View {
@@ -129,44 +244,114 @@ public struct BridgePairingView: View {
     }
 
     private var pairingStateColor: Color {
-        switch pairingState {
-        case .waiting: return t.accent
+        switch client.pairingState {
         case .paired: return t.risk(0)
-        case .error: return t.danger
+        case .pairingFailed: return t.danger
+        case .waitingForPeer, .unpaired: return t.accent
         }
     }
 
     private var pairingStateLabel: String {
-        switch pairingState {
-        case .waiting: return "waiting for bridge…"
-        case .paired: return "paired"
-        case .error(let msg): return msg
+        switch client.pairingState {
+        case .paired:
+            return "paired"
+        case .pairingFailed(let reason):
+            return "pairing failed — \(reason)"
+        case .waitingForPeer:
+            return "waiting for bridge…"
+        case .unpaired:
+            switch client.connectionState {
+            case .connecting:
+                return "connecting to relay…"
+            case .reconnecting:
+                return "relay unreachable — retrying…"
+            case .connected:
+                return "waiting for bridge…"
+            case .disconnected:
+                return "not connected"
+            }
         }
     }
 
-    private func startPairingListener() {
-        Task {
-            let keypair = PairingCrypto.generateKeyPair()
-            let publicKey = keypair.publicKeyBase64URL
-            try? await Task.sleep(for: .seconds(1))
-            await MainActor.run { pairingState = .paired }
-            if let onPaired { onPaired(publicKey, pairingCode) }
+    // MARK: - Actions
+
+    private func startPairing() {
+        let code = client.beginPairingSession()
+        pairingCode = code
+        client.relayURL = RelaySettings.url()
+        renderQR()
+        client.connect()
+    }
+
+    private func renderQR() {
+        let payload = QRPairingPayload(
+            v: 1,
+            relay: client.relayURL.absoluteString,
+            code: pairingCode,
+            pk: client.publicKeyBase64URL
+        )
+        guard let data = try? JSONEncoder().encode(payload),
+              let img = Self.makeQR(from: data) else {
+            qrImage = nil
+            return
         }
+        qrImage = Image(uiImage: img)
+    }
+
+    /// Accept a payload scanned from a host-presented QR. Supports either the
+    /// JSON payload format or a bare 6-digit code.
+    private func applyScannedPayload(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = trimmed.data(using: .utf8),
+           let payload = try? JSONDecoder().decode(QRPairingPayload.self, from: data) {
+            if let url = URL(string: payload.relay) { client.relayURL = url }
+            applyCode(payload.code)
+            return
+        }
+        let digits = trimmed.filter(\.isNumber)
+        guard digits.count == 6 else {
+            scanError = "That QR didn't contain a valid pairing payload."
+            return
+        }
+        applyCode(digits)
+    }
+
+    private func applyManualCode() {
+        let digits = manualCode.filter(\.isNumber)
+        guard digits.count == 6 else {
+            scanError = "Pairing codes are 6 digits."
+            return
+        }
+        applyCode(digits)
+    }
+
+    private func applyCode(_ code: String) {
+        scanError = nil
+        client.disconnect()
+        pairingCode = code
+        client.pairingCode = code
+        renderQR()
+        client.connect()
+    }
+
+    private static func makeQR(from data: Data) -> UIImage? {
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = data
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cg = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 
-extension String {
-    fileprivate var stableHash: Int {
-        var h = 0
-        for b in utf8 { h = h &* 31 &+ Int(b) }
-        return abs(h)
-    }
-}
-
-public extension PairingCrypto {
-    static func generatePairingCode() -> String {
-        let digits = (0..<6).map { _ in Int.random(in: 0...9) }
-        return digits.map(String.init).joined()
-    }
+/// Wire format for the pairing QR. Kept intentionally small and stable so the
+/// Go `conduitd pair` scanner can decode the same JSON.
+private struct QRPairingPayload: Codable {
+    let v: Int
+    let relay: String
+    let code: String
+    let pk: String
 }
 #endif

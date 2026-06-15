@@ -52,6 +52,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchStoryboardName: LaunchScreen
+        NSCameraUsageDescription: "Conduit uses the camera to scan the pairing QR code shown by your host when connecting a new bridge."
         NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
         NSMicrophoneUsageDescription: "Conduit uses the microphone so you can dictate terminal commands and agent prompts by voice."
         NSSpeechRecognitionUsageDescription: "Conduit transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
