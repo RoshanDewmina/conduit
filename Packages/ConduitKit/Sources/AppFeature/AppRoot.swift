@@ -900,7 +900,13 @@ public struct AppRoot: View {
                 onReconnect: { host in openSession(host: host, env: env) },
                 onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
                 onNewTask: { dispatchPresented = true },
-                onQuotaGuard: nil
+                onQuotaGuard: nil,
+                onOpenTerminal: { slotID in
+                    // Finding #5: intentional drill-in — select the slot and
+                    // present its live block terminal full-screen.
+                    selectFleetSlot(slotID)
+                    isShowingLiveSession = true
+                }
             )
             .id(workspacesRevision)
 
@@ -1151,8 +1157,12 @@ public struct AppRoot: View {
                 if self.fleetStore.slots.contains(where: { $0.id == slot.id }) {
                     self.selectFleetSlot(slot.id)
                 }
+                // Finding #5: post-connect lands on MONITORING (Fleet), not the
+                // full-screen block terminal. The session runs in the background
+                // as a monitored slot; the terminal becomes an intentional
+                // drill-in via the per-slot "open terminal" affordance (which
+                // sets `isShowingLiveSession`). Do NOT auto-present it here.
                 self.selectedTab = .fleet
-                self.isShowingLiveSession = true
                 // MAJOR-4: re-arm the approval pipeline after a reconnect. The
                 // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
                 // recreate + restart them and re-point the relay so new approvals

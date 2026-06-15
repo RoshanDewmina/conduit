@@ -349,7 +349,16 @@ public final class SessionViewModel {
             if consecutiveAuthFailures >= 2 {
                 awaitingPasswordRetry = true
             }
-            await transitionStatus(.failed(reason: "Authentication failed: \(reason)"))
+            // Finding #12: a password attempt rejected by the server is most
+            // often a key-only host. Say so plainly instead of leaving the user
+            // to retype a password that can never work.
+            let hint: String
+            if case .password = host.authMethod {
+                hint = " — this host may only accept keys. Edit the host and generate/use an Ed25519 key."
+            } else {
+                hint = ""
+            }
+            await transitionStatus(.failed(reason: "Authentication failed: \(reason)\(hint)"))
         } catch let err as ConduitError {
             await transitionStatus(.failed(reason: err.errorDescription ?? "connection failed"))
         } catch {

@@ -15,6 +15,8 @@ public struct FleetView: View {
     private let onDelete: (Host) -> Void
     private let onNewTask: () -> Void
     private let onQuotaGuard: (() -> Void)?
+    /// Open the live block terminal for a given slot (Finding #5 drill-in).
+    private let onOpenTerminal: ((UUID) -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
 
@@ -30,7 +32,8 @@ public struct FleetView: View {
         onReconnect: @escaping (Host) -> Void,
         onDelete: @escaping (Host) -> Void,
         onNewTask: @escaping () -> Void = {},
-        onQuotaGuard: (() -> Void)? = nil
+        onQuotaGuard: (() -> Void)? = nil,
+        onOpenTerminal: ((UUID) -> Void)? = nil
     ) {
         self.store = store
         self.hostRepo = hostRepo
@@ -42,6 +45,7 @@ public struct FleetView: View {
         self.onDelete = onDelete
         self.onNewTask = onNewTask
         self.onQuotaGuard = onQuotaGuard
+        self.onOpenTerminal = onOpenTerminal
     }
 
     private var reconnectableHosts: [Host] {
@@ -88,7 +92,7 @@ public struct FleetView: View {
 
             VStack(spacing: 0) {
                 DSStatusHeader(
-                    connected: !store.slots.isEmpty,
+                    state: store.connectionState,
                     policy: "balanced",
                     todaySpend: String(format: "$%.2f", summary.totalSpendUSD)
                 )
@@ -174,22 +178,50 @@ public struct FleetView: View {
                                 .padding(.top, 4)
                         } else {
                             ForEach(store.slots) { slot in
+                                let slotState = store.connectionState(for: slot)
                                 HStack(spacing: 6) {
+                                    DSStatusDot(tone: slotTone(slotState), pulse: slotState == .connecting, size: 7)
                                     DSListSectionHead(slot.hostName, count: slot.bridgeStatus?.agents.count)
                                     E2ERelayStatusBadge(state: .init(relayState: slot.relayState))
                                     if let health = hostHealthStore?.health(for: slot.hostID) {
                                         HostHealthBadge(health: health)
                                     }
+                                    // Finding #5: explicit one-tap drill-in to the
+                                    // block terminal. Connecting lands on monitoring;
+                                    // the terminal is opened intentionally from here.
+                                    if let onOpenTerminal, slotState.isLive {
+                                        Button {
+                                            Haptics.selection()
+                                            onOpenTerminal(slot.id)
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "terminal")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                Text("terminal")
+                                                    .font(.dsMonoPt(11, weight: .medium))
+                                            }
+                                            .foregroundStyle(t.accent)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(t.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(.trailing, 18)
+                                        .accessibilityLabel("Open terminal for \(slot.hostName)")
+                                    }
                                 }
-                                if let snap = slot.bridgeStatus {
+                                // Only surface agents / a "Refreshing…" placeholder
+                                // once the bridge is actually live — a connecting or
+                                // failed slot must say so honestly (Finding #9).
+                                if slotState.isLive, let snap = slot.bridgeStatus {
                                     ForEach(snap.agents) { agent in
                                         agentRow(agent)
                                             .padding(.horizontal, 18)
                                     }
                                 } else {
-                                    Text("Refreshing…")
+                                    Text(slotStatusLine(slotState))
                                         .font(.dsMonoPt(12))
-                                        .foregroundStyle(t.text3)
+                                        .foregroundStyle(slotState == .failed ? t.danger : t.text3)
                                         .padding(.horizontal, 18)
                                 }
                             }
@@ -480,6 +512,24 @@ public struct FleetView: View {
         savedHosts = (try? await hostRepo.all()) ?? []
         await loopStore?.refresh()
         await hostHealthStore?.refresh(fleetStore: store)
+    }
+
+    private func slotTone(_ state: Session.ConnectionState) -> DSStatusDotTone {
+        switch state {
+        case .connected, .relayPaired: return .ok
+        case .connecting:              return .warn
+        case .failed:                  return .danger
+        case .offline:                 return .off
+        }
+    }
+
+    private func slotStatusLine(_ state: Session.ConnectionState) -> String {
+        switch state {
+        case .connected, .relayPaired: return "Refreshing…"
+        case .connecting:              return "Connecting…"
+        case .failed:                  return "Bridge unreachable — tap reconnect."
+        case .offline:                 return "Offline."
+        }
     }
 
     private func agentDisplayName(_ source: Approval.AgentSource) -> String {

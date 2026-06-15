@@ -118,6 +118,32 @@ public final class FleetStore {
         }
     }
 
+    /// The one honest connection state for a single slot — derived from the
+    /// authoritative `SessionViewModel.status` plus the slot's relay state. This
+    /// is the single source of truth both the Fleet header and the top status
+    /// bar read from, so they can never disagree (Finding #9).
+    public func connectionState(for slot: Slot) -> Session.ConnectionState {
+        Session.ConnectionState.derive(
+            session: slot.sessionViewModel.status,
+            relay: slot.relayState
+        )
+    }
+
+    /// The fleet-wide honest connection state: the "best" (most-live) state
+    /// across all slots. Used for app-shell affordances that summarise the whole
+    /// fleet (e.g. the per-tab "bridge connected" header). Never reports
+    /// `.connected` just because a slot exists — only when one is actually live.
+    public var connectionState: Session.ConnectionState {
+        guard !slots.isEmpty else { return .offline }
+        let states = slots.map { connectionState(for: $0) }
+        // Order by liveness: connected > relayPaired > connecting > failed > offline.
+        if states.contains(.connected)    { return .connected }
+        if states.contains(.relayPaired)  { return .relayPaired }
+        if states.contains(.connecting)   { return .connecting }
+        if states.contains(.failed)       { return .failed }
+        return .offline
+    }
+
     /// Sum of pending approvals across all live inboxes.
     public var allPendingApprovals: Int {
         slots.reduce(0) { $0 + $1.inboxVM.approvals.filter(\.isPending).count }
