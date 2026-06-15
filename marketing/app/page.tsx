@@ -6,10 +6,11 @@ import ProblemSection from "@/components/sections/problem-section";
 import ApprovalCardSection from "@/components/sections/approval-card-section";
 import PolicySection from "@/components/sections/policy-section";
 import ActivitySection from "@/components/sections/activity-section";
-import CrossVendorSection from "@/components/sections/cross-vendor-section";
-import LocalFirstSection from "@/components/sections/local-first-section";
-import RealAppSection from "@/components/sections/real-app-section";
-import FleetSection from "@/components/sections/fleet-section";
+import HowItWorksSection from "@/components/sections/how-it-works-section";
+import WhyConduitSection from "@/components/sections/why-conduit-section";
+import ProofBandSection from "@/components/sections/proof-band-section";
+import PricingSection from "@/components/sections/pricing-section";
+import TrustSection from "@/components/sections/trust-section";
 import FinalCtaSection from "@/components/sections/final-cta-section";
 import FaqSection from "@/components/sections/faq-section";
 
@@ -26,10 +27,11 @@ export default function Home() {
           <ApprovalCardSection />
           <PolicySection />
           <ActivitySection />
-          <CrossVendorSection />
-          <LocalFirstSection />
-          <RealAppSection />
-          <FleetSection />
+          <HowItWorksSection />
+          <WhyConduitSection />
+          <ProofBandSection />
+          <PricingSection />
+          <TrustSection />
           <FinalCtaSection />
           <FaqSection />
         </main>

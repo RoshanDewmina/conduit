@@ -4,10 +4,10 @@ import Link from "next/link";
 import Button from "@/components/ui/button";
 
 const links = [
-  { label: "Product", href: "/product" },
-  { label: "Trust", href: "/trust" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Docs", href: "/docs" },
+  { label: "Features", href: "#features" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Trust", href: "#trust" },
 ];
 
 export default function SiteNav() {

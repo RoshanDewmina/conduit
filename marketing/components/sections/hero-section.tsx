@@ -7,7 +7,7 @@ export default function HeroSection() {
     <section className="max-w-[1152px] mx-auto px-6 md:px-8 pt-20 pb-10 text-center">
       <Reveal>
         <p className="font-display text-[11px] tracking-[0.2em] uppercase text-faint mb-6">
-          Governed Approvals for AI Coding Agents
+          Works with Claude Code · Codex · opencode
         </p>
         <h1 className="font-display font-bold text-4xl md:text-6xl lg:text-7xl leading-[1.0] text-fg mb-2">
           approve your agents.
@@ -27,13 +27,13 @@ export default function HeroSection() {
           <Button href="/download" variant="primary">
             Join the TestFlight beta
           </Button>
-          <Button href="#card" variant="ghost">
-            see how it works ↓
+          <Button href="#how-it-works" variant="ghost">
+            See how it works ↓
           </Button>
         </div>
 
         <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-faint">
-          TestFlight Beta · No Account · ~5 Min Setup
+          No account required · Your code stays on your machine
         </p>
       </Reveal>
 
@@ -41,7 +41,7 @@ export default function HeroSection() {
         <HeroPhone />
       </Reveal>
 
-      {/* WORKS WITH row */}
+      {/* VENDOR CHIPS */}
       <Reveal delay={0.25} className="mt-10 flex flex-col items-center gap-4">
         <p className="font-display text-[10px] tracking-[0.2em] uppercase text-faint">
           Works With

@@ -4,15 +4,15 @@ import Reveal from "@/components/ui/reveal";
 const FAQS = [
   {
     q: "Does my code go through your servers?",
-    a: "No. Source and credentials stay on your host. The relay only carries the approval metadata you send. E2EE of the relay is [PLANNED].",
+    a: "No. Source and credentials stay on your host. The relay only carries the approval metadata you send. End-to-end encryption of the relay is [PLANNED].",
   },
   {
     q: "How is this different from Claude's or OpenAI's mobile app?",
-    a: "Those are single-vendor (Claude-only / Codex-only) and Anthropic's isn't available to Team/Enterprise. Conduit governs all your agents, with your code on your host.",
+    a: "Those are single-vendor (Claude-only / Codex-only), and Anthropic's isn't available to Team/Enterprise. Conduit governs all your agents, with your code on your host.",
   },
   {
     q: "Will it constantly interrupt me?",
-    a: "No — policy auto-handles the safe majority. You tune how cautious it is.",
+    a: "No — policy auto-handles the safe majority. You tune how cautious it is from a preset.",
   },
   {
     q: "Which agents are supported?",
@@ -20,11 +20,11 @@ const FAQS = [
   },
   {
     q: "Is it available?",
-    a: "TestFlight beta now; App Store [PLANNED].",
+    a: "TestFlight beta now; App Store release is [PLANNED].",
   },
   {
     q: "What does it cost?",
-    a: "Free to use; a one-time Conduit Pro unlock is $14.99. Team/self-host [PLANNED].",
+    a: "Free to use. Self-host and cloud (3 sessions/mo) are $0. Pro is $9/mo or $79/yr. Founding Pro is $49/yr — a one-time purchase for the first 500 subscribers. Team/self-host pricing is [PLANNED].",
   },
 ];
 

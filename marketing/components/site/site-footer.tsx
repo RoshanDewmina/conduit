@@ -5,16 +5,25 @@ const columns = [
   {
     heading: "Product",
     links: [
-      { label: "How it works", href: "/product" },
-      { label: "Trust & Privacy", href: "/trust" },
-      { label: "Pricing", href: "/pricing" },
+      { label: "Features", href: "/#features" },
+      { label: "How it works", href: "/#how-it-works" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "Trust", href: "/#trust" },
     ],
   },
   {
-    heading: "Docs",
+    heading: "Legal",
     links: [
-      { label: "Documentation", href: "/docs" },
-      { label: "Download", href: "/download" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+      { label: "Security", href: "/#trust" },
+    ],
+  },
+  {
+    heading: "Community",
+    links: [
+      { label: "GitHub", href: "https://github.com/conduit" },
+      { label: "Discord", href: "https://discord.gg/conduit" },
     ],
   },
 ];
@@ -41,42 +50,47 @@ export default function SiteFooter() {
                 {col.heading}
               </p>
               <ul className="space-y-2">
-                {col.links.map((l) => (
-                  <li key={l.href}>
-                    <Link
-                      href={l.href}
-                      className="font-mono text-xs text-dim hover:text-fg transition-colors"
-                    >
-                      {l.label}
-                    </Link>
-                  </li>
-                ))}
+                {col.links.map((l) => {
+                  const isExternal = l.href.startsWith("http") || l.href.startsWith("https");
+                  const label = l.label;
+                  if (isExternal) {
+                    return (
+                      <li key={l.href}>
+                        <a
+                          href={l.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-dim hover:text-fg transition-colors"
+                        >
+                          {label}
+                        </a>
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={l.href}>
+                      <Link
+                        href={l.href}
+                        className="font-mono text-xs text-dim hover:text-fg transition-colors"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
-
-          <div>
-            <p className="font-display text-[10px] tracking-[0.2em] uppercase text-faint mb-3">
-              Status
-            </p>
-            <ul className="space-y-2">
-              <li className="font-mono text-xs text-dim">
-                TestFlight beta —{" "}
-                <span className="text-faint">App Store [PLANNED]</span>
-              </li>
-              <li className="font-mono text-xs text-faint">
-                No Conduit account.
-              </li>
-              <li className="font-mono text-xs text-faint">
-                Your code stays on your machine.
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
 
-      <div className="border-t border-line max-w-[1152px] mx-auto px-6 md:px-8 py-5">
-        <p className="font-mono text-[11px] text-ghost">© 2026 conduit.dev</p>
+      <div className="border-t border-line max-w-[1152px] mx-auto px-6 md:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <p className="font-mono text-[11px] text-ghost">
+          © 2026 conduit.dev · Your code stays on your machine.
+        </p>
+        <p className="font-mono text-[11px] text-ghost">
+          TestFlight beta · App Store [PLANNED]
+        </p>
       </div>
     </footer>
   );
