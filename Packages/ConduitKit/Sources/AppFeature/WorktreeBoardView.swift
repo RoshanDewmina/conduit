@@ -33,13 +33,7 @@ public struct WorktreeBoardView: View {
             }
         }
         .task {
-            let workdirByHost: [HostID: String] = store.fleetStore.slots.reduce(into: [:]) { dict, slot in
-                let cwd = slot.sessionViewModel.cwd
-                if slot.sessionViewModel.status == .connected, cwd != "~", !cwd.isEmpty {
-                    dict[slot.hostID] = cwd
-                }
-            }
-            await store.refresh(workdirByHost: workdirByHost)
+            await store.refresh()
         }
     }
 
@@ -73,13 +67,7 @@ public struct WorktreeBoardView: View {
             .padding(.vertical, 16)
         }
         .refreshable {
-            let workdirByHost: [HostID: String] = store.fleetStore.slots.reduce(into: [:]) { dict, slot in
-                let cwd = slot.sessionViewModel.cwd
-                if slot.sessionViewModel.status == .connected, cwd != "~", !cwd.isEmpty {
-                    dict[slot.hostID] = cwd
-                }
-            }
-            await store.refresh(workdirByHost: workdirByHost)
+            await store.refresh()
         }
     }
 

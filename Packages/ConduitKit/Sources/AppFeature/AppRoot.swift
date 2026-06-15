@@ -892,7 +892,7 @@ public struct AppRoot: View {
                 bridgeConnected: actions.isConnected,
                 bridgePolicy: "balanced",
                 todaySpend: "$0.00",
-                onSetPolicy: actions.savePolicyYAML
+                onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) }
             )
 
         case .fleet:

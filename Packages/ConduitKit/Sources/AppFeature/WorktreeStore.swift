@@ -53,16 +53,26 @@ public final class WorktreeStore {
     /// enumerate worktrees under. Hosts without an entry are skipped (the daemon
     /// returns `[]` for an empty workdir, so the board simply shows nothing for
     /// that host rather than erroring).
-    public func refresh(workdirByHost: [HostID: String] = [:]) async {
+    public func refresh(workdirByHost: [HostID: String]? = nil) async {
         isLoading = true
         defer { isLoading = false }
         error = nil
+
+        // Derive each connected host's workdir from its live session cwd unless
+        // the caller supplied an explicit map. Keeps `fleetStore` private — the
+        // view no longer needs to reach into it.
+        let resolved: [HostID: String] = workdirByHost ?? fleetStore.slots.reduce(into: [:]) { dict, slot in
+            let cwd = slot.sessionViewModel.cwd
+            if slot.sessionViewModel.status == .connected, cwd != "~", !cwd.isEmpty {
+                dict[slot.hostID] = cwd
+            }
+        }
 
         var collected: [Worktree] = []
 
         for slot in fleetStore.slots {
             guard slot.sessionViewModel.status == .connected else { continue }
-            guard let workdir = workdirByHost[slot.hostID], !workdir.isEmpty else { continue }
+            guard let workdir = resolved[slot.hostID], !workdir.isEmpty else { continue }
             do {
                 let items = try await slot.channel.listWorktrees(workdir: workdir)
                 collected.append(contentsOf: items)
