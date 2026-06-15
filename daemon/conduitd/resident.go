@@ -94,10 +94,24 @@ func (r *resident) handleConnection(conn net.Conn) {
 		return
 	}
 	if !framed {
-		r.core.handleHookWithNotify(conn, first, r.notifyAttachOrQueue)
+		r.core.handleHookWithNotify(conn, first, r.notifyAttachOrQueue, r.clientReachable)
 		return
 	}
 	conn.Close()
+}
+
+// clientReachable reports whether an escalated approval can plausibly reach a
+// human: either a live attach client is connected, or a push device has
+// registered. When neither holds, handleHookWithNotify fast-auto-approves after
+// a short grace instead of blocking 120s (Finding #10).
+func (r *resident) clientReachable() bool {
+	r.attachMu.Lock()
+	attached := r.attach != nil
+	r.attachMu.Unlock()
+	if attached {
+		return true
+	}
+	return r.core.deviceRegistered()
 }
 
 func (r *resident) serveAttach(conn net.Conn, _ []byte) {
