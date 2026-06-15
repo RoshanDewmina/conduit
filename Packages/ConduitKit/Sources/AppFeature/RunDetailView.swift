@@ -16,37 +16,119 @@ public struct RunDetailView: View {
     @State private var store: RunControlStore
     @State private var confirmStop = false
     @State private var showBudgetSheet = false
+    @State private var followUpText: String = ""
+    @State private var runStartTime = Date()
 
     private let title: String
     private let subtitle: String
+    private let runId: String
+    private let runOutputStore: RunOutputStore?
+    private let onSendFollowUp: ((String) -> Void)?
+
+    @Environment(\.conduitTokens) private var t
 
     public init(
         channel: any RunControlling,
         runId: String,
         title: String,
         subtitle: String,
-        status: RunControlStatus = .running
+        status: RunControlStatus = .running,
+        outputStore: RunOutputStore? = nil,
+        onSendFollowUp: ((String) -> Void)? = nil
     ) {
         _store = State(initialValue: RunControlStore(channel: channel, runId: runId, status: status))
         self.title = title
         self.subtitle = subtitle
+        self.runId = runId
+        self.runOutputStore = outputStore
+        self.onSendFollowUp = onSendFollowUp
     }
 
-    public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                if let err = store.lastError {
-                    Text(err)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.red)
-                }
+    // MARK: - Derived state
+
+    private var currentRun: RunOutputStore.Run? {
+        runOutputStore?.run(runId)
+    }
+
+    private var agentState: AgentState {
+        guard let run = currentRun else { return .thinking }
+        switch run.status {
+        case "running":
+            return run.chunks.isEmpty ? .thinking : .streaming
+        case "exited":
+            return .done
+        case "failed":
+            return .error
+        default:
+            return run.chunks.isEmpty ? .thinking : .streaming
+        }
+    }
+
+    private var spectrumMode: SpectrumMode {
+        switch store.status {
+        case .stopped, .budgetExceeded:
+            return .idle
+        case .paused:
+            return .idle
+        case .running:
+            switch agentState {
+            case .thinking:  return .loading
+            case .streaming: return .working
+            case .approval:  return .working
+            case .done:      return .idle
+            case .error:     return .scan
+            case .offline:   return .scan
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
+        }
+    }
+
+    private var dotMatrixState: DotMatrixState {
+        switch agentState {
+        case .thinking:  return .connecting
+        case .streaming: return .working
+        case .approval:  return .working
+        case .done:      return .done
+        case .error:     return .error
+        case .offline:   return .idle
+        }
+    }
+
+    private var hasOutput: Bool {
+        (currentRun?.chunks.isEmpty).map { !$0 } ?? false
+    }
+
+    // MARK: - Body
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            hudStrip
+            SpectrumBar(mode: spectrumMode, height: 6, gap: 1.5)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let err = store.lastError {
+                        Text(err)
+                            .font(.dsMonoPt(12))
+                            .foregroundStyle(t.termErr)
+                    }
+                    if hasOutput, let run = currentRun {
+                        outputContent(for: run)
+                    } else if currentRun != nil {
+                        thinkingPlaceholder
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+            }
         }
         .navigationTitle("run")
-        .safeAreaInset(edge: .bottom) { controlBar }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                if onSendFollowUp != nil {
+                    followUpBar
+                }
+                controlBar
+            }
+        }
         .confirmationDialog("Stop this run?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Stop run", role: .destructive) {
                 Haptics.warning()
@@ -62,35 +144,68 @@ public struct RunDetailView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 16, weight: .semibold, design: .monospaced))
-            Text(subtitle).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-            statusPill
+    // MARK: - HUD Strip
+
+    private var hudStrip: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                PixelBox(state: agentState, size: 12, subdivisions: 2)
+                Text(agentState.label)
+                    .font(.dsMonoPt(12, weight: .semibold))
+                    .foregroundStyle(t.hudText)
+                    .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    let e = ctx.date.timeIntervalSince(runStartTime)
+                    let m = Int(e) / 60
+                    let s = Int(e) % 60
+                    Text("\(m)m \(String(format: "%02d", s))s")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.hudText.opacity(0.7))
+                        .monospacedDigit()
+                }
+            }
+            Spacer(minLength: 0)
+            DotMatrixView(state: dotMatrixState, cols: 10, rows: 3, cell: 5, dot: 2.5)
         }
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.hudBg)
+        .overlay(Rectangle().fill(t.hudBorder).frame(height: 1), alignment: .bottom)
     }
 
-    private var statusPill: some View {
-        let (label, color): (String, Color) = {
-            switch store.status {
-            case .running: return ("working", .blue)
-            case .paused: return ("paused", .orange)
-            case .stopped: return ("stopped", .secondary)
-            case .budgetExceeded: return ("budget exceeded", .red)
-            }
-        }()
-        return HStack(spacing: 6) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text(label).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+    // MARK: - Thinking Placeholder
+
+    private var thinkingPlaceholder: some View {
+        VStack(spacing: 16) {
+            PixelBox(state: .thinking, size: 16, subdivisions: 2)
+            Text("Waiting for first output…")
+                .font(.dsMonoPt(13))
+                .foregroundStyle(t.text3)
         }
-        .padding(.top, 2)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    // MARK: - Output Content
+
+    private func outputContent(for run: RunOutputStore.Run) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(run.chunks.sorted(by: { $0.seq < $1.seq }).enumerated()), id: \.element.seq) { _, chunk in
+                Text(chunk.chunk)
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.termText)
+                    .textSelection(.enabled)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeIn(duration: 0.12), value: run.chunks.count)
     }
 
     // Destructive-left ordering per CONDUIT_UI_CONSISTENCY_RULES R3.3; equal-width row.
     private var controlBar: some View {
         HStack(spacing: 8) {
             DSButton("Stop", systemImage: "stop.fill", variant: .destructive, fullWidth: true) {
-                // Warning haptic on the destructive path (R6.2) — matches the confirm button below.
                 Haptics.warning()
                 confirmStop = true
             }
@@ -120,6 +235,42 @@ public struct RunDetailView: View {
         .padding(.bottom, 28)
         .background(.bar)
         .overlay(Divider(), alignment: .top)
+    }
+
+    // MARK: - Follow-up Bar
+
+    private var followUpBar: some View {
+        let textEmpty = followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HStack(spacing: 8) {
+            Text("$")
+                .font(.dsMonoPt(15))
+                .foregroundStyle(t.termPrompt)
+                .padding(.leading, 4)
+            TextField("follow-up", text: $followUpText, axis: .vertical)
+                .font(.dsMonoPt(15))
+                .foregroundStyle(t.text)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Button {
+                let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return }
+                onSendFollowUp?(text)
+                followUpText = ""
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(textEmpty ? t.text4 : t.accent)
+            }
+            .disabled(textEmpty)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 9)
+        .background(t.surf2)
+        .clipShape(RoundedRectangle(cornerRadius: t.pill, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.pill, style: .continuous).stroke(t.border, lineWidth: 0.5))
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .background(.bar)
     }
 }
 

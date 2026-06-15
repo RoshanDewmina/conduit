@@ -181,6 +181,7 @@ func (c *e2eRelayClient) messageLoop() {
 
 			var frame encryptedFrame
 			if err := json.Unmarshal([]byte(msg.Payload), &frame); err != nil {
+				log.Printf("e2e: frame unmarshal failed: %v", err)
 				continue
 			}
 
@@ -191,14 +192,20 @@ func (c *e2eRelayClient) messageLoop() {
 			}
 
 			var inner struct {
-				Type string `json:"type"`
+				Type    string          `json:"type"`
+				Payload json.RawMessage `json:"payload"`
 			}
 			if err := json.Unmarshal(plaintext, &inner); err != nil {
+				log.Printf("e2e: inner unmarshal failed: %v", err)
 				continue
 			}
 
 			if c.messageHandler != nil {
-				c.messageHandler(inner.Type, plaintext)
+				// Hand the handler the UNWRAPPED inner payload. The phone wraps app
+				// messages as {type, payload:{…typed params…}}; handlers unmarshal
+				// those params directly, so passing the whole plaintext left every
+				// field empty (silent no-op dispatch/approval over the relay).
+				c.messageHandler(inner.Type, inner.Payload)
 			}
 		}
 	}

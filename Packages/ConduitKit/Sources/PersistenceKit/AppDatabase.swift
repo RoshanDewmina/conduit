@@ -32,6 +32,18 @@ public final class AppDatabase: Sendable {
         try AppDatabase(try DatabaseQueue())
     }
 
+    /// Deletes all user data — used by Settings → Reset app. Each table is
+    /// cleared independently so a not-yet-migrated table cannot abort the wipe.
+    public func wipeAll() async throws {
+        try await dbWriter.write { db in
+            for table in ["approvals", "blocks", "patches", "session_snapshots",
+                          "sync_tombstones", "audit_events", "loops",
+                          "snippets", "hosts"] {
+                try? db.execute(sql: "DELETE FROM \(table)")
+            }
+        }
+    }
+
     // MARK: - Migrations
 
     private static var migrator: DatabaseMigrator {

@@ -90,13 +90,17 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Second peer — must be the opposite role of whoever is already here.
 			pair.mu.Lock()
-			dup := (role == "daemon" && pair.DaemonConn != nil) ||
-				(role == "phone" && pair.PhoneConn != nil)
-			if dup {
-				pair.mu.Unlock()
-				hub.mu.Unlock()
-				sendJSON(conn, map[string]interface{}{"type": "error", "message": role + " already connected"})
-				return
+			// Newest-wins: a peer reconnecting on the same code (a daemon that
+			// restarted, or a phone re-opening pairing) reclaims its slot. Close
+			// the stale connection so the relay frees the slot instead of rejecting
+			// the newcomer — otherwise a restarted daemon is locked out until the
+			// dead TCP connection times out (minutes).
+			if role == "daemon" && pair.DaemonConn != nil {
+				_ = pair.DaemonConn.Close()
+				pair.DaemonConn = nil
+			} else if role == "phone" && pair.PhoneConn != nil {
+				_ = pair.PhoneConn.Close()
+				pair.PhoneConn = nil
 			}
 			if role == "daemon" {
 				pair.DaemonConn = conn

@@ -86,6 +86,33 @@ else
     echo "Neither curl nor wget found" >&2
     exit 1
   fi
+
+  # Checksum verification (optional — warn on failure, don't hard-fail).
+  SHA256_URL="${DOWNLOAD_BASE}/SHA256SUMS"
+  SHA256_CONTENT=""
+  if command -v curl >/dev/null 2>&1; then
+    SHA256_CONTENT="$(curl -fsSL "$SHA256_URL" 2>/dev/null || true)"
+  elif command -v wget >/dev/null 2>&1; then
+    SHA256_CONTENT="$(wget -q -O - "$SHA256_URL" 2>/dev/null || true)"
+  fi
+  if [[ -n "$SHA256_CONTENT" ]]; then
+    EXPECTED="$(echo "$SHA256_CONTENT" | grep "conduitd_${OS}_${ARCH}" | awk '{print $1}')"
+    if [[ -n "$EXPECTED" ]]; then
+      ACTUAL="$(shasum -a 256 "$TARGET" | awk '{print $1}')"
+      if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+        echo "ERROR: checksum mismatch for conduitd_${OS}_${ARCH}" >&2
+        echo "  Expected: $EXPECTED" >&2
+        echo "  Actual:   $ACTUAL" >&2
+        rm -f "$TARGET"
+        exit 1
+      fi
+      echo "Checksum verified ✓"
+    else
+      echo "WARNING: no SHA256 entry for conduitd_${OS}_${ARCH} in SHA256SUMS" >&2
+    fi
+  else
+    echo "WARNING: SHA256SUMS not reachable at $SHA256_URL — skipping checksum verification" >&2
+  fi
 fi
 
 chmod 755 "$TARGET"

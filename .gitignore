@@ -115,3 +115,6 @@ daemon/conduitd/conduitd-macos
 daemon/conduitd/conduitd-linux-amd64
 daemon/conduitd/conduitd-linux-arm64
 daemon/conduitd/conduitd-darwin-arm64
+
+# conduitd release build artifacts
+daemon/conduitd/dist/

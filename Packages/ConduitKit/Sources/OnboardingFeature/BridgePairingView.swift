@@ -20,6 +20,11 @@ import ConduitCore
 /// real `E2ERelayClient.connectionState` / `pairingState`.
 public struct BridgePairingView: View {
     @StateObject private var client: E2ERelayClient
+    /// True only when this view minted its own client (previews / standalone).
+    /// When the app-wide client is injected, the view must NOT disconnect it on
+    /// disappear — doing so tears down the live bridge the dispatch path depends
+    /// on, dropping `E2ERelayBridge.isActive` right after a successful pair.
+    private let ownsClient: Bool
     @State private var pairingCode: String
     @State private var qrImage: Image?
     @State private var showScanner = false
@@ -44,6 +49,7 @@ public struct BridgePairingView: View {
             relayURL: RelaySettings.url(),
             pairingCode: PairingCrypto.generatePairingCode()
         )
+        self.ownsClient = (client == nil)
         _client = StateObject(wrappedValue: resolved)
         _pairingCode = State(initialValue: resolved.pairingCode)
         self.onUseSSH = onUseSSH
@@ -106,7 +112,7 @@ public struct BridgePairingView: View {
                 onPaired?(client.publicKeyBase64URL, pairingCode)
             }
         }
-        .onDisappear { client.disconnect() }
+        .onDisappear { if ownsClient { client.disconnect() } }
     }
 
     // MARK: - QR

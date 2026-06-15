@@ -545,7 +545,9 @@ public struct AppRoot: View {
         }
         .task {
 #if DEBUG
-            await DebugSeeder.seedIfNeeded(env: env)
+            if ProcessInfo.processInfo.environment["CONDUIT_SEED_DEMO"] == "1" {
+                await DebugSeeder.seedIfNeeded(env: env)
+            }
             await DebugSeeder.resetForUITestIfRequested(env: env)
             await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
 #endif
@@ -959,7 +961,19 @@ public struct AppRoot: View {
                 approvalRepository: approvalRepository,
                 sshKeyStore: env.keyStore,
                 daemonChannel: daemonChannel,
-                e2eRelayClient: env.e2eRelayClient
+                e2eRelayClient: env.e2eRelayClient,
+                onResetApp: {
+                    let db = env.database
+                    Task {
+                        try? await db.wipeAll()
+                        await MainActor.run {
+                            UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
+                            appLockEnabled = false
+                            selectedTab = .inbox
+                            onboardingSeen = false
+                        }
+                    }
+                }
             )
         }
     }
@@ -1307,6 +1321,7 @@ private struct SettingsWithLibraryView: View {
     var sshKeyStore: KeyStore? = nil
     var daemonChannel: DaemonChannel? = nil
     var e2eRelayClient: E2ERelayClient? = nil
+    var onResetApp: (() -> Void)? = nil
 
     var body: some View {
         SettingsView(
@@ -1317,7 +1332,8 @@ private struct SettingsWithLibraryView: View {
             approvalRepository: approvalRepository,
             sshKeyStore: sshKeyStore,
             daemonChannel: daemonChannel,
-            e2eRelayClient: e2eRelayClient
+            e2eRelayClient: e2eRelayClient,
+            onResetApp: onResetApp
         )
         .toolbar(.hidden, for: .navigationBar)
     }

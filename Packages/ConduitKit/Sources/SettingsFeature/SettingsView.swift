@@ -389,11 +389,13 @@ public struct SettingsView: View {
     let e2eRelayClient: E2ERelayClient?
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
+    public var onResetApp: (() -> Void)? = nil
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
     @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
     @State private var notificationFilter = NotificationFilter()
+    @State private var showResetConfirmation = false
     @Environment(\.conduitTokens) private var t
 
     private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
@@ -410,7 +412,8 @@ public struct SettingsView: View {
         daemonChannel: DaemonChannel? = nil,
         e2eRelayClient: E2ERelayClient? = nil,
         statusHeaderAgents: [AgentInfo] = [],
-        onTapStatusHeader: @escaping () -> Void = {}
+        onTapStatusHeader: @escaping () -> Void = {},
+        onResetApp: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -423,6 +426,7 @@ public struct SettingsView: View {
         self.e2eRelayClient = e2eRelayClient
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
+        self.onResetApp = onResetApp
     }
 
     public var body: some View {
@@ -448,8 +452,19 @@ public struct SettingsView: View {
                     // (5) ACCOUNT
                     accountSection
 
+                    // (6) RESET
+                    resetSection
+
                     versionFooter
                 }
+            }
+            .alert("Reset app", isPresented: $showResetConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Reset", role: .destructive) {
+                    onResetApp?()
+                }
+            } message: {
+                Text("This deletes all hosts, sessions and approvals and returns to onboarding. This cannot be undone.")
             }
         }
         .task {
@@ -660,6 +675,35 @@ public struct SettingsView: View {
     }
 
     // MARK: - (5) ACCOUNT
+
+    @ViewBuilder
+    private var resetSection: some View {
+        if onResetApp != nil {
+            sectionHead("DANGER ZONE")
+            settingsCard {
+                Button(role: .destructive) {
+                    showResetConfirmation = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 14))
+                            .frame(width: 20)
+                        Text("Reset app")
+                            .font(.dsSansPt(15))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(t.text4)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .foregroundStyle(t.danger)
+            }
+            .padding(.bottom, 16)
+        }
+    }
 
     @ViewBuilder
     private var accountSection: some View {

@@ -5,13 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 )
+
+// expandHome resolves a leading "~" (or "~/...") to the user's home directory.
+// exec.Cmd.Dir does not expand "~", so a dispatched run with cwd "~" would fail
+// to chdir; resolve it here. An empty cwd is left empty (inherits the daemon's).
+func expandHome(cwd string) string {
+	if cwd == "~" || strings.HasPrefix(cwd, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(cwd, "~"))
+		}
+	}
+	return cwd
+}
 
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
@@ -72,7 +86,7 @@ type launchFunc func(argv []string, cwd, runID string, emit emitFunc) (*procHand
 
 func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
-	cmd.Dir = cwd
+	cmd.Dir = expandHome(cwd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

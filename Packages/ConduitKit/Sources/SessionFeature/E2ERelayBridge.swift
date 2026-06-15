@@ -75,6 +75,18 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Sends a follow-up prompt to an already-running relay dispatch so the agent
+    /// continues the same run. Output streams back via the existing
+    /// `agent.run.output` path into the same runId. Fire-and-forget.
+    public func sendRunContinue(runId: String, prompt: String) async throws {
+        guard isActive else { return }
+        struct ContinueParams: Codable, Sendable { let runId: String; let prompt: String }
+        try await relayClient.send(
+            type: "agentRunContinue",
+            payload: ContinueParams(runId: runId, prompt: prompt)
+        )
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
