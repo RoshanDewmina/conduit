@@ -193,10 +193,13 @@ func TestCollectDoctorResultsOrderAndCount(t *testing.T) {
 	results := collectDoctorResults(dir, "/tmp/conduitd", dir, lookPathFor(), func(string, string, time.Duration) (net.Conn, error) {
 		return nil, errors.New("nope")
 	})
-	if len(results) != 11 {
-		t.Fatalf("expected 11 checks, got %d", len(results))
+	if len(results) != 12 {
+		t.Fatalf("expected 12 checks, got %d", len(results))
 	}
 	if results[0].name != "version" {
 		t.Fatalf("first check = %q", results[0].name)
+	}
+	if results[len(results)-1].name != "relay pairing" {
+		t.Fatalf("last check = %q", results[len(results)-1].name)
 	}
 }

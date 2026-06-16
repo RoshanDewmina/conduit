@@ -43,6 +43,15 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
+		// SECURITY: codex exec normally opens an interactive approval session
+		// (its sandbox/approvals), which HANGS on headless dispatch because no
+		// TTY is connected. Adding --dangerously-bypass-approvals-and-sandbox
+		// fixes the hang but bypasses codex's own sandbox. Conduit's gating
+		// MUST cover codex at that point — see docs/audit/CODEX_GATING.md.
+		// Default OFF (CONDUIT_CODEX_UNSAFE=1) until hook parity exists.
+		if os.Getenv("CONDUIT_CODEX_UNSAFE") == "1" {
+			argv = append(argv, "--dangerously-bypass-approvals-and-sandbox")
+		}
 		return append(argv, prompt), true
 	case "opencode":
 		argv := []string{"opencode", "run"}

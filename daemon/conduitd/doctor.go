@@ -81,6 +81,7 @@ func collectDoctorResults(conduitDir, exePath, home string, look lookPathFunc, d
 		checkAuditLog(conduitDir),
 		checkQueue(conduitDir),
 		checkOSArch(),
+		checkRelayPairing(conduitDir),
 	}
 }
 
@@ -294,6 +295,50 @@ func checkQueue(conduitDir string) checkResult {
 
 func checkOSArch() checkResult {
 	return checkResult{name: "platform", status: statusOK, message: fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)}
+}
+
+func checkRelayPairing(conduitDir string) checkResult {
+	path := filepath.Join(conduitDir, "relay-pairing.json")
+	if _, err := os.Stat(path); err != nil {
+		return checkResult{
+			name:    "relay pairing",
+			status:  statusWarn,
+			message: "relay-pairing.json absent (not yet paired)",
+			hint:    "run: conduitd pair",
+		}
+	}
+	var cfg relayPairConfig
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return checkResult{
+			name:    "relay pairing",
+			status:  statusWarn,
+			message: fmt.Sprintf("cannot read: %v", err),
+		}
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return checkResult{
+			name:    "relay pairing",
+			status:  statusFail,
+			critical: true,
+			message: fmt.Sprintf("corrupt: %v", err),
+			hint:    "remove relay-pairing.json and re-pair",
+		}
+	}
+	if cfg.RelayURL == "" || cfg.Code == "" || cfg.PrivateKey == "" || cfg.PublicKey == "" {
+		return checkResult{
+			name:    "relay pairing",
+			status:  statusFail,
+			critical: true,
+			message: "incomplete relay pairing config",
+			hint:    "re-run: conduitd pair",
+		}
+	}
+	return checkResult{
+		name:    "relay pairing",
+		status:  statusOK,
+		message: fmt.Sprintf("paired with relay %s", cfg.RelayURL),
+	}
 }
 
 func joinComma(items []string) string {
