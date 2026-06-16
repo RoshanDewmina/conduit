@@ -109,14 +109,17 @@ func (r *resident) handleConnection(conn net.Conn) {
 }
 
 // clientReachable reports whether an escalated approval can plausibly reach a
-// human: either a live attach client is connected, or a push device has
-// registered. When neither holds, handleHookWithNotify fast-auto-approves after
-// a short grace instead of blocking 120s (Finding #10).
+// human: a live attach client, a paired E2E relay phone, or a registered push
+// device. When none holds, handleHookWithNotify fast-auto-approves after a short
+// grace instead of blocking 120s (Finding #10).
 func (r *resident) clientReachable() bool {
 	r.attachMu.Lock()
 	attached := r.attach != nil
 	r.attachMu.Unlock()
 	if attached {
+		return true
+	}
+	if r.core.relayPaired() {
 		return true
 	}
 	return r.core.deviceRegistered()

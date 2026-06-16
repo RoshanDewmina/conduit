@@ -354,6 +354,27 @@ public struct AppRoot: View {
             guard let params = note.userInfo?["params"] as? RunStatusParams else { return }
             runOutputStore.updateStatus(params)
         }
+        // Relay-delivered approvals: the E2E bridge posts conduitE2EApprovalReceived,
+        // but on a relay-only setup there's no SSH ApprovalIngest to land them in the
+        // inbox. Map the ApprovalData into an Approval and surface it in the active
+        // inbox VM so the firewall request actually renders.
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2EApprovalReceived"))) { note in
+            guard let data = note.userInfo?["approvalData"] as? E2ERelayMessage.ApprovalData else { return }
+            let approval = Approval(
+                id: ApprovalID(UUID(uuidString: data.approvalID) ?? UUID()),
+                sessionID: SessionID(),
+                agent: Approval.AgentSource(rawValue: data.agent) ?? .unknown,
+                kind: Approval.Kind(rawValue: data.kind) ?? .command,
+                command: data.command,
+                cwd: data.cwd ?? "",
+                risk: Approval.Risk(rawValue: data.risk) ?? .medium,
+                toolName: data.toolName
+            )
+            let vm = activeInboxViewModel
+            if !vm.approvals.contains(where: { $0.id == approval.id }) {
+                vm.approvals.insert(approval, at: 0)
+            }
+        }
         .sheet(item: $activeRelayRun) { run in
             let bridge = e2eBridge
             NavigationStack {
@@ -1048,6 +1069,18 @@ public struct AppRoot: View {
         bridge.start()
         ApprovalRelay.shared.e2eBridge = bridge
         e2eBridge = bridge
+
+        #if DEBUG
+        // Headless auto-pair for testing the relay loop in the simulator (where
+        // synthesized taps don't reach the app, so the code can't be typed). Set
+        // SIMCTL_CHILD_CONDUIT_RELAY_CODE=<6-digit daemon code>; this replicates the
+        // manual-code path (client.pairingCode = code; connect()). Debug-only.
+        if let code = ProcessInfo.processInfo.environment["CONDUIT_RELAY_CODE"],
+           code.count == 6 {
+            env.e2eRelayClient.pairingCode = code
+            env.e2eRelayClient.connect()
+        }
+        #endif
 
         // These Tasks inherit @MainActor isolation, so client reads and the
         // fleet mutation are already main-actor-confined.

@@ -962,6 +962,14 @@ func (s *server) deviceRegistered() bool {
 	return s.device != nil
 }
 
+// relayPaired reports whether a phone is currently paired over the E2E relay, so
+// an escalated approval can reach a human there even with no local attach client
+// or registered push device. Without this, a relay-only setup auto-allows every
+// escalation (the approval never reaches the paired phone).
+func (s *server) relayPaired() bool {
+	return s.e2e != nil && s.e2e.client != nil && s.e2e.client.isPaired()
+}
+
 // noClientGrace is how long an escalated approval waits for a client to appear
 // when none is currently reachable. Short enough that a host's normal `claude`
 // runs are not stalled (Finding #10), long enough to absorb a phone reconnect
