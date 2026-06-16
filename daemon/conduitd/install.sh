@@ -4,15 +4,16 @@ set -euo pipefail
 # install.sh — conduitd installer
 #
 # Intended to be run via curl | sh:
-#   curl -fsSL https://github.com/REPLACE_ME/conduit/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh
 #
 # Downloads a prebuilt conduitd binary for linux/macOS × amd64/arm64 from
 # GitHub Releases, verifies SHA256, installs to ~/.conduit/bin/conduitd,
 # and starts the pairing flow.
 #
-# Usage:
-#   curl -fsSL https://REPLACE_ME/install.sh | sh
-#   curl -fsSL https://REPLACE_ME/install.sh | sh -s -- --hooks claude
+# Usage (canonical GitHub Releases source):
+#   curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh -s -- --hooks claude
+# (Once a custom domain is set, a vanity URL like https://get.<domain>/install.sh can redirect here.)
 #
 # Flags:
 #   --hooks <mode>      Install agent hooks (none|claude|codex|both). Default: none
@@ -28,7 +29,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.conduit/bin}"
 HOOKS_MODE="none"
 FROM_SOURCE="false"
 
-DEFAULT_RELEASE_BASE="https://github.com/REPLACE_ME/conduit/releases/latest/download"
+DEFAULT_RELEASE_BASE="https://github.com/RoshanDewmina/conduit/releases/latest/download"
 DOWNLOAD_BASE="${CONDUIT_RELEASE_BASE:-$DEFAULT_RELEASE_BASE}"
 
 while [[ $# -gt 0 ]]; do

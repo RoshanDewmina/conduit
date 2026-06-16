@@ -15,7 +15,7 @@ set -euo pipefail
 #
 # Environment:
 #   DRY_RUN     Set to "1" to skip GitHub upload (local build only). Default: 0
-#   GH_REPO     GitHub repo (owner/name). Default: REPLACE_ME/conduit
+#   GH_REPO     GitHub repo (owner/name). Default: RoshanDewmina/conduit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR="$SCRIPT_DIR/dist"
@@ -32,7 +32,7 @@ VERSION="$1"
 shift
 
 DRY_RUN="${DRY_RUN:-0}"
-GH_REPO="${GH_REPO:-REPLACE_ME/conduit}"
+GH_REPO="${GH_REPO:-RoshanDewmina/conduit}"
 
 for arg in "$@"; do
   case "$arg" in

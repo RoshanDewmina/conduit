@@ -3,7 +3,7 @@
 ## One-liner (curl | sh)
 
 ```bash
-curl -fsSL https://github.com/REPLACE_ME/conduit/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh
 ```
 
 This downloads the matching binary for your OS/arch, verifies the SHA256 checksum,
@@ -12,19 +12,19 @@ installs it to `~/.conduit/bin/conduitd`, and optionally wires agent hooks.
 ### With Claude Code hooks
 
 ```bash
-curl -fsSL https://github.com/REPLACE_ME/conduit/releases/latest/download/install.sh | sh -s -- --hooks claude
+curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh -s -- --hooks claude
 ```
 
 ### From source (requires Go)
 
 ```bash
-curl -fsSL https://github.com/REPLACE_ME/conduit/releases/latest/download/install.sh | sh -s -- --from-source
+curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh -s -- --from-source
 ```
 
 ## Manual install
 
 1. Download the binary for your platform from the
-   [latest release](https://github.com/REPLACE_ME/conduit/releases/latest):
+   [latest release](https://github.com/RoshanDewmina/conduit/releases/latest):
    - `conduitd_darwin_amd64` (macOS Intel)
    - `conduitd_darwin_arm64` (macOS Apple Silicon)
    - `conduitd_linux_amd64` (Linux x86_64)
