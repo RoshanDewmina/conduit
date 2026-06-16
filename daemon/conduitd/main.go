@@ -82,6 +82,12 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "shim":
+		if err := runShim(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "conduitd shim:", err)
+			os.Exit(1)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		usage()
@@ -127,6 +133,7 @@ Usage:
   conduitd pair            Generate a pairing code for relay setup instructions
   conduitd relay-attach    Save an existing pairing code for the resident daemon
   conduitd agent-hook ...  Send approval event from agent pre-tool hook
+  conduitd shim <agent> ...  Intercept an agent launch and hand off to the daemon
   conduitd doctor          Run setup/health self-check (✓/⚠/✗ checklist)
   conduitd version         Print version`)
 }

@@ -82,6 +82,7 @@ func collectDoctorResults(conduitDir, exePath, home string, look lookPathFunc, d
 		checkQueue(conduitDir),
 		checkOSArch(),
 		checkRelayPairing(conduitDir),
+		checkShimWrapper(home, look),
 	}
 }
 
@@ -381,4 +382,28 @@ func printDoctorReport(w *os.File, results []checkResult) {
 
 	fmt.Fprintln(w, "")
 	fmt.Fprintf(w, "%d ok, %d warnings, %d failures\n", ok, warn, fail)
+}
+
+// checkShimWrapper verifies that PATH `claude` resolves to the Conduit shim
+// under ~/.conduit/bin. Warn if claude resolves elsewhere (shim not first on
+// PATH); fail if claude is not found at all.
+func checkShimWrapper(home string, look lookPathFunc) checkResult {
+	p, err := look("claude")
+	if err != nil {
+		return checkResult{
+			name:    "shim wrapper",
+			status:  statusFail,
+			message: "claude not on PATH",
+			hint:    "run: conduitd install",
+		}
+	}
+	if filepath.Dir(p) == filepath.Join(home, ".conduit", "bin") {
+		return checkResult{name: "shim wrapper", status: statusOK, message: p}
+	}
+	return checkResult{
+		name:    "shim wrapper",
+		status:  statusWarn,
+		message: "claude resolves to " + p + " (shim not first on PATH)",
+		hint:    "run: conduitd install (shim PATH coverage)",
+	}
 }

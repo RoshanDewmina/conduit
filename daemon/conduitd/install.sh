@@ -172,6 +172,51 @@ install_codex_hook() {
   echo "Installed Codex hook: ~/.codex/hooks/conduit-hook.sh"
 }
 
+install_shim() {
+  # Resolve the real claude binary BEFORE the shim shadows it (skip INSTALL_DIR).
+  real_claude=""
+  OLD_IFS="$IFS"
+  IFS=':'
+  for p in $PATH; do
+    if [ "$p" != "$INSTALL_DIR" ] && [ -x "$p/claude" ]; then
+      real_claude="$p/claude"
+      break
+    fi
+  done
+  IFS="$OLD_IFS"
+
+  mkdir -p "$HOME/.conduit"
+  printf 'export CONDUIT_REAL_claude=%s\n' "$real_claude" > "$HOME/.conduit/shim.env"
+
+  # PATH-level shim launcher. Sources shim.env so CONDUIT_REAL_claude is set even
+  # in non-interactive shells that never sourced the rc snippet (fail-open).
+  cat > "$INSTALL_DIR/claude" <<'LAUNCH'
+#!/bin/sh
+[ -z "${CONDUIT_REAL_claude:-}" ] && [ -f "$HOME/.conduit/shim.env" ] && . "$HOME/.conduit/shim.env"
+export CONDUIT_REAL_claude
+exec "$HOME/.conduit/bin/conduitd" shim claude "$@"
+LAUNCH
+  chmod 755 "$INSTALL_DIR/claude"
+
+  # Shell-integration snippet (function + env shadowing).
+  cp "$SCRIPT_DIR/shim/conduit-shim.sh" "$HOME/.conduit/conduit-shim.sh"
+
+  # Idempotent managed block in rc files.
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    [ -e "$rc" ] || continue
+    if ! grep -q '>>> conduit shim >>>' "$rc" 2>/dev/null; then
+      {
+        echo ''
+        echo '# >>> conduit shim >>>'
+        echo 'export PATH="$HOME/.conduit/bin:$PATH"'
+        echo '[ -f "$HOME/.conduit/conduit-shim.sh" ] && . "$HOME/.conduit/conduit-shim.sh"'
+        echo '# <<< conduit shim <<<'
+      } >> "$rc"
+    fi
+  done
+  echo "Installed Conduit shim: ~/.conduit/bin/claude (real: ${real_claude:-not found})"
+}
+
 case "$HOOKS_MODE" in
   none) ;;
   claude) install_claude_hook ;;
@@ -179,6 +224,12 @@ case "$HOOKS_MODE" in
   both) install_claude_hook; install_codex_hook ;;
   *) echo "Invalid --hooks mode: $HOOKS_MODE" >&2; exit 1 ;;
 esac
+
+# Opt-in three-layer claude shim (PATH launcher + shell function + env). Off by
+# default because it edits the user's shell rc files; enable with CONDUIT_INSTALL_SHIM=1.
+if [ "${CONDUIT_INSTALL_SHIM:-}" = "1" ]; then
+  install_shim
+fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

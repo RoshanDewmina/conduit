@@ -295,7 +295,7 @@ public actor SSHHostRuntime: HostedAgentRuntime {
             switch event {
             case .approvalPending(let params):
                 appendApproval(runID: runID, params: params)
-            case .agentStatus, .secretRequest, .runOutput, .runStatus, .pong, .unknown:
+            case .agentStatus, .secretRequest, .runOutput, .runStatus, .sessionDiscovered, .pong, .unknown:
                 break
             }
         }

@@ -204,6 +204,8 @@ type server struct {
 	loopsMu   sync.Mutex
 	loops     map[string]loopState
 	loopsPath string
+	// sessions tracks shim-spawned agent sessions (id -> ShimSession).
+	sessions *sessionRegistry
 	// git runs git/gh subcommands for the agent.git.* / agent.worktree.* RPCs.
 	// nil ⇒ realGitRunner; injectable in tests.
 	git gitRunner
@@ -232,6 +234,7 @@ func newServer(home string) *server {
 		audit:      newAuditLog(home),
 		secrets:    newSecretsStore(home),
 		dispatcher: newDispatcher(),
+		sessions:   newSessionRegistry(),
 		scheduler:  newScheduler(home),
 		loops:      map[string]loopState{},
 		loopsPath:  filepath.Join(home, ".conduit", "loops.json"),

@@ -31,7 +31,7 @@ public actor RecentPatch {
                     if params.approvalKind == .patch, let patch = params.patch {
                         await onPatch(patch)
                     }
-                case .pong, .agentStatus, .secretRequest, .runOutput, .runStatus:
+                case .pong, .agentStatus, .secretRequest, .runOutput, .runStatus, .sessionDiscovered:
                     break
                 case .unknown:
                     // Future: when DaemonEvent gains a .patchProposed case,

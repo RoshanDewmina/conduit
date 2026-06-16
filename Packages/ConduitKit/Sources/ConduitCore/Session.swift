@@ -7,6 +7,7 @@ public struct Session: Identifiable, Sendable, Hashable {
     public var startedAt: Date
     public var endedAt: Date?
     public var status: Status
+    public var origin: SessionOrigin = .appInitiated
 
     public enum Status: Sendable, Hashable, Codable {
         case disconnected
@@ -23,6 +24,15 @@ public struct Session: Identifiable, Sendable, Hashable {
         case paired
         case degraded
         case error
+    }
+
+    /// Where a session came from. `.appInitiated` = opened by the user in-app;
+    /// `.shimDiscovered` = launched via the host shim into a managed tmux container;
+    /// `.bareMirror` = a pre-existing bare session surfaced read-only by the transcript watcher.
+    public enum SessionOrigin: String, Sendable, Codable, Hashable {
+        case appInitiated
+        case shimDiscovered
+        case bareMirror
     }
 
     /// The single, honest connection state surfaced consistently across the top
@@ -76,7 +86,8 @@ public struct Session: Identifiable, Sendable, Hashable {
         tmuxName: String? = nil,
         startedAt: Date = .now,
         endedAt: Date? = nil,
-        status: Status = .disconnected
+        status: Status = .disconnected,
+        origin: SessionOrigin = .appInitiated
     ) {
         self.id = id
         self.hostID = hostID
@@ -84,5 +95,6 @@ public struct Session: Identifiable, Sendable, Hashable {
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.status = status
+        self.origin = origin
     }
 }

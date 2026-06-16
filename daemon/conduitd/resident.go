@@ -102,6 +102,10 @@ func (r *resident) handleConnection(conn net.Conn) {
 		return
 	}
 	if !framed {
+		if isShimSpawn(first) {
+			r.core.handleShimSpawnConn(conn, first)
+			return
+		}
 		r.core.handleHookWithNotify(conn, first, r.notifyAttachOrQueue, r.clientReachable)
 		return
 	}

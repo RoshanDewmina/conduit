@@ -269,12 +269,29 @@ public struct RunStatusParams: Codable, Sendable, Hashable {
     }
 }
 
+public struct SessionDiscoveredParams: Codable, Sendable {
+    public let sessionId: String
+    public let tmuxName: String?
+    public let agent: String?
+    public let cwd: String?
+    public let managed: Bool
+
+    public init(sessionId: String, tmuxName: String?, agent: String?, cwd: String?, managed: Bool) {
+        self.sessionId = sessionId
+        self.tmuxName = tmuxName
+        self.agent = agent
+        self.cwd = cwd
+        self.managed = managed
+    }
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
     case agentStatus(AgentStatusSnapshot)
     case secretRequest(SecretRequestEvent)
     case runOutput(RunOutputParams)
     case runStatus(RunStatusParams)
+    case sessionDiscovered(SessionDiscoveredParams)
     case pong
     case unknown(method: String)
 }
@@ -314,6 +331,12 @@ extension DaemonEvent {
                   let p = try? JSONDecoder().decode(RunStatusParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .runStatus(p)
+        case "session.discovered":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(SessionDiscoveredParams.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .sessionDiscovered(p)
         case "pong":
             return .pong
         default:
