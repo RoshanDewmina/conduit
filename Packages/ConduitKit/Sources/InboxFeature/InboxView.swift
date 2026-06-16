@@ -14,6 +14,11 @@ public class InboxViewModel {
 
     public var effectiveApprovals: [Approval] { approvals }
 
+    /// Optional sink fired after a decision mutates a pending row. The base VM only
+    /// mutates local state; the relay/default inbox sets this to forward the decision
+    /// to the daemon (LiveInboxViewModel has its own repository-backed onDecision).
+    public var decisionSink: ((ApprovalID, Approval.Decision, String?) -> Void)?
+
     public init(approvals: [Approval] = []) {
         self.approvals = approvals
     }
@@ -35,6 +40,7 @@ public class InboxViewModel {
                 persistAllowAlwaysRule(for: approvals[idx])
             }
             Haptics.selection()
+            decisionSink?(id, decision, editedToolInput)
         }
     }
 }

@@ -1070,6 +1070,19 @@ public struct AppRoot: View {
         ApprovalRelay.shared.e2eBridge = bridge
         e2eBridge = bridge
 
+        // Route the relay/default inbox's decisions to the daemon. Without this the
+        // base InboxViewModel only updated local UI state, so approving a relay-
+        // delivered approval never released the daemon's blocked hook.
+        inboxVM.decisionSink = { id, decision, editedToolInput in
+            Task {
+                await ApprovalRelay.shared.forwardDecisionOnly(
+                    approvalID: id.uuidString,
+                    decision: decision,
+                    editedToolInput: editedToolInput
+                )
+            }
+        }
+
         #if DEBUG
         // Headless auto-pair for testing the relay loop in the simulator (where
         // synthesized taps don't reach the app, so the code can't be typed). Set
