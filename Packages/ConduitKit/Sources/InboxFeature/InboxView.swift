@@ -18,11 +18,6 @@ public class InboxViewModel {
         self.approvals = approvals
     }
 
-    // Vestigial: the first-run demo teaser was removed. `isDemo` is now always
-    // false at the call sites, so this never runs — kept only so those dead
-    // branches compile. TODO: strip the `isDemo` branches and delete this.
-    func dismissDemo() {}
-
     open func decide(
         _ id: ApprovalID,
         decision: Approval.Decision,
@@ -169,8 +164,6 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
-        let isDemo = false
-
         switch approval.kind {
         case .askQuestion:
             DSAskQuestionCard(
@@ -180,9 +173,8 @@ public struct InboxView: View {
                 timeLabel: pendingTimeLabel(approval),
                 question: approval.question ?? "What should I do next?",
                 choices: approval.choices ?? [],
-                onAnswer: { idx in
-                    if isDemo { vm.dismissDemo() }
-                    else { vm.decide(approval.id, decision: .approved, choiceIndex: idx) }
+                    onAnswer: { idx in
+                    vm.decide(approval.id, decision: .approved, choiceIndex: idx)
                 }
             )
 
@@ -196,16 +188,13 @@ public struct InboxView: View {
                 toolUseID: approval.toolUseID,
                 args: summarizedToolInput(approval),
                 risk: approval.risk.rawValue,
-                onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
                 onEditAndRun: {
-                    if isDemo { vm.dismissDemo() }
-                    else {
-                        editedToolInputText = editableToolInput(for: approval)
-                        editingApproval = approval
-                    }
+                    editedToolInputText = editableToolInput(for: approval)
+                    editingApproval = approval
                 },
-                onAllowAlways: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } },
-                onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } }
+                onAllowAlways: { scopeSheetApproval = approval },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
             )
             .onTapGesture { decisionSheetApproval = approval }
 
@@ -218,9 +207,9 @@ public struct InboxView: View {
                 toolName: approval.toolName ?? approval.command ?? "unknown",
                 credentialHint: approval.command ?? "credential",
                 risk: approval.risk.rawValue,
-                onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
-                onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } },
-                onAuthorizeScope: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } }
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onApprove: { vm.decide(approval.id, decision: .approved) },
+                onAuthorizeScope: { scopeSheetApproval = approval }
             )
 
         default:
@@ -234,13 +223,13 @@ public struct InboxView: View {
                     hostLabel: approval.cwd,
                     command: approval.command,
                     onViewDiff: (approval.patch != nil || approval.kind == .patch) ? { diffApproval = approval } : nil,
-                    onDeny: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) } },
-                    onAllowAlways: { if isDemo { vm.dismissDemo() } else { scopeSheetApproval = approval } },
-                    onEditAndRun: isDemo ? nil : ((approval.toolInput != nil || approval.command != nil) ? {
+                    onDeny: { vm.decide(approval.id, decision: .rejected) },
+                    onAllowAlways: { scopeSheetApproval = approval },
+                    onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
                         editedToolInputText = editableToolInput(for: approval)
                         editingApproval = approval
-                    } : nil),
-                    onApprove: { if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .approved) } }
+                    } : nil,
+                    onApprove: { vm.decide(approval.id, decision: .approved) }
                 )
                 if let br = approval.blastRadius {
                     DSBlastRadiusBanner(blastRadius: br)
@@ -262,58 +251,50 @@ public struct InboxView: View {
         let cmdStr = approval.command ?? approval.toolName ?? "Unknown command"
         let whyStr = br.matchedRule.map { "Matched policy rule \"\($0)\" requiring human approval." }
             ?? "This action requires human approval per your policy settings."
-        let isDemo = false
 
         DSDecisionSheet(
             risk: approval.risk.rawValue,
             agentName: agentNameStr,
             action: actionStr,
             command: cmdStr,
-            whyText: isDemo ? "This is a demo approval. In a real scenario, this text explains which policy rule matched the agent's action." : whyStr,
-            requiresBiometric: requiresBiometric && !isDemo,
+            whyText: whyStr,
+            requiresBiometric: requiresBiometric,
             diff: nil,
             blastRadius: br,
             onDeny: {
-                if isDemo { vm.dismissDemo() } else { vm.decide(approval.id, decision: .rejected) }
+                vm.decide(approval.id, decision: .rejected)
                 decisionSheetApproval = nil
             },
             onApprove: {
                 Task {
-                    if requiresBiometric && !isDemo {
+                    if requiresBiometric {
                         do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
                         catch {
                             if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
                             return
                         }
                     }
-                    if isDemo { vm.dismissDemo() } else {
-                        vm.decide(approval.id, decision: .approved)
-                        Haptics.success()
-                    }
+                    vm.decide(approval.id, decision: .approved)
+                    Haptics.success()
                     decisionSheetApproval = nil
                 }
             },
             onEditAndRun: {
-                if isDemo { vm.dismissDemo() }
-                else {
-                    editedToolInputText = editableToolInput(for: approval)
-                    editingApproval = approval
-                }
+                editedToolInputText = editableToolInput(for: approval)
+                editingApproval = approval
                 decisionSheetApproval = nil
             },
             onAllowAlways: {
                 Task {
-                    if requiresBiometric && !isDemo {
+                    if requiresBiometric {
                         do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
                         catch {
                             if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
                             return
                         }
                     }
-                    if isDemo { vm.dismissDemo() } else {
-                        decisionSheetApproval = nil
-                        scopeSheetApproval = approval
-                    }
+                    decisionSheetApproval = nil
+                    scopeSheetApproval = approval
                 }
             }
         )
