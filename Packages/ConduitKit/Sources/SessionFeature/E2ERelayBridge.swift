@@ -115,31 +115,39 @@ public final class E2ERelayBridge: ObservableObject {
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
         switch message.type {
+        // message.payload is the FULL inner plaintext {type, payload:{…}} — every
+        // case must unwrap RelayInnerEnvelope<T> to reach the typed params (same as
+        // agentRunOutput/dispatchResult). Decoding the struct directly from the full
+        // envelope silently fails (try? → nil), which is what dropped every relay
+        // approval/status before this fix.
         case "approvalPending":
-            guard let approval = try? JSONDecoder().decode(E2ERelayMessage.ApprovalData.self, from: message.payload)
-            else { return }
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.ApprovalData>.self, from: message.payload
+            ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("conduitE2EApprovalReceived"),
                 object: nil,
-                userInfo: ["approvalData": approval]
+                userInfo: ["approvalData": env.payload]
             )
 
         case "agentStatus":
-            guard let status = try? JSONDecoder().decode(E2ERelayMessage.StatusData.self, from: message.payload)
-            else { return }
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.StatusData>.self, from: message.payload
+            ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("conduitE2EStatusUpdate"),
                 object: nil,
-                userInfo: ["status": status]
+                userInfo: ["status": env.payload]
             )
 
         case "loopUpdate":
-            guard let loopData = try? JSONDecoder().decode(E2ERelayMessage.LoopData.self, from: message.payload)
-            else { return }
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.LoopData>.self, from: message.payload
+            ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("conduitE2ELoopUpdate"),
                 object: nil,
-                userInfo: ["loopData": loopData]
+                userInfo: ["loopData": env.payload]
             )
 
         case "dispatchResult":
