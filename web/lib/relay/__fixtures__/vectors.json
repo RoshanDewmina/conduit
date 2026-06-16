@@ -1,0 +1,17 @@
+{
+  "_comment": "Authoritative interop vectors generated from daemon/conduitd/e2e_crypto.go. base64url no-pad throughout.",
+  "daemonPrivB64": "AAIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH2A",
+  "daemonPubB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+  "frame": {
+    "ciphertextB64": "bds0nnZiSsZVdD6VMENEmYzbY-_j8qGEhrq6M4ESTFWuzJr_X6wHgjRZydz6lJdwqP-xBg1WxQwV9tpuxltJXuCPWLDkMZGki7liGRfkVzMQD19YZGH9xbuu9H9Au7bdP1_lXQ",
+    "nonceB64": "EBESExQVFhcYGRob",
+    "plaintext": "{\"type\":\"approvalResponse\",\"approvalID\":\"11111111-1111-1111-1111-111111111111\",\"decision\":\"approve\"}",
+    "tagB64": "1ZbkRwHDyS2I3JWtIKAd-Q",
+    "version": 1
+  },
+  "frameAAD": "conduit-frame-v1",
+  "helperID": "conduit-relay",
+  "phonePrivB64": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vn8",
+  "phonePubB64": "YFpyXSpK3-6xop4X7dYhwbdZPujNvESsbEq24vgF0jw",
+  "sessionKeyB64": "P76qvuQm8JLVXLiu__SuUE2dXyBDn37XiKYgur913X4"
+}

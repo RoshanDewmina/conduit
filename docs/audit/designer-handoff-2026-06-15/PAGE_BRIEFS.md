@@ -1228,3 +1228,1563 @@ These descriptions are functional only. They intentionally avoid direction about
   - Policy override
 - Implementation note: Risk logic and UI states exist; board card is a product/design rationale artifact.
 
+### 52. SessionView · full-screen block terminal
+
+- Slot: `sessionview`
+- Category: Power-user session
+- Swift status: partial
+- Board screenshot: [52-session-view.jpg](board-screenshots/52-session-view.jpg)
+- Swift screenshot: [gallery-session.jpg](swift-screenshots/gallery-session.jpg)
+- Purpose: Provide a full-screen block terminal session showing agent work, live command blocks with status, output streaming, and a chat input bar.
+- Primary user actions:
+  - Read live output from running commands.
+  - Send input or follow-up instructions.
+  - Inspect block status (running, completed, failed).
+- Required states:
+  - Connected and streaming
+  - Connecting
+  - Disconnected
+  - Idle prompt
+- Required data/content:
+  - Host and directory context
+  - Command blocks with timestamps
+  - Output stream per block
+  - Connection state
+- Implementation note: Session gallery route exists; board adds richer block card treatment and persistent chat input.
+
+### 53. ChatTranscriptView · scrollable block transcript
+
+- Slot: `chat-transcript`
+- Category: Power-user session
+- Swift status: partial
+- Board screenshot: [53-chat-transcript-view.jpg](board-screenshots/53-chat-transcript-view.jpg)
+- Swift screenshot: [gallery-session.jpg](swift-screenshots/gallery-session.jpg)
+- Purpose: Render a scrollable transcript of agent tool cards, commands, outputs, and status per block.
+- Primary user actions:
+  - Scroll through block history.
+  - Tap a block to expand or inspect.
+  - Open block action menu.
+- Required states:
+  - Populated transcript
+  - Empty transcript
+  - Streaming new blocks
+- Required data/content:
+  - Block list
+  - Per-block status and output
+  - Agent identity
+- Implementation note: ChatTranscriptView exists; board adds refined block card layout.
+
+### 54. ToolCardView · individual agent tool card
+
+- Slot: `toolcard`
+- Category: Power-user session
+- Swift status: partial
+- Board screenshot: [54-tool-card-view.jpg](board-screenshots/54-tool-card-view.jpg)
+- Swift screenshot: [gallery-session.jpg](swift-screenshots/gallery-session.jpg)
+- Purpose: Display one agent tool invocation with its command, output, status badges, blast chips, and action buttons.
+- Primary user actions:
+  - View command and output.
+  - Approve, deny, or edit a pending tool.
+  - Inspect blast radius chips.
+- Required states:
+  - Running
+  - Completed
+  - Failed
+  - Waiting for approval
+- Required data/content:
+  - Tool name
+  - Command
+  - Output
+  - Blast chips (files, git, network, credentials)
+  - Status badge
+- Implementation note: ToolCardView exists; board adds blast chips and richer status treatment.
+
+### 55. ChatInputBar · bottom input bar
+
+- Slot: `chat-input`
+- Category: Power-user session
+- Swift status: partial
+- Board screenshot: [55-chat-input-bar.jpg](board-screenshots/55-chat-input-bar.jpg)
+- Swift screenshot: [gallery-session.jpg](swift-screenshots/gallery-session.jpg)
+- Purpose: Provide a persistent text input at the bottom of the session for sending commands to the agent.
+- Primary user actions:
+  - Type a command or message.
+  - Send input.
+  - Open attachments or shortcuts.
+- Required states:
+  - Idle
+  - Typing
+  - Sending
+  - Disabled (disconnected)
+- Required data/content:
+  - Prompt prefix (›)
+  - Placeholder text
+  - Send button state
+- Implementation note: ChatInputBar exists in the session gallery; board refines the accessory rail integration.
+
+### 56. KeyboardAccessoryRail · shortcut rail
+
+- Slot: `keyboard-rail`
+- Category: Power-user session
+- Swift status: partial
+- Board screenshot: [56-keyboard-accessory-rail.jpg](board-screenshots/56-keyboard-accessory-rail.jpg)
+- Swift screenshot: none captured
+- Purpose: Show a horizontal rail of common command chips above the keyboard for quick input.
+- Primary user actions:
+  - Tap a shortcut chip to insert the command.
+  - Scroll the chip list.
+- Required states:
+  - Default chips
+  - Customized chips
+  - Empty (no shortcuts configured)
+- Required data/content:
+  - Chip labels (git, npm, swift, curl, etc.)
+  - Associated commands
+- Implementation note: Keyboard rail exists as a configurable accessory; board shows default chip set.
+
+### 57. QRScannerView · camera QR scanner
+
+- Slot: `qr-scanner`
+- Category: Onboarding and pairing
+- Swift status: partial
+- Board screenshot: [57-qr-scanner-view.jpg](board-screenshots/57-qr-scanner-view.jpg)
+- Swift screenshot: [gallery-onboarding-b.jpg](swift-screenshots/gallery-onboarding-b.jpg)
+- Purpose: Scan a bridge pairing QR code as the primary onboarding path.
+- Primary user actions:
+  - Scan a QR code.
+  - Enter pairing code manually as fallback.
+  - Handle scan failure or timeout.
+- Required states:
+  - Scanning
+  - Code scanned
+  - Scan failed
+  - Permission denied
+- Required data/content:
+  - Camera feed
+  - Viewfinder overlay
+  - Manual entry link
+  - Instructions
+- Implementation note: QR scanning exists in onboarding; board adds refined viewfinder and instruction overlay.
+
+### 58. BridgePairingView · bridge pairing screen
+
+- Slot: `bridge-pairing`
+- Category: Relay and security
+- Swift status: partial
+- Board screenshot: [58-bridge-pairing-view.jpg](board-screenshots/58-bridge-pairing-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show a 6-digit pairing code, QR toggle, and connection status for bridge pairing.
+- Primary user actions:
+  - Display pairing code to the bridge CLI.
+  - Switch between code and QR display.
+  - Monitor connection progress.
+- Required states:
+  - Waiting for pairing
+  - Pairing in progress
+  - Paired
+  - Pairing failed
+- Required data/content:
+  - Pairing code
+  - QR representation
+  - Bridge identity
+  - Connection status
+- Implementation note: Bridge pairing flow exists in onboarding/relay views; board isolates the dedicated pairing card.
+
+### 59. SSHConnectOverlay · full-screen connecting overlay
+
+- Slot: `ssh-connect`
+- Category: Host setup
+- Swift status: partial
+- Board screenshot: [59-ssh-connect-overlay.jpg](board-screenshots/59-ssh-connect-overlay.jpg)
+- Swift screenshot: none captured
+- Purpose: Show a full-screen dark overlay with animated orbital rings, PixelAvatar, and phase text during SSH connection.
+- Primary user actions:
+  - Cancel connection.
+  - Monitor connection progress.
+- Required states:
+  - Connecting
+  - Verifying
+  - Setup
+  - Done
+  - Failed
+- Required data/content:
+  - Host identity
+  - Phase label
+  - PixelAvatar
+  - Cancel action
+- Implementation note: Connection overlay exists in live SSH flow; board adds orbital animation treatment.
+
+### 60. WorkspacesView · saved hosts list
+
+- Slot: `workspaces`
+- Category: Host setup
+- Swift status: partial
+- Board screenshot: [60-workspaces-view.jpg](board-screenshots/60-workspaces-view.jpg)
+- Swift screenshot: [tab-fleet.png](swift-screenshots/tab-fleet.png)
+- Purpose: List saved SSH hosts with avatar, status dot, name, address, last used time, and FAB to add.
+- Primary user actions:
+  - Open a host.
+  - Add a new host.
+  - Delete or edit an existing host.
+- Required states:
+  - Populated list
+  - Empty list
+  - Offline hosts
+  - Loading
+- Required data/content:
+  - Host name
+  - PixelAvatar
+  - Status dot
+  - Address
+  - Last used time
+- Implementation note: Host list exists in fleet tab; board adds dedicated workspaces root with FAB.
+
+### 61. HostEditorView · SSH host form
+
+- Slot: `host-editor`
+- Category: Host setup
+- Swift status: partial
+- Board screenshot: [61-host-editor-view.jpg](board-screenshots/61-host-editor-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a form for adding or editing SSH host configuration.
+- Primary user actions:
+  - Enter name, hostname, port, username.
+  - Choose auth method (password or key).
+  - Test connection.
+  - Save host.
+- Required states:
+  - Empty form
+  - Testing connection
+  - Connection test succeeded
+  - Connection test failed
+  - Saving
+- Required data/content:
+  - Host name
+  - Hostname/IP
+  - Port
+  - Username
+  - Auth method
+  - Test result
+- Implementation note: AddHostView exists; board refines the form layout and test-connection UX.
+
+### 62. HostKeyConfirmSheet · TOFU host key trust
+
+- Slot: `host-key-confirm`
+- Category: Host setup and trust
+- Swift status: partial
+- Board screenshot: [62-host-key-confirm-sheet.jpg](board-screenshots/62-host-key-confirm-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Present a bottom sheet for TOFU host key trust decision on first connection.
+- Primary user actions:
+  - Review host fingerprint.
+  - Trust and connect.
+  - Cancel and stop connection.
+- Required states:
+  - Unknown host key
+  - Fingerprint changed
+  - Trusted
+- Required data/content:
+  - Host name
+  - SHA256 fingerprint visual
+  - Trust and Cancel buttons
+- Implementation note: TOFU sheet exists in live SSH flow; board adds fingerprint visual and refined sheet design.
+
+### 63. TerminalSettingsView · shell and color scheme
+
+- Slot: `terminal-settings`
+- Category: Settings
+- Swift status: partial
+- Board screenshot: [63-terminal-settings-view.jpg](board-screenshots/63-terminal-settings-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Configure default shell, color scheme, font size, and auto-connect toggle for the terminal.
+- Primary user actions:
+  - Select default shell (bash/zsh/fish).
+  - Pick a color scheme.
+  - Adjust font size.
+  - Toggle auto-connect.
+- Required states:
+  - Default settings
+  - Customized settings
+  - Unsupported shell selected
+- Required data/content:
+  - Shell list
+  - Color scheme list (Dark+, Solarized, Nord, Dracula, Gruvbox)
+  - Font size slider
+  - Auto-connect toggle
+- Implementation note: Terminal settings exist; board adds curated color scheme selection.
+
+### 64. E2ERelayPairingView · relay status and pairing
+
+- Slot: `e2e-relay`
+- Category: Relay and security
+- Swift status: partial
+- Board screenshot: [64-e2e-relay-pairing-view.jpg](board-screenshots/64-e2e-relay-pairing-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Display relay connection status, E2E encryption badge, pairing QR, and disconnect option.
+- Primary user actions:
+  - View relay state.
+  - Re-pair or disconnect.
+  - Inspect encryption details.
+- Required states:
+  - Paired
+  - Pairing
+  - Unpaired
+  - Disconnected
+- Required data/content:
+  - Relay URL/state
+  - Encryption badge (X25519 + ChaCha20-Poly1305)
+  - Pairing QR
+  - Disconnect button
+- Implementation note: Relay pairing view exists; board adds encryption algorithm badge.
+
+### 65. TrustPrivacyView · data path explanations
+
+- Slot: `trust-privacy-detail`
+- Category: Trust and privacy
+- Swift status: partial
+- Board screenshot: [65-trust-privacy-view.jpg](board-screenshots/65-trust-privacy-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Explain per-feature what data stays local, goes to provider, or goes through relay with color-coded badges.
+- Primary user actions:
+  - Review data paths for each capability.
+  - Open related settings.
+- Required states:
+  - Local-only path
+  - Cloud provider path
+  - Relay path
+  - Unknown path
+- Required data/content:
+  - Feature name
+  - Data classification
+  - Destination badge
+  - Control path
+- Implementation note: Settings entry exists; board adds dedicated detail view with color-coded path badges.
+
+### 66. PremiumComparisonView · Free vs Pro
+
+- Slot: `premium-compare`
+- Category: Billing
+- Swift status: partial
+- Board screenshot: [66-premium-comparison-view.jpg](board-screenshots/66-premium-comparison-view.jpg)
+- Swift screenshot: [gallery-paywall.jpg](swift-screenshots/gallery-paywall.jpg)
+- Purpose: Compare Free and Pro plan features with check marks and plan columns.
+- Primary user actions:
+  - Review feature differences.
+  - Start upgrade flow.
+- Required states:
+  - Free plan
+  - Pro plan
+  - Loading
+- Required data/content:
+  - Feature list
+  - Plan columns
+  - Check marks
+  - Upgrade call to action
+- Implementation note: Paywall gallery exists; board adds dedicated comparison view.
+
+### 67. BillingView · plan and invoice history
+
+- Slot: `billing-history`
+- Category: Billing
+- Swift status: partial
+- Board screenshot: [67-billing-view.jpg](board-screenshots/67-billing-view.jpg)
+- Swift screenshot: [gallery-billing.jpg](swift-screenshots/gallery-billing.jpg)
+- Purpose: Show current plan, next billing date, payment method, and invoice history.
+- Primary user actions:
+  - View current plan.
+  - Change payment method.
+  - Browse invoice history.
+- Required states:
+  - Active subscription
+  - No subscription
+  - Payment method missing
+  - Loading
+- Required data/content:
+  - Plan name
+  - Next billing date
+  - Payment method
+  - Invoice list
+- Implementation note: Billing gallery exists; board integrates plan, invoices, and payment method in one view.
+
+### 68. ProviderKeysView · API key management
+
+- Slot: `provider-keys-detail`
+- Category: Provider setup
+- Swift status: partial
+- Board screenshot: [68-provider-keys-view.jpg](board-screenshots/68-provider-keys-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Manage provider API keys with status badges for Anthropic, OpenAI, OpenRouter, Ollama, Google, Azure.
+- Primary user actions:
+  - Add or update a provider key.
+  - Verify a key.
+  - Remove a key.
+- Required states:
+  - Connected
+  - Missing key
+  - Invalid key
+  - Verifying
+- Required data/content:
+  - Provider name
+  - Key status badge
+  - Available models
+  - Last verified
+- Implementation note: Provider keys view exists; board adds expanded provider list and status badges.
+
+### 69. ShortcutBarEditor · customize shortcut bar
+
+- Slot: `shortcut-editor`
+- Category: Settings
+- Swift status: partial
+- Board screenshot: [69-shortcut-bar-editor.jpg](board-screenshots/69-shortcut-bar-editor.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide drag-reorder and enable/disable toggles for the keyboard accessory shortcut bar.
+- Primary user actions:
+  - Reorder shortcuts by dragging.
+  - Enable or disable individual shortcuts.
+- Required states:
+  - Default layout
+  - Customized layout
+  - Empty (all disabled)
+- Required data/content:
+  - Shortcut list
+  - Drag handle
+  - Enable toggle
+- Implementation note: Shortcut bar exists; board adds dedicated editor for customization.
+
+### 70. SnippetEditorView · snippet editing
+
+- Slot: `snippet-editor`
+- Category: Settings
+- Swift status: partial
+- Board screenshot: [70-snippet-editor-view.jpg](board-screenshots/70-snippet-editor-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Edit a command snippet with name, command body, and arguments list.
+- Primary user actions:
+  - Edit snippet name.
+  - Edit command text.
+  - Add or remove arguments.
+  - Save or discard changes.
+- Required states:
+  - Editing new snippet
+  - Editing existing snippet
+  - Invalid command
+  - Saving
+- Required data/content:
+  - Snippet name
+  - Command body
+  - Arguments list
+- Implementation note: Snippets exist in code; board adds dedicated editor view.
+
+### 71. SyncStatusView · iCloud sync status
+
+- Slot: `sync-status`
+- Category: Settings
+- Swift status: partial
+- Board screenshot: [71-sync-status-view.jpg](board-screenshots/71-sync-status-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Display iCloud sync status, last sync time, connected devices, and sync toggle.
+- Primary user actions:
+  - View sync state.
+  - Toggle sync on or off.
+  - View connected devices.
+- Required states:
+  - Synced
+  - Syncing
+  - Sync paused
+  - iCloud unavailable
+- Required data/content:
+  - Sync status
+  - Last sync time
+  - Device list
+  - Sync toggle
+- Implementation note: iCloud sync exists; board adds dedicated status view.
+
+### 72. PolicyEditorView · raw YAML editor
+
+- Slot: `policy-yaml-editor`
+- Category: Policy and governance
+- Swift status: partial
+- Board screenshot: [72-policy-editor-view.jpg](board-screenshots/72-policy-editor-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a raw YAML policy editor with syntax coloring and Save & Reload on Bridge action.
+- Primary user actions:
+  - Edit YAML content.
+  - Save and reload on bridge.
+  - Validate YAML syntax.
+- Required states:
+  - Valid YAML
+  - Invalid YAML
+  - Saving
+  - Reload pending
+- Required data/content:
+  - YAML body
+  - Syntax highlighting
+  - Validation errors
+  - Reload status
+- Implementation note: Policy YAML editor exists; board adds syntax coloring treatment.
+
+### 73. SecretsView · secrets vault
+
+- Slot: `secrets-vault`
+- Category: Secrets and permissions
+- Swift status: partial
+- Board screenshot: [73-secrets-view.jpg](board-screenshots/73-secrets-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Display secrets vault with name, type (env/file/api-key), scope, and pending agent requests.
+- Primary user actions:
+  - Approve or deny a secret request.
+  - View secret metadata.
+  - Revoke or rotate access.
+- Required states:
+  - No secrets
+  - Secrets available
+  - Pending requests
+  - Backend unavailable
+- Required data/content:
+  - Secret name
+  - Type badge
+  - Scope
+  - Requester
+- Implementation note: Secrets view exists; board adds type badges and request queue.
+
+### 74. AuditView · chronological audit events
+
+- Slot: `audit-events`
+- Category: Audit and compliance
+- Swift status: partial
+- Board screenshot: [74-audit-view.jpg](board-screenshots/74-audit-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show chronological audit events grouped by time with hash verification status.
+- Primary user actions:
+  - Browse audit events.
+  - Verify an event hash.
+  - Export audit log.
+- Required states:
+  - Populated
+  - Empty
+  - Verification failed
+  - Exporting
+- Required data/content:
+  - Event list grouped by time
+  - Event type
+  - Hash status
+  - Timestamp
+- Implementation note: Audit chain view exists; board adds time-grouped layout and hash badges.
+
+### 75. DoctorView · health check diagnostics
+
+- Slot: `doctor-diag`
+- Category: Diagnostics
+- Swift status: partial
+- Board screenshot: [75-doctor-view.jpg](board-screenshots/75-doctor-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Run health checks for daemon, hooks, keys, policy, host, and relay with pass/fail badges.
+- Primary user actions:
+  - Run all checks.
+  - Open fix instructions.
+  - Re-run individual checks.
+- Required states:
+  - All pass
+  - Some fail
+  - Running
+  - Unable to run
+- Required data/content:
+  - Check name
+  - Pass/fail badge
+  - Failure reason
+  - Suggested fix
+- Implementation note: Doctor view exists; board adds richer per-check detail.
+
+### 76. KeysView · SSH key management
+
+- Slot: `ssh-keys-manage`
+- Category: Credentials
+- Swift status: partial
+- Board screenshot: [76-keys-view.jpg](board-screenshots/76-keys-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Manage SSH keys with fingerprints, host associations, and last-used times.
+- Primary user actions:
+  - View generated keys.
+  - Add or import a key.
+  - Remove or rotate a key.
+- Required states:
+  - No keys
+  - Keys available
+  - Key locked
+- Required data/content:
+  - Key label
+  - Fingerprint
+  - Host usage
+  - Last used time
+- Implementation note: SSH key management exists; board adds host usage and last-used columns.
+
+### 77. AgentsView · cloud-hosted agent list
+
+- Slot: `agents-list`
+- Category: Fleet and providers
+- Swift status: partial
+- Board screenshot: [77-agents-view.jpg](board-screenshots/77-agents-view.jpg)
+- Swift screenshot: none captured
+- Purpose: List cloud-hosted agents with status, model, and spend per agent.
+- Primary user actions:
+  - Open an agent detail.
+  - Create a new agent.
+  - Pause or resume an agent.
+- Required states:
+  - Populated list
+  - Empty list
+  - Loading
+  - Offline agents
+- Required data/content:
+  - Agent name
+  - Status badge
+  - Model/provider
+  - Spend
+- Implementation note: Agent list exists in fleet tab; board adds dedicated agents root.
+
+### 78. AgentDetailView · agent detail header
+
+- Slot: `agent-detail`
+- Category: Fleet and providers
+- Swift status: partial
+- Board screenshot: [78-agent-detail-view.jpg](board-screenshots/78-agent-detail-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show agent detail header with run history list and controls (Pause/Resume, Schedule, Delete).
+- Primary user actions:
+  - View agent info.
+  - Pause or resume the agent.
+  - Open run history.
+  - Delete agent.
+- Required states:
+  - Agent active
+  - Agent paused
+  - Agent offline
+  - No run history
+- Required data/content:
+  - Agent name
+  - Model
+  - Status
+  - Spend
+  - Run list
+- Implementation note: Agent detail exists; board adds run history and schedule controls.
+
+### 79. AgentRunDetailView · agent run with live output
+
+- Slot: `agent-run-detail`
+- Category: Run control
+- Swift status: partial
+- Board screenshot: [79-agent-run-detail-view.jpg](board-screenshots/79-agent-run-detail-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show run detail with live output stream and controls (Stop, Pause, Budget, Ship, Diff).
+- Primary user actions:
+  - Monitor live output.
+  - Stop or pause the run.
+  - Set budget.
+  - Ship or review diff.
+- Required states:
+  - Running
+  - Paused
+  - Completed
+  - Failed
+- Required data/content:
+  - Goal
+  - Live output stream
+  - Controls
+  - Budget progress
+- Implementation note: Run detail view exists; board adds Ship/Diff action buttons.
+
+### 80. AgentFilesView · agent workspace file browser
+
+- Slot: `agent-files`
+- Category: File review
+- Swift status: partial
+- Board screenshot: [80-agent-files-view.jpg](board-screenshots/80-agent-files-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Browse agent workspace files with a directory tree.
+- Primary user actions:
+  - Navigate directory tree.
+  - Open a file for preview.
+  - Return to run context.
+- Required states:
+  - Files available
+  - No files
+  - Loading
+- Required data/content:
+  - Directory tree
+  - File names
+  - File sizes
+  - Permissions
+- Implementation note: File browsing exists in run context; board adds dedicated files view.
+
+### 81. AgentWorkspaceView · repository view
+
+- Slot: `agent-workspace`
+- Category: Repository
+- Swift status: partial
+- Board screenshot: [81-agent-workspace-view.jpg](board-screenshots/81-agent-workspace-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show repository and workspace context with branch, commits, and CI status.
+- Primary user actions:
+  - Switch branch.
+  - View commit history.
+  - Inspect CI status.
+- Required states:
+  - Repository connected
+  - No repository
+  - CI passing
+  - CI failing
+- Required data/content:
+  - Repository name
+  - Branch
+  - Recent commits
+  - CI status badge
+- Implementation note: Workspace context exists in loop detail; board adds dedicated workspace view.
+
+### 82. AgentOrgView · org members list
+
+- Slot: `agent-org`
+- Category: Fleet and providers
+- Swift status: partial
+- Board screenshot: [82-agent-org-view.jpg](board-screenshots/82-agent-org-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show organization members list with roles and status.
+- Primary user actions:
+  - View member roles.
+  - Invite new members.
+  - Remove a member.
+- Required states:
+  - Populated list
+  - Empty list
+  - Loading
+- Required data/content:
+  - Member name
+  - Role
+  - Status
+- Implementation note: Org features are cloud-only; board previews the member management view.
+
+### 83. AgentExecView · single execution detail
+
+- Slot: `agent-exec`
+- Category: Run control
+- Swift status: partial
+- Board screenshot: [83-agent-exec-view.jpg](board-screenshots/83-agent-exec-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show a single agent execution with command, arguments, environment, and output.
+- Primary user actions:
+  - View command and args.
+  - Inspect environment.
+  - Read output.
+- Required states:
+  - Completed
+  - Running
+  - Failed
+- Required data/content:
+  - Command
+  - Arguments
+  - Environment variables
+  - Output
+- Implementation note: Execution detail exists in run history; board isolates it as a standalone view.
+
+### 84. CreateAgentSheet · new hosted agent form
+
+- Slot: `create-agent`
+- Category: Fleet and providers
+- Swift status: partial
+- Board screenshot: [84-create-agent-sheet.jpg](board-screenshots/84-create-agent-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a bottom sheet form for creating a new hosted agent with name, runtime, model, and budget.
+- Primary user actions:
+  - Enter agent name.
+  - Select runtime.
+  - Choose model.
+  - Set budget.
+  - Create or cancel.
+- Required states:
+  - Empty form
+  - Submitting
+  - Creation failed
+- Required data/content:
+  - Agent name field
+  - Runtime picker
+  - Model picker
+  - Budget input
+- Implementation note: Agent creation exists; board adds a dedicated sheet form.
+
+### 85. AgentBillingSheet · prepaid credits
+
+- Slot: `agent-billing`
+- Category: Billing
+- Swift status: partial
+- Board screenshot: [85-agent-billing-sheet.jpg](board-screenshots/85-agent-billing-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Show prepaid credits, per-agent spend breakdown, and top-up options.
+- Primary user actions:
+  - View credit balance.
+  - Top up credits.
+  - View spend breakdown.
+- Required states:
+  - Credits available
+  - Credits low
+  - Credits exhausted
+  - Loading
+- Required data/content:
+  - Credit balance
+  - Per-agent spend
+  - Top-up options
+  - Spend history
+- Implementation note: Billing sheet exists behind cloud agent flows; board adds credit-focused layout.
+
+### 86. EditScheduleSheet · schedule editor
+
+- Slot: `edit-schedule`
+- Category: Run control
+- Swift status: partial
+- Board screenshot: [86-edit-schedule-sheet.jpg](board-screenshots/86-edit-schedule-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a schedule editor with cron expression, command, and enabled toggle.
+- Primary user actions:
+  - Enter or edit cron expression.
+  - Set command.
+  - Toggle schedule on/off.
+- Required states:
+  - Valid cron
+  - Invalid cron
+  - Schedule enabled
+  - Schedule disabled
+- Required data/content:
+  - Cron expression
+  - Command
+  - Enabled toggle
+  - Next run preview
+- Implementation note: Scheduling exists for cloud agents; board adds dedicated editor sheet.
+
+### 87. LoopDetailView · full agent loop lifecycle
+
+- Slot: `loop-detail`
+- Category: Loop supervision
+- Swift status: partial
+- Board screenshot: [87-loop-detail-view.jpg](board-screenshots/87-loop-detail-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show the full agent loop lifecycle: goal through plan, execution, CI, and proof with timeline stages.
+- Primary user actions:
+  - Review each loop stage.
+  - Open CI or proof detail.
+  - Stop or redirect the loop.
+- Required states:
+  - Planning
+  - Executing
+  - Waiting on CI
+  - Ready for proof
+  - Completed
+  - Failed
+- Required data/content:
+  - Goal
+  - Plan steps
+  - Current stage
+  - CI events
+  - Proof status
+- Implementation note: Loop detail view exists; board adds timeline stage visualization.
+
+### 88. RunDetailView · streaming output + controls
+
+- Slot: `run-detail`
+- Category: Run control
+- Swift status: partial
+- Board screenshot: [88-run-detail-view.jpg](board-screenshots/88-run-detail-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide streaming output view with budget progress and controls (Stop, Pause, Set Budget, Nudge).
+- Primary user actions:
+  - Read live output.
+  - Stop or pause run.
+  - Set or change budget.
+  - Send a nudge.
+- Required states:
+  - Running
+  - Paused
+  - Completed
+  - Failed
+- Required data/content:
+  - Goal
+  - Output stream
+  - Budget progress
+  - Available controls
+- Implementation note: Run detail exists; board adds budget progress bar and nudge control.
+
+### 89. QuotaGuardView · per-provider quota dashboard
+
+- Slot: `quota-guard`
+- Category: Cost control
+- Swift status: partial
+- Board screenshot: [89-quota-guard-view.jpg](board-screenshots/89-quota-guard-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show per-provider quota dashboard with spend vs cap, time windows, and alert thresholds.
+- Primary user actions:
+  - Review quota by provider.
+  - Adjust alert thresholds.
+  - Open provider detail.
+- Required states:
+  - Within quota
+  - Near limit
+  - Limit reached
+  - Provider unavailable
+- Required data/content:
+  - Provider name
+  - Spend
+  - Cap
+  - Time window
+  - Alert threshold
+- Implementation note: QuotaGuardView exists; board adds time windows and alert threshold controls.
+
+### 90. Git, Files & Preview · kanban and ship
+
+- Slot: `worktree-board`
+- Category: Branch supervision
+- Swift status: partial
+- Board screenshot: [90-worktree-board-view.jpg](board-screenshots/90-worktree-board-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Show 3-column kanban for git worktrees: Active, Stale, Merged.
+- Primary user actions:
+  - Move worktree between columns.
+  - Open a worktree detail.
+  - Promote or archive.
+- Required states:
+  - Active worktrees
+  - Stale worktrees
+  - No worktrees
+- Required data/content:
+  - Worktree columns
+  - Branch name
+  - Status
+  - Last activity
+- Implementation note: Worktree board exists; board adds kanban column layout.
+
+### 91. RunShipSheet · ship changes bottom sheet
+
+- Slot: `run-ship`
+- Category: Branch supervision
+- Swift status: partial
+- Board screenshot: [91-run-ship-sheet.jpg](board-screenshots/91-run-ship-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a bottom sheet for shipping changes with files list, commit message, and PR toggle.
+- Primary user actions:
+  - Review changed files.
+  - Write commit message.
+  - Toggle PR creation.
+  - Ship or cancel.
+- Required states:
+  - Ready to ship
+  - Shipping
+  - Ship failed
+- Required data/content:
+  - Changed files list
+  - Commit message
+  - PR toggle
+  - Ship status
+- Implementation note: Ship flow exists in loop/run context; board adds dedicated ship sheet.
+
+### 92. ShipItSheet · ship from loop context
+
+- Slot: `ship-it`
+- Category: Branch supervision
+- Swift status: partial
+- Board screenshot: [92-ship-it-sheet.jpg](board-screenshots/92-ship-it-sheet.jpg)
+- Swift screenshot: none captured
+- Purpose: Ship changes from loop context with goal summary, changed files, and commit preview.
+- Primary user actions:
+  - Review goal and changes.
+  - Write or confirm commit message.
+  - Execute ship.
+- Required states:
+  - Changes staged
+  - Shipping
+  - Ship failed
+- Required data/content:
+  - Goal summary
+  - Changed files
+  - Commit message
+  - Ship status
+- Implementation note: Ship sheet exists; board adds goal summary context.
+
+### 93. FilesView · SFTP file browser
+
+- Slot: `sftp-browser`
+- Category: File review
+- Swift status: partial
+- Board screenshot: [93-files-view.jpg](board-screenshots/93-files-view.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide an SFTP file browser with breadcrumb navigation, permissions, sizes, and dates.
+- Primary user actions:
+  - Navigate directories.
+  - Open a file.
+  - View file metadata.
+- Required states:
+  - Files available
+  - Directory empty
+  - Loading
+  - Connection lost
+- Required data/content:
+  - Breadcrumb trail
+  - File name
+  - Permissions
+  - Size
+  - Modification date
+- Implementation note: SFTP file browser exists; board adds breadcrumb and detail columns.
+
+### 94. FilePreviewView · monospace file preview
+
+- Slot: `file-preview`
+- Category: File review
+- Swift status: partial
+- Board screenshot: [94-file-preview-view.jpg](board-screenshots/94-file-preview-view.jpg)
+- Swift screenshot: [gallery-filepreview.jpg](swift-screenshots/gallery-filepreview.jpg)
+- Purpose: Display a monospace file preview with line numbers and language badge.
+- Primary user actions:
+  - Scroll file content.
+  - Copy text.
+  - Return to browser or run context.
+- Required states:
+  - File loaded
+  - File unavailable
+  - Unsupported type
+- Required data/content:
+  - File content
+  - Line numbers
+  - Language badge
+  - File path
+- Implementation note: File preview gallery exists; board adds language badge treatment.
+
+### 95. DiffView · side-by-side git diff
+
+- Slot: `diff-side-by-side`
+- Category: File change review
+- Swift status: matches
+- Board screenshot: [95-diff-view.jpg](board-screenshots/95-diff-view.jpg)
+- Swift screenshot: [gallery-diff.jpg](swift-screenshots/gallery-diff.jpg)
+- Purpose: Show a side-by-side git diff with green/red highlighting and line numbers.
+- Primary user actions:
+  - Review changes.
+  - Approve or deny.
+  - Open file detail.
+- Required states:
+  - Diff available
+  - Large diff
+  - Binary file
+- Required data/content:
+  - Added lines
+  - Removed lines
+  - Line numbers
+  - File path
+- Implementation note: Diff gallery exists; board adds side-by-side layout.
+
+### 96. PreviewSurface · WKWebView preview
+
+- Slot: `preview-surface`
+- Category: Preview and browsing
+- Swift status: partial
+- Board screenshot: [96-preview-surface.jpg](board-screenshots/96-preview-surface.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide a WKWebView preview frame with URL bar for previewing served content.
+- Primary user actions:
+  - View rendered content.
+  - Interact with the web view.
+- Required states:
+  - Content loaded
+  - Loading
+  - Content failed
+- Required data/content:
+  - URL
+  - Web content
+- Implementation note: Web preview exists; board refines the toolbar integration.
+
+### 97. PreviewToolbar · URL bar and controls
+
+- Slot: `preview-toolbar`
+- Category: Preview and browsing
+- Swift status: partial
+- Board screenshot: [97-preview-toolbar.jpg](board-screenshots/97-preview-toolbar.jpg)
+- Swift screenshot: none captured
+- Purpose: Provide URL bar with refresh, back/forward navigation, and port selector for the preview surface.
+- Primary user actions:
+  - Enter or edit URL.
+  - Refresh page.
+  - Navigate back or forward.
+  - Select port.
+- Required states:
+  - Page loaded
+  - Loading
+  - Invalid URL
+- Required data/content:
+  - URL text
+  - Refresh button
+  - Back/forward buttons
+  - Port selector
+- Implementation note: Preview toolbar exists in preview context; board refines port selector.
+
+### 98. Design System · DSButtonGallery
+
+- Slot: `ds-button-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [98-ds-button-gallery.jpg](board-screenshots/98-ds-button-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show all button variants: primary, ghost, danger, quiet in normal and disabled states.
+- Primary user actions:
+  - Browse variants.
+  - Inspect disabled and pressed states.
+- Required states:
+  - All variants visible
+  - None (static reference)
+- Required data/content:
+  - Variant labels
+  - Disabled variants
+- Implementation note: Button gallery exists in the component gallery; board shows all variants in one frame.
+
+### 99. Design System · DSChipGallery
+
+- Slot: `ds-chip-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [99-ds-chip-gallery.jpg](board-screenshots/99-ds-chip-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show all chip types: file, git, network, credentials, Pro, soon, new.
+- Primary user actions:
+  - Browse chip variants.
+- Required states:
+  - All variants visible
+- Required data/content:
+  - Chip labels and icons
+- Implementation note: Chips exist in the component gallery; board catalogues all variants.
+
+### 100. Design System · RiskBadgeGallery
+
+- Slot: `ds-risk-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [100-ds-risk-badge-gallery.jpg](board-screenshots/100-ds-risk-badge-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show all 4 risk levels: low, medium, high, critical.
+- Primary user actions:
+  - Browse risk badges.
+- Required states:
+  - All levels visible
+- Required data/content:
+  - Risk level labels
+  - Color coding
+- Implementation note: Risk badges exist; board catalogues all levels.
+
+### 101. Design System · StatusDotGallery
+
+- Slot: `ds-statusdot-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [101-ds-status-dot-gallery.jpg](board-screenshots/101-ds-status-dot-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show all status dot variants: working, waiting, idle, error, offline, done.
+- Primary user actions:
+  - Browse status dots.
+- Required states:
+  - All variants visible
+- Required data/content:
+  - Status labels
+  - Dot colors
+- Implementation note: Status dots exist; board catalogues all states.
+
+### 102. Design System · DSBlockCardGallery
+
+- Slot: `ds-blockcard-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [102-ds-block-card-gallery.jpg](board-screenshots/102-ds-block-card-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show block cards in running, completed, and failed states.
+- Primary user actions:
+  - Browse block card states.
+- Required states:
+  - Running
+  - Completed
+  - Failed
+- Required data/content:
+  - Block card variants
+  - State indicators
+- Implementation note: Block cards exist; board catalogues all states.
+
+### 103. Design System · DSMessageBubbleGallery
+
+- Slot: `ds-bubble-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [103-ds-message-bubble-gallery.jpg](board-screenshots/103-ds-message-bubble-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show chat bubble variants: user, assistant, system.
+- Primary user actions:
+  - Browse bubble variants.
+- Required states:
+  - All variants visible
+- Required data/content:
+  - Bubble styles
+- Implementation note: Message bubbles exist; board catalogues all types.
+
+### 104. Design System · DSApprovalCardGallery
+
+- Slot: `ds-approval-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [104-ds-approval-card-gallery.jpg](board-screenshots/104-ds-approval-card-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show approval cards with approve, deny, edit, and allow-always actions.
+- Primary user actions:
+  - Browse approval card variants.
+- Required states:
+  - All action variants visible
+- Required data/content:
+  - Action buttons
+  - Card layout
+- Implementation note: Approval cards exist; board catalogues all action variants.
+
+### 105. Design System · DSDecisionSheetGallery
+
+- Slot: `ds-decision-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [105-ds-decision-sheet-gallery.jpg](board-screenshots/105-ds-decision-sheet-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show the 4-action decision sheet with all action buttons.
+- Primary user actions:
+  - Browse decision sheet layout.
+- Required states:
+  - All 4 actions visible
+- Required data/content:
+  - Action list
+- Implementation note: Decision sheet exists; board catalogues the 4-action layout.
+
+### 106. Design System · DSBlastRadiusGallery
+
+- Slot: `ds-blast-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [106-ds-blast-radius-gallery.jpg](board-screenshots/106-ds-blast-radius-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show blast radius inline chips and full-width banner variants.
+- Primary user actions:
+  - Browse blast radius variants.
+- Required states:
+  - Inline chips visible
+  - Banner variants visible
+- Required data/content:
+  - Chip labels
+  - Banner layouts
+- Implementation note: Blast radius components exist; board catalogues all display modes.
+
+### 107. Design System · DSSpendHeroGallery
+
+- Slot: `ds-spend-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [107-ds-spend-hero-gallery.jpg](board-screenshots/107-ds-spend-hero-gallery.jpg)
+- Swift screenshot: [gallery-billing.jpg](swift-screenshots/gallery-billing.jpg)
+- Purpose: Show the spend hero card with provider breakdown.
+- Primary user actions:
+  - Browse spend hero layout.
+- Required states:
+  - Single provider
+  - Multiple providers
+  - No spend data
+- Required data/content:
+  - Spend amount
+  - Provider breakdown
+- Implementation note: Spend hero exists in billing gallery; board catalogues it as a component.
+
+### 108. Design System · ProofCardViewGallery
+
+- Slot: `ds-proof-gallery`
+- Category: Design system gallery
+- Swift status: matches
+- Board screenshot: [108-ds-proof-card-gallery.jpg](board-screenshots/108-ds-proof-card-gallery.jpg)
+- Swift screenshot: [gallery-proof.jpg](swift-screenshots/gallery-proof.jpg)
+- Purpose: Show the completion proof card with CI status.
+- Primary user actions:
+  - Browse proof card layout.
+- Required states:
+  - Proof complete
+  - Proof pending
+  - Proof failed
+- Required data/content:
+  - Goal summary
+  - CI status
+  - Changed files
+- Implementation note: Proof card gallery exists; board catalogues it as a design system component.
+
+### 109. Design System · DSScreenHeaderGallery
+
+- Slot: `ds-header-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [109-ds-screen-header-gallery.jpg](board-screenshots/109-ds-screen-header-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show screen header with title cursor and breadcrumb.
+- Primary user actions:
+  - Browse header variants.
+- Required states:
+  - With breadcrumb
+  - Without breadcrumb
+- Required data/content:
+  - Title
+  - Breadcrumb trail
+  - Cursor indicator
+- Implementation note: Screen headers exist; board catalogues cursor and breadcrumb treatments.
+
+### 110. Design System · DSStatusHeaderGallery
+
+- Slot: `ds-statusheader-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [110-ds-status-header-gallery.jpg](board-screenshots/110-ds-status-header-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show bridge status header variants.
+- Primary user actions:
+  - Browse status header variants.
+- Required states:
+  - Connected
+  - Disconnected
+  - Pairing
+- Required data/content:
+  - Status label
+  - Connection indicator
+- Implementation note: Status headers exist; board catalogues all connection states.
+
+### 111. Design System · AgentIslandGallery
+
+- Slot: `ds-island-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [111-ds-agent-island-gallery.jpg](board-screenshots/111-ds-agent-island-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show compact agent card with avatar, status, and inline approval.
+- Primary user actions:
+  - Browse island variants.
+- Required states:
+  - Idle
+  - Working
+  - Waiting for approval
+- Required data/content:
+  - Agent avatar
+  - Status
+  - Approval controls
+- Implementation note: Agent island component exists; board catalogues interactive states.
+
+### 112. Design System · DSHostRowGallery
+
+- Slot: `ds-hostrow-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [112-ds-host-row-gallery.jpg](board-screenshots/112-ds-host-row-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show host list row variants.
+- Primary user actions:
+  - Browse row variants.
+- Required states:
+  - Online
+  - Offline
+  - Degraded
+- Required data/content:
+  - Host name
+  - Status dot
+  - Avatar
+  - Address
+- Implementation note: Host rows exist in fleet; board catalogues all row variants.
+
+### 113. Design System · DSSessionRowGallery
+
+- Slot: `ds-sessionrow-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [113-ds-session-row-gallery.jpg](board-screenshots/113-ds-session-row-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show session row with unread badges.
+- Primary user actions:
+  - Browse session row variants.
+- Required states:
+  - Unread
+  - Read
+  - Active
+- Required data/content:
+  - Session name
+  - Unread badge
+  - Timestamp
+- Implementation note: Session rows exist; board catalogues badge and state variants.
+
+### 114. Design System · DSStateGallery
+
+- Slot: `ds-state-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [114-ds-state-gallery.jpg](board-screenshots/114-ds-state-gallery.jpg)
+- Swift screenshot: [gallery-states.jpg](swift-screenshots/gallery-states.jpg)
+- Purpose: Show empty, loading, error, and offline state components.
+- Primary user actions:
+  - Browse state variants.
+- Required states:
+  - Empty
+  - Loading
+  - Error
+  - Offline
+- Required data/content:
+  - Illustration
+  - Title
+  - Description
+  - Action button
+- Implementation note: State gallery exists; board catalogues all state components.
+
+### 115. Design System · DSTabBarGallery
+
+- Slot: `ds-tabbar-gallery`
+- Category: Design system gallery
+- Swift status: matches
+- Board screenshot: [115-ds-tab-bar-gallery.jpg](board-screenshots/115-ds-tab-bar-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show the 4-tab bar with inbox badge.
+- Primary user actions:
+  - Browse tab bar layout.
+- Required states:
+  - Badge visible
+  - Badge hidden
+- Required data/content:
+  - Tab icons
+  - Tab labels
+  - Badge count
+- Implementation note: Tab bar exists as the app root; board catalogues badge state.
+
+### 116. Design System · DSSegmentedControlGallery
+
+- Slot: `ds-segment-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [116-ds-segmented-control-gallery.jpg](board-screenshots/116-ds-segmented-control-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show segmented controls with 2, 3, and 4 segments.
+- Primary user actions:
+  - Browse segment variants.
+- Required states:
+  - 2 segments
+  - 3 segments
+  - 4 segments
+- Required data/content:
+  - Segment labels
+  - Selected state
+- Implementation note: Segmented controls exist; board catalogues all width variants.
+
+### 117. Design System · DSToastGallery
+
+- Slot: `ds-toast-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [117-ds-toast-gallery.jpg](board-screenshots/117-ds-toast-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show toast notification variants.
+- Primary user actions:
+  - Browse toast variants.
+- Required states:
+  - Success
+  - Error
+  - Warning
+  - Info
+- Required data/content:
+  - Toast message
+  - Icon
+  - Dismiss action
+- Implementation note: Toasts exist; board catalogues all severity variants.
+
+### 118. Design System · DSSheetGallery
+
+- Slot: `ds-sheet-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [118-ds-sheet-gallery.jpg](board-screenshots/118-ds-sheet-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show the bottom sheet pattern.
+- Primary user actions:
+  - Browse sheet layout.
+- Required states:
+  - Default height
+  - Expanded height
+  - With drag indicator
+- Required data/content:
+  - Sheet content
+  - Drag handle
+- Implementation note: Sheets are used throughout the app; board catalogues the pattern.
+
+### 119. Design System · DSDividerGallery
+
+- Slot: `ds-divider-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [119-ds-divider-gallery.jpg](board-screenshots/119-ds-divider-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show dividers, spectrum bar, and dot matrix variants.
+- Primary user actions:
+  - Browse divider variants.
+- Required states:
+  - All variants visible
+- Required data/content:
+  - Divider styles
+  - Spectrum bar
+  - Dot matrix
+- Implementation note: Dividers exist; board catalogues all decorative variants.
+
+### 120. Design System · PixelAvatarGallery
+
+- Slot: `ds-avatar-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [120-ds-pixel-avatar-gallery.jpg](board-screenshots/120-ds-pixel-avatar-gallery.jpg)
+- Swift screenshot: [gallery-features.jpg](swift-screenshots/gallery-features.jpg)
+- Purpose: Show all 8 palette variants in 4 sizes.
+- Primary user actions:
+  - Browse avatar variants.
+- Required states:
+  - All sizes and palettes visible
+- Required data/content:
+  - Size variants
+  - Palette variants
+- Implementation note: PixelAvatar exists in gallery; board catalogues all palette and size combinations.
+
+### 121. Design System · E2ERelayStatusBadge
+
+- Slot: `ds-relay-badge-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [121-ds-e2e-relay-badge-gallery.jpg](board-screenshots/121-ds-e2e-relay-badge-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show the relay badge with paired, pairing, and disconnected states.
+- Primary user actions:
+  - Browse relay badge states.
+- Required states:
+  - Paired
+  - Pairing
+  - Disconnected
+- Required data/content:
+  - Status label
+  - Icon indicator
+- Implementation note: Relay badge exists; board catalogues all states.
+
+### 122. Design System · HostHealthBadgeGallery
+
+- Slot: `ds-health-gallery`
+- Category: Design system gallery
+- Swift status: partial
+- Board screenshot: [122-ds-host-health-badge-gallery.jpg](board-screenshots/122-ds-host-health-badge-gallery.jpg)
+- Swift screenshot: none captured
+- Purpose: Show health badges with CPU, memory, and disk metrics.
+- Primary user actions:
+  - Browse health badge variants.
+- Required states:
+  - Healthy
+  - Degraded
+  - Critical
+- Required data/content:
+  - CPU metric
+  - Memory metric
+  - Disk metric
+  - Status color
+- Implementation note: Health badges exist in fleet; board catalogues all metric states.
+

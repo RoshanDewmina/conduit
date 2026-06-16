@@ -50,6 +50,77 @@ This inventory separates current captured surfaces from board concepts that need
 - Session surface switcher → deleted (`rm-shell`): Document that a session surface switcher should not be a primary navigation model.
 - Mock SSH host counts → fixed (real data) (`rm-keys`): Document that host and key counts should reflect real data rather than placeholder counts.
 - Risk ramp · independent of brand (`ramp`): Define how risk levels should map to approval behavior independent of provider branding.
+- SessionView · full-screen block terminal (`sessionview`): Provide a full-screen block terminal session showing agent work, live command blocks with status, output streaming, and a chat input bar.
+- ChatTranscriptView · scrollable block transcript (`chat-transcript`): Render a scrollable transcript of agent tool cards, commands, outputs, and status per block.
+- ToolCardView · individual agent tool card (`toolcard`): Display one agent tool invocation with its command, output, status badges, blast chips, and action buttons.
+- ChatInputBar · bottom input bar (`chat-input`): Provide a persistent text input at the bottom of the session for sending commands to the agent.
+- KeyboardAccessoryRail · shortcut rail (`keyboard-rail`): Show a horizontal rail of common command chips above the keyboard for quick input.
+- QRScannerView · camera QR scanner (`qr-scanner`): Scan a bridge pairing QR code as the primary onboarding path.
+- BridgePairingView · bridge pairing screen (`bridge-pairing`): Show a 6-digit pairing code, QR toggle, and connection status for bridge pairing.
+- SSHConnectOverlay · full-screen connecting overlay (`ssh-connect`): Show a full-screen dark overlay with animated orbital rings, PixelAvatar, and phase text during SSH connection.
+- WorkspacesView · saved hosts list (`workspaces`): List saved SSH hosts with avatar, status dot, name, address, last used time, and FAB to add.
+- HostEditorView · SSH host form (`host-editor`): Provide a form for adding or editing SSH host configuration.
+- HostKeyConfirmSheet · TOFU host key trust (`host-key-confirm`): Present a bottom sheet for TOFU host key trust decision on first connection.
+- TerminalSettingsView · shell and color scheme (`terminal-settings`): Configure default shell, color scheme, font size, and auto-connect toggle for the terminal.
+- E2ERelayPairingView · relay status and pairing (`e2e-relay`): Display relay connection status, E2E encryption badge, pairing QR, and disconnect option.
+- TrustPrivacyView · data path explanations (`trust-privacy-detail`): Explain per-feature what data stays local, goes to provider, or goes through relay with color-coded badges.
+- PremiumComparisonView · Free vs Pro (`premium-compare`): Compare Free and Pro plan features with check marks and plan columns.
+- BillingView · plan and invoice history (`billing-history`): Show current plan, next billing date, payment method, and invoice history.
+- ProviderKeysView · API key management (`provider-keys-detail`): Manage provider API keys with status badges for Anthropic, OpenAI, OpenRouter, Ollama, Google, Azure.
+- ShortcutBarEditor · customize shortcut bar (`shortcut-editor`): Provide drag-reorder and enable/disable toggles for the keyboard accessory shortcut bar.
+- SnippetEditorView · snippet editing (`snippet-editor`): Edit a command snippet with name, command body, and arguments list.
+- SyncStatusView · iCloud sync status (`sync-status`): Display iCloud sync status, last sync time, connected devices, and sync toggle.
+- PolicyEditorView · raw YAML editor (`policy-yaml-editor`): Provide a raw YAML policy editor with syntax coloring and Save & Reload on Bridge action.
+- SecretsView · secrets vault (`secrets-vault`): Display secrets vault with name, type (env/file/api-key), scope, and pending agent requests.
+- AuditView · chronological audit events (`audit-events`): Show chronological audit events grouped by time with hash verification status.
+- DoctorView · health check diagnostics (`doctor-diag`): Run health checks for daemon, hooks, keys, policy, host, and relay with pass/fail badges.
+- KeysView · SSH key management (`ssh-keys-manage`): Manage SSH keys with fingerprints, host associations, and last-used times.
+- AgentsView · cloud-hosted agent list (`agents-list`): List cloud-hosted agents with status, model, and spend per agent.
+- AgentDetailView · agent detail header (`agent-detail`): Show agent detail header with run history list and controls.
+- AgentRunDetailView · agent run with live output (`agent-run-detail`): Show run detail with live output stream and controls.
+- AgentFilesView · agent workspace file browser (`agent-files`): Browse agent workspace files with a directory tree.
+- AgentWorkspaceView · repository view (`agent-workspace`): Show repository and workspace context with branch, commits, and CI status.
+- AgentOrgView · org members list (`agent-org`): Show organization members list with roles and status.
+- AgentExecView · single execution detail (`agent-exec`): Show a single agent execution with command, arguments, environment, and output.
+- CreateAgentSheet · new hosted agent form (`create-agent`): Provide a bottom sheet form for creating a new hosted agent.
+- AgentBillingSheet · prepaid credits (`agent-billing`): Show prepaid credits, per-agent spend breakdown, and top-up options.
+- EditScheduleSheet · schedule editor (`edit-schedule`): Provide a schedule editor with cron expression, command, and enabled toggle.
+- LoopDetailView · full agent loop lifecycle (`loop-detail`): Show the full agent loop lifecycle with timeline stages.
+- RunDetailView · streaming output + controls (`run-detail`): Provide streaming output view with budget progress and controls.
+- QuotaGuardView · per-provider quota dashboard (`quota-guard`): Show per-provider quota dashboard with spend vs cap, time windows, and alert thresholds.
+- WorktreeBoardView · 3-column kanban (`worktree-board`): Show 3-column kanban for git worktrees.
+- RunShipSheet · ship changes bottom sheet (`run-ship`): Provide a bottom sheet for shipping changes with files list and commit message.
+- ShipItSheet · ship from loop context (`ship-it`): Ship changes from loop context with goal summary and changed files.
+- FilesView · SFTP file browser (`sftp-browser`): Provide an SFTP file browser with breadcrumb navigation, permissions, sizes, and dates.
+- FilePreviewView · monospace file preview (`file-preview`): Display a monospace file preview with line numbers and language badge.
+- DiffView · side-by-side git diff (`diff-side-by-side`): Show a side-by-side git diff with green/red highlighting.
+- PreviewSurface · WKWebView preview (`preview-surface`): Provide a WKWebView preview frame with URL bar.
+- PreviewToolbar · URL bar and controls (`preview-toolbar`): Provide URL bar with refresh, back/forward navigation, and port selector.
+- DSButtonGallery (`ds-button-gallery`): Show all button variants in normal and disabled states.
+- DSChipGallery (`ds-chip-gallery`): Show all chip types: file, git, network, credentials, Pro, soon, new.
+- RiskBadgeGallery (`ds-risk-gallery`): Show all 4 risk levels: low, medium, high, critical.
+- StatusDotGallery (`ds-statusdot-gallery`): Show all status dot variants: working, waiting, idle, error, offline, done.
+- DSBlockCardGallery (`ds-blockcard-gallery`): Show block cards in running, completed, and failed states.
+- DSMessageBubbleGallery (`ds-bubble-gallery`): Show chat bubble variants: user, assistant, system.
+- DSApprovalCardGallery (`ds-approval-gallery`): Show approval cards with all action variants.
+- DSDecisionSheetGallery (`ds-decision-gallery`): Show the 4-action decision sheet.
+- DSBlastRadiusGallery (`ds-blast-gallery`): Show blast radius inline chips and full-width banner.
+- DSSpendHeroGallery (`ds-spend-gallery`): Show the spend hero card with provider breakdown.
+- ProofCardViewGallery (`ds-proof-gallery`): Show the completion proof card with CI status.
+- DSScreenHeaderGallery (`ds-header-gallery`): Show screen header with title cursor and breadcrumb.
+- DSStatusHeaderGallery (`ds-statusheader-gallery`): Show bridge status header variants.
+- AgentIslandGallery (`ds-island-gallery`): Show compact agent card with avatar, status, and inline approval.
+- DSHostRowGallery (`ds-hostrow-gallery`): Show host list row variants.
+- DSSessionRowGallery (`ds-sessionrow-gallery`): Show session row with unread badges.
+- DSStateGallery (`ds-state-gallery`): Show empty, loading, error, and offline state components.
+- DSTabBarGallery (`ds-tabbar-gallery`): Show the 4-tab bar with inbox badge.
+- DSSegmentedControlGallery (`ds-segment-gallery`): Show segmented controls with 2, 3, and 4 segments.
+- DSToastGallery (`ds-toast-gallery`): Show toast notification variants.
+- DSSheetGallery (`ds-sheet-gallery`): Show the bottom sheet pattern.
+- DSDividerGallery (`ds-divider-gallery`): Show dividers, spectrum bar, and dot matrix.
+- PixelAvatarGallery (`ds-avatar-gallery`): Show all 8 palette variants in 4 sizes.
+- E2ERelayStatusBadge (`ds-relay-badge-gallery`): Show the relay badge with paired, pairing, and disconnected states.
+- HostHealthBadgeGallery (`ds-health-gallery`): Show health badges with CPU, memory, and disk metrics.
 
 ## Features To Add, Finish, or Expose With Routes
 
@@ -78,7 +149,7 @@ This inventory separates current captured surfaces from board concepts that need
 - Settings · Library dissolved (`settings`): Collect account, security, policy, notifications, billing, provider, relay, and advanced configuration entry points.
 - Policy Simulator · past N days (`policysimulator`): Estimate how a policy would have affected recent agent activity before applying it.
 - Secrets · vault + pending requests (`secrets`): Show available secret metadata and pending agent requests for secret access.
-- Onboarding 1 · hero (`onb-1`): Introduce the product’s primary job and start the setup flow.
+- Onboarding 1 · hero (`onb-1`): Introduce the product's primary job and start the setup flow.
 - Onboarding 2 · pair the bridge (no SSH) (`onb-2`): Pair the phone with the bridge or local control plane without requiring the user to understand SSH first.
 - Onboarding 3 · choose caution (`onb-3`): Choose the initial caution/autonomy level for agent approvals.
 - Onboarding 4 · first run + demo (`onb-4`): Guide the user into the first run or demo after basic setup is complete.
@@ -95,6 +166,77 @@ This inventory separates current captured surfaces from board concepts that need
 - Quota · per-provider dashboard (`quotaguard`): Show per-provider quota and spend guardrails so users can prevent unexpected cost or blocked runs.
 - Mock SSH host counts → fixed (real data) (`rm-keys`): Document that host and key counts should reflect real data rather than placeholder counts.
 - Risk ramp · independent of brand (`ramp`): Define how risk levels should map to approval behavior independent of provider branding.
+- SessionView · full-screen block terminal (`sessionview`): Provide a full-screen block terminal session.
+- ChatTranscriptView · scrollable block transcript (`chat-transcript`): Render a scrollable transcript of agent tool cards.
+- ToolCardView · individual agent tool card (`toolcard`): Display one agent tool invocation with command, output, and status badges.
+- ChatInputBar · bottom input bar (`chat-input`): Provide a persistent text input at the bottom of the session.
+- KeyboardAccessoryRail · shortcut rail (`keyboard-rail`): Show a horizontal rail of common command chips above the keyboard.
+- QRScannerView · camera QR scanner (`qr-scanner`): Scan a bridge pairing QR code as the primary onboarding path.
+- BridgePairingView · bridge pairing screen (`bridge-pairing`): Show a 6-digit pairing code, QR toggle, and connection status.
+- SSHConnectOverlay · full-screen connecting overlay (`ssh-connect`): Show a full-screen dark overlay with animated orbital rings and phase text.
+- WorkspacesView · saved hosts list (`workspaces`): List saved SSH hosts with avatar, status dot, name, address, and last used time.
+- HostEditorView · SSH host form (`host-editor`): Provide a form for adding or editing SSH host configuration.
+- HostKeyConfirmSheet · TOFU host key trust (`host-key-confirm`): Present a bottom sheet for TOFU host key trust decision.
+- TerminalSettingsView · shell and color scheme (`terminal-settings`): Configure default shell, color scheme, font size, and auto-connect.
+- E2ERelayPairingView · relay status and pairing (`e2e-relay`): Display relay connection status and E2E encryption badge.
+- TrustPrivacyView · data path explanations (`trust-privacy-detail`): Explain per-feature data paths with color-coded badges.
+- PremiumComparisonView · Free vs Pro (`premium-compare`): Compare Free and Pro plan features with check marks.
+- BillingView · plan and invoice history (`billing-history`): Show current plan, next billing date, and invoice history.
+- ProviderKeysView · API key management (`provider-keys-detail`): Manage provider API keys with status badges.
+- ShortcutBarEditor · customize shortcut bar (`shortcut-editor`): Provide drag-reorder and enable/disable toggles.
+- SnippetEditorView · snippet editing (`snippet-editor`): Edit a command snippet with name, command body, and arguments.
+- SyncStatusView · iCloud sync status (`sync-status`): Display iCloud sync status, last sync time, and connected devices.
+- PolicyEditorView · raw YAML editor (`policy-yaml-editor`): Provide a raw YAML policy editor with syntax coloring.
+- SecretsView · secrets vault (`secrets-vault`): Display secrets vault with name, type, scope, and pending requests.
+- AuditView · chronological audit events (`audit-events`): Show chronological audit events with hash verification status.
+- DoctorView · health check diagnostics (`doctor-diag`): Run health checks for daemon, hooks, keys, policy, host, and relay.
+- KeysView · SSH key management (`ssh-keys-manage`): Manage SSH keys with fingerprints and host associations.
+- AgentsView · cloud-hosted agent list (`agents-list`): List cloud-hosted agents with status, model, and spend.
+- AgentDetailView · agent detail header (`agent-detail`): Show agent detail with run history and controls.
+- AgentRunDetailView · agent run with live output (`agent-run-detail`): Show run detail with live output stream and controls.
+- AgentFilesView · agent workspace file browser (`agent-files`): Browse agent workspace files with directory tree.
+- AgentWorkspaceView · repository view (`agent-workspace`): Show repository context with branch, commits, and CI status.
+- AgentOrgView · org members list (`agent-org`): Show organization members list with roles and status.
+- AgentExecView · single execution detail (`agent-exec`): Show single agent execution with command, args, and output.
+- CreateAgentSheet · new hosted agent form (`create-agent`): Provide a bottom sheet for creating a new hosted agent.
+- AgentBillingSheet · prepaid credits (`agent-billing`): Show prepaid credits and per-agent spend breakdown.
+- EditScheduleSheet · schedule editor (`edit-schedule`): Provide a schedule editor with cron expression and command.
+- LoopDetailView · full agent loop lifecycle (`loop-detail`): Show the full agent loop lifecycle with timeline stages.
+- RunDetailView · streaming output + controls (`run-detail`): Provide streaming output view with budget progress and controls.
+- QuotaGuardView · per-provider quota dashboard (`quota-guard`): Show per-provider quota dashboard with spend vs cap.
+- WorktreeBoardView · 3-column kanban (`worktree-board`): Show 3-column kanban for git worktrees.
+- RunShipSheet · ship changes bottom sheet (`run-ship`): Provide a bottom sheet for shipping changes.
+- ShipItSheet · ship from loop context (`ship-it`): Ship changes from loop context with goal summary.
+- FilesView · SFTP file browser (`sftp-browser`): Provide an SFTP file browser with breadcrumb navigation.
+- FilePreviewView · monospace file preview (`file-preview`): Display a monospace file preview with line numbers.
+- DiffView · side-by-side git diff (`diff-side-by-side`): Show a side-by-side git diff with highlighting.
+- PreviewSurface · WKWebView preview (`preview-surface`): Provide a WKWebView preview frame with URL bar.
+- PreviewToolbar · URL bar and controls (`preview-toolbar`): Provide URL bar with refresh, back/forward, and port selector.
+- DSButtonGallery (`ds-button-gallery`): Show all button variants in normal and disabled states.
+- DSChipGallery (`ds-chip-gallery`): Show all chip types.
+- RiskBadgeGallery (`ds-risk-gallery`): Show all 4 risk levels.
+- StatusDotGallery (`ds-statusdot-gallery`): Show all status dot variants.
+- DSBlockCardGallery (`ds-blockcard-gallery`): Show block cards in running, completed, and failed states.
+- DSMessageBubbleGallery (`ds-bubble-gallery`): Show chat bubble variants.
+- DSApprovalCardGallery (`ds-approval-gallery`): Show approval cards with all action variants.
+- DSDecisionSheetGallery (`ds-decision-gallery`): Show the 4-action decision sheet.
+- DSBlastRadiusGallery (`ds-blast-gallery`): Show blast radius inline chips and full-width banner.
+- DSSpendHeroGallery (`ds-spend-gallery`): Show the spend hero card with provider breakdown.
+- ProofCardViewGallery (`ds-proof-gallery`): Show the completion proof card with CI status.
+- DSScreenHeaderGallery (`ds-header-gallery`): Show screen header with title cursor and breadcrumb.
+- DSStatusHeaderGallery (`ds-statusheader-gallery`): Show bridge status header variants.
+- AgentIslandGallery (`ds-island-gallery`): Show compact agent card with avatar and status.
+- DSHostRowGallery (`ds-hostrow-gallery`): Show host list row variants.
+- DSSessionRowGallery (`ds-sessionrow-gallery`): Show session row with unread badges.
+- DSStateGallery (`ds-state-gallery`): Show empty, loading, error, and offline state components.
+- DSTabBarGallery (`ds-tabbar-gallery`): Show the 4-tab bar with inbox badge.
+- DSSegmentedControlGallery (`ds-segment-gallery`): Show segmented controls with 2, 3, and 4 segments.
+- DSToastGallery (`ds-toast-gallery`): Show toast notification variants.
+- DSSheetGallery (`ds-sheet-gallery`): Show the bottom sheet pattern.
+- DSDividerGallery (`ds-divider-gallery`): Show dividers, spectrum bar, and dot matrix.
+- PixelAvatarGallery (`ds-avatar-gallery`): Show all 8 palette variants in 4 sizes.
+- E2ERelayStatusBadge (`ds-relay-badge-gallery`): Show the relay badge with paired, pairing, and disconnected states.
+- HostHealthBadgeGallery (`ds-health-gallery`): Show health badges with CPU, memory, and disk metrics.
 
 ## Requires Live Data, Owner Context, or Hardware
 

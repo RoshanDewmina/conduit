@@ -28,9 +28,10 @@ public struct OnboardingView: View {
     @State private var animationDirection: Int = 1
     @State private var selectedPreset: AutonomyPreset = .autoReads
     @State private var showPairing = false
+    @State private var showConnectionSuccess = false
     @Environment(\.conduitTokens) private var t
 
-    fileprivate static let totalSteps = 4
+    fileprivate static let totalSteps = 5
 
     public init(
         onContinue: @escaping () -> Void,
@@ -78,25 +79,26 @@ public struct OnboardingView: View {
                 onUseSSH: { showPairing = false },
                 onPaired: { _, _ in
                     showPairing = false
-                    // Pairing succeeded — land in the app (monitoring), NOT the
-                    // Add Host sheet that onContinue() opens.
-                    onAlreadyUseConduit()
+                    // Show success screen after pairing
+                    animationDirection = 1
+                    withAnimation { step += 1 }
                 }
             )
         }
     }
 
-    // MARK: Scroll content switcher
+// MARK: Scroll content switcher
 
-    @ViewBuilder
-    private var scrollContent: some View {
-        switch step {
-        case 0:  screen1Welcome.id("s0")
-        case 1:  screen2SSH.id("s1")
-        case 2:  screen3Preset.id("s2")
-        default: screen4Compute.id("s3")
-        }
+@ViewBuilder
+private var scrollContent: some View {
+    switch step {
+    case 0:  screen1Welcome.id("s0")
+    case 1:  screen2SSH.id("s1")
+    case 2:  screen3Preset.id("s2")
+    case 3:  screen4Compute.id("s3")
+    default: screen5Success.id("s4")
     }
+}
 
     // MARK: Solid footer CTA (R1.1 — never a gradient)
 
@@ -114,45 +116,50 @@ public struct OnboardingView: View {
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
-    @ViewBuilder
-    private var ctaButtons: some View {
-        switch step {
-        case 0:
-            VStack(spacing: 10) {
-                DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
-                Button {
-                    onAlreadyUseConduit()
-                } label: {
-                    Text("i already use conduit")
-                        .font(.dsMonoPt(13))
-                        .foregroundStyle(t.text3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
+@ViewBuilder
+private var ctaButtons: some View {
+    switch step {
+    case 0:
+        VStack(spacing: 10) {
+            DSButton("get started", variant: .primary, size: .lg, fullWidth: true, action: advance)
+            Button {
+                onAlreadyUseConduit()
+            } label: {
+                Text("i already use conduit")
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text3)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
             }
+            .buttonStyle(.plain)
+        }
 
-        case 1:
-            DSButton("i've enabled ssh", variant: .primary, size: .lg, fullWidth: true, action: advance)
+    case 1:
+        DSButton("i've enabled ssh", variant: .primary, size: .lg, fullWidth: true, action: advance)
 
-        case 2:
-            HStack(spacing: 10) {
-                stepDots
-                Spacer()
-                DSButton("continue", variant: .primary, size: .md, action: advance)
+    case 2:
+        HStack(spacing: 10) {
+            stepDots
+            Spacer()
+            DSButton("continue", variant: .primary, size: .md, action: advance)
+        }
+
+    case 3:
+        HStack(spacing: 10) {
+            DSButton("use my own host", variant: .ghost, size: .lg, fullWidth: true) {
+                onContinue()
             }
-
-        default:
-            HStack(spacing: 10) {
-                DSButton("use my own host", variant: .ghost, size: .lg, fullWidth: true) {
-                    onContinue()
-                }
-                DSButton("create workspace", variant: .primary, size: .lg, fullWidth: true) {
-                    onSetupWorkspace()
-                }
+            DSButton("create workspace", variant: .primary, size: .lg, fullWidth: true) {
+                onSetupWorkspace()
             }
         }
+        
+    default:
+        DSButton("start using conduit", variant: .primary, size: .lg, fullWidth: true) {
+            onAlreadyUseConduit()
+        }
     }
+}
 
     // MARK: Navigation helpers
 
@@ -182,19 +189,22 @@ public struct OnboardingView: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
-    // ================================================================
-    // MARK: Screen 1 — Hero (Welcome)
-    // ================================================================
+// ================================================================
+// MARK: Screen 1 — Hero (Welcome)
+// ================================================================
 
-    private var screen1Welcome: some View {
+private var screen1Welcome: some View {
+    GeometryReader { geometry in
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                SpectrumBar(mode: .working, height: 10)
+                // Spectrum bar at the top
+                SpectrumBar(mode: .working, height: 8)
                     .padding(.horizontal, 18)
                     .padding(.top, 16)
 
+                // CONDUIT text
                 Text("conduit")
-                    .font(.dsMonoPt(10, weight: .bold))
+                    .font(.dsMonoPt(11, weight: .bold))
                     .foregroundStyle(t.text3)
                     .kerning(2.5)
                     .textCase(.uppercase)
@@ -202,6 +212,7 @@ public struct OnboardingView: View {
                     .padding(.top, 10)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
+                // Main heading
                 VStack(alignment: .leading, spacing: 2) {
                     Text("agents ask.")
                         .foregroundStyle(t.text)
@@ -210,28 +221,33 @@ public struct OnboardingView: View {
                     Text("work resumes.")
                         .foregroundStyle(t.accent)
                 }
-                .font(.system(size: 40, weight: .bold, design: .monospaced))
+                .font(.system(size: 47, weight: .bold, design: .monospaced))
                 .lineSpacing(0)
-                .tracking(0)
+                .tracking(-0.025)
                 .padding(.horizontal, 18)
-                .padding(.top, 20)
+                .padding(.top, 40)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                Text("Coding agents pause for risky actions. Conduit sends the approval to your phone, then safely resumes the run.")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text3)
-                    .lineSpacing(6)
+                // Description text
+                Text("Your coding agents run on your own machine. Conduit taps you only when one needs a decision — and resumes the moment you choose.")
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text2)
+                    .lineSpacing(1.65)
                     .frame(maxWidth: 300, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 18)
-                    .padding(.top, 16)
+                    .padding(.top, 26)
                     .padding(.bottom, 24)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                
+                Spacer()
             }
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: geometry.size.height - 100) // Adjust for footer height
         }
     }
+}
 
     // ================================================================
     // MARK: Screen 2 — Connect host (SSH + bridge)
@@ -318,61 +334,167 @@ public struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
-    // ================================================================
-    // MARK: Screen 4 — Done / compute escape hatch
-    // ================================================================
+// ================================================================
+// MARK: Screen 4 — Done / compute escape hatch
+// ================================================================
 
-    private var screen4Compute: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                Spacer(minLength: 40)
+private var screen4Compute: some View {
+    ScrollView(.vertical, showsIndicators: false) {
+        VStack(spacing: 0) {
+            Spacer(minLength: 40)
 
-                DotMatrixView(state: .working, cols: 20, rows: 6, cell: 9, dot: 4)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        Text("no server?")
-                            .foregroundStyle(t.text)
-                    }
-                    HStack(spacing: 0) {
-                        Text("we'll spin one up")
-                            .foregroundStyle(t.text)
-                        Text("_")
-                            .foregroundStyle(t.accent)
-                    }
-                }
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-                .padding(.horizontal, 18)
-                .padding(.top, 20)
-
-                Text("Launch a managed cloud workspace in ~30s. Pay only for what you use — no subscription to use your own host.")
-                    .font(.dsSansPt(14.5))
-                    .foregroundStyle(t.text3)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 320)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-
-                HStack(spacing: 8) {
-                    DSChip("fly.io", tone: .accent, variant: .default)
-                    DSChip("4 vCPU", tone: .neutral, variant: .default)
-                    DSChip("metered", tone: .neutral, variant: .default)
-                }
+            DotMatrixView(state: .working, cols: 20, rows: 6, cell: 9, dot: 4)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 18)
-                .padding(.top, 20)
-                .padding(.bottom, 24)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Text("no server?")
+                        .foregroundStyle(t.text)
+                }
+                HStack(spacing: 0) {
+                    Text("we'll spin one up")
+                        .foregroundStyle(t.text)
+                    Text("_")
+                        .foregroundStyle(t.accent)
+                }
             }
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity)
+            .font(.system(size: 24, weight: .bold, design: .monospaced))
+            .multilineTextAlignment(.center)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            .padding(.horizontal, 18)
+            .padding(.top, 20)
+
+            Text("Launch a managed cloud workspace in ~30s. Pay only for what you use — no subscription to use your own host.")
+                .font(.dsSansPt(14.5))
+                .foregroundStyle(t.text3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 320)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+            HStack(spacing: 8) {
+                DSChip("fly.io", tone: .accent, variant: .default)
+                DSChip("4 vCPU", tone: .neutral, variant: .default)
+                DSChip("metered", tone: .neutral, variant: .default)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 18)
+            .padding(.top, 20)
+            .padding(.bottom, 24)
         }
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity)
     }
+}
+
+// ================================================================
+// MARK: Screen 5 — Success confirmation
+// ================================================================
+
+private var screen5Success: some View {
+    ScrollView(.vertical, showsIndicators: false) {
+        VStack(spacing: 0) {
+            Spacer(minLength: 40)
+
+            // Success checkmark icon
+            ZStack {
+                Circle()
+                    .fill(t.ok)
+                    .frame(width: 74, height: 74)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(t.bg)
+            }
+            .shadow(color: t.ok.opacity(0.3), radius: 10, x: 0, y: 0)
+            .shadow(color: t.ok.opacity(0.1), radius: 22, x: 0, y: 0)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Text("bridge")
+                        .foregroundStyle(t.text)
+                }
+                HStack(spacing: 0) {
+                    Text("paired")
+                        .foregroundStyle(t.text)
+                    Text("_")
+                        .foregroundStyle(t.accent)
+                }
+            }
+            .font(.system(size: 34, weight: .bold, design: .monospaced))
+            .multilineTextAlignment(.center)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            .padding(.horizontal, 18)
+            .padding(.top, 30)
+
+            Text("Your phone and the bridge are connected. Approvals now route straight here.")
+                .font(.dsSansPt(13.5))
+                .foregroundStyle(t.text2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 250)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+            // Host information card
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Circle()
+                        .fill(t.ok)
+                        .frame(width: 8, height: 8)
+                    Text("Dev VPS")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                    Text("claude-code · codex")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .overlay(
+                    Rectangle()
+                        .strokeBorder(t.divider, lineWidth: 0.5)
+                )
+
+                HStack {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(t.ok)
+                    Text("End-to-end encrypted relay")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text2)
+                    Spacer()
+                    Text("E2E")
+                        .font(.dsMonoPt(10))
+                        .foregroundColor(t.ok)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(t.okSoft)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 18)
+            .padding(.top, 26)
+            .padding(.bottom, 24)
+            
+            Spacer()
+        }
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity)
+    }
+}
 }
 
 // ================================================================
@@ -409,26 +531,48 @@ private struct SSHScreen: View {
                     .padding(.bottom, 10)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
 
-                Button {
-                    showPairing = true
-                } label: {
-                    HStack(spacing: 10) {
-                        DSIconView(.plus, size: 15, color: t.accent)
-                        Text("Pair the bridge")
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text)
-                        Spacer()
-                        DSIconView(.chevronRight, size: 15, color: t.text3)
+                HStack(spacing: 10) {
+                    Button {
+                        showPairing = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            DSIconView(.plus, size: 15, color: t.accent)
+                            Text("Pair the bridge")
+                                .font(.dsMonoPt(13))
+                                .foregroundStyle(t.text)
+                            Spacer()
+                            DSIconView(.chevronRight, size: 15, color: t.text3)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(t.surface)
+                        .overlay(
+                            Rectangle()
+                                .strokeBorder(t.borderStrong, lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(t.surface)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(t.borderStrong, lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
+                    
+                    Button {
+                        // TODO: Implement QR code scanning
+                        print("Scan QR code")
+                    } label: {
+                        HStack(spacing: 10) {
+                            DSIconView(.qrcode, size: 15, color: t.accent)
+                            Text("Scan QR")
+                                .font(.dsMonoPt(13))
+                                .foregroundStyle(t.text)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(t.surface)
+                        .overlay(
+                            Rectangle()
+                                .strokeBorder(t.borderStrong, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal, 18)
                 .padding(.bottom, 16)
 

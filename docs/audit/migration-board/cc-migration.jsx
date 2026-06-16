@@ -664,8 +664,242 @@ function MigrationBoard(){
           </div>
         </DCArtboard>
       </DCSection>
+
+      <DCSection id="session-live" title="Live session & transcript" subtitle="The block terminal chat surface — the core experience when connected to a host.">
+        <DCArtboard id="session-view" label="Session · full-screen terminal" width={320} height={660}>
+          <Frame tag="add"><SessionView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="chat-transcript" label="Chat transcript · tool cards" width={320} height={660}>
+          <Frame tag="add"><ChatTranscriptView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="tool-card" label="Tool card · agent decision" width={320} height={660}>
+          <Frame tag="add"><ToolCardView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="chat-input" label="Chat input bar" width={320} height={200}>
+          <Frame tag="add"><div className="cc" style={{height:200}}><ChatInputBar/></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="keyboard-rail" label="Keyboard accessory rail" width={320} height={160}>
+          <Frame tag="add"><div className="cc" style={{height:160,background:'var(--surface)'}}><KeyboardAccessoryRail/></div></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="qr-pairing" title="QR & bridge pairing" subtitle="The primary onboarding path — QR scanning and bridge code pairing.">
+        <DCArtboard id="qr-scanner" label="QR scanner · camera view" width={320} height={660}>
+          <Frame tag="add"><QRScannerView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="bridge-pairing" label="Bridge pairing · code + QR" width={320} height={660}>
+          <Frame tag="add"><BridgePairingView/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="ssh-connect" title="SSH & connection" subtitle="SSH connect overlay, host management, and TOFU trust — the advanced connection path.">
+        <DCArtboard id="ssh-overlay" label="SSH connect overlay · orb" width={320} height={660}>
+          <Frame tag="add"><SSHConnectOverlay/></Frame>
+        </DCArtboard>
+        <DCArtboard id="workspaces" label="Workspaces · saved hosts" width={320} height={660}>
+          <Frame tag="add"><WorkspacesView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="host-editor" label="Host editor · SSH form" width={320} height={660}>
+          <Frame tag="add"><HostEditorView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="host-key-confirm" label="Host key confirm·TOFU" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><HostKeyConfirmSheet/></div></div></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="settings-full" title="Settings — all sub-pages" subtitle="Every settings screen documented individually instead of the single 'dissolved' entry.">
+        <DCArtboard id="terminal-settings" label="Terminal customisation" width={320} height={660}>
+          <Frame tag="add"><TerminalSettingsView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="relay-pairing" label="E2E relay pairing status" width={320} height={660}>
+          <Frame tag="add"><E2ERelayPairingView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="trust-privacy-settings" label="Trust & privacy" width={320} height={660}>
+          <Frame tag="add"><TrustPrivacyView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="premium-comparison" label="Premium comparison" width={320} height={660}>
+          <Frame tag="add"><PremiumComparisonView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="billing-settings" label="Billing overview" width={320} height={660}>
+          <Frame tag="add"><BillingView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="provider-keys" label="Provider keys (expanded)" width={320} height={660}>
+          <Frame tag="add"><ProviderKeysView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="shortcut-editor" label="Shortcut bar editor" width={320} height={660}>
+          <Frame tag="add"><ShortcutBarEditor/></Frame>
+        </DCArtboard>
+        <DCArtboard id="snippet-editor" label="Snippet editor" width={320} height={660}>
+          <Frame tag="add"><SnippetEditorView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="sync-status" label="iCloud sync status" width={320} height={660}>
+          <Frame tag="add"><SyncStatusView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="policy-editor" label="Policy YAML editor" width={320} height={660}>
+          <Frame tag="add"><PolicyEditorView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="secrets-vault" label="Secrets vault" width={320} height={660}>
+          <Frame tag="add"><SecretsView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="audit-settings" label="Audit trail" width={320} height={660}>
+          <Frame tag="add"><AuditView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="doctor-settings" label="Doctor health check" width={320} height={660}>
+          <Frame tag="add"><DoctorView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="keys-settings" label="SSH key management" width={320} height={660}>
+          <Frame tag="add"><KeysView/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="agent-cloud" title="Agent & cloud features" subtitle="Hosted agent management, run control, schedules, and org features.">
+        <DCArtboard id="agents-list" label="Agents list" width={320} height={660}>
+          <Frame tag="add"><AgentsView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-detail" label="Agent detail" width={320} height={660}>
+          <Frame tag="add"><AgentDetailView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-run-detail" label="Agent run detail" width={320} height={660}>
+          <Frame tag="add"><AgentRunDetailView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-files" label="Agent files browser" width={320} height={660}>
+          <Frame tag="add"><AgentFilesView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-workspace" label="Agent workspace/repo" width={320} height={660}>
+          <Frame tag="add"><AgentWorkspaceView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-org" label="Org members" width={320} height={660}>
+          <Frame tag="add"><AgentOrgView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-exec" label="Agent execution detail" width={320} height={660}>
+          <Frame tag="add"><AgentExecView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="create-agent" label="Create agent sheet" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><CreateAgentSheet/></div></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="agent-billing" label="Agent billing sheet" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><AgentBillingSheet/></div></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="edit-schedule" label="Edit schedule sheet" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><EditScheduleSheet/></div></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="loop-detail" label="Loop detail (goal→plan→CI→proof)" width={320} height={660}>
+          <Frame tag="add"><LoopDetailView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="run-detail" label="Run detail + budget" width={320} height={660}>
+          <Frame tag="add"><RunDetailView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="quota-guard" label="Quota guardian dashboard" width={320} height={660}>
+          <Frame tag="add"><QuotaGuardView/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="git-files" title="Git, files & preview" subtitle="Git worktrees, ship-from-phone, SFTP browser, file preview, and diff viewer.">
+        <DCArtboard id="worktree-board" label="Worktree board · 3-column" width={320} height={660}>
+          <Frame tag="add"><WorktreeBoardView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="run-ship" label="Run ship (commit+push+PR)" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><RunShipSheet/></div></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="ship-it" label="Ship from loop detail" width={320} height={660}>
+          <Frame tag="add"><div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="add"/><div style={{flex:1,position:'relative',overflow:'hidden'}}><ShipItSheet/></div></div></Frame>
+        </DCArtboard>
+        <DCArtboard id="sfpt-browser" label="SFTP file browser" width={320} height={660}>
+          <Frame tag="add"><FilesView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="file-preview" label="File preview viewer" width={320} height={660}>
+          <Frame tag="add"><FilePreviewView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="diff-viewer" label="Diff viewer" width={320} height={660}>
+          <Frame tag="add"><DiffView/></Frame>
+        </DCArtboard>
+        <DCArtboard id="preview-surface" label="Preview surface (WKWebView)" width={320} height={660}>
+          <Frame tag="add"><PreviewSurface/></Frame>
+        </DCArtboard>
+        <DCArtboard id="preview-toolbar" label="Preview toolbar controls" width={320} height={280}>
+          <Frame tag="add"><div className="cc" style={{height:280}}><PreviewToolbar/></div></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="design-system-gallery" title="Design system — component gallery" subtitle="All design system components documented individually for the redesign reference.">
+        <DCArtboard id="ds-buttons" label="DS: Button variants" width={320} height={660}>
+          <DSButtonGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-chips" label="DS: Chips & badges" width={320} height={660}>
+          <DSChipGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-risk" label="DS: Risk badges" width={320} height={400}>
+          <RiskBadgeGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-status-dots" label="DS: Status dots" width={320} height={500}>
+          <StatusDotGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-block-card" label="DS: Block card states" width={320} height={660}>
+          <DSBlockCardGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-messages" label="DS: Message bubbles" width={320} height={500}>
+          <DSMessageBubbleGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-approval-cards" label="DS: Approval cards" width={320} height={660}>
+          <DSApprovalCardGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-decision-sheet" label="DS: Decision sheet 4-actions" width={320} height={500}>
+          <DSDecisionSheetGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-blast-radius" label="DS: Blast radius" width={320} height={500}>
+          <DSBlastRadiusGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-spend-hero" label="DS: Spend hero" width={320} height={500}>
+          <DSSpendHeroGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-proof-card" label="DS: Proof card" width={320} height={500}>
+          <ProofCardViewGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-screen-header" label="DS: Screen header" width={320} height={400}>
+          <DSScreenHeaderGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-status-header" label="DS: Status header" width={320} height={400}>
+          <DSStatusHeaderGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-agent-island" label="DS: Agent island" width={320} height={500}>
+          <AgentIslandGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-host-rows" label="DS: Host rows" width={320} height={500}>
+          <DSHostRowGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-session-rows" label="DS: Session rows" width={320} height={400}>
+          <DSSessionRowGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-states" label="DS: Empty/loading/error states" width={320} height={660}>
+          <DSStateGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-tab-bar" label="DS: Tab bar" width={320} height={400}>
+          <DSTabBarGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-segmented" label="DS: Segmented controls" width={320} height={400}>
+          <DSSegmentedControlGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-toasts" label="DS: Toast notifications" width={320} height={500}>
+          <DSToastGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-sheet" label="DS: Bottom sheet pattern" width={320} height={600}>
+          <DSSheetGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-dividers" label="DS: Dividers & decorations" width={320} height={400}>
+          <DSDividerGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-pixel-avatar" label="DS: Pixel avatars" width={320} height={500}>
+          <PixelAvatarGallery/>
+        </DCArtboard>
+        <DCArtboard id="ds-relay-badge" label="DS: E2E relay badge" width={320} height={400}>
+          <E2ERelayStatusBadge/>
+        </DCArtboard>
+        <DCArtboard id="ds-health-badge" label="DS: Host health badge" width={320} height={500}>
+          <HostHealthBadgeGallery/>
+        </DCArtboard>
+      </DCSection>
     </DesignCanvas>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<MigrationBoard/>);
+window.MigrationBoard = MigrationBoard;

@@ -1,5 +1,22 @@
 # CLAUDE.md — Conduit iOS codebase guide
 
+## Execution model — Claude plans & verifies, opencode/deepseek executes
+
+**Owner's standing directive (2026-06-16):** In this repo Claude Code does the *thinking* — planning, decomposition, writing precise specs, and verifying results — and delegates all *code/file edits* to opencode `deepseek-v4-flash` agents. **Default to NOT editing source yourself; dispatch instead.**
+
+**Dispatch pattern (headless, non-interactive):**
+```bash
+opencode run -m opencode/deepseek-v4-flash-free --variant high \
+  --dir "<repo-or-target-dir>" --dangerously-skip-permissions "<precise prompt>"
+```
+Run via Claude `Bash run_in_background` so many agents execute concurrently. Keep prompts surgically precise — deepseek is a weak executor; spell out exact files, boundaries, and acceptance checks.
+
+**Be aggressive about parallelism.** Decompose work so as many agents as possible run at once. The one hard rule: parallel agents must not write the same files. Isolate by (a) a distinct output file per agent, or (b) a separate git branch/worktree when mutating a shared tree. The `.dc.html` design board lives in `~/Downloads/Conduit GitHub repo/` (not a git repo) — parallelize there by file, one flow page per agent; a manifest-driven compiler re-stitches them into the combined board.
+
+**Claude always verifies — never trust deepseek output blind.** For the design board: curl/screenshot the rendered page on the local server. For Swift: run the authoritative `XcodeBuildMCP` **app-target** build (plain `swift build` skips `#if os(iOS)` code — see memory `project_ws10_qa`). Re-dispatch with corrections on any failure.
+
+Exception: meta/config edits the owner asks Claude to make directly (e.g. this file) are done by Claude, not delegated.
+
 ## MCP tooling — prefer these over raw shell for Apple-platform work
 
 Five MCP servers are configured for this project in the checked-in [`.mcp.json`](.mcp.json) (project scope — it overrides any same-named user/global server, and teammates inherit it; approve the servers when Claude Code prompts on first launch). **Reach for them before raw `xcodebuild` / `xcrun` / shell** when one fits: they return structured JSON (precise error `file:line`, per-test results, view hierarchies) instead of logs you have to grep, and they don't depend on shell env-var propagation quirks. They also cover Swift/iOS/Xcode work generally — not just this app.

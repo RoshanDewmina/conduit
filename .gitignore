@@ -119,9 +119,10 @@ daemon/conduitd/conduitd-darwin-arm64
 # conduitd release build artifacts
 daemon/conduitd/dist/
 
-# Root npm artifacts (this repo uses bun; root node_modules/package-lock are accidental)
+# Root npm artifacts (this repo uses bun; root node_modules/package-lock/package are accidental)
 /node_modules/
 /package-lock.json
+/package.json
 
 # Serena MCP cache (tooling artifact, not source)
 .serena/
