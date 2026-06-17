@@ -3,7 +3,7 @@
 > **Compiled:** 2026-06-11 · branch `feat/product-depth-sprint` (13 commits ahead of `master`, 0 behind).
 > **Purpose:** a single, self-contained briefing for an external agent (or human) with **zero prior context**, so they can (a) understand the product and codebase deeply, (b) advise on strategic direction, and (c) run grounded competitor research. Every architectural claim is backed by source `file:line`; every market claim carries a confidence tag and (where known) a source URL. **Verification status is flagged** — and where this dossier corrects an older in-repo audit doc, it says so explicitly.
 >
-> **Reading note for the advising agent:** several in-repo docs (`APP_AUDIT.md`, `cloud-execution-engine-plan.md`, parts of `current-state-audit.md`, `remaining-work.md`) were written 1–3 weeks ago and are **partially stale** — they describe gaps that have since been closed. Where they conflict with this dossier, trust this dossier's *Verified* items (§4) — they were re-checked against current source on 2026-06-11. The strategy/market docs (`PRODUCT_RESEARCH.md`, `ROADMAP.md`, `FRONTEND_DESIGN_BRIEF.md`) remain current and are summarized faithfully in §5–§8.
+> **Reading note for the advising agent:** several in-repo docs (`docs/_archive/APP_AUDIT.md`, `docs/_archive/cloud-execution-engine-plan.md`, parts of `docs/_archive/current-state-audit.md`, `docs/_archive/remaining-work.md`) were written 1–3 weeks ago and are **partially stale** — they describe gaps that have since been closed. Where they conflict with this dossier, trust this dossier's *Verified* items (§4) — they were re-checked against current source on 2026-06-11. The strategy/market docs (`PRODUCT_RESEARCH.md`, `ROADMAP.md`, `FRONTEND_DESIGN_BRIEF.md`) remain current and are summarized faithfully in §5–§8.
 
 ---
 
@@ -120,7 +120,7 @@ Git: current branch `feat/product-depth-sprint`; its 13 commits are mostly the p
 ## 4. Current state — verified 2026-06-11 (✅ works / 🔶 partial / ❌ gap / ⏸ owner-blocked)
 
 ### 4.1 Corrections to older in-repo audit docs (important for the advising agent)
-`APP_AUDIT.md`, `cloud-execution-engine-plan.md`, and `remaining-work.md` list gaps that are **now closed**. Verified against current source:
+`docs/_archive/APP_AUDIT.md`, `docs/_archive/cloud-execution-engine-plan.md`, and `docs/_archive/remaining-work.md` list gaps that are **now closed**. Verified against current source:
 - ❌→✅ **"`handleCreateRun` never calls `dispatchRun`"** — it does: `agents.go:315` `go dispatchRun(...)`.
 - ❌→✅ **"`.approvedAlways` collapsed to `approve` in `DaemonChannel.swift`; rule never persisted"** — `DaemonChannel.swift:111` sends `"approveAlways"`; conduitd `appendAllowAlways` writes it to `policy-always.yaml`.
 - ❌→✅ **"conduitd never POSTs approvals to push-backend (APNs loop open)"** — `server.go:532-533` `go s.postApprovalPush()` → `{PushBackendURL}/approval` (`server.go:613`). (APNs key + paid account + deployed backend all exist now; only a real-device delivery smoke test remains — see §10/§11.)
@@ -239,7 +239,7 @@ These are unresolved forks where the **code and the written strategy diverge**, 
 ---
 
 ## 10. Ship-gate / owner action items (external blockers)
-(`docs/ship-gate-owner-steps.md`, `remaining-work.md`, `PRODUCTION_READINESS_PLAN.md`)
+(`docs/ship-gate-owner-steps.md`, `docs/_archive/remaining-work.md`, `PRODUCTION_READINESS_PLAN.md`)
 1. ✅ **Paid Apple Developer account** (team `39HM2X8GS6`) + **APNs `.p8`** (`L8LVU9X82W`, at `~/Downloads/Personal-Docs/`) — both confirmed present. No longer a blocker.
 2. ⏸ **App Store Connect setup** (app record, enable Push + CloudKit, IAP, privacy nutrition label, screenshots) — the main remaining gate.
 3. ⏸ **Live-host validation** — full hook→policy→inbox→approve→audit round-trip + TUI/Ctrl-C/alt-screen/OSC-133 on a real SSH host (`docs/validation-playbook.md` TC-1..TC-7), plus a physical-device APNs smoke test.
@@ -264,7 +264,7 @@ These are unresolved forks where the **code and the written strategy diverge**, 
 - Build/run: `CLAUDE.md` (MCP tooling, gallery routes, live block-session harness), `project.yml` (xcodegen).
 
 ### 12.2 Doc index (read order for a new agent)
-**Strategy/current:** `FRONTEND_DESIGN_BRIEF.md`, `PRODUCT_RESEARCH.md`, `ROADMAP.md`, `PRODUCTION_READINESS_PLAN.md`, this dossier. **Architecture:** `agent-contract.md`, `block-terminal-implementation.md`, `conduitd-resident.md`, `hosted-agents-phase2.md`, `cloud-execution-engine-plan.md` (treat its "missing" list as partly **stale** per §4.1). **Ops:** `ship-gate-owner-steps.md`, `resident-daemon-owner-steps.md`, `validation-playbook.md`, `cloud-run-production-cutover.md`. **Caveat:** `APP_AUDIT.md` + `current-state-audit.md` are point-in-time and **partly superseded** by §4.
+**Strategy/current:** `FRONTEND_DESIGN_BRIEF.md`, `PRODUCT_RESEARCH.md`, `ROADMAP.md`, `PRODUCTION_READINESS_PLAN.md`, this dossier. **Architecture:** `agent-contract.md`, `block-terminal-implementation.md`, `conduitd-resident.md`, `hosted-agents-phase2.md`, `docs/_archive/cloud-execution-engine-plan.md` (treat its "missing" list as partly **stale** per §4.1). **Ops:** `ship-gate-owner-steps.md`, `resident-daemon-owner-steps.md`, `validation-playbook.md`, `cloud-run-production-cutover.md`. **Caveat:** `docs/_archive/APP_AUDIT.md` + `docs/_archive/current-state-audit.md` are point-in-time and **partly superseded** by §4.
 
 ### 12.3 Competitor deep-research brief (concrete, verifiable questions for the advising agent)
 Re-verify each with a primary source dated **after 2026-06-04**:

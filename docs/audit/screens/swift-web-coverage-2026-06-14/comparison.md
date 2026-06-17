@@ -8,7 +8,7 @@ This artifact compares the live Claude migration board at `http://localhost:4178
 - Swift screenshots captured: 28 files under [swift/](swift/).
 - Web board screenshots captured: 51 per-artboard files plus [web/full-board.jpg](web/full-board.jpg).
 - In-app Browser verification loaded `http://localhost:4178/index.html`, found 51 `data-dc-slot` artboards, and reported 0 JavaScript console errors. A later Playwright export logged one 404 static-resource error, recorded in [logs/web-playwright-console-errors.json](logs/web-playwright-console-errors.json).
-- Source-of-truth docs cross-checked: `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, and `docs/audit/FEATURE_COVERAGE.md`.
+- Source-of-truth docs cross-checked: `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, and `docs/_archive/audit/FEATURE_COVERAGE.md`.
 
 ## Status Legend
 

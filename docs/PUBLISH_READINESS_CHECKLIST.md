@@ -1,7 +1,7 @@
 # Conduit — Publish Readiness Checklist (single source of truth)
 
 > Reconciled 2026-06-13 against **today's verified state** (not older docs).
-> Supersedes the status claims in `remaining-work.md` (2026-05-28, stale: says "free team"),
+> Supersedes the status claims in `docs/_archive/remaining-work.md` (2026-05-28, stale: says "free team"),
 > and reconciles `ship-gate-owner-steps.md` + `PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
 > When those disagree, **this file + `CONDUIT_PROJECT_DOSSIER.md` win.**
 
@@ -60,7 +60,7 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 
 ## E. Doc hygiene
 
-- [ ] **E1 — Kill the doc drift.** `remaining-work.md` (2026-05-28) still says "free personal team" / "v0.1.0 on GCP" — both stale. Mark it superseded by this file + the dossier. Pre-empts an agent acting on wrong account/deploy state.
+- [ ] **E1 — Kill the doc drift.** `docs/_archive/remaining-work.md` (2026-05-28) still says "free personal team" / "v0.1.0 on GCP" — both stale. Mark it superseded by this file + the dossier. Pre-empts an agent acting on wrong account/deploy state.
 
 ---
 

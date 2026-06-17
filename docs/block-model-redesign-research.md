@@ -749,7 +749,7 @@ User-visible after Phase 0: `claude --version` works. `git commit -m "fix: --foo
 - Migrate the 7 secondary-chrome `.background(.bar)` sites to `conduitGlassChrome` (the work paused from earlier)
 - **OSC 133 missing-marker fallback** (per Q2 in §7): if no OSC 133 marker is received within ~5s of connect, degrade to a blockless live PTY view. Re-engage block segmentation if a marker arrives later.
 - **Belt-and-suspenders interactive-CLI hint** (NOT primary mechanism): if cursor-positioning sequences arrive while we're still in `.promptEditing` (i.e. before any 133;C), assume an interactive program slipped through and flip to executing state on the active block. This catches edge cases where shell integration is broken AND the user runs `claude` directly. The hint uses *byte patterns* (`\e[H`, `\e[2J`, `\e[?25l`) not binary names — works for any TUI.
-- Doc updates: `ARCHITECTURE.md`, `current-state-audit.md`, README milestone row
+- Doc updates: `ARCHITECTURE.md`, `docs/_archive/current-state-audit.md`, README milestone row
 
 **Estimated total**: ~10 working sessions. Phase 0 is independent and ships first. Phases 2–5 are the core architectural fix. Phases 6–7 close out the user's plug-and-play wedge.
 

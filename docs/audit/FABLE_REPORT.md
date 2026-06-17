@@ -41,7 +41,7 @@ The release is still a strict no-go because several production-only checks canno
 
 - Expanded `ConduitUITests/TapInjectionProofTests.swift` with deterministic reseeding, tap-injection proof, approve-decision proof, Face ID opt-in coverage, saved-host reconnect coverage, and a live localhost SSH TOFU test path.
 - Added June 13 Device Hub screenshots under `docs/audit/screens/`.
-- Rewrote `FABLE_REPORT.md`, `FABLE_FINDINGS.md`, `FEATURE_COVERAGE.md`, and the screenshot manifest for this strict pass.
+- Rewrote `FABLE_REPORT.md` (this file), `FABLE_FINDINGS.md` (archived → `docs/_archive/audit/FABLE_FINDINGS.md`), `FEATURE_COVERAGE.md` (archived → `docs/_archive/audit/FEATURE_COVERAGE.md`), and the screenshot manifest for this strict pass.
 
 ## Diff Summary
 
@@ -115,7 +115,7 @@ No long-running `xcodebuild`, backend, Go, or UI-test runner processes were left
 
 ## Feature Coverage
 
-The coverage matrix is in `docs/audit/FEATURE_COVERAGE.md`. Summary:
+The coverage matrix is in `docs/_archive/audit/FEATURE_COVERAGE.md`. Summary:
 
 - Core approvals path: shown and locally verified through Inbox, UI tests, live SSH TOFU, and relay fallback.
 - Local host connection path: shown and locally verified against localhost SSH.

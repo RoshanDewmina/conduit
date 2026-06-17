@@ -1,6 +1,6 @@
 # ROADMAP.md — Conduit Staged Execution Plan
 
-> Derived from verified §2.7 market data (see PRODUCT_RESEARCH.md) and codebase audit (APP_AUDIT.md).
+> Derived from verified §2.7 market data (see PRODUCT_RESEARCH.md) and codebase audit (`docs/_archive/APP_AUDIT.md`).
 > Product decisions are fixed; slice order is re-aimed per verified competitive analysis.
 
 ---
