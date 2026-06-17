@@ -55,9 +55,11 @@ final class TapInjectionProofTests: XCTestCase {
         let app = launchReseeded()
         defer { app.terminate() }
 
-        let inboxBreadcrumb = app.staticTexts["agent approvals"]
+        // The redesign replaced the "agent approvals" breadcrumb with a lowercase
+        // "inbox" header (InboxView). Assert on that as the inbox-tab marker.
+        let inboxBreadcrumb = app.staticTexts["inbox"]
         XCTAssertTrue(inboxBreadcrumb.waitForExistence(timeout: 30),
-                      "Inbox should be the default tab with the 'agent approvals' breadcrumb")
+                      "Inbox should be the default tab with the 'inbox' header")
 
         let settingsTab = app.buttons["Settings"]
         // 20s, not 5s: a cold relaunch on a contended sim (right after a build or the
@@ -83,13 +85,13 @@ final class TapInjectionProofTests: XCTestCase {
         let app = launchReseeded()
         defer { app.terminate() }
 
-        let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "APPROVE"))
-        XCTAssertTrue(app.buttons["APPROVE"].firstMatch.waitForExistence(timeout: 30),
+        let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Approve"))
+        XCTAssertTrue(app.buttons["Approve"].firstMatch.waitForExistence(timeout: 30),
                       "Reseeded inbox should show at least one pending APPROVE button")
         let before = approveButtons.count
         XCTAssertGreaterThan(before, 0, "Expected pending approval cards in the reseeded inbox")
 
-        app.buttons["APPROVE"].firstMatch.tap()
+        app.buttons["Approve"].firstMatch.tap()
 
         let deadline = Date().addingTimeInterval(10)
         var after = approveButtons.count
@@ -141,7 +143,11 @@ final class TapInjectionProofTests: XCTestCase {
         XCTAssertTrue(savedHeader.waitForExistence(timeout: 30),
                       "Fleet should list the seeded saved hosts under a 'Saved hosts' section")
 
-        XCTAssertTrue(app.staticTexts["Dev VPS"].waitForExistence(timeout: 10),
+        // The redesigned saved-host row composes the name into a non-discrete
+        // label, so match any descendant containing it rather than an exact staticText.
+        let devVPS = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Dev VPS")).firstMatch
+        XCTAssertTrue(devVPS.waitForExistence(timeout: 10),
                       "Seeded 'Dev VPS' host row should exist")
         // Tap the row cell, not the inner Text: tapping the static label inside a
         // SwiftUI List-row Button doesn't reliably activate the button.

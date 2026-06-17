@@ -30,13 +30,14 @@ public enum DebugSeeder {
         guard ProcessInfo.processInfo.environment["CONDUIT_UITEST_RESEED"] == "1" else { return }
         try? await env.approvalRepo.deleteAll()
         await seedApprovals(env.approvalRepo)
-        // Guarantee the Fleet "Saved hosts" reconnect list for tests/screenshots.
-        // Seed only when empty — seedHosts mints fresh HostIDs, so re-running it
-        // would duplicate rows. (A stale seeded flag from a prior session can leave
-        // the DB host-less while still skipping seedIfNeeded.)
-        if (try? await env.hostRepo.all())?.isEmpty ?? true {
-            await seedHosts(env.hostRepo)
+        // Deterministic Fleet "Saved hosts" set for tests/screenshots. Wipe any
+        // leftover hosts first (e.g. a stale localhost E2E host from a prior
+        // session would otherwise block seeding and break the 'Dev VPS' assertion),
+        // then seed. seedHosts mints fresh HostIDs, so clearing first avoids dupes.
+        for host in (try? await env.hostRepo.all()) ?? [] {
+            try? await env.hostRepo.delete(id: host.id)
         }
+        await seedHosts(env.hostRepo)
         UserDefaults.standard.removeObject(forKey: "appLockEnabled")
         UserDefaults.standard.set(true, forKey: "onboardingSeen")
         UserDefaults.standard.set(true, forKey: seededKey)
