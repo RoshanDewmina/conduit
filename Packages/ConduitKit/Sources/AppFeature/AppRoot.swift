@@ -193,16 +193,16 @@ public struct AppRoot: View {
     public enum Tab: Hashable, Sendable {
         case inbox
         case fleet
-        case activity
+        case control
         case settings
 
-        static let rootTabs: [Tab] = [.inbox, .fleet, .activity, .settings]
+        static let rootTabs: [Tab] = [.inbox, .fleet, .control, .settings]
 
         var title: String {
             switch self {
             case .inbox:    "Inbox"
             case .fleet:    "Fleet"
-            case .activity: "Activity"
+            case .control:  "Control"
             case .settings: "Settings"
             }
         }
@@ -211,7 +211,7 @@ public struct AppRoot: View {
             switch self {
             case .inbox:    "tray"
             case .fleet:    "square.stack.3d.up"
-            case .activity: "clock.arrow.circlepath"
+            case .control:  "slider.horizontal.3"
             case .settings: "gear"
             }
         }
@@ -235,7 +235,7 @@ public struct AppRoot: View {
             switch tab {
             case "inbox":    _selectedTab = State(initialValue: .inbox)
             case "fleet":    _selectedTab = State(initialValue: .fleet)
-            case "activity": _selectedTab = State(initialValue: .activity)
+            case "control", "activity": _selectedTab = State(initialValue: .control)
             case "settings": _selectedTab = State(initialValue: .settings)
             default:         _selectedTab = State(initialValue: .inbox)
             }
@@ -851,7 +851,7 @@ public struct AppRoot: View {
         let tabItems: [DSTabItem] = [
             DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
             DSTabItem(id: "fleet",    icon: .server,   label: "Fleet"),
-            DSTabItem(id: "activity", icon: .list,     label: "Activity"),
+            DSTabItem(id: "control",  icon: .shield,   label: "Control"),
             DSTabItem(id: "settings", icon: .settings, label: "Settings"),
         ]
 
@@ -860,7 +860,7 @@ public struct AppRoot: View {
                 switch selectedTab {
                 case .inbox:    "inbox"
                 case .fleet:    "fleet"
-                case .activity: "activity"
+                case .control:  "control"
                 case .settings: "settings"
                 }
             },
@@ -868,7 +868,7 @@ public struct AppRoot: View {
                 switch id {
                 case "inbox":    selectedTab = .inbox
                 case "fleet":    selectedTab = .fleet
-                case "activity": selectedTab = .activity
+                case "control":  selectedTab = .control
                 case "settings": selectedTab = .settings
                 default:         selectedTab = .inbox
                 }
@@ -906,9 +906,9 @@ public struct AppRoot: View {
                 rootDestination(.fleet, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-        case .activity:
+        case .control:
             NavigationStack {
-                rootDestination(.activity, env: env)
+                rootDestination(.control, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         case .settings:
@@ -1010,8 +1010,13 @@ public struct AppRoot: View {
             )
             .id(workspacesRevision)
 
-        case .activity:
-            ActivityView(actions: bridgeSessionActions())
+        case .control:
+            ControlView(
+                fleetStore: fleetStore,
+                bridgeActions: bridgeSessionActions(),
+                daemonChannel: daemonChannel,
+                onOpenBudget: { showingQuotaGuard = true }
+            )
 
         case .settings:
             SettingsWithLibraryView(

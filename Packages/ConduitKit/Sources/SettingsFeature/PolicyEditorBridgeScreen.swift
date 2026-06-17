@@ -4,14 +4,19 @@ import ConduitCore
 import SSHTransport
 
 /// Loads live policy YAML from the bridge before showing ``PolicyEditorView``.
-struct PolicyEditorBridgeScreen: View {
+public struct PolicyEditorBridgeScreen: View {
     let actions: BridgeSessionActions
     var daemonChannel: DaemonChannel? = nil
     @State private var yamlText = PolicyEditorView.balancedPreset
     @State private var editorGeneration = 0
     @State private var loadError: String?
 
-    var body: some View {
+    public init(actions: BridgeSessionActions, daemonChannel: DaemonChannel? = nil) {
+        self.actions = actions
+        self.daemonChannel = daemonChannel
+    }
+
+    public var body: some View {
         PolicyEditorView(
             cwd: actions.policyCWD,
             initialYAML: yamlText,
