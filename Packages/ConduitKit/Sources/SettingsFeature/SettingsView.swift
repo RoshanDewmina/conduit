@@ -9,7 +9,6 @@ import PersistenceKit
 import SecurityKit
 import SyncKit
 import SSHTransport
-import NotificationsKit
 
 @MainActor @Observable
 public final class SettingsViewModel {
@@ -393,8 +392,6 @@ public struct SettingsView: View {
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
-    @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
-    @State private var notificationFilter = NotificationFilter()
     @State private var showResetConfirmation = false
     @Environment(\.conduitTokens) private var t
 
@@ -437,11 +434,11 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
 
-                    // (1) BRIDGE & HOSTS
+                    // (1) CONNECTION
                     bridgeAndHostsSection
 
-                    // (2) APPROVALS
-                    approvalsSection
+                    // (2) NOTIFICATIONS  (autonomy/policy moved to the Control tab)
+                    notificationsSection
 
                     // (3) SECURITY
                     securitySection
@@ -449,10 +446,13 @@ public struct SettingsView: View {
                     // (4) TRUST & PRIVACY
                     trustPrivacySection
 
-                    // (5) ACCOUNT
+                    // (5) ADVANCED  (technical tools, demoted)
+                    advancedSection
+
+                    // (6) ACCOUNT
                     accountSection
 
-                    // (6) RESET
+                    // (7) RESET
                     resetSection
 
                     versionFooter
@@ -469,7 +469,6 @@ public struct SettingsView: View {
         }
         .task {
             await vm.load()
-            await loadNotificationFilter()
         }
     }
 
@@ -489,7 +488,7 @@ public struct SettingsView: View {
 
     private var bridgeAndHostsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHead("BRIDGE & HOSTS")
+            sectionHead("CONNECTION")
             settingsCard {
                 NavigationLink { TerminalSettingsView() } label: {
                     settingsNavRow("Open terminal", icon: "terminal", detail: "power-user · live session")
@@ -505,81 +504,68 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - (2) APPROVALS
+    // MARK: - (5) ADVANCED
 
     @ViewBuilder
-    private var approvalsSection: some View {
-        sectionHead("APPROVALS")
+    private var advancedSection: some View {
+        sectionHead("ADVANCED")
         settingsCard {
+            if let sshKeyStore {
+                NavigationLink {
+                    KeysView(viewModel: KeysViewModel(store: sshKeyStore), store: sshKeyStore)
+                } label: {
+                    settingsNavRow("SSH keys", icon: "key")
+                }
+            }
+
+            if let daemonChannel {
+                if sshKeyStore != nil {
+                    divider
+                }
+                NavigationLink {
+                    SecretsView(viewModel: {
+                        let vm = SecretsViewModel()
+                        vm.attach(channel: daemonChannel)
+                        return vm
+                    }())
+                } label: {
+                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                }
+            }
+
+            if sshKeyStore != nil || daemonChannel != nil {
+                divider
+            }
+
             NavigationLink {
-                PolicyEditorBridgeScreen(actions: bridgeActions, daemonChannel: daemonChannel)
+                DoctorView(viewModel: DoctorViewModel(actions: bridgeActions))
             } label: {
-                settingsNavRow("Policy", icon: "shield", detail: "\(autonomyPresetRaw) · edit rules")
+                settingsNavRow("Health check", icon: "stethoscope", detail: "diagnose daemon setup")
             }
         }
-        .padding(.bottom, 10)
+        .padding(.bottom, 16)
+    }
 
-        sectionSubhead("NOTIFICATION FILTERS")
+    // MARK: - (2) NOTIFICATIONS
+
+    @ViewBuilder
+    private var notificationsSection: some View {
+        sectionHead("NOTIFICATIONS")
         settingsCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Minimum risk")
-                    .font(.dsSansPt(13, weight: .medium))
+            HStack(spacing: 12) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 14))
                     .foregroundStyle(t.text2)
-                DSSegmentedPicker(
-                    options: [
-                        (label: "Low+", value: Approval.Risk.low),
-                        (label: "Med+", value: Approval.Risk.medium),
-                        (label: "High+", value: Approval.Risk.high),
-                        (label: "Crit", value: Approval.Risk.critical),
-                    ],
-                    selection: Binding(
-                        get: { notificationFilter.minRisk },
-                        set: { notificationFilter.minRisk = $0 }
-                    )
-                )
-                .padding(.bottom, 4)
-
-                Toggle(isOn: Binding(
-                    get: { notificationFilter.quietHoursEnabled },
-                    set: { notificationFilter.quietHoursEnabled = $0 }
-                )) {
-                    Text("Quiet hours")
-                        .font(.dsSansPt(14))
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Notification settings")
+                        .font(.dsSansPt(15))
                         .foregroundStyle(t.text)
+                    Text("Quiet hours, risk levels, and autonomy are in the Control tab")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
                 }
-                .tint(t.accent)
-
-                if notificationFilter.quietHoursEnabled {
-                    HStack(spacing: 8) {
-                        Text("From")
-                            .font(.dsMonoPt(11))
-                            .foregroundStyle(t.text3)
-                        Picker("Quiet start", selection: Binding(
-                            get: { notificationFilter.quietHoursStart },
-                            set: { notificationFilter.quietHoursStart = $0 }
-                        )) {
-                            ForEach(0..<24, id: \.self) { hour in
-                                Text(Self.hourLabel(hour)).tag(hour)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        Text("to")
-                            .font(.dsMonoPt(11))
-                            .foregroundStyle(t.text3)
-                        Picker("Quiet end", selection: Binding(
-                            get: { notificationFilter.quietHoursEnd },
-                            set: { notificationFilter.quietHoursEnd = $0 }
-                        )) {
-                            ForEach(0..<24, id: \.self) { hour in
-                                Text(Self.hourLabel(hour)).tag(hour)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                }
+                Spacer()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -613,36 +599,8 @@ public struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            if let sshKeyStore {
-                divider
-                NavigationLink {
-                    KeysView(viewModel: KeysViewModel(store: sshKeyStore), store: sshKeyStore)
-                } label: {
-                    settingsNavRow("SSH keys", icon: "key")
-                }
-            }
-
-            if let daemonChannel {
-                divider
-                NavigationLink {
-                    SecretsView(viewModel: {
-                        let vm = SecretsViewModel()
-                        vm.attach(channel: daemonChannel)
-                        return vm
-                    }())
-                } label: {
-                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
-                }
-            }
-
             divider
-            NavigationLink {
-                DoctorView(viewModel: DoctorViewModel(actions: bridgeActions))
-            } label: {
-                settingsNavRow("Health check", icon: "stethoscope", detail: "diagnose daemon setup")
-            }
 
-            divider
             NavigationLink {
                 ProviderKeysView(viewModel: vm)
             } label: {
@@ -814,16 +772,6 @@ public struct SettingsView: View {
             .padding(.bottom, 6)
     }
 
-    private func sectionSubhead(_ title: String) -> some View {
-        Text(title)
-            .font(.dsMonoPt(11, weight: .medium))
-            .tracking(11 * 0.10)
-            .foregroundStyle(t.text4)
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 6)
-    }
-
     private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             content()
@@ -932,19 +880,6 @@ public struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(.bottom, 36)
-    }
-
-    private static func hourLabel(_ hour: Int) -> String {
-        let normalized = hour % 24
-        return String(format: "%02d:00", normalized)
-    }
-
-    private func loadNotificationFilter() async {
-        notificationFilter = await Notifications.shared.loadFilter()
-    }
-
-    private func persistNotificationFilter() async {
-        await Notifications.shared.saveFilter(notificationFilter)
     }
 
 }

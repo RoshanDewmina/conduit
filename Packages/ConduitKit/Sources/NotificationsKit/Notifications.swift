@@ -287,7 +287,7 @@ public actor Notifications {
         let reject = UNNotificationAction(
             identifier: "approval.reject",
             title: "Reject",
-            options: [.destructive]
+            options: [.authenticationRequired, .destructive]
         )
         let approvalCategory = UNNotificationCategory(
             identifier: "approval",
