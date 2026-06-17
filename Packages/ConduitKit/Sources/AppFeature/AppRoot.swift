@@ -451,7 +451,7 @@ public struct AppRoot: View {
             if onboardingSeen {
                 rootContainer(env: env)
             } else {
-                OnboardingView(
+                OnboardingRedesignView(
                     onContinue: {
                         onboardingSeen = true
                         addHostPresented = true
@@ -1348,6 +1348,13 @@ public struct AppRoot: View {
             }
             let daemonPath = (try? await DaemonBootstrap.ensureInstalled(session: sshSession, manifest: DaemonBootstrap.loadManifest())) ?? "$HOME/.conduit/bin/conduitd"
             try? await channel.start(daemonPath: daemonPath)  // launch conduitd serve on remote host
+            // First connect after onboarding: flush the chosen tier's starter policy
+            // to the daemon (it wasn't reachable during pairing). Idempotent — no-op
+            // once applied; a failed push retries on the next connect.
+            await OnboardingPolicy.applyPendingIfNeeded { yaml in
+                try await channel.savePolicyYAML(cwd: "", yaml: yaml)
+                try await channel.reloadPolicy(cwd: "")
+            }
             // Register device with conduitd so APNs alerts reach this device when
             // backgrounded. The handshake reply carries the per-session relay
             // capability token — store it so backend-relayed decisions can

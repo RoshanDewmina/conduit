@@ -40,7 +40,9 @@ struct DebugGalleryView: View {
         case "onboarding-paired":   OnboardingView(onContinue: {}, startPhase: .paired)
         case "onboarding-caution":  OnboardingView(onContinue: {}, startPhase: .caution)
         case "onboarding-firstrun": OnboardingView(onContinue: {}, startPhase: .firstRun)
-        case "onboarding-redesign": OnboardingRedesignGalleryView()
+        case "onboarding-redesign":      OnboardingRedesignGalleryView()
+        case "onboarding-redesign-pair": OnboardingRedesignGalleryView(startStep: 1)
+        case "onboarding-redesign-policy": OnboardingRedesignGalleryView(startStep: 2)
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "chat":           chatGallery

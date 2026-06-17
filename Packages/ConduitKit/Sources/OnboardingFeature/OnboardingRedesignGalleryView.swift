@@ -1,36 +1,53 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import ConduitCore
+import SecurityKit
+import SSHTransport
 
-public struct OnboardingRedesignGalleryView: View {
-    @State private var step = 0
-    @State private var selectedPreset: RedesignPolicyPreset = .balanced
+// MARK: - OnboardingRedesignView (productized 3-step first-run)
 
+/// First-run onboarding in the simplified 3-step language: Why Conduit → Pair the
+/// bridge → Default policy. Pairing is real (drives the app-wide `E2ERelayClient`
+/// with a real 6-digit code); the chosen policy tier is persisted and pushed to the
+/// daemon on first connect via `OnboardingPolicy`.
+public struct OnboardingRedesignView: View {
+    let onContinue: () -> Void
+    let onAlreadyUseConduit: () -> Void
+    let onSetupWorkspace: () -> Void
+
+    @StateObject private var client: E2ERelayClient
+    @State private var step: Int
+    @State private var selectedLevel: OnboardingCautionLevel = .balanced
+    @State private var pairingCode = ""
+    @State private var didStartPairing = false
+
+    @AppStorage("conduit.onboarding.autonomyPreset") private var storedPreset: String = ""
     @Environment(\.conduitTokens) private var t
 
     private let steps = OnboardingRedesignStep.all
 
-    public init() {}
+    public init(
+        onContinue: @escaping () -> Void,
+        onAlreadyUseConduit: @escaping () -> Void = {},
+        onSetupWorkspace: @escaping () -> Void = {},
+        relayClient: E2ERelayClient? = nil,
+        startStep: Int = 0
+    ) {
+        self.onContinue = onContinue
+        self.onAlreadyUseConduit = onAlreadyUseConduit
+        self.onSetupWorkspace = onSetupWorkspace
+        let resolved = relayClient ?? E2ERelayClient(
+            relayURL: RelaySettings.url(),
+            pairingCode: PairingCrypto.generatePairingCode()
+        )
+        _client = StateObject(wrappedValue: resolved)
+        _step = State(initialValue: min(max(startStep, 0), OnboardingRedesignStep.all.count - 1))
+    }
+
+    private var current: OnboardingRedesignStep { steps[step] }
 
     public var body: some View {
-        ConduitOnboardingVariant(
-            step: $step,
-            selectedPreset: $selectedPreset,
-            steps: steps
-        )
-        .background(t.bg)
-    }
-}
-
-private struct ConduitOnboardingVariant: View {
-    @Binding var step: Int
-    @Binding var selectedPreset: RedesignPolicyPreset
-
-    let steps: [OnboardingRedesignStep]
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
         VStack(spacing: 0) {
             header
             ScrollView(.vertical, showsIndicators: false) {
@@ -48,9 +65,11 @@ private struct ConduitOnboardingVariant: View {
         }
         .background(t.bg.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        .onChange(of: step) { _, new in
+            if steps[new].kind == .pair { startPairingIfNeeded() }
+        }
+        .onAppear { if current.kind == .pair { startPairingIfNeeded() } }
     }
-
-    private var current: OnboardingRedesignStep { steps[step] }
 
     private var header: some View {
         VStack(spacing: 12) {
@@ -122,9 +141,9 @@ private struct ConduitOnboardingVariant: View {
         case .value:
             ConduitLoopCard()
         case .pair:
-            ConduitPairingCard()
+            ConduitPairingCard(client: client, pairingCode: pairingCode)
         case .policy:
-            ConduitPolicyCard(selectedPreset: $selectedPreset)
+            ConduitPolicyCard(selectedLevel: $selectedLevel)
         }
     }
 
@@ -135,10 +154,10 @@ private struct ConduitOnboardingVariant: View {
                 .frame(height: 0.5)
             VStack(spacing: 10) {
                 DSButton(current.primaryAction, variant: .primary, size: .lg, fullWidth: true) {
-                    advance()
+                    advanceOrFinish()
                 }
                 if let secondary = current.secondaryAction {
-                    Button(secondary) {}
+                    Button(secondary) { handleSecondary() }
                         .font(.dsMonoPt(12, weight: .medium))
                         .foregroundStyle(t.text3)
                         .frame(maxWidth: .infinity)
@@ -152,11 +171,53 @@ private struct ConduitOnboardingVariant: View {
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
-    private func advance() {
-        guard step < steps.count - 1 else { return }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { step += 1 }
+    // MARK: Actions
+
+    private func advanceOrFinish() {
+        if step < steps.count - 1 {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { step += 1 }
+        } else {
+            finish()
+        }
+    }
+
+    private func handleSecondary() {
+        // The only secondary action is "I already use Conduit" on the value step.
+        if current.kind == .value { onAlreadyUseConduit() }
+    }
+
+    private func startPairingIfNeeded() {
+        guard !didStartPairing else { return }
+        didStartPairing = true
+        let code = client.beginPairingSession()
+        pairingCode = code
+        client.relayURL = RelaySettings.url()
+        client.connect()
+    }
+
+    private func finish() {
+        storedPreset = selectedLevel.mappedPreset.rawValue
+        // Push this tier's starter policy on the first daemon connect (see OnboardingPolicy).
+        OnboardingPolicy.markPending(selectedLevel)
+        onContinue()
     }
 }
+
+// MARK: - Gallery wrapper (DebugGalleryView route `onboarding-redesign`)
+
+/// Visual-reference + XCUITest entry point. Renders the productized view with
+/// no-op callbacks so the flow can be walked without leaving the gallery.
+public struct OnboardingRedesignGalleryView: View {
+    let startStep: Int
+    @Environment(\.conduitTokens) private var t
+    public init(startStep: Int = 0) { self.startStep = startStep }
+    public var body: some View {
+        OnboardingRedesignView(onContinue: {}, onSetupWorkspace: {}, startStep: startStep)
+            .background(t.bg)
+    }
+}
+
+// MARK: - Cards
 
 private struct ConduitLoopCard: View {
     @Environment(\.conduitTokens) private var t
@@ -200,6 +261,9 @@ private struct ConduitLoopCard: View {
 }
 
 private struct ConduitPairingCard: View {
+    @ObservedObject var client: E2ERelayClient
+    let pairingCode: String
+
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
@@ -234,12 +298,13 @@ private struct ConduitPairingCard: View {
                         .font(.dsMonoPt(9, weight: .bold))
                         .tracking(1.1)
                         .foregroundStyle(t.text3)
-                    Text("482 917")
+                    Text(displayCode)
                         .font(.system(size: 30, weight: .bold, design: .monospaced))
                         .foregroundStyle(t.text)
-                    Text("Auto-pairs after install.")
+                        .accessibilityIdentifier("pairingCode")
+                    Text(statusLabel)
                         .font(.dsSansPt(12))
-                        .foregroundStyle(t.text3)
+                        .foregroundStyle(isPaired ? t.accent : t.text3)
                 }
             }
         }
@@ -247,32 +312,49 @@ private struct ConduitPairingCard: View {
         .background(t.surface)
         .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
     }
+
+    private var isPaired: Bool { client.pairingState == .paired }
+
+    private var displayCode: String {
+        let digits = pairingCode
+        guard digits.count == 6 else { return digits.isEmpty ? "— — —" : digits }
+        let mid = digits.index(digits.startIndex, offsetBy: 3)
+        return "\(digits[..<mid]) \(digits[mid...])"
+    }
+
+    private var statusLabel: String {
+        switch client.pairingState {
+        case .unpaired, .waitingForPeer: return "Waiting for the host to pair…"
+        case .paired:                    return "Paired ✓"
+        case .pairingFailed:             return "Pairing failed — tap back to retry"
+        }
+    }
 }
 
 private struct ConduitPolicyCard: View {
-    @Binding var selectedPreset: RedesignPolicyPreset
+    @Binding var selectedLevel: OnboardingCautionLevel
 
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
         VStack(spacing: 8) {
-            ForEach(RedesignPolicyPreset.allCases) { preset in
+            ForEach(OnboardingCautionLevel.allCases) { level in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.14)) { selectedPreset = preset }
+                    withAnimation(.easeInOut(duration: 0.14)) { selectedLevel = level }
                 } label: {
                     HStack(alignment: .top, spacing: 12) {
-                        DSStatusDot(tone: selectedPreset == preset ? .accent : .off, size: 9)
+                        DSStatusDot(tone: selectedLevel == level ? .accent : .off, size: 9)
                             .padding(.top, 5)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
-                                Text(preset.title)
+                                Text(level.title)
                                     .font(.dsSansPt(15, weight: .semibold))
                                     .foregroundStyle(t.text)
-                                if preset == .balanced {
+                                if level.recommended {
                                     DSChip("recommended", tone: .accent, variant: .soft, size: .sm)
                                 }
                             }
-                            Text(preset.detail)
+                            Text(level.detail)
                                 .font(.dsSansPt(13))
                                 .foregroundStyle(t.text3)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -281,19 +363,21 @@ private struct ConduitPolicyCard: View {
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(selectedPreset == preset ? t.accentSoft : t.surface)
+                    .background(selectedLevel == level ? t.accentSoft : t.surface)
                     .overlay(
                         Rectangle()
-                            .strokeBorder(selectedPreset == preset ? t.accent : t.border, lineWidth: 1)
+                            .strokeBorder(selectedLevel == level ? t.accent : t.border, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("policyPreset_\(preset.rawValue)")
-                .accessibilityValue(selectedPreset == preset ? "selected" : "unselected")
+                .accessibilityIdentifier("policyPreset_\(level.rawValue)")
+                .accessibilityValue(selectedLevel == level ? "selected" : "unselected")
             }
         }
     }
 }
+
+// MARK: - Step model
 
 private struct OnboardingRedesignStep: Identifiable {
     enum Kind {
@@ -317,7 +401,7 @@ private struct OnboardingRedesignStep: Identifiable {
             title: "Agents ask. You approve. Work resumes.",
             body: "Conduit puts risky agent actions on your phone so you can keep work moving without opening the terminal.",
             primaryAction: "Get started",
-            secondaryAction: nil,
+            secondaryAction: "I already use Conduit",
             kind: .value
         ),
         .init(
@@ -339,33 +423,6 @@ private struct OnboardingRedesignStep: Identifiable {
             kind: .policy
         ),
     ]
-}
-
-private enum RedesignPolicyPreset: String, CaseIterable, Identifiable {
-    case cautious
-    case balanced
-    case bypass
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .cautious: return "Cautious"
-        case .balanced: return "Balanced"
-        case .bypass: return "Bypass"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .cautious:
-            return "Ask on every write, network call, secret, and destructive action."
-        case .balanced:
-            return "Auto-allow safe reads and routine writes; ask on risky actions."
-        case .bypass:
-            return "Ask only for critical actions in trusted repositories."
-        }
-    }
 }
 
 #Preview("Onboarding redesign gallery") {

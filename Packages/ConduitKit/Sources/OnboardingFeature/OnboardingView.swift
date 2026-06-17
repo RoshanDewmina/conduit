@@ -267,8 +267,10 @@ public struct OnboardingView: View {
     // MARK: Finish
 
     private func persistPreset() {
-        // TODO(policy): route this into the live policy store once the IA's policy surface lands.
         storedPreset = cautionLevel.mappedPreset.rawValue
+        // Queue the chosen tier's starter policy; it's pushed to the daemon on the
+        // first successful connect (the bridge isn't reachable yet during pairing).
+        OnboardingPolicy.markPending(cautionLevel)
     }
 
     private func finish() {
