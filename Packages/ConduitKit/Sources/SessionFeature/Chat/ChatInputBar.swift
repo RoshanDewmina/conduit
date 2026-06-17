@@ -219,6 +219,7 @@ public struct ChatInputBar: View {
                         .font(.title2)
                         .foregroundStyle(t.danger)
                 }
+                .accessibilityLabel("Stop running command")
             } else {
                 // (b) Attachment button
                 if mediaAttachmentEnabled, onAttach != nil {
@@ -230,12 +231,14 @@ public struct ChatInputBar: View {
                         .font(.title3)
                         .foregroundStyle(isMicActive ? t.danger : t.text3)
                 }
+                .accessibilityLabel(isMicActive ? "Stop dictation" : "Dictate")
                 // Snippet
                 Button(action: onSnippet) {
                     Image(systemName: "chevron.up.square")
                         .font(.title3)
                         .foregroundStyle(t.text3)
                 }
+                .accessibilityLabel("Insert snippet")
                 // P2.7: Send button with long-press for advanced options
                 Menu {
                     Button(action: onSubmit) {
@@ -274,6 +277,7 @@ public struct ChatInputBar: View {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Send message")
                 .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
@@ -298,6 +302,7 @@ public struct ChatInputBar: View {
                 .font(.title3)
                 .foregroundStyle(t.text3)
         }
+        .accessibilityLabel("Attach photo or file")
     }
 
     // MARK: - P2.6: Keyboard toolbar rail

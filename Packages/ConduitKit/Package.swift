@@ -43,7 +43,6 @@ let package = Package(
         .library(name: "OnboardingFeature", targets: ["OnboardingFeature"]),
         .library(name: "KeysFeature",       targets: ["KeysFeature"]),
         .library(name: "DiffFeature",       targets: ["DiffFeature"]),
-        .library(name: "PreviewFeature",    targets: ["PreviewFeature"]),
         .library(name: "FilesFeature",      targets: ["FilesFeature"]),
         .library(name: "WorktreesFeature",  targets: ["WorktreesFeature"]),
     ],
@@ -179,11 +178,6 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "PreviewFeature",
-            dependencies: ["DesignSystem", "PreviewKit", "SSHTransport", "ConduitCore"],
-            swiftSettings: swiftSettings
-        ),
-        .target(
             name: "FilesFeature",
             dependencies: ["DesignSystem", "SSHTransport"],
             swiftSettings: swiftSettings
@@ -229,7 +223,6 @@ let package = Package(
                 "DiffFeature",
                 "DiffKit",
                 "SSHTransport",
-                "PreviewFeature",
                 "FilesFeature",
                 "KeysFeature",
                 "SyncKit",

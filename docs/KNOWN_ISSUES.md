@@ -55,9 +55,25 @@ doc is now stale on its "OPEN" column:
   `strings.HasPrefix(objName, "runs/"+runID+"/")` (`artifacts.go handleArtifactDownload`).
 - **exec.Command** — explicit argv, no shell (triage FINDING-3, re-confirmed).
 
+**Official-docs verification (part 9) — 7/8 compliant (2026-06-17):** Keychain accessibility
+(`WhenUnlockedThisDeviceOnly` + non-synchronizable), ATS (enforced; only local networking exempt), APNs
+`aps-environment: production`, `PrivacyInfo.xcprivacy` required-reason codes (CA92.1↔UserDefaults,
+C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
+**compliant** with current Apple/OWASP-MASVS guidance.
+
+**One documented security follow-up (P2, NOT auto-fixed — auth-path change needs device testing):**
+- **BiometricGate no-biometrics soft-bypass.** `SecurityKit/BiometricGate.swift:16-20` returns *success* when no
+  biometrics are enrolled (and `.biometryNotEnrolled` at the eval branch). On a device with neither biometrics nor
+  passcode, the app-lock / SSH-key gate is effectively open (MASVS-AUTH soft bypass). The `.biometryLockout` branch
+  already does the right thing (passcode fallback, fail-closed). **Recommended fix:** in the no-biometrics path,
+  fall back to `.deviceOwnerAuthentication` (passcode) and only graceful-degrade when *no passcode either* (so the
+  simulator/test harness still works). **Deferred** because it changes an auth path and must be validated on a real
+  device + the no-passcode sim harness — not a blind cleanup edit. Defense-in-depth bonus: bind the SSH-key Keychain
+  item with a `SecAccessControl` (`.biometryCurrentSet`) ACL so the Secure Enclave enforces biometrics, not app logic.
+
 **Residual operational items (not code bugs):**
 - Confirm `APNS_*` + live `STRIPE_*` secrets are set on the running push-backend instance (D1 in checklist).
-- Ensure the **deployed daemon is the Go build**, not the stale Swift `conduitd` 0.1.0 (see §3).
+- Ensure the **deployed daemon is the Go build**, not the stale Swift `conduitd` 0.1.0 (now quarantined in §3).
 
 ---
 
@@ -66,24 +82,20 @@ doc is now stale on its "OPEN" column:
 **Verified against current code (V1_READINESS_AUDIT.md was partially actioned):**
 - ✅ Already removed: `isDemo` dead branches (InboxView), `SessionsHomeView`, `WorktreeBoardView`.
 - ✅ Engine boundary intact: `ConduitCore/SecurityKit/SSHTransport/AgentKit/PersistenceKit/NotificationsKit/DiffKit/SyncKit` import **zero** SwiftUI/UIKit.
-- ⚠️ **Still orphaned (zero production routes) — candidates for dead-strip before publish:**
-  `FilesFeature/*` (FilesView, SFTPFilesView, FilePreviewView), `PreviewFeature/*` (PreviewSurface/Toolbar/ViewModel),
-  `QuotaGuardView`, `SettingsFeature/SnippetEditorView`, plus dead DesignSystem components
-  (`DSMetricTile`, `DSRiskRow`, `DSStepNode`, `DSHealthRow`, `DSToast`, `DSSkeletonRow`, `DSIconTokenView`, `DSSpendHero`).
-  Re-confirm reachability per-symbol before removing.
+- ✅ **Removed this session:** stale Swift `conduitd` → `daemon/conduitd/legacy-swift/`; 8 zero-ref DS
+  components (`DSMetricTile/DSRiskRow/DSStepNode/DSHealthRow/DSToast/DSIconTokenView` + dead `DSSkeletonRow`
+  siblings); `SnippetEditorView`; **`PreviewFeature/*` whole module** (verified orphan — only a dead
+  `import PreviewFeature` in `AppRoot.swift:18`, zero type usage; removed dir + Package.swift target/product/dep).
+- ✅ **CORRECTION:** `FilesFeature` is **NOT orphaned** — `FilePreviewView` has a real production route via
+  `AgentFilesView` → `AgentDetailView.swift:405` ("Files" tool row) + `AgentRunDetailView.swift:215`. **Keep.**
+  (An earlier draft of this doc wrongly listed it as orphaned.)
+- ✅ `QuotaGuardView` is **reachable** (`AppRoot.swift:489`) — keep (also wrongly listed orphaned earlier).
+- 🟡 **Follow-up:** after PreviewFeature removal, `PreviewKit` is consumed only by the test target — evaluate
+  it for removal separately.
 
-**Duplicate / confusing abstractions:**
-- `daemon/conduitd/` ships **both** the canonical **Go** module (`go.mod`, policy engine) **and** a stale
-  **Swift** package (`Package.swift`, `Sources/conduitd`, v0.1.0, no policy). The Swift one is the
-  "stale 0.1.0" called out in the checklist (B4). **Action:** remove the Swift package or move it under
-  an explicit `legacy/` path so no one ships it by accident.
-- `DiffKit` (engine) vs `DiffFeature` (UI) and `PreviewKit` vs `PreviewFeature` — confirm both layers are
-  actually used; PreviewFeature appears orphaned (above).
-
-**Repo hygiene — FIXED this session:**
-- `daemon/agent-runner/agent-runner` (Mach-O 8.2 MB) was **tracked in git** and churning in diffs while
-  the sibling `push-backend`/`conduitd` binaries were already ignored. Untracked (`git rm --cached`) and
-  added to `.gitignore`. File kept on disk; change is unstaged-isolated (not committed).
+**Repo hygiene — FIXED:**
+- `daemon/agent-runner/agent-runner` (Mach-O 8.2 MB) was tracked in git while sibling binaries were ignored.
+  Untracked (`git rm --cached`) + added to `.gitignore`. Committed `810d8704`.
 
 ---
 
@@ -117,7 +129,19 @@ perf issues.** The hot paths are correctly engineered:
 - ✅ Design-system glass primitive (`conduitGlassChrome`) is the single chrome path (agent-contract §4).
 - No prototype-quality/placeholder screens found in the production navigation.
 
-**Accessibility — one real P2 gap:**
+**Accessibility — VoiceOver labels FIXED this session:**
+- ✅ Added `.accessibilityLabel` to the icon-only controls flagged by the per-screen sweep: ChatInputBar
+  (mic/snippet/stop, send Menu, attach Menu), ToolCardView (Explain/collapse), ChatHeaderView (session-options
+  menu), AgentStatusBar (expand chevron), SecretsView (delete/add), and the shared `DSIconButton` (new
+  `accessibilityLabel:` param + all 5 call sites labeled). Verified app-target build green.
+- 🟡 **Residual P3 (documented, not fixed — need per-caller judgment):** (a) hardcoded `.font(.system(size: N))`
+  literals that won't scale with Dynamic Type on user-facing text — `DSApprovalBanner.swift:26` (safety-critical),
+  `InboxApprovalCard.swift:121`, `DSOfflineState.swift:26/52`, `ChatInputBar.swift:115` hint. Fix: swap to a
+  relative text style (`.font(.subheadline)` etc.) or the DS relative token. (b) `DSStatusDot` (Primitives.swift)
+  conveys status by color only (WCAG 1.4.1) — needs a tone→text `accessibilityLabel`, but it usually sits beside
+  descriptive text so blind labeling risks VoiceOver double-speak; label per-caller instead.
+
+**Reduce Motion — one real P2 gap:**
 - **P2 · Reduce Motion not honored by 7 design-system animations.** Only `PixelBox.swift` checks
   `accessibilityReduceMotion` (3 refs). These components run `repeatForever` (infinite) animations with **no**
   reduce-motion guard:

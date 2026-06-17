@@ -307,12 +307,14 @@ public struct ToolCardView<Footer: View>: View {
                         .foregroundStyle(isErrorState ? t.termAccent : t.termText3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Explain with AI")
             }
             Button(action: onCollapse) {
                 Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")
                     .font(.caption2).foregroundStyle(t.termText3)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(block.isCollapsed ? "Expand output" : "Collapse output")
         }
     }
 

@@ -25,7 +25,7 @@ public struct KeysManagementView: View {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 DSDetailHeader("ssh keys", onBack: { dismiss() }) {
-                    DSIconButton(.plus) {
+                    DSIconButton(.plus, accessibilityLabel: "Generate SSH key") {
                         Task { await vm.generate() }
                     }
                 }

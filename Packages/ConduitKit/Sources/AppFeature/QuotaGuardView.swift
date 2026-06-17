@@ -46,7 +46,7 @@ public struct QuotaGuardView: View {
                     .foregroundStyle(t.text3)
             }
             Spacer()
-            DSIconButton(.refresh) {
+            DSIconButton(.refresh, accessibilityLabel: "Refresh quota") {
                 Haptics.selection()
                 Task { await store.refresh() }
             }

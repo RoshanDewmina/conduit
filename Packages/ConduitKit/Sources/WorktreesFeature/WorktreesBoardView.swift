@@ -34,7 +34,7 @@ public struct WorktreesBoardView: View {
                     breadcrumb: "parallel agents",
                     count: worktrees.isEmpty ? nil : "\(activeCount) active"
                 ) {
-                    DSIconButton(.plus) {
+                    DSIconButton(.plus, accessibilityLabel: "New worktree") {
                         Haptics.selection()
                         onCreateNew()
                     }

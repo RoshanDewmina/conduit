@@ -139,7 +139,7 @@ public struct PaywallSheet: View {
             }
 
             // Dismiss button
-            DSIconButton(.close) { dismiss() }
+            DSIconButton(.close, accessibilityLabel: "Close") { dismiss() }
                 .padding(.top, 8)
                 .padding(.trailing, 8)
         }

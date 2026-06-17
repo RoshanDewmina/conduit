@@ -91,6 +91,7 @@ public struct AgentStatusBar: View {
                     .font(.caption2)
                     .foregroundStyle(t.hudText.opacity(0.6))
                     .frame(width: 28, height: 28)
+                    .accessibilityLabel(isExpanded ? "Collapse agent status" : "Expand agent status")
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

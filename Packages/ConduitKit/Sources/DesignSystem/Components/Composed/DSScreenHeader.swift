@@ -137,12 +137,14 @@ public struct DSDetailHeader<Trailing: View>: View {
 
 public struct DSIconButton: View {
     let icon: DSIcon
+    let accessibilityLabel: String?
     let action: () -> Void
 
     @Environment(\.conduitTokens) private var t
 
-    public init(_ icon: DSIcon, action: @escaping () -> Void) {
+    public init(_ icon: DSIcon, accessibilityLabel: String? = nil, action: @escaping () -> Void) {
         self.icon = icon
+        self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
 
@@ -160,5 +162,6 @@ public struct DSIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel ?? "")
     }
 }

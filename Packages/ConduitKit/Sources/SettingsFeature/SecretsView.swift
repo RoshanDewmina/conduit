@@ -147,6 +147,7 @@ public struct SecretsView: View {
                 Button { vm.showAddSheet = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add secret")
             }
         }
         .sheet(isPresented: $vm.showAddSheet) {
@@ -209,6 +210,7 @@ private struct SecretRow: View {
                         .font(.dsSansPt(12))
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Delete secret \(secret.name)")
             }
         }
         .padding(.vertical, 4)
