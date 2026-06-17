@@ -159,8 +159,8 @@ Decision/approval; the inbox queue; the **while-you-were-away activity feed** (t
 ### 5.4 The prototype and chosen design (current branch)
 `docs/conduit-ui-prototype/` — **Next.js 16 + React 19 + shadcn/ui + Tailwind 4**, rendered in 390×844 iPhone frames, dark Geist palette. Routes: `/` (variant selector), `/final` (chosen reference), `/grid` (all variants), and A/B/C variants per screen. **Chosen variants** (commit `1c718c84`): **inbox-B** (compact cards), **checkpoint-B** (bottom sheet over inbox context), **loop-A** (timeline of steps with progress), **report-A** (audit-style proof card: goal, diff, files, commands, tests, risks). **It is a design reference, not a shipping app** — the handoff target is SwiftUI ("Plan 2"). It does **not** connect to the backend or bridge.
 
-### 5.5 Information-architecture shift
-The brief states the current `hosts/inbox/library/settings` terminal-first IA **"has outgrown"** the command-center reality; **restructuring the IA is explicitly in scope** (`§9`, `§11.6`). The terminal should become the *deep* surface, with approvals/fleet/activity as the everyday top level.
+### 5.5 Information-architecture shift — ✅ SHIPPED (2026-06)
+The IA restructure is **done**. The earlier `hosts/inbox/library/settings` terminal-first IA has been replaced by the four shipped tabs **Inbox / Fleet / Activity / Settings** (`AppFeature/AppRoot.swift` `enum Tab { case inbox; case fleet; case activity; case settings }`). Approvals (Inbox), the agent fleet (Fleet), and history (Activity) are the everyday top level; the **chat-based session/terminal surface is now the *deep* surface** reached by depth from Fleet/Inbox — not a top-level tab.
 
 ---
 

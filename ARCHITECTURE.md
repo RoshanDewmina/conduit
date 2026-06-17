@@ -2,7 +2,7 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-05-27
+Last updated: 2026-06-17 (IA section §4.1 refreshed to the shipped Inbox/Fleet/Activity/Settings tabs)
 Target platform: iOS 26.0+ deployment (project.yml and Package.swift); verified on iOS 26.4 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
@@ -172,13 +172,16 @@ replaces the tab bar.
 
 | Tab | Purpose | Always-on signal |
 |---|---|---|
-| **Workspaces** | List of remote hosts and their open sessions | Connected/disconnected dot per host |
-| **Session** | The active terminal / agent surface | Live render, scrollback |
 | **Inbox** | Pending approvals, completed runs, failures | Unread badge count, deep links |
-| **Settings** | Keys, AI providers, snippets, security | Sync status |
+| **Fleet** | Hosts + active agent sessions/slots, reconnectable hosts | Connected/agent-running dot per slot |
+| **Activity** | Audit feed / "while you were away" history | Recent-event count |
+| **Settings** | Keys, AI providers, secrets, security | Sync status |
 
-The **Session** tab is the floor model. Workspaces ⇒ Inbox ⇒ Session is the
-canonical fast path; Settings is a once-a-week destination.
+> **Shipped IA (2026-06):** the four tabs are **Inbox / Fleet / Activity / Settings**
+> (`AppFeature/AppRoot.swift` `enum Tab`). The **chat-based session surface is a *depth*
+> destination** reached from Fleet/Inbox, **not** a top-level tab. (The earlier
+> *Workspaces / Session / Inbox / Settings* layout described below historically has been
+> replaced — Fleet subsumes Workspaces, Session is a depth surface, Activity is new.)
 
 ### 4.2 Session screen layout
 

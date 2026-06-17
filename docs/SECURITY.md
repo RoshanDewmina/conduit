@@ -1,5 +1,10 @@
 # Conduit Security Posture (Self-Host)
 
+> ⚠️ **SUPERSEDED (2026-06-17)** by [`docs/legal/SECURITY_ARCHITECTURE.md`](legal/SECURITY_ARCHITECTURE.md)
+> (fuller, newer threat model, 2026-06-15) and [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §2 (current
+> verified security posture: GO). This file is retained for its self-host posture notes only — for
+> current security state use those two documents.
+
 This document describes the end-to-end security model for Conduit and the `conduitd` bridge when used in self-host mode.
 
 ## Threat Model (Practical Scope)

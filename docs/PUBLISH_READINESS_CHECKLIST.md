@@ -9,7 +9,12 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 
 ---
 
-## A. Verified GREEN today (2026-06-13 evidence)
+## A. Verified GREEN (2026-06-13, re-verified 2026-06-17)
+
+> **2026-06-17 re-verification:** green baseline holds — `swift build` + **app-target `xcodebuild`
+> BUILD SUCCEEDED with 0 concurrency warnings**, and all 4 Go modules build+test pass (see
+> `docs/KNOWN_ISSUES.md` §1). The previously-uncommitted live-loop fixes + polish are now **COMMITTED**
+> on `opencode/onboarding-redesign` (pushed to origin).
 
 | Layer | Result | Evidence |
 |---|---|---|
