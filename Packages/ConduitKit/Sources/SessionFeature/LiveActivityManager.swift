@@ -35,6 +35,7 @@ public struct ConduitSessionAttributes: ActivityAttributes {
         public var agentName: String?       // "Claude Code" when an agent is running
         public var pendingApprovalID: String?
         public var isStreaming: Bool        // agent is actively executing (drives the blue glyph)
+        public var cost: Double?            // accumulated cost in USD
         public var lastUpdate: Date
 
         public init(
@@ -43,6 +44,7 @@ public struct ConduitSessionAttributes: ActivityAttributes {
             agentName: String? = nil,
             pendingApprovalID: String? = nil,
             isStreaming: Bool = false,
+            cost: Double? = nil,
             lastUpdate: Date = .now
         ) {
             self.status = status
@@ -50,6 +52,7 @@ public struct ConduitSessionAttributes: ActivityAttributes {
             self.agentName = agentName
             self.pendingApprovalID = pendingApprovalID
             self.isStreaming = isStreaming
+            self.cost = cost
             self.lastUpdate = lastUpdate
         }
     }
@@ -100,7 +103,8 @@ public final class ConduitLiveActivityManager {
             status: status,
             pendingApprovals: pendingApprovals,
             agentName: agentName,
-            pendingApprovalID: pendingApprovalID
+            pendingApprovalID: pendingApprovalID,
+            cost: lastContent[hostID]?.cost
         )
 
         if let existing = activities[hostID] {
@@ -138,7 +142,8 @@ public final class ConduitLiveActivityManager {
             status: status,
             pendingApprovals: pendingApprovals,
             agentName: agentName,
-            pendingApprovalID: pendingApprovalID
+            pendingApprovalID: pendingApprovalID,
+            cost: lastContent[hostID]?.cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[hostID] = content
@@ -164,7 +169,8 @@ public final class ConduitLiveActivityManager {
                 pendingApprovals: count,
                 agentName: base.agentName,
                 pendingApprovalID: count > 0 ? base.pendingApprovalID : nil,
-                isStreaming: base.isStreaming
+                isStreaming: base.isStreaming,
+                cost: base.cost
             )
             await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
             lastContent[hostID] = content
@@ -181,7 +187,24 @@ public final class ConduitLiveActivityManager {
             status: base.status,
             pendingApprovals: base.pendingApprovals,
             agentName: base.agentName,
-            isStreaming: isStreaming
+            isStreaming: isStreaming,
+            cost: base.cost
+        )
+        await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
+        lastContent[hostID] = content
+    }
+
+    /// Update the accumulated cost for a host's activity. No-ops when no activity
+    /// is running for the host.
+    public func updateCost(hostID: String, cost: Double?) async {
+        guard let activity = activities[hostID], let base = lastContent[hostID] else { return }
+        let content = ConduitSessionAttributes.ContentState(
+            status: base.status,
+            pendingApprovals: base.pendingApprovals,
+            agentName: base.agentName,
+            pendingApprovalID: base.pendingApprovalID,
+            isStreaming: base.isStreaming,
+            cost: cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[hostID] = content

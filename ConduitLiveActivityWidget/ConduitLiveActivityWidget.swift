@@ -1,9 +1,8 @@
 // Tier 1.5.1 — iOS Widget Extension that renders the Conduit session
 // Live Activity on the lock screen and Dynamic Island.
 //
-// The activity is started by `ConduitLiveActivityManager` in the main app
-// target. This extension only reacts to its `ContentState` updates — it
-// neither owns nor mutates state.
+// Simplified design: clean minimal UI with agent name, status, progress,
+// cost, and approve/reject buttons for pending approvals.
 
 import WidgetKit
 import SwiftUI
@@ -25,184 +24,227 @@ struct ConduitLiveActivityWidgetBundle: WidgetBundle {
 struct ConduitSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ConduitSessionAttributes.self) { context in
-            // Lock-screen + banner appearance.
-            HStack(spacing: 12) {
-                LiveActivityPixelGlyph(
-                    color: statusColor(context.state.status,
-                                       pendingApprovals: context.state.pendingApprovals,
-                                       isStreaming: context.state.isStreaming),
-                    cell: 7, gap: 2
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.attributes.hostName)
-                        .font(.headline)
-                    HStack(spacing: 4) {
-                        if let agent = context.state.agentName {
-                            Text(agent).foregroundStyle(.secondary)
-                            Text("·").foregroundStyle(.tertiary)
-                        }
-                        Text(context.state.status)
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.caption.monospaced())
-                    Spacer()
-                    if context.state.pendingApprovals > 0 {
-                        Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
-                            .labelStyle(.titleAndIcon)
-                            .foregroundStyle(.orange)
-                            .font(.caption.weight(.semibold))
-                    }
-                }
-
-                if let approvalID = context.state.pendingApprovalID, !approvalID.isEmpty {
-                    HStack(spacing: 8) {
-                        Button(
-                            intent: ApprovalActionIntent(
-                                approvalID: approvalID,
-                                hostID: context.attributes.hostID,
-                                decision: .reject
-                            )
-                        ) {
-                            Label("Reject", systemImage: "xmark.circle")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button(
-                            intent: ApprovalActionIntent(
-                                approvalID: approvalID,
-                                hostID: context.attributes.hostID,
-                                decision: .approve
-                            )
-                        ) {
-                            Label("Approve", systemImage: "checkmark.circle")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .font(.caption)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .activityBackgroundTint(Color.black.opacity(0.75))
-            .activitySystemActionForegroundColor(.white)
+            // Lock-screen + banner appearance
+            lockScreenView(context: context)
         } dynamicIsland: { context in
             DynamicIsland {
+                // MARK: - Dynamic Island Expanded
                 DynamicIslandExpandedRegion(.leading) {
-                    LiveActivityPixelGlyph(
-                        color: statusColor(context.state.status,
-                                           pendingApprovals: context.state.pendingApprovals),
-                        cell: 6, gap: 2
-                    )
+                    Circle()
+                        .fill(statusColor(for: context.state))
+                        .frame(width: 8, height: 8)
                 }
+
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.pendingApprovals > 0 {
                         Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
                             .foregroundStyle(.orange)
+                    } else if let cost = context.state.cost, cost > 0 {
+                        Text(formatCost(cost))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
                     }
                 }
+
                 DynamicIslandExpandedRegion(.center) {
-                    VStack(alignment: .center, spacing: 1) {
-                        Text(context.attributes.hostName).font(.headline)
-                        if let agent = context.state.agentName {
-                            Text(agent).font(.caption).foregroundStyle(.secondary)
-                        }
+                    VStack(alignment: .center, spacing: 2) {
+                        Text(context.state.agentName ?? context.attributes.hostName)
+                            .font(.headline)
+                            .lineLimit(1)
+
+                        Text(statusLabel(for: context.state))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
+
                 DynamicIslandExpandedRegion(.bottom) {
                     if let approvalID = context.state.pendingApprovalID, !approvalID.isEmpty {
-                        HStack(spacing: 10) {
-                            Button(
-                                intent: ApprovalActionIntent(
-                                    approvalID: approvalID,
-                                    hostID: context.attributes.hostID,
-                                    decision: .reject
-                                )
-                            ) {
-                                Label("Reject", systemImage: "xmark")
+                        approvalButtons(
+                            approvalID: approvalID,
+                            hostID: context.attributes.hostID
+                        )
+                    } else {
+                        HStack(spacing: 8) {
+                            if context.state.isStreaming {
+                                Image(systemName: "waveform")
+                                    .font(.caption2)
+                                    .foregroundStyle(.blue)
                             }
-                            .buttonStyle(.bordered)
-                            Button(
-                                intent: ApprovalActionIntent(
-                                    approvalID: approvalID,
-                                    hostID: context.attributes.hostID,
-                                    decision: .approve
-                                )
-                            ) {
-                                Label("Approve", systemImage: "checkmark")
+
+                            if let cost = context.state.cost, cost > 0 {
+                                Text(formatCost(cost))
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
                 }
             } compactLeading: {
-                LiveActivityPixelGlyph(
-                    color: statusColor(context.state.status,
-                                       pendingApprovals: context.state.pendingApprovals,
-                                       isStreaming: context.state.isStreaming),
-                    cell: 4, gap: 1.4
-                )
+                compactLeadingView(context: context)
             } compactTrailing: {
-                if context.state.pendingApprovals > 0 {
-                    Text("\(context.state.pendingApprovals)")
-                        .foregroundStyle(.orange)
-                }
+                compactTrailingView(context: context)
             } minimal: {
-                LiveActivityPixelGlyph(
-                    color: statusColor(context.state.status,
-                                       pendingApprovals: context.state.pendingApprovals,
-                                       isStreaming: context.state.isStreaming),
-                    cell: 3.4, gap: 1.1
-                )
+                minimalView(context: context)
             }
         }
     }
 
-    /// State tint for the pixel glyph — mirrors `PixelBox.stateColor`. A pending
-    /// approval is the most important signal, so it wins (amber) over connection
-    /// status, matching how the in-app island goes amber on approval.
-    private func statusColor(_ status: String, pendingApprovals: Int, isStreaming: Bool = false) -> Color {
-        if pendingApprovals > 0 {
-            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber
-        }
-        if isStreaming {
-            return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue (streaming)
-        }
-        switch status {
-        case "connected":    return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green
-        case "reconnecting": return Color(.sRGB, red: 0.820, green: 0.439, blue: 0.184, opacity: 1) // orange
-        case "suspended":    return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1) // dim
-        default:             return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green
-        }
-    }
-}
+    // MARK: - Lock Screen
 
-/// A static 3×3 "pixel block" that mirrors the in-app `PixelBox` motif for the
-/// Live Activity. Widget extensions render static snapshots — no `TimelineView`
-/// animation — so this is a still grid tinted by session state, with a fixed
-/// per-cell opacity pattern so it reads as pixels rather than a solid square.
-private struct LiveActivityPixelGlyph: View {
-    let color: Color
-    var cell: CGFloat = 4
-    var gap: CGFloat = 1.4
+    @ViewBuilder
+    private func lockScreenView(context: ActivityViewContext<ConduitSessionAttributes>) -> some View {
+        HStack(spacing: 12) {
+            // Status indicator
+            Circle()
+                .fill(statusColor(for: context.state))
+                .frame(width: 10, height: 10)
 
-    private static let opacities: [Double] = [
-        0.55, 0.95, 0.70,
-        0.90, 0.65, 0.95,
-        0.70, 0.92, 0.55,
-    ]
+            VStack(alignment: .leading, spacing: 2) {
+                // Agent name or host name
+                Text(context.state.agentName ?? context.attributes.hostName)
+                    .font(.headline)
+                    .lineLimit(1)
 
-    var body: some View {
-        VStack(spacing: gap) {
-            ForEach(0..<3, id: \.self) { row in
-                HStack(spacing: gap) {
-                    ForEach(0..<3, id: \.self) { col in
-                        RoundedRectangle(cornerRadius: max(0.5, cell * 0.18), style: .continuous)
-                            .fill(color.opacity(Self.opacities[row * 3 + col]))
-                            .frame(width: cell, height: cell)
+                // Status + cost
+                HStack(spacing: 6) {
+                    Text(statusLabel(for: context.state))
+                        .foregroundStyle(.secondary)
+
+                    if let cost = context.state.cost, cost > 0 {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                        Text(formatCost(cost))
+                            .foregroundStyle(.secondary)
                     }
                 }
+                .font(.caption.monospaced())
+            }
+
+            Spacer()
+
+            // Pending approval badge
+            if context.state.pendingApprovals > 0 {
+                Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.orange)
+                    .font(.caption.weight(.semibold))
             }
         }
-        .accessibilityHidden(true)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .activityBackgroundTint(Color.black.opacity(0.75))
+        .activitySystemActionForegroundColor(.white)
+    }
+
+    // MARK: - Dynamic Island Compact
+
+    @ViewBuilder
+    private func compactLeadingView(context: ActivityViewContext<ConduitSessionAttributes>) -> some View {
+        Circle()
+            .fill(statusColor(for: context.state))
+            .frame(width: 6, height: 6)
+    }
+
+    @ViewBuilder
+    private func compactTrailingView(context: ActivityViewContext<ConduitSessionAttributes>) -> some View {
+        if context.state.pendingApprovals > 0 {
+            Text("\(context.state.pendingApprovals)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+        } else {
+            Text(shortStatus(for: context.state))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Dynamic Island Minimal
+
+    @ViewBuilder
+    private func minimalView(context: ActivityViewContext<ConduitSessionAttributes>) -> some View {
+        Circle()
+            .fill(statusColor(for: context.state))
+            .frame(width: 5, height: 5)
+    }
+
+    // MARK: - Approval Buttons
+
+    @ViewBuilder
+    private func approvalButtons(approvalID: String, hostID: String) -> some View {
+        HStack(spacing: 10) {
+            Button(
+                intent: ApprovalActionIntent(
+                    approvalID: approvalID,
+                    hostID: hostID,
+                    decision: .reject
+                )
+            ) {
+                Label("Reject", systemImage: "xmark")
+            }
+            .buttonStyle(.bordered)
+
+            Button(
+                intent: ApprovalActionIntent(
+                    approvalID: approvalID,
+                    hostID: hostID,
+                    decision: .approve
+                )
+            ) {
+                Label("Approve", systemImage: "checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .font(.caption)
+    }
+
+    // MARK: - Status Colors (ok=green, warn=amber, danger=red)
+
+    private func statusColor(for state: ConduitSessionAttributes.ContentState) -> Color {
+        if state.pendingApprovals > 0 {
+            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (warn)
+        }
+        if state.isStreaming {
+            return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue (streaming)
+        }
+        switch state.status {
+        case "connected":
+            return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green (ok)
+        case "reconnecting":
+            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (warn)
+        case "error":
+            return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (danger)
+        case "suspended":
+            return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1) // dim
+        default:
+            return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green (ok)
+        }
+    }
+
+    private func statusLabel(for state: ConduitSessionAttributes.ContentState) -> String {
+        if state.pendingApprovals > 0 {
+            return "\(state.pendingApprovals) pending"
+        }
+        if state.isStreaming {
+            return "streaming"
+        }
+        switch state.status {
+        case "connected":    return "connected"
+        case "reconnecting": return "reconnecting"
+        case "error":        return "error"
+        case "suspended":    return "suspended"
+        default:             return state.status
+        }
+    }
+
+    private func shortStatus(for state: ConduitSessionAttributes.ContentState) -> String {
+        if state.pendingApprovals > 0 { return "\(state.pendingApprovals)" }
+        if state.isStreaming { return "..." }
+        return state.status.prefix(3).lowercased() + "..."
+    }
+
+    private func formatCost(_ cost: Double) -> String {
+        if cost < 0.01 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
     }
 }

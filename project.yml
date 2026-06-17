@@ -124,6 +124,44 @@ targets:
         embed: true
       - target: ConduitWidget
         embed: true
+      - target: ConduitWatchWidget
+        embed: true
+
+  ConduitWatchWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: ConduitWatchWidget
+    info:
+      path: ConduitWatchWidget/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: ConduitWatchWidget/ConduitWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.conduit.mobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchwidget
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+    dependencies:
+      - package: ConduitKit
+        product: ConduitCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
 
   ConduitLiveActivityWidget:
     type: app-extension
