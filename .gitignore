@@ -105,6 +105,9 @@ animations/node_modules/
 marketing/.next/
 marketing/node_modules/
 
+# agent-runner compiled binary (build artifact, not source)
+daemon/agent-runner/agent-runner
+
 # push-backend compiled binaries
 daemon/push-backend/push-backend
 daemon/push-backend/push-backend-linux
@@ -131,3 +134,6 @@ daemon/conduitd/dist/
 .tmp-*.png
 .tmp-*
 .design-shots/
+
+# Git worktrees
+.worktrees/
