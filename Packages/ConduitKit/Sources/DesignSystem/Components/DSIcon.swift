@@ -461,22 +461,4 @@ private extension Path {
     }
 }
 
-// MARK: - Token-tinted convenience
 
-public struct DSIconTokenView: View {
-    let icon: DSIcon
-    let size: CGFloat
-    let colorPath: KeyPath<ConduitTokens, Color>
-
-    @Environment(\.conduitTokens) private var t
-
-    public init(_ icon: DSIcon, size: CGFloat = 20, token: KeyPath<ConduitTokens, Color>) {
-        self.icon = icon
-        self.size = size
-        self.colorPath = token
-    }
-
-    public var body: some View {
-        DSIconView(icon, size: size, color: t[keyPath: colorPath])
-    }
-}
