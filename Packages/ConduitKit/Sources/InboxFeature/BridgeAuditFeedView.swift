@@ -44,7 +44,7 @@ private struct AuditEntryRow: View {
             DSStatusDot(tone: chipTone.asDotTone, size: 7)
                 .padding(.top, 5)
 
-            VStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     DSChip(chipLabel, systemImage: chipIcon, tone: chipTone, variant: .soft, size: .sm)
                     Spacer()

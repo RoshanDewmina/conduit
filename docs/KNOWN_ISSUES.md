@@ -86,6 +86,7 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   components (`DSMetricTile/DSRiskRow/DSStepNode/DSHealthRow/DSToast/DSIconTokenView` + dead `DSSkeletonRow`
   siblings); `SnippetEditorView`; **`PreviewFeature/*` whole module** (verified orphan — only a dead
   `import PreviewFeature` in `AppRoot.swift:18`, zero type usage; removed dir + Package.swift target/product/dep).
+- ✅ `PreviewFeature` **REMOVED** (commit 59e7ae3d): module dir + Package.swift target/product/AppFeature dep all deleted.
 - ✅ **CORRECTION:** `FilesFeature` is **NOT orphaned** — `FilePreviewView` has a real production route via
   `AgentFilesView` → `AgentDetailView.swift:405` ("Files" tool row) + `AgentRunDetailView.swift:215`. **Keep.**
   (An earlier draft of this doc wrongly listed it as orphaned.)
@@ -141,16 +142,11 @@ perf issues.** The hot paths are correctly engineered:
   conveys status by color only (WCAG 1.4.1) — needs a tone→text `accessibilityLabel`, but it usually sits beside
   descriptive text so blind labeling risks VoiceOver double-speak; label per-caller instead.
 
-**Reduce Motion — one real P2 gap:**
-- **P2 · Reduce Motion not honored by 7 design-system animations.** Only `PixelBox.swift` checks
-  `accessibilityReduceMotion` (3 refs). These components run `repeatForever` (infinite) animations with **no**
-  reduce-motion guard:
-  `DesignSystem/Components/Composites.swift`, `AgentIsland.swift`, `Primitives.swift` (×2), `DSChip.swift`,
-  `ChatComponents.swift`, `States/DSOfflineState.swift`, `States/DSSkeletonRow.swift`.
-  *Impact:* users with Reduce Motion enabled (vestibular sensitivity) still get continuous shimmer/pulse —
-  WCAG 2.3.3 (Animation from Interactions) concern. *Fix:* gate each `repeatForever` `withAnimation` on
-  `@Environment(\.accessibilityReduceMotion)` and fall back to a static/opacity state — same pattern PixelBox
-  already uses. High-confidence, low-risk; ~7 small edits, each needs an app-target build check.
+**Reduce Motion — ✅ FIXED (commit 53bac151):**
+- P2 resolved. All 7 design-system animations now gate `repeatForever` on
+  `@Environment(\.accessibilityReduceMotion)` with static/opacity fallbacks: BlinkModifier,
+  BlinkingCaretModifier, AgentIsland nudge, DSStatusDot pulse, DSConnectionGlyph spinner,
+  DSOfflineState pulse, DSSkeletonRow shimmer, and AgentBadge streaming dots.
 - **Residual (info):** `.accessibilityLabel` appears in only 8 files — icon-only buttons elsewhere may lack
   VoiceOver labels. Not individually verified (would need per-button audit); flagged for the per-screen a11y
   sweep (checklist B8).
@@ -184,9 +180,8 @@ that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFIC
 - **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
 - **P1:** none confirmed. (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `conduitd` was
   quarantined this session; `SnippetEditorView` + dead DS components were removed.)
-- **P2:** (a) **Reduce-Motion guard on 7 DS animation components** (§4b) — the one confirmed accessibility
-  fix. (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8). (c) Dead-strip
-  orphaned `FilesFeature`/`PreviewFeature` whole modules (needs Package.swift surgery — deferred, higher-risk).
+- **P2:** (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8).
+  *(a) Reduce-Motion ✓ fixed 53bac151. (c) PreviewFeature ✓ removed 59e7ae3d.*
 - **P3:** `BridgeAuditFeedView` plain-VStack laziness defeat (§4); 2 slow-type-check getters (§4); deliberate
   doc archival pass already done this session (§5 archived 23 docs).
 - **Owner-gated (unchanged):** App Store Connect setup, physical-device APNs smoke test, live remote-host

@@ -23,6 +23,7 @@ public enum AgentKind: String, Codable, Hashable, Sendable, CaseIterable {
     case gemini        // Gemini CLI / Antigravity
     case opencode      // OpenCode
     case copilot       // GitHub Copilot CLI
+    case kimi          // Kimi Code (Moonshot AI)
 }
 
 // MARK: - Registration
@@ -227,6 +228,32 @@ public struct AgentRegistration: Codable, Hashable, Sendable {
             resumeCommand: "{{executable}} --session {{sessionId}}",
             cwd: .preserve,
             sessionDirectory: "~/.local/share/opencode"
+        )
+    }
+
+    public static var builtInKimi: AgentRegistration {
+        AgentRegistration(
+            id: AgentKind.kimi.rawValue,
+            name: "Kimi Code",
+            iconAssetName: "AgentIcons/Kimi",
+            detect: AgentDetectRule(processName: "kimi", argvContains: ["kimi"]),
+            sessionIdSource: .argvOption("--session"),
+            resumeCommand: "{{executable}} --session {{sessionId}}",
+            cwd: .preserve,
+            sessionDirectory: "~/.kimi-code"
+        )
+    }
+
+    public static var builtInCopilot: AgentRegistration {
+        AgentRegistration(
+            id: AgentKind.copilot.rawValue,
+            name: "GitHub Copilot",
+            iconAssetName: "AgentIcons/Copilot",
+            detect: AgentDetectRule(processName: "copilot", argvContains: ["copilot"]),
+            sessionIdSource: .argvOption("--resume"),
+            resumeCommand: "{{executable}} --resume {{sessionId}}",
+            cwd: .preserve,
+            sessionDirectory: "~/.copilot/sessions"
         )
     }
 }
@@ -434,6 +461,8 @@ public struct AgentRegistry: Sendable {
             .builtInClaude,
             .builtInCodex,
             .builtInOpencode,
+            .builtInKimi,
+            .builtInCopilot,
             .builtInCursor,
             .builtInGrok,
             .builtInPi,

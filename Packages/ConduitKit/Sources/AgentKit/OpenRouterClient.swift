@@ -180,6 +180,7 @@ public actor OpenRouterClient: AIClient {
             "max_tokens": maxTokens,
             "stream": stream,
             "messages": chatMessages,
+            "transforms": ["middle-out"],
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         return req

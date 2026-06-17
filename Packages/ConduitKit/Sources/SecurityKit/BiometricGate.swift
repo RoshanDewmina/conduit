@@ -16,7 +16,12 @@ public actor BiometricGate: Sendable {
         guard ctx.canEvaluatePolicy(
             .deviceOwnerAuthenticationWithBiometrics, error: &nsError
         ) else {
-            return  // No biometrics available (simulator, no Touch/Face ID enrolled)
+            if let nsError, let laErr = nsError as? LAError,
+               laErr.code == .biometryNotEnrolled {
+                try await passcodeFallback(reason: reason)
+                return
+            }
+            return  // Simulator or no passcode — degrade gracefully
         }
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
             ctx.evaluatePolicy(
@@ -29,8 +34,6 @@ public actor BiometricGate: Sendable {
                         case .userCancel, .appCancel, .systemCancel:
                             cont.resume(throwing: ConduitError.cancelled)
                         case .biometryNotAvailable, .biometryNotEnrolled:
-                            // No biometrics configured at all — degrade gracefully
-                            // (mirrors the canEvaluatePolicy early-return above).
                             cont.resume()
                         case .biometryLockout:
                             // Biometry IS enrolled but is locked out (too many failed
@@ -72,6 +75,28 @@ public actor BiometricGate: Sendable {
                 } else {
                     cont.resume(throwing: ConduitError.authFailed(
                         reason: "Biometric authentication denied"
+                    ))
+                }
+            }
+        }
+    }
+
+    private func passcodeFallback(reason: String) async throws {
+        let ctx = LAContext()
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            ctx.evaluatePolicy(
+                .deviceOwnerAuthentication,
+                localizedReason: reason
+            ) { success, error in
+                if let error {
+                    cont.resume(throwing: ConduitError.authFailed(
+                        reason: error.localizedDescription
+                    ))
+                } else if success {
+                    cont.resume()
+                } else {
+                    cont.resume(throwing: ConduitError.authFailed(
+                        reason: "Authentication required"
                     ))
                 }
             }

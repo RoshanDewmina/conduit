@@ -98,7 +98,7 @@ public struct FleetView: View {
                         ? nil
                         : "\(store.slots.count + reconnectableHosts.count) hosts"
                 ) {
-                    DSIconButton(.plus, accessibilityLabel: "New task") {
+                    DSIconButton(.plus, accessibilityLabel: "New Chat") {
                         Haptics.selection()
                         onNewTask()
                     }
