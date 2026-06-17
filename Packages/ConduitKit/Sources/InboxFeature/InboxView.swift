@@ -55,9 +55,10 @@ public struct InboxView: View {
     public var onSetPolicy: ((String) async -> Void)?
 
     @Environment(\.conduitTokens) private var t
-    @State private var detailApproval: Approval?
     @State private var editingApproval: Approval?
     @State private var editedToolInputText = ""
+    @State private var diffApproval: Approval?
+    @State private var decisionSheetApproval: Approval?
     @State private var scopeSheetApproval: Approval?
 
     public init(
@@ -83,36 +84,62 @@ public struct InboxView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Big typography header
-                HStack {
-                    Text("inbox")
-                        .font(.dsDisplayPt(32, weight: .bold))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    if pendingCount > 0 {
-                        Text("\(pendingCount) pending")
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text3)
+                // ── BLOCKS header
+                DSScreenHeader(
+                    "inbox",
+                    breadcrumb: "agent approvals",
+                    count: pendingCount > 0 ? "\(pendingCount) pending" : nil
+                )
+
+                if !statusHeaderAgents.isEmpty {
+                    AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
+                }
+
+                Spacer().frame(height: 12)
+
+                if !awayAuditEntries.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        DSListSectionHead("WHILE YOU WERE AWAY", count: awayAuditEntries.count)
+                        BridgeAuditFeedView(entries: awayAuditEntries)
+                            .padding(.horizontal, 16)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
 
                 if visibleApprovals.isEmpty {
-                    InboxEmptyState()
+                    VStack {
+                        Spacer()
+                        DSEmptyState(
+                            dotMatrix: .idle,
+                            title: "No approvals waiting",
+                            subtitle: "When a coding agent needs permission, its request will appear here."
+                        )
+                        .padding(.horizontal, 24)
+                        Spacer()
+                    }
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             let pending = visibleApprovals.filter { $0.isPending }
+                            let decided = visibleApprovals.filter { !$0.isPending }
 
                             if !pending.isEmpty {
+                                DSListSectionHead("PENDING", count: pending.count)
                                 ForEach(pending) { approval in
                                     pendingCard(approval)
                                         .padding(.horizontal, 16)
                                 }
                             }
-                        }
+
+                            if !decided.isEmpty {
+                                DSListSectionHead("DECIDED", count: decided.count)
+                                ForEach(decided) { approval in
+                                    decidedRow(approval)
+                                }
+                            }
+        }
+                        // BUG-4: constrain scroll content to the viewport width so wide
+                        // rows at large Dynamic Type wrap instead of overflowing and being
+                        // centre-clipped on the leading edge by the ScrollView.
                         .frame(maxWidth: .infinity)
                         .padding(.top, 4)
                         .padding(.bottom, 16)
@@ -120,11 +147,14 @@ public struct InboxView: View {
                 }
             }
         }
-        .sheet(item: $detailApproval) { approval in
-            detailSheet(approval)
-        }
         .sheet(item: $editingApproval) { approval in
             editSheet(approval)
+        }
+        .sheet(item: $diffApproval) { approval in
+            diffSheet(approval)
+        }
+        .sheet(item: $decisionSheetApproval) { approval in
+            decisionSheetContent(approval)
         }
         .sheet(item: $scopeSheetApproval) { approval in
             AllowAlwaysScopeSheet(approval: approval) { scopedRule in
@@ -140,81 +170,110 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
-        let isCritical = approval.risk.rawValue >= 3
-        InboxApprovalCard(
-            agentKey: agentKey(approval.agent),
-            agentName: agentName(approval.agent),
-            timeLabel: pendingTimeLabel(approval),
-            question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
-            toolName: approval.toolName ?? approval.command,
-            args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
-            risk: approval.risk.rawValue,
-            isCritical: isCritical,
-            onDeny: { vm.decide(approval.id, decision: .rejected) },
-            onApprove: {
-                if isCritical {
-                    Task {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
-                        catch {
-                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
-                            return
-                        }
-                        vm.decide(approval.id, decision: .approved)
-                        Haptics.success()
-                    }
-                } else {
-                    vm.decide(approval.id, decision: .approved)
+        switch approval.kind {
+        case .askQuestion:
+            DSAskQuestionCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: pendingTimeLabel(approval),
+                question: approval.question ?? "What should I do next?",
+                choices: approval.choices ?? [],
+                    onAnswer: { idx in
+                    vm.decide(approval.id, decision: .approved, choiceIndex: idx)
+                }
+            )
+
+        case .callMCP:
+            DSMCPCallCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: pendingTimeLabel(approval),
+                toolName: approval.toolName ?? approval.command ?? "unknown_tool",
+                toolUseID: approval.toolUseID,
+                args: summarizedToolInput(approval),
+                risk: approval.risk.rawValue,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onEditAndRun: {
+                    editedToolInputText = editableToolInput(for: approval)
+                    editingApproval = approval
+                },
+                onAllowAlways: { scopeSheetApproval = approval },
+                onApprove: { vm.decide(approval.id, decision: .approved) }
+            )
+            .onTapGesture { decisionSheetApproval = approval }
+
+        case .credential:
+            DSCredentialRequestCard(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                timeLabel: pendingTimeLabel(approval),
+                toolName: approval.toolName ?? approval.command ?? "unknown",
+                credentialHint: approval.command ?? "credential",
+                risk: approval.risk.rawValue,
+                onDeny: { vm.decide(approval.id, decision: .rejected) },
+                onApprove: { vm.decide(approval.id, decision: .approved) },
+                onAuthorizeScope: { scopeSheetApproval = approval }
+            )
+
+        default:
+            VStack(alignment: .leading, spacing: 8) {
+                DSApprovalCard(
+                    agentKey: agentKey(approval.agent),
+                    risk: approval.risk.rawValue,
+                    timeLabel: pendingTimeLabel(approval),
+                    agentName: agentName(approval.agent),
+                    action: approval.toolName.map { "run \($0)" } ?? defaultActionVerb(for: approval.kind),
+                    hostLabel: approval.cwd,
+                    command: approval.command,
+                    onViewDiff: (approval.patch != nil || approval.kind == .patch) ? { diffApproval = approval } : nil,
+                    onDeny: { vm.decide(approval.id, decision: .rejected) },
+                    onAllowAlways: { scopeSheetApproval = approval },
+                    onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
+                        editedToolInputText = editableToolInput(for: approval)
+                        editingApproval = approval
+                    } : nil,
+                    onApprove: { vm.decide(approval.id, decision: .approved) }
+                )
+                if let br = approval.blastRadius {
+                    DSBlastRadiusBanner(blastRadius: br)
                 }
             }
-        )
-        .onTapGesture { detailApproval = approval }
+            .onTapGesture { decisionSheetApproval = approval }
+        }
     }
 
-    // MARK: - Detail sheet
-
     @ViewBuilder
-    private func detailSheet(_ approval: Approval) -> some View {
-        let isCritical = approval.risk.rawValue >= 3
+    private func decisionSheetContent(_ approval: Approval) -> some View {
         let br = approval.blastRadius ?? ApprovalBlastRadius(matchedRule: "policy rule")
-        InboxApprovalDetail(
-            agentKey: agentKey(approval.agent),
-            agentName: agentName(approval.agent),
-            hostLabel: approval.cwd,
-            cwd: approval.cwd,
-            sessionID: approval.sessionID.uuidString,
-            timeLabel: pendingTimeLabel(approval),
-            question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
-            toolName: approval.toolName ?? approval.command,
-            args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
-            command: approval.command,
+        let requiresBiometric = approval.risk.rawValue >= 3
+        let agentNameStr = agentName(approval.agent)
+        let actionStr: String = {
+            if let tn = approval.toolName { return "run \(tn)" }
+            return defaultActionVerb(for: approval.kind)
+        }()
+        let cmdStr = approval.command ?? approval.toolName ?? "Unknown command"
+        let whyStr = br.matchedRule.map { "Matched policy rule \"\($0)\" requiring human approval." }
+            ?? "This action requires human approval per your policy settings."
+
+        DSDecisionSheet(
             risk: approval.risk.rawValue,
-            isCritical: isCritical,
-            matchedRule: br.matchedRule,
+            agentName: agentNameStr,
+            action: actionStr,
+            command: cmdStr,
+            whyText: whyStr,
+            requiresBiometric: requiresBiometric,
+            diff: nil,
+            blastRadius: br,
             onDeny: {
                 vm.decide(approval.id, decision: .rejected)
-                detailApproval = nil
-            },
-            onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
-                editedToolInputText = editableToolInput(for: approval)
-                editingApproval = approval
-                detailApproval = nil
-            } : nil,
-            onAllowAlways: {
-                Task {
-                    if isCritical {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
-                        catch {
-                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
-                            return
-                        }
-                    }
-                    detailApproval = nil
-                    scopeSheetApproval = approval
-                }
+                decisionSheetApproval = nil
             },
             onApprove: {
                 Task {
-                    if isCritical {
+                    if requiresBiometric {
                         do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
                         catch {
                             if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
@@ -223,15 +282,31 @@ public struct InboxView: View {
                     }
                     vm.decide(approval.id, decision: .approved)
                     Haptics.success()
-                    detailApproval = nil
+                    decisionSheetApproval = nil
+                }
+            },
+            onEditAndRun: {
+                editedToolInputText = editableToolInput(for: approval)
+                editingApproval = approval
+                decisionSheetApproval = nil
+            },
+            onAllowAlways: {
+                Task {
+                    if requiresBiometric {
+                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
+                        catch {
+                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                            return
+                        }
+                    }
+                    decisionSheetApproval = nil
+                    scopeSheetApproval = approval
                 }
             }
         )
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
-
-    // MARK: - Edit sheet
 
     @ViewBuilder
     private func editSheet(_ approval: Approval) -> some View {
@@ -284,7 +359,17 @@ public struct InboxView: View {
         .presentationDetents([.medium, .large])
     }
 
-    // MARK: - Helpers
+    private func diffSheet(_ approval: Approval) -> some View {
+        NavigationStack {
+            if let patch = approval.patch {
+                DiffView(diff: UnifiedDiffParser.parse(patch))
+                    .navigationTitle("Patch Diff")
+                    .navigationBarTitleDisplayMode(.inline)
+            } else {
+                ContentUnavailableView("No diff available", systemImage: "plusminus")
+            }
+        }
+    }
 
     private func editableToolInput(for approval: Approval) -> String {
         guard let toolInput = approval.toolInput, !toolInput.isEmpty else {
@@ -350,6 +435,53 @@ public struct InboxView: View {
         lines.append(contentsOf: oldLines.map { "-\($0)" })
         lines.append(contentsOf: newLines.map { "+\($0)" })
         return UnifiedDiffParser.parse(lines.joined(separator: "\n"))
+    }
+
+    // MARK: - Decided row (compact)
+
+    @ViewBuilder
+    private func decidedRow(_ approval: Approval) -> some View {
+        HStack(spacing: 12) {
+            AgentIdentityBadge(agent: agentKey(approval.agent), label: nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(decidedLabel(approval))
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .lineLimit(1)
+                Text(approval.cwd)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+            Spacer()
+            if let d = approval.decision {
+                let approved = d == .approved || d == .approvedAlways
+                if d == .approved, let ci = approval.answeredChoice,
+                   let choices = approval.choices, ci < choices.count {
+                    DSChip("→ \(choices[ci])", tone: .ok, style: .soft)
+                } else {
+                    DSChip(d == .approvedAlways ? "always" : d.rawValue, tone: approved ? .ok : .danger, style: .soft)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack {
+            Spacer()
+            DSEmptyState(
+                dotMatrix: .idle,
+                title: "No approvals waiting",
+                subtitle: "When a coding agent needs permission, its request appears here and on your lock screen."
+            )
+            .padding(.horizontal, 24)
+            Spacer()
+        }
     }
 
     // MARK: - Computed
@@ -420,6 +552,15 @@ public struct InboxView: View {
         let hours = minutes / 60
         let remMin = minutes % 60
         return remMin == 0 ? "\(hours)h" : "\(hours)h \(remMin)m"
+    }
+
+    private func decidedLabel(_ approval: Approval) -> String {
+        if approval.kind == .askQuestion,
+           let ci = approval.answeredChoice,
+           let choices = approval.choices, ci < choices.count {
+            return "Answered: \(choices[ci])"
+        }
+        return approval.command ?? defaultActionVerb(for: approval.kind)
     }
 }
 
