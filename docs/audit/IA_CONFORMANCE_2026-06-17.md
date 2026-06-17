@@ -32,7 +32,22 @@ Current app IA: **Inbox · Fleet · Activity · Settings** (`AppRoot.Tab`).
 - Autonomy presets (`AutonomyPreset`), budget/quota (`QuotaGuard`), policy rules — all **exist**, just not consolidated under Control.
 - Onboarding "agents ask / you approve / work resumes" + demo approval + connect-computer.
 
-## Plan to conform (proposed)
+## STATUS 2026-06-17 (evening): IMPLEMENTED ✅
+
+P1+P2+P3 shipped (commits 7c4c186a, 04747ccd, 5d0c8ffc):
+- **Control tab** replaces Activity (Inbox/Fleet/Control/Settings). `ControlView`
+  consolidates autonomy, budget (→QuotaGuard), risk rules (→PolicyEditor), quiet
+  hours, and a NEW phone **Emergency Stop** (fans out disconnect() to live slots).
+- **Inbox** gained a home dashboard (handled-today / last-decision) + a **History**
+  button presenting the former Activity view.
+- **Settings** regrouped: Connection / Notifications(pointer) / Security / Trust&Privacy
+  / Advanced(SSH keys, Secrets, Health check) / Account.
+- Verified: app-target build green; full ConduitUITests suite (7 tests) passes.
+
+Remaining soft deviation: G10 quiet-hours lives in Control; Settings→Notifications is a
+pointer. Decide if testers expect the control under Settings.
+
+## Plan to conform (original proposal — now implemented)
 **P1 — Control tab (replace Activity):** new `ControlView` consolidating: Autonomy level
 (reuse `AutonomyPreset`), Budget limits (reuse `QuotaGuard`), Automatic approvals + Risk
 rules (reuse Policy), Quiet hours (reuse notification filters), **Emergency Stop** (new

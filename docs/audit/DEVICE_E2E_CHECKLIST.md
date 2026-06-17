@@ -54,16 +54,18 @@
 
 ## G. Tester IA navigation tasks (run blind — see DEVICE_E2E_CHECKLIST §IA)
 Ask a fresh tester to do each WITHOUT help; record which tab they open:
-- ☐ G1 "Find approvals waiting for you." → expect **Inbox**
-- ☐ G2 "Find what agents are running." → expect **Fleet**
-- ☐ G3 "Change when agents need permission." → expect **Control** ⚠️ (today: Settings → Policy — see deviation report)
-- ☐ G4 "Set a spend limit." → expect **Control** ⚠️ (today: Fleet → Quota Guard / Settings)
-- ☐ G5 "Find old decisions." → expect **Inbox → History**
-- ☐ G6 "Connect another computer." → expect **Settings → Connection** or Fleet add-state
-- ☐ G7 "Stop all agents." → expect **Control → Emergency stop** ⚠️ (today: watch-only, no phone button)
-- ☐ G8 "Find SSH keys." → expect **Settings → Advanced** ⚠️ (today: Settings → Security)
-- ☐ G9 "Review changed files from a task." → expect **Fleet → task detail**
-- ☐ G10 "Change notification quiet hours." → expect **Settings → Notifications** (today: Settings → Notification Filters)
+- ☐ G1 "Find approvals waiting for you." → **Inbox** ✅ conforms
+- ☐ G2 "Find what agents are running." → **Fleet** ✅ conforms
+- ☐ G3 "Change when agents need permission." → **Control → When agents ask permission** ✅ (now in Control)
+- ☐ G4 "Set a spend limit." → **Control → Budget limits** ✅ (now in Control)
+- ☐ G5 "Find old decisions." → **Inbox → History** ✅ (hourglass button in Inbox header)
+- ☐ G6 "Connect another computer." → **Settings → Connection** ✅ (renamed)
+- ☐ G7 "Stop all agents." → **Control → Emergency stop** ✅ (now a phone button, was watch-only)
+- ☐ G8 "Find SSH keys." → **Settings → Advanced** ✅ (demoted from Security)
+- ☐ G9 "Review changed files from a task." → **Fleet → task detail** (device-only)
+- ☐ G10 "Change notification quiet hours." → **Control → Quiet hours**. ⚠️ minor: Settings →
+  Notifications is now a *pointer* card to Control, not the control itself. If testers
+  consistently look in Settings, move the quiet-hours control back there.
 
-> ⚠️ = current app deviates from the tester's expected IA. See
-> `docs/audit/IA_CONFORMANCE_2026-06-17.md` for the gap analysis + plan.
+> The Inbox/Fleet/Control/Settings restructure landed (commits 7c4c186a, 04747ccd,
+> 5d0c8ffc). Only G10 is a soft deviation. See `IA_CONFORMANCE_2026-06-17.md`.
