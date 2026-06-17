@@ -409,9 +409,10 @@ public struct PolicyEditorView: View {
 
     private func yamlForPreset(_ p: AutonomyPreset) -> String {
         switch p {
-        case .alwaysAsk:    return Self.strictPreset
-        case .autoReads:    return Self.balancedPreset
-        case .agentDecides: return Self.permissivePreset
+        case .alwaysAsk:      return Self.strictPreset
+        case .autoReads:      return Self.balancedPreset
+        case .autoSafeWrites: return Self.balancedPreset
+        case .agentDecides:   return Self.permissivePreset
         }
     }
 

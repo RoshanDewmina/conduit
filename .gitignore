@@ -130,3 +130,4 @@ daemon/conduitd/dist/
 # Temporary screenshots / scratch captures
 .tmp-*.png
 .tmp-*
+.design-shots/

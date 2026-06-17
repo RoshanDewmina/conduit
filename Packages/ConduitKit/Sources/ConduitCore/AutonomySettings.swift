@@ -7,6 +7,10 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
     /// automatically. All writes and destructive ops still ask the user.
     case autoReads
 
+    /// Auto-approve low- and medium-risk actions ("safe writes"); ask on
+    /// high/critical (deletes, network, secrets). The "Balanced" tier.
+    case autoSafeWrites
+
     /// Every agent action surfaces an approval request, regardless of risk.
     case alwaysAsk
 
@@ -16,17 +20,19 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
 
     public var label: String {
         switch self {
-        case .autoReads:    return "Auto-approve reads"
-        case .alwaysAsk:    return "Always ask"
-        case .agentDecides: return "Critical only"
+        case .autoReads:      return "Auto-approve reads"
+        case .autoSafeWrites: return "Auto-approve safe writes"
+        case .alwaysAsk:      return "Always ask"
+        case .agentDecides:   return "Critical only"
         }
     }
 
     public var shortLabel: String {
         switch self {
-        case .autoReads:    return "Auto-reads"
-        case .alwaysAsk:    return "Always ask"
-        case .agentDecides: return "Critical only"
+        case .autoReads:      return "Auto-reads"
+        case .autoSafeWrites: return "Safe writes"
+        case .alwaysAsk:      return "Always ask"
+        case .agentDecides:   return "Critical only"
         }
     }
 
@@ -34,6 +40,8 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
         switch self {
         case .autoReads:
             return "Read-only operations are approved automatically. Writes and destructive actions always ask."
+        case .autoSafeWrites:
+            return "Low- and medium-risk actions run automatically. Deletes, network, and secret-touching actions still ask."
         case .alwaysAsk:
             return "Every agent action requires your approval before it runs."
         case .agentDecides:
@@ -49,6 +57,10 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
             return false
         case .autoReads:
             return risk == .low && (kind == .command || kind == .callMCP)
+        case .autoSafeWrites:
+            // "Safe writes": auto-approve low/medium risk of any kind; high &
+            // critical (deletes, network, secrets) still surface.
+            return risk <= .medium
         case .agentDecides:
             return risk < .critical
         }
