@@ -142,6 +142,7 @@ public struct AppRoot: View {
     @State private var approvalIngest: ApprovalIngest?
     @State private var showingProvisioningWizard = false
     @State private var showingQuotaGuard = false
+    @State private var showingHistory = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
@@ -986,8 +987,14 @@ public struct AppRoot: View {
                 viewModel: activeInboxViewModel,
                 statusHeaderAgents: [],
                 onTapStatusHeader: {},
-                onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) }
+                onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) },
+                onOpenHistory: { showingHistory = true }
             )
+            .sheet(isPresented: $showingHistory) {
+                NavigationStack {
+                    ActivityView(actions: bridgeSessionActions())
+                }
+            }
 
         case .fleet:
             FleetView(

@@ -53,6 +53,7 @@ public struct InboxView: View {
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     public var onSetPolicy: ((String) async -> Void)?
+    private let onOpenHistory: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
     @State private var detailApproval: Approval?
@@ -67,7 +68,8 @@ public struct InboxView: View {
         awayAuditEntries: [AuditLogEntry] = [],
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
-        onSetPolicy: ((String) async -> Void)? = nil
+        onSetPolicy: ((String) async -> Void)? = nil,
+        onOpenHistory: (() -> Void)? = nil
     ) {
         self.vm = viewModel
         self.sessionID = sessionID
@@ -76,6 +78,7 @@ public struct InboxView: View {
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
         self.onSetPolicy = onSetPolicy
+        self.onOpenHistory = onOpenHistory
     }
 
     public var body: some View {
@@ -84,7 +87,7 @@ public struct InboxView: View {
 
             VStack(spacing: 0) {
                 // ── Big typography header
-                HStack {
+                HStack(spacing: 10) {
                     Text("inbox")
                         .font(.dsDisplayPt(32, weight: .bold))
                         .foregroundStyle(t.text)
@@ -94,13 +97,27 @@ public struct InboxView: View {
                             .font(.dsMonoPt(13))
                             .foregroundStyle(t.text3)
                     }
+                    if let onOpenHistory {
+                        Button {
+                            Haptics.selection()
+                            onOpenHistory()
+                        } label: {
+                            DSIconView(.hourglass, size: 16, color: t.text2)
+                                .frame(width: 38, height: 38)
+                                .background(t.surface)
+                                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("History")
+                        .accessibilityIdentifier("inboxHistory")
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
 
-                if visibleApprovals.isEmpty {
-                    InboxEmptyState()
+                if visibleApprovals.filter({ $0.isPending }).isEmpty {
+                    inboxHomeDashboard
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -361,6 +378,91 @@ public struct InboxView: View {
 
     private var pendingCount: Int {
         visibleApprovals.filter { $0.isPending }.count
+    }
+
+    // MARK: - Home dashboard (shown when nothing is pending)
+
+    private var handledTodayCount: Int {
+        let cal = Calendar.current
+        return visibleApprovals.filter { a in
+            guard let decided = a.decidedAt else { return false }
+            return cal.isDateInToday(decided)
+        }.count
+    }
+
+    private var lastDecision: Approval? {
+        visibleApprovals
+            .filter { $0.decidedAt != nil }
+            .max { ($0.decidedAt ?? .distantPast) < ($1.decidedAt ?? .distantPast) }
+    }
+
+    @ViewBuilder
+    private var inboxHomeDashboard: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    DSStatusDot(tone: .ok, size: 9)
+                    Text("You're all caught up")
+                        .font(.dsSansPt(16, weight: .semibold))
+                        .foregroundStyle(t.text)
+                }
+                Text("No approvals are waiting. New requests from your agents will appear here.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    dashboardStat(value: "\(handledTodayCount)", label: "handled today")
+                    dashboardStat(
+                        value: lastDecision.map { ($0.decision == .approved ? "approved" : "denied") } ?? "—",
+                        label: "last decision"
+                    )
+                }
+
+                if onOpenHistory != nil {
+                    Button {
+                        Haptics.selection()
+                        onOpenHistory?()
+                    } label: {
+                        HStack(spacing: 8) {
+                            DSIconView(.hourglass, size: 15, color: t.text2)
+                            Text("View decision history")
+                                .font(.dsSansPt(14, weight: .medium))
+                                .foregroundStyle(t.text)
+                            Spacer(minLength: 0)
+                            DSIconView(.chevronRight, size: 13, color: t.text4)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(t.surface)
+                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+    }
+
+    private func dashboardStat(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                .foregroundStyle(t.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(0.5)
+                .foregroundStyle(t.text3)
+                .textCase(.uppercase)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface)
+        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
     }
 
     // MARK: - Mapping helpers
