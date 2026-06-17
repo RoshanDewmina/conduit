@@ -92,10 +92,14 @@ be corrected.
 ## 8. Documentation rules
 
 - `ARCHITECTURE.md` is the source of truth for product + technical scope.
-- `docs/current-state-audit.md` is the source of truth for "what works
-  right now" — update it when you ship a milestone, not retroactively.
-- `docs/remaining-work.md` tracks pre-release blockers; trim items as
-  they're closed instead of leaving stale "TODO" markers.
+- `docs/PUBLISH_READINESS_CHECKLIST.md` is the source of truth for launch
+  state ("what works / what's gated") — update it when you ship a milestone,
+  not retroactively. (`docs/current-state-audit.md` is archived/stale — do
+  not rely on it.)
+- `docs/KNOWN_ISSUES.md` is the canonical audit/issue tracker (security,
+  perf, dead code, doc drift). Record verified findings there.
+- `docs/remaining-work.md` is **superseded** (states a wrong "free Apple
+  team" blocker); do not act on it. Track real blockers in the checklist above.
 - When code disagrees with a doc, fix one of them in the same commit.
   Don't let drift accumulate.
 
