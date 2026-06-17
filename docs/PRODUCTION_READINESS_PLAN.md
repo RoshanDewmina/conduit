@@ -27,12 +27,12 @@
 **Branch reality:** `master` carries the command-center work (resident daemon, policy engine + audit + blast-radius, cross-vendor usage, opencode, WS-B2 dispatch/schedule) and is pushed to origin. `agent/ws-b2-prod` (unmerged) adds ssh-host bridge-dispatch + live-spend budget. Tests: **Swift 327/51 suites green; Go conduitd + policy green.**
 
 **Already done (don't redo):**
-- Core SSH/terminal/blocks/reconnect/keys/persistence (see `docs/remaining-work.md`).
+- Core SSH/terminal/blocks/reconnect/keys/persistence (see `docs/_archive/remaining-work.md`).
 - Approval loop: structured `tool_use`, policy engine (deny→ask→allow, fail-closed default=ask), audit log, allow-always, edit-before-run.
 - Cross-vendor: claude/codex/opencode hooks + `agent.status` usage (honest, omits when absent).
 - Proactive dispatch/schedule (policy + budget gated).
 - Ship-gate partials: `project.yml` uses full `Conduit.entitlements` (push+CloudKit); `DEVELOPMENT_TEAM=39HM2X8GS6`; `ITSAppUsesNonExemptEncryption=false`; `UIBackgroundModes=[fetch, remote-notification]`.
-- Strategy/research docs: `docs/{PRODUCT_RESEARCH,APP_AUDIT,ROADMAP,UX_OPPORTUNITIES,SECURITY-REVIEW}.md`; `~/Downloads/conduit-*research*.md`, `conduit-execution-briefing-2026-06-04.md` (authority doc — §2.7 has the verified market reality + wedge).
+- Strategy/research docs: `docs/{PRODUCT_RESEARCH,_archive/APP_AUDIT,ROADMAP,UX_OPPORTUNITIES,SECURITY-REVIEW}.md`; `~/Downloads/conduit-*research*.md`, `conduit-execution-briefing-2026-06-04.md` (authority doc — §2.7 has the verified market reality + wedge).
 
 **Known gaps / risks to resolve (this plan):**
 - **Build env:** the Conduit scheme embeds a **watchOS app**; **watchOS 26.5 runtime may be missing** → full-scheme build fails. Fix the runtime or descope watch for CI (see WS-1).
@@ -45,7 +45,7 @@
 ---
 
 ## 2. STUDY (do this first, in parallel)
-- **Codebase:** `CLAUDE.md`, `ARCHITECTURE.md`, `docs/agent-contract.md`, `docs/block-terminal-implementation.md`, `docs/remaining-work.md`, `docs/ship-gate-owner-steps.md`, `docs/validation-playbook.md`, `docs/SECURITY-REVIEW.md`, `docs/ship-gate-owner-steps.md`, `docs/BUILD_PLAN_COMMAND_CENTER.md`.
+- **Codebase:** `CLAUDE.md`, `ARCHITECTURE.md`, `docs/agent-contract.md`, `docs/block-terminal-implementation.md`, `docs/_archive/remaining-work.md`, `docs/ship-gate-owner-steps.md`, `docs/validation-playbook.md`, `docs/SECURITY-REVIEW.md`, `docs/ship-gate-owner-steps.md`, `docs/BUILD_PLAN_COMMAND_CENTER.md`.
 - **Research + wedge:** `~/Downloads/conduit-execution-briefing-2026-06-04.md` (§2.7 = verified market reality + the wedge), `conduit-deep-market-research-2026-06-04.md`, `deep-research-report.md`, `docs/PRODUCT_RESEARCH.md`. **Our wedge:** the only cockpit where agents run *unattended, safely* — under a policy you control, on infra you own, across every vendor. Every UX decision should reinforce reliability + the autonomy/security story.
 - **Competitors (for parity + polish bar):** READMEs in `github_readmes/` (Happy, Omnara, CC Pocket, cmux, Paseo, …). For deeper reference, clone **opencode** (we integrate it; need its hook/SSE API) and **Happy** (MIT; best E2E + push-on-permission reference) into `~/conduit-refs/` (outside the repo, never commit). Do NOT copy AGPL code (cmux, CloudCLI) — ideas only.
 

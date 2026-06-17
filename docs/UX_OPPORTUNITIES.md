@@ -233,7 +233,7 @@ The current approval card in `InboxView.swift:181-183` shows a truncated 500-cha
 
 **Status: COMPLETE. Do not rebuild.**
 
-The Snippets / Workflow system is fully implemented with `{{arg}}` placeholders (literal, enum, dynamic-shell), a 371-line editor, 235-line palette, and 212-line library view. See APP_AUDIT.md §3.1.
+The Snippets / Workflow system is fully implemented with `{{arg}}` placeholders (literal, enum, dynamic-shell), a 371-line editor, 235-line palette, and 212-line library view. See `docs/_archive/APP_AUDIT.md` §3.1.
 
 **What remains:**
 - Seed a meaningful default library (common agent commands, git workflows, deploy scripts)

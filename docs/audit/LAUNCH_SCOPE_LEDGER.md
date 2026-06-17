@@ -1,7 +1,7 @@
 # Conduit — Launch Scope & Deferral Ledger
 
 > The single source of truth for **what ships at v1 launch**, **what is deferred (and to which roadmap
-> tier)**, and **what is cut entirely**. Reconciles `BACKEND_COVERAGE.md`, `FEATURE_COVERAGE.md`, the
+> tier)**, and **what is cut entirely**. Reconciles `BACKEND_COVERAGE.md`, `docs/_archive/audit/FEATURE_COVERAGE.md`, the
 > migration board, and the bridge-platform roadmap. Date: 2026-06-13.
 >
 > **Status keys:** `✅ ship` (in v1) · `🔶 ship-gated` (v1 but behind paid cloud entitlement) ·

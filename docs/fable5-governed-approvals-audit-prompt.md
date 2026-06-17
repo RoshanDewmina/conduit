@@ -69,9 +69,9 @@ not "is this more featureful or more decorated."
 ---
 
 ## Phase 1 — Orient & establish a green baseline
-1. Read the lay of the land: `docs/CONDUIT_PROJECT_DOSSIER.md`, `docs/APP_AUDIT.md`,
+1. Read the lay of the land: `docs/CONDUIT_PROJECT_DOSSIER.md`, `docs/_archive/APP_AUDIT.md`,
    `docs/PRODUCTION_READINESS_PLAN.md`, `docs/UX_OPPORTUNITIES.md`, `docs/SECURITY-REVIEW.md`,
-   `docs/validation-playbook.md`, `docs/remaining-work.md`, the latest `docs/conduit-test-run-*.md`,
+   `docs/validation-playbook.md`, `docs/_archive/remaining-work.md`, `docs/_archive/conduit-test-run-*.md`,
    `docs/ship-gate-owner-steps.md`, and the relevant `ship-plan/workstreams/WS-*.md` (esp. WS-9 a11y, WS-10 QA,
    WS-11 approval card, WS-13 nav/safe-area, WS-7 observability/release). Summarize the current believed state and
    the open gaps in `FABLE_FINDINGS.md`.
