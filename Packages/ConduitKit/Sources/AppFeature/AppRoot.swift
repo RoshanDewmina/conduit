@@ -485,10 +485,8 @@ public struct AppRoot: View {
             )
         }
         .sheet(isPresented: $showingQuotaGuard) {
-            if let store = env.quotaGuardStore {
-                NavigationStack {
-                    QuotaGuardView(store: store)
-                }
+            NavigationStack {
+                QuotaGuardView(store: env.quotaGuardStore)
             }
         }
         .sheet(isPresented: $addHostPresented) {
