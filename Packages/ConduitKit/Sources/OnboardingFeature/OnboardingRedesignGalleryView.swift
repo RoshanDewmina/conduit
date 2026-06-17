@@ -66,6 +66,8 @@ private struct ConduitOnboardingVariant: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(step == 0)
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("onboardingBack")
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text("CONDUIT SETUP")
@@ -286,6 +288,8 @@ private struct ConduitPolicyCard: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("policyPreset_\(preset.rawValue)")
+                .accessibilityValue(selectedPreset == preset ? "selected" : "unselected")
             }
         }
     }
