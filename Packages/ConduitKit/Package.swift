@@ -167,6 +167,8 @@ let package = Package(
                 "PersistenceKit",
                 "DiffKit",
                 "DiffFeature",
+                "SettingsFeature",
+                "SSHTransport",
             ],
             swiftSettings: swiftSettings
         ),

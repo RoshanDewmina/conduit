@@ -129,6 +129,14 @@ public struct FleetView: View {
                             }
                         }
 
+                        if let onQuotaGuard, quotaGuardStore != nil {
+                            Button(action: onQuotaGuard) {
+                                quotaGuardEntry
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 18)
+                        }
+
                         if store.slots.isEmpty && reconnectableHosts.isEmpty {
                             emptyState
                                 .padding(.horizontal, 18)

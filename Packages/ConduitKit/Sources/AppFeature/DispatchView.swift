@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import SessionFeature
 
 // MARK: - DispatchAgent
 
@@ -34,6 +35,8 @@ public struct DispatchView: View {
     @State private var prompt: String = ""
     @State private var budgetText: String = ""
     @State private var selectedModel: String = ""
+    @State private var dictationEngine: DictationEngine?
+    @State private var isDictating = false
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -245,6 +248,43 @@ public struct DispatchView: View {
                             .padding(.vertical, 20)
                             .allowsHitTesting(false)
                     }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Button {
+                        if isDictating {
+                            dictationEngine?.stop()
+                            dictationEngine = nil
+                            isDictating = false
+                        } else {
+                            let engine = DictationEngine()
+                            dictationEngine = engine
+                            isDictating = true
+                            Task {
+                                await engine.start { text in
+                                    prompt = text
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: isDictating ? "mic.fill" : "mic")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(isDictating ? t.accent : t.text3)
+                            .frame(width: 30, height: 30)
+                            .background(t.surfaceSunk)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(t.border, lineWidth: 1)
+                            )
+                            .phaseAnimator([0, 1], trigger: isDictating) { content, phase in
+                                content
+                                    .scaleEffect(isDictating ? 1 + CGFloat(phase) * 0.12 : 1)
+                            } animation: { _ in
+                                .easeInOut(duration: 1.0).repeatForever(autoreverses: true)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
                 }
         }
     }

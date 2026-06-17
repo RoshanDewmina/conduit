@@ -5,8 +5,8 @@ import AVFoundation
 /// Wraps SFSpeechRecognizer + AVAudioEngine for live voice transcription.
 /// All mutation is MainActor-isolated; audio tap callbacks hop back via Task.
 @MainActor
-final class DictationEngine: NSObject {
-    var isListening = false
+public final class DictationEngine: NSObject {
+    public internal(set) var isListening = false
 
     private let recognizer: SFSpeechRecognizer? = SFSpeechRecognizer()
     private var audioEngine = AVAudioEngine()
@@ -16,7 +16,7 @@ final class DictationEngine: NSObject {
 
     /// Request permission then begin transcription. `onTranscription` fires on MainActor with
     /// the best partial or final string. Stops automatically when speech ends or on error.
-    func start(onTranscription: @escaping @MainActor (String) -> Void) async {
+    public func start(onTranscription: @escaping @MainActor (String) -> Void) async {
         let authorized = await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { status in
                 cont.resume(returning: status == .authorized)
@@ -66,7 +66,7 @@ final class DictationEngine: NSObject {
         }
     }
 
-    func stop() {
+    public func stop() {
         audioEngine.stop()
         if tapInstalled {
             audioEngine.inputNode.removeTap(onBus: 0)

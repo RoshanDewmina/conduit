@@ -635,15 +635,6 @@ public struct SettingsView: View {
                 }
             }
 
-            if let auditRepository {
-                divider
-                NavigationLink {
-                    AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
-                } label: {
-                    settingsNavRow("On-device audit log", icon: "lock.shield")
-                }
-            }
-
             divider
             NavigationLink {
                 DoctorView(viewModel: DoctorViewModel(actions: bridgeActions))

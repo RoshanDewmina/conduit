@@ -142,6 +142,7 @@ public struct AppRoot: View {
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
     @State private var showingProvisioningWizard = false
+    @State private var showingQuotaGuard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
@@ -482,6 +483,13 @@ public struct AppRoot: View {
                 },
                 onCancel: { showingProvisioningWizard = false }
             )
+        }
+        .sheet(isPresented: $showingQuotaGuard) {
+            if let store = env.quotaGuardStore {
+                NavigationStack {
+                    QuotaGuardView(store: store)
+                }
+            }
         }
         .sheet(isPresented: $addHostPresented) {
             NavigationStack {
@@ -995,7 +1003,7 @@ public struct AppRoot: View {
                 onReconnect: { host in openSession(host: host, env: env) },
                 onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
                 onNewTask: { dispatchPresented = true },
-                onQuotaGuard: nil,
+                onQuotaGuard: { showingQuotaGuard = true },
                 onOpenTerminal: { slotID in
                     // Finding #5: intentional drill-in — select the slot and
                     // present its live block terminal full-screen.

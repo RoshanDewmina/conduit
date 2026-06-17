@@ -2,17 +2,24 @@
 import SwiftUI
 import ConduitCore
 import DesignSystem
+import PersistenceKit
+import SettingsFeature
+import SSHTransport
 
 public struct ActivityView: View {
     private let actions: BridgeSessionActions
+    private let auditRepository: AuditRepository?
+    private let daemonChannel: DaemonChannel?
     @State private var entries: [AuditLogEntry] = []
     @State private var isLoading = false
     @State private var loadError: String?
 
     @Environment(\.conduitTokens) private var t
 
-    public init(actions: BridgeSessionActions) {
+    public init(actions: BridgeSessionActions, auditRepository: AuditRepository? = nil, daemonChannel: DaemonChannel? = nil) {
         self.actions = actions
+        self.auditRepository = auditRepository
+        self.daemonChannel = daemonChannel
     }
 
     public var body: some View {
@@ -43,6 +50,10 @@ public struct ActivityView: View {
                         } else {
                             BridgeAuditFeedView(entries: entries)
                                 .padding(.horizontal, 16)
+
+                            if let auditRepository {
+                                auditSection(repository: auditRepository)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -55,6 +66,40 @@ public struct ActivityView: View {
             if isLoading && entries.isEmpty { ProgressView() }
         }
         .task { await load() }
+    }
+
+    @ViewBuilder
+    private func auditSection(repository: AuditRepository) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("FULL AUDIT LOG")
+                .font(.dsMonoPt(11, weight: .medium))
+                .tracking(11 * 0.10)
+                .foregroundStyle(t.text3)
+                .padding(.horizontal, 16)
+                .padding(.top, 22)
+                .padding(.bottom, 6)
+
+            NavigationLink {
+                AuditView(
+                    viewModel: AuditViewModel(repository: repository),
+                    daemonChannel: daemonChannel
+                )
+            } label: {
+                HStack {
+                    Image(systemName: "lock.shield")
+                        .foregroundStyle(t.accent)
+                    Text("On-device audit log")
+                        .font(.body)
+                        .foregroundStyle(t.text1)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(t.text4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
     }
 
     private func load() async {

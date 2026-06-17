@@ -17,6 +17,7 @@ public struct LoopDetailView: View {
     @State private var gitStore: GitStore?
     @State private var showShipSheet = false
     @State private var diffToReview: IdentifiableDiff?
+    let runOutputStore: RunOutputStore?
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.openURL) private var openURL
@@ -26,13 +27,27 @@ public struct LoopDetailView: View {
         onDismiss: @escaping () -> Void = {},
         ciEvents: [CIEvent] = [],
         ciEventLoader: (@Sendable () async -> [CIEvent])? = nil,
-        gitStore: GitStore? = nil
+        gitStore: GitStore? = nil,
+        runOutputStore: RunOutputStore? = nil
     ) {
         self.loop = loop
         self.onDismiss = onDismiss
         _ciEvents = State(initialValue: ciEvents)
         self.ciEventLoader = ciEventLoader
         _gitStore = State(initialValue: gitStore)
+        self.runOutputStore = runOutputStore
+    }
+
+    private var loopOutput: RunOutputStore.Run? {
+        runOutputStore?.run(loop.id)
+    }
+
+    private var hasOutput: Bool {
+        (loopOutput?.chunks.isEmpty).map { !$0 } ?? false
+    }
+
+    private var isStreaming: Bool {
+        loop.status == .running && loopOutput.map { !$0.isTerminal } ?? false
     }
 
     public var body: some View {
@@ -49,6 +64,7 @@ public struct LoopDetailView: View {
                         changesSection
                     }
                     progressSection
+                    outputSection
                     approvalsSection
                     spendSection
                     if let proof = loop.proof {
@@ -420,6 +436,20 @@ public struct LoopDetailView: View {
         return "\(passed)✓"
     }
 
+    // MARK: - Output
+
+    @ViewBuilder
+    private var outputSection: some View {
+        if hasOutput, let run = loopOutput {
+            VStack(alignment: .leading, spacing: 8) {
+                DSListSectionHead("Output")
+
+                LoopStreamingOutputText(text: run.text, isStreaming: isStreaming)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
     // MARK: - Approvals
 
     private var approvalsSection: some View {
@@ -671,6 +701,41 @@ struct ShipItSheet: View {
             }
         }
         .disabled(store.isShipping || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+}
+
+// MARK: - Streaming output
+
+/// Renders accumulated loop output as a single flowing monospace block with a
+/// blinking block caret while the agent is still writing.
+private struct LoopStreamingOutputText: View {
+    let text: String
+    let isStreaming: Bool
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        Group {
+            if isStreaming {
+                TimelineView(.periodic(from: .now, by: 0.55)) { ctx in
+                    let on = Int(ctx.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
+                    composed(caretOpacity: on ? 1 : 0.12)
+                }
+            } else {
+                composed(caretOpacity: 0)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func composed(caretOpacity: Double) -> Text {
+        let body = Text(text)
+            .font(.dsMonoPt(13))
+            .foregroundColor(t.termText)
+        let caret = Text(isStreaming ? "▋" : "")
+            .font(.dsMonoPt(13))
+            .foregroundColor(t.termPrompt.opacity(caretOpacity))
+        return Text("\(body)\(caret)")
     }
 }
 #endif
