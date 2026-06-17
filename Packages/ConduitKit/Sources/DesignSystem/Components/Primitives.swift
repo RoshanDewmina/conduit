@@ -519,55 +519,6 @@ public struct DSEmptyState: View {
     }
 }
 
-// MARK: - Toast
-// primitives.css:391-412
-
-public enum DSToastTone { case neutral, ok, err }
-
-public struct DSToast: View {
-    let message: String
-    let tone: DSToastTone
-    let action: (label: String, handler: () -> Void)?
-
-    @Environment(\.conduitTokens) private var t
-
-    public init(_ message: String, tone: DSToastTone = .neutral, action: (label: String, handler: () -> Void)? = nil) {
-        self.message = message
-        self.tone = tone
-        self.action = action
-    }
-
-    public var body: some View {
-        HStack(spacing: 10) {
-            Text(message)
-                .font(.dsSansPt(13))
-                .foregroundStyle(fgColor)
-            if let act = action {
-                Button(act.label, action: act.handler)
-                    .font(.dsMonoPt(11, weight: .medium))
-                    .textCase(.uppercase)
-                    .foregroundStyle(fgColor.opacity(0.7))
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(bgColor)
-        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
-        .shadow(color: .black.opacity(0.08), radius: 24, y: 16)
-    }
-
-    private var bgColor: Color {
-        switch tone {
-        case .neutral: return t.text
-        case .ok:      return t.ok
-        case .err:     return t.danger
-        }
-    }
-
-    private var fgColor: Color { t.textOnDark }
-}
-
 // MARK: - DSKey (keyboard key)
 // primitives.css:418-437
 
