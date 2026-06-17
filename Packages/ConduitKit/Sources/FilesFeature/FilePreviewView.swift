@@ -3,11 +3,6 @@ import SwiftUI
 import UIKit
 import DesignSystem
 
-// Canonical full-file viewer — the single bottom-drawer file view (CONDUIT_UI_CONSISTENCY_RULES
-// §7 / R7.2). Header: filename · path · line-count · read-only. Body: line-numbered mono that
-// scrolls both axes. Footer: dismiss hint + Copy. Mirrors the migration board's `FileViewerSheet`.
-// Present via `.filePreviewDrawer(...)` (bottom drawer, medium → large detents, grabber).
-
 public struct FilePreviewView: View {
     let filename: String
     let path: String?
@@ -29,29 +24,35 @@ public struct FilePreviewView: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
-            DSDivider()
+            DSDivider(.strong)
             fileBody
             footer
         }
         .background(t.termBg)
     }
 
-    // MARK: Header — filename · path · line-count · read-only, with a close affordance.
-
     private var header: some View {
-        HStack(spacing: 9) {
-            DSIconView(.file, size: 15, color: t.termText2)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(filename)
-                    .font(.dsMonoPt(13.5, weight: .semibold))
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(filename.lowercased())
+                    .font(.dsDisplayPt(22, weight: .bold))
                     .foregroundStyle(t.termText)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(subtitle)
-                    .font(.dsMonoPt(10.5))
-                    .foregroundStyle(t.termText3)
-                    .lineLimit(1)
-                    .truncationMode(.head)
+                HStack(spacing: 6) {
+                    if let path {
+                        Text(path)
+                            .foregroundStyle(t.termText3)
+                    }
+                    Text("\(lines.count) lines")
+                        .foregroundStyle(t.termText3)
+                    Text("·")
+                        .foregroundStyle(t.termText3)
+                    Text("read-only")
+                        .foregroundStyle(t.termText3)
+                }
+                .font(.dsMonoPt(11))
+                .lineLimit(1)
             }
             Spacer(minLength: 8)
             Button {
@@ -61,23 +62,19 @@ public struct FilePreviewView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(t.termText2)
-                    .frame(width: 34, height: 34)
-                    .contentShape(Rectangle())
+                    .frame(width: 36, height: 36)
+                    .background(t.termSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.termBorder, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 2)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
-
-    private var subtitle: String {
-        let n = lines.count
-        let location = path.map { "\($0) · " } ?? ""
-        return "\(location)\(n) line\(n == 1 ? "" : "s") · read-only"
-    }
-
-    // MARK: Body — line-numbered, monospaced, scrolls both axes.
 
     private var fileBody: some View {
         ScrollView([.vertical, .horizontal]) {
@@ -87,7 +84,7 @@ public struct FilePreviewView: View {
                         Text("\(i + 1)")
                             .font(.dsMonoPt(11))
                             .foregroundStyle(t.termText3)
-                            .frame(width: 28, alignment: .trailing)
+                            .frame(width: 32, alignment: .trailing)
                             .textSelection(.disabled)
                         Text(lines[i].isEmpty ? " " : String(lines[i]))
                             .font(.dsMonoPt(12))
@@ -99,12 +96,10 @@ public struct FilePreviewView: View {
                     .padding(.vertical, 1.5)
                 }
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-
-    // MARK: Footer — dismiss hint + Copy.
 
     private var footer: some View {
         HStack(spacing: 10) {
@@ -123,22 +118,24 @@ public struct FilePreviewView: View {
                 .foregroundStyle(t.termText)
                 .padding(.horizontal, 12)
                 .frame(height: 34)
-                .overlay(RoundedRectangle(cornerRadius: 2).stroke(t.termBorder))
+                .background(t.termSurface)
+                .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                        .strokeBorder(t.termBorder, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .overlay(DSDivider(), alignment: .top)
+        .overlay(DSDivider(.strong), alignment: .top)
     }
 }
 
 // MARK: - Bottom-drawer presentation
 
 public extension View {
-    /// Presents `FilePreviewView` as the canonical bottom drawer (R7.2): medium → large
-    /// detents with a grabber, custom in-sheet header (so no extra navigation chrome).
     func filePreviewDrawer(
         filename: String?,
         content: String?,

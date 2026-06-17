@@ -22,7 +22,7 @@ public struct QuotaGuardView: View {
                     if store.providers.isEmpty && !store.isLoading {
                         emptyCard
                     } else {
-                        totalSpendCard
+                        heroCard
                         alertsSection
                         providerCards
                     }
@@ -36,59 +36,74 @@ public struct QuotaGuardView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("quota guard")
-                    .font(.dsMonoPt(18, weight: .bold))
+                    .font(.dsSansPt(28, weight: .bold))
                     .foregroundStyle(t.text)
-                Spacer()
-                DSIconButton(.refresh) {
-                    Haptics.selection()
-                    Task { await store.refresh() }
-                }
-                .disabled(store.isLoading)
+                Text("per-provider budget caps & burn rate")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
             }
-            Text("per-provider budget caps & burn rate")
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.text3)
+            Spacer()
+            DSIconButton(.refresh) {
+                Haptics.selection()
+                Task { await store.refresh() }
+            }
+            .disabled(store.isLoading)
         }
         .padding(.horizontal, 18)
         .padding(.top, 12)
         .padding(.bottom, 16)
     }
 
-    // MARK: - Total Spend
+    // MARK: - Hero Card
 
-    private var totalSpendCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(String(format: "$%.2f", store.totalSpendToday))
-                    .font(.dsMonoPt(28, weight: .bold))
-                    .foregroundStyle(t.text)
-                    .monospacedDigit()
-                Text("today")
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text3)
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("total spend today")
+                        .font(.dsMonoPt(10, weight: .medium))
+                        .tracking(1)
+                        .textCase(.uppercase)
+                        .foregroundStyle(t.text3)
+
+                    Text(String(format: "$%.2f", store.totalSpendToday))
+                        .font(.dsSansPt(36, weight: .bold))
+                        .foregroundStyle(t.text)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                }
+
+                Spacer()
+
+                let worstPercent = store.providers.map { provider in
+                    guard let cap = provider.dailyCapUSD, cap > 0 else { return 0 }
+                    return Int((provider.spentTodayUSD / cap) * 100)
+                }.max() ?? 0
+                ProgressRing(
+                    fraction: Double(worstPercent) / 100.0,
+                    color: thresholdColor(for: Double(worstPercent) / 100.0),
+                    size: 64,
+                    lineWidth: 5
+                )
             }
 
             if store.hasOverLimit {
-                Label("At least one provider is over its daily cap", systemImage: "exclamationmark.triangle.fill")
-                    .font(.dsMonoPt(11))
+                Label("At least one provider is over its daily cap", systemImage: "exclamationmark.circle.fill")
+                    .font(.dsMonoPt(11, weight: .medium))
                     .foregroundStyle(t.danger)
             } else if store.hasNearLimit {
-                Label("At least one provider is near its daily cap", systemImage: "exclamationmark.triangle")
-                    .font(.dsMonoPt(11))
+                Label("At least one provider is near its daily cap", systemImage: "exclamationmark.triangle.fill")
+                    .font(.dsMonoPt(11, weight: .medium))
                     .foregroundStyle(t.warn)
             }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(t.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                .strokeBorder(t.border, lineWidth: 1)
-        )
+        .dsCard(padding: 14)
         .padding(.horizontal, 18)
     }
 
@@ -164,16 +179,43 @@ public struct QuotaGuardView: View {
     }
 
     private func providerCard(_ provider: QuotaGuard.ProviderQuota) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(provider.displayName)
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.text)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                if let pct = provider.percentUsed {
+                    ProgressRing(
+                        fraction: pct,
+                        color: providerThresholdColor(pct),
+                        size: 44,
+                        lineWidth: 4
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(provider.displayName)
+                        .font(.dsSansPt(15, weight: .semibold))
+                        .foregroundStyle(t.text)
+
+                    HStack(spacing: 8) {
+                        if let dailyCap = provider.dailyCapUSD {
+                            Text(String(format: "$%.2f / $%.2f daily", provider.spentTodayUSD, dailyCap))
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(t.text3)
+                        }
+                        if let monthlyCap = provider.monthlyCapUSD {
+                            Text(String(format: "$%.2f / $%.2f mo", provider.spentThisMonthUSD, monthlyCap))
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(t.text3)
+                        }
+                    }
+                }
+
                 Spacer()
+
                 if let pct = provider.percentUsed {
                     Text(String(format: "%.0f%%", pct * 100))
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(provider.isOverLimit ? t.danger : provider.isNearLimit ? t.warn : t.text3)
+                        .font(.dsMonoPt(13, weight: .bold))
+                        .foregroundStyle(providerThresholdColor(pct))
+                        .monospacedDigit()
                 }
             }
 
@@ -246,6 +288,22 @@ public struct QuotaGuardView: View {
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Threshold Colors
+
+    private func thresholdColor(for fraction: Double) -> Color {
+        if fraction >= 0.90 { return t.danger }
+        if fraction >= 0.75 { return t.warn }
+        if fraction >= 0.50 { return Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1) }
+        return t.ok
+    }
+
+    private func providerThresholdColor(_ fraction: Double) -> Color {
+        if fraction >= 0.90 { return t.danger }
+        if fraction >= 0.75 { return t.warn }
+        if fraction >= 0.50 { return Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1) }
+        return t.ok
     }
 
     // MARK: - Empty
