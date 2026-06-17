@@ -10,6 +10,7 @@ public struct DSSkeletonRow: View {
     let subtitleWidth: CGFloat
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = -1
 
     public init(showAvatar: Bool = true, titleWidth: CGFloat = 0.55, subtitleWidth: CGFloat = 0.35) {
@@ -64,6 +65,7 @@ public struct DSSkeletonRow: View {
     }
 
     private func startShimmer() {
+        guard !reduceMotion else { return }
         withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
             phase = 1.3
         }

@@ -11,6 +11,7 @@ public struct DSStatusDot: View {
     let size: CGFloat
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulseScale: CGFloat = 1
     @State private var pulseOpacity: Double = 0.6
 
@@ -27,6 +28,7 @@ public struct DSStatusDot: View {
                     .stroke(dotColor.opacity(pulseOpacity), lineWidth: 1.5)
                     .frame(width: size * pulseScale, height: size * pulseScale)
                     .onAppear {
+                        guard !reduceMotion else { return }
                         withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
                             pulseScale = 2.2
                             pulseOpacity = 0
@@ -68,6 +70,7 @@ public struct DSStatusIcon: View {
     let size: CGFloat
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rotation: Double = 0
 
     public init(state: DSConnectionState, size: CGFloat = 20) {
@@ -84,6 +87,7 @@ public struct DSStatusIcon: View {
         .frame(width: size, height: size)
         .rotationEffect(state == .reconnecting || state == .agentRunning ? .degrees(rotation) : .zero)
         .onAppear {
+            guard !reduceMotion else { return }
             if state == .reconnecting || state == .agentRunning {
                 withAnimation(.linear(duration: state == .reconnecting ? 1.6 : 2.2).repeatForever(autoreverses: false)) {
                     rotation = 360

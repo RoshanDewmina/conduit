@@ -34,6 +34,7 @@ public struct AgentIsland: View {
     @State private var expanded = false
     @State private var panelH: CGFloat = 220
     @State private var nudge = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         agents: [AgentInfo],
@@ -80,6 +81,7 @@ public struct AgentIsland: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: expanded)
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 nudge = true
             }

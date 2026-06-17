@@ -7,6 +7,7 @@ public struct DSOfflineState: View {
     let onDismiss: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dotScale: CGFloat = 1
 
     public init(onDismiss: (() -> Void)? = nil) {
@@ -26,6 +27,7 @@ public struct DSOfflineState: View {
                     .foregroundStyle(t.warn)
             }
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
                     dotScale = 1.18
                 }

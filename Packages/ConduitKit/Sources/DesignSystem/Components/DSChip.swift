@@ -266,6 +266,7 @@ public struct RiskBadge: View {
 public struct AgentBadge: View {
     let state: AgentState
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(_ state: AgentState) { self.state = state }
 
@@ -295,9 +296,9 @@ public struct AgentBadge: View {
                     .fill(state.color(tokens: t))
                     .frame(width: 4, height: 4)
                     .phaseAnimator([0.3, 1.0, 0.3], trigger: state) { v, p in
-                        v.opacity(p)
+                        v.opacity(reduceMotion ? 1 : p)
                     } animation: { _ in
-                        .easeInOut(duration: 0.5).delay(Double(i) * 0.15).repeatForever(autoreverses: false)
+                        reduceMotion ? nil : .easeInOut(duration: 0.5).delay(Double(i) * 0.15).repeatForever(autoreverses: false)
                     }
             }
         }

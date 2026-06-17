@@ -223,9 +223,11 @@ extension DSBlockCard where Header == EmptyView {
 // Blink modifier
 private struct BlinkModifier: ViewModifier {
     @State private var visible = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
         content.opacity(visible ? 1 : 0)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 0.5).repeatForever()) { visible.toggle() }
             }
     }

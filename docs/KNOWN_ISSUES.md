@@ -7,10 +7,9 @@
 > + `docs/CONDUIT_PROJECT_DOSSIER.md` (note: dossier is from 2026-06-11 and its IA section is stale —
 > tabs are now **Inbox / Fleet / Activity / Settings**, session surface is chat-based).
 >
-> **Method note:** the planned multi-agent deep audit (perf / UX / a11y fan-out) was cut short by an
-> account session/rate limit on 2026-06-16. The security + build + architecture findings below were
-> verified inline against current source. The perf/UX/a11y lanes should be re-run after the limit
-> resets and merged here.
+> **Method note:** the multi-agent fan-out repeatedly tripped the account session limit (parallel agents
+> burn quota fast), so **all dimensions were audited inline by a single agent** against current source —
+> security, architecture, build, **and** perf/UX/a11y (§4, §4b). Findings cite real file:line evidence.
 
 ---
 
@@ -88,15 +87,49 @@ doc is now stale on its "OPEN" column:
 
 ---
 
-## 4. Performance notes (compile-time hints; runtime perf lane not yet deep-audited)
+## 4. Performance — audited inline 2026-06-17 (verdict: HEALTHY)
 
-Slow-to-type-check view getters (>300ms) — break up the expression to speed builds (no runtime cost):
-- `SessionFeature/Chat/ChatTranscriptView.swift:90` `transcriptBody` — **481ms** (in the in-flight chat work).
-- `SettingsFeature/SnippetEditorView.swift:176` `body` — 303ms (note: SnippetEditorView is orphaned, §3).
-- `AppFeature/FleetView.swift:89` `body` — 308ms.
+The runtime perf lane (originally throttled) was completed inline against current source. **Conclusion: no P1
+perf issues.** The hot paths are correctly engineered:
+- ✅ **List virtualization** — `ChatTranscriptView` (`LazyVStack` + stable `ForEach(..., id: \.element.id)`,
+  line 74/78), `InboxView` (`LazyVStack`, line 106), `FleetView` (`LazyVStack`, line 108), `ActivityView`
+  (`LazyVStack`, line 38) all virtualize.
+- ✅ **Terminal output is capped** — `TerminalEngine/BlockRenderer.swift:214-239` trims per-block to
+  `maxLinearLines`; `trimToLatest(_:)` (line 318) caps total block count. Not unbounded.
+- ✅ **Audit feed is capped** — `ActivityView.swift:113` `tailAudit(100)` bounds entries to 100.
 
-**Not yet audited (rate-limited):** SwiftUI invalidation on large transcripts/lists, terminal/block render
-cost, block-store/audit-tail growth caps, async task cancellation on view disappear. Re-run the perf lane.
+**Residual (low):**
+- **P3** `InboxFeature/BridgeAuditFeedView.swift:24-25` renders its rows in a plain `VStack` (not Lazy)
+  nested as the single child of `ActivityView`'s `LazyVStack` — so all ≤100 audit rows build eagerly,
+  defeating the parent's laziness. Harmless at the 100-row cap; would matter if the cap grows. Fix: render
+  the `ForEach` directly in the parent `LazyVStack`, or make this a `List`.
+- **P3 (build-time only, no runtime cost)** slow-to-type-check getters >300ms — split the expressions:
+  `ChatTranscriptView.swift:90` `transcriptBody` (481ms), `FleetView.swift:89` `body` (308ms).
+  (`SnippetEditorView` was deleted in §3, so its 303ms getter is gone.)
+
+---
+
+## 4b. UX + Accessibility — audited inline 2026-06-17
+
+**UX (verdict: solid):**
+- ✅ Empty states exist on core surfaces — `InboxView.swift:102-103` (`InboxEmptyState`), `FleetView.swift:140-141`
+  (`emptyState`), `ActivityView.swift:66` (loading `ProgressView` + empty branch).
+- ✅ Design-system glass primitive (`conduitGlassChrome`) is the single chrome path (agent-contract §4).
+- No prototype-quality/placeholder screens found in the production navigation.
+
+**Accessibility — one real P2 gap:**
+- **P2 · Reduce Motion not honored by 7 design-system animations.** Only `PixelBox.swift` checks
+  `accessibilityReduceMotion` (3 refs). These components run `repeatForever` (infinite) animations with **no**
+  reduce-motion guard:
+  `DesignSystem/Components/Composites.swift`, `AgentIsland.swift`, `Primitives.swift` (×2), `DSChip.swift`,
+  `ChatComponents.swift`, `States/DSOfflineState.swift`, `States/DSSkeletonRow.swift`.
+  *Impact:* users with Reduce Motion enabled (vestibular sensitivity) still get continuous shimmer/pulse —
+  WCAG 2.3.3 (Animation from Interactions) concern. *Fix:* gate each `repeatForever` `withAnimation` on
+  `@Environment(\.accessibilityReduceMotion)` and fall back to a static/opacity state — same pattern PixelBox
+  already uses. High-confidence, low-risk; ~7 small edits, each needs an app-target build check.
+- **Residual (info):** `.accessibilityLabel` appears in only 8 files — icon-only buttons elsewhere may lack
+  VoiceOver labels. Not individually verified (would need per-button audit); flagged for the per-screen a11y
+  sweep (checklist B8).
 
 ---
 
@@ -125,10 +158,12 @@ that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFIC
 ## 6. Remaining P0/P1/P2 after this audit
 
 - **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
-- **P1:** (a) Re-run the throttled perf/UX/a11y deep audit and fold results here. (b) Empty/loading/error +
-  a11y sweep across surfaces (checklist B8) — not yet verified per-screen. (c) Remove/quarantine the stale
-  Swift `conduitd` package so governance can't ship disabled (checklist B4).
-- **P2:** Dead-strip orphaned `FilesFeature`/`PreviewFeature`/`QuotaGuardView`/`SnippetEditorView` + dead
-  DS components. Break up the 3 slow-type-check getters. Deliberate doc archival pass (§5).
+- **P1:** none confirmed. (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `conduitd` was
+  quarantined this session; `SnippetEditorView` + dead DS components were removed.)
+- **P2:** (a) **Reduce-Motion guard on 7 DS animation components** (§4b) — the one confirmed accessibility
+  fix. (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8). (c) Dead-strip
+  orphaned `FilesFeature`/`PreviewFeature` whole modules (needs Package.swift surgery — deferred, higher-risk).
+- **P3:** `BridgeAuditFeedView` plain-VStack laziness defeat (§4); 2 slow-type-check getters (§4); deliberate
+  doc archival pass already done this session (§5 archived 23 docs).
 - **Owner-gated (unchanged):** App Store Connect setup, physical-device APNs smoke test, live remote-host
   E2E, vanity domain/DNS — see `docs/PUBLISH_READINESS_CHECKLIST.md` §C/§D.
