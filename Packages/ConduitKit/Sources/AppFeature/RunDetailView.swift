@@ -24,6 +24,9 @@ public struct RunDetailView: View {
     private let runId: String
     private let runOutputStore: RunOutputStore?
     private let onSendFollowUp: ((String) -> Void)?
+    private let pendingApprovalCount: Int
+    private let onApprove: (() -> Void)?
+    private let onReject: (() -> Void)?
 
     @Environment(\.conduitTokens) private var t
 
@@ -34,7 +37,10 @@ public struct RunDetailView: View {
         subtitle: String,
         status: RunControlStatus = .running,
         outputStore: RunOutputStore? = nil,
-        onSendFollowUp: ((String) -> Void)? = nil
+        onSendFollowUp: ((String) -> Void)? = nil,
+        pendingApprovalCount: Int = 0,
+        onApprove: (() -> Void)? = nil,
+        onReject: (() -> Void)? = nil
     ) {
         _store = State(initialValue: RunControlStore(channel: channel, runId: runId, status: status))
         self.title = title
@@ -42,6 +48,9 @@ public struct RunDetailView: View {
         self.runId = runId
         self.runOutputStore = outputStore
         self.onSendFollowUp = onSendFollowUp
+        self.pendingApprovalCount = pendingApprovalCount
+        self.onApprove = onApprove
+        self.onReject = onReject
     }
 
     // MARK: - Derived state
@@ -112,35 +121,84 @@ public struct RunDetailView: View {
         currentRun?.isTerminal ?? false
     }
 
+    private var isErrorState: Bool {
+        currentRun?.status == "failed" ||
+        (store.lastError != nil && store.status != .running)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            PixelBox(state: .offline, size: 64)
+            Text("No active run")
+                .font(.dsMonoPt(14))
+                .foregroundStyle(t.text3)
+            Text("Deploy an agent task from the dashboard to get started")
+                .font(.dsMonoPt(14))
+                .foregroundStyle(t.text3)
+                .multilineTextAlignment(.center)
+            DSButton("Start new run", variant: .primary) {
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    private var errorContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if let err = store.lastError {
+                    DSTypedErrorCard(
+                        error: .other(err),
+                        onPrimary: nil,
+                        onSecondary: nil
+                    )
+                } else if currentRun?.status == "failed" {
+                    DSTypedErrorCard(
+                        error: .other("Run failed"),
+                        onPrimary: nil,
+                        onSecondary: nil
+                    )
+                }
+                if hasOutput, let run = currentRun {
+                    outputContent(for: run)
+                }
+                Color.clear.frame(height: 1).id(Self.bottomAnchor)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+        }
+    }
+
     // MARK: - Body
 
     public var body: some View {
         VStack(spacing: 0) {
             hudStrip
             SpectrumBar(mode: spectrumMode, height: 6, gap: 1.5)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let err = store.lastError {
-                            Text(err)
-                                .font(.dsMonoPt(12))
-                                .foregroundStyle(t.termErr)
+            if currentRun == nil {
+                emptyState
+            } else if isErrorState {
+                errorContent
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if hasOutput, let run = currentRun {
+                                outputContent(for: run)
+                            } else if currentRun != nil {
+                                thinkingPlaceholder
+                            }
+                            // Bottom anchor: the view auto-scrolls here as output streams
+                            // in so the freshest tokens stay visible (terminal-tail feel).
+                            Color.clear.frame(height: 1).id(Self.bottomAnchor)
                         }
-                        if hasOutput, let run = currentRun {
-                            outputContent(for: run)
-                        } else if currentRun != nil {
-                            thinkingPlaceholder
-                        }
-                        // Bottom anchor: the view auto-scrolls here as output streams
-                        // in so the freshest tokens stay visible (terminal-tail feel).
-                        Color.clear.frame(height: 1).id(Self.bottomAnchor)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 12)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 12)
-                }
-                .onChange(of: currentRun?.chunks.count ?? 0) { _, _ in
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                    .onChange(of: currentRun?.chunks.count ?? 0) { _, _ in
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -148,6 +206,9 @@ public struct RunDetailView: View {
         .navigationTitle("run")
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
+                if let approve = onApprove, let reject = onReject, pendingApprovalCount > 0 {
+                    approvalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
+                }
                 if onSendFollowUp != nil {
                     followUpBar
                 }
@@ -288,6 +349,52 @@ public struct RunDetailView: View {
         .overlay(Divider(), alignment: .top)
     }
 
+    // MARK: - Approval Banner
+
+    private func approvalBanner(count: Int, onApprove: @escaping () -> Void, onReject: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bell.badge")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(t.warn)
+            Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
+                .font(.dsMonoPt(12, weight: .semibold))
+                .foregroundStyle(t.text2)
+            Spacer()
+            Button {
+                Haptics.selection()
+                onReject()
+            } label: {
+                Text("DENY")
+                    .font(.dsMonoPt(11, weight: .semibold))
+                    .foregroundStyle(t.danger)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(t.dangerSoft)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Button {
+                Haptics.medium()
+                onApprove()
+            } label: {
+                Text("APPROVE")
+                    .font(.dsMonoPt(11, weight: .semibold))
+                    .foregroundStyle(t.accentFg)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(t.accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(t.warnSoft)
+        .overlay(Rectangle().fill(t.warn.opacity(0.25)).frame(height: 1), alignment: .bottom)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.spring(response: 0.3), value: pendingApprovalCount)
+    }
+
     // MARK: - Follow-up Bar
 
     private var followUpBar: some View {
@@ -302,17 +409,26 @@ public struct RunDetailView: View {
                 .foregroundStyle(t.text)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-            Button {
-                let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                onSendFollowUp?(text)
-                followUpText = ""
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(textEmpty ? t.text4 : t.accent)
+                .disabled(isErrorState)
+            if isErrorState {
+                DSButton("Reconnect", systemImage: "arrow.clockwise", variant: .primary) {
+                    let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSendFollowUp?(text.isEmpty ? "/reconnect" : text)
+                    followUpText = ""
+                }
+            } else {
+                Button {
+                    let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { return }
+                    onSendFollowUp?(text)
+                    followUpText = ""
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(textEmpty ? t.text4 : t.accent)
+                }
+                .disabled(textEmpty)
             }
-            .disabled(textEmpty)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 9)

@@ -8,6 +8,13 @@ import DesignSystem
 // Each Block becomes a ToolCardView. Input is handled by ChatInputBar
 // at the bottom of the parent view — not inline here.
 
+private struct BottomOffsetKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = .zero
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 public struct ChatTranscriptView: View {
     let blocks: BlockRenderer
     let onLiveBytes: (ArraySlice<UInt8>) -> Void
@@ -31,6 +38,8 @@ public struct ChatTranscriptView: View {
     @State private var blockPanAccumX: CGFloat = 0
     @State private var blockPanAccumY: CGFloat = 0
     @State private var blockPanLastTranslation: CGSize = .zero
+    @State private var isAtBottom = true
+    @State private var maxBottomY: CGFloat = 0
 
     public init(
         blocks: BlockRenderer,
@@ -59,11 +68,22 @@ public struct ChatTranscriptView: View {
                     Color.clear
                         .frame(height: 1)
                         .onAppear { onLoadOlder?() }
-                    ForEach(blocks.blocks) { block in
+                    ForEach(Array(blocks.blocks.enumerated()), id: \.element.id) { index, block in
+                        if index > 0 {
+                            timestampDivider(between: blocks.blocks[index - 1], and: block)
+                        }
+                        if !block.command.isEmpty {
+                            userBubble(for: block)
+                        }
                         toolCard(for: block)
                             .id(block.id)
                     }
-                    Color.clear.frame(height: 8).id("bottom")
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(key: BottomOffsetKey.self, value: geo.frame(in: .global).minY)
+                    }
+                    .frame(height: 0)
+                    .id("bottom")
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
@@ -81,12 +101,47 @@ public struct ChatTranscriptView: View {
                 if hapticFeedback { Haptics.light() }
             }
             .onChange(of: blocks.blocks.count) { _, _ in
+                guard isAtBottom else { return }
                 withAnimation(.easeOut(duration: 0.12)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
             .onChange(of: blocks.blocks.last?.chunks.count) { _, _ in
+                guard isAtBottom else { return }
                 proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            .onPreferenceChange(BottomOffsetKey.self) { bottomMinY in
+                if maxBottomY == 0 {
+                    maxBottomY = bottomMinY
+                }
+                if bottomMinY > maxBottomY {
+                    maxBottomY = bottomMinY
+                }
+                let dist = maxBottomY - bottomMinY
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isAtBottom = dist < 100
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !isAtBottom {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                        isAtBottom = true
+                    } label: {
+                        Text("↓ latest")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(t.surface2)
+                            .clipShape(Capsule())
+                    }
+                    .transition(.opacity)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 12)
+                }
             }
         }
     }
@@ -110,6 +165,55 @@ public struct ChatTranscriptView: View {
             EmptyView()
         }
     }
+
+    // MARK: - User prompt bubble (P1.2)
+
+    @ViewBuilder
+    private func userBubble(for block: Block) -> some View {
+        VStack(alignment: .trailing, spacing: 3) {
+            Text("You")
+                .font(.dsMonoPt(10))
+                .foregroundStyle(t.text3)
+            Text(block.command)
+                .font(.dsMonoPt(14))
+                .foregroundStyle(t.text)
+                .lineSpacing(14 * 0.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(t.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, 4)
+    }
+
+    // MARK: - Timestamp divider (P1.3)
+
+    @ViewBuilder
+    private func timestampDivider(between previous: Block, and current: Block) -> some View {
+        let prevMinute = Self.calendar.dateComponents([.year, .month, .day, .hour, .minute], from: previous.startedAt)
+        let currMinute = Self.calendar.dateComponents([.year, .month, .day, .hour, .minute], from: current.startedAt)
+        if prevMinute != currMinute {
+            HStack(spacing: 0) {
+                DSDivider(.soft)
+                Text("─ \(Self.timestampFormatter.string(from: current.startedAt)) ─")
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(t.text4)
+                    .fixedSize()
+                DSDivider(.soft)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private static let timestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
+    private static let calendar: Calendar = .current
 
     // MARK: - Block-mode cursor pan (Gesture #1)
 
