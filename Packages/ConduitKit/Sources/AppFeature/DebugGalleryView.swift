@@ -1044,7 +1044,7 @@ private struct AgentHUDGalleryScreen: View {
 
 // MARK: - Agent status header gallery (CONDUIT_GALLERY=statusheader)
 // Renders the slim AgentStatusHeader in the REAL placement it ships in on the
-// Sessions tab: in-layout, BELOW a custom large title (as in SessionsHomeView),
+// Sessions tab: in-layout, BELOW a custom large title,
 // over the app's dark surface — the way to verify it reads cleanly and never
 // overlaps the cutout or title.
 

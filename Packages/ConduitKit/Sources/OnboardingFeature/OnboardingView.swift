@@ -170,7 +170,7 @@ public struct OnboardingView: View {
                 withAnimation { phase = .firstRun }
             }
         case .firstRun:
-            DSButton("run the demo approval", variant: .primary, size: .lg, fullWidth: true) {
+            DSButton("continue", variant: .primary, size: .lg, fullWidth: true) {
                 finish()
             }
         }
@@ -189,9 +189,9 @@ public struct OnboardingView: View {
 
     private var leadingControl: OnboardingLeadingControl {
         switch phase {
-        case .welcome, .paired: return .none
-        case .scan:             return .close
-        case .pair, .caution, .firstRun: return .back
+        case .welcome:       return .none
+        case .scan:          return .close
+        case .pair, .paired, .caution, .firstRun: return .back
         }
     }
 
@@ -203,11 +203,13 @@ public struct OnboardingView: View {
             withAnimation { phase = .welcome }
         case .scan:
             withAnimation { phase = .pair }
+        case .paired:
+            withAnimation { phase = .pair }
         case .caution:
             withAnimation { phase = .paired }
         case .firstRun:
             withAnimation { phase = .caution }
-        case .welcome, .paired:
+        case .welcome:
             break
         }
     }

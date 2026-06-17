@@ -16,7 +16,7 @@ import SettingsFeature
 import KeysFeature
 import DesignSystem
 import PreviewFeature
-import FilesFeature
+
 import DiffFeature
 import SyncKit
 

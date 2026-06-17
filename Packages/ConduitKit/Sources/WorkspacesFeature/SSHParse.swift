@@ -3,7 +3,7 @@ import Foundation
 import ConduitCore
 
 /// Parsed result from an SSH command string.
-/// Extends the WorkspacesView quick-connect parser with `-i <keyfile>` capture.
+/// Extends the SSH quick-connect parser with `-i <keyfile>` capture.
 public struct SSHParseResult: Sendable {
     public let user: String
     public let host: String
