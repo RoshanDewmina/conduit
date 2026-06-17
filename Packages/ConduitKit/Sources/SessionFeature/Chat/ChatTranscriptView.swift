@@ -24,6 +24,9 @@ public struct ChatTranscriptView: View {
     let onCollapse: (Block) -> Void
     let onStar: (Block) -> Void
     let onLoadOlder: (() -> Void)?
+    // P2.5: Run summary
+    var runStatus: RunControlStatus?
+    var budgetBurn: String?
 
     @Environment(\.conduitTokens) private var t
 
@@ -49,7 +52,9 @@ public struct ChatTranscriptView: View {
         onRerun: @escaping (Block) -> Void,
         onCollapse: @escaping (Block) -> Void,
         onStar: @escaping (Block) -> Void,
-        onLoadOlder: (() -> Void)? = nil
+        onLoadOlder: (() -> Void)? = nil,
+        runStatus: RunControlStatus? = nil,
+        budgetBurn: String? = nil
     ) {
         self.blocks = blocks
         self.onLiveBytes = onLiveBytes
@@ -59,6 +64,8 @@ public struct ChatTranscriptView: View {
         self.onCollapse = onCollapse
         self.onStar = onStar
         self.onLoadOlder = onLoadOlder
+        self.runStatus = runStatus
+        self.budgetBurn = budgetBurn
     }
 
     public var body: some View {
@@ -75,8 +82,41 @@ public struct ChatTranscriptView: View {
                         if !block.command.isEmpty {
                             userBubble(for: block)
                         }
-                        toolCard(for: block)
-                            .id(block.id)
+                        HStack(alignment: .top, spacing: 0) {
+                            // P2.2: Turn timeline indicator for response blocks
+                            if block.command.isEmpty, index > 0,
+                               !blocks.blocks[index - 1].command.isEmpty {
+                                // First response block after a command — show turn start dot
+                                VStack(spacing: 0) {
+                                    Circle()
+                                        .fill(t.termAccent.opacity(0.4))
+                                        .frame(width: 6, height: 6)
+                                        .padding(.top, 12)
+                                    Rectangle()
+                                        .fill(t.termAccent.opacity(0.15))
+                                        .frame(width: 2)
+                                }
+                                .frame(width: 12)
+                                .padding(.leading, 4)
+                            } else if block.command.isEmpty, index > 0,
+                                      !blocks.blocks[index - 1].command.isEmpty {
+                                // Continuation of turn — just the line
+                                Rectangle()
+                                    .fill(t.termAccent.opacity(0.15))
+                                    .frame(width: 2)
+                                    .frame(height: 8)
+                                    .padding(.leading, 9)
+                            } else if block.command.isEmpty, index > 0,
+                                      blocks.blocks[index - 1].command.isEmpty {
+                                // Continuing an existing turn — vertical line
+                                Rectangle()
+                                    .fill(t.termAccent.opacity(0.15))
+                                    .frame(width: 2)
+                                    .padding(.leading, 9)
+                            }
+                            toolCard(for: block)
+                                .id(block.id)
+                        }
                     }
                     GeometryReader { geo in
                         Color.clear
@@ -84,6 +124,12 @@ public struct ChatTranscriptView: View {
                     }
                     .frame(height: 0)
                     .id("bottom")
+
+                    // P2.5: Run summary line
+                    if let status = runStatus, status == .stopped || status == .budgetExceeded,
+                       !blocks.blocks.isEmpty {
+                        runSummary
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
@@ -204,6 +250,88 @@ public struct ChatTranscriptView: View {
                 DSDivider(.soft)
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    // MARK: - P2.2: Turn grouping
+
+    /// Determines if a block starts a new turn (has a user command).
+    private func isNewTurn(_ block: Block, previous: Block?) -> Bool {
+        guard let previous else { return true }
+        return !block.command.isEmpty || block.command != previous.command
+    }
+
+    // MARK: - P2.5: Run summary
+
+    private var runSummary: some View {
+        let blockCount = blocks.blocks.count
+        let elapsed = runElapsed
+        let burn = budgetBurn ?? "$0.00"
+        return HStack(spacing: 0) {
+            DSDivider(.soft)
+            VStack(spacing: 4) {
+                Text("── \(blockCount) block\(blockCount == 1 ? "" : "s") · \(elapsed) · \(burn) ──")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                Text("Run complete")
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.vertical, 8)
+            DSDivider(.soft)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var runElapsed: String {
+        guard let first = blocks.blocks.first else { return "0s" }
+        let end = blocks.blocks.last?.finishedAt ?? Date()
+        let seconds = end.timeIntervalSince(first.startedAt)
+        if seconds < 60 {
+            return String(format: "%.1fs", seconds)
+        }
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return "\(mins)m \(secs)s"
+    }
+
+    /// Groups consecutive blocks into logical turns. A turn starts when a block
+    /// has a user command, and includes all subsequent response blocks until the
+    /// next command block.
+    private func turnGroups() -> [(command: Block, blocks: [Block])] {
+        var groups: [(command: Block, blocks: [Block])] = []
+        var currentCommand: Block?
+        var currentBlocks: [Block] = []
+
+        for block in blocks.blocks {
+            if !block.command.isEmpty {
+                if let cmd = currentCommand {
+                    groups.append((command: cmd, blocks: currentBlocks))
+                }
+                currentCommand = block
+                currentBlocks = [block]
+            } else {
+                currentBlocks.append(block)
+            }
+        }
+        if let cmd = currentCommand {
+            groups.append((command: cmd, blocks: currentBlocks))
+        }
+        return groups
+    }
+
+    /// P2.2: Turn timeline indicator — a vertical line on the left connecting
+    /// blocks that belong to the same turn (response blocks after a command).
+    @ViewBuilder
+    private func turnTimelineIndicator(blockIndex: Int, in turnBlocks: [Block]) -> some View {
+        if turnBlocks.count > 1 {
+            let position = turnBlocks.firstIndex(where: { $0.id == blocks.blocks[blockIndex].id }) ?? 0
+            if position > 0 {
+                Rectangle()
+                    .fill(t.termAccent.opacity(0.25))
+                    .frame(width: 2)
+                    .frame(height: 8)
+            }
         }
     }
 

@@ -10,8 +10,6 @@ import SSHTransport
 struct AgentDetailView: View {
     @Bindable var store: AgentStore
     let agent: HostedAgent
-    /// Daemon channel for the agent's host, used to build a GitStore for the
-    /// run-detail "Changes" / "Ship it" flow. nil ⇒ git section hidden.
     var gitChannel: DaemonChannel? = nil
 
     @State private var prompt = ""
@@ -21,6 +19,8 @@ struct AgentDetailView: View {
     @State private var scheduleSaving = false
     @State private var editingSchedule: AgentSchedule?
     @State private var deletingSchedule: AgentSchedule?
+    @State private var showAPIKey = false
+    @State private var isDefaultAgent = true
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -28,9 +28,14 @@ struct AgentDetailView: View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                DSDetailHeader(agent.name, onBack: { dismiss() })
+                navBar
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        apiKeySection
+                        modelPickerSection
+                        defaultAgentToggle
+                        usageSummarySection
+                        Divider().background(t.divider).padding(.vertical, 4)
                         runPromptSection
                         scheduleSection
                         toolsSection
@@ -39,7 +44,7 @@ struct AgentDetailView: View {
                         }
                         runHistorySection
                     }
-                    .padding(16)
+                    .padding(22)
                 }
             }
         }
@@ -69,10 +74,194 @@ struct AgentDetailView: View {
         }
     }
 
+    // MARK: - Nav bar
+
+    private var navBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                    .frame(width: 36, height: 36)
+                    .background(t.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Text(agent.name)
+                .font(.dsSansPt(17, weight: .semibold))
+                .foregroundStyle(t.text)
+            Spacer()
+            // Placeholder for symmetry
+            Color.clear.frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 60)
+    }
+
+    // MARK: - API Key
+
+    private var apiKeySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("API key")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text3)
+            HStack {
+                if showAPIKey {
+                    Text("sk-ant-api03-••••••••")
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text4)
+                } else {
+                    Text("••••••••••••••••")
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text4)
+                        .tracking(2)
+                }
+                Spacer()
+                Button {
+                    showAPIKey.toggle()
+                } label: {
+                    Text(showAPIKey ? "hide" : "show")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1))
+        }
+    }
+
+    // MARK: - Model picker
+
+    private var modelPickerSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Model")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text3)
+            VStack(spacing: 4) {
+                modelOption("claude-opus-4-8", subtitle: "Recommended", isSelected: true)
+                modelOption("claude-sonnet-4-6", subtitle: nil, isSelected: false)
+                modelOption("claude-haiku-3-5", subtitle: nil, isSelected: false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modelOption(_ name: String, subtitle: String?, isSelected: Bool) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .strokeBorder(isSelected ? t.accent : t.text4, lineWidth: 1.5)
+                    .frame(width: 10, height: 10)
+                if isSelected {
+                    Circle()
+                        .fill(t.accent)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.text4)
+                }
+            }
+            Spacer()
+        }
+        .padding(10)
+        .padding(.horizontal, 2)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(isSelected ? t.accent : t.border, lineWidth: isSelected ? 1.5 : 1))
+    }
+
+    // MARK: - Default agent toggle
+
+    private var defaultAgentToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Default agent")
+                    .font(.dsMonoPt(11.5))
+                    .foregroundStyle(t.text)
+                Text("Fallback for new sessions")
+                    .font(.dsMonoPt(9.5))
+                    .foregroundStyle(t.text4)
+            }
+            Spacer()
+            Toggle("", isOn: $isDefaultAgent)
+                .tint(t.accent)
+                .labelsHidden()
+                .frame(width: 44)
+        }
+        .padding(12)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1))
+    }
+
+    // MARK: - Usage summary
+
+    private var usageSummarySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("USAGE THIS MONTH")
+                .font(.dsMonoPt(10))
+                .tracking(10 * 0.05)
+                .foregroundStyle(t.text4)
+            HStack(spacing: 18) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("847K")
+                        .font(.dsMonoPt(13, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    Text("tokens in")
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.text4)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("2.3M")
+                        .font(.dsMonoPt(13, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    Text("tokens out")
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.text4)
+                }
+                Spacer()
+            }
+        }
+        .padding(12)
+        .background(t.surfaceSunk)
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1))
+    }
+
+    // MARK: - Run prompt
+
     private var runPromptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("RUN")
                 .font(.dsMonoPt(11, weight: .semibold))
+                .tracking(11 * 0.1)
+                .textCase(.uppercase)
                 .foregroundStyle(t.text3)
             if agent.runtimeKind.isCloud {
                 Text("Runs in a managed cloud sandbox\(agent.region.map { " · \($0)" } ?? "") via the control plane.")
@@ -87,7 +276,10 @@ struct AgentDetailView: View {
                 .font(.dsMonoPt(14))
                 .lineLimit(3...6)
                 .padding(12)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD))
+                .background(t.surface, in: RoundedRectangle(cornerRadius: t.r2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r2)
+                        .strokeBorder(t.border, lineWidth: 1))
             DSButton(isRunning ? "Running…" : "Start run", variant: .primary, mono: true) {
                 Task {
                     isRunning = true
@@ -101,6 +293,8 @@ struct AgentDetailView: View {
         }
     }
 
+    // MARK: - Schedule
+
     private var scheduleSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             DSListSectionHead("SCHEDULE")
@@ -113,7 +307,10 @@ struct AgentDetailView: View {
             TextField("Command (optional)", text: $scheduleCommand)
                 .font(.dsMonoPt(13))
                 .padding(10)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD))
+                .background(t.surface, in: RoundedRectangle(cornerRadius: t.r2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r2)
+                        .strokeBorder(t.border, lineWidth: 1))
             DSButton(scheduleSaving ? "Saving…" : "Save schedule", variant: .secondary, mono: true) {
                 Task {
                     scheduleSaving = true
@@ -121,7 +318,7 @@ struct AgentDetailView: View {
                     try? await store.saveSchedule(
                         agentID: agent.id,
                         cronExpr: schedulePreset.rawValue,
-                        command: scheduleCommand.isEmpty ? agent.command : scheduleCommand
+                        command: scheduleCommand.isEmpty ? agent.command ?? "" : scheduleCommand
                     )
                 }
             }
@@ -194,6 +391,8 @@ struct AgentDetailView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    // MARK: - Tools
+
     @ViewBuilder
     private var toolsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -245,6 +444,8 @@ struct AgentDetailView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Team
+
     private var teamSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             DSListSectionHead("TEAM")
@@ -266,8 +467,8 @@ struct AgentDetailView: View {
         }
     }
 
-    /// Build a GitStore for this agent's workspace (SSH host + configured path +
-    /// connected channel). nil ⇒ the run detail hides its "Changes" section.
+    // MARK: - Run history
+
     private func makeGitStore() -> GitStore? {
         guard agent.runtimeKind == .sshHost,
               let workdir = agent.workspacePath, !workdir.isEmpty,

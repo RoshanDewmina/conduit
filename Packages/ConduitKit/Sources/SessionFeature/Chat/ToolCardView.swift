@@ -30,6 +30,8 @@ public struct ToolCardView<Footer: View>: View {
     @State private var searchActive = false
     @State private var searchQuery = ""
     @State private var runningPhase = false
+    @State private var swipeOffset: CGFloat = 0
+    @State private var swipeActive = false
 
     @AppStorage("terminalFontSize") private var termFontSize: Double = 11
     @Environment(\.conduitTokens) private var t
@@ -77,6 +79,11 @@ public struct ToolCardView<Footer: View>: View {
         liveHandle != nil && block.state == .executing
     }
 
+    private var isErrorState: Bool {
+        if case .error = cardState { return true }
+        return false
+    }
+
     /// Full-size inline TUI height — only used when a live TUI handle is actively
     /// rendering cursor-positioning content. Matches screen × 0.55, clamped to
     /// 360…720 pt. Short/idle blocks skip this floor and size to their content.
@@ -115,50 +122,81 @@ public struct ToolCardView<Footer: View>: View {
     // MARK: - Body
 
     public var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // ── Left gutter accent by state (matches DSBlockCard) ──────────
-            Rectangle()
-                .fill(gutterColor)
-                .frame(width: 3)
-
-            VStack(alignment: .leading, spacing: 0) {
-                // ── Tier 1: kind label + meta (on card surface) ───────────
-                cardHeader
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-
-                if !block.isCollapsed {
-                    // ── Tier 2: "$ command" bar (sunken) ──────────────────
-                    commandBar
-
-                    // ── Tier 3: output panel (darkest terminal surface) ───
-                    if showsOutputArea {
-                        outputBody
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(t.termBg)
+        ZStack(alignment: .trailing) {
+            // P2.1: Swipe-left action buttons (revealed behind card)
+            if swipeActive {
+                HStack(spacing: 0) {
+                    Spacer()
+                    swipeActionButton(icon: "arrow.clockwise", label: "Re-run", tint: t.termAccent) {
+                        performSwipeAction { onRerun() }
                     }
-
-                    // ── Search bar ────────────────────────────────────────
-                    if searchActive {
-                        searchBar.padding(.horizontal, 12).padding(.vertical, 6)
+                    swipeActionButton(
+                        icon: block.isStarred ? "star.slash" : "star.fill",
+                        label: block.isStarred ? "Unstar" : "Star",
+                        tint: t.termAccent
+                    ) {
+                        performSwipeAction { onStar() }
                     }
+                    swipeActionButton(icon: "doc.on.doc", label: "Copy", tint: t.termText2) {
+                        performSwipeAction {
+                            #if os(iOS)
+                            UIPasteboard.general.string = block.command
+                            #endif
+                        }
+                    }
+                }
+                .frame(height: 60)
+                .padding(.trailing, 2)
+            }
 
-                    // ── Caller-injected footer (prompt input) ─────────────
-                    if hasFooter {
-                        Rectangle().fill(t.termBorder).frame(height: 1)
-                        footer.padding(.horizontal, 12).padding(.vertical, 4)
+            HStack(alignment: .top, spacing: 0) {
+                // ── Left gutter accent by state (matches DSBlockCard) ──────────
+                Rectangle()
+                    .fill(gutterColor)
+                    .frame(width: 3)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    // ── Tier 1: kind label + meta (on card surface) ───────────
+                    cardHeader
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+
+                    if !block.isCollapsed {
+                        // ── Tier 2: "$ command" bar (sunken) ──────────────────
+                        commandBar
+
+                        // ── Tier 3: output panel (darkest terminal surface) ───
+                        if showsOutputArea {
+                            outputBody
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(t.termBg)
+                        }
+
+                        // ── Search bar ────────────────────────────────────────
+                        if searchActive {
+                            searchBar.padding(.horizontal, 12).padding(.vertical, 6)
+                        }
+
+                        // ── Caller-injected footer (prompt input) ─────────────
+                        if hasFooter {
+                            Rectangle().fill(t.termBorder).frame(height: 1)
+                            footer.padding(.horizontal, 12).padding(.vertical, 4)
+                        }
                     }
                 }
             }
+            .background(cardBg)
+            .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
+                    .strokeBorder(cardBorder, lineWidth: 0.75)
+            )
+            .offset(x: swipeOffset)
+            .gesture(swipeLeftGesture)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: swipeOffset)
         }
-        .background(cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                .strokeBorder(cardBorder, lineWidth: 0.75)
-        )
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .contextMenu { contextMenuItems }
         .onAppear {
@@ -177,6 +215,53 @@ public struct ToolCardView<Footer: View>: View {
                 runningPhase = false
             }
         }
+    }
+
+    // MARK: - P2.1: Swipe-left gesture
+
+    private var swipeLeftGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                let translation = value.translation.width
+                if translation < 0 {
+                    swipeOffset = max(translation, -180)
+                }
+            }
+            .onEnded { value in
+                if value.translation.width < -80 {
+                    withAnimation { swipeOffset = -150 }
+                    swipeActive = true
+                } else {
+                    withAnimation { swipeOffset = 0 }
+                    swipeActive = false
+                }
+            }
+    }
+
+    private func swipeActionButton(
+        icon: String,
+        label: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(label)
+                    .font(.dsMonoPt(9))
+            }
+            .foregroundStyle(tint)
+            .frame(width: 64, height: 56)
+            .background(tint.opacity(0.12))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func performSwipeAction(_ action: @escaping () -> Void) {
+        withAnimation { swipeOffset = 0 }
+        swipeActive = false
+        action()
     }
 
     // MARK: - Card header
@@ -213,6 +298,15 @@ public struct ToolCardView<Footer: View>: View {
             }
             if block.isStarred {
                 Image(systemName: "star.fill").font(.caption2).foregroundStyle(t.termAccent)
+            }
+            // P2.3: Inline "Explain with AI" button — visible for blocks with output
+            if block.hasOutput || cardState != .running {
+                Button(action: onExplain) {
+                    Image(systemName: "sparkles")
+                        .font(.caption2)
+                        .foregroundStyle(isErrorState ? t.termAccent : t.termText3)
+                }
+                .buttonStyle(.plain)
             }
             Button(action: onCollapse) {
                 Image(systemName: block.isCollapsed ? "chevron.down" : "chevron.up")

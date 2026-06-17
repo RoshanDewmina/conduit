@@ -45,6 +45,7 @@ let package = Package(
         .library(name: "DiffFeature",       targets: ["DiffFeature"]),
         .library(name: "PreviewFeature",    targets: ["PreviewFeature"]),
         .library(name: "FilesFeature",      targets: ["FilesFeature"]),
+        .library(name: "WorktreesFeature",  targets: ["WorktreesFeature"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
@@ -188,6 +189,11 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .target(
+            name: "WorktreesFeature",
+            dependencies: ["DesignSystem", "ConduitCore"],
+            swiftSettings: swiftSettings
+        ),
+        .target(
             name: "KeysFeature",
             dependencies: ["DesignSystem", "SecurityKit"],
             swiftSettings: swiftSettings
@@ -215,6 +221,7 @@ let package = Package(
                 "PersistenceKit",
                 "NotificationsKit",
                 "WorkspacesFeature",
+                "WorktreesFeature",
                 "SessionFeature",
                 "InboxFeature",
                 "OnboardingFeature",

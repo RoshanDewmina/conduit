@@ -11,6 +11,7 @@ struct AgentOrgView: View {
 
     @State private var inviteEmail = ""
     @State private var inviteSending = false
+    @State private var showingRunnerSetup = false
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -21,6 +22,7 @@ struct AgentOrgView: View {
                 DSDetailHeader(store.teamOrg?.displayName ?? "Team", onBack: { dismiss() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        runnerSetupLink
                         membersSection
                         inviteSection
                     }
@@ -32,7 +34,38 @@ struct AgentOrgView: View {
         .task {
             await store.loadOrgMembers()
         }
+        .navigationDestination(isPresented: $showingRunnerSetup) {
+            RunnerSetupView(selectedChoice: .constant(.sshHost)) {
+                // Continue — navigate to provisioning or dismiss
+            }
+        }
     }
+
+    // MARK: - Runner setup link
+
+    private var runnerSetupLink: some View {
+        Button {
+            showingRunnerSetup = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.accent)
+                    .frame(width: 18)
+                Text("Where should agents run?")
+                    .font(.dsMonoPt(13, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Members
 
     private var membersSection: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,6 +110,8 @@ struct AgentOrgView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Invite
+
     private var inviteSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             DSListSectionHead("INVITE")
@@ -86,7 +121,10 @@ struct AgentOrgView: View {
                 .autocorrectionDisabled(true)
                 .keyboardType(.emailAddress)
                 .padding(10)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD))
+                .background(t.surface, in: RoundedRectangle(cornerRadius: t.r2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r2)
+                        .strokeBorder(t.border, lineWidth: 1))
             DSButton(inviteSending ? "Sending…" : "Send invite", variant: .secondary, mono: true) {
                 Task {
                     inviteSending = true

@@ -37,6 +37,12 @@ public struct ChatInputBar: View {
     // (b) Media attachment
     var onAttach: ((ComposerAttachment) -> Void)? = nil
 
+    // P2.6: Keyboard toolbar rail
+    var showKeyboardRail: Bool = true
+    var onPaste: (() -> Void)? = nil
+    var onInsertSnippet: (() -> Void)? = nil
+    var onClearInput: (() -> Void)? = nil
+
     @AppStorage("flag.approvalBar")    private var approvalBarEnabled: Bool = true
     @AppStorage("flag.mediaAttachment") private var mediaAttachmentEnabled: Bool = true
 
@@ -60,7 +66,11 @@ public struct ChatInputBar: View {
         pendingApprovalCount: Int = 0,
         onApprove: (() -> Void)? = nil,
         onReject: (() -> Void)? = nil,
-        onAttach: ((ComposerAttachment) -> Void)? = nil
+        onAttach: ((ComposerAttachment) -> Void)? = nil,
+        showKeyboardRail: Bool = true,
+        onPaste: (() -> Void)? = nil,
+        onInsertSnippet: (() -> Void)? = nil,
+        onClearInput: (() -> Void)? = nil
     ) {
         self._inputText = inputText
         self.isExecuting = isExecuting
@@ -76,13 +86,22 @@ public struct ChatInputBar: View {
         self.onApprove = onApprove
         self.onReject = onReject
         self.onAttach = onAttach
+        self.showKeyboardRail = showKeyboardRail
+        self.onPaste = onPaste
+        self.onInsertSnippet = onInsertSnippet
+        self.onClearInput = onClearInput
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // (a) Approval quick-action banner — amber pill above input
             if approvalBarEnabled, pendingApprovalCount > 0, let approve = onApprove, let reject = onReject {
-                approvalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
+                DSApprovalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
+            }
+
+            // P2.6: Keyboard toolbar rail
+            if showKeyboardRail, !isExecuting {
+                keyboardToolbarRail
             }
 
             // Main input row
@@ -136,52 +155,6 @@ public struct ChatInputBar: View {
             // This block intentionally empty — photosPicker handles the picker;
             // the confirmationDialog below is used for camera + files choice.
         }
-    }
-
-    // MARK: - Approval banner
-
-    private func approvalBanner(count: Int, onApprove: @escaping () -> Void, onReject: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "bell.badge")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(t.warn)
-            Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
-                .font(.dsMonoPt(12, weight: .semibold))
-                .foregroundStyle(t.text2)
-            Spacer()
-            Button {
-                Haptics.selection()
-                onReject()
-            } label: {
-                Text("DENY")
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.danger)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(t.dangerSoft)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            Button {
-                Haptics.medium()
-                onApprove()
-            } label: {
-                Text("APPROVE")
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.accentFg)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(t.accent)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(t.warnSoft)
-        .overlay(Rectangle().fill(t.warn.opacity(0.25)).frame(height: 1), alignment: .bottom)
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .animation(.spring(response: 0.3), value: pendingApprovalCount)
     }
 
     // MARK: - Pill text field
@@ -263,14 +236,43 @@ public struct ChatInputBar: View {
                         .font(.title3)
                         .foregroundStyle(t.text3)
                 }
-                // Send
-                Button(action: onSubmit) {
+                // P2.7: Send button with long-press for advanced options
+                Menu {
+                    Button(action: onSubmit) {
+                        Label("Send", systemImage: "arrow.up")
+                    }
+                    Button {
+                        // Send as system command (# prefix)
+                        inputText = "#\(inputText)"
+                        onSubmit()
+                    } label: {
+                        Label("Send as system", systemImage: "terminal")
+                    }
+                    Button(action: onSnippet) {
+                        Label("Insert snippet", systemImage: "chevron.up.square")
+                    }
+                    Button {
+                        UIPasteboard.general.string = inputText
+                    } label: {
+                        Label("Copy to clipboard", systemImage: "doc.on.doc")
+                    }
+                    if inputText.count > 100 {
+                        Button {
+                            // Trim to last 100 chars
+                            inputText = String(inputText.suffix(100))
+                        } label: {
+                            Label("Trim input", systemImage: "scissors")
+                        }
+                    }
+                } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundStyle(
                             inputText.trimmingCharacters(in: .whitespaces).isEmpty
                                 ? t.text4 : t.accent
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -296,6 +298,60 @@ public struct ChatInputBar: View {
                 .font(.title3)
                 .foregroundStyle(t.text3)
         }
+    }
+
+    // MARK: - P2.6: Keyboard toolbar rail
+
+    private var keyboardToolbarRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                railQuickAction(icon: "doc.on.clipboard", label: "Paste") {
+                    onPaste?()
+                }
+                railQuickAction(icon: "chevron.up.square", label: "Snippet") {
+                    onInsertSnippet?()
+                }
+                railQuickAction(icon: "arrow.uturn.backward", label: "Undo") {
+                    onSendLiveKey([0x1b, 0x5b, 0x7a])  // Ctrl+Z
+                }
+                railQuickAction(icon: "xmark", label: "Clear") {
+                    onClearInput?()
+                }
+                if !inputText.isEmpty {
+                    railQuickAction(icon: "trash", label: "Clear") {
+                        inputText = ""
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(t.surf1)
+        .overlay(
+            Rectangle().fill(t.border).frame(height: 0.5),
+            alignment: .bottom
+        )
+    }
+
+    private func railQuickAction(
+        icon: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                Text(label)
+                    .font(.dsMonoPt(10))
+            }
+            .foregroundStyle(t.text2)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(t.surf2)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

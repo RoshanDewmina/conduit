@@ -14,6 +14,8 @@ public struct ChatHeaderView: View {
     let onDisconnect: (() -> Void)?
     let onPortForward: (() -> Void)?
     let onReconnect: (() -> Void)?
+    // P2.4: Budget burn display
+    var budgetBurn: String?
 
     @Environment(\.conduitTokens) private var t
 
@@ -25,7 +27,8 @@ public struct ChatHeaderView: View {
         onBack: (() -> Void)? = nil,
         onDisconnect: (() -> Void)? = nil,
         onPortForward: (() -> Void)? = nil,
-        onReconnect: (() -> Void)? = nil
+        onReconnect: (() -> Void)? = nil,
+        budgetBurn: String? = nil
     ) {
         self.hostName = hostName
         self.cwd = cwd
@@ -35,6 +38,7 @@ public struct ChatHeaderView: View {
         self.onDisconnect = onDisconnect
         self.onPortForward = onPortForward
         self.onReconnect = onReconnect
+        self.budgetBurn = budgetBurn
     }
 
     public var body: some View {
@@ -77,6 +81,21 @@ public struct ChatHeaderView: View {
             }
 
             Spacer()
+
+            // P2.4: Budget burn display
+            if let burn = budgetBurn {
+                HStack(spacing: 3) {
+                    Image(systemName: "flame")
+                        .font(.dsMonoPt(9))
+                    Text(burn)
+                        .font(.dsMonoPt(11, weight: .medium))
+                }
+                .foregroundStyle(t.accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(t.accent.opacity(0.12))
+                .clipShape(Capsule())
+            }
 
             AgentBadge(state)
 

@@ -207,7 +207,7 @@ public struct RunDetailView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 if let approve = onApprove, let reject = onReject, pendingApprovalCount > 0 {
-                    approvalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
+                    DSApprovalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
                 }
                 if onSendFollowUp != nil {
                     followUpBar
@@ -347,52 +347,6 @@ public struct RunDetailView: View {
         .padding(.bottom, 28)
         .background(.bar)
         .overlay(Divider(), alignment: .top)
-    }
-
-    // MARK: - Approval Banner
-
-    private func approvalBanner(count: Int, onApprove: @escaping () -> Void, onReject: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "bell.badge")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(t.warn)
-            Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
-                .font(.dsMonoPt(12, weight: .semibold))
-                .foregroundStyle(t.text2)
-            Spacer()
-            Button {
-                Haptics.selection()
-                onReject()
-            } label: {
-                Text("DENY")
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.danger)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(t.dangerSoft)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            Button {
-                Haptics.medium()
-                onApprove()
-            } label: {
-                Text("APPROVE")
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.accentFg)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(t.accent)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(t.warnSoft)
-        .overlay(Rectangle().fill(t.warn.opacity(0.25)).frame(height: 1), alignment: .bottom)
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .animation(.spring(response: 0.3), value: pendingApprovalCount)
     }
 
     // MARK: - Follow-up Bar
