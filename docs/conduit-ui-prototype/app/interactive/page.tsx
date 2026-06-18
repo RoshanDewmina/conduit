@@ -1,1549 +1,1191 @@
 "use client"
 
-import type { ReactNode } from "react"
+import type { ChangeEvent, ReactNode } from "react"
 import { useMemo, useState } from "react"
 import {
-  AppWindow,
-  Bell,
-  Bot,
-  ChevronLeft,
+  AlertTriangle,
+  CheckCircle2,
   ChevronRight,
-  ClipboardList,
-  Command,
-  Download,
+  Clock3,
   FileDiff,
-  FileText,
-  Folder,
-  GitPullRequest,
-  History,
-  Inbox,
-  Library,
-  Mic,
+  Menu,
   MoreHorizontal,
-  Radio,
-  RefreshCw,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PlayCircle,
+  Plus,
+  Search,
   Send,
   Server,
   ShieldCheck,
-  Sparkles,
-  Terminal,
-  Upload,
-  Wifi,
   X,
-  Zap,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
-  ACTIVITY_LOG,
-  APP_TABS,
-  DESIGN_MODES,
-  DIFF_LINES,
-  FEATURE_MAP,
-  FILES,
-  HOSTS,
-  INITIAL_APPROVALS,
-  INITIAL_BLOCKS,
-  LIBRARY_CARDS,
-  SESSION_SURFACES,
-  SETTINGS_GROUPS,
-  SNIPPETS,
-  type ActivityItem,
-  type AppTabID,
-  type ApprovalDecision,
-  type ApprovalItem,
-  type DesignMode,
-  type DesignModeID,
-  type HostSlot,
-  type SessionSurfaceID,
-  type TerminalBlock,
-} from "@/lib/interactive-data"
+  ARTIFACT_ICONS,
+  ATTENTION_ITEMS,
+  CHAT_CONTEXT,
+  DIFF_PREVIEW_LINES,
+  FILE_PREVIEW,
+  FLEET_AGENTS,
+  NAV_ICONS,
+  SIDEBAR_VARIANTS,
+  STATE_ICONS,
+  THREADS,
+  type AttentionItem,
+  type ChatArtifact,
+  type ChatMessage,
+  type ChatThread,
+  type FleetAgent,
+  type SidebarVariant,
+  type SidebarVariantID,
+} from "@/lib/sidebar-chat-data"
 
-type SettingsState = {
-  appLock: boolean
-  redact: boolean
-  push: boolean
-  cloudSync: boolean
+const riskClass = {
+  low: "border-[#36c26b]/35 bg-[#36c26b]/10 text-[#6fea9a]",
+  medium: "border-[#f0a93b]/35 bg-[#f0a93b]/10 text-[#f5c469]",
+  high: "border-[#5a68ff]/45 bg-[#2f43ff]/14 text-[#91a0ff]",
+  critical: "border-[#e0533f]/45 bg-[#e0533f]/12 text-[#ff897c]",
 }
 
-const TONE_CLASS = {
-  ok: "bg-[#36c26b] text-[#36c26b]",
-  warn: "bg-[#f0a93b] text-[#f0a93b]",
-  danger: "bg-[#e0533f] text-[#e0533f]",
-  info: "bg-[#2f43ff] text-[#5a68ff]",
-  off: "bg-[#34373e] text-[#8a8d96]",
+const stateClass = {
+  running: "bg-[#36c26b] text-[#9ef2bd]",
+  "needs-you": "bg-[#f0a93b] text-[#ffd98a]",
+  done: "bg-[#5a68ff] text-[#aeb7ff]",
+  paused: "bg-[#8a8d96] text-[#c8cad0]",
+  idle: "bg-[#565963] text-[#c8cad0]",
+  offline: "bg-[#34373e] text-[#8a8d96]",
 }
 
-const RISK_CLASS = {
-  low: "border-[#36c26b]/35 bg-[#36c26b]/10 text-[#36c26b]",
-  medium: "border-[#f0a93b]/35 bg-[#f0a93b]/10 text-[#f0a93b]",
-  high: "border-[#2f43ff]/45 bg-[#2f43ff]/12 text-[#7d88ff]",
-  critical: "border-[#e0533f]/45 bg-[#e0533f]/12 text-[#e0533f]",
+const artifactClass = {
+  blue: "border-[#5a68ff]/35 bg-[#2f43ff]/12 text-[#aeb7ff]",
+  green: "border-[#36c26b]/35 bg-[#36c26b]/10 text-[#9ef2bd]",
+  amber: "border-[#f0a93b]/35 bg-[#f0a93b]/10 text-[#ffd98a]",
+  red: "border-[#e0533f]/35 bg-[#e0533f]/10 text-[#ff897c]",
+  neutral: "border-white/[0.1] bg-white/[0.035] text-[#d6d3cc]",
 }
 
 export default function InteractivePage() {
-  const [modeID, setModeID] = useState<DesignModeID>("approval")
-  const mode = DESIGN_MODES.find((item) => item.id === modeID) ?? DESIGN_MODES[0]
-  const [activeTab, setActiveTab] = useState<AppTabID>(mode.homeTab)
-  const [sessionSurface, setSessionSurface] = useState<SessionSurfaceID>("terminal")
-  const [approvals, setApprovals] = useState<ApprovalItem[]>(INITIAL_APPROVALS)
-  const [terminalBlocks, setTerminalBlocks] = useState<TerminalBlock[]>(INITIAL_BLOCKS)
-  const [commandInput, setCommandInput] = useState("")
-  const [selectedHostID, setSelectedHostID] = useState("host-1")
-  const [hostStatus, setHostStatus] = useState<Record<string, HostSlot["status"]>>({})
-  const [decisionID, setDecisionID] = useState<string | null>(null)
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [showLibrary, setShowLibrary] = useState(false)
-  const [toast, setToast] = useState("Live prototype ready")
-  const [settings, setSettings] = useState({
-    appLock: true,
-    redact: false,
-    push: true,
-    cloudSync: true,
-  })
+  const [variantID, setVariantID] = useState<SidebarVariantID>("chat")
+  const [threads, setThreads] = useState<ChatThread[]>(THREADS)
+  const [attention, setAttention] = useState<AttentionItem[]>(ATTENTION_ITEMS)
+  const [selectedThreadID, setSelectedThreadID] = useState(THREADS[0].id)
+  const [searchText, setSearchText] = useState("")
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [composer, setComposer] = useState("")
+  const [activeArtifact, setActiveArtifact] = useState<ChatArtifact | null>(THREADS[0].messages[1].artifacts?.[0] ?? null)
+  const [model, setModel] = useState(THREADS[0].model)
+  const [host, setHost] = useState(THREADS[0].host)
+  const [budget, setBudget] = useState(THREADS[0].budget)
 
-  const pendingCount = approvals.filter((approval) => approval.decision === "pending").length
-  const hosts = HOSTS.map((host) => ({ ...host, status: hostStatus[host.id] ?? host.status }))
-  const selectedHost = hosts.find((host) => host.id === selectedHostID) ?? hosts[0]
-  const activeDecision = approvals.find((approval) => approval.id === decisionID) ?? null
+  const variant = SIDEBAR_VARIANTS.find((item) => item.id === variantID) ?? SIDEBAR_VARIANTS[0]
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadID) ?? threads[0]
 
-  function selectMode(nextModeID: DesignModeID) {
-    const nextMode = DESIGN_MODES.find((item) => item.id === nextModeID) ?? DESIGN_MODES[0]
-    setModeID(nextModeID)
-    setActiveTab(nextMode.homeTab)
-    setToast(`${nextMode.name} direction selected`)
+  const filteredThreads = useMemo(() => {
+    const q = searchText.trim().toLowerCase()
+    if (!q) return threads
+    return threads.filter((thread) => {
+      const haystack = [
+        thread.title,
+        thread.agent,
+        thread.host,
+        thread.cwd,
+        thread.summary,
+        ...thread.messages.map((message) => message.body),
+        ...thread.messages.flatMap((message) => message.artifacts?.map((artifact) => `${artifact.label} ${artifact.detail}`) ?? []),
+      ].join(" ").toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [searchText, threads])
+
+  function selectVariant(next: SidebarVariantID) {
+    setVariantID(next)
+    setSidebarOpen(true)
   }
 
-  function setTab(tab: AppTabID) {
-    setShowLibrary(false)
-    setActiveTab(tab)
+  function selectThread(threadID: string) {
+    const next = threads.find((thread) => thread.id === threadID)
+    if (!next) return
+    setSelectedThreadID(threadID)
+    setModel(next.model)
+    setHost(next.host)
+    setBudget(next.budget)
+    setActiveArtifact(next.messages.flatMap((message) => message.artifacts ?? [])[0] ?? null)
+    setSidebarOpen(false)
   }
 
-  function decide(id: string, decision: ApprovalDecision) {
-    setApprovals((items) => items.map((item) => (item.id === id ? { ...item, decision } : item)))
-    setDecisionID(null)
-    setToast(decision === "rejected" ? "Decision rejected" : "Decision approved and relayed")
-  }
-
-  function submitCommand() {
-    const prompt = commandInput.trim()
-    if (!prompt) return
-    const nextBlock: TerminalBlock = {
-      id: `b-${Date.now()}`,
-      prompt,
-      output: commandOutput(prompt),
-      exit: prompt.includes("fail") ? 1 : 0,
-      duration: prompt.includes("test") ? "18.6s" : "0.42s",
+  function createThread() {
+    const id = `thread-new-${Date.now()}`
+    const newThread: ChatThread = {
+      id,
+      title: "New agent chat",
+      agent: "Codex",
+      agentKey: "CX",
+      host: "This Mac",
+      cwd: "/Users/roshansilva/Documents/command-center",
+      model: "gpt-5-codex",
+      budget: "$4 cap",
+      status: "running",
+      lastActive: "now",
+      summary: "Fresh conversation ready to continue from the phone.",
+      messages: [
+        {
+          id: `${id}-system`,
+          role: "system",
+          body: "New thread created. Choose an agent context, write a prompt, and Conduit will keep the conversation in history.",
+          time: "now",
+          status: "complete",
+        },
+      ],
     }
-    setTerminalBlocks((blocks) => [...blocks, nextBlock])
-    setCommandInput("")
-    setToast("Command sent to the active PTY")
+    setThreads((current) => [newThread, ...current])
+    setSelectedThreadID(id)
+    setSearchText("")
+    setModel(newThread.model)
+    setHost(newThread.host)
+    setBudget(newThread.budget)
+    setActiveArtifact(null)
+    setSidebarOpen(false)
   }
 
-  function connectHost(id: string) {
-    setHostStatus((items) => ({ ...items, [id]: "connected" }))
-    setSelectedHostID(id)
-    setActiveTab("session")
-    setToast("Host connected and session opened")
-  }
-
-  function openSession(hostID: string, surface: SessionSurfaceID = "terminal") {
-    setSelectedHostID(hostID)
-    setSessionSurface(surface)
-    setActiveTab("session")
-  }
-
-  function approveFromWatch() {
-    const next = approvals.find((approval) => approval.decision === "pending")
-    if (next) {
-      decide(next.id, "approved")
-      setToast("Approved from Apple Watch")
+  function sendFollowUp() {
+    const trimmed = composer.trim()
+    if (!trimmed) return
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      body: trimmed,
+      time: "now",
     }
-  }
-
-  function decideFromWatch(decision: Extract<ApprovalDecision, "approved" | "rejected">) {
-    const next = approvals.find((approval) => approval.decision === "pending")
-    if (next) {
-      decide(next.id, decision)
-      setToast(decision === "rejected" ? "Rejected from Apple Watch" : "Approved from Apple Watch")
+    const assistantMessage: ChatMessage = {
+      id: `assistant-${Date.now()}`,
+      role: "assistant",
+      body: "Follow-up accepted. Conduit continues this thread with a fresh runId, keeps the prior turns visible, and streams new artifacts into the same conversation.",
+      time: "now",
+      status: "streaming",
+      artifacts: [
+        { id: `tests-${Date.now()}`, kind: "tests", label: "Tests", detail: "queued after update", tone: "green" },
+      ],
     }
+    setThreads((current) =>
+      current.map((thread) =>
+        thread.id === selectedThreadID
+          ? {
+              ...thread,
+              status: "running",
+              lastActive: "now",
+              summary: trimmed,
+              messages: [...thread.messages, userMessage, assistantMessage],
+            }
+          : thread
+      )
+    )
+    setComposer("")
   }
 
-  const screen = showLibrary ? (
-    <LibraryScreen onBack={() => setShowLibrary(false)} />
-  ) : (
-    <ScreenRouter
-      mode={mode}
-      activeTab={activeTab}
-      approvals={approvals}
-      hosts={hosts}
-      selectedHost={selectedHost}
-      terminalBlocks={terminalBlocks}
-      commandInput={commandInput}
-      sessionSurface={sessionSurface}
-      settings={settings}
-      onSetCommandInput={setCommandInput}
-      onSubmitCommand={submitCommand}
-      onSetSurface={setSessionSurface}
-      onSetTab={setTab}
-      onSetDecision={setDecisionID}
-      onDecide={decide}
-      onConnectHost={connectHost}
-      onOpenSession={openSession}
-      onOpenLibrary={() => setShowLibrary(true)}
-      onToggleSetting={(key) => setSettings((current) => ({ ...current, [key]: !current[key] }))}
-    />
-  )
+  function continueThread(threadID: string) {
+    selectThread(threadID)
+    setComposer("Continue from the last result and explain the next step.")
+  }
+
+  function decide(item: AttentionItem, state: "approved" | "rejected") {
+    setAttention((current) => current.map((entry) => (entry.id === item.id ? { ...entry, state } : entry)))
+    const message: ChatMessage = {
+      id: `decision-${item.id}-${Date.now()}`,
+      role: "system",
+      body: state === "approved" ? `${item.action} approved. The agent can continue in this thread.` : `${item.action} rejected. The agent is paused for edits.`,
+      time: "now",
+      status: "complete",
+      artifacts: [
+        { id: `approval-${item.id}`, kind: "approval", label: "Approval", detail: state, tone: state === "approved" ? "green" : "red" },
+      ],
+    }
+    setThreads((current) =>
+      current.map((thread) =>
+        thread.id === item.threadId
+          ? {
+              ...thread,
+              status: state === "approved" ? "running" : "paused",
+              lastActive: "now",
+              messages: [...thread.messages, message],
+            }
+          : thread
+      )
+    )
+    selectThread(item.threadId)
+  }
+
+  function openFleetAgent(agent: FleetAgent) {
+    selectThread(agent.threadId)
+  }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#050810] text-[#e9e9e2]">
-      <div className="mx-auto flex min-h-screen max-w-[1120px] flex-col px-5 py-5 max-[560px]:px-3">
-        <ReviewHeader
-          mode={mode}
-          activeTab={activeTab}
-          pendingCount={pendingCount}
-          onModeChange={selectMode}
-          onOpenOnboarding={() => setShowOnboarding(true)}
+    <main className="min-h-screen overflow-hidden bg-[#050810] text-[#ecebe5]">
+      <div className="flex h-screen">
+        <Sidebar
+          open={sidebarOpen}
+          variant={variant}
+          activeVariantID={variantID}
+          threads={filteredThreads}
+          allThreads={threads}
+          attention={attention}
+          fleet={FLEET_AGENTS}
+          selectedThreadID={selectedThread.id}
+          searchText={searchText}
+          onSearchChange={setSearchText}
+          onToggle={() => setSidebarOpen((open) => !open)}
+          onVariantChange={selectVariant}
+          onCreateThread={createThread}
+          onSelectThread={selectThread}
+          onContinueThread={continueThread}
+          onDecision={decide}
+          onOpenFleetAgent={openFleetAgent}
         />
 
-        <div className="grid flex-1 grid-cols-[minmax(390px,1fr)_300px] gap-6 py-5 max-[980px]:grid-cols-1">
-          <section className="sticky top-5 flex h-[calc(100vh-116px)] min-h-[560px] items-center justify-center self-start max-[980px]:static max-[980px]:h-auto max-[980px]:min-h-0">
-            <PhoneShell
-              mode={mode}
-              activeTab={activeTab}
-              pendingCount={pendingCount}
-              toast={toast}
-              onSetTab={setTab}
-            >
-              {screen}
-              {activeDecision && (
-                <DecisionSheet
-                  approval={activeDecision}
-                  onClose={() => setDecisionID(null)}
-                  onDecide={decide}
-                />
-              )}
-              {showOnboarding && <OnboardingOverlay onClose={() => setShowOnboarding(false)} />}
-            </PhoneShell>
-          </section>
-
-          <ActionDock
-            mode={mode}
-            activeTab={activeTab}
-            selectedHost={selectedHost}
-            pendingCount={pendingCount}
-            approvals={approvals}
-            onWatchApprove={approveFromWatch}
-            onWatchDecision={decideFromWatch}
-            onOpenSession={() => openSession(selectedHost.id)}
-            onSetTab={setTab}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close sidebar overlay"
+            className="fixed inset-0 z-30 bg-black/55 md:hidden"
+            onClick={() => setSidebarOpen(false)}
           />
-        </div>
+        )}
+
+        <section className="flex min-w-0 flex-1 flex-col">
+          <TopBar
+            variant={variant}
+            thread={selectedThread}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((open) => !open)}
+          />
+
+          <div
+            className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] gap-0 max-[1120px]:grid-cols-1"
+            data-testid={`variant-screen-${variant.id}`}
+          >
+            <ChatDetail
+              thread={selectedThread}
+              attention={attention}
+              activeArtifact={activeArtifact}
+              model={model}
+              host={host}
+              budget={budget}
+              composer={composer}
+              onModelChange={setModel}
+              onHostChange={setHost}
+              onBudgetChange={setBudget}
+              onComposerChange={setComposer}
+              onSend={sendFollowUp}
+              onArtifactOpen={setActiveArtifact}
+              onDecision={decide}
+            />
+            <ContextPanel
+              thread={selectedThread}
+              artifact={activeArtifact}
+              attention={attention}
+              fleet={FLEET_AGENTS}
+              onArtifactOpen={setActiveArtifact}
+              onOpenFleetAgent={openFleetAgent}
+            />
+          </div>
+        </section>
       </div>
     </main>
   )
 }
 
-function ScreenRouter(props: {
-  mode: DesignMode
-  activeTab: AppTabID
-  approvals: ApprovalItem[]
-  hosts: HostSlot[]
-  selectedHost: HostSlot
-  terminalBlocks: TerminalBlock[]
-  commandInput: string
-  sessionSurface: SessionSurfaceID
-  settings: SettingsState
-  onSetCommandInput: (value: string) => void
-  onSubmitCommand: () => void
-  onSetSurface: (surface: SessionSurfaceID) => void
-  onSetTab: (tab: AppTabID) => void
-  onSetDecision: (id: string) => void
-  onDecide: (id: string, decision: ApprovalDecision) => void
-  onConnectHost: (id: string) => void
-  onOpenSession: (hostID: string, surface?: SessionSurfaceID) => void
-  onOpenLibrary: () => void
-  onToggleSetting: (key: keyof SettingsState) => void
-}) {
-  switch (props.activeTab) {
-    case "inbox":
-      return (
-        <InboxScreen
-          mode={props.mode}
-          approvals={props.approvals}
-          onSetDecision={props.onSetDecision}
-          onDecide={props.onDecide}
-          onViewDiff={() => {
-            props.onSetSurface("diff")
-            props.onSetTab("session")
-          }}
-        />
-      )
-    case "fleet":
-      return (
-        <FleetScreen
-          mode={props.mode}
-          hosts={props.hosts}
-          onConnectHost={props.onConnectHost}
-          onOpenSession={props.onOpenSession}
-        />
-      )
-    case "session":
-      return (
-        <SessionScreen
-          mode={props.mode}
-          selectedHost={props.selectedHost}
-          approvals={props.approvals}
-          terminalBlocks={props.terminalBlocks}
-          commandInput={props.commandInput}
-          sessionSurface={props.sessionSurface}
-          onSetCommandInput={props.onSetCommandInput}
-          onSubmitCommand={props.onSubmitCommand}
-          onSetSurface={props.onSetSurface}
-          onSetDecision={props.onSetDecision}
-          onDecide={props.onDecide}
-        />
-      )
-    case "activity":
-      return <ActivityScreen />
-    case "settings":
-      return (
-        <SettingsScreen
-          settings={props.settings}
-          onToggleSetting={props.onToggleSetting}
-          onOpenLibrary={props.onOpenLibrary}
-        />
-      )
-  }
-}
-
-function ReviewHeader(props: {
-  mode: DesignMode
-  activeTab: AppTabID
-  pendingCount: number
-  onModeChange: (mode: DesignModeID) => void
-  onOpenOnboarding: () => void
+function Sidebar(props: {
+  open: boolean
+  variant: SidebarVariant
+  activeVariantID: SidebarVariantID
+  threads: ChatThread[]
+  allThreads: ChatThread[]
+  attention: AttentionItem[]
+  fleet: FleetAgent[]
+  selectedThreadID: string
+  searchText: string
+  onSearchChange: (value: string) => void
+  onToggle: () => void
+  onVariantChange: (id: SidebarVariantID) => void
+  onCreateThread: () => void
+  onSelectThread: (id: string) => void
+  onContinueThread: (id: string) => void
+  onDecision: (item: AttentionItem, state: "approved" | "rejected") => void
+  onOpenFleetAgent: (agent: FleetAgent) => void
 }) {
   return (
-    <header className="border border-white/[0.08] bg-[#0a0b0d]/95 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto min-w-[190px]">
-          <p className="font-mono text-[10px] uppercase tracking-[0.26em] text-[#5a68ff]">Conduit</p>
-          <h1 className="mt-1 text-[22px] font-black leading-none tracking-[-0.02em] text-white">Interactive Prototype</h1>
-          <p className="mt-1 font-mono text-[11px] text-[#565963]">
-            {APP_TABS[props.activeTab].label} · {props.pendingCount} pending
-          </p>
-        </div>
-
-        <div className="flex min-w-[320px] flex-1 gap-1 border border-white/[0.08] bg-white/[0.025] p-1 max-[560px]:min-w-0">
-          {DESIGN_MODES.map((mode) => (
-            <button
-              type="button"
-              key={mode.id}
-              data-testid={`mode-${mode.id}`}
-              onClick={() => props.onModeChange(mode.id)}
-              title={mode.premise}
-              className={cn(
-                "min-w-0 flex-1 border px-3 py-2 text-left transition",
-                props.mode.id === mode.id
-                  ? "border-[#2f43ff]/60 bg-[#2f43ff]/14 text-white"
-                  : "border-transparent text-[#8a8d96] hover:border-white/[0.08] hover:bg-white/[0.03]"
-              )}
-            >
-              <span className="block truncate font-mono text-[10px] font-bold uppercase tracking-[0.13em]">{mode.name}</span>
-              <span className="mt-2 block h-1.5 w-full" style={{ background: props.mode.id === mode.id ? mode.accent : "#23262d" }} />
-            </button>
-          ))}
-        </div>
-
+    <aside
+      data-testid="sidebar-panel"
+      className={cn(
+        "z-40 flex h-screen shrink-0 flex-col border-r border-white/[0.08] bg-[#090b10]/98 transition-all duration-300",
+        props.open ? "w-[360px]" : "w-[74px]",
+        "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[88vw] max-md:max-w-[390px]",
+        props.open ? "max-md:translate-x-0" : "max-md:-translate-x-full md:translate-x-0"
+      )}
+    >
+      <div className="flex h-[72px] items-center gap-3 border-b border-white/[0.08] px-4">
+        <PixelMark label="C" />
+        {props.open && (
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-[#5a68ff]">Conduit</p>
+            <h1 className="truncate text-[17px] font-black leading-none text-white">Sidebar chat</h1>
+          </div>
+        )}
         <button
           type="button"
-          onClick={props.onOpenOnboarding}
-          className="flex h-[54px] items-center justify-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[#e9e9e2] hover:border-[#2f43ff]/50 max-[560px]:h-11 max-[560px]:w-full"
+          data-testid="sidebar-toggle"
+          onClick={props.onToggle}
+          className="grid size-10 place-items-center border border-white/[0.1] bg-white/[0.03] text-[#c8cad0] transition hover:border-[#5a68ff]/45 hover:text-white"
+          aria-label={props.open ? "Collapse sidebar" : "Open sidebar"}
         >
-          <Sparkles className="size-3.5 text-[#2f43ff]" />
-          Onboarding
+          {props.open ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
         </button>
+      </div>
+
+      <VariantSwitcher
+        open={props.open}
+        activeVariantID={props.activeVariantID}
+        onVariantChange={props.onVariantChange}
+      />
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {props.variant.navOrder.map((section) => (
+          <SidebarSection key={section} icon={NAV_ICONS[section]} label={sectionLabel(section)} open={props.open}>
+            {section === "new" && <NewChatButton open={props.open} onCreateThread={props.onCreateThread} />}
+            {section === "search" && (
+              <SearchBlock open={props.open} value={props.searchText} onChange={props.onSearchChange} />
+            )}
+            {section === "threads" && (
+              <ThreadList
+                open={props.open}
+                threads={props.threads}
+                selectedThreadID={props.selectedThreadID}
+                searchActive={props.searchText.trim().length > 0}
+                onSelectThread={props.onSelectThread}
+                onContinueThread={props.onContinueThread}
+              />
+            )}
+            {section === "attention" && (
+              <AttentionList open={props.open} items={props.attention} onDecision={props.onDecision} onSelectThread={props.onSelectThread} />
+            )}
+            {section === "fleet" && <FleetList open={props.open} agents={props.fleet} onOpenFleetAgent={props.onOpenFleetAgent} />}
+            {section === "settings" && <SettingsList open={props.open} />}
+          </SidebarSection>
+        ))}
+      </div>
+
+      {props.open && (
+        <div className="border-t border-white/[0.08] p-3">
+          <div className="border border-[#36c26b]/25 bg-[#36c26b]/10 p-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-[#6fea9a]" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#9ef2bd]">Governed remote control</span>
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-[#c8cad0]">
+              Chat remains the main surface, while policy, approvals, and fleet status stay one tap away.
+            </p>
+          </div>
+        </div>
+      )}
+    </aside>
+  )
+}
+
+function VariantSwitcher(props: {
+  open: boolean
+  activeVariantID: SidebarVariantID
+  onVariantChange: (id: SidebarVariantID) => void
+}) {
+  return (
+    <div className={cn("border-b border-white/[0.08] p-3", !props.open && "px-2")}>
+      {props.open ? (
+        <div className="grid gap-1">
+          {SIDEBAR_VARIANTS.map((variant) => {
+            const Icon = variant.primaryIcon
+            const active = props.activeVariantID === variant.id
+            return (
+              <button
+                type="button"
+                key={variant.id}
+                data-testid={`variant-${variant.id}`}
+                onClick={() => props.onVariantChange(variant.id)}
+                className={cn(
+                  "flex w-full min-w-0 items-center gap-3 border px-3 py-2 text-left transition",
+                  active ? "border-[#5a68ff]/60 bg-[#2f43ff]/16 text-white" : "border-transparent text-[#8a8d96] hover:border-white/[0.08] hover:bg-white/[0.03]"
+                )}
+              >
+                <Icon className="size-4 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em]">{variant.label}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-[#6f737c]">{variant.premise}</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {SIDEBAR_VARIANTS.map((variant) => {
+            const Icon = variant.primaryIcon
+            return (
+              <button
+                type="button"
+                key={variant.id}
+                data-testid={`variant-${variant.id}`}
+                onClick={() => props.onVariantChange(variant.id)}
+                className={cn(
+                  "grid size-11 place-items-center border transition",
+                  props.activeVariantID === variant.id ? "border-[#5a68ff]/60 bg-[#2f43ff]/16 text-white" : "border-white/[0.08] bg-white/[0.025] text-[#8a8d96]"
+                )}
+                aria-label={variant.label}
+              >
+                <Icon className="size-4" />
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SidebarSection(props: {
+  icon: LucideIcon
+  label: string
+  open: boolean
+  children: ReactNode
+}) {
+  const Icon = props.icon
+  return (
+    <section className="mb-3">
+      <div className={cn("mb-2 flex items-center gap-2 px-1", !props.open && "justify-center")}>
+        <Icon className="size-3.5 text-[#5a68ff]" />
+        {props.open && <h2 className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#70747d]">{props.label}</h2>}
+      </div>
+      {props.children}
+    </section>
+  )
+}
+
+function NewChatButton(props: { open: boolean; onCreateThread: () => void }) {
+  return (
+    <button
+      type="button"
+      data-testid="new-chat"
+      onClick={props.onCreateThread}
+      className={cn(
+        "flex w-full items-center justify-center gap-2 border border-[#5a68ff]/45 bg-[#2f43ff]/18 text-white transition hover:bg-[#2f43ff]/25",
+        props.open ? "px-3 py-3 text-left" : "size-11"
+      )}
+    >
+      <Plus className="size-4" />
+      {props.open && <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em]">New chat</span>}
+    </button>
+  )
+}
+
+function SearchBlock(props: {
+  open: boolean
+  value: string
+  onChange: (value: string) => void
+}) {
+  if (!props.open) {
+    return (
+      <div className="grid size-11 place-items-center border border-white/[0.08] bg-white/[0.025] text-[#8a8d96]">
+        <Search className="size-4" />
+      </div>
+    )
+  }
+  return (
+    <label className="flex items-center gap-2 border border-white/[0.08] bg-[#0e1016] px-3 py-2">
+      <Search className="size-4 text-[#70747d]" />
+      <input
+        data-testid="thread-search"
+        value={props.value}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => props.onChange(event.target.value)}
+        placeholder="Search threads, messages, artifacts"
+        className="min-w-0 flex-1 bg-transparent font-mono text-[12px] text-white outline-none placeholder:text-[#565963]"
+      />
+      {props.value && (
+        <button type="button" onClick={() => props.onChange("")} aria-label="Clear search">
+          <X className="size-4 text-[#70747d]" />
+        </button>
+      )}
+    </label>
+  )
+}
+
+function ThreadList(props: {
+  open: boolean
+  threads: ChatThread[]
+  selectedThreadID: string
+  searchActive: boolean
+  onSelectThread: (id: string) => void
+  onContinueThread: (id: string) => void
+}) {
+  if (!props.open) {
+    return (
+      <div className="grid gap-2">
+        {props.threads.slice(0, 4).map((thread) => (
+          <button
+            key={thread.id}
+            type="button"
+            onClick={() => props.onSelectThread(thread.id)}
+            className={cn("grid size-11 place-items-center border font-mono text-[11px]", props.selectedThreadID === thread.id ? "border-[#5a68ff]/55 bg-[#2f43ff]/16 text-white" : "border-white/[0.08] bg-white/[0.025] text-[#8a8d96]")}
+          >
+            {thread.agentKey}
+          </button>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="grid gap-2" data-testid="thread-results">
+      {props.searchActive && (
+        <p className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#70747d]">{props.threads.length} matching threads</p>
+      )}
+      {props.threads.map((thread) => (
+        <article
+          key={thread.id}
+          data-testid={`thread-row-${thread.id}`}
+          className={cn("border bg-[#0e1016] transition", props.selectedThreadID === thread.id ? "border-[#5a68ff]/50" : "border-white/[0.07] hover:border-white/[0.14]")}
+        >
+          <button type="button" onClick={() => props.onSelectThread(thread.id)} className="w-full p-3 text-left">
+            <div className="flex items-center gap-2">
+              <AgentBadge thread={thread} />
+              <StatePill state={thread.status} />
+              <span className="ml-auto font-mono text-[10px] text-[#565963]">{thread.lastActive}</span>
+            </div>
+            <h3 className="mt-2 line-clamp-1 text-[14px] font-bold leading-tight text-white">{thread.title}</h3>
+            <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#8a8d96]">{thread.summary}</p>
+          </button>
+          <div className="flex border-t border-white/[0.06]">
+            <button
+              type="button"
+              data-testid={`continue-${thread.id}`}
+              onClick={() => props.onContinueThread(thread.id)}
+              className="flex flex-1 items-center justify-center gap-2 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#aeb7ff] hover:bg-white/[0.04]"
+            >
+              <PlayCircle className="size-3.5" />
+              Continue
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function AttentionList(props: {
+  open: boolean
+  items: AttentionItem[]
+  onDecision: (item: AttentionItem, state: "approved" | "rejected") => void
+  onSelectThread: (id: string) => void
+}) {
+  const pending = props.items.filter((item) => item.state === "pending")
+  if (!props.open) {
+    return (
+      <button
+        type="button"
+        className="relative grid size-11 place-items-center border border-[#f0a93b]/35 bg-[#f0a93b]/10 text-[#ffd98a]"
+        onClick={() => pending[0] && props.onSelectThread(pending[0].threadId)}
+        aria-label="Needs attention"
+      >
+        <AlertTriangle className="size-4" />
+        {pending.length > 0 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center bg-[#e0533f] font-mono text-[10px] text-white">{pending.length}</span>}
+      </button>
+    )
+  }
+  return (
+    <div className="grid gap-2">
+      {props.items.map((item) => (
+        <article key={item.id} className="border border-white/[0.08] bg-[#0e1016] p-3">
+          <div className="flex items-center gap-2">
+            <span className={cn("border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]", riskClass[item.risk])}>{item.risk}</span>
+            <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.12em] text-[#70747d]">{item.state}</span>
+          </div>
+          <button type="button" onClick={() => props.onSelectThread(item.threadId)} className="mt-2 w-full text-left">
+            <h3 className="text-[13px] font-bold text-white">{item.title}</h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#8a8d96]">{item.detail}</p>
+          </button>
+          {item.state === "pending" && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                data-testid={`reject-${item.id}`}
+                onClick={() => props.onDecision(item, "rejected")}
+                className="border border-white/[0.08] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#c8cad0] hover:bg-white/[0.04]"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                data-testid={`approve-${item.id}`}
+                onClick={() => props.onDecision(item, "approved")}
+                className="border border-[#36c26b]/40 bg-[#36c26b]/12 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#9ef2bd] hover:bg-[#36c26b]/18"
+              >
+                Approve
+              </button>
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function FleetList(props: {
+  open: boolean
+  agents: FleetAgent[]
+  onOpenFleetAgent: (agent: FleetAgent) => void
+}) {
+  if (!props.open) {
+    return (
+      <div className="grid gap-2">
+        {props.agents.slice(0, 3).map((agent) => (
+          <button
+            key={agent.id}
+            type="button"
+            onClick={() => props.onOpenFleetAgent(agent)}
+            className="grid size-11 place-items-center border border-white/[0.08] bg-white/[0.025] text-[#8a8d96]"
+            aria-label={agent.agent}
+          >
+            <Server className="size-4" />
+          </button>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="grid gap-2">
+      {props.agents.map((agent) => (
+        <button
+          type="button"
+          key={agent.id}
+          data-testid={`fleet-agent-${agent.id}`}
+          onClick={() => props.onOpenFleetAgent(agent)}
+          className="border border-white/[0.08] bg-[#0e1016] p-3 text-left transition hover:border-[#36c26b]/40"
+        >
+          <div className="flex items-center gap-2">
+            <Server className="size-4 text-[#6fea9a]" />
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-white">{agent.host}</span>
+            <span className="ml-auto font-mono text-[10px] text-[#70747d]">{agent.spend}</span>
+          </div>
+          <p className="mt-2 text-[13px] font-semibold text-[#d6d3cc]">{agent.agent} - {agent.model}</p>
+          <p className="mt-1 truncate font-mono text-[11px] text-[#70747d]">{agent.branch}</p>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function SettingsList(props: { open: boolean }) {
+  const rows = ["Policy and approvals", "Models and budgets", "Hosts and relay"]
+  if (!props.open) {
+    return (
+      <div className="grid size-11 place-items-center border border-white/[0.08] bg-white/[0.025] text-[#8a8d96]">
+        <MoreHorizontal className="size-4" />
+      </div>
+    )
+  }
+  return (
+    <div className="grid gap-1">
+      {rows.map((row) => (
+        <button key={row} type="button" className="flex items-center justify-between border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left text-[12px] text-[#c8cad0]">
+          {row}
+          <ChevronRight className="size-3.5 text-[#565963]" />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TopBar(props: {
+  variant: SidebarVariant
+  thread: ChatThread
+  sidebarOpen: boolean
+  onToggleSidebar: () => void
+}) {
+  const Icon = props.variant.primaryIcon
+  return (
+    <header className="flex h-[72px] items-center gap-3 border-b border-white/[0.08] bg-[#0a0d14]/96 px-4">
+      <button
+        type="button"
+        className="grid size-11 place-items-center border border-white/[0.1] bg-white/[0.03] text-[#c8cad0] md:hidden"
+        onClick={props.onToggleSidebar}
+        aria-label="Open sidebar"
+      >
+        <Menu className="size-5" />
+      </button>
+      <button
+        type="button"
+        className="hidden size-11 place-items-center border border-white/[0.1] bg-white/[0.03] text-[#c8cad0] md:grid"
+        onClick={props.onToggleSidebar}
+        aria-label={props.sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+      >
+        {props.sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+      </button>
+      <div className="grid size-11 place-items-center border border-[#5a68ff]/35 bg-[#2f43ff]/12">
+        <Icon className="size-5 text-[#aeb7ff]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="truncate text-[18px] font-black text-white">{props.thread.title}</h2>
+          <StatePill state={props.thread.status} />
+        </div>
+        <p className="truncate font-mono text-[11px] text-[#70747d]">{props.variant.label} - {props.variant.premise}</p>
+      </div>
+      <div className="hidden items-center gap-2 lg:flex">
+        <TinyMetric label="threads" value="history" />
+        <TinyMetric label="search" value="global" />
+        <TinyMetric label="fleet" value="context" />
       </div>
     </header>
   )
 }
 
-function PhoneShell(props: {
-  mode: DesignMode
-  activeTab: AppTabID
-  pendingCount: number
-  toast: string
-  onSetTab: (tab: AppTabID) => void
-  children: ReactNode
+function ChatDetail(props: {
+  thread: ChatThread
+  attention: AttentionItem[]
+  activeArtifact: ChatArtifact | null
+  model: string
+  host: string
+  budget: string
+  composer: string
+  onModelChange: (value: string) => void
+  onHostChange: (value: string) => void
+  onBudgetChange: (value: string) => void
+  onComposerChange: (value: string) => void
+  onSend: () => void
+  onArtifactOpen: (artifact: ChatArtifact) => void
+  onDecision: (item: AttentionItem, state: "approved" | "rejected") => void
 }) {
+  const pendingForThread = props.attention.filter((item) => item.threadId === props.thread.id && item.state === "pending")
   return (
-    <div className="interactive-phone-frame relative h-[844px] w-[390px] overflow-hidden border border-white/[0.14] bg-[#0a0b0d] shadow-[0_50px_120px_rgba(0,0,0,0.65)] max-[520px]:scale-[0.88]">
-      <div className="absolute inset-x-0 top-0 z-30 h-[52px] bg-[#0a0b0d]">
-        <div className="flex items-center justify-between px-9 pt-4 font-mono text-[12px] text-white">
-          <span>9:41</span>
-          <div className="flex items-center gap-2">
-            <SignalBars />
-            <Wifi className="size-4" />
-            <div className="flex h-4 w-8 items-center border border-[#36c26b] px-0.5">
-              <div className="h-2.5 flex-1 bg-[#36c26b]" />
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="absolute left-1/2 top-0 z-40 h-[34px] w-[122px] -translate-x-1/2 rounded-b-[20px] bg-black" />
-
-      <div className="absolute inset-x-0 top-[52px] z-20 border-b border-white/[0.08] bg-[#101320]">
-        <button
-          type="button"
-          onClick={() => props.onSetTab("session")}
-          className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
-        >
-          <PixelGlyph seed={props.mode.shortName} size={36} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[13px] text-[#8a8d96]">
-                {props.pendingCount > 0 ? `${props.pendingCount} pending approvals` : "all sessions clear"}
-              </span>
-              <StatusLight tone={props.pendingCount > 0 ? "warn" : "ok"} pulse={props.pendingCount > 0} />
-            </div>
-            <p className="truncate font-mono text-[10px] text-[#565963]">{props.toast}</p>
-          </div>
-          <ChevronRight className="size-4 text-[#8a8d96]" />
-        </button>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-[76px] top-[104px] overflow-hidden">{props.children}</div>
-
-      <nav className="absolute inset-x-0 bottom-0 z-30 grid h-[76px] border-t border-white/[0.08] bg-[#111317]/95 backdrop-blur">
-        <div
-          className="grid h-full"
-          style={{ gridTemplateColumns: `repeat(${props.mode.tabOrder.length}, minmax(0, 1fr))` }}
-        >
-          {props.mode.tabOrder.map((id) => {
-            const item = APP_TABS[id]
-            const Icon = item.icon
-            const active = props.activeTab === id
-            return (
-              <button
-                type="button"
-                key={id}
-                data-testid={`tab-${id}`}
-                onClick={() => props.onSetTab(id)}
-                className={cn(
-                  "relative flex flex-col items-center justify-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em]",
-                  active ? "text-[#2f43ff]" : "text-[#565963]"
-                )}
-              >
-                {active && <span className="absolute top-0 h-[3px] w-8 bg-[#2f43ff]" />}
-                <Icon className="size-[20px]" strokeWidth={2.1} />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </nav>
-    </div>
-  )
-}
-
-function InboxScreen(props: {
-  mode: DesignMode
-  approvals: ApprovalItem[]
-  onSetDecision: (id: string) => void
-  onDecide: (id: string, decision: ApprovalDecision) => void
-  onViewDiff: () => void
-}) {
-  const pending = props.approvals.filter((item) => item.decision === "pending")
-  const decided = props.approvals.filter((item) => item.decision !== "pending")
-  return (
-    <ScreenFrame>
-      <ScreenHeader
-        title="inbox"
-        breadcrumb={props.mode.id === "session" ? "active workspace approvals" : "agent approvals"}
-        count={pending.length ? `${pending.length} pending` : "clear"}
-      />
-
-      {props.mode.id === "approval" && (
-        <div className="mx-4 mt-4 border border-[#2f43ff]/25 bg-[#2f43ff]/10 p-3">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#7d88ff]">decision queue</span>
-            <Bell className="size-4 text-[#7d88ff]" />
-          </div>
-          <p className="mt-2 text-[13px] leading-relaxed text-[#d6d3cc]">
-            High-risk actions pause here first. Approve, edit, or deny without leaving the active run.
-          </p>
-        </div>
-      )}
-
-      <div className="mt-4 flex-1 overflow-y-auto pb-4">
-        {pending.length > 0 && <SectionHead label="pending" count={pending.length} />}
-        <div className="space-y-3 px-4">
-          {pending.map((approval) => (
-            <ApprovalCard
-              key={approval.id}
-              approval={approval}
-              compact={props.mode.id === "fleet"}
-              onOpen={() => props.onSetDecision(approval.id)}
-              onDecide={props.onDecide}
-              onViewDiff={props.onViewDiff}
-            />
-          ))}
-        </div>
-
-        {decided.length > 0 && <SectionHead label="decided" count={decided.length} className="mt-5" />}
-        <div className="px-4">
-          {decided.map((approval) => (
-            <button
-              type="button"
-              key={approval.id}
-              onClick={() => props.onSetDecision(approval.id)}
-              className="flex w-full items-center gap-3 border-b border-white/[0.06] py-3 text-left"
-            >
-              <AgentBadge approval={approval} label={false} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-[13px] text-[#e9e9e2]">{approval.command}</p>
-                <p className="truncate font-mono text-[11px] text-[#565963]">{approval.cwd}</p>
-              </div>
-              <DecisionPill decision={approval.decision} />
-            </button>
-          ))}
-        </div>
-      </div>
-    </ScreenFrame>
-  )
-}
-
-function ApprovalCard(props: {
-  approval: ApprovalItem
-  compact?: boolean
-  onOpen: () => void
-  onDecide: (id: string, decision: ApprovalDecision) => void
-  onViewDiff: () => void
-}) {
-  const approval = props.approval
-  return (
-    <article className="border border-[#23262d] bg-[#0e0f12]">
-      <button type="button" onClick={props.onOpen} className="w-full p-3 text-left">
-        <div className="flex items-center gap-2">
-          <AgentBadge approval={approval} />
-          <RiskPill risk={approval.risk} />
-          <span className="ml-auto font-mono text-[11px] text-[#565963]">{approval.time}</span>
-        </div>
-        <p className="mt-3 text-[15px] font-bold leading-tight text-[#e9e9e2]">{approval.title}</p>
-        <div className="mt-2 flex items-center gap-2 font-mono text-[11px] text-[#565963]">
-          <Server className="size-3.5" />
-          <span className="truncate">{approval.cwd}</span>
-        </div>
-        <CommandBlock command={approval.command} tone={approval.risk} />
-        {!props.compact && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {approval.blastRadius.map((item) => (
-              <span key={item} className="border border-white/[0.08] bg-white/[0.03] px-2 py-1 font-mono text-[10px] text-[#8a8d96]">
-                {item}
-              </span>
-            ))}
-          </div>
-        )}
-      </button>
-
-      <div className="flex flex-wrap gap-2 border-t border-white/[0.06] p-3">
-        {approval.kind === "patch" && (
-          <RectButton tone="info" onClick={props.onViewDiff}>
-            View diff
-          </RectButton>
-        )}
-        <RectButton tone="muted" onClick={props.onOpen}>
-          Edit & run
-        </RectButton>
-        <RectButton tone="danger" onClick={() => props.onDecide(approval.id, "rejected")}>
-          Deny
-        </RectButton>
-        <RectButton tone="muted" onClick={() => props.onDecide(approval.id, "approvedAlways")}>
-          Always
-        </RectButton>
-        <RectButton tone="primary" testId={`approve-${approval.id}`} onClick={() => props.onDecide(approval.id, "approved")}>
-          Approve
-        </RectButton>
-      </div>
-    </article>
-  )
-}
-
-function FleetScreen(props: {
-  mode: DesignMode
-  hosts: HostSlot[]
-  onConnectHost: (id: string) => void
-  onOpenSession: (id: string, surface?: SessionSurfaceID) => void
-}) {
-  const connected = props.hosts.filter((host) => host.status === "connected")
-  const activeAgents = props.hosts.flatMap((host) => host.agents).filter((agent) => agent.state !== "offline")
-  return (
-    <ScreenFrame>
-      <ScreenHeader
-        title="fleet"
-        breadcrumb={props.mode.id === "fleet" ? "control room" : "agents & spend"}
-        count={`${props.hosts.length} hosts`}
-      />
-
-      <div className="mx-4 mt-4 grid grid-cols-3 border border-[#23262d] bg-[#0e0f12]">
-        <FleetMetric value={`${activeAgents.length}`} label="vendors" />
-        <FleetMetric value={`${connected.length}`} label="sessions" />
-        <FleetMetric value="$2.40" label="today" />
-      </div>
-
-      {props.mode.id === "fleet" && (
-        <div className="mx-4 mt-3 border border-[#36c26b]/25 bg-[#36c26b]/10 p-3">
-          <div className="flex items-center gap-2">
-            <Radio className="size-4 text-[#36c26b]" />
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#36c26b]">bridge health</span>
-          </div>
-          <div className="mt-3 grid grid-cols-4 gap-1">
-            {["push", "watch", "conduitd", "tmux"].map((item, index) => (
-              <span key={item} className={cn("h-2", index === 2 ? "bg-[#f0a93b]" : "bg-[#36c26b]")} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 flex-1 overflow-y-auto pb-4">
-        <SectionHead label="live hosts" count={props.hosts.filter((host) => host.status !== "saved").length} />
-        <div className="space-y-3 px-4">
-          {props.hosts.map((host) => (
-            <HostCard
-              key={host.id}
-              host={host}
-              onConnect={() => props.onConnectHost(host.id)}
-              onOpenSession={(surface) => props.onOpenSession(host.id, surface)}
-            />
-          ))}
-        </div>
-      </div>
-    </ScreenFrame>
-  )
-}
-
-function HostCard(props: {
-  host: HostSlot
-  onConnect: () => void
-  onOpenSession: (surface?: SessionSurfaceID) => void
-}) {
-  const tone = props.host.status === "connected" ? "ok" : props.host.status === "reconnecting" ? "warn" : "off"
-  return (
-    <article className="border border-[#23262d] bg-[#0e0f12] p-3">
-      <div className="flex items-center gap-3">
-        <PixelGlyph seed={props.host.name} size={44} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-[15px] font-bold text-[#e9e9e2]">{props.host.name}</h3>
-            <StatusLight tone={tone} pulse={props.host.status === "reconnecting"} />
-          </div>
-          <p className="truncate font-mono text-[11px] text-[#565963]">{props.host.address}</p>
-        </div>
-        <button
-          type="button"
-          onClick={props.host.status === "saved" ? props.onConnect : () => props.onOpenSession()}
-          className="grid size-9 place-items-center border border-white/[0.08] text-[#2f43ff]"
-          aria-label={props.host.status === "saved" ? "Connect host" : "Open session"}
-        >
-          {props.host.status === "saved" ? <RefreshCw className="size-4" /> : <Terminal className="size-4" />}
-        </button>
-      </div>
-
-      {props.host.agents.length > 0 && (
-        <div className="mt-3 space-y-2 border-t border-white/[0.06] pt-3">
-          {props.host.agents.map((agent) => (
-            <div key={agent.name} className="flex items-center gap-2">
-              <StatusLight
-                tone={agent.state === "needs-you" ? "warn" : agent.state === "running" ? "ok" : agent.state === "idle" ? "info" : "off"}
-                pulse={agent.state === "running" || agent.state === "needs-you"}
-              />
-              <span className="font-mono text-[12px] text-[#d6d3cc]">{agent.name}</span>
-              <span className="truncate font-mono text-[10px] text-[#565963]">{agent.model}</span>
-              <span className="ml-auto font-mono text-[11px] text-[#8a8d96]">{agent.spend}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {props.host.status !== "saved" && (
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <TinyButton icon={Terminal} label="shell" onClick={() => props.onOpenSession("terminal")} />
-          <TinyButton icon={AppWindow} label="preview" onClick={() => props.onOpenSession("preview")} />
-          <TinyButton icon={FileDiff} label="diff" onClick={() => props.onOpenSession("diff")} />
-        </div>
-      )}
-    </article>
-  )
-}
-
-function SessionScreen(props: {
-  mode: DesignMode
-  selectedHost: HostSlot
-  approvals: ApprovalItem[]
-  terminalBlocks: TerminalBlock[]
-  commandInput: string
-  sessionSurface: SessionSurfaceID
-  onSetCommandInput: (value: string) => void
-  onSubmitCommand: () => void
-  onSetSurface: (surface: SessionSurfaceID) => void
-  onSetDecision: (id: string) => void
-  onDecide: (id: string, decision: ApprovalDecision) => void
-}) {
-  return (
-    <ScreenFrame className="bg-[#08090c]">
-      <div className="border-b border-[#23262d] bg-[#111317] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button type="button" className="grid size-10 place-items-center border border-[#2f343c] text-[#8a8d96]">
-            <ChevronLeft className="size-5" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate font-mono text-[15px] font-bold text-[#e9e9e2]">{props.selectedHost.name}</h2>
-              <span className="border border-[#36c26b]/25 bg-[#36c26b]/10 px-2 py-1 font-mono text-[11px] text-[#36c26b]">
-                Done
-              </span>
-            </div>
-            <p className="truncate font-mono text-[12px] text-[#565963]">
-              <span className="text-[#2f43ff]">$</span> {props.selectedHost.cwd}
-            </p>
-          </div>
-          <button type="button" className="grid size-10 place-items-center text-[#8a8d96]" aria-label="More">
-            <MoreHorizontal className="size-5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-[#23262d] bg-[#0e0f12] px-2 py-2">
-        {SESSION_SURFACES.map((surface) => {
-          const Icon = surface.icon
-          const active = props.sessionSurface === surface.id
-          return (
-            <button
-              type="button"
-              key={surface.id}
-              data-testid={`surface-${surface.id}`}
-              onClick={() => props.onSetSurface(surface.id)}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em]",
-                active
-                  ? "border-[#2f43ff]/55 bg-[#2f43ff]/15 text-[#7d88ff]"
-                  : "border-white/[0.06] bg-white/[0.02] text-[#8a8d96]"
-              )}
-            >
-              <Icon className="size-3.5" />
-              {surface.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {props.sessionSurface === "terminal" && (
-          <TerminalSurface
-            blocks={props.terminalBlocks}
-            value={props.commandInput}
-            onChange={props.onSetCommandInput}
-            onSubmit={props.onSubmitCommand}
+    <section className="flex min-h-0 flex-col bg-[#050810]">
+      <div className="border-b border-white/[0.08] bg-[#080b12] px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <AgentBadge thread={props.thread} />
+          <ContextSelect
+            testId="host-select"
+            label="Host"
+            value={props.host}
+            options={["This Mac", "Dev VPS", "Staging"]}
+            onChange={props.onHostChange}
           />
-        )}
-        {props.sessionSurface === "preview" && <PreviewSurface />}
-        {props.sessionSurface === "files" && <FilesSurface />}
-        {props.sessionSurface === "diff" && <DiffSurface />}
-        {props.sessionSurface === "session-inbox" && (
-          <div className="h-full overflow-y-auto p-4">
-            <div className="space-y-3">
-              {props.approvals
-                .filter((item) => item.decision === "pending")
-                .map((approval) => (
-                  <ApprovalCard
-                    key={approval.id}
-                    approval={approval}
-                    compact={props.mode.id === "session"}
-                    onOpen={() => props.onSetDecision(approval.id)}
-                    onDecide={props.onDecide}
-                    onViewDiff={() => props.onSetSurface("diff")}
-                  />
-                ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </ScreenFrame>
-  )
-}
-
-function TerminalSurface(props: {
-  blocks: TerminalBlock[]
-  value: string
-  onChange: (value: string) => void
-  onSubmit: () => void
-}) {
-  return (
-    <div className="flex h-full flex-col bg-[#08090c]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {props.blocks.map((block) => (
-          <article
-            key={block.id}
-            className={cn(
-              "mb-3 border bg-[#101217]",
-              block.exit === 1 ? "border-[#e0533f]/65" : "border-[#2f343c]"
-            )}
-          >
-            <div className="flex items-center gap-2 border-b border-[#2f343c] bg-[#15171c] px-3 py-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8a8d96]">run</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#565963]">command</span>
-              <span className="ml-auto font-mono text-[11px] text-[#565963]">{block.duration}</span>
-              <span
-                className={cn(
-                  "px-2 py-1 font-mono text-[11px]",
-                  block.exit === 0 ? "bg-[#36c26b]/12 text-[#36c26b]" : "bg-[#e0533f]/12 text-[#e0533f]"
-                )}
-              >
-                exit {block.exit ?? "…"}
-              </span>
-            </div>
-            <div className="p-3 font-mono text-[15px] leading-relaxed">
-              <p>
-                <span className="text-[#2f43ff]">roshansilva@127.0.0.1</span>
-                <span className="text-[#565963]">:/command-center $ </span>
-                <span className="text-[#e9e9e2]">{block.prompt}</span>
-              </p>
-              {block.output.map((line) => (
-                <p key={line} className={line.includes("PASS") || line.includes("passed") ? "text-[#36c26b]" : "text-[#55b7ff]"}>
-                  {line}
-                </p>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <div className="border-t border-[#23262d] bg-[#0e0f12]">
-        <div className="flex gap-2 overflow-x-auto px-3 py-2">
-          {["Esc", "Tab", "Ctrl", "Tmux", "↑", "↓", "←", "→"].map((key) => (
-            <button
-              type="button"
-              key={key}
-              className="min-w-14 border border-[#2f343c] bg-[#15171c] px-3 py-3 font-mono text-[14px] text-[#d6d3cc]"
-            >
-              {key}
-            </button>
-          ))}
-          <button type="button" className="ml-auto grid min-w-12 place-items-center text-[#565963]" aria-label="History">
-            <History className="size-6" />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 px-3 pb-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 border border-white/[0.06] bg-[#15171c] px-3 py-3">
-            <span className="font-mono text-[#565963]">$</span>
+          <ContextSelect
+            testId="model-select"
+            label="Model"
+            value={props.model}
+            options={["gpt-5-codex", "sonnet 4.5", "deepseek-v4-flash", "kimi-k2"]}
+            onChange={props.onModelChange}
+          />
+          <label className="flex h-9 items-center gap-2 border border-white/[0.08] bg-white/[0.025] px-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#70747d]">Budget</span>
             <input
-              value={props.value}
-              onChange={(event) => props.onChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") props.onSubmit()
-              }}
-              placeholder="command"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[15px] text-[#e9e9e2] outline-none placeholder:text-[#34373e]"
+              data-testid="budget-input"
+              value={props.budget}
+              onChange={(event) => props.onBudgetChange(event.target.value)}
+              className="w-20 bg-transparent font-mono text-[11px] text-white outline-none"
             />
+          </label>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="mx-auto flex max-w-[860px] flex-col gap-5">
+          <ThreadSummary thread={props.thread} />
+
+          {pendingForThread.map((item) => (
+            <InlineApproval key={item.id} item={item} onDecision={props.onDecision} />
+          ))}
+
+          {props.thread.messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              agentKey={props.thread.agentKey}
+              onArtifactOpen={props.onArtifactOpen}
+            />
+          ))}
+
+          <div className="hidden max-[1120px]:block">
+            <ArtifactPreview artifact={props.activeArtifact} testId="artifact-preview-mobile" />
           </div>
-          <button type="button" className="grid size-11 place-items-center text-[#565963]" aria-label="Dictate">
-            <Mic className="size-5" />
-          </button>
+        </div>
+      </div>
+
+      <div className="border-t border-white/[0.08] bg-[#080b12] p-4">
+        <div className="mx-auto flex max-w-[860px] items-end gap-3">
+          <label className="min-w-0 flex-1 border border-white/[0.1] bg-[#10131b] p-3 focus-within:border-[#5a68ff]/50">
+            <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.16em] text-[#70747d]">Continue this thread</span>
+            <textarea
+              data-testid="composer-input"
+              value={props.composer}
+              onChange={(event) => props.onComposerChange(event.target.value)}
+              placeholder="Send a follow-up, request changes, or ask for status..."
+              rows={2}
+              className="max-h-32 min-h-12 w-full resize-none bg-transparent text-[14px] leading-relaxed text-white outline-none placeholder:text-[#565963]"
+            />
+          </label>
           <button
             type="button"
-            onClick={props.onSubmit}
-            className="grid size-11 place-items-center bg-[#2f43ff] text-white"
-            aria-label="Send command"
+            data-testid="send-follow-up"
+            onClick={props.onSend}
+            disabled={!props.composer.trim()}
+            className="grid size-14 place-items-center border border-[#5a68ff]/45 bg-[#2f43ff]/18 text-white transition enabled:hover:bg-[#2f43ff]/26 disabled:border-white/[0.08] disabled:bg-white/[0.02] disabled:text-[#565963]"
+            aria-label="Send follow-up"
           >
             <Send className="size-5" />
           </button>
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
-function PreviewSurface() {
-  const [viewport, setViewport] = useState<"mobile" | "desktop">("mobile")
-  return (
-    <div className="flex h-full flex-col bg-[#f4f4f2] text-[#14161b]">
-      <div className="flex items-center gap-2 border-b border-[#d2d4d0] bg-white px-3 py-2">
-        <button type="button" className="border border-[#d2d4d0] px-2 py-1 font-mono text-[11px]">
-          :3000
-        </button>
-        <button type="button" className="border border-[#d2d4d0] px-2 py-1 font-mono text-[11px]">
-          Detect
-        </button>
-        <div className="ml-auto flex border border-[#d2d4d0]">
-          {(["mobile", "desktop"] as const).map((item) => (
-            <button
-              type="button"
-              key={item}
-              onClick={() => setViewport(item)}
-              className={cn(
-                "px-2 py-1 font-mono text-[10px] uppercase",
-                viewport === item ? "bg-[#2f43ff] text-white" : "text-[#4a4d55]"
-              )}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="flex-1 overflow-auto bg-[#eceef0] p-4">
-        <div className={cn("mx-auto min-h-[560px] bg-white shadow-sm", viewport === "mobile" ? "w-[240px]" : "w-[560px]")}>
-          <div className="h-40 bg-[#0a0b0d] p-5 text-white">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#5a68ff]">Preview</p>
-            <h3 className="mt-3 text-xl font-black">Remote app is live</h3>
-            <p className="mt-2 text-sm text-white/55">SSH proxy, hot reload, and WebSocket checks are passing.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 p-4">
-            {["Auth flow", "API health", "Visual QA", "Deploy gate"].map((item) => (
-              <div key={item} className="border border-[#e2e3e0] p-3">
-                <p className="text-sm font-bold">{item}</p>
-                <p className="mt-1 text-xs text-[#80838c]">Ready for review</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function FilesSurface() {
-  const [selected, setSelected] = useState("ARCHITECTURE.md")
-  return (
-    <div className="grid h-full grid-rows-[auto_1fr] bg-[#0a0b0d]">
-      <div className="flex items-center gap-2 border-b border-[#23262d] px-3 py-2">
-        <Folder className="size-4 text-[#2f43ff]" />
-        <span className="truncate font-mono text-[12px] text-[#8a8d96]">/Users/roshan/command-center</span>
-        <button type="button" className="ml-auto grid size-8 place-items-center border border-[#2f343c]" aria-label="Upload">
-          <Upload className="size-4" />
-        </button>
-      </div>
-      <div className="min-h-0 overflow-y-auto">
-        {FILES.map((file) => (
-          <button
-            type="button"
-            key={file.name}
-            onClick={() => setSelected(file.name)}
-            className={cn(
-              "flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left",
-              selected === file.name && "bg-[#2f43ff]/10"
-            )}
-          >
-            {file.kind === "dir" ? <Folder className="size-4 text-[#2f43ff]" /> : <FileText className="size-4 text-[#8a8d96]" />}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-mono text-[13px] text-[#e9e9e2]">{file.name}</p>
-              <p className="font-mono text-[10px] text-[#565963]">{file.size} · {file.touched}</p>
-            </div>
-            <Download className="size-4 text-[#565963]" />
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function DiffSurface() {
-  return (
-    <div className="flex h-full flex-col bg-[#0a0b0d]">
-      <div className="border-b border-[#23262d] p-3">
-        <div className="flex items-center gap-2">
-          <GitPullRequest className="size-4 text-[#36c26b]" />
-          <span className="font-mono text-[12px] text-[#d6d3cc]">fix/auth-token-refresh</span>
-          <span className="ml-auto font-mono text-[11px] text-[#36c26b]">+11</span>
-          <span className="font-mono text-[11px] text-[#e0533f]">-4</span>
-        </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-[#8a8d96]">
-          Mutexes the token refresh path and records audit evidence for the agent run.
-        </p>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto font-mono text-[12px]">
-        {DIFF_LINES.map((line, index) => (
-          <div
-            key={`${line.text}-${index}`}
-            className={cn(
-              "flex gap-2 px-3 py-1",
-              line.kind === "add" && "bg-[#36c26b]/10 text-[#36c26b]",
-              line.kind === "del" && "bg-[#e0533f]/10 text-[#e0533f]",
-              line.kind === "meta" && "text-[#5a68ff]",
-              line.kind === "hunk" && "bg-white/[0.03] text-[#8a8d96]",
-              line.kind === "ctx" && "text-[#8a8d96]"
-            )}
-          >
-            <span className="w-6 text-right text-[#565963]">{index + 1}</span>
-            <span className="whitespace-pre-wrap">{line.text}</span>
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-2 border-t border-[#23262d] p-3">
-        <RectButton tone="danger">Reject hunk</RectButton>
-        <RectButton tone="primary">Approve patch</RectButton>
-      </div>
-    </div>
-  )
-}
-
-function ActivityScreen() {
-  const [filter, setFilter] = useState<ActivityItem["type"] | "all">("all")
-  const visible = filter === "all" ? ACTIVITY_LOG : ACTIVITY_LOG.filter((item) => item.type === filter)
-  return (
-    <ScreenFrame>
-      <ScreenHeader title="activity" breadcrumb="audit & replay" count={`${visible.length} events`} />
-      <div className="mx-4 mt-4 flex gap-2 overflow-x-auto">
-        {(["all", "approval", "connect", "test", "preview", "security"] as const).map((item) => (
-          <button
-            type="button"
-            key={item}
-            onClick={() => setFilter(item)}
-            className={cn(
-              "border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em]",
-              filter === item ? "border-[#2f43ff]/60 bg-[#2f43ff]/15 text-[#7d88ff]" : "border-white/[0.08] text-[#8a8d96]"
-            )}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="mt-4 flex-1 overflow-y-auto px-4 pb-4">
-        <div className="border border-[#23262d] bg-[#0e0f12]">
-          {visible.map((item) => (
-            <div key={item.id} className="flex gap-3 border-b border-white/[0.06] p-3 last:border-b-0">
-              <StatusLight tone={item.tone} pulse={item.tone === "warn"} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-mono text-[13px] text-[#e9e9e2]">{item.title}</p>
-                  <span className="ml-auto font-mono text-[10px] text-[#565963]">{item.time}</span>
-                </div>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#8a8d96]">{item.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </ScreenFrame>
-  )
-}
-
-function SettingsScreen(props: {
-  settings: SettingsState
-  onToggleSetting: (key: keyof SettingsState) => void
-  onOpenLibrary: () => void
+function ContextPanel(props: {
+  thread: ChatThread
+  artifact: ChatArtifact | null
+  attention: AttentionItem[]
+  fleet: FleetAgent[]
+  onArtifactOpen: (artifact: ChatArtifact) => void
+  onOpenFleetAgent: (agent: FleetAgent) => void
 }) {
+  const relatedFleet = props.fleet.find((agent) => agent.threadId === props.thread.id)
+  const artifacts = props.thread.messages.flatMap((message) => message.artifacts ?? [])
   return (
-    <ScreenFrame>
-      <ScreenHeader
-        title="settings"
-        breadcrumb="device & agent"
-        action={<IconButton icon={LibraryIcon} label="Open library" onClick={props.onOpenLibrary} />}
-      />
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <SectionHead label="library" count={LIBRARY_CARDS.length} />
-        <div className="grid grid-cols-2 gap-2">
-          {LIBRARY_CARDS.map((card) => {
-            const Icon = card.icon
+    <aside className="min-h-0 overflow-y-auto border-l border-white/[0.08] bg-[#090b10] p-4 max-[1120px]:hidden">
+      <PanelSection title="Thread must-haves" count={CHAT_CONTEXT.length}>
+        <div className="grid gap-2">
+          {CHAT_CONTEXT.map((item) => {
+            const Icon = item.icon
+            return (
+              <div key={item.label} className="flex items-center gap-3 border border-white/[0.06] bg-white/[0.025] p-3">
+                <Icon className="size-4 text-[#aeb7ff]" />
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#c8cad0]">{item.label}</p>
+                  <p className="text-[12px] text-[#70747d]">{item.value}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Artifacts" count={artifacts.length}>
+        <div className="grid gap-2">
+          {artifacts.map((artifact) => {
+            const Icon = ARTIFACT_ICONS[artifact.kind]
             return (
               <button
+                key={artifact.id}
                 type="button"
-                key={card.label}
-                onClick={props.onOpenLibrary}
-                className="border border-[#23262d] bg-[#0e0f12] p-3 text-left"
+                data-testid={`artifact-${artifact.kind}`}
+                onClick={() => props.onArtifactOpen(artifact)}
+                className={cn("flex items-center gap-3 border p-3 text-left transition hover:bg-white/[0.055]", artifactClass[artifact.tone])}
               >
-                <Icon className="size-4 text-[#2f43ff]" />
-                <p className="mt-3 font-mono text-[17px] text-[#e9e9e2]">{card.count}</p>
-                <p className="font-mono text-[11px] text-[#d6d3cc]">{card.label}</p>
-                <p className="mt-1 text-[10px] leading-tight text-[#565963]">{card.detail}</p>
+                <Icon className="size-4" />
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em]">{artifact.label}</p>
+                  <p className="text-[12px] opacity-80">{artifact.detail}</p>
+                </div>
               </button>
             )
           })}
         </div>
+      </PanelSection>
 
-        <SectionHead label="controls" className="mt-5" />
-        <div className="border border-[#23262d] bg-[#0e0f12]">
-          <ToggleRow label="Face ID app lock" active={props.settings.appLock} onToggle={() => props.onToggleSetting("appLock")} />
-          <ToggleRow label="Redact saved output" active={props.settings.redact} onToggle={() => props.onToggleSetting("redact")} />
-          <ToggleRow label="Push approvals" active={props.settings.push} onToggle={() => props.onToggleSetting("push")} />
-          <ToggleRow label="iCloud sync" active={props.settings.cloudSync} onToggle={() => props.onToggleSetting("cloudSync")} />
-        </div>
+      <ArtifactPreview artifact={props.artifact} testId="artifact-preview" />
 
-        <SectionHead label="policy" className="mt-5" />
-        <div className="space-y-2">
-          {SETTINGS_GROUPS.map((group) => {
-            const Icon = group.icon
-            return (
-              <div key={group.label} className="border border-[#23262d] bg-[#0e0f12] p-3">
-                <div className="flex items-center gap-2">
-                  <Icon className="size-4 text-[#8a8d96]" />
-                  <span className="font-mono text-[13px] text-[#e9e9e2]">{group.label}</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {group.items.map((item) => (
-                    <span key={item} className="border border-white/[0.08] bg-white/[0.03] px-2 py-1 font-mono text-[10px] text-[#8a8d96]">
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </ScreenFrame>
-  )
-}
-
-const LibraryIcon = Library
-
-function LibraryScreen(props: { onBack: () => void }) {
-  return (
-    <ScreenFrame>
-      <ScreenHeader
-        title="library"
-        breadcrumb="your toolkit"
-        action={<IconButton icon={ChevronLeft} label="Back" onClick={props.onBack} />}
-      />
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <SectionHead label="snippets" count={SNIPPETS.length} />
-        <div className="space-y-2">
-          {SNIPPETS.map((snippet) => (
-            <div key={snippet.name} className="border border-[#23262d] bg-[#0e0f12] p-3">
-              <div className="flex items-center gap-2">
-                <Command className="size-4 text-[#2f43ff]" />
-                <span className="font-mono text-[13px] font-bold text-[#e9e9e2]">{snippet.name}</span>
-                <span className="ml-auto border border-white/[0.08] px-2 py-1 font-mono text-[10px] text-[#8a8d96]">{snippet.scope}</span>
-              </div>
-              <p className="mt-2 truncate border-l-2 border-[#2f43ff] pl-3 font-mono text-[12px] text-[#8a8d96]">{snippet.body}</p>
-            </div>
-          ))}
-        </div>
-
-        <SectionHead label="keys & agents" className="mt-5" />
-        <div className="grid grid-cols-2 gap-2">
-          <LibraryTile icon={ShieldCheck} label="Secure keys" value="3" />
-          <LibraryTile icon={Bot} label="Agent profiles" value="4" />
-          <LibraryTile icon={ClipboardList} label="Policy rules" value="8" />
-          <LibraryTile icon={Sparkles} label="Cloud agents" value="2" />
-        </div>
-      </div>
-    </ScreenFrame>
-  )
-}
-
-function ActionDock(props: {
-  mode: DesignMode
-  activeTab: AppTabID
-  selectedHost: HostSlot
-  pendingCount: number
-  approvals: ApprovalItem[]
-  onWatchApprove: () => void
-  onWatchDecision: (decision: Extract<ApprovalDecision, "approved" | "rejected">) => void
-  onOpenSession: () => void
-  onSetTab: (tab: AppTabID) => void
-}) {
-  const nextApproval = props.approvals.find((approval) => approval.decision === "pending")
-  return (
-    <aside className="self-center border border-white/[0.08] bg-[#0a0b0d] max-[980px]:self-stretch">
-      <div className="border-b border-white/[0.08] p-4">
-        <div className="flex items-center gap-3">
-          <span className="h-8 w-1.5" style={{ background: props.mode.accent }} aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#565963]">direction</p>
-            <h2 className="truncate text-[18px] font-black text-white">{props.mode.name}</h2>
-          </div>
-        </div>
-        <p className="mt-3 text-[13px] leading-relaxed text-[#8a8d96]">{props.mode.premise}</p>
-      </div>
-
-      <div className="grid grid-cols-2 border-b border-white/[0.08]">
-        <DockStat label="screen" value={APP_TABS[props.activeTab].label} />
-        <DockStat label="pending" value={`${props.pendingCount}`} tone={props.pendingCount > 0 ? "warn" : "ok"} />
-      </div>
-
-      <div className="p-4">
-        <div className="border border-white/[0.08] bg-[#111317] p-3">
-          <div className="flex items-center gap-2">
-            <Radio className="size-4 text-[#36c26b]" />
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#8a8d96]">Live Activity</p>
-            <StatusLight tone={props.pendingCount > 0 ? "warn" : "ok"} pulse={props.pendingCount > 0} />
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <PixelGlyph seed="live" size={32} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-white">{props.selectedHost.name}</p>
-              <p className="truncate font-mono text-[11px] text-[#8a8d96]">
-                {nextApproval ? nextApproval.title : "All sessions clear"}
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <RectButton
-              tone="danger"
-              testId="watch-reject"
-              onClick={() => props.onWatchDecision("rejected")}
-            >
-              Reject
-            </RectButton>
-            <RectButton tone="primary" testId="watch-approve" onClick={props.onWatchApprove}>
-              Approve
-            </RectButton>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-2">
+      {relatedFleet && (
+        <PanelSection title="Fleet context" count={1}>
           <button
             type="button"
-            onClick={props.onOpenSession}
-            className="border border-white/[0.08] bg-white/[0.03] px-3 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#e9e9e2] hover:border-[#2f43ff]/50"
+            onClick={() => props.onOpenFleetAgent(relatedFleet)}
+            className="w-full border border-[#36c26b]/25 bg-[#36c26b]/10 p-3 text-left"
           >
-            Session
+            <div className="flex items-center gap-2">
+              <Server className="size-4 text-[#9ef2bd]" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[#9ef2bd]">{relatedFleet.host}</span>
+            </div>
+            <p className="mt-2 text-[13px] font-semibold text-white">{relatedFleet.agent} - {relatedFleet.branch}</p>
+            <p className="mt-1 font-mono text-[11px] text-[#70747d]">{relatedFleet.cwd}</p>
           </button>
-          <button
-            type="button"
-            onClick={() => props.onSetTab("activity")}
-            className="border border-white/[0.08] bg-white/[0.03] px-3 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#e9e9e2] hover:border-[#2f43ff]/50"
-          >
-            Audit
-          </button>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2 border border-white/[0.08] bg-white/[0.025] px-3 py-2">
-          <Zap className="size-4 text-[#f0a93b]" />
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#8a8d96]">
-            {FEATURE_MAP.length} features reachable in phone
-          </p>
-        </div>
-      </div>
+        </PanelSection>
+      )}
     </aside>
   )
 }
 
-function DecisionSheet(props: {
-  approval: ApprovalItem
-  onClose: () => void
-  onDecide: (id: string, decision: ApprovalDecision) => void
-}) {
-  const [choice, setChoice] = useState(0)
-  return (
-    <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm">
-      <div className="absolute inset-x-0 bottom-0 border-t border-white/[0.12] bg-[#111317] p-4 shadow-2xl">
-        <div className="mx-auto mb-4 h-1 w-10 bg-white/20" />
-        <div className="flex items-start gap-3">
-          <AgentBadge approval={props.approval} />
-          <button type="button" onClick={props.onClose} className="ml-auto text-[#8a8d96]" aria-label="Close decision sheet">
-            <X className="size-5" />
-          </button>
+function ArtifactPreview(props: { artifact: ChatArtifact | null; testId: string }) {
+  if (!props.artifact) {
+    return (
+      <PanelSection title="Preview" count={0}>
+        <div className="border border-white/[0.06] bg-white/[0.02] p-4 text-[12px] leading-relaxed text-[#70747d]">
+          Select a diff, file list, test result, or approval artifact to inspect it beside the chat.
         </div>
-        <h3 className="mt-3 text-[18px] font-black leading-tight text-[#e9e9e2]">{props.approval.title}</h3>
-        <CommandBlock command={props.approval.command} tone={props.approval.risk} />
-        {props.approval.choices && (
-          <div className="mt-3 grid gap-2">
-            {props.approval.choices.map((item, index) => (
-              <button
-                type="button"
-                key={item}
-                onClick={() => setChoice(index)}
+      </PanelSection>
+    )
+  }
+
+  return (
+    <PanelSection title={`${props.artifact.label} preview`} count={1}>
+      <div className="border border-white/[0.08] bg-[#0d1017] p-3" data-testid={props.testId}>
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#70747d]">{props.artifact.detail}</p>
+        {props.artifact.kind === "diff" && (
+          <div className="mt-3 overflow-hidden border border-white/[0.06] bg-black/30 font-mono text-[11px]">
+            {DIFF_PREVIEW_LINES.map((line) => (
+              <div
+                key={line.text}
                 className={cn(
-                  "flex items-center gap-3 border px-3 py-3 text-left font-mono text-[12px]",
-                  choice === index ? "border-[#2f43ff] bg-[#2f43ff]/12 text-[#e9e9e2]" : "border-white/[0.08] text-[#8a8d96]"
+                  "px-3 py-1.5",
+                  line.kind === "add" && "bg-[#36c26b]/10 text-[#9ef2bd]",
+                  line.kind === "del" && "bg-[#e0533f]/10 text-[#ff897c]",
+                  line.kind === "meta" && "text-[#aeb7ff]"
                 )}
               >
-                <span className="grid size-7 place-items-center border border-white/[0.1]">{String.fromCharCode(65 + index)}</span>
-                {item}
-              </button>
+                {line.text}
+              </div>
             ))}
           </div>
         )}
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <RectButton tone="danger" onClick={() => props.onDecide(props.approval.id, "rejected")}>
-            Deny
-          </RectButton>
-          <RectButton tone="muted" onClick={() => props.onDecide(props.approval.id, "approvedAlways")}>
-            Always
-          </RectButton>
-          <RectButton tone="primary" testId={`sheet-approve-${props.approval.id}`} onClick={() => props.onDecide(props.approval.id, "approved")}>
-            Approve
-          </RectButton>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function OnboardingOverlay(props: { onClose: () => void }) {
-  const [step, setStep] = useState(0)
-  const steps = [
-    {
-      title: "agents ask.",
-      accent: "you approve.",
-      body: "Risky commands, file writes, credentials, and network actions pause on this phone.",
-      icon: Inbox,
-    },
-    {
-      title: "remote stays alive.",
-      accent: "tmux resumes.",
-      body: "The workspace keeps running through network handoffs and foreground changes.",
-      icon: Server,
-    },
-    {
-      title: "review the work.",
-      accent: "ship safely.",
-      body: "Diffs, files, previews, snippets, and reports live beside the terminal.",
-      icon: FileDiff,
-    },
-  ]
-  const current = steps[step]
-  const Icon = current.icon
-  return (
-    <div className="absolute inset-0 z-50 bg-[#0a0b0d] p-6">
-      <SpectrumBar />
-      <div className="mt-8 font-mono text-[10px] uppercase tracking-[0.28em] text-[#565963]">conduit</div>
-      <div className="mt-10 grid size-16 place-items-center border border-[#2f43ff]/40 bg-[#2f43ff]/12 text-[#5a68ff]">
-        <Icon className="size-8" />
-      </div>
-      <h2 className="mt-8 text-[38px] font-black leading-[0.98] tracking-[-0.03em]">
-        {current.title}
-        <br />
-        <span className="text-[#8a8d96]">{current.accent}</span>
-      </h2>
-      <p className="mt-5 max-w-[250px] font-mono text-[12px] leading-loose text-[#8a8d96]">{current.body}</p>
-      <div className="absolute inset-x-6 bottom-8">
-        <div className="mb-5 flex gap-1.5">
-          {steps.map((item, index) => (
-            <span key={item.title} className={cn("h-1 flex-1", step === index ? "bg-[#2f43ff]" : "bg-[#23262d]")} />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <RectButton tone="muted" onClick={props.onClose}>
-            Skip
-          </RectButton>
-          <RectButton tone="primary" onClick={() => (step === steps.length - 1 ? props.onClose() : setStep(step + 1))}>
-            {step === steps.length - 1 ? "Done" : "Continue"}
-          </RectButton>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ScreenFrame({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn("flex h-full flex-col bg-[#0a0b0d]", className)}>{children}</section>
-}
-
-function ScreenHeader(props: { title: string; breadcrumb: string; count?: string; action?: ReactNode }) {
-  return (
-    <header className="px-4 pt-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-black lowercase tracking-[-0.06em] text-[#e9e9e2] text-[42px] leading-none">
-            {props.title}
-            <span className="text-[#2f43ff]">_</span>
-          </h2>
-          <div className="mt-3 flex items-center gap-2 font-mono text-[13px] text-[#565963]">
-            <span>~/conduit</span>
-            <ChevronRight className="size-3 text-[#2f43ff]" />
-            <span>{props.breadcrumb}</span>
-            {props.count && <span className="ml-auto text-[#8a8d96]">{props.count}</span>}
+        {props.artifact.kind === "files" && (
+          <div className="mt-3 grid gap-1">
+            {FILE_PREVIEW.map((file) => (
+              <div key={file} className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.025] px-2 py-2 font-mono text-[11px] text-[#d6d3cc]">
+                <FileDiff className="size-3.5 text-[#aeb7ff]" />
+                {file}
+              </div>
+            ))}
           </div>
+        )}
+        {props.artifact.kind === "tests" && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <TinyMetric label="lint" value="pass" />
+            <TinyMetric label="build" value="pass" />
+            <TinyMetric label="e2e" value="queued" />
+            <TinyMetric label="console" value="clean" />
+          </div>
+        )}
+        {props.artifact.kind === "approval" && (
+          <div className="mt-3 border border-[#f0a93b]/25 bg-[#f0a93b]/10 p-3 text-[12px] leading-relaxed text-[#ffd98a]">
+            This is shown inside chat and mirrored in the attention sidebar so the user does not context-switch to a separate tab.
+          </div>
+        )}
+        {props.artifact.kind === "preview" && (
+          <div className="mt-3 grid h-36 place-items-center border border-[#36c26b]/25 bg-[#36c26b]/10 text-center">
+            <PlayCircle className="mb-2 size-7 text-[#9ef2bd]" />
+            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[#9ef2bd]">Preview tunnel active</p>
+          </div>
+        )}
+      </div>
+    </PanelSection>
+  )
+}
+
+function ThreadSummary(props: { thread: ChatThread }) {
+  return (
+    <section className="border border-white/[0.08] bg-[#0c0f16] p-4">
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#5a68ff]">Saved conversation</p>
+          <h2 data-testid="active-thread-title" className="mt-2 text-[28px] font-black leading-none text-white max-sm:text-[24px]">{props.thread.title}</h2>
+          <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[#a6a8af]">{props.thread.summary}</p>
         </div>
-        {props.action}
+        <div className="grid min-w-[190px] gap-2 font-mono text-[11px] text-[#8a8d96]">
+          <MetaRow label="Host" value={props.thread.host} />
+          <MetaRow label="CWD" value={props.thread.cwd} />
+          <MetaRow label="Model" value={props.thread.model} />
+          <MetaRow label="Budget" value={props.thread.budget} />
+        </div>
       </div>
-      <SpectrumBar className="mt-4" />
-    </header>
+    </section>
   )
 }
 
-function SpectrumBar({ className }: { className?: string }) {
-  return (
-    <div className={cn("grid h-2 grid-cols-7 gap-0.5", className)} aria-hidden="true">
-      {["#C8423B", "#E2662C", "#F0922E", "#F2C14E", "#C77BA6", "#7E4FB5", "#5460C8"].map((color) => (
-        <span key={color} style={{ background: color }} />
-      ))}
-    </div>
-  )
-}
-
-function SectionHead({ label, count, className }: { label: string; count?: number; className?: string }) {
-  return (
-    <div className={cn("px-4 pb-2 pt-1 font-mono text-[12px] uppercase tracking-[0.22em] text-[#565963]", className)}>
-      {label}
-      {count !== undefined && <span> · {count}</span>}
-    </div>
-  )
-}
-
-function AgentBadge({ approval, label = true }: { approval: ApprovalItem; label?: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 border border-[#2f343c] bg-[#15171c] px-1.5 py-1">
-      <span className="grid size-5 place-items-center bg-[#d1702f] font-mono text-[10px] font-black text-white">
-        {approval.agentKey}
-      </span>
-      {label && <span className="font-mono text-[12px] text-[#8a8d96]">{approval.agent}</span>}
-    </span>
-  )
-}
-
-function RiskPill({ risk }: { risk: ApprovalItem["risk"] }) {
-  return <span className={cn("border px-2 py-1 font-mono text-[11px] font-bold uppercase", RISK_CLASS[risk])}>{risk}</span>
-}
-
-function DecisionPill({ decision }: { decision: ApprovalDecision }) {
-  const label = decision === "approvedAlways" ? "always" : decision
-  const approved = decision === "approved" || decision === "approvedAlways"
-  return (
-    <span className={cn("px-2 py-1 font-mono text-[11px]", approved ? "bg-[#36c26b]/12 text-[#36c26b]" : "bg-[#e0533f]/12 text-[#e0533f]")}>
-      {label}
-    </span>
-  )
-}
-
-function CommandBlock({ command, tone }: { command: string; tone: ApprovalItem["risk"] }) {
-  const color = tone === "critical" ? "#e0533f" : tone === "medium" ? "#f0a93b" : "#2f43ff"
-  return (
-    <div className="mt-3 border-l-4 bg-[#050810] px-3 py-3" style={{ borderColor: color }}>
-      <div className="mb-1 flex gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-[#8a8d96]">
-        <span>bash</span>
-        <span className="bg-[#23262d] px-1.5">{tone}</span>
-      </div>
-      <p className="break-words font-mono text-[15px] leading-snug text-[#e9e9e2]">{command}</p>
-    </div>
-  )
-}
-
-function RectButton({
-  children,
-  tone,
-  onClick,
-  testId,
-}: {
-  children: ReactNode
-  tone: "primary" | "danger" | "muted" | "info"
-  onClick?: () => void
-  testId?: string
+function InlineApproval(props: {
+  item: AttentionItem
+  onDecision: (item: AttentionItem, state: "approved" | "rejected") => void
 }) {
-  const toneClass = {
-    primary: "border-[#2f43ff] bg-[#2f43ff] text-white hover:bg-[#5a68ff]",
-    danger: "border-[#e0533f] bg-[#e0533f]/10 text-[#e0533f] hover:bg-[#e0533f]/18",
-    muted: "border-[#2f343c] bg-transparent text-[#e9e9e2] hover:bg-white/[0.04]",
-    info: "border-[#2f43ff]/45 bg-[#2f43ff]/10 text-[#7d88ff] hover:bg-[#2f43ff]/16",
-  }[tone]
   return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      className={cn("flex min-h-9 flex-1 items-center justify-center px-3 font-mono text-[11px] font-bold uppercase tracking-[0.12em] transition", toneClass)}
-    >
-      {children}
-    </button>
+    <article className="border border-[#f0a93b]/35 bg-[#f0a93b]/10 p-4" data-testid={`inline-approval-${props.item.id}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <ShieldCheck className="size-4 text-[#ffd98a]" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#ffd98a]">Needs approval</span>
+        <span className={cn("border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]", riskClass[props.item.risk])}>{props.item.risk}</span>
+      </div>
+      <h3 className="mt-3 text-[16px] font-bold text-white">{props.item.title}</h3>
+      <p className="mt-1 text-[13px] leading-relaxed text-[#d6d3cc]">{props.item.detail}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          data-testid={`inline-reject-${props.item.id}`}
+          onClick={() => props.onDecision(props.item, "rejected")}
+          className="border border-white/[0.1] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#c8cad0]"
+        >
+          Reject
+        </button>
+        <button
+          type="button"
+          data-testid={`inline-approve-${props.item.id}`}
+          onClick={() => props.onDecision(props.item, "approved")}
+          className="border border-[#36c26b]/40 bg-[#36c26b]/12 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#9ef2bd]"
+        >
+          {props.item.action}
+        </button>
+      </div>
+    </article>
   )
 }
 
-function TinyButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
+function MessageBubble(props: {
+  message: ChatMessage
+  agentKey: string
+  onArtifactOpen: (artifact: ChatArtifact) => void
+}) {
+  const isUser = props.message.role === "user"
+  const isSystem = props.message.role === "system"
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center justify-center gap-1 border border-white/[0.08] bg-white/[0.025] px-2 py-2 font-mono text-[10px] uppercase text-[#8a8d96]"
-    >
-      <Icon className="size-3.5" />
-      {label}
-    </button>
+    <article className={cn("flex gap-3", isUser && "justify-end")}>
+      {!isUser && (
+        <div className={cn("grid size-9 shrink-0 place-items-center border font-mono text-[11px]", isSystem ? "border-[#36c26b]/30 bg-[#36c26b]/10 text-[#9ef2bd]" : "border-[#5a68ff]/35 bg-[#2f43ff]/12 text-[#aeb7ff]")}>
+          {isSystem ? <ShieldCheck className="size-4" /> : props.agentKey}
+        </div>
+      )}
+      <div className={cn("max-w-[78%] border p-4 max-sm:max-w-[90%]", isUser ? "border-[#5a68ff]/35 bg-[#2f43ff]/16" : "border-white/[0.08] bg-[#0d1017]")}>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#70747d]">{props.message.role}</span>
+          <span className="font-mono text-[10px] text-[#565963]">{props.message.time}</span>
+          {props.message.status && <MessageStatus status={props.message.status} />}
+        </div>
+        <p className="text-[14px] leading-relaxed text-[#e9e9e2]">{props.message.body}</p>
+        {!!props.message.artifacts?.length && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {props.message.artifacts.map((artifact) => {
+              const Icon = ARTIFACT_ICONS[artifact.kind]
+              return (
+                <button
+                  type="button"
+                  key={artifact.id}
+                  data-testid={`message-artifact-${artifact.kind}`}
+                  onClick={() => props.onArtifactOpen(artifact)}
+                  className={cn("flex items-center gap-2 border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em]", artifactClass[artifact.tone])}
+                >
+                  <Icon className="size-3.5" />
+                  {artifact.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </article>
   )
 }
 
-function ToggleRow({ label, active, onToggle }: { label: string; active: boolean; onToggle: () => void }) {
+function ContextSelect(props: {
+  testId: string
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
   return (
-    <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 border-b border-white/[0.06] px-3 py-3 text-left last:border-b-0">
-      <span className="font-mono text-[13px] text-[#e9e9e2]">{label}</span>
-      <span className={cn("ml-auto flex h-6 w-10 items-center border p-0.5 transition", active ? "border-[#2f43ff] bg-[#2f43ff]/20" : "border-[#2f343c] bg-[#15171c]")}>
-        <span className={cn("size-4 bg-[#8a8d96] transition", active && "translate-x-4 bg-[#2f43ff]")} />
-      </span>
-    </button>
+    <label className="flex h-9 items-center gap-2 border border-white/[0.08] bg-white/[0.025] px-3">
+      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#70747d]">{props.label}</span>
+      <select
+        data-testid={props.testId}
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+        className="bg-[#0d1017] font-mono text-[11px] text-white outline-none"
+      >
+        {props.options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+    </label>
   )
 }
 
-function IconButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
+function PanelSection(props: { title: string; count?: number; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="grid size-10 place-items-center border border-white/[0.08] bg-white/[0.025] text-[#8a8d96]" aria-label={label}>
-      <Icon className="size-4" />
-    </button>
+    <section className="mb-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#70747d]">{props.title}</h3>
+        {typeof props.count === "number" && <span className="font-mono text-[10px] text-[#565963]">{props.count}</span>}
+      </div>
+      {props.children}
+    </section>
   )
 }
 
-function FleetMetric({ value, label }: { value: string; label: string }) {
+function AgentBadge(props: { thread: ChatThread }) {
   return (
-    <div className="border-r border-[#23262d] px-2 py-4 text-center last:border-r-0">
-      <p className="font-mono text-[22px] text-[#e9e9e2]">{value}</p>
-      <p className="mt-1 font-mono text-[11px] text-[#8a8d96]">{label}</p>
-    </div>
-  )
-}
-
-function DockStat({ value, label, tone = "info" }: { value: string; label: string; tone?: "info" | "ok" | "warn" }) {
-  const color = tone === "ok" ? "text-[#36c26b]" : tone === "warn" ? "text-[#f0a93b]" : "text-[#7d88ff]"
-  return (
-    <div className="border-r border-white/[0.08] bg-white/[0.02] p-3 last:border-r-0">
-      <p className={cn("truncate font-mono text-[16px]", color)}>{value}</p>
-      <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#565963]">{label}</p>
-    </div>
-  )
-}
-
-function LibraryTile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <div className="border border-[#23262d] bg-[#0e0f12] p-3">
-      <Icon className="size-4 text-[#8a8d96]" />
-      <p className="mt-3 font-mono text-[22px] text-[#e9e9e2]">{value}</p>
-      <p className="font-mono text-[11px] text-[#8a8d96]">{label}</p>
-    </div>
-  )
-}
-
-function StatusLight({ tone, pulse = false }: { tone: keyof typeof TONE_CLASS; pulse?: boolean }) {
-  return (
-    <span className="relative inline-flex size-2 shrink-0">
-      {pulse && <span className={cn("absolute inline-flex size-full animate-ping opacity-60", TONE_CLASS[tone].split(" ")[0])} />}
-      <span className={cn("relative inline-flex size-2", TONE_CLASS[tone].split(" ")[0])} />
+    <span className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.035] px-2.5 py-1.5">
+      <span className="grid size-5 place-items-center bg-[#5a68ff] font-mono text-[10px] font-black text-white">{props.thread.agentKey}</span>
+      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#d6d3cc]">{props.thread.agent}</span>
     </span>
   )
 }
 
-function PixelGlyph({ seed, size }: { seed: string; size: number }) {
-  const cells = useMemo(() => {
-    const base = seed.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return Array.from({ length: 16 }, (_, index) => (base + index * 7) % 5)
-  }, [seed])
-  const colors = ["#2f343c", "#565963", "#8a8d96", "#bda4a8", "#cbd8d4"]
+function StatePill(props: { state: ChatThread["status"] | FleetAgent["state"] }) {
+  const Icon = STATE_ICONS[props.state]
   return (
-    <div
-      className="grid shrink-0 grid-cols-4 gap-[2px] overflow-hidden border border-white/[0.08] bg-[#15171c] p-[5px]"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    >
-      {cells.map((cell, index) => (
-        <span key={`${seed}-${index}`} style={{ background: colors[cell] }} />
-      ))}
-    </div>
-  )
-}
-
-function SignalBars() {
-  return (
-    <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
-      {[6, 9, 12, 15].map((height) => (
-        <span key={height} className="w-1 bg-white" style={{ height }} />
-      ))}
+    <span className={cn("inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]", stateClass[props.state])}>
+      <Icon className="size-3" />
+      {props.state}
     </span>
   )
 }
 
-function commandOutput(prompt: string) {
-  if (prompt.includes("test")) return ["PASS SessionViewModelTests", "PASS ApprovalRelayTests", "116 tests passed"]
-  if (prompt.includes("git")) return [" M docs/conduit-ui-prototype/app/interactive/page.tsx", " M docs/conduit-ui-prototype/app/page.tsx"]
-  if (prompt.startsWith("#")) return ["Translated natural language into shell command", "npm run lint && npm run build"]
-  if (prompt.includes("fail")) return ["fatal: simulated command failure"]
-  return ["command accepted", "remote PTY still attached"]
+function MessageStatus(props: { status: NonNullable<ChatMessage["status"]> }) {
+  const icon = props.status === "complete" ? <CheckCircle2 className="size-3" /> : props.status === "blocked" ? <AlertTriangle className="size-3" /> : <Clock3 className="size-3" />
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[#70747d]">
+      {icon}
+      {props.status}
+    </span>
+  )
+}
+
+function MetaRow(props: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
+      <span className="uppercase tracking-[0.12em] text-[#565963]">{props.label}</span>
+      <span className="truncate text-[#d6d3cc]">{props.value}</span>
+    </div>
+  )
+}
+
+function TinyMetric(props: { label: string; value: string }) {
+  return (
+    <div className="border border-white/[0.08] bg-white/[0.025] px-3 py-2">
+      <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#565963]">{props.label}</p>
+      <p className="mt-1 font-mono text-[12px] text-[#d6d3cc]">{props.value}</p>
+    </div>
+  )
+}
+
+function PixelMark(props: { label: string }) {
+  return (
+    <div className="grid size-10 grid-cols-2 grid-rows-2 gap-0.5 border border-[#5a68ff]/40 bg-[#2f43ff]/12 p-1">
+      <span className="bg-[#5a68ff]" />
+      <span className="bg-[#36c26b]" />
+      <span className="bg-[#f0a93b]" />
+      <span className="grid place-items-center bg-[#111827] font-mono text-[10px] font-black text-white">{props.label}</span>
+    </div>
+  )
+}
+
+function sectionLabel(section: SidebarVariant["navOrder"][number]) {
+  switch (section) {
+    case "new": return "Start"
+    case "search": return "Search"
+    case "threads": return "Recent threads"
+    case "attention": return "Needs attention"
+    case "fleet": return "Fleet"
+    case "settings": return "Settings"
+  }
 }
