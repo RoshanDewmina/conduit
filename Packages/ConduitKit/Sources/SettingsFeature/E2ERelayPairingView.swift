@@ -24,6 +24,10 @@ public struct E2ERelayPairingView: View {
         _client = ObservedObject(initialValue: resolved)
         _ownedClient = State(initialValue: client == nil ? resolved : nil)
         _relayURL = State(initialValue: RelaySettings.urlString())
+        // Seed from the client's stable code so navigating back doesn't reset to "000000"
+        _pairingCode = State(initialValue: resolved.pairingCode)
+        // Default to showing the phone's code — the common flow is: see code → relay-attach on laptop
+        _showGeneratedCode = State(initialValue: true)
     }
 
     public var body: some View {
@@ -45,6 +49,12 @@ public struct E2ERelayPairingView: View {
             }
             .navigationTitle("Relay Pairing")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                // Auto-start so user only needs to copy the code + run relay-attach
+                if client.connectionState == .disconnected {
+                    connect()
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if client.pairingState == .paired {

@@ -4,7 +4,6 @@ import Observation
 import ConduitCore
 import AgentKit
 import DesignSystem
-import KeysFeature
 import PersistenceKit
 import SecurityKit
 import SyncKit
@@ -389,14 +388,16 @@ public struct SettingsView: View {
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     public var onResetApp: (() -> Void)? = nil
+    public var onShowLimits: (() -> Void)? = nil
+    public var onEmergencyStop: (() -> Void)? = nil
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("redactSavedHistory") private var redactSavedHistory = false
     @State private var showResetConfirmation = false
+    @State private var confirmingStop = false
     @Environment(\.conduitTokens) private var t
 
     private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
-    private static let showPaidSurfaces = true
 
     public init(
         viewModel: SettingsViewModel,
@@ -410,7 +411,8 @@ public struct SettingsView: View {
         e2eRelayClient: E2ERelayClient? = nil,
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
-        onResetApp: (() -> Void)? = nil
+        onResetApp: (() -> Void)? = nil,
+        onShowLimits: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -424,6 +426,7 @@ public struct SettingsView: View {
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
+        self.onShowLimits = onShowLimits
     }
 
     public var body: some View {
@@ -433,43 +436,22 @@ public struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
-
-                    // (1) CONNECTION
-                    bridgeAndHostsSection
-
-                    // (2) NOTIFICATIONS  (autonomy/policy moved to the Control tab)
-                    notificationsSection
-
-                    // (3) SECURITY
+                    generalSection
+                    connectionSection
                     securitySection
-
-                    // (4) TRUST & PRIVACY
-                    trustPrivacySection
-
-                    // (5) ADVANCED  (technical tools, demoted)
                     advancedSection
-
-                    // (6) ACCOUNT
-                    accountSection
-
-                    // (7) RESET
                     resetSection
-
                     versionFooter
                 }
             }
             .alert("Reset app", isPresented: $showResetConfirmation) {
                 Button("Cancel", role: .cancel) {}
-                Button("Reset", role: .destructive) {
-                    onResetApp?()
-                }
+                Button("Reset", role: .destructive) { onResetApp?() }
             } message: {
                 Text("This deletes all hosts, sessions and approvals and returns to onboarding. This cannot be undone.")
             }
         }
-        .task {
-            await vm.load()
-        }
+        .task { await vm.load() }
     }
 
     // MARK: - (0) Header
@@ -484,146 +466,113 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - (1) BRIDGE & HOSTS
-
-    private var bridgeAndHostsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHead("CONNECTION")
-            settingsCard {
-                NavigationLink { TerminalSettingsView() } label: {
-                    settingsNavRow("Open terminal", icon: "terminal", detail: "power-user · live session")
-                }
-                divider
-                settingsInfoRow("Bridge status", icon: "shield", detail: bridgeActions.isConnected ? "running · attached" : "not connected")
-                divider
-                NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
-                    settingsNavRow("Relay Pairing", icon: "lock.rotation", detail: "E2E encrypted relay connection")
-                }
-            }
-            .padding(.bottom, 16)
-        }
-    }
-
-    // MARK: - (5) ADVANCED
+    // MARK: - (1) GENERAL
 
     @ViewBuilder
-    private var advancedSection: some View {
-        sectionHead("ADVANCED")
+    private var generalSection: some View {
+        sectionHead("GENERAL")
         settingsCard {
-            if let sshKeyStore {
-                NavigationLink {
-                    KeysView(viewModel: KeysViewModel(store: sshKeyStore), store: sshKeyStore)
-                } label: {
-                    settingsNavRow("SSH keys", icon: "key")
-                }
+            NavigationLink { NotificationsSettingsView() } label: {
+                settingsNavRow("Notifications", icon: "bell", detail: "push severity & quiet hours")
             }
-
-            if let daemonChannel {
-                if sshKeyStore != nil {
-                    divider
-                }
-                NavigationLink {
-                    SecretsView(viewModel: {
-                        let vm = SecretsViewModel()
-                        vm.attach(channel: daemonChannel)
-                        return vm
-                    }())
-                } label: {
-                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
-                }
-            }
-
-            if sshKeyStore != nil || daemonChannel != nil {
-                divider
-            }
-
-            NavigationLink {
-                DoctorView(viewModel: DoctorViewModel(actions: bridgeActions))
-            } label: {
-                settingsNavRow("Health check", icon: "stethoscope", detail: "diagnose daemon setup")
-            }
-        }
-        .padding(.bottom, 16)
-    }
-
-    // MARK: - (2) NOTIFICATIONS
-
-    @ViewBuilder
-    private var notificationsSection: some View {
-        sectionHead("NOTIFICATIONS")
-        settingsCard {
-            HStack(spacing: 12) {
-                Image(systemName: "bell.badge")
-                    .font(.system(size: 14))
-                    .foregroundStyle(t.text2)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Notification settings")
-                        .font(.dsSansPt(15))
-                        .foregroundStyle(t.text)
-                    Text("Quiet hours, risk levels, and autonomy are in the Control tab")
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .padding(.bottom, 16)
-    }
-
-    // MARK: - (3) SECURITY
-
-    @ViewBuilder
-    private var securitySection: some View {
-        sectionHead("SECURITY")
-        settingsCard {
-            Toggle(isOn: $appLockEnabled) {
-                Text("Require Face ID on launch")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text)
-            }
-            .tint(t.accent)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
             divider
-
-            Toggle(isOn: $redactSavedHistory) {
-                Text("Redact secrets in saved history")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text)
+            NavigationLink { AppearanceSettingsView() } label: {
+                settingsNavRow("Appearance", icon: "paintbrush", detail: colorSchemeLabel)
             }
-            .tint(t.accent)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
             divider
-
-            NavigationLink {
-                ProviderKeysView(viewModel: vm)
-            } label: {
+            NavigationLink { ProviderKeysView(viewModel: vm) } label: {
                 settingsNavRow("Provider keys", icon: "key.horizontal", detail: "Anthropic · OpenAI — sent direct to provider")
             }
         }
         .padding(.bottom, 16)
     }
 
-    // MARK: - (4) TRUST & PRIVACY
+    private var colorSchemeLabel: String {
+        switch colorSchemePref {
+        case "light": return "light"
+        case "dark":  return "dark"
+        default:      return "system"
+        }
+    }
+
+    // MARK: - (2) CONNECTION
 
     @ViewBuilder
-    private var trustPrivacySection: some View {
-        sectionHead("TRUST & PRIVACY")
+    private var connectionSection: some View {
+        sectionHead("CONNECTION")
         settingsCard {
-            NavigationLink { TrustPrivacyView() } label: {
-                settingsNavRow("Trust & Privacy", icon: "checkmark.shield", detail: "host-key TOFU · Keychain · keys go direct to provider")
+            NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
+                settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
+            }
+            divider
+            NavigationLink { DoctorView(viewModel: DoctorViewModel(actions: bridgeActions)) } label: {
+                settingsNavRow("Health check", icon: "stethoscope", detail: "diagnose daemon setup")
             }
         }
         .padding(.bottom, 16)
     }
 
-    // MARK: - (5) ACCOUNT
+    // MARK: - (3) SECURITY & PRIVACY
+
+    @ViewBuilder
+    private var securitySection: some View {
+        sectionHead("SECURITY & PRIVACY")
+        settingsCard {
+            Toggle(isOn: $redactSavedHistory) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Redact secrets in history")
+                        .font(.dsSansPt(15))
+                        .foregroundStyle(t.text)
+                    Text("Masks tokens and keys in the saved audit log")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                }
+            }
+            .tint(t.accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            divider
+            NavigationLink { TrustPrivacyView() } label: {
+                settingsNavRow("Trust & privacy", icon: "checkmark.shield", detail: "data handling · host-key TOFU")
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - (4) ADVANCED
+
+    @ViewBuilder
+    private var advancedSection: some View {
+        sectionHead("ADVANCED")
+        settingsCard {
+            NavigationLink { AutonomyLevelView() } label: {
+                settingsNavRow("Autonomy level", icon: "slider.horizontal.3", detail: "when agents ask vs auto-approve")
+            }
+            if let auditRepository {
+                divider
+                NavigationLink {
+                    AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
+                } label: {
+                    settingsNavRow("Audit log", icon: "list.bullet.clipboard", detail: "approval & run history")
+                }
+            }
+            if let daemonChannel {
+                divider
+                NavigationLink {
+                    SecretsView(viewModel: {
+                        let svm = SecretsViewModel()
+                        svm.attach(channel: daemonChannel)
+                        return svm
+                    }())
+                } label: {
+                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                }
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - (6) RESET
 
     @ViewBuilder
     private var resetSection: some View {
@@ -652,53 +601,6 @@ public struct SettingsView: View {
             }
             .padding(.bottom, 16)
         }
-    }
-
-    @ViewBuilder
-    private var accountSection: some View {
-        sectionHead("ACCOUNT")
-        settingsCard {
-            NavigationLink { PremiumComparisonView() } label: {
-                settingsNavRow("Conduit Pro", icon: "star.circle")
-            }
-            if Self.showPaidSurfaces {
-                divider
-                NavigationLink { BillingView(backendURL: backendURL) } label: {
-                    settingsNavRow("Billing & usage", icon: "creditcard")
-                }
-                if let org = PurchaseManager.shared.cloudEntitlement?.teamOrg {
-                    divider
-                    teamOrgRow(org)
-                }
-                if let engine = syncEngine {
-                    divider
-                    SyncStatusView(engine: engine)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                }
-            }
-            divider
-            appearanceRow
-        }
-        .padding(.bottom, 36)
-    }
-
-    private var appearanceRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Theme")
-                .font(.dsSansPt(13, weight: .medium))
-                .foregroundStyle(t.text2)
-            DSSegmentedPicker(
-                options: [
-                    (label: "System", value: "system"),
-                    (label: "Light",  value: "light"),
-                    (label: "Dark",   value: "dark"),
-                ],
-                selection: $colorSchemePref
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Provider row
@@ -785,24 +687,6 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
     }
 
-    private func teamOrgRow(_ org: TeamOrgInfo) -> some View {
-        HStack(spacing: 12) {
-            DSIconView(.server, size: 16, color: t.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Team")
-                    .font(.dsSansPt(14))
-                    .foregroundStyle(t.text)
-                Text(org.displayName)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-            }
-            Spacer()
-            DSChip("org", tone: .accent, variant: .soft, size: .sm)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     private func settingsNavRow(_ label: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -882,6 +766,237 @@ public struct SettingsView: View {
         .padding(.bottom, 36)
     }
 
+}
+
+// MARK: - Autonomy Level Detail
+
+private struct AutonomyLevelView: View {
+    @AppStorage("inbox.autonomyPreset") private var autonomyPresetRaw: String = AutonomyPreset.alwaysAsk.rawValue
+    @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
+
+    private var autonomy: AutonomyPreset {
+        AutonomyPreset(rawValue: autonomyPresetRaw) ?? .alwaysAsk
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("autonomy level", onBack: { dismiss() })
+
+                    VStack(spacing: 8) {
+                        ForEach(AutonomyPreset.allCases, id: \.self) { preset in
+                            Button {
+                                Haptics.selection()
+                                withAnimation(.easeInOut(duration: 0.14)) { autonomyPresetRaw = preset.rawValue }
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    DSStatusDot(tone: autonomy == preset ? .accent : .off, size: 9)
+                                        .padding(.top, 5)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(preset.label)
+                                            .font(.dsSansPt(15, weight: .semibold))
+                                            .foregroundStyle(t.text)
+                                        Text(preset.description)
+                                            .font(.dsSansPt(13))
+                                            .foregroundStyle(t.text3)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(autonomy == preset ? t.accentSoft : t.surface)
+                                .overlay(Rectangle().strokeBorder(autonomy == preset ? t.accent : t.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("autonomy_\(preset.rawValue)")
+                            .accessibilityValue(autonomy == preset ? "selected" : "unselected")
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+// MARK: - Notifications Settings
+
+private struct NotificationsSettingsView: View {
+    @AppStorage("notif.push.high")   private var pushHigh   = true
+    @AppStorage("notif.push.medium") private var pushMedium = false
+    @AppStorage("notif.push.low")    private var pushLow    = false
+    @AppStorage("notif.quietHours")  private var quietHoursOn = false
+    @AppStorage("notif.quietStart")  private var quietStart  = "23:00"
+    @AppStorage("notif.quietEnd")    private var quietEnd    = "08:00"
+    @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("notifications", onBack: { dismiss() })
+
+                    sectionHead("PUSH WHEN AN ACTION IS")
+                    card {
+                        severityRow(
+                            label: "Critical",
+                            detail: "secrets · network · destructive",
+                            isAlways: true,
+                            binding: .constant(true)
+                        )
+                        hairline
+                        severityRow(label: "High", detail: "deletes, broad writes", isAlways: false, binding: $pushHigh)
+                        hairline
+                        severityRow(label: "Medium", detail: "ordinary writes & patches", isAlways: false, binding: $pushMedium)
+                        hairline
+                        severityRow(label: "Low", detail: "read-only — rarely escalated", isAlways: false, binding: $pushLow)
+                    }
+
+                    Text("Everything else resolves under policy, silently.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+
+                    sectionHead("QUIET HOURS")
+                    card {
+                        Toggle(isOn: $quietHoursOn) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Mute high & below")
+                                    .font(.dsSansPt(15))
+                                    .foregroundStyle(t.text)
+                                Text("\(quietStart) – \(quietEnd)")
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text3)
+                            }
+                        }
+                        .tint(t.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+
+                    Text("Critical notifications always break through quiet hours.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                        .padding(.bottom, 36)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+
+    private func sectionHead(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 6)
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: t.r4, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            .padding(.horizontal, 18)
+    }
+
+    private var hairline: some View { DSDivider(.soft, leadingInset: 16) }
+
+    private func severityRow(label: String, detail: String, isAlways: Bool, binding: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.dsSansPt(15, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+            if isAlways {
+                Text("always")
+                    .font(.dsMonoPt(11, weight: .medium))
+                    .foregroundStyle(t.text3)
+            } else {
+                Toggle("", isOn: binding)
+                    .labelsHidden()
+                    .tint(t.accent)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Appearance Settings
+
+private struct AppearanceSettingsView: View {
+    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
+
+    private let options: [(String, String, String)] = [
+        ("system", "System",  "Follows your iOS appearance setting"),
+        ("light",  "Light",   "Always use the light theme"),
+        ("dark",   "Dark",    "Always use the dark theme"),
+    ]
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("appearance", onBack: { dismiss() })
+
+                    VStack(spacing: 8) {
+                        ForEach(options, id: \.0) { key, label, desc in
+                            Button {
+                                Haptics.selection()
+                                withAnimation(.easeInOut(duration: 0.14)) {
+                                    colorSchemePref = key
+                                }
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    DSStatusDot(tone: colorSchemePref == key ? .accent : .off, size: 9)
+                                        .padding(.top, 5)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(label)
+                                            .font(.dsSansPt(15, weight: .semibold))
+                                            .foregroundStyle(t.text)
+                                        Text(desc)
+                                            .font(.dsSansPt(13))
+                                            .foregroundStyle(t.text3)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(colorSchemePref == key ? t.accentSoft : t.surface)
+                                .overlay(Rectangle().strokeBorder(colorSchemePref == key ? t.accent : t.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
 }
 
 #endif

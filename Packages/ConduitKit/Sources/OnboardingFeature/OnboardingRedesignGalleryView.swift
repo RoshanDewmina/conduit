@@ -265,28 +265,38 @@ private struct ConduitPairingCard: View {
     let pairingCode: String
 
     @Environment(\.conduitTokens) private var t
+    @State private var didCopy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                DSChip("bridge", icon: .server, tone: .accent, variant: .soft, size: .sm)
-                DSChip("no account", icon: .shield, tone: .ok, variant: .soft, size: .sm)
-                Spacer(minLength: 0)
-            }
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("$ curl -fsSL conduit.dev/install | sh")
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Installs conduitd, then pairs this phone to the host.")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("$ curl -fsSL conduit.dev/install | sh")
-                    .font(.dsMonoPt(13))
-                    .foregroundStyle(t.text)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Installs conduitd, then pairs this phone to the host.")
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    UIPasteboard.general.string = "curl -fsSL conduit.dev/install | sh"
+                    didCopy = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        didCopy = false
+                    }
+                } label: {
+                    Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 14))
+                        .foregroundStyle(t.text3)
+                }
+                .buttonStyle(.plain)
             }
             .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
             .background(t.surfaceSunk)
             .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
 
@@ -401,7 +411,7 @@ private struct OnboardingRedesignStep: Identifiable {
             title: "Agents ask. You approve. Work resumes.",
             body: "Conduit puts risky agent actions on your phone so you can keep work moving without opening the terminal.",
             primaryAction: "Get started",
-            secondaryAction: "I already use Conduit",
+            secondaryAction: nil,
             kind: .value
         ),
         .init(
