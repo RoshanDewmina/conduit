@@ -17,6 +17,10 @@ public protocol RunControlling: Sendable {
     func resumeRun(runId: String) async throws -> Bool
     func stopRun(runId: String) async throws -> Bool
     func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool
+    /// Continue the run with a follow-up prompt. The daemon re-launches the vendor
+    /// CLI under a NEW runId (re-passing policy + budget); the result carries that
+    /// new runId so the caller can attach the continued turn.
+    func continueRun(runId: String, prompt: String) async throws -> DispatchResult
 }
 
 @MainActor

@@ -457,6 +457,15 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: DispatchResult.self)
     }
 
+    /// Continue an existing run with a follow-up prompt. The daemon re-launches the
+    /// vendor CLI under a NEW runId (re-passing policy + budget); output streams back
+    /// under that new runId via the existing agent.run.output path.
+    public func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+        let params: [String: Any] = ["runId": runId, "prompt": prompt]
+        let data = try await sendRPC(method: "agent.run.continue", params: params)
+        return try Self.decodeResult(data, as: DispatchResult.self)
+    }
+
     @discardableResult
     public func cancelRun(runId: String) async throws -> Bool {
         let data = try await sendRPC(method: "agent.cancel", params: ["runId": runId])

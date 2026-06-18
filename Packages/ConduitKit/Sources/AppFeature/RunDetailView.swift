@@ -285,186 +285,29 @@ public struct RunDetailView: View {
     }
 
     // Destructive-left ordering per CONDUIT_UI_CONSISTENCY_RULES R3.3; equal-width row.
-    @ViewBuilder
     private var controlBar: some View {
-        if runIsTerminal {
-            finishedBar
-        } else {
-            liveControlBar
-        }
-    }
-
-    // Shown once the run has exited/failed: a calm status line, not live controls.
-    private var finishedBar: some View {
-        let failed = currentRun?.status == "failed"
-        return HStack(spacing: 8) {
-            Image(systemName: failed ? "xmark.circle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(failed ? t.termErr : t.termPrompt)
-            Text(failed
-                 ? "Run failed\(currentRun?.exitCode.map { " · exit \($0)" } ?? "")"
-                 : "Run complete")
-                .font(.dsMonoPt(13, weight: .semibold))
-                .foregroundStyle(t.text)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 28)
-        .background(.bar)
-        .overlay(Divider(), alignment: .top)
-    }
-
-    private var liveControlBar: some View {
-        HStack(spacing: 8) {
-            DSButton("Stop", systemImage: "stop.fill", variant: .destructive, fullWidth: true) {
-                Haptics.warning()
-                confirmStop = true
-            }
-            .disabled(!store.canStop)
-
-            if store.canResume {
-                DSButton("Resume", systemImage: "play.fill", variant: .secondary, fullWidth: true) {
-                    Haptics.selection()
-                    Task { await store.resume() }
-                }
-            } else {
-                DSButton("Pause", systemImage: "pause.fill", variant: .secondary, fullWidth: true) {
-                    Haptics.selection()
-                    Task { await store.pause() }
-                }
-                .disabled(!store.canPause)
-            }
-
-            DSButton("Budget", systemImage: "gauge.with.dots.needle.50percent", variant: .secondary, fullWidth: true) {
-                Haptics.selection()
-                showBudgetSheet = true
-            }
-            .disabled(!store.canSetBudget)
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 28)
-        .background(.bar)
-        .overlay(Divider(), alignment: .top)
+        RunControlBar(
+            store: store,
+            isTerminal: runIsTerminal,
+            failed: currentRun?.status == "failed",
+            exitCode: currentRun?.exitCode,
+            onStop: { confirmStop = true },
+            onShowBudget: { showBudgetSheet = true }
+        )
+        .padding(.bottom, 12)
     }
 
     // MARK: - Follow-up Bar
 
     private var followUpBar: some View {
-        let textEmpty = followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return HStack(spacing: 8) {
-            Text("$")
-                .font(.dsMonoPt(15))
-                .foregroundStyle(t.termPrompt)
-                .padding(.leading, 4)
-            TextField("follow-up", text: $followUpText, axis: .vertical)
-                .font(.dsMonoPt(15))
-                .foregroundStyle(t.text)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .disabled(isErrorState)
-            if isErrorState {
-                DSButton("Reconnect", systemImage: "arrow.clockwise", variant: .primary) {
-                    let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    onSendFollowUp?(text.isEmpty ? "/reconnect" : text)
-                    followUpText = ""
-                }
-            } else {
-                Button {
-                    let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { return }
-                    onSendFollowUp?(text)
-                    followUpText = ""
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(textEmpty ? t.text4 : t.accent)
-                }
-                .disabled(textEmpty)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 9)
-        .background(t.surf2)
-        .clipShape(RoundedRectangle(cornerRadius: t.pill, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: t.pill, style: .continuous).stroke(t.border, lineWidth: 0.5))
+        RunFollowUpBar(
+            text: $followUpText,
+            isErrorState: isErrorState,
+            onSend: { onSendFollowUp?($0) }
+        )
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .background(.bar)
-    }
-}
-
-// MARK: - Streaming output
-
-/// Renders accumulated run output as a single flowing monospace block with a
-/// blinking block caret while the agent is still writing. Concatenating the text
-/// (rather than one Text per chunk) lets sub-line token deltas flow inline like a
-/// real terminal; the caret is appended via Text composition so it sits right
-/// after the last glyph and wraps with the text.
-private struct StreamingOutputText: View {
-    let text: String
-    let isStreaming: Bool
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        Group {
-            if isStreaming {
-                // 0.55s blink phase, no per-frame state — TimelineView re-renders the
-                // composed Text and we flip the caret's opacity from the wall clock.
-                TimelineView(.periodic(from: .now, by: 0.55)) { ctx in
-                    let on = Int(ctx.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
-                    composed(caretOpacity: on ? 1 : 0.12)
-                }
-            } else {
-                composed(caretOpacity: 0)
-            }
-        }
-        .textSelection(.enabled)
-    }
-
-    private func composed(caretOpacity: Double) -> Text {
-        let body = Text(text)
-            .font(.dsMonoPt(13))
-            .foregroundColor(t.termText)
-        let caret = Text(isStreaming ? "▋" : "")
-            .font(.dsMonoPt(13))
-            .foregroundColor(t.termPrompt.opacity(caretOpacity))
-        return Text("\(body)\(caret)")
-    }
-}
-
-// MARK: - Budget sheet
-
-private struct BudgetSheet: View {
-    let onSet: (Double) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var amount = "5.00"
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Set daily budget")
-                .font(.system(size: 17, weight: .semibold, design: .monospaced))
-            HStack(spacing: 8) {
-                Text("$").font(.system(size: 16, design: .monospaced)).foregroundStyle(.secondary)
-                TextField("5.00", text: $amount)
-                    .font(.system(size: 16, design: .monospaced))
-                    .keyboardType(.decimalPad)
-            }
-            .padding(.horizontal, 13).frame(height: 46)
-            .background(RoundedRectangle(cornerRadius: 2).stroke(.secondary.opacity(0.3)))
-
-            // Disabled until the input parses, so "Set cap" can't silently dismiss on bad input.
-            DSButton("Set cap", variant: .primary, fullWidth: true) {
-                guard let usd = Double(amount) else { return }
-                Haptics.success()
-                onSet(usd)
-                dismiss()
-            }
-            .disabled(Double(amount) == nil)
-        }
-        .padding(18)
     }
 }
 
@@ -475,6 +318,9 @@ private struct BudgetSheet: View {
         func resumeRun(runId: String) async throws -> Bool { true }
         func stopRun(runId: String) async throws -> Bool { true }
         func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { true }
+        func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+            DispatchResult(runId: "r2", status: "started", decision: "allow", rule: nil, message: nil)
+        }
     }
     return NavigationStack {
         RunDetailView(

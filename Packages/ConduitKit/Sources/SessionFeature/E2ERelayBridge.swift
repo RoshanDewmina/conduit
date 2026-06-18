@@ -13,6 +13,7 @@ public final class E2ERelayBridge: ObservableObject {
     private let approvalRelay: ApprovalRelay
     private var messageTask: Task<Void, Never>?
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
+    private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -99,16 +100,20 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
-    /// Sends a follow-up prompt to an already-running relay dispatch so the agent
-    /// continues the same run. Output streams back via the existing
-    /// `agent.run.output` path into the same runId. Fire-and-forget.
-    public func sendRunContinue(runId: String, prompt: String) async throws {
-        guard isActive else { return }
+    /// Sends a follow-up prompt to continue a relay run. The daemon re-launches the
+    /// vendor CLI under a NEW runId (re-passing policy + budget) and replies with
+    /// `runContinueResult`; output then streams under the new runId. Returns the
+    /// result (with the new runId) so the caller can attach the continued turn.
+    public func sendRunContinue(runId: String, prompt: String) async throws -> DispatchResult {
+        guard isActive else { throw E2EError.notPaired }
         struct ContinueParams: Codable, Sendable { let runId: String; let prompt: String }
         try await relayClient.send(
             type: "agentRunContinue",
             payload: ContinueParams(runId: runId, prompt: prompt)
         )
+        return try await withCheckedThrowingContinuation { c in
+            self.continueContinuation = c
+        }
     }
 
     // MARK: - Private
@@ -159,6 +164,15 @@ public final class E2ERelayBridge: ObservableObject {
                 dispatchContinuation?.resume(throwing: E2EError.decryptFailed)
                 dispatchContinuation = nil
             }
+
+        case "runContinueResult":
+            let envelope = try? JSONDecoder().decode(E2ERelayMessage.RelayInnerEnvelope<DispatchResult>.self, from: message.payload)
+            if let result = envelope?.payload {
+                continueContinuation?.resume(returning: result)
+            } else {
+                continueContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            continueContinuation = nil
 
         case "agentRunOutput":
             // message.payload is the full inner plaintext {type, payload:{…}}, so

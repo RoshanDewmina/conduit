@@ -743,6 +743,8 @@ public struct AppRoot: View {
                     runOutputStore.register(runId: runId)
                     let channel = RelayRunControl(send: { runId, action in
                         await bridge.sendRunControl(runId: runId, action: action)
+                    }, onContinue: { runId, prompt in
+                        try await bridge.sendRunContinue(runId: runId, prompt: prompt)
                     })
                     return .started(ActiveChatRun(
                         runId: runId,
@@ -873,9 +875,6 @@ public struct AppRoot: View {
                     onDispatch: { agentID, cwd, prompt, budget, model in
                         await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                     },
-                    onSendFollowUp: { runId, prompt in
-                        Task { try? await e2eBridge?.sendRunContinue(runId: runId, prompt: prompt) }
-                    },
                     onNewTask: { selectedTab = .newchat }
                 )
                 .safeAreaInset(edge: .bottom, spacing: 0) { bar }
@@ -991,9 +990,6 @@ public struct AppRoot: View {
                 runOutputStore: runOutputStore,
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
-                },
-                onSendFollowUp: { runId, prompt in
-                    Task { try? await e2eBridge?.sendRunContinue(runId: runId, prompt: prompt) }
                 },
                 onNewTask: { selectedTab = .newchat }
             )
@@ -1603,10 +1599,14 @@ public enum ChatDispatchOutcome {
 /// agent.run.status. Budget-over-relay isn't wired yet (returns false).
 struct RelayRunControl: RunControlling {
     let send: @Sendable (_ runId: String, _ action: String) async -> Bool
+    let onContinue: @Sendable (_ runId: String, _ prompt: String) async throws -> DispatchResult
     func pauseRun(runId: String) async throws -> Bool { await send(runId, "pause") }
     func resumeRun(runId: String) async throws -> Bool { await send(runId, "resume") }
     func stopRun(runId: String) async throws -> Bool { await send(runId, "stop") }
     func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { false }
+    func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+        try await onContinue(runId, prompt)
+    }
 }
 
 #endif

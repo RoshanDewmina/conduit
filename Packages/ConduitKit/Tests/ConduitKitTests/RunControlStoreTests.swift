@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ConduitCore
 @testable import AppFeature
 
 // Sendable fake: an actor satisfies RunControlling's Sendable requirement and
@@ -10,6 +11,10 @@ actor FakeRunChannel: RunControlling {
     func resumeRun(runId: String) async throws -> Bool { calls.append("resume:\(runId)"); return true }
     func stopRun(runId: String) async throws -> Bool { calls.append("stop:\(runId)"); return true }
     func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { calls.append("budget:\(runId):\(budgetUSD)"); return true }
+    func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+        calls.append("continue:\(runId)")
+        return DispatchResult(runId: "\(runId)-2", status: "started")
+    }
 }
 
 @Suite("RunControlStore")
@@ -64,4 +69,5 @@ private actor ThrowingRunChannel: RunControlling {
     func resumeRun(runId: String) async throws -> Bool { throw Boom() }
     func stopRun(runId: String) async throws -> Bool { throw Boom() }
     func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { throw Boom() }
+    func continueRun(runId: String, prompt: String) async throws -> DispatchResult { throw Boom() }
 }
