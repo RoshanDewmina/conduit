@@ -13,6 +13,93 @@ func denyEval(ApprovalEvent) (string, string)  { return "deny", "deny-network" }
 
 func noAudit(AuditEntry) {}
 
+func TestDispatchStoresCWDAndModel(t *testing.T) {
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Model: "sonnet", Prompt: "hi"},
+		allowEval, noAudit)
+	if res.Status != "started" {
+		t.Fatalf("want started, got %q (%s)", res.Status, res.Message)
+	}
+	run := d.runs[res.RunID]
+	if run == nil || run.CWD != "/repo" || run.Model != "sonnet" {
+		t.Fatalf("want CWD=/repo Model=sonnet, got %+v", run)
+	}
+}
+
+func TestContinueArgv(t *testing.T) {
+	claude, ok := continueArgv("claudeCode", "next step", "")
+	if !ok {
+		t.Fatal("claude continue should be supported")
+	}
+	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", "next step"}
+	if !reflect.DeepEqual(claude, want) {
+		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
+	}
+	oc, ok := continueArgv("opencode", "next step", "gpt-5")
+	if !ok || !reflect.DeepEqual(oc, []string{"opencode", "run", "--continue", "--format", "json", "--model", "gpt-5", "next step"}) {
+		t.Fatalf("opencode argv mismatch: %v ok=%v", oc, ok)
+	}
+	if _, ok := continueArgv("codex", "x", ""); !ok {
+		t.Fatal("codex continue should be supported (gated by CONDUIT_CODEX_UNSAFE at runtime)")
+	}
+	if _, ok := continueArgv("kimi", "x", ""); !ok {
+		t.Fatal("kimi continue should be supported")
+	}
+	if _, ok := continueArgv("bogus", "x", ""); ok {
+		t.Fatal("unknown agent must be unsupported")
+	}
+}
+
+func TestContinueRunNewRunIDAndGate(t *testing.T) {
+	var launches int
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launches++
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	first := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "start"}, allowEval, noAudit)
+	cont := d.continueRun(first.RunID, "next", allowEval, noAudit)
+	if cont.Status != "started" {
+		t.Fatalf("want started, got %q (%s)", cont.Status, cont.Message)
+	}
+	if cont.RunID == "" || cont.RunID == first.RunID {
+		t.Fatalf("continue must allocate a NEW runId, got %q (first %q)", cont.RunID, first.RunID)
+	}
+	if launches != 2 {
+		t.Fatalf("want 2 launches, got %d", launches)
+	}
+}
+
+func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
+	var contLaunched bool
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	first := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "start"}, allowEval, noAudit)
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		contLaunched = true
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.continueRun(first.RunID, "next", denyEval, noAudit)
+	if res.Status != "denied" {
+		t.Fatalf("want denied, got %q", res.Status)
+	}
+	if contLaunched {
+		t.Fatal("a policy-denied continue must NOT launch")
+	}
+}
+
+func TestContinueRunUnknownRun(t *testing.T) {
+	d := newDispatcher()
+	if res := d.continueRun("nope", "x", allowEval, noAudit); res.Status != "error" {
+		t.Fatalf("want error for unknown run, got %q", res.Status)
+	}
+}
+
 func TestProcHandlePauseResumeRecorded(t *testing.T) {
 	var events []string
 	d := newDispatcher()

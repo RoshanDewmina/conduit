@@ -84,7 +84,11 @@ func TestStreamJSONNonJSONLineFallsBackToRaw(t *testing.T) {
 	}
 }
 
-func TestStreamJSONUnrecognisedTypeFallsBackToRaw(t *testing.T) {
+// An unknown JSON *object* type is suppressed (not dumped raw): in multi-vendor
+// structured mode the agents emit many metadata object types that should never
+// reach chat. (Non-object/non-JSON lines DO fall back to raw — see the tests
+// below — so genuine plain-text output is never silently lost.)
+func TestStreamJSONUnknownObjectTypeSuppressed(t *testing.T) {
 	var mu sync.Mutex
 	var chunks []map[string]any
 	emit := func(method string, params any) {
@@ -106,11 +110,8 @@ func TestStreamJSONUnrecognisedTypeFallsBackToRaw(t *testing.T) {
 	streamJSONOutput(emit, "run-1", r, &seq, &wg)
 	wg.Wait()
 
-	if len(chunks) != 1 {
-		t.Fatalf("want 1 raw chunk, got %d", len(chunks))
-	}
-	if chunks[0]["chunk"] != `{"type":"unknown_event","data":"value"}`+"\n" {
-		t.Fatalf("want raw JSON line + newline, got %q", chunks[0]["chunk"])
+	if len(chunks) != 0 {
+		t.Fatalf("want unknown object type suppressed (0 chunks), got %d: %+v", len(chunks), chunks)
 	}
 }
 

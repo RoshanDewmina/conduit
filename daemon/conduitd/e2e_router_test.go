@@ -132,6 +132,53 @@ func TestE2ERouterDispatchStarted(t *testing.T) {
 	}
 }
 
+// TestE2ERouterContinue verifies that an inbound agentRunContinue message reaches
+// server.runContinue, re-passes the gate, and replies with runContinueResult
+// carrying a NEW runId.
+func TestE2ERouterContinue(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAllow)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	first := srv.runDispatch(dispatchParams{Agent: "opencode", CWD: "/tmp", Prompt: "start"})
+	if first.Status != "started" {
+		t.Fatalf("dispatch: want started, got %q", first.Status)
+	}
+
+	payload, _ := json.Marshal(map[string]string{"runId": first.RunID, "prompt": "next"})
+	router.handleMessage("agentRunContinue", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "runContinueResult" {
+		t.Fatalf("expected runContinueResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	var result dispatchResult
+	if err := json.Unmarshal(env.Payload, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if result.Status != "started" || result.RunID == "" || result.RunID == first.RunID {
+		t.Fatalf("continue: want started + new runId, got %+v", result)
+	}
+}
+
 // TestE2ERouterSendRelayNotification verifies that sendRelayNotification sends
 // a correctly typed message only when paired.
 func TestE2ERouterSendRelayNotification(t *testing.T) {

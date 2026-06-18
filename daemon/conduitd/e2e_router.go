@@ -139,6 +139,22 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		}
 		r.server.applyRunControl(p.RunID, p.Action)
 
+	case "agentRunContinue":
+		var p struct {
+			RunID  string `json:"runId"`
+			Prompt string `json:"prompt"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil || p.RunID == "" {
+			log.Printf("e2e: unmarshal agentRunContinue failed: %v", err)
+			return
+		}
+		result := r.server.runContinue(p.RunID, p.Prompt)
+		// Reply with the new runId; continued output streams under it via the
+		// existing agentRunOutput/agentRunStatus fan-out.
+		msg := map[string]interface{}{"type": "runContinueResult", "payload": result}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("runContinueResult", data)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
 	}

@@ -354,6 +354,12 @@ func (s *server) runDispatch(p dispatchParams) dispatchResult {
 	return s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
 }
 
+// runContinue continues an existing run with a new prompt (used by the SSH RPC and
+// the E2E relay), re-passing the policy + budget gates via the dispatcher.
+func (s *server) runContinue(runID, prompt string) dispatchResult {
+	return s.dispatcher.continueRun(runID, prompt, s.policyEffect, s.auditEntry)
+}
+
 // applyRunControl applies a relay-delivered run-control action to a dispatched
 // run, routing through the same dispatcher methods the local RPC path uses.
 func (s *server) applyRunControl(runID, action string) {
@@ -668,6 +674,17 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		s.writeResult(msg.ID, s.runDispatch(p))
+
+	case "agent.run.continue":
+		var p struct {
+			RunID  string `json:"runId"`
+			Prompt string `json:"prompt"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.RunID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.writeResult(msg.ID, s.runContinue(p.RunID, p.Prompt))
 
 	case "agent.cancel":
 		var p struct {

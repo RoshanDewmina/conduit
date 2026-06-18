@@ -39,22 +39,65 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		}
 		return argv, true
 	case "codex":
-		argv := []string{"codex", "exec"}
+		// --json emits structured NDJSON events; --dangerously-bypass flag is
+		// required for headless dispatch (no TTY) — see docs/audit/CODEX_GATING.md.
+		argv := []string{"codex", "exec", "--json"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
-		// SECURITY: codex exec normally opens an interactive approval session
-		// (its sandbox/approvals), which HANGS on headless dispatch because no
-		// TTY is connected. Adding --dangerously-bypass-approvals-and-sandbox
-		// fixes the hang but bypasses codex's own sandbox. Conduit's gating
-		// MUST cover codex at that point — see docs/audit/CODEX_GATING.md.
-		// Default OFF (CONDUIT_CODEX_UNSAFE=1) until hook parity exists.
 		if os.Getenv("CONDUIT_CODEX_UNSAFE") == "1" {
 			argv = append(argv, "--dangerously-bypass-approvals-and-sandbox")
 		}
 		return append(argv, prompt), true
+	case "kimi":
+		argv := []string{"kimi", "--prompt", prompt, "--output-format", "stream-json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run"}
+		argv := []string{"opencode", "run", "--format", "json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return append(argv, prompt), true
+	default:
+		return nil, false
+	}
+}
+
+// continueArgv builds an explicit, shell-free argv that continues the most-recent
+// vendor session in the run's cwd with a new prompt. It mirrors agentArgv (same
+// streaming flags + per-vendor gating) so a continued run streams identically to
+// the original. ok=false means the agent is unknown.
+func continueArgv(agent, prompt, model string) ([]string, bool) {
+	switch normalizeAgentSource(agent) {
+	case "claudeCode":
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", prompt}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
+	case "codex":
+		// Resume the most-recent codex session non-interactively. Same headless
+		// gating as agentArgv: codex needs the bypass env when no TTY is attached
+		// (see docs/audit/CODEX_GATING.md). No new blast radius beyond dispatch.
+		argv := []string{"codex", "exec", "resume", "--last", "--json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		if os.Getenv("CONDUIT_CODEX_UNSAFE") == "1" {
+			argv = append(argv, "--dangerously-bypass-approvals-and-sandbox")
+		}
+		return append(argv, prompt), true
+	case "kimi":
+		argv := []string{"kimi", "--continue", "--prompt", prompt, "--output-format", "stream-json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
+	case "opencode":
+		argv := []string{"opencode", "run", "--continue", "--format", "json"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -114,7 +157,9 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	// reader can parse per-line JSON deltas instead of line-buffered chunks.
 	streamJSON := false
 	for i, a := range argv {
-		if a == "--output-format" && i+1 < len(argv) && argv[i+1] == "stream-json" {
+		if (a == "--output-format" && i+1 < len(argv) && argv[i+1] == "stream-json") ||
+			(a == "--format" && i+1 < len(argv) && argv[i+1] == "json") ||
+			a == "--json" {
 			streamJSON = true
 			break
 		}
@@ -189,9 +234,21 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 	}
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	// Accumulator for Claude tool_use content blocks (reset per block).
+	type toolAccum struct {
+		toolID   string
+		toolName string
+		inputBuf strings.Builder
+	}
+	var pending *toolAccum
+
 	for sc.Scan() {
 		line := sc.Text()
 
+		// A line that isn't a JSON object (plain text, a JSON array, a panic/stack
+		// trace printed to stdout) falls back to raw so real output is never silently
+		// dropped. Unknown JSON *object* types are suppressed below (vendor metadata).
 		var obj map[string]any
 		if err := json.Unmarshal([]byte(line), &obj); err != nil {
 			n := atomic.AddInt64(seq, 1)
@@ -208,18 +265,63 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				continue
 			}
 			eTyp, _ := event["type"].(string)
-			if eTyp != "content_block_delta" {
+			switch eTyp {
+			case "content_block_start":
+				cb, _ := event["content_block"].(map[string]any)
+				if cb == nil {
+					break
+				}
+				if cbType, _ := cb["type"].(string); cbType == "tool_use" {
+					pending = &toolAccum{
+						toolID:   fmt.Sprintf("%v", cb["id"]),
+						toolName: fmt.Sprintf("%v", cb["name"]),
+					}
+				} else {
+					pending = nil
+				}
+			case "content_block_delta":
+				delta, _ := event["delta"].(map[string]any)
+				if delta == nil {
+					break
+				}
+				switch dTyp, _ := delta["type"].(string); dTyp {
+				case "text_delta":
+					text, _ := delta["text"].(string)
+					if text == "" {
+						break
+					}
+					n := atomic.AddInt64(seq, 1)
+					emit("agent.run.output", map[string]any{
+						"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
+					})
+				case "input_json_delta":
+					if pending != nil {
+						partial, _ := delta["partial_json"].(string)
+						pending.inputBuf.WriteString(partial)
+					}
+				}
+			case "content_block_stop":
+				if pending != nil {
+					emit("agent.tool.start", map[string]any{
+						"runId":     runID,
+						"toolId":    pending.toolID,
+						"toolName":  pending.toolName,
+						"inputJSON": pending.inputBuf.String(),
+					})
+					pending = nil
+				}
+			}
+		case "system", "assistant", "result":
+			// Recognised types we do not emit text from:
+			//   system   – session init (reserved for future resume).
+			//   assistant – whole-message fallback (superseded by deltas).
+			//   result   – run completion metadata.
+		case "text":
+			part, _ := obj["part"].(map[string]any)
+			if part == nil {
 				continue
 			}
-			delta, _ := event["delta"].(map[string]any)
-			if delta == nil {
-				continue
-			}
-			dTyp, _ := delta["type"].(string)
-			if dTyp != "text_delta" {
-				continue
-			}
-			text, _ := delta["text"].(string)
+			text, _ := part["text"].(string)
 			if text == "" {
 				continue
 			}
@@ -227,16 +329,84 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			emit("agent.run.output", map[string]any{
 				"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
 			})
-		case "system", "assistant", "result":
-			// Recognised types we do not emit text from:
-			//   system   – session init (reserved for future resume).
-			//   assistant – whole-message fallback (superseded by deltas).
-			//   result   – run completion metadata.
-		default:
-			n := atomic.AddInt64(seq, 1)
-			emit("agent.run.output", map[string]any{
-				"runId": runID, "stream": "stdout", "chunk": line + "\n", "seq": int(n),
+		case "tool_use":
+			// opencode: complete tool event (input already resolved, not streaming deltas).
+			part, _ := obj["part"].(map[string]any)
+			if part == nil {
+				continue
+			}
+			toolName, _ := part["tool"].(string)
+			callID, _ := part["callID"].(string)
+			if toolName == "" || callID == "" {
+				continue
+			}
+			state, _ := part["state"].(map[string]any)
+			if state == nil {
+				continue
+			}
+			inputObj, _ := state["input"].(map[string]any)
+			inputBytes, _ := json.Marshal(inputObj)
+			displayName := toolName
+			if len(toolName) > 0 {
+				displayName = strings.ToUpper(toolName[:1]) + toolName[1:]
+			}
+			emit("agent.tool.start", map[string]any{
+				"runId":     runID,
+				"toolId":    callID,
+				"toolName":  displayName,
+				"inputJSON": string(inputBytes),
 			})
+		case "item.started":
+			// codex --json: command execution started → show as a Bash tool card.
+			item, _ := obj["item"].(map[string]any)
+			if item == nil {
+				continue
+			}
+			if itemType, _ := item["type"].(string); itemType == "command_execution" {
+				cmd, _ := item["command"].(string)
+				id, _ := item["id"].(string)
+				cmdBytes, _ := json.Marshal(map[string]string{"command": cmd})
+				emit("agent.tool.start", map[string]any{
+					"runId":     runID,
+					"toolId":    id,
+					"toolName":  "Bash",
+					"inputJSON": string(cmdBytes),
+				})
+			}
+		case "item.completed":
+			// codex --json: emit agent prose; command output is suppressed (shown via tool card).
+			item, _ := obj["item"].(map[string]any)
+			if item == nil {
+				continue
+			}
+			if itemType, _ := item["type"].(string); itemType == "agent_message" {
+				text, _ := item["text"].(string)
+				if text != "" {
+					n := atomic.AddInt64(seq, 1)
+					emit("agent.run.output", map[string]any{
+						"runId": runID, "stream": "stdout", "chunk": text + "\n", "seq": int(n),
+					})
+				}
+			}
+		case "thread.started", "turn.started", "turn.completed",
+			"step_start", "step_finish", "tool", "tool_result",
+			"session_event", "message_start", "message_stop":
+			// lifecycle/metadata events (opencode + codex) — suppress
+		case "":
+			// kimi stream-json uses {"role":"..."} instead of {"type":"..."}.
+			role, _ := obj["role"].(string)
+			if role == "assistant" {
+				content, _ := obj["content"].(string)
+				if content != "" {
+					n := atomic.AddInt64(seq, 1)
+					emit("agent.run.output", map[string]any{
+						"runId": runID, "stream": "stdout", "chunk": content, "seq": int(n),
+					})
+				}
+			}
+			// meta, user, tool etc. → suppress
+		default:
+			// Unknown event type — suppress to avoid emitting raw JSON into chat.
 		}
 	}
 }
@@ -267,9 +437,11 @@ type dispatchRun struct {
 	ID        string
 	Agent     string
 	Prompt    string
+	CWD       string // working dir of the original launch; reused for continues
+	Model     string // model of the original launch; reused for continues
 	Status    string // running | paused | cancelled | budget-exceeded
 	BudgetUSD float64
-	SessionID string // reserved for future session-resume support
+	SessionID string // reserved for future resume-by-id
 	handle    *procHandle
 }
 
@@ -639,7 +811,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
@@ -695,4 +867,63 @@ func (d *dispatcher) resume(runID string) bool {
 	d.mu.Unlock()
 	d.emitAudit(AuditEntry{Action: "run-resumed", Agent: agent, Kind: "run-control", ApprovalID: runID})
 	return true
+}
+
+// continueRun re-launches the vendor CLI to continue an existing run's conversation
+// with a new prompt, as a FRESH process under a NEW runId (avoids the per-launch seq
+// collision in the phone's RunOutputStore). It re-passes the budget + policy gates
+// exactly like dispatch(); a follow-up prompt is new attacker-influenceable input.
+func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
+	d.mu.Lock()
+	run := d.runs[runID]
+	d.mu.Unlock()
+	if run == nil {
+		return dispatchResult{Status: "error", Message: "unknown run: " + runID}
+	}
+
+	argv, ok := continueArgv(run.Agent, prompt, run.Model)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "continue not supported for agent: " + run.Agent}
+	}
+
+	// Budget gate (shared daily total vs this run's cap).
+	d.mu.Lock()
+	spent := d.spentUSD
+	d.mu.Unlock()
+	if run.BudgetUSD > 0 && spent >= run.BudgetUSD {
+		audit(AuditEntry{Action: "continue-budget-exceeded", Agent: run.Agent, Kind: "dispatch", Command: prompt})
+		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, run.BudgetUSD)}
+	}
+
+	// Policy gate (fail-closed at medium risk, same as dispatch).
+	event := ApprovalEvent{
+		ApprovalID: newUUID(),
+		Agent:      normalizeAgentSource(run.Agent),
+		Kind:       "command",
+		Command:    "[continue] " + strings.Join(argv, " "),
+		CWD:        run.CWD,
+		Risk:       1,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	effect, rule := evalFn(event)
+	switch effect {
+	case "deny":
+		audit(AuditEntry{Action: "continue-denied", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
+	case "ask":
+		audit(AuditEntry{Action: "continue-needs-approval", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
+		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+	}
+
+	id := newUUID()
+	handle, err := d.launch(argv, run.CWD, id, d.emit)
+	if err != nil {
+		audit(AuditEntry{Action: "continue-error", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	d.mu.Lock()
+	d.runs[id] = &dispatchRun{ID: id, Agent: run.Agent, Prompt: prompt, CWD: run.CWD, Model: run.Model, Status: "running", BudgetUSD: run.BudgetUSD, handle: handle}
+	d.mu.Unlock()
+	audit(AuditEntry{Action: "continue-launched", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule, ApprovalID: id})
+	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }
