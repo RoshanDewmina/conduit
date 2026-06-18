@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import CryptoKit
 import ConduitCore
 import SecurityKit
@@ -10,6 +11,10 @@ import OSLog
 public final class E2ERelayClient: ObservableObject {
 
     private nonisolated static let logger = Logger(subsystem: "dev.conduit.mobile", category: "E2ERelayClient")
+
+    private static let udPairingCode = "conduit.relay.pairedCode"
+    private static let udPairingPrivKey = "conduit.relay.pairedPrivKey"
+    private static let udPairingRelayURL = "conduit.relay.pairedRelayURL"
 
     @Published public private(set) var connectionState: ConnectionState = .disconnected
     @Published public private(set) var pairingState: PairingState = .unpaired
@@ -94,6 +99,100 @@ public final class E2ERelayClient: ObservableObject {
         let code = PairingCrypto.generatePairingCode()
         pairingCode = code
         return code
+    }
+
+    // MARK: - Stored pairing persistence
+
+    public static var hasStoredPairing: Bool {
+        UserDefaults.standard.string(forKey: udPairingCode) != nil
+    }
+
+    public static func storedPairingCode() -> String? {
+        UserDefaults.standard.string(forKey: udPairingCode)
+    }
+
+    /// Keychain account for the relay private key.
+    private static let kcAccountPrivKey = "conduit.relay.pairedPrivKey"
+
+    /// The relay pairing private key (Base64URL), read from the Keychain. Legacy
+    /// installs stored it in `UserDefaults` in plaintext; migrate any such value
+    /// into the Keychain on first read and scrub the `UserDefaults` copy.
+    public static func storedPairingPrivKey() -> String? {
+        if let data = keychainRead(account: kcAccountPrivKey) {
+            return Base64URL.encode(data)
+        }
+        if let legacy = UserDefaults.standard.string(forKey: udPairingPrivKey),
+           let data = try? Base64URL.decode(legacy) {
+            keychainWrite(data, account: kcAccountPrivKey)
+            UserDefaults.standard.removeObject(forKey: udPairingPrivKey)
+            return legacy
+        }
+        return nil
+    }
+
+    // MARK: - Keychain (relay private key at rest)
+    //
+    // The shared SecurityKit `Keychain` is an async actor, but this pairing-
+    // persistence API is synchronous, so the (synchronous) SecItem APIs are used
+    // directly with the same accessibility class the wrapper uses:
+    // whenUnlockedThisDeviceOnly, non-synchronizable (never to iCloud Keychain).
+
+    private static let kcService = "dev.conduit.relay"
+
+    private static func keychainWrite(_ data: Data, account: String) {
+        _ = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: kcService,
+            kSecAttrAccount as String: account,
+        ] as CFDictionary)
+        let attrs: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: kcService,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrSynchronizable as String: false,
+        ]
+        let status = SecItemAdd(attrs as CFDictionary, nil)
+        if status != errSecSuccess {
+            logger.error("keychainWrite failed: OSStatus \(status, privacy: .public)")
+        }
+    }
+
+    private static func keychainRead(account: String) -> Data? {
+        var result: AnyObject?
+        let status = SecItemCopyMatching([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: kcService,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ] as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    public static func storedRelayURL() -> String? {
+        UserDefaults.standard.string(forKey: udPairingRelayURL)
+    }
+
+    public func restoreStoredPairing() {
+        guard let code = Self.storedPairingCode(),
+              let privKeyBase64 = Self.storedPairingPrivKey(),
+              let relayURLString = Self.storedRelayURL()
+        else { return }
+
+        guard let privKeyData = try? Base64URL.decode(privKeyBase64),
+              let privateKey = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: privKeyData)
+        else {
+            Self.logger.error("restoreStoredPairing: failed to decode stored private key")
+            return
+        }
+
+        self.pairingCode = code
+        self.keyPair = PairingCrypto.KeyPair(privateKey: privateKey)
+        self.relayURL = URL(string: relayURLString) ?? self.relayURL
+        Self.logger.info("restoreStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
     }
 
     public func connect() {
@@ -234,6 +333,13 @@ public final class E2ERelayClient: ObservableObject {
                 Self.logger.info("handleMessage: session key derived, pairing complete")
                 pairingState = .paired
                 reconnectDelay = 1.0
+
+                // Private key → Keychain (device-only). Pairing code + relay URL
+                // are non-secret routing data and stay in UserDefaults.
+                UserDefaults.standard.set(self.pairingCode, forKey: Self.udPairingCode)
+                Self.keychainWrite(self.keyPair.privateKey.rawRepresentation, account: Self.kcAccountPrivKey)
+                UserDefaults.standard.set(self.relayURL.absoluteString, forKey: Self.udPairingRelayURL)
+
             } catch {
                 Self.logger.error("handleMessage: key derivation failed: \(error.localizedDescription, privacy: .public)")
                 pairingState = .pairingFailed("Key derivation failed: \(error.localizedDescription)")

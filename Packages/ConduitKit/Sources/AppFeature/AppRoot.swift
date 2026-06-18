@@ -73,6 +73,9 @@ public final class AppEnvironment {
             relayURL: RelaySettings.url(),
             pairingCode: PairingCrypto.generatePairingCode()
         )
+        if E2ERelayClient.hasStoredPairing {
+            e2eRelayClient.restoreStoredPairing()
+        }
     }
 
     public func aiClient(provider: AIProvider? = nil, managedOpenRouterKey: String? = nil) async -> (any AIClient)? {
@@ -124,7 +127,6 @@ public struct AppRoot: View {
     @State private var selectedTab: Tab = .inbox
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
-    @State private var dispatchPresented = false
     @State private var editingHost: Host?
     @State private var workspacesRevision = UUID()
     @State private var passwordPromptHost: Host?
@@ -132,10 +134,6 @@ public struct AppRoot: View {
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var runOutputStore = RunOutputStore()
-    @State private var dispatchFeedback: String?
-    // The relay run currently presented in the streaming RunDetailView (set on a
-    // successful relay dispatch so output has a screen to stream into).
-    @State private var activeRelayRun: ActiveRelayRun?
     @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -176,6 +174,7 @@ public struct AppRoot: View {
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var e2eBridge: E2ERelayBridge?
+    @State private var relayBridgeIsActive: Bool = false
 
     private var isPro: Bool {
         #if DEBUG
@@ -194,16 +193,16 @@ public struct AppRoot: View {
     public enum Tab: Hashable, Sendable {
         case inbox
         case fleet
-        case control
+        case newchat
         case settings
 
-        static let rootTabs: [Tab] = [.inbox, .fleet, .control, .settings]
+        static let rootTabs: [Tab] = [.inbox, .fleet, .newchat, .settings]
 
         var title: String {
             switch self {
             case .inbox:    "Inbox"
             case .fleet:    "Fleet"
-            case .control:  "Control"
+            case .newchat:  "New Chat"
             case .settings: "Settings"
             }
         }
@@ -212,7 +211,7 @@ public struct AppRoot: View {
             switch self {
             case .inbox:    "tray"
             case .fleet:    "square.stack.3d.up"
-            case .control:  "slider.horizontal.3"
+            case .newchat:  "sparkles"
             case .settings: "gear"
             }
         }
@@ -236,7 +235,7 @@ public struct AppRoot: View {
             switch tab {
             case "inbox":    _selectedTab = State(initialValue: .inbox)
             case "fleet":    _selectedTab = State(initialValue: .fleet)
-            case "control", "activity": _selectedTab = State(initialValue: .control)
+            case "newchat", "control", "activity": _selectedTab = State(initialValue: .newchat)
             case "settings": _selectedTab = State(initialValue: .settings)
             default:         _selectedTab = State(initialValue: .inbox)
             }
@@ -300,19 +299,13 @@ public struct AppRoot: View {
             PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
+            // Re-engage the app lock when leaving the foreground so the lock
+            // screen is shown (and content hidden in the app switcher) on return.
+            if newPhase != .active && appLockEnabled {
+                isUnlocked = false
+            }
             if newPhase == .background, #available(iOS 16.2, *) {
                 Task { await ConduitLiveActivityManager.shared.endAll() }
-            }
-            if appLockEnabled {
-                switch newPhase {
-                case .active:
-                    isUnlocked = false
-                    Task { await attemptUnlock() }
-                case .background:
-                    isUnlocked = false
-                default:
-                    break
-                }
             }
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
@@ -374,23 +367,6 @@ public struct AppRoot: View {
             let vm = activeInboxViewModel
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
                 vm.approvals.insert(approval, at: 0)
-            }
-        }
-        .sheet(item: $activeRelayRun) { run in
-            let bridge = e2eBridge
-            NavigationStack {
-                RunDetailView(
-                    channel: RelayRunControl(send: { runId, action in
-                        await bridge?.sendRunControl(runId: runId, action: action) ?? false
-                    }),
-                    runId: run.runId,
-                    title: run.title,
-                    subtitle: run.subtitle,
-                    outputStore: runOutputStore,
-                    onSendFollowUp: { prompt in
-                        Task { try? await bridge?.sendRunContinue(runId: run.runId, prompt: prompt) }
-                    }
-                )
             }
         }
     }
@@ -455,8 +431,7 @@ public struct AppRoot: View {
                 OnboardingRedesignView(
                     onContinue: {
                         onboardingSeen = true
-                        addHostPresented = true
-                        selectedTab = .fleet
+                        selectedTab = .inbox
                     },
                     onAlreadyUseConduit: {
                         onboardingSeen = true
@@ -526,21 +501,6 @@ public struct AppRoot: View {
                     AgentsView(store: agentStore, statusChannel: fleetStore.slots.first?.channel)
                 }
             }
-        }
-        .sheet(isPresented: $dispatchPresented) {
-            NavigationStack {
-                DispatchView(
-                    agents: dispatchAgents(),
-                    onDispatch: { agentID, cwd, prompt, budget, model in
-                        performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
-                    }
-                )
-            }
-        }
-        .alert("Dispatch", isPresented: Binding(get: { dispatchFeedback != nil }, set: { if !$0 { dispatchFeedback = nil } })) {
-            Button("OK", role: .cancel) { dispatchFeedback = nil }
-        } message: {
-            Text(dispatchFeedback ?? "")
         }
         .sheet(item: $editingHost) { host in
             NavigationStack {
@@ -749,99 +709,97 @@ public struct AppRoot: View {
                 )
             }
         }
-        if e2eBridge?.isActive == true {
+        if e2eBridge != nil {
             agents.append(DispatchAgent(
                 id: "relay|opencode",
-                name: "Relay Agent",
+                name: "Relay Host",
                 cwd: "~",
-                isOffline: false
+                isOffline: !relayBridgeIsActive
             ))
         }
         return agents
     }
 
     @MainActor
-    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) {
+    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return }
-
-        dispatchPresented = false
+        guard parts.count == 2 else { return .blocked("Unknown agent.") }
 
         // Relay-paired dispatch: send through the E2E relay bridge.
         if parts[0] == "relay" {
-            Task {
-                do {
-                    guard let bridge = e2eBridge else {
-                        dispatchFeedback = "Relay bridge not available."
-                        return
-                    }
-                    let result = try await bridge.sendDispatch(
-                        agent: parts[1], cwd: cwd, prompt: prompt,
-                        budgetUSD: budgetUSD, model: model
-                    )
-                    await MainActor.run {
-                        switch result.status {
-                        case "started":
-                            if let runId = result.runId {
-                                runOutputStore.register(runId: runId)
-                                // Open the streaming run view so output appears live.
-                                activeRelayRun = ActiveRelayRun(
-                                    runId: runId,
-                                    title: "Relay · \(parts[1])",
-                                    subtitle: prompt
-                                )
-                            }
-                        case "denied":
-                            dispatchFeedback = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
-                        case "needsApproval":
-                            dispatchFeedback = "Awaiting your approval — check the Inbox."
-                        case "budgetExceeded":
-                            dispatchFeedback = result.message ?? "Daily budget cap reached."
-                        default:
-                            dispatchFeedback = result.message ?? "Couldn't start the run."
-                        }
-                    }
-                } catch {
-                    await MainActor.run { dispatchFeedback = "Relay dispatch failed: \(error.localizedDescription)" }
-                }
+            guard let bridge = e2eBridge else {
+                return .blocked("Relay bridge not available.")
             }
-            return
+            do {
+                let result = try await bridge.sendDispatch(
+                    agent: parts[1], cwd: cwd, prompt: prompt,
+                    budgetUSD: budgetUSD, model: model
+                )
+                switch result.status {
+                case "started":
+                    guard let runId = result.runId else {
+                        return .blocked(result.message ?? "Couldn't start the run.")
+                    }
+                    runOutputStore.register(runId: runId)
+                    let channel = RelayRunControl(send: { runId, action in
+                        await bridge.sendRunControl(runId: runId, action: action)
+                    })
+                    return .started(ActiveChatRun(
+                        runId: runId,
+                        channel: channel,
+                        title: "Relay · \(parts[1])",
+                        subtitle: prompt
+                    ))
+                case "denied":
+                    return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
+                case "needsApproval":
+                    return .blocked("Awaiting your approval — check the Inbox.")
+                case "budgetExceeded":
+                    return .blocked(result.message ?? "Daily budget cap reached.")
+                default:
+                    return .blocked(result.message ?? "Couldn't start the run.")
+                }
+            } catch {
+                return .blocked("Relay dispatch failed: \(error.localizedDescription)")
+            }
         }
 
         // SSH dispatch: route through the fleet slot's daemon channel.
         guard let slotUUID = UUID(uuidString: parts[0]),
               let slot = fleetStore.slots.first(where: { $0.id == slotUUID })
-        else { return }
+        else { return .blocked("Host is no longer connected.") }
         let vendor = parts[1]
-        Task {
-            do {
-                let result = try await slot.channel.dispatchAgent(
-                    agent: vendor,
-                    cwd: cwd,
-                    prompt: prompt,
-                    budgetUSD: budgetUSD ?? 0,
-                    model: model
-                )
-                await MainActor.run {
-                    switch result.status {
-                    case "started":
-                        if let runId = result.runId {
-                            runOutputStore.register(runId: runId)
-                            dispatchFeedback = "Run started — output is streaming to this session."
-                        }
-                    case "denied":
-                        dispatchFeedback = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
-                    case "needsApproval":
-                        dispatchFeedback = "Awaiting your approval — check the Inbox."
-                    case "budgetExceeded":
-                        dispatchFeedback = result.message ?? "Daily budget cap reached."
-                    default:
-                        dispatchFeedback = result.message ?? "Couldn't start the run."
-                    }
+        do {
+            let result = try await slot.channel.dispatchAgent(
+                agent: vendor,
+                cwd: cwd,
+                prompt: prompt,
+                budgetUSD: budgetUSD ?? 0,
+                model: model
+            )
+            switch result.status {
+            case "started":
+                guard let runId = result.runId else {
+                    return .blocked(result.message ?? "Couldn't start the run.")
                 }
-            } catch {
-                await MainActor.run { dispatchFeedback = "Dispatch failed: \(error.localizedDescription)" }
+                runOutputStore.register(runId: runId)
+                return .started(ActiveChatRun(
+                    runId: runId,
+                    channel: slot.channel,
+                    title: "\(vendor) · \(slot.hostName)",
+                    subtitle: prompt
+                ))
+            case "denied":
+                return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
+            case "needsApproval":
+                return .blocked("Awaiting your approval — check the Inbox.")
+            case "budgetExceeded":
+                return .blocked(result.message ?? "Daily budget cap reached.")
+            default:
+                return .blocked(result.message ?? "Couldn't start the run.")
             }
+        } catch {
+            return .blocked("Dispatch failed: \(error.localizedDescription)")
         }
     }
 
@@ -852,7 +810,7 @@ public struct AppRoot: View {
         let tabItems: [DSTabItem] = [
             DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
             DSTabItem(id: "fleet",    icon: .server,   label: "Fleet"),
-            DSTabItem(id: "control",  icon: .shield,   label: "Control"),
+            DSTabItem(id: "newchat",  icon: .sparkles, label: "New Chat"),
             DSTabItem(id: "settings", icon: .settings, label: "Settings"),
         ]
 
@@ -861,7 +819,7 @@ public struct AppRoot: View {
                 switch selectedTab {
                 case .inbox:    "inbox"
                 case .fleet:    "fleet"
-                case .control:  "control"
+                case .newchat:  "newchat"
                 case .settings: "settings"
                 }
             },
@@ -869,7 +827,7 @@ public struct AppRoot: View {
                 switch id {
                 case "inbox":    selectedTab = .inbox
                 case "fleet":    selectedTab = .fleet
-                case "control":  selectedTab = .control
+                case "newchat":  selectedTab = .newchat
                 case "settings": selectedTab = .settings
                 default:         selectedTab = .inbox
                 }
@@ -907,10 +865,20 @@ public struct AppRoot: View {
                 rootDestination(.fleet, env: env)
                     .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
-        case .control:
+        case .newchat:
             NavigationStack {
-                rootDestination(.control, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+                NewChatTabView(
+                    agents: dispatchAgents(),
+                    runOutputStore: runOutputStore,
+                    onDispatch: { agentID, cwd, prompt, budget, model in
+                        await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                    },
+                    onSendFollowUp: { runId, prompt in
+                        Task { try? await e2eBridge?.sendRunContinue(runId: runId, prompt: prompt) }
+                    },
+                    onNewTask: { selectedTab = .newchat }
+                )
+                .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             }
         case .settings:
             NavigationStack {
@@ -1006,7 +974,7 @@ public struct AppRoot: View {
                 onConnectHost: { addHostPresented = true },
                 onReconnect: { host in openSession(host: host, env: env) },
                 onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
-                onNewTask: { dispatchPresented = true },
+                onNewTask: { selectedTab = .newchat },
                 onQuotaGuard: { showingQuotaGuard = true },
                 onOpenTerminal: { slotID in
                     // Finding #5: intentional drill-in — select the slot and
@@ -1017,12 +985,17 @@ public struct AppRoot: View {
             )
             .id(workspacesRevision)
 
-        case .control:
-            ControlView(
-                fleetStore: fleetStore,
-                bridgeActions: bridgeSessionActions(),
-                daemonChannel: daemonChannel,
-                onOpenBudget: { showingQuotaGuard = true }
+        case .newchat:
+            NewChatTabView(
+                agents: dispatchAgents(),
+                runOutputStore: runOutputStore,
+                onDispatch: { agentID, cwd, prompt, budget, model in
+                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                },
+                onSendFollowUp: { runId, prompt in
+                    Task { try? await e2eBridge?.sendRunContinue(runId: runId, prompt: prompt) }
+                },
+                onNewTask: { selectedTab = .newchat }
             )
 
         case .settings:
@@ -1035,6 +1008,7 @@ public struct AppRoot: View {
                 sshKeyStore: env.keyStore,
                 daemonChannel: daemonChannel,
                 e2eRelayClient: env.e2eRelayClient,
+                quotaGuardStore: env.quotaGuardStore,
                 onResetApp: {
                     let db = env.database
                     Task {
@@ -1044,6 +1018,13 @@ public struct AppRoot: View {
                             appLockEnabled = false
                             selectedTab = .inbox
                             onboardingSeen = false
+                        }
+                    }
+                },
+                onEmergencyStop: {
+                    Task {
+                        for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
+                            await slot.sessionViewModel.disconnect()
                         }
                     }
                 }
@@ -1084,8 +1065,16 @@ public struct AppRoot: View {
             approvalRelay: ApprovalRelay.shared
         )
         bridge.start()
+        if E2ERelayClient.hasStoredPairing {
+            env.e2eRelayClient.connect()
+        }
         ApprovalRelay.shared.e2eBridge = bridge
         e2eBridge = bridge
+        Task { @MainActor in
+            for await active in bridge.$isActive.values {
+                relayBridgeIsActive = active
+            }
+        }
 
         // Route the relay/default inbox's decisions to the daemon. Without this the
         // base InboxViewModel only updated local UI state, so approving a relay-
@@ -1426,7 +1415,10 @@ private struct SettingsWithLibraryView: View {
     var sshKeyStore: KeyStore? = nil
     var daemonChannel: DaemonChannel? = nil
     var e2eRelayClient: E2ERelayClient? = nil
+    var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
+    var onEmergencyStop: (() -> Void)? = nil
+    @State private var showLimits = false
 
     var body: some View {
         SettingsView(
@@ -1438,9 +1430,15 @@ private struct SettingsWithLibraryView: View {
             sshKeyStore: sshKeyStore,
             daemonChannel: daemonChannel,
             e2eRelayClient: e2eRelayClient,
-            onResetApp: onResetApp
+            onResetApp: onResetApp,
+            onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil
         )
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showLimits) {
+            if let store = quotaGuardStore {
+                QuotaGuardView(store: store)
+            }
+        }
     }
 }
 
@@ -1581,12 +1579,23 @@ private struct PasswordPromptView: View {
     }
 }
 
-/// Identifies the relay run currently presented in the streaming RunDetailView.
-struct ActiveRelayRun: Identifiable {
-    let runId: String
-    let title: String
-    let subtitle: String
-    var id: String { runId }
+/// A dispatched run NewChatTabView is rendering inline. Transport-agnostic: `channel`
+/// is whichever RunControlling the dispatch used (relay or a fleet slot's DaemonChannel),
+/// so the inline thread's Stop/Pause/Budget controls work the same either way.
+public struct ActiveChatRun: Identifiable {
+    public let runId: String
+    public let channel: any RunControlling
+    public let title: String
+    public let subtitle: String
+    public var id: String { runId }
+}
+
+/// What performDispatch resolved to, returned directly to the caller (NewChatTabView)
+/// instead of mutating shared AppRoot state — so the inline thread owns its own
+/// run lifecycle rather than a separate sheet-presented page reacting to it.
+public enum ChatDispatchOutcome {
+    case started(ActiveChatRun)
+    case blocked(String)
 }
 
 /// RunControlling for relay-dispatched runs. Stop/pause/resume route over the
