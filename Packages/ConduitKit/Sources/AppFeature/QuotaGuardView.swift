@@ -38,7 +38,7 @@ public struct QuotaGuardView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("quota guard")
+                Text("limits")
                     .font(.dsSansPt(28, weight: .bold))
                     .foregroundStyle(t.text)
                 Text("per-provider budget caps & burn rate")
@@ -46,7 +46,7 @@ public struct QuotaGuardView: View {
                     .foregroundStyle(t.text3)
             }
             Spacer()
-            DSIconButton(.refresh, accessibilityLabel: "Refresh quota") {
+            DSIconButton(.settings, accessibilityLabel: "Limits settings") {
                 Haptics.selection()
                 Task { await store.refresh() }
             }

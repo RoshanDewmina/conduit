@@ -297,6 +297,8 @@ public actor SSHHostRuntime: HostedAgentRuntime {
                 appendApproval(runID: runID, params: params)
             case .agentStatus, .secretRequest, .runOutput, .runStatus, .sessionDiscovered, .pong, .unknown:
                 break
+            case .toolStart:
+                break
             }
         }
         await channel.stop()

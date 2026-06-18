@@ -233,7 +233,7 @@ public struct FleetView: View {
             Image(systemName: "shield.checkered")
                 .font(.system(size: 13))
                 .foregroundStyle(t.accent)
-            Text("Quota Guard")
+            Text("Limits")
                 .font(.dsMonoPt(12, weight: .medium))
                 .foregroundStyle(t.accent)
             Spacer()
@@ -322,8 +322,7 @@ public struct FleetView: View {
         DSEmptyState(
             icon: .server,
             title: "No agents connected",
-            subtitle: "Connect the SSH host where your agents work. Conduit will attach the approval bridge so risky actions pause on this phone.",
-            action: (label: "Connect a host", handler: onConnectHost)
+            subtitle: "Connect the SSH host where your agents work. Conduit will attach the approval bridge so risky actions pause on this phone."
         )
     }
 

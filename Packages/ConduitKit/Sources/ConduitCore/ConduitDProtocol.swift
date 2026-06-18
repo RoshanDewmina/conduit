@@ -269,6 +269,20 @@ public struct RunStatusParams: Codable, Sendable, Hashable {
     }
 }
 
+public struct ToolStartParams: Codable, Sendable {
+    public let runId: String
+    public let toolId: String
+    public let toolName: String
+    public let inputJSON: String
+
+    public init(runId: String, toolId: String, toolName: String, inputJSON: String) {
+        self.runId = runId
+        self.toolId = toolId
+        self.toolName = toolName
+        self.inputJSON = inputJSON
+    }
+}
+
 public struct SessionDiscoveredParams: Codable, Sendable {
     public let sessionId: String
     public let tmuxName: String?
@@ -291,6 +305,7 @@ public enum DaemonEvent: Sendable {
     case secretRequest(SecretRequestEvent)
     case runOutput(RunOutputParams)
     case runStatus(RunStatusParams)
+    case toolStart(ToolStartParams)
     case sessionDiscovered(SessionDiscoveredParams)
     case pong
     case unknown(method: String)
@@ -331,6 +346,12 @@ extension DaemonEvent {
                   let p = try? JSONDecoder().decode(RunStatusParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .runStatus(p)
+        case "agent.tool.start":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(ToolStartParams.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .toolStart(p)
         case "session.discovered":
             guard let params = dict["params"] as? [String: Any],
                   let paramsData = try? JSONSerialization.data(withJSONObject: params),

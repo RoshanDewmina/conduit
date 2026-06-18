@@ -612,7 +612,7 @@ public struct DSTabBar: View {
         // still reads as one filled bar. Home-button devices (inset 0) are a
         // no-op. `pullDown` is clamped so we never overshoot below the edge.
         let inset = homeIndicatorInset
-        let clearance: CGFloat = 12
+        let clearance: CGFloat = 24
         let pullDown: CGFloat = inset > clearance ? -(inset - clearance) : 0
 
         return HStack(spacing: 0) {
@@ -642,7 +642,7 @@ public struct DSTabBar: View {
         } label: {
             VStack(spacing: 5) {
                 ZStack(alignment: .topTrailing) {
-                    DSIconView(item.icon, size: 20, color: isActive ? t.accent : t.text3)
+                    DSIconView(item.icon, size: 24, color: isActive ? t.accent : t.text3)
                         .scaleEffect(isActive ? 1.0 : 0.92)
                     if item.badge {
                         Circle()

@@ -33,6 +33,8 @@ public actor RecentPatch {
                     }
                 case .pong, .agentStatus, .secretRequest, .runOutput, .runStatus, .sessionDiscovered:
                     break
+                case .toolStart:
+                    break
                 case .unknown:
                     // Future: when DaemonEvent gains a .patchProposed case,
                     // decode and forward the unified diff here.

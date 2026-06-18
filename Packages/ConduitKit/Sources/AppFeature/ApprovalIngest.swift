@@ -31,6 +31,10 @@ public actor ApprovalIngest {
                     await runOutputStore?.updateStatus(params)
                     continue
                 }
+                if case .toolStart(let params) = event {
+                    await runOutputStore?.appendToolStart(params)
+                    continue
+                }
                 if case .approvalPending(let params) = event {
                     let sessionID = params.sessionId.flatMap { UUID(uuidString: $0) }.map(SessionID.init) ?? SessionID()
                     let approval = Approval(

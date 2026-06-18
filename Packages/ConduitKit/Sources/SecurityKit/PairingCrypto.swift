@@ -16,6 +16,10 @@ public enum PairingCrypto {
     public struct KeyPair: Sendable {
         public let privateKey: Curve25519.KeyAgreement.PrivateKey
         public var publicKeyBase64URL: String { Base64URL.encode(privateKey.publicKey.rawRepresentation) }
+
+        public init(privateKey: Curve25519.KeyAgreement.PrivateKey) {
+            self.privateKey = privateKey
+        }
     }
 
     public struct EncryptedFrame: Codable, Sendable, Equatable {

@@ -45,6 +45,7 @@ struct DebugGalleryView: View {
         case "onboarding-redesign-policy": OnboardingRedesignGalleryView(startStep: 2)
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
+        case "newchat":        newChatGallery
         case "chat":           chatGallery
         case "components":     fullComponentCatalog
         case "blocks":         BlocksReviewScreen()
@@ -613,6 +614,56 @@ struct DebugGalleryView: View {
     }
 
     // MARK: - Chat hero (legacy route)
+
+    private var newChatGallery: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // User bubble
+                HStack(alignment: .top) {
+                    Spacer(minLength: 56)
+                    Text("Build the project and check for errors")
+                        .font(.dsSansPt(15))
+                        .foregroundStyle(t.text)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(t.surface)
+                        .overlay(Rectangle().strokeBorder(t.accent.opacity(0.35), lineWidth: 1))
+                }
+                // Assistant turn — tool cards + prose
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 5) {
+                        PixelBox(state: .streaming, size: 9, subdivisions: 2)
+                        Text("streaming")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text4)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        NewChatToolCardPreview(
+                            toolName: "Bash",
+                            inputJSON: #"{"command":"git status"}"#,
+                            status: .done
+                        )
+                        NewChatToolCardPreview(
+                            toolName: "Bash",
+                            inputJSON: #"{"command":"swift build --configuration release"}"#,
+                            status: .running
+                        )
+                        NewChatToolCardPreview(
+                            toolName: "Read",
+                            inputJSON: #"{"path":"Sources/AppFeature/NewChatTabView.swift"}"#,
+                            status: .running
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    StreamingOutputText(text: "Analysing build output…", isStreaming: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+        }
+        .background(t.bg.ignoresSafeArea())
+    }
 
     private var chatGallery: some View {
         VStack(spacing: 0) {
@@ -1614,6 +1665,53 @@ private struct ProofCardGalleryScreen: View {
         spend: .init(totalUSD: 0.89, inputTokens: 5_400, outputTokens: 1_200),
         prNumber: 45
     )
+}
+
+/// Standalone preview of `InlineChatToolCard` for the gallery (avoids needing a live RunOutputStore).
+private struct NewChatToolCardPreview: View {
+    let toolName: String
+    let inputJSON: String
+    let status: RunOutputStore.ToolBlock.ToolStatus
+    @Environment(\.conduitTokens) private var t
+
+    private var command: String {
+        guard let data = inputJSON.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return toolName }
+        if let cmd = json["command"] as? String { return cmd }
+        if let path = json["path"] as? String { return path }
+        return toolName
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(status == .running ? t.accent : t.ok)
+                .frame(width: 2)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(toolName.uppercased())
+                        .font(.dsMonoPt(9, weight: .semibold))
+                        .foregroundStyle(t.text4)
+                        .tracking(0.8)
+                    Spacer()
+                    if status == .running {
+                        PixelBox(state: .streaming, size: 7, subdivisions: 2)
+                    } else {
+                        DSStatusDot(tone: .ok, size: 6)
+                    }
+                }
+                Text(command)
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text)
+                    .lineLimit(3)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .background(t.surfaceSunk)
+        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+    }
 }
 
 #endif
