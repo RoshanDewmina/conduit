@@ -1,14 +1,10 @@
-# M2 — Real Terminal (Raw PTY)
+# Historical M2 Demo: Real Terminal (Raw PTY)
 
-Status: in progress
-Created: 2026-05-24
+Status: superseded on 2026-06-17.
 
-## Goal
-When a TUI program takes over the screen, SessionView swaps in RawTerminalView
-bound to a live PTY channel. Exiting alt-screen returns to Block mode.
+This demo script is retained as historical context only. Current terminal behavior is implemented in `TerminalEngine` and `SessionFeature`; validate it with the current tests and the repo-level launch checklist instead of this May 2026 milestone note.
 
-## Demo Script
-1. Connect to remote host (M1 flow).
-2. Type `vim test.md` → SwiftTerm takes over, keyboard rail shows Esc / hjkl.
-3. Edit, `:wq` → returns to Block mode with a synthetic "vim test.md" block.
-4. Type `tmux new -s scratch` → SwiftTerm again; detach (`C-b d`) → back to Block mode.
+Current references:
+
+- `docs/KNOWN_ISSUES.md` performance and terminal notes
+- `docs/PUBLISH_READINESS_CHECKLIST.md` validation gates

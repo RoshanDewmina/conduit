@@ -83,10 +83,12 @@ Three rules keep the codebase honest:
 | M11 | Temporal wall    | 🚧 Phase 0+1+UX landed 2026-05-27; Phase 2 pending |
 | M12 | Live Block I/O   | 🚧 core implementation landed 2026-05-28; real-host TUI validation pending |
 
-Last updated 2026-05-28. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) §14 for the full roadmap and
-[`docs/current-state-audit.md`](./docs/current-state-audit.md) for the verified-this-pass details.
+Last updated 2026-06-17. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the product and module
+architecture, [`docs/PUBLISH_READINESS_CHECKLIST.md`](./docs/PUBLISH_READINESS_CHECKLIST.md) for
+launch gates, and [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) for the current audit tracker.
 
-Current implementation audit: [`docs/current-state-audit.md`](./docs/current-state-audit.md).
+Historical state audits have been archived under [`docs/_archive/`](./docs/_archive/). Do not use
+`docs/current-state-audit.md` as source of truth.
 
 ## Heritage
 

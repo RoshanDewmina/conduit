@@ -1,15 +1,10 @@
-# M3 — Survive (Reconnect & Continuity)
+# Historical M3 Demo: Survive (Reconnect & Continuity)
 
-Status: in progress
-Created: 2026-05-24
+Status: superseded on 2026-06-17.
 
-## Goal
-Sessions survive Wi-Fi ↔ cellular handoffs and ~10s backgrounds without
-user-visible breakage. tmux is the durability backbone.
+This demo script is retained as historical context only. Current reconnect/session-continuity behavior should be verified from current `SessionViewModel`, `AutoReconnectEngine` tests, and the repo-level release checklist.
 
-## Demo Script
-1. Connect to remote host, run `top` in raw mode.
-2. Toggle airplane mode for 10s → "suspended" badge appears.
-3. Disable airplane → reconnect within 5s, same `top` view continues.
-4. Background app for 30s → reopen → session attaches to same tmux,
-   last 2000 bytes replay above prompt.
+Current references:
+
+- `docs/PUBLISH_READINESS_CHECKLIST.md` C4 reconnect/session-loss hardening
+- `docs/KNOWN_ISSUES.md` current audit tracker

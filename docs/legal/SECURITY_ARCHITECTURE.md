@@ -1,6 +1,6 @@
 # Security Architecture — Conduit
 
-**Last updated:** {{DATE}}
+**Last updated:** 2026-06-17
 
 **Audience:** Security researchers, system administrators, and technically
 sophisticated users evaluating Conduit's threat model.
@@ -19,6 +19,10 @@ relies on three principles:
    optional end-to-end encryption through the push relay.
 3. **User sovereignty.** You choose which relay (Conduit's default or
    self-hosted), which hosts to pair with, and when to approve.
+
+**Implementation note, 2026-06-17:** the self-host SSH path is the verified production path in the
+current app. Backend-relayed decisions are present in code through `ApprovalRelay`, but end-to-end
+relay pairing and physical-device APNs behavior still require live validation before release.
 
 ---
 

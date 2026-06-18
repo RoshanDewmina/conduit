@@ -13,14 +13,14 @@
 
 ---
 
-## 1. Build & test baseline — VERIFIED GREEN (2026-06-16/17)
+## 1. Build & test baseline — VERIFIED GREEN (2026-06-18)
 
 | Target | Command | Result |
 |---|---|---|
-| ConduitKit (SPM) | `cd Packages/ConduitKit && swift build` | ✅ clean (4.9s) |
-| App target (strict concurrency) | `xcodebuild -scheme Conduit -destination 'iPhone 17 Pro' build` | ✅ **BUILD SUCCEEDED**, 0 concurrency/sendable warnings |
-| conduitd + policy (Go) | `go vet ./... && go build ./... && go test ./...` | ✅ pass |
-| push-backend (Go) | `go vet/build/test ./...` | ✅ pass (1.2s) |
+| ConduitKit (SPM) | `cd Packages/ConduitKit && swift build` | ✅ clean |
+| ConduitKit tests | `cd Packages/ConduitKit && swift test` | ✅ **385 tests / 61 suites pass** |
+| conduitd + policy (Go) | `go vet ./... && go build ./... && go test ./...` | ✅ 124 tests pass |
+| push-backend (Go) | `go vet/build/test ./...` | ✅ pass |
 | agent-runner (Go) | `go vet/build/test ./...` | ✅ pass |
 | conduit-mcp (Go) | `go build ./...` | ✅ pass (no test target) |
 
@@ -49,6 +49,9 @@ doc is now stale on its "OPEN" column:
 - **TOFU in production** — `TOFUHostKeyValidator` always prompts; auto-trust strictly `#if DEBUG`.
 - **No secret logging** — Swift + Go daemon (run/agent IDs only; `redactSecrets()` on every audit command field).
 - **Keychain** — `whenUnlockedThisDeviceOnly`, `kSecAttrSynchronizable:false`.
+- **Notification action hardening** — approval Reject now uses
+  `UNNotificationActionOptions.authenticationRequired` as well as `.destructive`, matching Approve's
+  unlocked-device requirement. Evidence: `NotificationsKit/Notifications.swift` `registerCategories()`.
 - **Cross-tenant / IDOR** — `push-backend/agents.go` scopes **every** handler via
   `resolveEntitlementFromBearer` + `resourceVisibleToEntitlement(ent, CustomerID, OrgID)`.
 - **Artifact download path traversal** — GCS-backed, entitlement-scoped, plus defense-in-depth
@@ -61,15 +64,13 @@ doc is now stale on its "OPEN" column:
 C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
 **compliant** with current Apple/OWASP-MASVS guidance.
 
-**One documented security follow-up (P2, NOT auto-fixed — auth-path change needs device testing):**
-- **BiometricGate no-biometrics soft-bypass.** `SecurityKit/BiometricGate.swift:16-20` returns *success* when no
-  biometrics are enrolled (and `.biometryNotEnrolled` at the eval branch). On a device with neither biometrics nor
-  passcode, the app-lock / SSH-key gate is effectively open (MASVS-AUTH soft bypass). The `.biometryLockout` branch
-  already does the right thing (passcode fallback, fail-closed). **Recommended fix:** in the no-biometrics path,
-  fall back to `.deviceOwnerAuthentication` (passcode) and only graceful-degrade when *no passcode either* (so the
-  simulator/test harness still works). **Deferred** because it changes an auth path and must be validated on a real
-  device + the no-passcode sim harness — not a blind cleanup edit. Defense-in-depth bonus: bind the SSH-key Keychain
-  item with a `SecAccessControl` (`.biometryCurrentSet`) ACL so the Secure Enclave enforces biometrics, not app logic.
+**Documented security follow-up (P2, device validation needed):**
+- **BiometricGate no-passcode fallback still degrades open.** `SecurityKit/BiometricGate.swift:16-24`
+  now falls back to `.deviceOwnerAuthentication` when biometry is not enrolled, and the `.biometryLockout`
+  branch requires passcode. If `canEvaluatePolicy` fails for other reasons, the gate still returns success
+  for simulator/no-passcode compatibility. **Recommended fix:** add a device-tested policy that fails closed
+  on real devices without passcode, while preserving explicit simulator/test bypass behavior. Defense-in-depth
+  bonus: bind SSH-key Keychain items with `SecAccessControl` where feasible.
 
 **Residual operational items (not code bugs):**
 - Confirm `APNS_*` + live `STRIPE_*` secrets are set on the running push-backend instance (D1 in checklist).

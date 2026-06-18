@@ -1,5 +1,9 @@
 # Security Review — WS-8
 
+> Historical review from 2026-05-31. Current security posture and open launch risks are tracked in
+> `docs/KNOWN_ISSUES.md` and `docs/legal/SECURITY_ARCHITECTURE.md`. Use this file as evidence for
+> the WS-8 key-import review only, not as the current security source of truth.
+
 **Date:** 2026-05-31  
 **Reviewer:** WS-8 agent (Claude Sonnet 4.6)  
 **Branch:** feat/warp-style-agent-blocks  
