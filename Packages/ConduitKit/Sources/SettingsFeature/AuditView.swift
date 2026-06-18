@@ -5,6 +5,7 @@ import Observation
 import ConduitCore
 import PersistenceKit
 import SSHTransport
+import DesignSystem
 
 @MainActor @Observable
 public final class AuditViewModel {
@@ -101,6 +102,8 @@ public struct AuditView: View {
     @State private var exportDocument: AuditExportDocument?
     @State private var isExporting = false
     @State private var isExportingJSONL = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
     private let daemonChannel: DaemonChannel?
 
     public init(viewModel: AuditViewModel, daemonChannel: DaemonChannel? = nil) {
@@ -109,123 +112,62 @@ public struct AuditView: View {
     }
 
     public var body: some View {
-        List {
-            Section {
-                HStack(spacing: 12) {
-                    chainStatusIcon
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Audit Chain")
-                            .font(.headline)
-                        if let count = vm.verification?.entryCount ?? (vm.entryCount > 0 ? vm.entryCount : nil) {
-                            Text("\(count) entries")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let ts = vm.verification?.lastTimestamp ?? vm.lastTimestamp {
-                            Text("Last: \(ts)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if vm.isVerifying {
-                        ProgressView()
-                    } else {
-                        Button {
-                            Task { await vm.verifyChain(daemonChannel: daemonChannel) }
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("audit log", onBack: { dismiss() }) {
+                        Menu {
+                            Button {
+                                Task {
+                                    if let data = await vm.exportJSON() {
+                                        exportDocument = AuditExportDocument(data: data)
+                                        isExporting = true
+                                    }
+                                }
+                            } label: {
+                                Label("Export JSON", systemImage: "square.and.arrow.up")
+                            }
+                            Button {
+                                isExportingJSONL = true
+                                Task {
+                                    if let data = await vm.exportJSONL(daemonChannel: daemonChannel) {
+                                        exportDocument = AuditExportDocument(data: data)
+                                        isExporting = true
+                                    }
+                                    isExportingJSONL = false
+                                }
+                            } label: {
+                                Label("Export JSONL (hash-chained)", systemImage: "link.badge.plus")
+                            }
+                            .disabled(isExportingJSONL || daemonChannel == nil)
                         } label: {
-                            Label("Verify", systemImage: "checkmark.shield")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(vm.chainValid == true ? .green : vm.chainValid == false ? .red : .secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-            } header: {
-                Text("Chain Status")
-            }
-
-            if let err = vm.verificationError {
-                Section {
-                    Label(err, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .font(.caption)
-                }
-            }
-
-            if let verification = vm.verification, !verification.valid, let brokenAt = verification.brokenAt {
-                Section {
-                    Label("Chain broken at entry #\(brokenAt)", systemImage: "link.badge.xmark")
-                        .foregroundStyle(.red)
-                        .font(.caption)
-                }
-            }
-
-            if vm.events.isEmpty, !vm.isLoading {
-                ContentUnavailableView(
-                    "No audit events yet",
-                    systemImage: "checkmark.shield",
-                    description: Text("Connection and approval security events will appear here.")
-                )
-                .listRowBackground(Color.clear)
-            } else {
-                ForEach(vm.events, id: \.id) { event in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(event.type.rawValue)
-                                .font(.caption.weight(.semibold))
-                                .textCase(.uppercase)
-                            Spacer()
-                            Text(event.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("Host: \(event.hostID.uuidString)")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
-                        if !event.metadata.isEmpty {
-                            Text(Self.metadataText(event.metadata))
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
+                            DSIconButton(.share, accessibilityLabel: "Export") {
+                                // Menu handles action
+                            }
                         }
                     }
-                    .padding(.vertical, 2)
+
+                    chainStatusSection
+
+                    if let err = vm.verificationError {
+                        errorBanner(err)
+                    }
+
+                    if let verification = vm.verification, !verification.valid, let brokenAt = verification.brokenAt {
+                        errorBanner("Chain broken at entry #\(brokenAt)")
+                    }
+
+                    if vm.events.isEmpty, !vm.isLoading {
+                        emptyState
+                    } else {
+                        eventsList
+                    }
                 }
             }
         }
-        .navigationTitle("Security Audit Log")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        Task {
-                            if let data = await vm.exportJSON() {
-                                exportDocument = AuditExportDocument(data: data)
-                                isExporting = true
-                            }
-                        }
-                    } label: {
-                        Label("Export JSON", systemImage: "square.and.arrow.up")
-                    }
-                    Button {
-                        isExportingJSONL = true
-                        Task {
-                            if let data = await vm.exportJSONL(daemonChannel: daemonChannel) {
-                                exportDocument = AuditExportDocument(data: data)
-                                isExporting = true
-                            }
-                            isExportingJSONL = false
-                        }
-                    } label: {
-                        Label("Export JSONL (hash-chained)", systemImage: "link.badge.plus")
-                    }
-                    .disabled(isExportingJSONL || daemonChannel == nil)
-                } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                }
-            }
-        }
+        .navigationBarHidden(true)
         .overlay {
             if vm.isLoading { ProgressView() }
         }
@@ -272,6 +214,135 @@ public struct AuditView: View {
             .sorted(by: { $0.key < $1.key })
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: " ")
+    }
+
+    // MARK: - New helper views
+
+    private var chainStatusSection: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                chainStatusIcon
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Audit Chain")
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    if let count = vm.verification?.entryCount ?? (vm.entryCount > 0 ? vm.entryCount : nil) {
+                        Text("\(count) entries")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                    }
+                    if let ts = vm.verification?.lastTimestamp ?? vm.lastTimestamp {
+                        Text("Last: \(ts)")
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text4)
+                    }
+                }
+                Spacer()
+                if vm.isVerifying {
+                    ProgressView()
+                } else {
+                    Button {
+                        Task { await vm.verifyChain(daemonChannel: daemonChannel) }
+                    } label: {
+                        DSChip("Verify", tone: vm.chainValid == true ? .ok : vm.chainValid == false ? .danger : .neutral, variant: .outlined, size: .sm)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(t.danger)
+            Text(message)
+                .font(.dsMonoPt(12))
+                .foregroundStyle(t.danger)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(t.dangerSoft)
+        .overlay(
+            Rectangle()
+                .strokeBorder(t.danger.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 32))
+                .foregroundStyle(t.text4)
+            Text("No audit events yet")
+                .font(.dsSansPt(14, weight: .semibold))
+                .foregroundStyle(t.text)
+            Text("Connection and approval security events will appear here.")
+                .font(.dsMonoPt(12))
+                .foregroundStyle(t.text3)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    private var eventsList: some View {
+        VStack(spacing: 0) {
+            ForEach(vm.events, id: \.id) { event in
+                if event.id != vm.events.first?.id {
+                    DSDivider(.soft, leadingInset: 16)
+                }
+                eventRow(event)
+            }
+        }
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+
+    private func eventRow(_ event: AuditEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(event.type.rawValue)
+                    .font(.dsMonoPt(11, weight: .semibold))
+                    .foregroundStyle(t.accent)
+                    .textCase(.uppercase)
+                Spacer()
+                Text(event.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(t.text4)
+            }
+            Text("Host: \(event.hostID.uuidString)")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text3)
+            if !event.metadata.isEmpty {
+                Text(Self.metadataText(event.metadata))
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(t.text4)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }
 #endif

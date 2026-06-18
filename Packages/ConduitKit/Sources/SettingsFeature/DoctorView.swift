@@ -36,6 +36,7 @@ public final class DoctorViewModel {
 public struct DoctorView: View {
     @State private var vm: DoctorViewModel
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: DoctorViewModel) {
         _vm = State(initialValue: viewModel)
@@ -47,7 +48,12 @@ public struct DoctorView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    header
+                    DSDetailHeader("conduit doctor", onBack: { dismiss() }) {
+                        DSButton("Run", systemImage: "stethoscope", variant: .secondary, size: .sm) {
+                            Task { await vm.runDoctor() }
+                        }
+                        .disabled(vm.isLoading)
+                    }
 
                     if let report = vm.report {
                         reportCard(report)

@@ -44,6 +44,9 @@ public enum DSIcon: String, CaseIterable, Sendable {
     case command
     case tag
     case list
+    case clock
+    case xmark
+    case share
 }
 
 // MARK: - Rendering view
@@ -429,6 +432,21 @@ private func draw(icon: DSIcon, ctx: GraphicsContext, color: Color, style: Strok
         ctx.fill(Path.dot(.p(4,6), r:1.3), with: .color(color))
         ctx.fill(Path.dot(.p(4,12), r:1.3), with: .color(color))
         ctx.fill(Path.dot(.p(4,18), r:1.3), with: .color(color))
+
+    case .clock:
+        ctx.stroke(Path.circle(.p(12,12), r:9), with: .color(color), style: style)
+        ctx.stroke(Path.line(.p(12,7), .p(12,12)), with: .color(color), style: style)
+        ctx.stroke(Path.line(.p(12,12), .p(16,15)), with: .color(color), style: style)
+
+    case .xmark:
+        ctx.stroke(Path.line(.p(6,6), .p(18,18)), with: .color(color), style: style)
+        ctx.stroke(Path.line(.p(18,6), .p(6,18)), with: .color(color), style: style)
+
+    case .share:
+        ctx.stroke(Path.line(.p(12,3), .p(12,15)), with: .color(color), style: style)
+        var arr = Path(); arr.move(to: .p(7,10)); arr.addLine(to: .p(12,5)); arr.addLine(to: .p(17,10))
+        ctx.stroke(arr, with: .color(color), style: style)
+        ctx.stroke(Path.line(.p(4,20), .p(20,20)), with: .color(color), style: style)
     }
 }
 

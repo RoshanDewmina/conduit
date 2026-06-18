@@ -2,6 +2,7 @@
 import SwiftUI
 import DesignSystem
 import AgentKit
+import PersistenceKit
 
 // MARK: - DispatchAgent
 
@@ -35,6 +36,7 @@ struct ChatTurn: Identifiable {
 public struct NewChatTabView: View {
     let agents: [DispatchAgent]
     let runOutputStore: RunOutputStore
+    let chatRepo: ChatConversationRepository?
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
 
@@ -59,16 +61,25 @@ public struct NewChatTabView: View {
     @State private var showBudgetSheet = false
     @State private var dispatchErrorMessage: String?
 
+    // Persistence
+    @State private var conversationID: String?
+    @State private var recentConversations: [ChatConversation] = []
+    @State private var searchQuery: String = ""
+    @State private var searchResults: [ChatConversationSearchResult] = []
+    @State private var showRecentPanel = false
+
     @Environment(\.conduitTokens) private var t
 
     public init(
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
+        chatRepo: ChatConversationRepository? = nil,
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
+        self.chatRepo = chatRepo
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
     }
@@ -115,6 +126,8 @@ public struct NewChatTabView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 8)
                 }
+            } else if showRecentPanel && chatRepo != nil {
+                recentPanel
             } else {
                 ZStack(alignment: .topLeading) {
                     t.bg.ignoresSafeArea()
@@ -184,6 +197,19 @@ public struct NewChatTabView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer()
+            if chatRepo != nil && activeRun == nil {
+                Button {
+                    Haptics.selection()
+                    showRecentPanel.toggle()
+                } label: {
+                    DSIconView(.clock, size: 16, color: showRecentPanel ? t.accent : t.text2)
+                        .frame(width: 36, height: 36)
+                        .background(t.surface)
+                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Recent conversations")
+            }
             if activeRun != nil {
                 Button {
                     Haptics.selection()
@@ -405,6 +431,19 @@ public struct NewChatTabView: View {
             prompt = ""
             selectedModel = ""
             budgetText = ""
+            // Persist conversation + turn
+            if let chatRepo {
+                Task {
+                    let conv = try? await chatRepo.createConversation(
+                        title: chatTitle, agentID: agent.vendor.isEmpty ? agent.name : agent.vendor,
+                        hostName: agent.name, cwd: agent.cwd
+                    )
+                    conversationID = conv?.id
+                    _ = try? await chatRepo.appendTurn(
+                        conversationID: conv?.id ?? "", prompt: trimmedPrompt, runID: run.runId
+                    )
+                }
+            }
         case .blocked(let message):
             dispatchErrorMessage = message
         }
@@ -434,6 +473,14 @@ public struct NewChatTabView: View {
                 activeRun = continued
                 turns.append(ChatTurn(prompt: trimmed, runId: newRunId))
                 controlStore = RunControlStore(channel: continued.channel, runId: newRunId)
+                // Persist follow-up turn
+                if let chatRepo, let convID = conversationID {
+                    Task {
+                        _ = try? await chatRepo.appendTurn(
+                            conversationID: convID, prompt: trimmed, runID: newRunId
+                        )
+                    }
+                }
             case "denied":
                 dispatchErrorMessage = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
             case "needsApproval":
@@ -457,6 +504,109 @@ public struct NewChatTabView: View {
         prompt = ""
         followUpText = ""
         dispatchErrorMessage = nil
+        conversationID = nil
+    }
+
+    // MARK: - Recent / Search panel
+
+    private func loadRecent() {
+        guard let chatRepo else { return }
+        Task {
+            recentConversations = (try? await chatRepo.recent(limit: 50)) ?? []
+        }
+    }
+
+    private func performSearch() {
+        guard let chatRepo, !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            searchResults = []
+            return
+        }
+        Task {
+            searchResults = (try? await chatRepo.search(searchQuery)) ?? []
+        }
+    }
+
+    private var recentPanel: some View {
+        VStack(spacing: 0) {
+            // Search bar
+            HStack(spacing: 8) {
+                DSIconView(.search, size: 14, color: t.text3)
+                TextField("Search conversations\u{2026}", text: $searchQuery)
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text)
+                    .tint(t.accent)
+                    .onChange(of: searchQuery) { _, _ in performSearch() }
+                if !searchQuery.isEmpty {
+                    Button { searchQuery = ""; searchResults = [] } label: {
+                        DSIconView(.xmark, size: 12, color: t.text3)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(t.surfaceSunk)
+            .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            Divider().padding(.top, 8)
+
+            // Results
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    let items: [ChatConversationSearchResult] = searchQuery.isEmpty
+                        ? recentConversations.map { ChatConversationSearchResult(conversation: $0, snippet: $0.title) }
+                        : searchResults
+                    if items.isEmpty {
+                        VStack(spacing: 8) {
+                            Text(searchQuery.isEmpty ? "No conversations yet" : "No matches")
+                                .font(.dsSansPt(14))
+                                .foregroundStyle(t.text4)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                    } else {
+                        ForEach(items) { result in
+                            Button {
+                                showRecentPanel = false
+                                chatTitle = result.conversation.title
+                                conversationID = result.conversation.id
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(result.conversation.title)
+                                        .font(.dsSansPt(15, weight: .semibold))
+                                        .foregroundStyle(t.text)
+                                        .lineLimit(1)
+                                    Text(result.snippet)
+                                        .font(.dsSansPt(13))
+                                        .foregroundStyle(t.text3)
+                                        .lineLimit(2)
+                                    HStack(spacing: 6) {
+                                        Text(result.conversation.hostName)
+                                            .font(.dsMonoPt(10))
+                                            .foregroundStyle(t.text4)
+                                        Text("\u{00B7}")
+                                            .foregroundStyle(t.text4)
+                                        Text(result.conversation.agentID)
+                                            .font(.dsMonoPt(10))
+                                            .foregroundStyle(t.text4)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            Rectangle().fill(t.border).frame(height: 0.5).padding(.horizontal, 16)
+                        }
+                    }
+                }
+            }
+        }
+        .background(t.bg.ignoresSafeArea())
+        .onAppear { loadRecent() }
     }
 
     /// Cheap heuristic title: first few words of the prompt, cleaned of whitespace runs.

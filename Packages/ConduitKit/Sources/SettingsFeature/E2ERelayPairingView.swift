@@ -47,30 +47,22 @@ public struct E2ERelayPairingView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 36)
             }
-            .navigationTitle("Relay Pairing")
-            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 // Auto-start so user only needs to copy the code + run relay-attach
                 if client.connectionState == .disconnected {
                     connect()
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if client.pairingState == .paired {
-                        Button("Done") { dismiss() }
-                            .font(.dsSansPt(15, weight: .medium))
-                            .foregroundStyle(t.accent)
-                    }
-                }
-            }
         }
+        .navigationBarHidden(true)
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
         VStack(spacing: 8) {
+            DSDetailHeader("relay pairing", onBack: { dismiss() })
+
             Image(systemName: "lock.rotation")
                 .font(.system(size: 48))
                 .foregroundStyle(t.accent)

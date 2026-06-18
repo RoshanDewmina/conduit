@@ -55,6 +55,10 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public let patch: String?
     public let cwd: String
     public let risk: Int
+    // Optional: hook approvals (e.g. a user's own terminal session) carry no
+    // Conduit runId; only dispatched runs do. Required → broke decode of every
+    // approval the daemon sends (it emits ApprovalEvent, which has no runId).
+    public let runId: String?
 
     public let toolName: String?
     public let toolUseID: String?
@@ -67,7 +71,7 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public let matchedRule: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, sessionId, agent, kind, command, patch, cwd, risk
+        case id, sessionId, agent, kind, command, patch, cwd, risk, runId
         case toolName, toolUseID, toolInput
         case agentSessionID = "agentSessionID"
         case files, touchesGit, touchesNetwork, matchedRule

@@ -38,6 +38,7 @@ public final class AppEnvironment {
     public let loopStore: LoopStore
     public let quotaGuardStore: QuotaGuardStore
     public let hostHealthStore: HostHealthStore
+    public let chatRepo: ChatConversationRepository
     public let e2eRelayClient: E2ERelayClient
 
     public init() throws {
@@ -46,6 +47,7 @@ public final class AppEnvironment {
         self.snippetRepo = SnippetRepository(db: database)
         self.blockRepo = BlockRepository(database)
         self.snapshotRepo = SessionSnapshotRepository(database)
+        self.chatRepo = ChatConversationRepository(database)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
@@ -175,6 +177,7 @@ public struct AppRoot: View {
     @State private var selectedFleetSlotID: UUID?
     @State private var e2eBridge: E2ERelayBridge?
     @State private var relayBridgeIsActive: Bool = false
+    @State private var sidebarState = SidebarShellState()
 
     private var isPro: Bool {
         #if DEBUG
@@ -808,40 +811,37 @@ public struct AppRoot: View {
     @Environment(\.conduitTokens) private var t
 
     private func compactRoot(env: AppEnvironment) -> some View {
-        let inboxBadge = activeInboxViewModel.approvals.filter(\.isPending).count > 0
-        let tabItems: [DSTabItem] = [
-            DSTabItem(id: "inbox",    icon: .inbox,    label: "Inbox", badge: inboxBadge),
-            DSTabItem(id: "fleet",    icon: .server,   label: "Fleet"),
-            DSTabItem(id: "newchat",  icon: .sparkles, label: "New Chat"),
-            DSTabItem(id: "settings", icon: .settings, label: "Settings"),
-        ]
-
-        let tabID = Binding<String>(
-            get: {
-                switch selectedTab {
-                case .inbox:    "inbox"
-                case .fleet:    "fleet"
-                case .newchat:  "newchat"
-                case .settings: "settings"
-                }
-            },
-            set: { id in
-                switch id {
-                case "inbox":    selectedTab = .inbox
-                case "fleet":    selectedTab = .fleet
-                case "newchat":  selectedTab = .newchat
-                case "settings": selectedTab = .settings
-                default:         selectedTab = .inbox
-                }
-            }
-        )
-
-        return ZStack {
+        ZStack {
             t.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                tabContent(env: env, tabItems: tabItems, tabID: tabID)
+            // The detail MUST live in a NavigationStack or the `.toolbar` hamburger
+            // never renders — leaving the drawer unreachable and the app stuck on
+            // the default destination (New Chat) with no way to navigate.
+            NavigationStack {
+                sidebarDetail(for: sidebarState.selectedDestination, env: env)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                Task { await sidebarState.loadRecent() }
+                                sidebarState.isDrawerOpen = true
+                            } label: {
+                                DSIconView(.list, size: 18, color: t.text)
+                            }
+                        }
+                    }
+            }
+            if sidebarState.isDrawerOpen {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture { sidebarState.isDrawerOpen = false }
+                ConduitSidebarView(state: sidebarState) { dest in
+                    sidebarState.isDrawerOpen = false
+                    sidebarState.selectedDestination = dest
+                }
+                .transition(.move(edge: .leading))
+                .zIndex(1)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: sidebarState.isDrawerOpen)
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
                 SessionView(viewModel: vm)
@@ -850,60 +850,19 @@ public struct AppRoot: View {
         }
     }
 
-    // Tab bar is placed INSIDE each tab's root view so NavigationStack push
-    // naturally hides it — pushed detail views don't inherit the safeAreaInset.
-    @ViewBuilder
-    private func tabContent(env: AppEnvironment, tabItems: [DSTabItem], tabID: Binding<String>) -> some View {
-        let bar = DSTabBar(items: tabItems, selectedID: tabID)
-
-        switch selectedTab {
-        case .inbox:
-            NavigationStack {
-                rootDestination(.inbox, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
-            }
-        case .fleet:
-            NavigationStack {
-                rootDestination(.fleet, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
-            }
-        case .newchat:
-            NavigationStack {
-                NewChatTabView(
-                    agents: dispatchAgents(),
-                    runOutputStore: runOutputStore,
-                    onDispatch: { agentID, cwd, prompt, budget, model in
-                        await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
-                    },
-                    onNewTask: { selectedTab = .newchat }
-                )
-                .safeAreaInset(edge: .bottom, spacing: 0) { bar }
-            }
-        case .settings:
-            NavigationStack {
-                rootDestination(.settings, env: env)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { bar }
-            }
-        }
-    }
-
     private func regularRoot(env: AppEnvironment) -> some View {
         ZStack {
             t.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                NavigationSplitView {
-                    List(selection: splitSelection) {
-                        ForEach(Tab.rootTabs, id: \.self) { tab in
-                            Label(tab.title, systemImage: tab.systemImage).tag(tab)
-                        }
-                    }
-                    .navigationTitle("Conduit")
-                } detail: {
-                    NavigationStack {
-                        rootDestination(selectedTab, env: env)
-                    }
+            NavigationSplitView {
+                ConduitSidebarView(state: sidebarState) { dest in
+                    sidebarState.selectedDestination = dest
+                }
+            } detail: {
+                NavigationStack {
+                    sidebarDetail(for: sidebarState.selectedDestination, env: env)
                 }
             }
+            .task { await sidebarState.loadRecent() }
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
@@ -973,7 +932,6 @@ public struct AppRoot: View {
                 onConnectHost: { addHostPresented = true },
                 onReconnect: { host in openSession(host: host, env: env) },
                 onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
-                onNewTask: { selectedTab = .newchat },
                 onQuotaGuard: { showingQuotaGuard = true },
                 onOpenTerminal: { slotID in
                     // Finding #5: intentional drill-in — select the slot and
@@ -988,6 +946,7 @@ public struct AppRoot: View {
             NewChatTabView(
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
+                chatRepo: env.chatRepo,
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
@@ -1025,6 +984,40 @@ public struct AppRoot: View {
                     }
                 }
             )
+        }
+    }
+
+    @ViewBuilder
+    private func sidebarDetail(for dest: SidebarDestination, env: AppEnvironment) -> some View {
+        switch dest {
+        case .newChat:
+            NewChatTabView(
+                agents: dispatchAgents(),
+                runOutputStore: runOutputStore,
+                chatRepo: env.chatRepo,
+                onDispatch: { agentID, cwd, prompt, budget, model in
+                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                },
+                onNewTask: { sidebarState.selectedDestination = .newChat }
+            )
+        case .thread:
+            // TODO: load the selected conversation by id — currently opens a fresh
+            // New Chat (NewChatTabView has no initial-conversation parameter yet).
+            NewChatTabView(
+                agents: dispatchAgents(),
+                runOutputStore: runOutputStore,
+                chatRepo: env.chatRepo,
+                onDispatch: { agentID, cwd, prompt, budget, model in
+                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                },
+                onNewTask: { sidebarState.selectedDestination = .newChat }
+            )
+        case .needsAttention:
+            rootDestination(.inbox, env: env)
+        case .fleet:
+            rootDestination(.fleet, env: env)
+        case .settings:
+            rootDestination(.settings, env: env)
         }
     }
 
@@ -1205,7 +1198,8 @@ public struct AppRoot: View {
             )
             let approvalRepo = ApprovalRepository(env.database)
             let channel = DaemonChannel(session: sshSession)
-            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore)
+            let chatSink = ChatRunPersistenceSink(chatRepo: env.chatRepo)
+            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore, chatPersistenceSink: chatSink)
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
                 onDecision: { id, decision, editedToolInput in
@@ -1304,13 +1298,15 @@ public struct AppRoot: View {
                 // only Sendable values (no `vm`, so no retain cycle).
                 let fleet = self.fleetStore
                 let quotaGuard = env.quotaGuardStore
-                vm.onReconnected = { [fleet, quotaGuard, runOutputStore, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
+                let chatRepo = env.chatRepo
+                vm.onReconnected = { [fleet, quotaGuard, runOutputStore, chatRepo, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
                     if let existing = await fleet.slots.first(where: { $0.id == slotID }) {
                         await existing.ingest.stop()
                         await existing.channel.stop()
                     }
                     let newChannel = DaemonChannel(session: sshSession)
-                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore)
+                    let newChatSink = ChatRunPersistenceSink(chatRepo: chatRepo)
+                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore, chatPersistenceSink: newChatSink)
                     await fleet.rearm(slotID: slotID, channel: newChannel, ingest: newIngest)
                     try? await newChannel.start()
                     if !backendURL.isEmpty {

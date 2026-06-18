@@ -392,7 +392,6 @@ public struct SettingsView: View {
     public var onEmergencyStop: (() -> Void)? = nil
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
-    @AppStorage("redactSavedHistory") private var redactSavedHistory = false
     @State private var showResetConfirmation = false
     @State private var confirmingStop = false
     @Environment(\.conduitTokens) private var t
@@ -437,9 +436,8 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
                     generalSection
-                    connectionSection
-                    securitySection
-                    advancedSection
+                    policyHostsSection
+                    dataSection
                     resetSection
                     versionFooter
                 }
@@ -480,6 +478,10 @@ public struct SettingsView: View {
                 settingsNavRow("Appearance", icon: "paintbrush", detail: colorSchemeLabel)
             }
             divider
+            NavigationLink { TrustPrivacyView() } label: {
+                settingsNavRow("Security & privacy", icon: "checkmark.shield", detail: "data handling · host-key TOFU")
+            }
+            divider
             NavigationLink { ProviderKeysView(viewModel: vm) } label: {
                 settingsNavRow("Provider keys", icon: "key.horizontal", detail: "Anthropic · OpenAI — sent direct to provider")
             }
@@ -495,11 +497,11 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - (2) CONNECTION
+    // MARK: - (2) POLICY & HOSTS
 
     @ViewBuilder
-    private var connectionSection: some View {
-        sectionHead("CONNECTION")
+    private var policyHostsSection: some View {
+        sectionHead("POLICY & HOSTS")
         settingsCard {
             NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
@@ -512,52 +514,21 @@ public struct SettingsView: View {
         .padding(.bottom, 16)
     }
 
-    // MARK: - (3) SECURITY & PRIVACY
+    // MARK: - (3) DATA
 
     @ViewBuilder
-    private var securitySection: some View {
-        sectionHead("SECURITY & PRIVACY")
+    private var dataSection: some View {
+        sectionHead("DATA")
         settingsCard {
-            Toggle(isOn: $redactSavedHistory) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Redact secrets in history")
-                        .font(.dsSansPt(15))
-                        .foregroundStyle(t.text)
-                    Text("Masks tokens and keys in the saved audit log")
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                }
-            }
-            .tint(t.accent)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            divider
-            NavigationLink { TrustPrivacyView() } label: {
-                settingsNavRow("Trust & privacy", icon: "checkmark.shield", detail: "data handling · host-key TOFU")
-            }
-        }
-        .padding(.bottom, 16)
-    }
-
-    // MARK: - (4) ADVANCED
-
-    @ViewBuilder
-    private var advancedSection: some View {
-        sectionHead("ADVANCED")
-        settingsCard {
-            NavigationLink { AutonomyLevelView() } label: {
-                settingsNavRow("Autonomy level", icon: "slider.horizontal.3", detail: "when agents ask vs auto-approve")
-            }
             if let auditRepository {
-                divider
                 NavigationLink {
                     AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
                 } label: {
-                    settingsNavRow("Audit log", icon: "list.bullet.clipboard", detail: "approval & run history")
+                    settingsNavRow("Audit & proof", icon: "list.bullet.clipboard", detail: "approval & run history")
                 }
+                divider
             }
             if let daemonChannel {
-                divider
                 NavigationLink {
                     SecretsView(viewModel: {
                         let svm = SecretsViewModel()
@@ -572,7 +543,7 @@ public struct SettingsView: View {
         .padding(.bottom, 16)
     }
 
-    // MARK: - (6) RESET
+    // MARK: - (4) RESET
 
     @ViewBuilder
     private var resetSection: some View {

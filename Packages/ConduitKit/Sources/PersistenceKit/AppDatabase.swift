@@ -36,7 +36,8 @@ public final class AppDatabase: Sendable {
     /// cleared independently so a not-yet-migrated table cannot abort the wipe.
     public func wipeAll() async throws {
         try await dbWriter.write { db in
-            for table in ["approvals", "blocks", "patches", "session_snapshots",
+            for table in ["chat_artifacts", "chat_turns", "chat_conversations",
+                          "approvals", "blocks", "patches", "session_snapshots",
                           "sync_tombstones", "audit_events", "loops",
                           "snippets", "hosts"] {
                 try? db.execute(sql: "DELETE FROM \(table)")
@@ -238,6 +239,73 @@ public final class AppDatabase: Sendable {
                 t.column("proof",              .text)
                 t.column("created_at",         .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
                 t.column("updated_at",         .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+            }
+        }
+
+        // Durable chat persistence — conversations, turns, artifacts, FTS.
+        m.registerMigration("v10") { db in
+            try db.create(table: "chat_conversations") { t in
+                t.column("id",                  .text).primaryKey()
+                t.column("title",               .text).notNull()
+                t.column("agent_id",            .text).notNull()
+                t.column("vendor",              .text)
+                t.column("host_name",           .text).notNull()
+                t.column("host_id",             .text)
+                t.column("cwd",                 .text).notNull()
+                t.column("model",               .text)
+                t.column("budget_usd",          .real)
+                t.column("status",              .text).notNull().defaults(to: "active")
+                t.column("created_at",          .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("updated_at",          .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("last_activity_at",    .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+            }
+            try db.create(index: "idx_chat_conv_last_activity", on: "chat_conversations", columns: ["last_activity_at"])
+            try db.create(index: "idx_chat_conv_status", on: "chat_conversations", columns: ["status"])
+            try db.create(index: "idx_chat_conv_agent", on: "chat_conversations", columns: ["agent_id"])
+            try db.create(index: "idx_chat_conv_host", on: "chat_conversations", columns: ["host_name"])
+
+            try db.create(table: "chat_turns") { t in
+                t.column("id",              .text).primaryKey()
+                t.column("conversation_id", .text).notNull().indexed()
+                t.column("ordinal",         .integer).notNull()
+                t.column("prompt",          .text).notNull()
+                t.column("run_id",          .text).notNull()
+                t.column("transport_kind",  .text).notNull().defaults(to: "ssh")
+                t.column("status",          .text).notNull().defaults(to: "running")
+                t.column("assistant_text",  .text).notNull().defaults(to: "")
+                t.column("error_message",   .text)
+                t.column("created_at",      .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("completed_at",    .datetime)
+                t.foreignKey(["conversation_id"], references: "chat_conversations", onDelete: .cascade)
+            }
+            try db.create(index: "idx_chat_turn_run", on: "chat_turns", columns: ["run_id"])
+
+            try db.create(table: "chat_artifacts") { t in
+                t.column("id",              .text).primaryKey()
+                t.column("conversation_id", .text).notNull().indexed()
+                t.column("turn_id",         .text).notNull()
+                t.column("run_id",          .text).notNull()
+                t.column("kind",            .text).notNull()
+                t.column("title",           .text).notNull()
+                t.column("summary",         .text)
+                t.column("payload_json",    .text).notNull().defaults(to: "{}")
+                t.column("status",          .text).notNull().defaults(to: "running")
+                t.column("created_at",      .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("updated_at",      .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.foreignKey(["conversation_id"], references: "chat_conversations", onDelete: .cascade)
+                t.foreignKey(["turn_id"], references: "chat_turns", onDelete: .cascade)
+            }
+            try db.create(index: "idx_chat_art_run", on: "chat_artifacts", columns: ["run_id"])
+            try db.create(index: "idx_chat_art_kind", on: "chat_artifacts", columns: ["kind"])
+            try db.create(index: "idx_chat_art_status", on: "chat_artifacts", columns: ["status"])
+
+            try db.create(virtualTable: "chat_fts", using: FTS5()) { t in
+                t.column("conversation_id")
+                t.column("title")
+                t.column("prompt")
+                t.column("assistant_text")
+                t.column("artifact_text")
+                t.tokenizer = .porter()
             }
         }
 

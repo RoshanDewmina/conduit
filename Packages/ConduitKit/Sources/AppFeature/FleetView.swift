@@ -13,7 +13,6 @@ public struct FleetView: View {
     private let onConnectHost: () -> Void
     private let onReconnect: (Host) -> Void
     private let onDelete: (Host) -> Void
-    private let onNewTask: () -> Void
     private let onQuotaGuard: (() -> Void)?
     /// Open the live block terminal for a given slot (Finding #5 drill-in).
     private let onOpenTerminal: ((UUID) -> Void)?
@@ -31,7 +30,6 @@ public struct FleetView: View {
         onConnectHost: @escaping () -> Void,
         onReconnect: @escaping (Host) -> Void,
         onDelete: @escaping (Host) -> Void,
-        onNewTask: @escaping () -> Void = {},
         onQuotaGuard: (() -> Void)? = nil,
         onOpenTerminal: ((UUID) -> Void)? = nil
     ) {
@@ -43,7 +41,6 @@ public struct FleetView: View {
         self.onConnectHost = onConnectHost
         self.onReconnect = onReconnect
         self.onDelete = onDelete
-        self.onNewTask = onNewTask
         self.onQuotaGuard = onQuotaGuard
         self.onOpenTerminal = onOpenTerminal
     }
@@ -97,12 +94,7 @@ public struct FleetView: View {
                     count: reconnectableHosts.isEmpty && store.slots.isEmpty
                         ? nil
                         : "\(store.slots.count + reconnectableHosts.count) hosts"
-                ) {
-                    DSIconButton(.plus, accessibilityLabel: "New Chat") {
-                        Haptics.selection()
-                        onNewTask()
-                    }
-                }
+                )
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -357,36 +349,33 @@ public struct FleetView: View {
     }
 
     private func agentRow(_ a: AgentVendorStatus) -> some View {
-        Button { onNewTask() } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(a.displayName)
-                        .font(.dsSansPt(14, weight: .semibold))
-                        .foregroundStyle(t.text)
-                    Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
-                        .font(.dsMonoPt(11))
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(a.displayName)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+                HStack(spacing: 6) {
+                    DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 7)
+                    Text(a.loggedIn == true ? "running" : "idle")
+                        .font(.dsMonoPt(10))
                         .foregroundStyle(t.text3)
-                    HStack(spacing: 6) {
-                        DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 7)
-                        Text(a.loggedIn == true ? "running" : "idle")
-                            .font(.dsMonoPt(10))
-                            .foregroundStyle(t.text3)
-                        if let badge = privacyVariant(a) {
-                            PrivacyBadge(badge)
-                        }
+                    if let badge = privacyVariant(a) {
+                        PrivacyBadge(badge)
                     }
-                    .padding(.top, 2)
                 }
-                Spacer()
-                if let usd = a.usageUSD {
-                    Text(String(format: "$%.2f", usd))
-                        .font(.dsMonoPt(12))
-                        .foregroundStyle(t.text2)
-                }
+                .padding(.top, 2)
             }
-            .dsCard()
+            Spacer()
+            if let usd = a.usageUSD {
+                Text(String(format: "$%.2f", usd))
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text2)
+            }
         }
-        .buttonStyle(.plain)
+        .dsCard()
     }
 
     private func privacyVariant(_ a: AgentVendorStatus) -> PrivacyBadgeVariant? {
