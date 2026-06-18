@@ -120,22 +120,33 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			pair.mu.Unlock()
 			hub.mu.Unlock()
 
-			log.Printf("relay: %s connected with code %s (paired)", role, code)
-
-			// Notify each peer of the other's public key (order-independent).
-			sendJSON(daemonConn, map[string]interface{}{
-				"type":          "peer_joined",
-				"role":          "phone",
-				"peerPublicKey": phoneKey,
-			})
-			sendJSON(phoneConn, map[string]interface{}{
-				"type":          "peer_joined",
-				"role":          "daemon",
-				"peerPublicKey": daemonKey,
-			})
-			// Flush any buffered messages to the peer that just joined.
-			for _, msg := range buffered {
-				sendJSON(conn, msg)
+			// A pair entry persists across disconnects (cleanup only fires after
+			// 24h of inactivity), so an existing pair does NOT guarantee the other
+			// role is actually connected — e.g. the daemon dropped and the phone is
+			// reconnecting alone. Sending peer_joined to a nil conn here panicked
+			// the handler (crashing this connection, not the process — but the
+			// resulting EOF made the client retry instantly with no backoff,
+			// looping forever). Only announce pairing once both sides are present;
+			// otherwise treat this connection like a fresh "first peer" wait.
+			if daemonConn != nil && phoneConn != nil {
+				log.Printf("relay: %s connected with code %s (paired)", role, code)
+				sendJSON(daemonConn, map[string]interface{}{
+					"type":          "peer_joined",
+					"role":          "phone",
+					"peerPublicKey": phoneKey,
+				})
+				sendJSON(phoneConn, map[string]interface{}{
+					"type":          "peer_joined",
+					"role":          "daemon",
+					"peerPublicKey": daemonKey,
+				})
+				// Flush any buffered messages to the peer that just joined.
+				for _, msg := range buffered {
+					sendJSON(conn, msg)
+				}
+			} else {
+				log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
+				sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
 			}
 		}
 
