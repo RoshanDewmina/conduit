@@ -61,7 +61,7 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 }
 
 // sendStatusUpdate sends agent status through the E2E relay.
-func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, spend float64) {
+func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, spend float64, hostName string) {
 	if r.client == nil || !r.client.isPaired() {
 		return
 	}
@@ -73,6 +73,7 @@ func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, s
 			"model":        model,
 			"sessionCount": sessions,
 			"usageUSD":     spend,
+			"hostName":     hostName,
 		},
 	}
 

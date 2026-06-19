@@ -2,7 +2,7 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-17 (IA section §4.1 refreshed to the shipped Inbox/Fleet/Activity/Settings tabs)
+Last updated: 2026-06-18 (IA §4.1 refreshed to the shipped **sidebar / New Chat** shell; tab bar deprecated)
 Target platform: iOS 26.0+ deployment (project.yml and Package.swift); verified on iOS 26.4 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
@@ -18,6 +18,59 @@ with this document, one of the two is wrong; do not let drift accumulate.
 The document is intentionally opinionated. Where multiple viable approaches
 exist, the chosen approach is named and the alternatives are recorded with
 the reason for rejection.
+
+---
+
+## 0.1 Current state snapshot (authoritative — 2026-06-18)
+
+> A new agent should be able to read **this section + §4.1** and know where the project
+> stands without opening any other doc. Where older sections below conflict with this
+> snapshot, **this snapshot wins** until they are rewritten. The former
+> `docs/CONDUIT_PROJECT_DOSSIER.md` is **archived** (`docs/_archive/`); this is its successor.
+
+**What Conduit is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
+OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
+approves; it is not where code is written. Three fused layers:
+1. **iOS app** — `Packages/ConduitKit/` (SwiftUI, 21 SPM targets). **Sidebar / New Chat shell** (see §4.1).
+2. **`conduitd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/conduitd/`.
+3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
+
+**Two transports to the daemon:** SSH (`conduitd serve` over a live session) **and** a blind
+**E2E relay** (`E2ERelayClient` ↔ `push-backend` relay) so the phone can dispatch/approve
+without holding an SSH session. Both re-run policy + budget gates.
+
+### V1 scope (locked 2026-06-18)
+- **V1 ships:** the sidebar/New Chat shell, SSH + E2E-relay transports, governed approvals (hook→policy→inbox→approve→audit), APNs notifications, fleet (≤3), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+- **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The SSH/self-host-first positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
+
+### Implemented (✅ verified in code / tests)
+- **Sidebar/New Chat IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
+- **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
+- **conduitd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
+- **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
+- **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, biometric gate + app-lock + audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop.
+
+### Partial / built-but-not-wired (🔶)
+- **Chat artifacts:** `ChatArtifactCard`/`ChatArtifactDetailView` (6 sub-cards, 14 tests) are the **intended richer artifact renderer** but are **not yet wired** — `NewChatTabView` currently renders live tool calls via its own `InlineChatToolCard`. **Decision (2026-06-18): keep both**; they are complementary (live tool-call card vs. run-artifact card), not duplicates. Wire `ChatArtifactCard` when run artifacts (diff/file/test/preview) flow into the transcript. `FleetThreadMapper` (4 tests) similarly built, awaiting fleet→thread wiring.
+- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, **live APNs device delivery** — not yet proven on device (see `docs/LIVE_LOOP_RUNBOOK.md`).
+- **`continue`/follow-up:** implemented for all vendors in `dispatch.go` (`continueArgv`) — **in V1 scope.** Re-verify each vendor's argv with the `vendor-cli-adapter-audit` skill before trusting (CLI flags drift).
+
+### Deferred to V2 — code retained, NOT deleted
+- **Hosted-cloud execution UI:** `ProviderDetailView`, `HostedProvisioningView`, `HostedRunnerStatusView`, `SelfHostVsHostedView` (orphaned, 0 refs) and the `agent-runner`/multi-cloud dispatch depth (Fly real; GCP needs an image; Lightsail bootstrap only). Compiles, stays in tree, unwired in V1. **Do not delete.**
+
+### Planned (not started)
+- First-class **Loop** primitive (`conduit_loop_start`/`conduit_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
+- Cross-vendor breadth beyond the four CLIs; open-sourcing `conduitd`.
+
+### Deprecated / removed
+- **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — replaced by the sidebar shell (§4.1).
+- Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
+- `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `CONDUIT_PROJECT_DOSSIER.md` → `docs/_archive/` (point-in-time, superseded).
+
+### Current priorities (in order)
+1. **Close the live loop on a real device:** hook→policy→inbox→approve→audit + **APNs delivery while the app is closed** + relay dispatch round-trip, end-to-end (the #1 unverified gap). Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
+2. **App Store Connect setup + TestFlight** (the main external ship gate).
+3. Optional V1 polish: wire `ChatArtifactCard` + `FleetThreadMapper`; empty/error/a11y sweep; pixel polish.
 
 ---
 
@@ -164,24 +217,32 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation
+### 4.1 Top-level navigation — **sidebar / New Chat shell** (shipped 2026-06-18)
 
-A four-tab `TabView` is the home. Each tab is a `NavigationStack` rooted in a
-single feature module. On iPad and external keyboard, a `NavigationSplitView`
-replaces the tab bar.
+The home is **not** a tab bar. It is a **sidebar/drawer shell** (ChatGPT/Claude-app
+style) whose default surface is **New Chat**. Source of truth:
+`AppFeature/AppRoot.swift` (`compactRoot` = drawer overlay on iPhone, `regularRoot`
+= `NavigationSplitView` on iPad), `ConduitSidebarView.swift`, `SidebarShellState.swift`.
 
-| Tab | Purpose | Always-on signal |
+Navigation is driven by `SidebarDestination`, not `enum Tab`:
+
+| Sidebar destination | Surface | Notes |
 |---|---|---|
-| **Inbox** | Pending approvals, completed runs, failures | Unread badge count, deep links |
-| **Fleet** | Hosts + active agent sessions/slots, reconnectable hosts | Connected/agent-running dot per slot |
-| **Activity** | Audit feed / "while you were away" history | Recent-event count |
-| **Settings** | Keys, AI providers, secrets, security | Sync status |
+| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | **Default first surface.** Durable, backed by `ChatConversationRepository`. |
+| **Thread** (`.thread(id)`) | `NewChatTabView(initialConversationID:)` | Resume a persisted conversation from the sidebar's Recent list. |
+| **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | Inbox is the system of record for approvals; History/Activity is a sheet off Inbox, not a root. |
+| **Fleet** (`.fleet`) | `FleetView` — hosts + active session slots (≤3) | Opens a slot's live block terminal as an intentional drill-in. |
+| **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security / Advanced / Account. |
 
-> **Shipped IA (2026-06):** the four tabs are **Inbox / Fleet / Activity / Settings**
-> (`AppFeature/AppRoot.swift` `enum Tab`). The **chat-based session surface is a *depth*
-> destination** reached from Fleet/Inbox, **not** a top-level tab. (The earlier
-> *Workspaces / Session / Inbox / Settings* layout described below historically has been
-> replaced — Fleet subsumes Workspaces, Session is a depth surface, Activity is new.)
+> **Deprecated:** the earlier `enum Tab { inbox, fleet, newchat, settings }` **tab bar**
+> and the `Inbox / Fleet / Activity / Settings` and `Inbox / Fleet / Control / Settings`
+> layouts. The `Tab` enum still exists in `AppRoot.swift` but is **vestigial** — only
+> `rootDestination(.inbox/.fleet)` is reached, from inside `sidebarDetail`. `Activity` and
+> `Control` are **not** root surfaces; Activity history lives in Recent Threads / the Inbox
+> History sheet / audit detail. Do **not** reintroduce a tab bar.
+>
+> The chat-based session/terminal surface is a **depth** destination reached from
+> Fleet/Inbox, never a root.
 
 ### 4.2 Session screen layout
 

@@ -11,17 +11,21 @@ public struct DispatchAgent: Identifiable {
     public let name: String
     public let cwd: String
     public let isOffline: Bool
+    public let hostID: String?
+    public let hostName: String?
 
     /// The agent kind after the "|" separator in id, e.g. "opencode", "claudeCode", "codex".
     public var vendor: String {
         id.split(separator: "|", maxSplits: 1).dropFirst().first.map(String.init) ?? ""
     }
 
-    public init(id: String, name: String, cwd: String, isOffline: Bool) {
+    public init(id: String, name: String, cwd: String, isOffline: Bool, hostID: String? = nil, hostName: String? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
         self.isOffline = isOffline
+        self.hostID = hostID
+        self.hostName = hostName
     }
 }
 
@@ -37,10 +41,13 @@ public struct NewChatTabView: View {
     let agents: [DispatchAgent]
     let runOutputStore: RunOutputStore
     let chatRepo: ChatConversationRepository?
+    let fleetStore: FleetStore
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
+    let initialConversationID: String?
 
     @State private var prompt: String = ""
+    @State private var isHistorical = false
     @State private var selectedAgentID: String = ""
     @State private var showAgentPicker = false
     @State private var showOptions = false
@@ -64,9 +71,7 @@ public struct NewChatTabView: View {
     // Persistence
     @State private var conversationID: String?
     @State private var recentConversations: [ChatConversation] = []
-    @State private var searchQuery: String = ""
-    @State private var searchResults: [ChatConversationSearchResult] = []
-    @State private var showRecentPanel = false
+    @State private var showComposer = false
 
     @Environment(\.conduitTokens) private var t
 
@@ -74,14 +79,18 @@ public struct NewChatTabView: View {
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
         chatRepo: ChatConversationRepository? = nil,
+        fleetStore: FleetStore,
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
-        onNewTask: @escaping () -> Void
+        onNewTask: @escaping () -> Void,
+        initialConversationID: String? = nil
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
         self.chatRepo = chatRepo
+        self.fleetStore = fleetStore
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
+        self.initialConversationID = initialConversationID
     }
 
     // MARK: - Derived run state (mirrors RunDetailView's, scoped to this thread's run)
@@ -112,54 +121,66 @@ public struct NewChatTabView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            header
-
-            if activeRun != nil {
-                ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        ForEach(turns) { turn in
-                            turnView(turn)
+        ZStack(alignment: .bottomTrailing) {
+            VStack(spacing: 0) {
+                if activeRun != nil || isHistorical {
+                    chatHeader
+                }
+                if activeRun != nil || isHistorical {
+                    ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
+                        VStack(alignment: .leading, spacing: 20) {
+                            ForEach(turns) { turn in
+                                turnView(turn)
+                            }
                         }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                }
-            } else if showRecentPanel && chatRepo != nil {
-                recentPanel
-            } else {
-                ZStack(alignment: .topLeading) {
-                    t.bg.ignoresSafeArea()
-                    TextEditor(text: $prompt)
-                        .font(.dsSansPt(16))
-                        .foregroundStyle(t.text)
-                        .tint(t.accent)
-                        .scrollContentBackground(.hidden)
                         .padding(.horizontal, 18)
-                        .padding(.top, 12)
-                    if prompt.isEmpty {
-                        Text("Describe a task or just say hi\u{2026}")
-                            .font(.dsSansPt(16))
-                            .foregroundStyle(t.text4)
-                            .padding(.horizontal, 22)
-                            .padding(.top, 20)
-                            .allowsHitTesting(false)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
                     }
+                } else if let repo = chatRepo {
+                    SessionsListView(
+                        chatRepo: repo,
+                        fleetStore: fleetStore,
+                        onOpenThread: { id in
+                            Task { await loadConversation(id: id) }
+                        }
+                    )
+                } else {
+                    fleetLandingContent
                 }
-
-                if showOptions {
-                    optionsPanel
+                if activeRun != nil {
+                    bottomBar
                 }
             }
-
-            bottomBar
+            .background(t.bg.ignoresSafeArea())
+            if activeRun == nil && !isHistorical {
+                Button {
+                    Haptics.medium()
+                    showComposer = true
+                } label: {
+                    DSIconView(.plus, size: 20, color: t.accentFg)
+                        .frame(width: 52, height: 52)
+                        .background(t.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .padding(.bottom, 28)
+            }
         }
-        .background(t.bg.ignoresSafeArea())
         .onAppear {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
             }
+        }
+        .task {
+            guard let cid = initialConversationID, turns.isEmpty else { return }
+            await loadConversation(id: cid)
+        }
+        .sheet(isPresented: $showComposer) {
+            composerSheet
+                .presentationDetents([.height(420), .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAgentPicker) {
             agentPickerSheet
@@ -187,30 +208,44 @@ public struct NewChatTabView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Active chat header (post-dispatch)
 
-    private var header: some View {
+    private var chatHeader: some View {
         HStack(spacing: 10) {
+            Button {
+                Haptics.selection()
+                resetForNewChat()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(t.text)
+                    .frame(width: 36, height: 36)
+                    .background(t.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
             Text(chatTitle)
-                .font(.dsDisplayPt(32, weight: .bold))
+                .font(.dsMonoPt(15, weight: .semibold))
                 .foregroundStyle(t.text)
                 .lineLimit(1)
-                .truncationMode(.tail)
             Spacer()
-            if chatRepo != nil && activeRun == nil {
-                Button {
-                    Haptics.selection()
-                    showRecentPanel.toggle()
-                } label: {
-                    DSIconView(.clock, size: 16, color: showRecentPanel ? t.accent : t.text2)
-                        .frame(width: 36, height: 36)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+            if isStreaming {
+                HStack(spacing: 5) {
+                    Circle().fill(t.ok).frame(width: 6, height: 6)
+                    Text("working")
+                        .font(.dsMonoPt(10))
+                        .foregroundStyle(t.ok)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Recent conversations")
-            }
-            if activeRun != nil {
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(t.surface2)
+                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+            } else {
                 Button {
                     Haptics.selection()
                     resetForNewChat()
@@ -227,6 +262,195 @@ public struct NewChatTabView: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    // MARK: - Fleet landing content (pre-dispatch)
+
+    private var fleetLandingContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if agents.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    DSIconView(.server, size: 32, color: t.text4)
+                    Text("No agents connected")
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text4)
+                    Text("Pair a host in Settings \u{2192} Relay pairing")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text4)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+            } else {
+                Text("AGENTS")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text4)
+                    .tracking(2)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                VStack(spacing: 0) {
+                    ForEach(agents) { agent in
+                        Button {
+                            selectedAgentID = agent.id
+                            showComposer = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                DSIconView(.server, size: 16, color: agent.isOffline ? t.text4 : t.text2)
+                                    .frame(width: 28, height: 28)
+                                    .background(t.surface2)
+                                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(agent.name)
+                                        .font(.dsMonoPt(13, weight: .medium))
+                                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
+                                        .lineLimit(1)
+                                    Text(agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                                        .font(.dsMonoPt(10))
+                                        .foregroundStyle(t.text4)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Circle()
+                                    .fill(agent.isOffline ? t.text4 : t.ok)
+                                    .frame(width: 7, height: 7)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        if agent.id != agents.last?.id {
+                            Rectangle().fill(t.border).frame(height: 0.5).padding(.leading, 20)
+                        }
+                    }
+                }
+                .background(t.surface)
+                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                .padding(.horizontal, 20)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Composer bottom sheet
+
+    private var composerSheet: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("New chat")
+                        .font(.dsDisplayPt(22, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Spacer()
+                    Button { showComposer = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(t.text2)
+                            .frame(width: 30, height: 30)
+                            .background(t.surface2)
+                            .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $prompt)
+                        .font(.dsSansPt(15))
+                        .foregroundStyle(t.text)
+                        .tint(t.accent)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 80, maxHeight: 140)
+                        .padding(10)
+                        .background(t.surface2)
+                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    if prompt.isEmpty {
+                        Text("Describe a task or just say hi\u{2026}")
+                            .font(.dsSansPt(15))
+                            .foregroundStyle(t.text4)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 18)
+                            .allowsHitTesting(false)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        showComposer = false
+                        showAgentPicker = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            DSStatusDot(tone: .accent, size: 7)
+                            Text(agentLabel)
+                                .font(.dsMonoPt(12, weight: .semibold))
+                                .foregroundStyle(t.text)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9))
+                                .foregroundStyle(t.text3)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(t.surface)
+                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        showComposer = false
+                        showAgentPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(machineLabel)
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(t.text3)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9))
+                                .foregroundStyle(t.text3)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(t.surface)
+                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                HStack {
+                    Button { withAnimation { showOptions.toggle() } } label: {
+                        HStack(spacing: 4) {
+                            Text("Options")
+                                .font(.dsMonoPt(11))
+                                .foregroundStyle(showOptions ? t.text : t.text3)
+                            Image(systemName: showOptions ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 9))
+                                .foregroundStyle(t.text3)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                if showOptions {
+                    optionsPanel
+                }
+                Button {
+                    let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    showComposer = false
+                    Task { await sendCurrentPrompt() }
+                } label: {
+                    Text("Send")
+                        .font(.dsMonoPt(14, weight: .semibold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(canSend ? t.accent : t.surfaceSunk)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+            }
+            .padding(20)
+        }
+        .navigationBarHidden(true)
     }
 
     // MARK: - Conversation turns
@@ -436,7 +660,7 @@ public struct NewChatTabView: View {
                 Task {
                     let conv = try? await chatRepo.createConversation(
                         title: chatTitle, agentID: agent.vendor.isEmpty ? agent.name : agent.vendor,
-                        hostName: agent.name, cwd: agent.cwd
+                        hostName: agent.name, hostID: agent.hostID, cwd: agent.cwd
                     )
                     conversationID = conv?.id
                     _ = try? await chatRepo.appendTurn(
@@ -498,115 +722,31 @@ public struct NewChatTabView: View {
     private func resetForNewChat() {
         activeRun = nil
         controlStore = nil
-        chatTitle = "new chat"
+        chatTitle = "new task"
         sentPrompt = ""
         turns = []
         prompt = ""
         followUpText = ""
         dispatchErrorMessage = nil
         conversationID = nil
+        isHistorical = false
     }
 
-    // MARK: - Recent / Search panel
-
-    private func loadRecent() {
-        guard let chatRepo else { return }
-        Task {
-            recentConversations = (try? await chatRepo.recent(limit: 50)) ?? []
-        }
-    }
-
-    private func performSearch() {
-        guard let chatRepo, !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            searchResults = []
-            return
-        }
-        Task {
-            searchResults = (try? await chatRepo.search(searchQuery)) ?? []
-        }
-    }
-
-    private var recentPanel: some View {
-        VStack(spacing: 0) {
-            // Search bar
-            HStack(spacing: 8) {
-                DSIconView(.search, size: 14, color: t.text3)
-                TextField("Search conversations\u{2026}", text: $searchQuery)
-                    .font(.dsSansPt(14))
-                    .foregroundStyle(t.text)
-                    .tint(t.accent)
-                    .onChange(of: searchQuery) { _, _ in performSearch() }
-                if !searchQuery.isEmpty {
-                    Button { searchQuery = ""; searchResults = [] } label: {
-                        DSIconView(.xmark, size: 12, color: t.text3)
-                    }
-                    .buttonStyle(.plain)
-                }
+    private func loadConversation(id cid: String) async {
+        guard let repo = chatRepo else { return }
+        guard let conv = try? await repo.conversation(id: cid) else { return }
+        let persisted = (try? await repo.turns(conversationID: cid)) ?? []
+        await MainActor.run {
+            chatTitle = conv.title
+            conversationID = cid
+            turns = []
+            for p in persisted {
+                runOutputStore.register(runId: p.runID, status: "exited")
+                runOutputStore.appendOutput(RunOutputParams(runId: p.runID, stream: "stdout", chunk: p.assistantText, seq: 0))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(t.surfaceSunk)
-            .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-
-            Divider().padding(.top, 8)
-
-            // Results
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    let items: [ChatConversationSearchResult] = searchQuery.isEmpty
-                        ? recentConversations.map { ChatConversationSearchResult(conversation: $0, snippet: $0.title) }
-                        : searchResults
-                    if items.isEmpty {
-                        VStack(spacing: 8) {
-                            Text(searchQuery.isEmpty ? "No conversations yet" : "No matches")
-                                .font(.dsSansPt(14))
-                                .foregroundStyle(t.text4)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
-                    } else {
-                        ForEach(items) { result in
-                            Button {
-                                showRecentPanel = false
-                                chatTitle = result.conversation.title
-                                conversationID = result.conversation.id
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(result.conversation.title)
-                                        .font(.dsSansPt(15, weight: .semibold))
-                                        .foregroundStyle(t.text)
-                                        .lineLimit(1)
-                                    Text(result.snippet)
-                                        .font(.dsSansPt(13))
-                                        .foregroundStyle(t.text3)
-                                        .lineLimit(2)
-                                    HStack(spacing: 6) {
-                                        Text(result.conversation.hostName)
-                                            .font(.dsMonoPt(10))
-                                            .foregroundStyle(t.text4)
-                                        Text("\u{00B7}")
-                                            .foregroundStyle(t.text4)
-                                        Text(result.conversation.agentID)
-                                            .font(.dsMonoPt(10))
-                                            .foregroundStyle(t.text4)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            Rectangle().fill(t.border).frame(height: 0.5).padding(.horizontal, 16)
-                        }
-                    }
-                }
-            }
+            turns = persisted.map { ChatTurn(prompt: $0.prompt, runId: $0.runID) }
+            isHistorical = true
         }
-        .background(t.bg.ignoresSafeArea())
-        .onAppear { loadRecent() }
     }
 
     /// Cheap heuristic title: first few words of the prompt, cleaned of whitespace runs.
@@ -634,13 +774,22 @@ public struct NewChatTabView: View {
                     .tracking(1.0)
                 Menu {
                     Button("Auto (agent default)") { selectedModel = "" }
-                    if selectedAgent?.vendor == "claudeCode" {
+                    if selectedAgent?.vendor == "claudeCode" || selectedAgent?.vendor == "openrouter" {
                         Button("Claude Sonnet 4") { selectedModel = "claude-sonnet-4" }
                         Button("Claude Haiku 4") { selectedModel = "claude-haiku-4" }
                     }
-                    if selectedAgent?.vendor == "opencode" {
+                    if selectedAgent?.vendor == "opencode" || selectedAgent?.vendor == "openrouter" {
                         Button("DeepSeek V4 Flash (free)") { selectedModel = "opencode/deepseek-v4-flash-free" }
                         Button("MiMo V2.5 (free)") { selectedModel = "opencode/mimo-v2.5-free" }
+                    }
+                    if selectedAgent?.vendor == "codex" || selectedAgent?.vendor == "openrouter" {
+                        Button("GPT-5 Codex") { selectedModel = "openai/gpt-5-codex" }
+                    }
+                    if selectedAgent?.vendor == "kimi" || selectedAgent?.vendor == "openrouter" {
+                        Button("Kimi K2.7 Code") { selectedModel = "kimi-code/kimi-for-coding" }
+                    }
+                    if selectedAgent?.vendor == "openrouter" {
+                        Button("Gemini 2.5 Pro") { selectedModel = "google/gemini-2.5-pro" }
                     }
                 } label: {
                     HStack {
@@ -683,36 +832,48 @@ public struct NewChatTabView: View {
                 t.bg.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(agents) { agent in
-                            let isSelected = agent.id == selectedAgentID
-                            Button {
-                                guard !agent.isOffline else { return }
-                                selectedAgentID = agent.id
-                                showAgentPicker = false
-                            } label: {
-                                HStack(spacing: 12) {
-                                    DSStatusDot(tone: agent.isOffline ? .off : .ok, size: 8)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(agent.name)
-                                            .font(.dsMonoPt(14, weight: .semibold))
-                                            .foregroundStyle(agent.isOffline ? t.text4 : t.text)
-                                        Text(agent.vendor.isEmpty ? agent.cwd : "\(agent.vendor) \u{00B7} \(agent.cwd)")
-                                            .font(.dsMonoPt(11))
-                                            .foregroundStyle(t.text3)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    if isSelected {
-                                        DSIconView(.check, size: 14, color: t.accent)
-                                    }
-                                }
+                        let machineGroups = Dictionary(grouping: agents, by: { $0.hostName ?? "Relay" })
+                        ForEach(machineGroups.keys.sorted(), id: \.self) { machine in
+                            Text(machine.uppercased())
+                                .font(.dsMonoPt(10))
+                                .foregroundStyle(t.text4)
+                                .tracking(1.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 20)
-                                .padding(.vertical, 14)
-                                .contentShape(Rectangle())
+                                .padding(.top, 16)
+                                .padding(.bottom, 6)
+                            let machineAgents = machineGroups[machine] ?? []
+                            ForEach(machineAgents) { agent in
+                                let isSelected = agent.id == selectedAgentID
+                                Button {
+                                    guard !agent.isOffline else { return }
+                                    selectedAgentID = agent.id
+                                    showAgentPicker = false
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        DSStatusDot(tone: agent.isOffline ? .off : .ok, size: 8)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(agent.name)
+                                                .font(.dsMonoPt(14, weight: .semibold))
+                                                .foregroundStyle(agent.isOffline ? t.text4 : t.text)
+                                            Text(agent.vendor.isEmpty ? agent.cwd : "\(agent.vendor) \u{00B7} \(agent.cwd)")
+                                                .font(.dsMonoPt(11))
+                                                .foregroundStyle(t.text3)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        if isSelected {
+                                            DSIconView(.check, size: 14, color: t.accent)
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 14)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(agent.isOffline)
+                                Rectangle().fill(t.border).frame(height: 0.5).padding(.horizontal, 20)
                             }
-                            .buttonStyle(.plain)
-                            .disabled(agent.isOffline)
-                            Rectangle().fill(t.border).frame(height: 0.5).padding(.horizontal, 20)
                         }
                     }
                     .padding(.top, 12)

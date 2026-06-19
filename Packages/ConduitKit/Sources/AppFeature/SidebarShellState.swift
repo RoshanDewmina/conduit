@@ -7,6 +7,7 @@ import PersistenceKit
 public enum SidebarDestination: Hashable, Sendable {
     case newChat
     case thread(id: String)
+    case sessions
     case needsAttention
     case fleet
     case settings
@@ -24,6 +25,7 @@ public enum SidebarSection: Hashable, Sendable {
 @MainActor @Observable
 public final class SidebarShellState {
     public var selectedDestination: SidebarDestination = .newChat
+    public var previousDestination: SidebarDestination? = nil
     public var isDrawerOpen = false
     public var searchQuery = ""
     public var recentThreads: [ChatConversation] = []

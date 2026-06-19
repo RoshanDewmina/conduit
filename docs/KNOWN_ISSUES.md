@@ -1,11 +1,11 @@
 # Conduit — Known Issues & Pre-Launch Audit (canonical)
 
-> **Compiled:** 2026-06-17 · branch `opencode/onboarding-redesign` (83 commits ahead of `master`).
+> **Compiled:** 2026-06-19 · branch `master` (updated).
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
 > `docs/PUBLISH_READINESS_CHECKLIST.md`; for product/architecture narrative use `ARCHITECTURE.md`
-> + `docs/CONDUIT_PROJECT_DOSSIER.md` (note: dossier is from 2026-06-11 and its IA section is stale —
-> tabs are now **Inbox / Fleet / Activity / Settings**, session surface is chat-based).
+> (§0.1 current-state snapshot + §4.1 IA). The current IA is the **sidebar / New Chat shell** —
+> not a tab bar (the old `CONDUIT_PROJECT_DOSSIER.md` is archived under `docs/_archive/`).
 >
 > **Method note:** the multi-agent fan-out repeatedly tripped the account session limit (parallel agents
 > burn quota fast), so **all dimensions were audited inline by a single agent** against current source —
@@ -19,6 +19,7 @@
 |---|---|---|
 | ConduitKit (SPM) | `cd Packages/ConduitKit && swift build` | ✅ clean |
 | ConduitKit tests | `cd Packages/ConduitKit && swift test` | ✅ **385 tests / 61 suites pass** |
+| Xcode app-target (iOS sim) | `XcodeBuildMCP build_sim` | ✅ **SUCCEEDED** 0 errors 0 warnings (2026-06-19) |
 | conduitd + policy (Go) | `go vet ./... && go build ./... && go test ./...` | ✅ 124 tests pass |
 | push-backend (Go) | `go vet/build/test ./...` | ✅ pass |
 | agent-runner (Go) | `go vet/build/test ./...` | ✅ pass |
@@ -162,10 +163,12 @@ perf issues.** The hot paths are correctly engineered:
 - `docs/remaining-work.md` is self-flagged SUPERSEDED yet still states a **wrong** "free Apple team"
   blocker — keep the banner, do not act on its blockers.
 
-**Proposed canonical set (keep + maintain):**
-`ARCHITECTURE.md`, `docs/agent-contract.md`, `docs/PUBLISH_READINESS_CHECKLIST.md` (launch state),
-`docs/CONDUIT_PROJECT_DOSSIER.md` (refresh IA), `docs/SECURITY.md` + `docs/legal/SECURITY_ARCHITECTURE.md`,
-`docs/ROADMAP.md`, **this file** (`KNOWN_ISSUES.md`), `docs/block-terminal-implementation.md`.
+**Canonical set (keep + maintain):**
+`ARCHITECTURE.md` (product/architecture + §0.1 current-state snapshot), `docs/agent-contract.md`,
+`docs/PUBLISH_READINESS_CHECKLIST.md` (launch state), `docs/SECURITY.md` +
+`docs/legal/SECURITY_ARCHITECTURE.md`, `docs/ROADMAP.md`, **this file** (`KNOWN_ISSUES.md`),
+`docs/block-terminal-implementation.md`. (`CONDUIT_PROJECT_DOSSIER.md` is **archived** —
+ARCHITECTURE.md §0.1 is its successor.)
 
 **Recommended archival** (move to `docs/_archive/` with a pointer — preserve, don't delete; do deliberately
 in a dedicated cleanup pass, checking inbound references first): `docs/current-state-audit.md`,
@@ -179,11 +182,24 @@ that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFIC
 ## 6. Remaining P0/P1/P2 after this audit
 
 - **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
-- **P1:** none confirmed. (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `conduitd` was
-  quarantined this session; `SnippetEditorView` + dead DS components were removed.)
+- **P1:** `e2eRouter.sendApproval` (`daemon/conduitd/e2e_router.go`) silently no-ops with zero logging when
+  `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live testing on a
+  real phone. A real escalation was dropped this way (audit showed `escalate`→`deny` exactly 120s apart,
+  i.e. the fail-closed timeout, not a human decision) while `conduitd.stderr.log` showed irregular relay
+  re-pairing right around that timestamp — the daemon and phone's websocket pairing flaps, and any
+  approval that fires inside a flap window vanishes with no trace beyond the eventual timeout-deny. A
+  retry once the relay had been stable for 30+ min succeeded normally (`escalate`→`approve` in 49s). The
+  loop's fail-closed behavior means this is safe, not silent-unsafe — but it's silent-*undiagnosable*: add
+  a log line on the early-return so a dropped send is distinguishable from "phone never got it" in
+  `conduitd.stderr.log` instead of only inferable from audit-log timing + re-pair-log correlation after
+  the fact.
+  (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `conduitd` was quarantined this session;
+  `SnippetEditorView` + dead DS components were removed.)
 - **P2:** (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8).
   *(a) Reduce-Motion ✓ fixed 53bac151. (c) PreviewFeature ✓ removed 59e7ae3d.*
 - **P3:** `BridgeAuditFeedView` plain-VStack laziness defeat (§4); 2 slow-type-check getters (§4); deliberate
-  doc archival pass already done this session (§5 archived 23 docs).
+  doc archival pass already done this session (§5 archived 23 docs). GitHub-repo-connector chip in the
+  new-chat composer (seen in Claude mobile's composer, studied during the 2026-06-18 sidebar/Sessions IA
+  redesign) is intentionally deferred — revisit when repo-scoped dispatch context is needed.
 - **Owner-gated (unchanged):** App Store Connect setup, physical-device APNs smoke test, live remote-host
   E2E, vanity domain/DNS — see `docs/PUBLISH_READINESS_CHECKLIST.md` §C/§D.

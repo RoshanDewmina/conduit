@@ -122,6 +122,7 @@ type relayStatusData struct {
 	Model        string
 	SessionCount int
 	UsageUSD     float64
+	HostName     string
 }
 
 // shimStatusData aggregates running shim sessions for one agent into a status
@@ -142,10 +143,9 @@ func (s *server) emitShimStatus() {
 	if s.e2e == nil {
 		return
 	}
+	hostName, _ := os.Hostname()
 	for _, agent := range []string{"claudeCode", "codex", "opencode"} {
 		d := s.shimStatusData(agent)
-		if d.SessionCount > 0 {
-			s.e2e.sendStatusUpdate(d.Agent, d.Model, d.SessionCount, d.UsageUSD)
-		}
+		s.e2e.sendStatusUpdate(d.Agent, d.Model, d.SessionCount, d.UsageUSD, hostName)
 	}
 }

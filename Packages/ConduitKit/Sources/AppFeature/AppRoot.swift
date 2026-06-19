@@ -177,6 +177,7 @@ public struct AppRoot: View {
     @State private var selectedFleetSlotID: UUID?
     @State private var e2eBridge: E2ERelayBridge?
     @State private var relayBridgeIsActive: Bool = false
+    @State private var relayHostName: String?
     @State private var sidebarState = SidebarShellState()
 
     private var isPro: Bool {
@@ -246,13 +247,17 @@ public struct AppRoot: View {
         #endif
     }
 
+    @ViewBuilder
     public var body: some View {
         #if DEBUG
         if let gallery = ProcessInfo.processInfo.environment["CONDUIT_GALLERY"] {
-            return AnyView(DebugGalleryView(route: gallery).conduitTokens())
+            DebugGalleryView(route: gallery).conduitTokens()
+        } else {
+            mainBody.environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
         }
+        #else
+        mainBody.environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
         #endif
-        return AnyView(mainBody.environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light))
     }
 
     private var mainBody: some View {
@@ -708,17 +713,30 @@ public struct AppRoot: View {
                     id: "\(slot.id.uuidString)|\(agent.agent)",
                     name: "\(agent.displayName) · \(slot.hostName)",
                     cwd: cwd,
-                    isOffline: offline || !(agent.loggedIn ?? true)
+                    isOffline: offline || !(agent.loggedIn ?? true),
+                    hostID: slot.hostID.uuidString,
+                    hostName: slot.hostName
                 )
             }
         }
         if e2eBridge != nil {
-            agents.append(DispatchAgent(
-                id: "relay|opencode",
-                name: "Relay Host",
-                cwd: "~",
-                isOffline: !relayBridgeIsActive
-            ))
+            for agentID in ["claudeCode", "codex", "opencode", "kimi"] {
+                let displayName: String
+                switch agentID {
+                case "claudeCode": displayName = "Claude Code"
+                case "codex": displayName = "Codex"
+                case "kimi": displayName = "Kimi"
+                default: displayName = "OpenCode"
+                }
+                agents.append(DispatchAgent(
+                    id: "relay|\(agentID)",
+                    name: "\(displayName) · Relay",
+                    cwd: "~",
+                    isOffline: !relayBridgeIsActive,
+                    hostID: nil,
+                    hostName: relayHostName
+                ))
+            }
         }
         return agents
     }
@@ -810,37 +828,59 @@ public struct AppRoot: View {
 
     @Environment(\.conduitTokens) private var t
 
+    private func openDrawer() {
+        Task { await sidebarState.loadRecent() }
+        sidebarState.isDrawerOpen = true
+    }
+
     private func compactRoot(env: AppEnvironment) -> some View {
         ZStack {
             t.bg.ignoresSafeArea()
-            // The detail MUST live in a NavigationStack or the `.toolbar` hamburger
-            // never renders — leaving the drawer unreachable and the app stuck on
-            // the default destination (New Chat) with no way to navigate.
             NavigationStack {
                 sidebarDetail(for: sidebarState.selectedDestination, env: env)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button {
-                                Task { await sidebarState.loadRecent() }
-                                sidebarState.isDrawerOpen = true
+                                openDrawer()
                             } label: {
                                 DSIconView(.list, size: 18, color: t.text)
+                                    .frame(width: 36, height: 36)
+                                    .background(t.surface2)
+                                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                             }
                         }
                     }
             }
             if sidebarState.isDrawerOpen {
-                Color.black.opacity(0.3)
+                Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .onTapGesture { sidebarState.isDrawerOpen = false }
-                ConduitSidebarView(state: sidebarState) { dest in
-                    sidebarState.isDrawerOpen = false
-                    sidebarState.selectedDestination = dest
+                HStack(spacing: 0) {
+                    ConduitSidebarView(state: sidebarState) { dest in
+                        sidebarState.isDrawerOpen = false
+                        sidebarState.previousDestination = sidebarState.selectedDestination
+                        sidebarState.selectedDestination = dest
+                    }
+                    .frame(maxWidth: 340)
+                    .background(t.surface)
+                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.25), radius: 16, x: 4, y: 0)
+                    Spacer(minLength: 0)
                 }
+                .ignoresSafeArea()
                 .transition(.move(edge: .leading))
                 .zIndex(1)
             }
         }
+        .gesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .global)
+                .onChanged { value in
+                    guard value.startLocation.x < 30, !sidebarState.isDrawerOpen else { return }
+                    if value.translation.width > 40 {
+                        openDrawer()
+                    }
+                }
+        )
         .animation(.easeInOut(duration: 0.25), value: sidebarState.isDrawerOpen)
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
@@ -855,6 +895,7 @@ public struct AppRoot: View {
             t.bg.ignoresSafeArea()
             NavigationSplitView {
                 ConduitSidebarView(state: sidebarState) { dest in
+                    sidebarState.previousDestination = sidebarState.selectedDestination
                     sidebarState.selectedDestination = dest
                 }
             } detail: {
@@ -947,6 +988,7 @@ public struct AppRoot: View {
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
                 chatRepo: env.chatRepo,
+                fleetStore: fleetStore,
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
@@ -982,7 +1024,8 @@ public struct AppRoot: View {
                             await slot.sessionViewModel.disconnect()
                         }
                     }
-                }
+                },
+                sidebarShellState: sidebarState
             )
         }
     }
@@ -995,29 +1038,67 @@ public struct AppRoot: View {
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
                 chatRepo: env.chatRepo,
+                fleetStore: fleetStore,
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
                 onNewTask: { sidebarState.selectedDestination = .newChat }
             )
-        case .thread:
-            // TODO: load the selected conversation by id — currently opens a fresh
-            // New Chat (NewChatTabView has no initial-conversation parameter yet).
+        case .thread(let id):
             NewChatTabView(
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
                 chatRepo: env.chatRepo,
+                fleetStore: fleetStore,
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
-                onNewTask: { sidebarState.selectedDestination = .newChat }
+                onNewTask: { sidebarState.selectedDestination = .newChat },
+                initialConversationID: id
+            )
+            .id(id)
+        case .sessions:
+            SessionsListView(
+                chatRepo: env.chatRepo,
+                fleetStore: fleetStore,
+                onOpenThread: { id in sidebarState.selectedDestination = .thread(id: id) }
             )
         case .needsAttention:
             rootDestination(.inbox, env: env)
         case .fleet:
             rootDestination(.fleet, env: env)
         case .settings:
-            rootDestination(.settings, env: env)
+            SettingsWithLibraryView(
+                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+                syncEngine: env.syncEngine,
+                backendURL: Self.pushBackendURL(),
+                auditRepository: env.auditRepo,
+                approvalRepository: approvalRepository,
+                sshKeyStore: env.keyStore,
+                daemonChannel: daemonChannel,
+                e2eRelayClient: env.e2eRelayClient,
+                quotaGuardStore: env.quotaGuardStore,
+                onResetApp: {
+                    let db = env.database
+                    Task {
+                        try? await db.wipeAll()
+                        await MainActor.run {
+                            UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
+                            appLockEnabled = false
+                            selectedTab = .inbox
+                            onboardingSeen = false
+                        }
+                    }
+                },
+                onEmergencyStop: {
+                    Task {
+                        for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
+                            await slot.sessionViewModel.disconnect()
+                        }
+                    }
+                },
+                sidebarShellState: sidebarState
+            )
         }
     }
 
@@ -1062,6 +1143,14 @@ public struct AppRoot: View {
         Task { @MainActor in
             for await active in bridge.$isActive.values {
                 relayBridgeIsActive = active
+            }
+        }
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: Notification.Name("conduitE2EStatusUpdate")) {
+                if let status = notification.userInfo?["status"] as? E2ERelayMessage.StatusData,
+                   let hn = status.hostName {
+                    relayHostName = hn
+                }
             }
         }
 
@@ -1410,6 +1499,9 @@ private struct SettingsWithLibraryView: View {
     var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
     var onEmergencyStop: (() -> Void)? = nil
+    // Sidebar back navigation — use @Bindable so the mutation goes through the
+    // observable directly, avoiding closure-capture staleness through deep view trees.
+    @Bindable var sidebarShellState: SidebarShellState
     @State private var showLimits = false
 
     var body: some View {
@@ -1423,7 +1515,10 @@ private struct SettingsWithLibraryView: View {
             daemonChannel: daemonChannel,
             e2eRelayClient: e2eRelayClient,
             onResetApp: onResetApp,
-            onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil
+            onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
+            onBack: {
+                sidebarShellState.selectedDestination = sidebarShellState.previousDestination ?? .newChat
+            }
         )
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showLimits) {

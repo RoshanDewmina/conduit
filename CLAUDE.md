@@ -1,14 +1,31 @@
 # CLAUDE.md — Conduit iOS codebase guide
 
+## Read first — current state & project skills
+
+- **Source of truth for what Conduit is and where it stands:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
+  — **§0.1 (current-state snapshot: implemented / partial / planned / deprecated / priorities)** and
+  **§4.1 (navigation)**. The app home is a **sidebar / New Chat shell** (durable chat threads), *not* a
+  tab bar; the old `enum Tab` is vestigial. `docs/CONDUIT_PROJECT_DOSSIER.md` is **archived** — don't cite it.
+- **Issue tracker:** `docs/KNOWN_ISSUES.md`. **Launch state:** `docs/PUBLISH_READINESS_CHECKLIST.md`.
+  **Invariants:** `docs/agent-contract.md`.
+- **Project skills** live in [`.claude/skills/`](.claude/skills/README.md) — invoke via the `Skill` tool.
+  Start a non-trivial task with **`conduit-context-onboarding`**; gate "done" with
+  **`conduit-verification-gate`**; touching `daemon/conduitd/dispatch.go` → **`vendor-cli-adapter-audit`**;
+  dispatching parallel work → **`conduit-parallel-handoff`**. See the table in `.claude/skills/README.md`.
+
 ## Execution model — Claude plans & verifies, opencode/deepseek executes
 
 **Owner's standing directive (2026-06-16):** In this repo Claude Code does the *thinking* — planning, decomposition, writing precise specs, and verifying results — and delegates all *code/file edits* to opencode `deepseek-v4-flash` agents. **Default to NOT editing source yourself; dispatch instead.**
 
 **Dispatch pattern (headless, non-interactive):**
 ```bash
-opencode run -m opencode/deepseek-v4-flash-free --variant high \
-  --dir "<repo-or-target-dir>" --dangerously-skip-permissions "<precise prompt>"
+opencode run -m openrouter/deepseek/deepseek-v4-flash --variant high \
+  --dir "<repo-or-target-dir>" "<precise prompt>"
 ```
+Use the paid OpenRouter `deepseek-v4-flash` model, not `opencode/deepseek-v4-flash-free` — the free
+tier hangs indefinitely on concurrent dispatches (observed: 6 parallel free-tier calls all stalled at
+the startup banner with zero output for 10+ minutes). `--dangerously-skip-permissions` is not a valid
+flag on the installed opencode CLI (1.17.7) — omit it.
 Run via Claude `Bash run_in_background` so many agents execute concurrently. Keep prompts surgically precise — deepseek is a weak executor; spell out exact files, boundaries, and acceptance checks.
 
 **Be aggressive about parallelism.** Decompose work so as many agents as possible run at once. The one hard rule: parallel agents must not write the same files. Isolate by (a) a distinct output file per agent, or (b) a separate git branch/worktree when mutating a shared tree. The `.dc.html` design board lives in `~/Downloads/Conduit GitHub repo/` (not a git repo) — parallelize there by file, one flow page per agent; a manifest-driven compiler re-stitches them into the combined board.

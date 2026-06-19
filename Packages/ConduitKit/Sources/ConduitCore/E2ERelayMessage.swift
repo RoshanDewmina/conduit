@@ -51,12 +51,14 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let model: String?
         public let sessionCount: Int
         public let usageUSD: Double?
+        public let hostName: String?
 
-        public init(agent: String, model: String?, sessionCount: Int, usageUSD: Double?) {
+        public init(agent: String, model: String?, sessionCount: Int, usageUSD: Double?, hostName: String? = nil) {
             self.agent = agent
             self.model = model
             self.sessionCount = sessionCount
             self.usageUSD = usageUSD
+            self.hostName = hostName
         }
     }
 

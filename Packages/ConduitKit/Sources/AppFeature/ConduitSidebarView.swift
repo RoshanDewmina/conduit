@@ -19,18 +19,15 @@ public struct ConduitSidebarView: View {
 
     public var body: some View {
         List {
+            profileSection
             newChatSection
             searchSection
             recentThreadsSection
-            if state.pendingApprovalCount > 0 {
-                needsAttentionSection
-            }
-            fleetSection
-            settingsSection
+            sessionsSection
         }
         .scrollIndicators(.hidden)
         .listStyle(.plain)
-        .background(t.bg.ignoresSafeArea())
+        .background(t.bg)
         .tint(t.accent)
         .task { await state.loadRecent() }
     }
@@ -38,12 +35,11 @@ public struct ConduitSidebarView: View {
     private var newChatSection: some View {
         Section {
             Button {
-                state.selectedDestination = .newChat
                 onNavigate(.newChat)
             } label: {
                 HStack(spacing: t.s3) {
                     DSIconView(.plus, size: 18, color: t.accentFg)
-                    Text("New Chat")
+                    Text("New Task")
                         .font(.dsMono(.body, weight: .medium))
                         .foregroundStyle(t.accentFg)
                 }
@@ -96,7 +92,6 @@ public struct ConduitSidebarView: View {
             } else {
                 ForEach(recentThreads) { thread in
                     Button {
-                        state.selectedDestination = .thread(id: thread.id)
                         onNavigate(.thread(id: thread.id))
                     } label: {
                         ThreadRow(thread: thread, isSelected: false)
@@ -107,32 +102,25 @@ public struct ConduitSidebarView: View {
             }
         } header: {
             if !recentThreads.isEmpty {
-                Text("RECENT")
+                Text("HISTORY")
                     .dsCapsStyle()
                     .foregroundStyle(t.text3)
             }
         }
     }
 
-    private var needsAttentionSection: some View {
+    private var profileSection: some View {
         Section {
             Button {
-                state.selectedDestination = .needsAttention
-                onNavigate(.needsAttention)
+                onNavigate(.settings)
             } label: {
                 HStack(spacing: t.s3) {
-                    DSIconView(.alert, size: 18, color: t.warn)
-                    Text("Needs Attention")
-                        .font(.dsMono(.callout, weight: .medium))
+                    PixelAvatar(seed: "conduit-user", size: 32)
+                    Text("Conduit")
+                        .font(.dsMono(.callout, weight: .semibold))
                         .foregroundStyle(t.text)
                     Spacer()
-                    Text("\(state.pendingApprovalCount)")
-                        .font(.dsMono(.caption2, weight: .bold))
-                        .foregroundStyle(t.accentFg)
-                        .padding(.horizontal, t.s2)
-                        .padding(.vertical, t.s1)
-                        .background(t.warn)
-                        .clipShape(Capsule())
+                    DSIconView(.settings, size: 16, color: t.text3)
                 }
                 .padding(.vertical, t.s1)
             }
@@ -141,19 +129,26 @@ public struct ConduitSidebarView: View {
         }
     }
 
-    private var fleetSection: some View {
+    private var sessionsSection: some View {
         Section {
             Button {
-                state.selectedDestination = .fleet
-                onNavigate(.fleet)
+                onNavigate(.newChat)
             } label: {
                 HStack(spacing: t.s3) {
-                    DSIconView(.server, size: 18, color: t.text)
-                    Text("Fleet")
+                    DSIconView(.terminal, size: 18, color: t.text)
+                    Text("Sessions")
                         .font(.dsMono(.callout, weight: .medium))
                         .foregroundStyle(t.text)
                     Spacer()
-                    if state.fleetSlotCount > 0 {
+                    if state.pendingApprovalCount > 0 {
+                        Text("\(state.pendingApprovalCount)")
+                            .font(.dsMono(.caption2, weight: .bold))
+                            .foregroundStyle(t.accentFg)
+                            .padding(.horizontal, t.s2)
+                            .padding(.vertical, t.s1)
+                            .background(t.warn)
+                            .clipShape(Capsule())
+                    } else if state.fleetSlotCount > 0 {
                         DSChip("\(state.fleetSlotCount)", tone: .ok, variant: .soft, size: .sm)
                     }
                 }
@@ -164,25 +159,6 @@ public struct ConduitSidebarView: View {
         }
     }
 
-    private var settingsSection: some View {
-        Section {
-            Button {
-                state.selectedDestination = .settings
-                onNavigate(.settings)
-            } label: {
-                HStack(spacing: t.s3) {
-                    DSIconView(.settings, size: 18, color: t.text2)
-                    Text("Settings")
-                        .font(.dsMono(.callout))
-                        .foregroundStyle(t.text2)
-                    Spacer()
-                }
-                .padding(.vertical, t.s1)
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-        }
-    }
 }
 
 private struct ThreadRow: View {

@@ -1068,6 +1068,10 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		ApprovalID: event.ApprovalID,
 	})
 
+	if event.RunID == "" {
+		event.RunID = s.dispatcher.runForCWD(event.CWD, event.Agent)
+	}
+
 	decisionCh := s.approvals.add(event)
 	if notify != nil {
 		if err := notify(event); err != nil {

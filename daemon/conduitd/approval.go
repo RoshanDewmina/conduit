@@ -33,6 +33,7 @@ type ApprovalEvent struct {
 	TouchesGit     bool     `json:"touchesGit,omitempty"`
 	TouchesNetwork bool     `json:"touchesNetwork,omitempty"`
 	MatchedRule    string   `json:"matchedRule,omitempty"`
+	RunID          string   `json:"runId,omitempty"`
 }
 
 type ApprovalDecision struct {

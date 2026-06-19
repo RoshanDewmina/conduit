@@ -3,7 +3,8 @@
 > Reconciled 2026-06-18 against **today's verified state** (branch `v1-chat-persistence-sidebar`).
 > Supersedes the status claims in `docs/_archive/remaining-work.md` (2026-05-28, stale: says "free team"),
 > and reconciles `ship-gate-owner-steps.md` + `PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
-> When those disagree, **this file + `CONDUIT_PROJECT_DOSSIER.md` win.**
+> When those disagree, **this file + `ARCHITECTURE.md` (§0.1 / §4.1) win.**
+> (`CONDUIT_PROJECT_DOSSIER.md` is archived under `docs/_archive/` — superseded by `ARCHITECTURE.md` §0.1.)
 
 Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated (one human action away)
 
@@ -20,6 +21,9 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 | Chat persistence + FTS search | ✅ v10 migrations, `ChatConversationRepository` with 18 tests | `ChatConversationRepositoryTests.swift` |
 | Chat artifact cards + detail views | ✅ 7 card types, detail panels, 14 rendering tests | `ChatArtifactCards.swift`, `ChatArtifactDetailView.swift` |
 | Sidebar shell (iPhone + iPad) | ✅ `ConduitSidebarView` + `SidebarShellState`, wired into `AppRoot.swift` | compact: drawer overlay; regular: `NavigationSplitView` |
+| **Sidebar redesign (2026-06-19)** | ✅ full-height drawer, unified Sessions home (All/Needs input/Ready for review tabs), relay hostname grouping in agent picker | Xcode app-target build SUCCEEDED, 385/385 tests pass |
+| **Live relay dispatch (2026-06-19)** | ✅ phone→relay→daemon dispatch proven live (opencode "Hi" → `dispatch-launched`) | PATH fix in launchd plist; `agentRunContinue` chain verified end-to-end |
+| **Push backend (2026-06-19)** | ✅ Cloud Run `conduit-push` (australia-southeast1) rebuilt from source, APNs keys wired, `APPROVAL_RELAY_SECRET` enforced (401 on unauth), conduitd sends Bearer token on `/register` | `roshan-agent-f1c2466d` project |
 | Fleet thread routing | ✅ `FleetThreadMapper` with 4 tests | maps host/agent/cwd to conversation |
 | Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop |
 | **Full live governed-approvals loop** | ✅ **proven on simulator** after fixing 2 bugs | `docs/test-runs/2026-06-12-live-loop-pass1.md` |
@@ -56,7 +60,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 
 ## D. Owner-gated — App Store / external (one human action away)
 
-- [ ] **D1 — Confirm APNs secrets on the *running* backend.** `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_KEY_PATH` must be set via `fly secrets set`.
+- [x] **D1 — Confirm APNs secrets on the *running* backend.** ✅ Set on Cloud Run `conduit-push` (australia-southeast1) + hermes-box `relay.env`. `APPROVAL_RELAY_SECRET` enforced.
 - [ ] **D2 — App Store Connect setup.** App record, Push + CloudKit + App Groups entitlements, IAP `dev.conduit.mobile.pro` Non-Consumable $14.99, privacy nutrition label, screenshots, reviewer notes.
 - [ ] **D3 — Physical-device validation** (= C2).
 - [ ] **D4 — Vanity domain + DNS.** Repoint `CONDUIT_PUSH_BACKEND_URL` off `sslip.io` to `push.conduit.dev`.

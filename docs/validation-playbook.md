@@ -1,5 +1,11 @@
 # Conduit Validation Playbook
 
+> **For the full guided bring-up + notification proof, use [`LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md).**
+> This playbook is the lower-level automated/manual test-case reference (TC-1..TC-7). Note: the
+> "Known limitations" table below is partly **stale** — allow-always now persists
+> (`policy-always.yaml`) and conduitd POSTs approvals to push-backend; the open gap is
+> **physical-device APNs while the app is closed** (runbook Phase 5c).
+
 Tests the hook → conduitd → iOS Inbox → Allow/Reject golden path.
 
 ## What's automated vs manual

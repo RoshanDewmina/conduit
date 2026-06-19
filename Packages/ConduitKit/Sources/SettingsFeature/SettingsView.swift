@@ -390,6 +390,7 @@ public struct SettingsView: View {
     public var onResetApp: (() -> Void)? = nil
     public var onShowLimits: (() -> Void)? = nil
     public var onEmergencyStop: (() -> Void)? = nil
+    public var onBack: (() -> Void)? = nil
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @State private var showResetConfirmation = false
@@ -411,7 +412,8 @@ public struct SettingsView: View {
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
-        onShowLimits: (() -> Void)? = nil
+        onShowLimits: (() -> Void)? = nil,
+        onBack: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -426,6 +428,7 @@ public struct SettingsView: View {
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
         self.onShowLimits = onShowLimits
+        self.onBack = onBack
     }
 
     public var body: some View {
@@ -456,6 +459,27 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
+        if let onBack {
+            HStack {
+                Button(action: onBack) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Back")
+                            .font(.dsMono(.callout, weight: .medium))
+                    }
+                    .foregroundStyle(t.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(t.surface2)
+                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+        }
         DSScreenHeader("settings", breadcrumb: "device & agent")
 
         if !statusHeaderAgents.isEmpty {

@@ -546,6 +546,25 @@ func (d *dispatcher) runStatus(runID string) string {
 	return ""
 }
 
+// runForCWD returns the ID of an active (running) dispatched run whose cwd and
+// agent match, so a hook-originated approval can be correlated back to the run
+// that triggered it. Returns "" when no active run matches.
+func (d *dispatcher) runForCWD(cwd, agent string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	want := expandHome(cwd)
+	wantAgent := normalizeAgentSource(agent)
+	for id, run := range d.runs {
+		if run.Status != "running" {
+			continue
+		}
+		if expandHome(run.CWD) == want && normalizeAgentSource(run.Agent) == wantAgent {
+			return id
+		}
+	}
+	return ""
+}
+
 // setBudget updates a run's cap and enforces it immediately. usd <= 0 removes the
 // cap (the run continues unconstrained).
 func (d *dispatcher) setBudget(runID string, usd float64) bool {
@@ -904,6 +923,7 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 		CWD:        run.CWD,
 		Risk:       1,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		RunID:      runID,
 	}
 	effect, rule := evalFn(event)
 	switch effect {

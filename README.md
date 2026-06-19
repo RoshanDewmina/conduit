@@ -67,6 +67,10 @@ Three rules keep the codebase honest:
 
 ## Status
 
+> **Current direction (2026-06-18):** the app home is a **sidebar / New Chat shell** with durable
+> chat threads — *not* a tab bar. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
+> and §4.1 for the authoritative picture; the milestone table below is historical milestone history.
+
 | M  | Title             | Status |
 |----|-------------------|--------|
 | M0 | Scaffolding       | ✅ verified |
