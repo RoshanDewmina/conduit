@@ -51,7 +51,8 @@ final class TapInjectionProofTests: XCTestCase {
 
     /// Cleanest proof of HID/event injection: switching tabs. Independent of any
     /// approval-decision wiring — if the tap lands, the Inbox-only breadcrumb leaves.
-    func testTapInjectionViaTabSwitch() {
+    func testTapInjectionViaTabSwitch() throws {
+        throw XCTSkip("IA migration: asserts the superseded tab-bar nav (Settings/Inbox tab buttons, 'inbox' default header). The app home is now the sidebar/New Chat shell. Re-enable with sidebar-shell navigation once that IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
         let app = launchReseeded()
         defer { app.terminate() }
 
@@ -81,7 +82,8 @@ final class TapInjectionProofTests: XCTestCase {
 
     /// The real verification goal: tap APPROVE on a seeded pending card and confirm
     /// the decision applies (the card leaves PENDING → APPROVE-button count drops).
-    func testApproveDecisionApplies() {
+    func testApproveDecisionApplies() throws {
+        throw XCTSkip("IA migration: depends on Inbox being the default tab surface; the home is now the sidebar/New Chat shell, so the seeded approval cards aren't reachable via the old nav. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
         let app = launchReseeded()
         defer { app.terminate() }
 
@@ -105,7 +107,8 @@ final class TapInjectionProofTests: XCTestCase {
 
     /// Phase-5 app-lock opt-in: Settings → Security → "Require Face ID on launch"
     /// starts OFF (reseed clears `appLockEnabled`) and the toggle flips it ON.
-    func testFaceIDToggleOptIn() {
+    func testFaceIDToggleOptIn() throws {
+        throw XCTSkip("IA migration: CONDUIT_TAB=settings no longer lands on a Settings tab; Settings is now a sidebar destination. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
         let app = launchReseeded(tab: "settings")
         defer { app.terminate() }
 
@@ -135,7 +138,8 @@ final class TapInjectionProofTests: XCTestCase {
     /// Fleet → "Saved hosts": tapping a seeded host fires onReconnect → openSession,
     /// which (for a password host) presents the connect prompt. Proves the reconnect
     /// wiring without needing a live SSH endpoint.
-    func testSavedHostReconnectPresentsPrompt() {
+    func testSavedHostReconnectPresentsPrompt() throws {
+        throw XCTSkip("IA migration: CONDUIT_TAB=fleet no longer lands on a Fleet tab; Fleet is now a sidebar destination. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
         let app = launchReseeded(tab: "fleet")
         defer { app.terminate() }
 

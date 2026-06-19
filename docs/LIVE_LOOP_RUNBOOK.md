@@ -29,9 +29,16 @@ agent PreToolUse hook ─▶ ~/.conduit/conduitd.sock ─▶ policyEngine.evalua
 hook blocks ≤120s ◀── decision relayed back ◀── phone Approve/Reject (Inbox / lock-screen / Watch)
 ```
 
+> ⚠️ **V1 TRANSPORT = E2E RELAY (corrected 2026-06-19).** V1 does **not** use SSH. The phone pairs to
+> the `push-backend` relay; the resident `conduitd` connects to the same relay; phone ↔ relay ↔ daemon,
+> end-to-end encrypted. **Phase 5b (relay) is the actual V1 loop — do it first.** The SSH phases below
+> (Phase 3, `DaemonChannel`/`conduitd serve`) are a **legacy/secondary harness** kept because the SSH
+> path is already proven and convenient for local sim testing; they are *not* the V1 story. (This runbook
+> still leads with SSH for historical reasons — reorder pending.)
+
 **Two transports — both re-run policy + budget gates:**
-- **SSH** — the app opens an SSH session and launches `conduitd serve`, which *attaches* to the resident `conduitd daemon`. Approvals relay over that channel. Code: `DaemonChannel` (`SSHTransport/`), armed in `AppRoot.startSession` / `SessionViewModel.onReconnected`.
-- **E2E relay** — the phone pairs to `push-backend`'s relay (`E2ERelayClient` + `E2ERelayBridge`), so it can dispatch/approve **without** holding an SSH session. Decisions route through `ApprovalRelay.forwardDecisionOnly`.
+- **E2E relay (V1):** the phone (`E2ERelayClient` + `E2ERelayBridge`) pairs to `push-backend`'s relay; the resident daemon connects host-side; decisions route through `ApprovalRelay.forwardDecisionOnly`. **No phone-held SSH session.** This is the path V1 ships.
+- **SSH (legacy/secondary):** the app opens an SSH session and launches `conduitd serve`, which *attaches* to the resident `conduitd daemon`. Code: `DaemonChannel` (`SSHTransport/`), armed in `AppRoot.startSession` / `SessionViewModel.onReconnected`. Useful as a local proven harness; not the V1 transport.
 
 **Notifications:** `push-backend` holds the APNs `.p8` and POSTs to APNs when an `ask` escalates. The device registers its APNs token via `Conduit/ConduitApp.swift` → `Notifications.registerDeviceToken(sessionID:backendURL:)`. **The `sessionId` used at registration MUST equal the one in the relay decision POST** (`DeviceIdentity.sessionID()`) or the backend can't map token↔session (this was MAJOR-8).
 

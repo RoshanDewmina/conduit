@@ -1,5 +1,11 @@
 # Conduit — Project Dossier (State of the Project)
 
+> ⚠️ **ARCHIVED 2026-06-18 — superseded by [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §0.1 + §4.1.**
+> This dossier was compiled 2026-06-11 and predates the **sidebar / New Chat IA pivot**; its
+> "tabs Inbox/Fleet/Activity/Settings" navigation and several §4 gap statuses are now stale.
+> Kept for the strategy/market analysis (§5–§9) and historical context only. For current state,
+> read `ARCHITECTURE.md`. Do not cite this file as source of truth.
+
 > **Compiled:** 2026-06-11 · branch `feat/product-depth-sprint` (13 commits ahead of `master`, 0 behind).
 > **Purpose:** a single, self-contained briefing for an external agent (or human) with **zero prior context**, so they can (a) understand the product and codebase deeply, (b) advise on strategic direction, and (c) run grounded competitor research. Every architectural claim is backed by source `file:line`; every market claim carries a confidence tag and (where known) a source URL. **Verification status is flagged** — and where this dossier corrects an older in-repo audit doc, it says so explicitly.
 >

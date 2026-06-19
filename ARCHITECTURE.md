@@ -21,7 +21,7 @@ the reason for rejection.
 
 ---
 
-## 0.1 Current state snapshot (authoritative — 2026-06-18)
+## 0.1 Current state snapshot (authoritative — 2026-06-19)
 
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
@@ -35,13 +35,22 @@ approves; it is not where code is written. Three fused layers:
 2. **`conduitd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/conduitd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
-**Two transports to the daemon:** SSH (`conduitd serve` over a live session) **and** a blind
-**E2E relay** (`E2ERelayClient` ↔ `push-backend` relay) so the phone can dispatch/approve
-without holding an SSH session. Both re-run policy + budget gates.
+**V1 transport = the blind E2E relay.** The phone (`E2ERelayClient` + `E2ERelayBridge`) pairs to
+the `push-backend` relay, and the resident `conduitd` connects to the same relay on the host side;
+phone ↔ **relay** ↔ daemon. The relay is end-to-end encrypted — it forwards ciphertext it can't read.
+**The phone never holds an SSH session in V1.** A second transport — SSH (`conduitd serve` over a live
+session, `DaemonChannel`) — still exists in code but is **legacy / power-user, NOT the V1 path**; do
+not frame V1 around it. Both transports re-run policy + budget gates.
 
-### V1 scope (locked 2026-06-18)
-- **V1 ships:** the sidebar/New Chat shell, SSH + E2E-relay transports, governed approvals (hook→policy→inbox→approve→audit), APNs notifications, fleet (≤3), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
-- **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The SSH/self-host-first positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
+> **Resilience implication:** because the **resident daemon** holds session/approval state and the phone
+> only attaches via the relay (waking on APNs), "the agent survives when the phone disconnects" is a
+> property of the architecture, not a feature to add. This is why Mosh-style roaming transport (Moshi)
+> and cloud session-migration (Omnara) are largely **non-gaps** for Conduit — the phone was never the
+> session holder.
+
+### V1 scope (locked 2026-06-18; transport corrected 2026-06-19)
+- **V1 ships:** the sidebar/New Chat shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, fleet (≤3), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+- **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
 
 ### Implemented (✅ verified in code / tests)
 - **Sidebar/New Chat IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
@@ -49,10 +58,15 @@ without holding an SSH session. Both re-run policy + budget gates.
 - **conduitd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
 - **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, biometric gate + app-lock + audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop.
+- **V1 reach work (2026-06-19, code-complete; device verification pending):**
+  - **opencode approval gating** — conduitd-dispatched `opencode` runs now gate every tool call through the policy engine via a `CONDUIT_GATE=1`-guarded PreToolUse hook (the guard means the owner's interactive opencode sessions are unaffected). Live-verified against `~/.conduit/audit.log` (auto-allow + auto-deny, hash-chain intact). Closes the prior governance bypass where only Claude Code gated. `daemon/conduitd/dispatch.go` + `docs/opencode-conduit-hook.sh`.
+  - **Push-driven Live Activity** — `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New `daemon/push-backend/liveactivity.go` ActivityKit sender with the strict APNs contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). **APNs payload privacy:** the alert body no longer carries the raw command (`body := ev.Command` removed) — redacted risk/tool summary only; full detail fetched in-app post-unlock.
+  - **Cold-decision gate** — `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a killed-app Live Activity forwards to conduitd (previously the singleton creds were empty cold → decision dropped).
+  - **Watch WCSession polish** — `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gains `.accessoryRectangular` + VoiceOver labels.
 
 ### Partial / built-but-not-wired (🔶)
 - **Chat artifacts:** `ChatArtifactCard`/`ChatArtifactDetailView` (6 sub-cards, 14 tests) are the **intended richer artifact renderer** but are **not yet wired** — `NewChatTabView` currently renders live tool calls via its own `InlineChatToolCard`. **Decision (2026-06-18): keep both**; they are complementary (live tool-call card vs. run-artifact card), not duplicates. Wire `ChatArtifactCard` when run artifacts (diff/file/test/preview) flow into the transcript. `FleetThreadMapper` (4 tests) similarly built, awaiting fleet→thread wiring.
-- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, **live APNs device delivery** — not yet proven on device (see `docs/LIVE_LOOP_RUNBOOK.md`).
+- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, **live APNs device delivery** — not yet proven on device (see `docs/LIVE_LOOP_RUNBOOK.md`). The Live Activity **push token → push-backend registration** is the one piece of the 2026-06-19 push work still to wire: it must route through a new `DaemonChannel.registerActivityToken` RPC → conduitd (which holds `APPROVAL_RELAY_SECRET`), **not** the app holding the Tier-1 secret. Until then the push-driven Live Activity is built but unregistered.
 - **`continue`/follow-up:** implemented for all vendors in `dispatch.go` (`continueArgv`) — **in V1 scope.** Re-verify each vendor's argv with the `vendor-cli-adapter-audit` skill before trusting (CLI flags drift).
 
 ### Deferred to V2 — code retained, NOT deleted
