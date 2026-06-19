@@ -84,6 +84,12 @@ public final class PhoneWatchConnector {
     private let delegate = WatchSessionDelegate()
     private var tasks: [Task<Void, Never>] = []
 
+    // Live pending-approval count, updated by the approval-observer task and read by the
+    // session-status task so both consumers share the same value without a second query.
+    private var livePendingCount: Int = 0
+    // Timestamp captured once when the session connects; used for true uptime.
+    private var connectedSince: TimeInterval? = nil
+
     // Callbacks set by AppRoot per-session
     public var onEmergencyStop: (@Sendable () async -> Void)?
     public var onRunSnippet: (@Sendable (String) async -> Void)?
@@ -102,30 +108,40 @@ public final class PhoneWatchConnector {
     ) {
         stopSyncing()
         self.onDecision = onDecision
+        connectedSince = sessionViewModel.status == .connected
+            ? Date().timeIntervalSinceReferenceDate
+            : nil
 
-        // 1. Sync pending approvals whenever DB changes
-        tasks.append(Task { [delegate] in
+        // 1. Sync pending approvals whenever DB changes; track live count for status task.
+        tasks.append(Task { [delegate, weak self] in
             do {
                 for try await approvals in await approvalRepo.observe() {
                     guard !Task.isCancelled else { break }
-                    delegate.sendApprovals(approvals.filter { $0.isPending })
+                    let pending = approvals.filter { $0.isPending }
+                    self?.livePendingCount = pending.count
+                    delegate.sendApprovals(pending)
                 }
             } catch {}
         })
 
-        // 2. Push session status every 5s
-        tasks.append(Task { [delegate, weak sessionViewModel] in
+        // 2. Push session status every 5 s, including live agent and pending-count data.
+        tasks.append(Task { [delegate, weak self, weak sessionViewModel] in
             while !Task.isCancelled {
-                if let vm = sessionViewModel {
+                if let vm = sessionViewModel, let self {
+                    let nowConnected = vm.status == .connected
+                    // Capture connect timestamp on first detection of connected state.
+                    if nowConnected && self.connectedSince == nil {
+                        self.connectedSince = Date().timeIntervalSinceReferenceDate
+                    } else if !nowConnected {
+                        self.connectedSince = nil
+                    }
                     let status = WatchSessionStatus(
                         hostName: vm.host.name,
                         hostname: vm.host.hostname,
-                        isConnected: vm.status == .connected,
-                        agentActive: false,  // future: track agent state
-                        pendingCount: 0,     // filled by approval count separately
-                        connectedAt: vm.status == .connected
-                            ? Date().timeIntervalSinceReferenceDate
-                            : nil
+                        isConnected: nowConnected,
+                        agentActive: vm.isExecutingUnified,
+                        pendingCount: self.livePendingCount,
+                        connectedAt: nowConnected ? self.connectedSince : nil
                     )
                     delegate.sendSessionStatus(status)
                 }
@@ -195,6 +211,8 @@ public final class PhoneWatchConnector {
     public func stopSyncing() {
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
+        livePendingCount = 0
+        connectedSince = nil
         onEmergencyStop = nil
         onRunSnippet = nil
         onDecision = nil

@@ -32,9 +32,19 @@ struct InboxCountProvider: TimelineProvider {
 }
 
 struct InboxCountWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: InboxCountEntry
 
     var body: some View {
+        switch family {
+        case .accessoryRectangular:
+            rectangularView
+        default:
+            circularView
+        }
+    }
+
+    private var circularView: some View {
         ZStack {
             if entry.pendingCount > 0 {
                 Circle()
@@ -52,6 +62,32 @@ struct InboxCountWidgetView: View {
             }
         }
         .containerBackground(.black, for: .widget)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var rectangularView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: entry.pendingCount > 0 ? "tray.fill" : "checkmark.circle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(entry.pendingCount > 0 ? Color.orange : Color.green)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Conduit")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(entry.pendingCount > 0 ? "\(entry.pendingCount) pending" : "All clear")
+                    .font(.caption2)
+                    .foregroundStyle(entry.pendingCount > 0 ? Color.orange : Color.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .containerBackground(.black, for: .widget)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        entry.pendingCount == 0
+            ? "Conduit inbox clear"
+            : "Conduit inbox, \(entry.pendingCount) pending approval\(entry.pendingCount == 1 ? "" : "s")"
     }
 }
 
@@ -64,6 +100,6 @@ struct InboxCountWidget: Widget {
         }
         .configurationDisplayName("Conduit Inbox")
         .description("Shows pending approval count.")
-        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+        .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryRectangular])
     }
 }
