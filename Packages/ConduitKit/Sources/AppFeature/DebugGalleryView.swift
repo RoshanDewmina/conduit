@@ -63,6 +63,7 @@ struct DebugGalleryView: View {
         case "shell-fleet":    ShellFleetGalleryScreen()
         case "shell-settings": ShellSettingsGalleryScreen()
         case "shell-sidebar":  ShellSidebarGalleryScreen()
+        case "scaffold-demo":  ScaffoldDemoScreen()
         case "features":       FeaturesGalleryScreen()
         case "proof":          ProofCardGalleryScreen()
         case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
@@ -1806,6 +1807,27 @@ private struct ShellSettingsGalleryScreen: View {
             viewModel: viewModel,
             onResetApp: {}
         )
+    }
+}
+
+private struct ScaffoldDemoScreen: View {
+    @Environment(\.conduitTokens) private var t
+    var body: some View {
+        DSScreen("Audit log", subtitle: "Every decision, hash-chained", onBack: {}) {
+            DSIconButton(.clock) {}
+        } content: {
+            ForEach(0..<4, id: \.self) { i in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("git push origin main")
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text)
+                    Text(i % 2 == 0 ? "auto-allowed · low risk" : "approved · 12:0\(i) PM")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text2)
+                }
+                .dsCard()
+            }
+        }
     }
 }
 
