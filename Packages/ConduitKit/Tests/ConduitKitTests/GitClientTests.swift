@@ -69,4 +69,12 @@ struct GitClientTests {
         // Injection attempt stays inside the quoted literal.
         #expect(GitClient.shellQuote("a'; rm -rf /") == "'a'\\''; rm -rf /'")
     }
+
+    @Test("numstat totals include text files and keep binary files countable")
+    func parseNumstat() {
+        let summary = GitClient.parseNumstat("12\t3\tSources/App.swift\n-\t-\tAssets/logo.png\n0\t1\tREADME.md\n")
+        #expect(summary.additions == 12)
+        #expect(summary.deletions == 4)
+        #expect(summary.changedFiles == 3)
+    }
 }

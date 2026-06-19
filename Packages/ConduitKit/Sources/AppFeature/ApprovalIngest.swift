@@ -29,21 +29,51 @@ public actor ChatRunPersistenceSink {
             status = .running
         }
         let text = outputBuffer.removeValue(forKey: params.runId) ?? ""
-        Task { try? await chatRepo.updateTurnOutput(runID: params.runId, assistantText: text, status: status) }
+        Task {
+            try? await chatRepo.updateTurnOutput(runID: params.runId, assistantText: text, status: status)
+            if status == .completed || status == .failed {
+                try? await chatRepo.updateArtifactStatuses(
+                    runID: params.runId,
+                    status: status == .completed ? .done : .failed
+                )
+            }
+        }
     }
 
     public func handleToolStart(_ params: ToolStartParams) {
-        guard !params.runId.isEmpty else { return }
+        handleArtifact(AgentArtifactEvent(
+            artifactID: params.toolId,
+            runID: params.runId,
+            kind: "tool",
+            title: params.toolName,
+            payloadJSON: params.inputJSON
+        ))
+    }
+
+    public func handleArtifact(_ event: AgentArtifactEvent) {
+        guard !event.runID.isEmpty, !event.artifactID.isEmpty else { return }
         Task {
-            if let turn = try? await chatRepo.turnByRunID(params.runId) {
+            if let turn = try? await chatRepo.turnByRunID(event.runID) {
                 let artifact = ChatArtifact(
-                    conversationID: turn.conversationID, turnID: turn.id,
-                    runID: params.runId, kind: .tool, title: params.toolName,
-                    summary: nil, payloadJSON: params.inputJSON, status: .running
+                    id: event.artifactID,
+                    conversationID: turn.conversationID,
+                    turnID: turn.id,
+                    runID: event.runID,
+                    kind: ChatArtifact.Kind(rawValue: event.kind) ?? .tool,
+                    title: event.title,
+                    summary: event.summary,
+                    payloadJSON: Self.persistablePayload(event.payloadJSON),
+                    status: ChatArtifact.Status(rawValue: event.status) ?? .running
                 )
                 try? await chatRepo.upsertArtifact(artifact)
             }
         }
+    }
+
+    private static func persistablePayload(_ payload: String) -> String {
+        let limit = 64 * 1024
+        guard payload.utf8.count > limit else { return payload }
+        return String(payload.prefix(limit)) + "\\n[artifact payload truncated]"
     }
 
     public func handleApprovalPending(_ params: ApprovalPendingParams) {
@@ -85,6 +115,10 @@ public actor ApprovalIngest {
                 if case .toolStart(let params) = event {
                     await runOutputStore?.appendToolStart(params)
                     await chatPersistenceSink?.handleToolStart(params)
+                    continue
+                }
+                if case .artifact(let params) = event {
+                    await chatPersistenceSink?.handleArtifact(params)
                     continue
                 }
                 if case .approvalPending(let params) = event {

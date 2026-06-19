@@ -13,6 +13,7 @@ public struct ChatHeaderView: View {
     let onBack: (() -> Void)?
     let onDisconnect: (() -> Void)?
     let onPortForward: (() -> Void)?
+    let onOpenWorkspace: (() -> Void)?
     let onReconnect: (() -> Void)?
     // P2.4: Budget burn display
     var budgetBurn: String?
@@ -27,6 +28,7 @@ public struct ChatHeaderView: View {
         onBack: (() -> Void)? = nil,
         onDisconnect: (() -> Void)? = nil,
         onPortForward: (() -> Void)? = nil,
+        onOpenWorkspace: (() -> Void)? = nil,
         onReconnect: (() -> Void)? = nil,
         budgetBurn: String? = nil
     ) {
@@ -37,6 +39,7 @@ public struct ChatHeaderView: View {
         self.onBack = onBack
         self.onDisconnect = onDisconnect
         self.onPortForward = onPortForward
+        self.onOpenWorkspace = onOpenWorkspace
         self.onReconnect = onReconnect
         self.budgetBurn = budgetBurn
     }
@@ -98,6 +101,18 @@ public struct ChatHeaderView: View {
             }
 
             AgentBadge(state)
+
+            if let onOpenWorkspace {
+                Button(action: onOpenWorkspace) {
+                    Image(systemName: "rectangle.3.group")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(t.text2)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open workspace")
+            }
 
             if onDisconnect != nil || onPortForward != nil || onReconnect != nil {
                 Menu {

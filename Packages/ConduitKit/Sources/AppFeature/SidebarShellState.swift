@@ -9,6 +9,7 @@ public enum SidebarDestination: Hashable, Sendable {
     case thread(id: String)
     case sessions
     case needsAttention
+    case governance
     case fleet
     case settings
 }
@@ -18,6 +19,7 @@ public enum SidebarSection: Hashable, Sendable {
     case search
     case recentThreads
     case needsAttention
+    case governance
     case fleet
     case settings
 }

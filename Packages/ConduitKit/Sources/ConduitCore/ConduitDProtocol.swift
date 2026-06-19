@@ -287,6 +287,52 @@ public struct ToolStartParams: Codable, Sendable {
     }
 }
 
+/// A durable, vendor-neutral artifact emitted by conduitd. The same identifier
+/// is reused while an artifact moves from running to done/failed, letting the
+/// iOS history store upsert without a schema migration.
+public struct AgentArtifactEvent: Codable, Sendable, Hashable {
+    public let artifactID: String
+    public let runID: String
+    public let kind: String
+    public let title: String
+    public let summary: String?
+    public let payloadJSON: String
+    public let status: String
+
+    public init(
+        artifactID: String,
+        runID: String,
+        kind: String,
+        title: String,
+        summary: String? = nil,
+        payloadJSON: String = "{}",
+        status: String = "running"
+    ) {
+        self.artifactID = artifactID
+        self.runID = runID
+        self.kind = kind
+        self.title = title
+        self.summary = summary
+        self.payloadJSON = payloadJSON
+        self.status = status
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case artifactID, runID, kind, title, summary, payloadJSON, status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        artifactID = try c.decodeIfPresent(String.self, forKey: .artifactID) ?? ""
+        runID = try c.decodeIfPresent(String.self, forKey: .runID) ?? ""
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "tool"
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Tool"
+        summary = try c.decodeIfPresent(String.self, forKey: .summary)
+        payloadJSON = try c.decodeIfPresent(String.self, forKey: .payloadJSON) ?? "{}"
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "running"
+    }
+}
+
 public struct SessionDiscoveredParams: Codable, Sendable {
     public let sessionId: String
     public let tmuxName: String?
@@ -310,6 +356,7 @@ public enum DaemonEvent: Sendable {
     case runOutput(RunOutputParams)
     case runStatus(RunStatusParams)
     case toolStart(ToolStartParams)
+    case artifact(AgentArtifactEvent)
     case sessionDiscovered(SessionDiscoveredParams)
     case pong
     case unknown(method: String)
@@ -356,6 +403,12 @@ extension DaemonEvent {
                   let p = try? JSONDecoder().decode(ToolStartParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .toolStart(p)
+        case "agent.artifact":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(AgentArtifactEvent.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .artifact(p)
         case "session.discovered":
             guard let params = dict["params"] as? [String: Any],
                   let paramsData = try? JSONSerialization.data(withJSONObject: params),

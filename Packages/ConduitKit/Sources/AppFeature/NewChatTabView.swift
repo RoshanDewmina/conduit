@@ -44,6 +44,7 @@ public struct NewChatTabView: View {
     let fleetStore: FleetStore
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
+    let onOpenWorkspace: (DispatchAgent?) -> Void
     let initialConversationID: String?
 
     @State private var prompt: String = ""
@@ -82,6 +83,7 @@ public struct NewChatTabView: View {
         fleetStore: FleetStore,
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void,
+        onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         initialConversationID: String? = nil
     ) {
         self.agents = agents
@@ -90,6 +92,7 @@ public struct NewChatTabView: View {
         self.fleetStore = fleetStore
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
+        self.onOpenWorkspace = onOpenWorkspace
         self.initialConversationID = initialConversationID
     }
 
@@ -239,6 +242,19 @@ public struct NewChatTabView: View {
                 }
             }
             Spacer()
+            Button {
+                Haptics.selection()
+                onOpenWorkspace(selectedAgent)
+            } label: {
+                Image(systemName: "rectangle.3.group")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(t.text2)
+                    .frame(width: 42, height: 42)
+                    .background(t.surface2, in: Circle())
+                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open workspace")
             if isStreaming {
                 HStack(spacing: 5) {
                     Circle().fill(t.ok).frame(width: 6, height: 6)

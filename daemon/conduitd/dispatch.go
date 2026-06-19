@@ -235,6 +235,25 @@ func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, 
 	}
 }
 
+// emitToolArtifact keeps the existing live terminal event while emitting the
+// normalized, durable event consumed by chat history and review surfaces.
+func emitToolArtifact(emit emitFunc, runID, toolID, toolName, inputJSON string) {
+	if emit == nil {
+		return
+	}
+	emit("agent.tool.start", map[string]any{
+		"runId": runID, "toolId": toolID, "toolName": toolName, "inputJSON": inputJSON,
+	})
+	emit("agent.artifact", map[string]any{
+		"artifactID": toolID,
+		"runID":      runID,
+		"kind":       "tool",
+		"title":      toolName,
+		"payloadJSON": inputJSON,
+		"status":     "running",
+	})
+}
+
 func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done *sync.WaitGroup) {
 	defer done.Done()
 	if emit == nil {
@@ -311,12 +330,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				}
 			case "content_block_stop":
 				if pending != nil {
-					emit("agent.tool.start", map[string]any{
-						"runId":     runID,
-						"toolId":    pending.toolID,
-						"toolName":  pending.toolName,
-						"inputJSON": pending.inputBuf.String(),
-					})
+					emitToolArtifact(emit, runID, pending.toolID, pending.toolName, pending.inputBuf.String())
 					pending = nil
 				}
 			}
@@ -359,12 +373,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if len(toolName) > 0 {
 				displayName = strings.ToUpper(toolName[:1]) + toolName[1:]
 			}
-			emit("agent.tool.start", map[string]any{
-				"runId":     runID,
-				"toolId":    callID,
-				"toolName":  displayName,
-				"inputJSON": string(inputBytes),
-			})
+			emitToolArtifact(emit, runID, callID, displayName, string(inputBytes))
 		case "item.started":
 			// codex --json: command execution started → show as a Bash tool card.
 			item, _ := obj["item"].(map[string]any)
@@ -375,12 +384,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				cmd, _ := item["command"].(string)
 				id, _ := item["id"].(string)
 				cmdBytes, _ := json.Marshal(map[string]string{"command": cmd})
-				emit("agent.tool.start", map[string]any{
-					"runId":     runID,
-					"toolId":    id,
-					"toolName":  "Bash",
-					"inputJSON": string(cmdBytes),
-				})
+				emitToolArtifact(emit, runID, id, "Bash", string(cmdBytes))
 			}
 		case "item.completed":
 			// codex --json: emit agent prose; command output is suppressed (shown via tool card).

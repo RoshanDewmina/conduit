@@ -84,14 +84,14 @@ public struct RawTerminalView: UIViewRepresentable {
             switch gr.state {
             case .changed:
                 let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
-                term.font = UIFont(name: "FiraCode-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+                term.font = UIFont(name: "JetBrainsMono-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
             case .ended:
                 let newSize = (baseFontSize * gr.scale).clamped(to: 9...24)
                 baseFontSize = newSize
                 UserDefaults.standard.set(Double(newSize), forKey: "terminalFontSize")
-                term.font = UIFont(name: "FiraCode-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
+                term.font = UIFont(name: "JetBrainsMono-Regular", size: newSize) ?? UIFont.monospacedSystemFont(ofSize: newSize, weight: .regular)
             case .cancelled, .failed:
-                term.font = UIFont(name: "FiraCode-Regular", size: baseFontSize) ?? UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
+                term.font = UIFont(name: "JetBrainsMono-Regular", size: baseFontSize) ?? UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
             default:
                 break
             }
@@ -267,7 +267,7 @@ public struct RawTerminalView: UIViewRepresentable {
         term.smartQuotesType = .no
         term.smartInsertDeleteType = .no
         let fontSize = CGFloat(UserDefaults.standard.double(forKey: "terminalFontSize").nonZeroOr(11))
-        term.font = UIFont(name: "FiraCode-Regular", size: fontSize) ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        term.font = UIFont(name: "JetBrainsMono-Regular", size: fontSize) ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let theme = TerminalTheme.current
         term.nativeBackgroundColor = UIColor(theme.background)
         term.nativeForegroundColor = UIColor(theme.foreground)

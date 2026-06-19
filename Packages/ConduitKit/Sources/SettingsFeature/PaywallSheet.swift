@@ -20,9 +20,9 @@ public struct PaywallSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
 
-                    // Spectrum bar — aligned to the same 16pt gutter as the
-                    // content below so it doesn't full-bleed past the layout.
-                    SpectrumBar(mode: .idle, height: 8)
+                    Rectangle()
+                        .fill(t.divider)
+                        .frame(height: 1)
                         .padding(.horizontal, 16)
 
                     VStack(alignment: .leading, spacing: 20) {

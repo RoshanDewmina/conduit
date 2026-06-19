@@ -10,7 +10,9 @@ public struct OnboardingWelcomeScreen: View {
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                SpectrumBar(mode: .working, height: 8)
+                Rectangle()
+                    .fill(t.divider)
+                    .frame(height: 1)
                     .padding(.horizontal, 18)
                     .padding(.top, 24)
 

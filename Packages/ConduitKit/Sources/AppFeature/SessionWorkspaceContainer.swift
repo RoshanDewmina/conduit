@@ -1,0 +1,689 @@
+#if os(iOS)
+import SwiftUI
+import UIKit
+import WebKit
+import ConduitCore
+import DesignSystem
+import DiffFeature
+import DiffKit
+import FilesFeature
+import PreviewKit
+import SessionFeature
+import SSHTransport
+
+/// The single app-level presentation owner for workspace tools. Terminal remains
+/// in SessionFeature; files, review, and host previews are composed here so no
+/// feature needs to depend on another feature's implementation.
+public struct SessionWorkspaceContainer: View {
+    private let viewModel: SessionViewModel
+    private let onSwitchHost: () -> Void
+
+    @State private var route: WorkspaceRoute?
+
+    public init(viewModel: SessionViewModel, onSwitchHost: @escaping () -> Void) {
+        self.viewModel = viewModel
+        self.onSwitchHost = onSwitchHost
+    }
+
+    public var body: some View {
+        SessionView(viewModel: viewModel, onOpenWorkspace: { route = .launcher })
+            .sheet(item: $route) { selectedRoute in
+                routeView(selectedRoute)
+            }
+    }
+
+    @ViewBuilder
+    private func routeView(_ selectedRoute: WorkspaceRoute) -> some View {
+        switch selectedRoute {
+        case .launcher:
+            WorkspaceLauncherView { selection in
+                if selection == .terminal {
+                    route = nil
+                } else {
+                    route = selection
+                }
+            }
+            .presentationDetents([.height(356)])
+            .presentationDragIndicator(.visible)
+
+        case .environment:
+            DSReviewSheet("Environment") {
+                WorkspaceEnvironmentView(
+                    session: viewModel.session,
+                    host: viewModel.host,
+                    workdir: viewModel.cwd,
+                    onOpenReview: { route = .review },
+                    onOpenFiles: { route = .files },
+                    onOpenBrowser: { route = .browser },
+                    onSwitchHost: {
+                        route = nil
+                        onSwitchHost()
+                    }
+                )
+            }
+            .presentationDetents([.medium, .large])
+
+        case .review:
+            DSReviewSheet("Review") {
+                WorkspaceReviewView(session: viewModel.session, workdir: viewModel.cwd)
+            }
+            .presentationDetents([.large])
+
+        case .browser:
+            DSReviewSheet("Preview") {
+                HostPreviewView(session: viewModel.session, host: viewModel.host)
+            }
+            .presentationDetents([.large])
+
+        case .files:
+            DSReviewSheet("Files") {
+                HostFilesView(session: viewModel.session, initialPath: viewModel.cwd)
+            }
+            .presentationDetents([.large])
+
+        case .terminal:
+            EmptyView()
+        }
+    }
+}
+
+private struct WorkspaceLauncherView: View {
+    let onSelect: (WorkspaceRoute) -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Capsule()
+                .fill(t.text4)
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+
+            Text("Workspace")
+                .font(.dsSansPt(20, weight: .semibold))
+                .foregroundStyle(t.text)
+                .padding(.horizontal, 20)
+
+            VStack(spacing: 8) {
+                workspaceButton("Review", systemImage: "plusminus", route: .review)
+                workspaceButton("Terminal", systemImage: "terminal", route: .terminal)
+                workspaceButton("Browser", systemImage: "globe", route: .browser)
+                workspaceButton("Files", systemImage: "folder", route: .files)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 18)
+        .background(t.bg)
+    }
+
+    private func workspaceButton(_ title: String, systemImage: String, route: WorkspaceRoute) -> some View {
+        Button { onSelect(route) } label: {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 24)
+                Text(title)
+                    .font(.dsSansPt(17, weight: .medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .foregroundStyle(t.text)
+            .padding(.horizontal, 16)
+            .frame(height: 52)
+            .conduitGlassChrome(cornerRadius: 14, interactive: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open \(title)")
+    }
+}
+
+public struct RelayWorkspaceUnavailableView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Image(systemName: "lock.laptopcomputer")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(t.accent)
+            Text("Connect this host with SSH")
+                .font(.dsSansPt(21, weight: .semibold))
+                .foregroundStyle(t.text)
+            Text("Relay remains available for agent dispatch, output, continuation, and approvals. Terminal, local previews, and host files use a direct SSH connection so Conduit never turns the relay into a command console or HTTP proxy.")
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Done") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .tint(t.accent)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(24)
+        .background(t.bg)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct WorkspaceEnvironmentView: View {
+    let session: SSHSession
+    let host: Host
+    let workdir: String
+    let onOpenReview: () -> Void
+    let onOpenFiles: () -> Void
+    let onOpenBrowser: () -> Void
+    let onSwitchHost: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+    @State private var status: GitStatus?
+    @State private var summary: GitChangeSummary?
+    @State private var branches: [String] = []
+    @State private var pendingBranch: String?
+    @State private var errorMessage: String?
+    @State private var isLoading = false
+    @State private var isShowingCommit = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .font(.dsSansPt(14))
+                        .foregroundStyle(t.danger)
+                }
+
+                DSSectionGroup("Workspace") {
+                    DSNavigationRow(
+                        "Changes",
+                        subtitle: changesSubtitle,
+                        value: changesValue,
+                        systemImage: "plusminus",
+                        action: onOpenReview
+                    )
+                    DSDivider().padding(.leading, 50)
+                    DSNavigationRow(
+                        "Host",
+                        subtitle: "Connected through SSH",
+                        value: host.name,
+                        systemImage: "laptopcomputer",
+                        action: onSwitchHost
+                    )
+                    DSDivider().padding(.leading, 50)
+                    branchRow
+                    DSDivider().padding(.leading, 50)
+                    DSNavigationRow(
+                        "Commit or push",
+                        subtitle: "Stage, commit, then push the current branch",
+                        systemImage: "arrow.up.to.line.compact",
+                        action: { isShowingCommit = true }
+                    )
+                }
+
+                DSSectionGroup("Sources") {
+                    DSNavigationRow("Files", subtitle: "Browse this host", systemImage: "folder", action: onOpenFiles)
+                    DSDivider().padding(.leading, 50)
+                    DSNavigationRow("Browser", subtitle: "Open a local dev preview", systemImage: "globe", action: onOpenBrowser)
+                }
+
+                if isLoading {
+                    ProgressView("Loading environment")
+                        .font(.dsSansPt(14))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .padding(16)
+        }
+        .task { await reload() }
+        .refreshable { await reload() }
+        .confirmationDialog(
+            "Discard local changes?",
+            isPresented: Binding(get: { pendingBranch != nil }, set: { if !$0 { pendingBranch = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Switch branch", role: .destructive) {
+                if let pendingBranch { checkout(pendingBranch) }
+            }
+            Button("Cancel", role: .cancel) { pendingBranch = nil }
+        } message: {
+            Text("Your working tree has changes. Switching branches may overwrite or hide them.")
+        }
+        .sheet(isPresented: $isShowingCommit) {
+            CommitAndPushSheet(session: session, workdir: workdir) { await reload() }
+                .presentationDetents([.medium])
+        }
+    }
+
+    private var branchRow: some View {
+        Menu {
+            ForEach(branches, id: \.self) { branch in
+                Button(branch) { chooseBranch(branch) }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(t.text2)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Branch")
+                        .font(.dsSansPt(16, weight: .medium))
+                        .foregroundStyle(t.text)
+                    Text(status?.branch ?? "Loading")
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose branch")
+    }
+
+    private var changesSubtitle: String {
+        guard let status else { return "Loading Git status" }
+        return status.isClean ? "Working tree is clean" : "\(status.changes.count) changed file\(status.changes.count == 1 ? "" : "s")"
+    }
+
+    private var changesValue: String? {
+        guard let summary else { return nil }
+        return "+\(summary.additions) -\(summary.deletions)"
+    }
+
+    private func reload() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let client = GitClient(session: session)
+            async let loadedStatus = client.status(workdir: workdir)
+            async let loadedSummary = client.changeSummary(workdir: workdir)
+            async let loadedBranches = client.listBranches(workdir: workdir)
+            status = try await loadedStatus
+            summary = try await loadedSummary
+            branches = try await loadedBranches
+            errorMessage = nil
+        } catch {
+            errorMessage = "Couldn’t load this Git workspace: \(error.localizedDescription)"
+        }
+    }
+
+    private func chooseBranch(_ branch: String) {
+        guard branch != status?.branch else { return }
+        if WorkspaceBranchGuard.needsConfirmation(
+            currentBranch: status?.branch ?? "",
+            targetBranch: branch,
+            isClean: status?.isClean ?? false
+        ) {
+            pendingBranch = branch
+        } else {
+            checkout(branch)
+        }
+    }
+
+    private func checkout(_ branch: String) {
+        pendingBranch = nil
+        Task {
+            do {
+                try await GitClient(session: session).checkout(workdir: workdir, name: branch)
+                await reload()
+            } catch {
+                errorMessage = "Couldn’t switch branches: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+private struct CommitAndPushSheet: View {
+    let session: SSHSession
+    let workdir: String
+    let onComplete: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+    @State private var message = ""
+    @State private var state: CommitState = .idle
+
+    private enum CommitState: Equatable { case idle, working, complete(String), failed(String) }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Commit message")
+                    .font(.dsSansPt(15, weight: .medium))
+                TextField("Describe this change", text: $message, axis: .vertical)
+                    .lineLimit(3...6)
+                    .font(.dsSansPt(16))
+                    .padding(12)
+                    .background(t.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+
+                stateLabel
+                Spacer()
+                Button(action: commitAndPush) {
+                    Group {
+                        if state == .working { ProgressView().tint(t.accentInk) }
+                        else { Label("Commit and push", systemImage: "arrow.up.to.line.compact") }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(t.accent)
+                .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state == .working)
+            }
+            .padding(20)
+            .navigationTitle("Commit or push")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+    }
+
+    @ViewBuilder private var stateLabel: some View {
+        switch state {
+        case .idle: EmptyView()
+        case .working: Text("Staging and pushing…").font(.dsSansPt(14)).foregroundStyle(t.text3)
+        case .complete(let detail): Label(detail, systemImage: "checkmark.circle.fill").font(.dsSansPt(14)).foregroundStyle(t.ok)
+        case .failed(let detail): Label(detail, systemImage: "exclamationmark.triangle.fill").font(.dsSansPt(14)).foregroundStyle(t.danger)
+        }
+    }
+
+    private func commitAndPush() {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        state = .working
+        Task {
+            do {
+                let client = GitClient(session: session)
+                try await client.stage(workdir: workdir)
+                try await client.commit(workdir: workdir, message: trimmed)
+                try await client.push(workdir: workdir)
+                state = .complete("Committed and pushed")
+                await onComplete()
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+        }
+    }
+}
+
+private struct WorkspaceReviewView: View {
+    let session: SSHSession
+    let workdir: String
+
+    @State private var diff: UnifiedDiff?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let diff, !diff.files.isEmpty {
+                DiffView(diff: diff)
+            } else if let errorMessage {
+                ContentUnavailableView("Review unavailable", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
+            } else {
+                ContentUnavailableView("No changes", systemImage: "checkmark.circle", description: Text("This workspace has no changes relative to HEAD."))
+            }
+        }
+        .task {
+            do {
+                let raw = try await GitClient(session: session).diff(workdir: workdir)
+                diff = UnifiedDiffParser.parse(raw)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct HostFilesView: View {
+    let session: SSHSession
+    let initialPath: String
+
+    @Environment(\.conduitTokens) private var t
+    @State private var path = "~"
+    @State private var entries: [SFTPEntry] = []
+    @State private var preview: FilePreview?
+    @State private var errorMessage: String?
+
+    private struct FilePreview: Identifiable {
+        let id = UUID()
+        let entry: SFTPEntry
+        let content: String
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text(path)
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Spacer()
+                Button { goUp() } label: { Image(systemName: "arrow.up") }
+                    .buttonStyle(.bordered)
+                    .disabled(path == "/" || path == "~")
+                    .accessibilityLabel("Parent folder")
+            }
+            .padding(16)
+
+            if let errorMessage {
+                Text(errorMessage).font(.dsSansPt(13)).foregroundStyle(t.danger).padding(.horizontal, 16)
+            }
+
+            List(entries) { entry in
+                Button { open(entry) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: entry.isDirectory ? "folder.fill" : "doc.text")
+                            .foregroundStyle(entry.isDirectory ? t.accent : t.text3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.name).font(.dsMonoPt(13, weight: entry.isDirectory ? .semibold : .regular))
+                            if let bytes = entry.sizeBytes, !entry.isDirectory {
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+                                    .font(.dsMonoPt(10)).foregroundStyle(t.text4)
+                            }
+                        }
+                        Spacer()
+                        if entry.isDirectory { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(t.text4) }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .listStyle(.plain)
+        }
+        .task { path = initialPath; await load() }
+        .task(id: path) { await load() }
+        .sheet(item: $preview) { preview in
+            DSReviewSheet(preview.entry.name) {
+                FilePreviewView(filename: preview.entry.name, content: preview.content, path: preview.entry.path)
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private func load() async {
+        do {
+            entries = try await SFTPClient(session: session).list(path: path)
+            errorMessage = nil
+        } catch {
+            entries = []
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func open(_ entry: SFTPEntry) {
+        if entry.isDirectory {
+            path = entry.path
+            return
+        }
+        Task {
+            do {
+                let data = try await SFTPClient(session: session).read(path: entry.path, limitBytes: 256 * 1024)
+                preview = FilePreview(entry: entry, content: String(data: data, encoding: .utf8) ?? "[Binary file — \(data.count) bytes]")
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func goUp() {
+        let parent = (path as NSString).deletingLastPathComponent
+        path = parent.isEmpty ? "/" : parent
+    }
+}
+
+private struct HostPreviewView: View {
+    let session: SSHSession
+    let host: Host
+
+    @Environment(\.conduitTokens) private var t
+    @State private var ports: [Int] = []
+    @State private var portText = ""
+    @State private var displayedURL: URL?
+    @State private var directTunnel: LocalPortForwardTunnel?
+    @State private var fallbackPort: Int?
+    @State private var errorMessage: String?
+    @State private var isLoading = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(ports, id: \.self) { port in
+                        Button("localhost:\(port)") { portText = String(port); openPreview() }
+                    }
+                } label: {
+                    Label("Detected ports", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.dsSansPt(14, weight: .medium))
+                }
+                .disabled(ports.isEmpty)
+
+                TextField("Port", text: $portText)
+                    .keyboardType(.numberPad)
+                    .font(.dsMonoPt(14))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 86)
+
+                Button("Open", action: openPreview)
+                    .buttonStyle(.borderedProminent)
+                    .tint(t.accent)
+                    .disabled(HostPreviewPort.parse(portText) == nil)
+            }
+            .padding(16)
+
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.danger)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+            }
+
+            if let displayedURL {
+                HostPreviewWebView(url: displayedURL, fallbackSession: fallbackPort == nil ? nil : session, fallbackPort: fallbackPort)
+            } else if isLoading {
+                ProgressView("Detecting local development servers")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView(
+                    "No preview selected",
+                    systemImage: "globe",
+                    description: Text("Choose a detected loopback port or enter the port for a development server on \(host.name).")
+                )
+            }
+        }
+        .task { await detectPorts() }
+        .onDisappear { Task { await directTunnel?.stop() } }
+    }
+
+    private func detectPorts() async {
+        do {
+            ports = try await PortDetector(session: session).detect()
+            if let first = ports.first { portText = String(first) }
+            errorMessage = nil
+        } catch {
+            errorMessage = "Couldn’t detect preview ports: \(error.localizedDescription)"
+        }
+        isLoading = false
+    }
+
+    private func openPreview() {
+        guard let remotePort = HostPreviewPort.parse(portText) else {
+            errorMessage = "Enter a port between 1 and 65535."
+            return
+        }
+        Task {
+            await directTunnel?.stop()
+            let localPort = 49_152 + (remotePort % 10_000)
+            let forward = PortForward(
+                hostID: host.id,
+                localPort: localPort,
+                remoteHost: "127.0.0.1",
+                remotePort: remotePort,
+                label: "Host preview"
+            )
+            do {
+                let tunnel = try await session.startLocalPortForward(forward)
+                directTunnel = tunnel
+                fallbackPort = nil
+                displayedURL = URL(string: "http://127.0.0.1:\(localPort)/")
+                errorMessage = nil
+            } catch {
+                // Narrow fallback only: the existing scheme handler can still
+                // render basic HTTP when a direct local listener is unavailable.
+                directTunnel = nil
+                fallbackPort = remotePort
+                displayedURL = URL(string: "conduit-preview://localhost/")
+                errorMessage = "Direct preview forwarding failed. Using basic HTTP fallback; live reload may be unavailable."
+            }
+        }
+    }
+}
+
+private struct HostPreviewWebView: UIViewRepresentable {
+    let url: URL
+    let fallbackSession: SSHSession?
+    let fallbackPort: Int?
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        if let fallbackSession, let fallbackPort {
+            configuration.setURLSchemeHandler(SSHProxyURLSchemeHandler(session: fallbackSession, remotePort: fallbackPort), forURLScheme: "conduit-preview")
+        }
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = context.coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        guard webView.url != url else { return }
+        webView.load(URLRequest(url: url))
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
+            guard let url = action.request.url else { decisionHandler(.cancel); return }
+            if HostPreviewNavigation.isEmbeddedPreviewURL(url) {
+                decisionHandler(.allow)
+            } else {
+                UIApplication.shared.open(url)
+                decisionHandler(.cancel)
+            }
+        }
+    }
+}
+#endif

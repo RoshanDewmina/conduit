@@ -126,7 +126,6 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
-    @State private var selectedTab: Tab = .inbox
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
     @State private var editingHost: Host?
@@ -173,6 +172,7 @@ public struct AppRoot: View {
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
     @State private var showingHostedAgents = false
+    @State private var showingRelayWorkspaceUnavailable = false
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var e2eBridge: E2ERelayBridge?
@@ -194,33 +194,6 @@ public struct AppRoot: View {
         }
     }
 
-    public enum Tab: Hashable, Sendable {
-        case inbox
-        case fleet
-        case newchat
-        case settings
-
-        static let rootTabs: [Tab] = [.inbox, .fleet, .newchat, .settings]
-
-        var title: String {
-            switch self {
-            case .inbox:    "Inbox"
-            case .fleet:    "Fleet"
-            case .newchat:  "New Chat"
-            case .settings: "Settings"
-            }
-        }
-
-        var systemImage: String {
-            switch self {
-            case .inbox:    "tray"
-            case .fleet:    "square.stack.3d.up"
-            case .newchat:  "sparkles"
-            case .settings: "gear"
-            }
-        }
-    }
-
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
         case failure(String)
@@ -234,15 +207,19 @@ public struct AppRoot: View {
             _environment = State(initialValue: .failure(error.localizedDescription))
         }
         #if DEBUG
-        // UI-audit hook: launch straight into a tab via SIMCTL_CHILD_CONDUIT_TAB.
-        if let tab = ProcessInfo.processInfo.environment["CONDUIT_TAB"] {
-            switch tab {
-            case "inbox":    _selectedTab = State(initialValue: .inbox)
-            case "fleet":    _selectedTab = State(initialValue: .fleet)
-            case "newchat", "control", "activity": _selectedTab = State(initialValue: .newchat)
-            case "settings": _selectedTab = State(initialValue: .settings)
-            default:         _selectedTab = State(initialValue: .inbox)
+        // UI-audit hook: launch directly into the sidebar shell. The legacy tab
+        // router was removed; destinations are now the sole root navigation model.
+        if let destination = ProcessInfo.processInfo.environment["CONDUIT_DESTINATION"] {
+            let state = SidebarShellState()
+            switch destination {
+            case "inbox": state.selectedDestination = .needsAttention
+            case "governance": state.selectedDestination = .governance
+            case "fleet": state.selectedDestination = .fleet
+            case "sessions": state.selectedDestination = .sessions
+            case "settings": state.selectedDestination = .settings
+            default: state.selectedDestination = .newChat
             }
+            _sidebarState = State(initialValue: state)
         }
         #endif
     }
@@ -347,7 +324,7 @@ public struct AppRoot: View {
             if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { _ in
-            selectedTab = .inbox
+            sidebarState.selectedDestination = .needsAttention
         }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
@@ -358,6 +335,35 @@ public struct AppRoot: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2ERunStatus"))) { note in
             guard let params = note.userInfo?["params"] as? RunStatusParams else { return }
             runOutputStore.updateStatus(params)
+            if case .ready(let env) = environment,
+               params.status == "exited" || params.status == "failed" {
+                Task {
+                    try? await env.chatRepo.updateArtifactStatuses(
+                        runID: params.runId,
+                        status: params.status == "exited" && params.exitCode == 0 ? .done : .failed
+                    )
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2EArtifact"))) { note in
+            guard let event = note.userInfo?["params"] as? AgentArtifactEvent,
+                  case .ready(let env) = environment
+            else { return }
+            Task {
+                guard let turn = try? await env.chatRepo.turnByRunID(event.runID) else { return }
+                let artifact = ChatArtifact(
+                    id: event.artifactID,
+                    conversationID: turn.conversationID,
+                    turnID: turn.id,
+                    runID: event.runID,
+                    kind: ChatArtifact.Kind(rawValue: event.kind) ?? .tool,
+                    title: event.title,
+                    summary: event.summary,
+                    payloadJSON: event.payloadJSON,
+                    status: ChatArtifact.Status(rawValue: event.status) ?? .running
+                )
+                try? await env.chatRepo.upsertArtifact(artifact)
+            }
         }
         // Relay-delivered approvals: the E2E bridge posts conduitE2EApprovalReceived,
         // but on a relay-only setup there's no SSH ApprovalIngest to land them in the
@@ -442,11 +448,11 @@ public struct AppRoot: View {
                 OnboardingRedesignView(
                     onContinue: {
                         onboardingSeen = true
-                        selectedTab = .inbox
+                        sidebarState.selectedDestination = .newChat
                     },
                     onAlreadyUseConduit: {
                         onboardingSeen = true
-                        selectedTab = .fleet
+                        sidebarState.selectedDestination = .fleet
                     },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
@@ -461,7 +467,7 @@ public struct AppRoot: View {
                 onComplete: { host in
                     showingProvisioningWizard = false
                     onboardingSeen = true
-                    selectedTab = .fleet
+                    sidebarState.selectedDestination = .fleet
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         openSession(host: host, env: env)
@@ -512,6 +518,11 @@ public struct AppRoot: View {
                     AgentsView(store: agentStore, statusChannel: fleetStore.slots.first?.channel)
                 }
             }
+        }
+        .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
+            RelayWorkspaceUnavailableView()
+                .presentationDetents([.height(310)])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $editingHost) { host in
             NavigationStack {
@@ -575,7 +586,7 @@ public struct AppRoot: View {
                 // Cold launch: route to Inbox, then re-post so the now-mounted
                 // InboxView observer opens the detail sheet. REVIEW intent only —
                 // never auto-decides (ApprovalActionBuffer handles decisions separately).
-                selectedTab = .inbox
+                sidebarState.selectedDestination = .needsAttention
                 NotificationCenter.default.post(
                     name: .conduitOpenApproval, object: nil,
                     userInfo: ["approvalId": approvalID]
@@ -622,13 +633,6 @@ public struct AppRoot: View {
         }
     }
 
-    private var splitSelection: Binding<Tab?> {
-        Binding(
-            get: { selectedTab },
-            set: { selectedTab = $0 ?? .inbox }
-        )
-    }
-
     private var activeInboxViewModel: InboxViewModel {
         selectedFleetSlot?.inboxVM ?? liveInboxVM ?? inboxVM
     }
@@ -640,6 +644,24 @@ public struct AppRoot: View {
 
     private var activeSessionViewModel: SessionViewModel? {
         selectedFleetSlot?.sessionViewModel ?? sessionViewModel
+    }
+
+    /// A workspace is a direct SSH capability. Relay dispatch keeps its
+    /// governed control loop, but it intentionally does not become a shell or
+    /// HTTP proxy.
+    private func openWorkspace(for agent: DispatchAgent?) {
+        if let hostID = agent?.hostID,
+           let uuid = UUID(uuidString: hostID),
+           let slot = fleetStore.slots.first(where: { $0.hostID.uuidString == uuid.uuidString }) {
+            selectFleetSlot(slot.id)
+            isShowingLiveSession = true
+        } else if agent?.id.hasPrefix("e2e|") == true || agent?.hostID == nil {
+            showingRelayWorkspaceUnavailable = true
+        } else if activeSessionViewModel != nil {
+            isShowingLiveSession = true
+        } else {
+            showingRelayWorkspaceUnavailable = true
+        }
     }
 
     @MainActor
@@ -930,7 +952,13 @@ public struct AppRoot: View {
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
-                SessionView(viewModel: vm)
+                SessionWorkspaceContainer(
+                    viewModel: vm,
+                    onSwitchHost: {
+                        isShowingLiveSession = false
+                        sidebarState.selectedDestination = .fleet
+                    }
+                )
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             }
         }
@@ -953,7 +981,13 @@ public struct AppRoot: View {
         }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
-                SessionView(viewModel: vm)
+                SessionWorkspaceContainer(
+                    viewModel: vm,
+                    onSwitchHost: {
+                        isShowingLiveSession = false
+                        sidebarState.selectedDestination = .fleet
+                    }
+                )
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             }
         }
@@ -987,93 +1021,77 @@ public struct AppRoot: View {
     private func jumpToUnreadLiveSession() {
         guard let slot = fleetStore.firstSlotWithPendingApprovals() else { return }
         selectFleetSlot(slot.id)
-        selectedTab = .inbox
+        sidebarState.selectedDestination = .needsAttention
         isShowingLiveSession = true
     }
 
-    @ViewBuilder
-    private func rootDestination(_ tab: Tab, env: AppEnvironment) -> some View {
-        switch tab {
-        case .inbox:
-            let actions = bridgeSessionActions()
-            InboxView(
-                viewModel: activeInboxViewModel,
-                statusHeaderAgents: [],
-                onTapStatusHeader: {},
-                onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) },
-                onOpenHistory: { showingHistory = true }
-            )
-            .sheet(isPresented: $showingHistory) {
-                NavigationStack {
-                    ActivityView(actions: bridgeSessionActions())
-                }
+    private func inboxDestination() -> some View {
+        let actions = bridgeSessionActions()
+        return InboxView(
+            viewModel: activeInboxViewModel,
+            statusHeaderAgents: [],
+            onTapStatusHeader: {},
+            onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) },
+            onOpenHistory: { showingHistory = true }
+        )
+        .sheet(isPresented: $showingHistory) {
+            NavigationStack {
+                ActivityView(actions: bridgeSessionActions())
             }
-
-        case .fleet:
-            FleetView(
-                store: fleetStore,
-                hostRepo: env.hostRepo,
-                loopStore: env.loopStore,
-                quotaGuardStore: env.quotaGuardStore,
-                hostHealthStore: env.hostHealthStore,
-                onConnectHost: { addHostPresented = true },
-                onReconnect: { host in openSession(host: host, env: env) },
-                onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
-                onQuotaGuard: { showingQuotaGuard = true },
-                onOpenTerminal: { slotID in
-                    // Finding #5: intentional drill-in — select the slot and
-                    // present its live block terminal full-screen.
-                    selectFleetSlot(slotID)
-                    isShowingLiveSession = true
-                }
-            )
-            .id(workspacesRevision)
-
-        case .newchat:
-            NewChatTabView(
-                agents: dispatchAgents(),
-                runOutputStore: runOutputStore,
-                chatRepo: env.chatRepo,
-                fleetStore: fleetStore,
-                onDispatch: { agentID, cwd, prompt, budget, model in
-                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
-                },
-                onNewTask: { selectedTab = .newchat }
-            )
-
-        case .settings:
-            SettingsWithLibraryView(
-                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
-                syncEngine: env.syncEngine,
-                backendURL: Self.pushBackendURL(),
-                auditRepository: env.auditRepo,
-                approvalRepository: approvalRepository,
-                sshKeyStore: env.keyStore,
-                daemonChannel: daemonChannel,
-                e2eRelayClient: env.e2eRelayClient,
-                quotaGuardStore: env.quotaGuardStore,
-                onResetApp: {
-                    let db = env.database
-                    Task {
-                        try? await db.wipeAll()
-                        await MainActor.run {
-                            UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
-                            appLockEnabled = false
-                            selectedTab = .inbox
-                            onboardingSeen = false
-                        }
-                    }
-                },
-                onEmergencyStop: {
-                    Task {
-                        for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
-                            await slot.sessionViewModel.disconnect()
-                        }
-                    }
-                },
-                sidebarShellState: sidebarState
-            )
         }
+    }
+
+    private func fleetDestination(env: AppEnvironment) -> some View {
+        FleetView(
+            store: fleetStore,
+            hostRepo: env.hostRepo,
+            loopStore: env.loopStore,
+            quotaGuardStore: env.quotaGuardStore,
+            hostHealthStore: env.hostHealthStore,
+            onConnectHost: { addHostPresented = true },
+            onReconnect: { host in openSession(host: host, env: env) },
+            onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
+            onQuotaGuard: { showingQuotaGuard = true },
+            onOpenTerminal: { slotID in
+                selectFleetSlot(slotID)
+                isShowingLiveSession = true
+            }
+        )
+        .id(workspacesRevision)
+    }
+
+    private func settingsDestination(env: AppEnvironment) -> some View {
+        SettingsWithLibraryView(
+            viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
+            syncEngine: env.syncEngine,
+            backendURL: Self.pushBackendURL(),
+            auditRepository: env.auditRepo,
+            approvalRepository: approvalRepository,
+            sshKeyStore: env.keyStore,
+            daemonChannel: daemonChannel,
+            e2eRelayClient: env.e2eRelayClient,
+            quotaGuardStore: env.quotaGuardStore,
+            onResetApp: {
+                let db = env.database
+                Task {
+                    try? await db.wipeAll()
+                    await MainActor.run {
+                        UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
+                        appLockEnabled = false
+                        sidebarState.selectedDestination = .newChat
+                        onboardingSeen = false
+                    }
+                }
+            },
+            onEmergencyStop: {
+                Task {
+                    for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
+                        await slot.sessionViewModel.disconnect()
+                    }
+                }
+            },
+            sidebarShellState: sidebarState
+        )
     }
 
     @ViewBuilder
@@ -1088,7 +1106,8 @@ public struct AppRoot: View {
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
-                onNewTask: { sidebarState.selectedDestination = .newChat }
+                onNewTask: { sidebarState.selectedDestination = .newChat },
+                onOpenWorkspace: { agent in openWorkspace(for: agent) }
             )
         case .thread(let id):
             NewChatTabView(
@@ -1100,6 +1119,7 @@ public struct AppRoot: View {
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
                 onNewTask: { sidebarState.selectedDestination = .newChat },
+                onOpenWorkspace: { agent in openWorkspace(for: agent) },
                 initialConversationID: id
             )
             .id(id)
@@ -1110,41 +1130,18 @@ public struct AppRoot: View {
                 onOpenThread: { id in sidebarState.selectedDestination = .thread(id: id) }
             )
         case .needsAttention:
-            rootDestination(.inbox, env: env)
-        case .fleet:
-            rootDestination(.fleet, env: env)
-        case .settings:
-            SettingsWithLibraryView(
-                viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
-                syncEngine: env.syncEngine,
-                backendURL: Self.pushBackendURL(),
-                auditRepository: env.auditRepo,
-                approvalRepository: approvalRepository,
-                sshKeyStore: env.keyStore,
-                daemonChannel: daemonChannel,
-                e2eRelayClient: env.e2eRelayClient,
-                quotaGuardStore: env.quotaGuardStore,
-                onResetApp: {
-                    let db = env.database
-                    Task {
-                        try? await db.wipeAll()
-                        await MainActor.run {
-                            UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
-                            appLockEnabled = false
-                            selectedTab = .inbox
-                            onboardingSeen = false
-                        }
-                    }
-                },
-                onEmergencyStop: {
-                    Task {
-                        for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
-                            await slot.sessionViewModel.disconnect()
-                        }
-                    }
-                },
-                sidebarShellState: sidebarState
+            inboxDestination()
+        case .governance:
+            GovernanceView(
+                actions: bridgeSessionActions(),
+                onOpenSettings: { sidebarState.selectedDestination = .settings },
+                onOpenInbox: { sidebarState.selectedDestination = .needsAttention },
+                onOpenFleet: { sidebarState.selectedDestination = .fleet }
             )
+        case .fleet:
+            fleetDestination(env: env)
+        case .settings:
+            settingsDestination(env: env)
         }
     }
 
@@ -1469,7 +1466,7 @@ public struct AppRoot: View {
                 // as a monitored slot; the terminal becomes an intentional
                 // drill-in via the per-slot "open terminal" affordance (which
                 // sets `isShowingLiveSession`). Do NOT auto-present it here.
-                self.selectedTab = .fleet
+                self.sidebarState.selectedDestination = .fleet
                 // MAJOR-4: re-arm the approval pipeline after a reconnect. The
                 // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
                 // recreate + restart them and re-point the relay so new approvals

@@ -49,6 +49,33 @@ func TestStreamJSONOutputEmitsTextDeltas(t *testing.T) {
 	}
 }
 
+func TestStreamJSONOutputEmitsNormalizedToolArtifact(t *testing.T) {
+	var methods []string
+	var artifact map[string]any
+	emit := func(method string, params any) {
+		methods = append(methods, method)
+		if method == "agent.artifact" {
+			artifact = params.(map[string]any)
+		}
+	}
+	var seq int64
+	var wg sync.WaitGroup
+	wg.Add(1)
+	input := `{"type":"item.started","item":{"type":"command_execution","id":"cmd-1","command":"git status"}}
+`
+	streamJSONOutput(emit, "run-1", strings.NewReader(input), &seq, &wg)
+	wg.Wait()
+	if artifact == nil {
+		t.Fatalf("expected normalized artifact, methods: %v", methods)
+	}
+	if artifact["artifactID"] != "cmd-1" || artifact["runID"] != "run-1" {
+		t.Fatalf("unexpected artifact identity: %+v", artifact)
+	}
+	if artifact["kind"] != "tool" || artifact["status"] != "running" {
+		t.Fatalf("unexpected artifact lifecycle: %+v", artifact)
+	}
+}
+
 func TestStreamJSONNonJSONLineFallsBackToRaw(t *testing.T) {
 	var mu sync.Mutex
 	var chunks []map[string]any

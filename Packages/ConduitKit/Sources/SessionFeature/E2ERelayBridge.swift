@@ -196,6 +196,16 @@ public final class E2ERelayBridge: ObservableObject {
                 userInfo: ["params": env.payload]
             )
 
+        case "agentArtifact":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<AgentArtifactEvent>.self, from: message.payload
+            ) else { return }
+            NotificationCenter.default.post(
+                name: Notification.Name("conduitE2EArtifact"),
+                object: nil,
+                userInfo: ["params": env.payload]
+            )
+
         default:
             break
         }

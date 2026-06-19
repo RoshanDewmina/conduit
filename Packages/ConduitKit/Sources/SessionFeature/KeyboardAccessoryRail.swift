@@ -44,7 +44,7 @@ private enum RailStyle {
     static let onAccent = UIColor(red: 0.055, green: 0.059, blue: 0.071, alpha: 1) // #0e0f12 termBg
 
     static func mono(_ size: CGFloat) -> UIFont {
-        UIFont(name: "FiraCode-Regular", size: size)
+        UIFont(name: "JetBrainsMono-Regular", size: size)
             ?? .monospacedSystemFont(ofSize: size, weight: .medium)
     }
 }

@@ -189,6 +189,8 @@ func methodToRelayType(method string) string {
 		return "agentRunOutput"
 	case "agent.run.status":
 		return "agentRunStatus"
+	case "agent.artifact":
+		return "agentArtifact"
 	default:
 		return ""
 	}

@@ -108,26 +108,5 @@ public class RelayChatViewModel {
         return "\(mins)m \(secs)s"
     }
 
-    // MARK: - P0.3: SpectrumBar mode mapping
-
-    public func spectrumMode(
-        runStatus: RunControlStatus,
-        agentState: AgentState,
-        blocks: [Block]
-    ) -> SpectrumMode {
-        switch runStatus {
-        case .stopped, .budgetExceeded: return .idle
-        case .paused: return .idle
-        case .running:
-            switch agentState {
-            case .thinking: return .loading
-            case .streaming: return .working
-            case .approval: return .working
-            case .done: return .idle
-            case .error: return .scan
-            case .offline: return .scan
-            }
-        }
-    }
 }
 #endif

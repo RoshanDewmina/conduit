@@ -51,6 +51,20 @@ public struct GitStatus: Sendable, Equatable {
     public var hasStagedChanges: Bool { changes.contains(where: \.staged) }
 }
 
+/// Compact diff totals for an Environment surface. Binary files count toward
+/// `changedFiles` without inventing line counts.
+public struct GitChangeSummary: Sendable, Equatable {
+    public let additions: Int
+    public let deletions: Int
+    public let changedFiles: Int
+
+    public init(additions: Int, deletions: Int, changedFiles: Int) {
+        self.additions = additions
+        self.deletions = deletions
+        self.changedFiles = changedFiles
+    }
+}
+
 /// Result of the conduitd `agent.git.ship` RPC (stage+commit+push+PR).
 /// Idempotent: `committed`/`pushed` report exactly which stages completed so a
 /// partial failure (e.g. commit ok, push rejected) is safely retryable.
@@ -128,6 +142,12 @@ public actor GitClient {
         return try await runGit(workdir: workdir, args)
     }
 
+    /// Returns combined staged and unstaged line totals relative to `HEAD`.
+    public func changeSummary(workdir: String) async throws -> GitChangeSummary {
+        let out = try await runGit(workdir: workdir, ["diff", "HEAD", "--numstat"])
+        return Self.parseNumstat(out)
+    }
+
     /// Returns recent log lines (`--oneline`, capped at `limit`).
     public func log(workdir: String, limit: Int = 20) async throws -> String {
         try await runGit(workdir: workdir, ["--no-pager", "log", "--oneline", "-n", String(limit)])
@@ -190,6 +210,23 @@ public actor GitClient {
             }
             return Worktree.ChangedFile(path: path, status: status)
         }
+    }
+
+    /// Parses `git diff --numstat`. A binary record (`-\t-\tpath`) counts as a
+    /// changed file but intentionally contributes no misleading line total.
+    nonisolated public static func parseNumstat(_ output: String) -> GitChangeSummary {
+        var additions = 0
+        var deletions = 0
+        var changedFiles = 0
+
+        for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
+            let columns = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+            guard columns.count == 3 else { continue }
+            changedFiles += 1
+            additions += Int(columns[0]) ?? 0
+            deletions += Int(columns[1]) ?? 0
+        }
+        return GitChangeSummary(additions: additions, deletions: deletions, changedFiles: changedFiles)
     }
 
     // MARK: - Write operations

@@ -165,6 +165,8 @@ public actor ChatConversationRepository {
 
     public func upsertArtifact(_ artifact: ChatArtifact) async throws {
         try await db.dbWriter.write { db in
+            let cappedPayload = String(artifact.payloadJSON.prefix(64 * 1024))
+            let payload = Self.redactionEnabled ? Redactor.shared.redact(cappedPayload).redacted : cappedPayload
             try db.execute(sql: """
                 INSERT INTO chat_artifacts
                     (id, conversation_id, turn_id, run_id, kind, title, summary,
@@ -177,7 +179,7 @@ public actor ChatConversationRepository {
             """, arguments: [
                 artifact.id, artifact.conversationID, artifact.turnID,
                 artifact.runID, artifact.kind.rawValue, artifact.title,
-                artifact.summary, artifact.payloadJSON, artifact.status.rawValue,
+                artifact.summary, payload, artifact.status.rawValue,
                 artifact.createdAt, artifact.updatedAt,
             ])
             try Self.syncFTS(db, conversationID: artifact.conversationID)
@@ -189,6 +191,19 @@ public actor ChatConversationRepository {
             try db.execute(sql: """
                 UPDATE chat_artifacts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
             """, arguments: [status.rawValue, id])
+        }
+    }
+
+    /// Completes every still-running artifact for a run when conduitd emits the
+    /// terminal run lifecycle event. Tool adapters do not all have individual
+    /// completion records, but the run result is authoritative for their state.
+    public func updateArtifactStatuses(runID: String, status: ChatArtifact.Status) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                UPDATE chat_artifacts
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE run_id = ? AND status = 'running'
+            """, arguments: [status.rawValue, runID])
         }
     }
 

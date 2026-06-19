@@ -35,6 +35,10 @@ public actor RecentPatch {
                     break
                 case .toolStart:
                     break
+                case .artifact(let artifact):
+                    if artifact.kind == "diff", !artifact.payloadJSON.isEmpty {
+                        await onPatch(artifact.payloadJSON)
+                    }
                 case .unknown:
                     // Future: when DaemonEvent gains a .patchProposed case,
                     // decode and forward the unified diff here.

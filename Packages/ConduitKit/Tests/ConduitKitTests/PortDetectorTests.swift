@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import PreviewKit
 
 @Suite("PortDetector parsing")
@@ -65,5 +66,21 @@ struct PortDetectorTests {
         """
         let ports = PortDetector.parsePorts(from: sample)
         #expect(ports.contains(8000))
+    }
+
+    @Test("host preview ports reject invalid input")
+    func previewPortValidation() {
+        #expect(HostPreviewPort.parse("5173") == 5173)
+        #expect(HostPreviewPort.parse("0") == nil)
+        #expect(HostPreviewPort.parse("65536") == nil)
+        #expect(HostPreviewPort.parse("ssh://host") == nil)
+    }
+
+    @Test("only loopback previews stay in the embedded browser")
+    func previewURLHandling() {
+        #expect(HostPreviewNavigation.isEmbeddedPreviewURL(URL(string: "http://127.0.0.1:5173/")!))
+        #expect(HostPreviewNavigation.isEmbeddedPreviewURL(URL(string: "conduit-preview://localhost/")!))
+        #expect(!HostPreviewNavigation.isEmbeddedPreviewURL(URL(string: "https://example.com/")!))
+        #expect(!HostPreviewNavigation.isEmbeddedPreviewURL(URL(string: "http://192.168.1.2:3000/")!))
     }
 }

@@ -27,9 +27,11 @@ public struct SessionView: View {
 
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
+    private let onOpenWorkspace: (() -> Void)?
 
-    public init(viewModel: SessionViewModel) {
+    public init(viewModel: SessionViewModel, onOpenWorkspace: (() -> Void)? = nil) {
         _vm = State(initialValue: viewModel)
+        self.onOpenWorkspace = onOpenWorkspace
     }
 
     public var body: some View {
@@ -139,6 +141,7 @@ public struct SessionView: View {
                         dismiss()
                     },
                     onPortForward: { showingPortForward = true },
+                    onOpenWorkspace: onOpenWorkspace,
                     // Manual reconnect: only surfaced when the connection is not
                     // healthy (dropped/failed/suspended), so the user isn't stranded
                     // on a dead session when automatic reconnect hasn't fired.

@@ -163,10 +163,9 @@ public struct BillingView: View {
                             .foregroundStyle(t.text3)
                         Spacer()
                     }
-                    // Brand spectrum strip (R5.3): the red→blue signature device marks the
-                    // usage/data context. On-brand and decorative — no fabricated quota.
-                    SpectrumBar(mode: .idle, height: 6)
-                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                    Rectangle()
+                        .fill(t.divider)
+                        .frame(height: 1)
                     Text("AI usage today · metered across vendors")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)

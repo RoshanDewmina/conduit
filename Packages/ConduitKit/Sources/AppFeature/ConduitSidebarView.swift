@@ -121,6 +121,15 @@ public struct ConduitSidebarView: View {
             )
             sidebarDivider
             SidebarNavRow(
+                title: "Governance",
+                subtitle: "Policy, bridge and enforcement",
+                systemImage: "checkmark.shield",
+                badge: nil,
+                selected: state.selectedDestination == .governance,
+                action: { onNavigate(.governance) }
+            )
+            sidebarDivider
+            SidebarNavRow(
                 title: "Fleet",
                 subtitle: state.fleetSlotCount > 0 ? "\(state.fleetSlotCount) connected" : "Hosts and running agents",
                 systemImage: "rectangle.3.group",

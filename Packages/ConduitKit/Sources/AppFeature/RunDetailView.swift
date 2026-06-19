@@ -73,24 +73,6 @@ public struct RunDetailView: View {
         }
     }
 
-    private var spectrumMode: SpectrumMode {
-        switch store.status {
-        case .stopped, .budgetExceeded:
-            return .idle
-        case .paused:
-            return .idle
-        case .running:
-            switch agentState {
-            case .thinking:  return .loading
-            case .streaming: return .working
-            case .approval:  return .working
-            case .done:      return .idle
-            case .error:     return .scan
-            case .offline:   return .scan
-            }
-        }
-    }
-
     private var dotMatrixState: DotMatrixState {
         switch agentState {
         case .thinking:  return .connecting
@@ -174,7 +156,7 @@ public struct RunDetailView: View {
     public var body: some View {
         VStack(spacing: 0) {
             hudStrip
-            SpectrumBar(mode: spectrumMode, height: 6, gap: 1.5)
+            DSDivider(.strong)
             if currentRun == nil {
                 emptyState
             } else if isErrorState {
