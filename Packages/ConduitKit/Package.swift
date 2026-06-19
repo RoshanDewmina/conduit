@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.4
 // ConduitKit — modular engines + features for the Conduit iOS app.
 // Engines are platform-agnostic (no UIKit/SwiftUI). Features depend on engines.
 
@@ -16,7 +16,7 @@ let swiftSettings: [SwiftSetting] = [
 let package = Package(
     name: "ConduitKit",
     platforms: [
-        .iOS(.v26),
+        .iOS(.v27),
         .macOS(.v15),
         .watchOS(.v26),
     ],
@@ -222,6 +222,7 @@ let package = Package(
                 "SettingsFeature",
                 "DiffFeature",
                 "DiffKit",
+                "PreviewKit",
                 "SSHTransport",
                 "FilesFeature",
                 "KeysFeature",
@@ -230,6 +231,7 @@ let package = Package(
             swiftSettings: swiftSettings,
             linkerSettings: [
                 .linkedFramework("WatchConnectivity", .when(platforms: [.iOS])),
+                .linkedFramework("WebKit", .when(platforms: [.iOS])),
             ]
         ),
 

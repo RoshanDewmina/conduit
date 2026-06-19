@@ -25,13 +25,13 @@ be corrected.
 
 ## 2. Platform contract
 
-- Deployment target: **iOS 26.0** (`project.yml` and `Package.swift`).
-- Toolchain: Xcode 26.x, Swift 6.2, SwiftPM-first.
+- Deployment target: **iOS 27.0** (`project.yml` and `Package.swift`).
+- Toolchain: Xcode 27.x, Swift 6.2, SwiftPM-first.
 - Strict concurrency and existential-any are on by default — do not add
   upcoming-feature flags for them.
-- iOS 26-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
+- iOS 27-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
   modifiers, `BGContinuedProcessingTask`, Foundation Models, etc.) can be
-  used without `#available` gating once the rest of the file requires iOS 26.
+  used without `#available` gating once the rest of the file requires iOS 27.
 
 ## 3. Code change rules
 

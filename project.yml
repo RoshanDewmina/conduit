@@ -2,15 +2,15 @@ name: Conduit
 options:
   bundleIdPrefix: dev.conduit
   deploymentTarget:
-    iOS: "26.0"
-  xcodeVersion: "26.0"
+    iOS: "27.0"
+  xcodeVersion: "27.0"
   createIntermediateGroups: true
   developmentLanguage: en
 
 settings:
   base:
     SWIFT_VERSION: "6.2"
-    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     # Must stay YES: the Approve/Reject Live Activity & widget buttons are backed
@@ -38,7 +38,7 @@ targets:
   Conduit:
     type: application
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: Conduit
     resources:
@@ -124,6 +124,36 @@ targets:
         embed: true
       - target: ConduitWidget
         embed: true
+      - target: ConduitWatch
+        embed: true
+
+  ConduitWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: ConduitWatch
+    info:
+      path: ConduitWatch/Info.plist
+    entitlements:
+      path: ConduitWatch/ConduitWatch.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchapp
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+    dependencies:
+      - package: ConduitKit
+        product: ConduitCore
+      - sdk: WatchConnectivity.framework
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
       - target: ConduitWatchWidget
         embed: true
 
@@ -140,6 +170,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).ConduitWatchWidgetBundle"
     entitlements:
       path: ConduitWatchWidget/ConduitWatchWidget.entitlements
       properties:
@@ -166,7 +197,7 @@ targets:
   ConduitLiveActivityWidget:
     type: app-extension
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: ConduitLiveActivityWidget
     info:
@@ -181,7 +212,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.liveactivity
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
-        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
@@ -198,7 +229,7 @@ targets:
   ConduitWidget:
     type: app-extension
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: ConduitWidget
     info:
@@ -218,7 +249,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.widget
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
-        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
@@ -234,7 +265,7 @@ targets:
   ConduitUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: ConduitUITests
     settings:
