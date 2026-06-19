@@ -972,6 +972,22 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, map[string]string{"ok": "true"})
 
+	case "conduit.device.register.activity":
+		var p struct {
+			PushBackendURL string `json:"pushBackendURL"`
+			SessionID      string `json:"sessionId"`
+			ActivityToken  string `json:"activityToken"`
+			IsPushToStart  bool   `json:"isPushToStart"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.ActivityToken == "" || p.SessionID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if p.PushBackendURL != "" {
+			go s.postActivityTokenRegistration(p.PushBackendURL, p.SessionID, p.ActivityToken, p.IsPushToStart)
+		}
+		s.writeResult(msg.ID, map[string]string{"ok": "true"})
+
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
 	}
@@ -1334,6 +1350,36 @@ func (s *server) postDeviceTokenRegistration(backendURL, sessionID, hexToken str
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		fmt.Fprintf(os.Stderr, "apns-token registration rejected: HTTP %d\n", resp.StatusCode)
+	}
+}
+
+func (s *server) postActivityTokenRegistration(backendURL, sessionID, activityToken string, isPushToStart bool) {
+	body, err := json.Marshal(map[string]interface{}{
+		"sessionId":     sessionID,
+		"activityToken": activityToken,
+		"isPushToStart": isPushToStart,
+	})
+	if err != nil {
+		return
+	}
+	endpoint := strings.TrimRight(backendURL, "/") + "/register-activity-token"
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "activity-token registration POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "activity-token registration rejected: HTTP %d\n", resp.StatusCode)
 	}
 }
 

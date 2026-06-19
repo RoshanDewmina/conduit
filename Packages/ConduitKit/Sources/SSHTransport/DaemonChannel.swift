@@ -136,6 +136,18 @@ public actor DaemonChannel {
         )
     }
 
+    public func registerActivityToken(activityToken: String, sessionID: String, isPushToStart: Bool, pushBackendURL: String) async throws {
+        _ = try await sendRPC(
+            method: "conduit.device.register.activity",
+            params: [
+                "pushBackendURL": pushBackendURL,
+                "sessionId": sessionID,
+                "activityToken": activityToken,
+                "isPushToStart": isPushToStart,
+            ]
+        )
+    }
+
     public static func decisionWireValue(for decision: Approval.Decision) -> String {
         switch decision {
         case .approved: return "approve"
