@@ -30,45 +30,28 @@ public struct NewWorktreeView: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
+        DSScreen("New worktree", onBack: onCancel) {
+            sectionLabel("BASE BRANCH")
+            branchPicker
 
-            VStack(spacing: 0) {
-                DSDetailHeader("new worktree", onBack: onCancel)
+            sectionLabel("NEW BRANCH NAME")
+            branchNameInput
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Base branch picker
-                        sectionLabel("BASE BRANCH")
-                        branchPicker
+            sectionLabel("ASSIGN AGENT")
+            agentPicker
 
-                        // New branch name
-                        sectionLabel("NEW BRANCH NAME")
-                        branchNameInput
-
-                        // Assign agent
-                        sectionLabel("ASSIGN AGENT")
-                        agentPicker
-
-                        // Create button
-                        DSButton(
-                            "Create worktree",
-                            systemImage: "plus",
-                            variant: .primary,
-                            size: .lg,
-                            fullWidth: true
-                        ) {
-                            Haptics.selection()
-                            onCreate(selectedBaseBranch, newBranchName, selectedAgent)
-                        }
-                        .disabled(newBranchName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
-                }
+            DSButton(
+                "Create worktree",
+                systemImage: "plus",
+                variant: .primary,
+                size: .lg,
+                fullWidth: true
+            ) {
+                Haptics.selection()
+                onCreate(selectedBaseBranch, newBranchName, selectedAgent)
             }
+            .disabled(newBranchName.trimmingCharacters(in: .whitespaces).isEmpty)
+            .padding(.top, 8)
         }
     }
 
