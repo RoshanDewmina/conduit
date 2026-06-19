@@ -99,14 +99,14 @@ public struct DSSpendHero: View {
         GeometryReader { geo in
             let w = geo.size.width
             let total = max(totalVendorAmount, 0.001)
-            let spectra = ConduitTokens.spectrumColors
+            let vendorColors = [t.accent, t.ok, t.warn, t.text3]
             let gap: CGFloat = 2
 
             HStack(spacing: gap) {
                 ForEach(Array(vendors.enumerated()), id: \.offset) { idx, vendor in
                     let fraction = CGFloat(vendor.amount / total)
                     let segW = max(4, (w - gap * CGFloat(vendors.count - 1)) * fraction)
-                    let color = spectra[idx % spectra.count]
+                    let color = vendorColors[idx % vendorColors.count]
 
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
                         .fill(color)

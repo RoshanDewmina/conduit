@@ -277,6 +277,7 @@ public struct DSExitChip: View {
 public enum AgentKey: String, Sendable {
     case claudeCode = "claude-code"
     case codex
+    case kimi
     case cursor
     case opencode
     case devin
@@ -287,6 +288,7 @@ public enum AgentKey: String, Sendable {
         switch self {
         case .claudeCode: return "CC"
         case .codex:      return "CX"
+        case .kimi:       return "KM"
         case .cursor:     return "CR"
         case .opencode:   return "OC"
         case .devin:      return "DV"
@@ -299,6 +301,7 @@ public enum AgentKey: String, Sendable {
         switch self {
         case .claudeCode: return Color(.sRGB, red: 0.820, green: 0.439, blue: 0.184, opacity: 1) // orange
         case .codex:      return Color(.sRGB, red: 0.153, green: 0.157, blue: 0.176, opacity: 1) // dark grey
+        case .kimi:       return Color(.sRGB, red: 0.047, green: 0.541, blue: 0.545, opacity: 1)
         case .cursor:     return Color(.sRGB, red: 0.290, green: 0.196, blue: 0.816, opacity: 1) // purple
         case .opencode:   return Color(.sRGB, red: 0.153, green: 0.157, blue: 0.176, opacity: 1)
         case .devin:      return Color(.sRGB, red: 0.153, green: 0.157, blue: 0.176, opacity: 1)

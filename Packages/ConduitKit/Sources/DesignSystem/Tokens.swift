@@ -104,19 +104,6 @@ public struct ConduitTokens: Sendable {
         }
     }
 
-    // MARK: Famicom spectrum (M-THEORY cartridge) — the signature device.
-    // Drives the spectrum bar, dot-matrix loaders, logo and the risk ramp. Same in both schemes.
-    public static let spectrumColors: [Color] = [
-        Color(.sRGB, red: 0.784, green: 0.259, blue: 0.231, opacity: 1), // #C8423B
-        Color(.sRGB, red: 0.886, green: 0.400, blue: 0.173, opacity: 1), // #E2662C
-        Color(.sRGB, red: 0.941, green: 0.573, blue: 0.180, opacity: 1), // #F0922E
-        Color(.sRGB, red: 0.949, green: 0.757, blue: 0.306, opacity: 1), // #F2C14E
-        Color(.sRGB, red: 0.780, green: 0.482, blue: 0.651, opacity: 1), // #C77BA6
-        Color(.sRGB, red: 0.494, green: 0.310, blue: 0.710, opacity: 1), // #7E4FB5
-        Color(.sRGB, red: 0.329, green: 0.376, blue: 0.784, opacity: 1), // #5460C8
-    ]
-    public var spectrum: [Color] { Self.spectrumColors }
-
     // MARK: Backward-compat aliases
     public var surf0: Color { bg }
     public var surf1: Color { surface }

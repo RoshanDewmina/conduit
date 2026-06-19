@@ -1,23 +1,22 @@
 import SwiftUI
 
 // MARK: - Font helpers
-// Shell UI now uses system rounded typography for a calmer, chat-first feel.
-// Monospace remains custom and explicit for paths, commands, code, and terminal output.
+// Shell UI uses a compact brand face, a readable UI face, and explicit mono.
 
 public extension Font {
-    /// Chakra Petch at the given TextStyle — use for screen titles and large headers.
+    /// Playwrite US Modern is reserved for short brand/display moments.
     static func dsDisplay(_ style: TextStyle, weight: Weight = .semibold) -> Font {
-        .system(style, design: .rounded, weight: weight)
+        .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Chakra Petch at an exact point size, scaled relative to the nearest TextStyle.
+    /// Playwrite US Modern at an exact point size.
     static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
-    /// DM Sans at the given TextStyle with weight.
+    /// Instrument Sans at the given TextStyle with weight.
     static func dsSans(_ style: TextStyle, weight: Weight = .regular) -> Font {
-        .system(style, design: .rounded, weight: weight)
+        .custom(sansFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
     /// Fragment Mono at the given TextStyle with weight.
@@ -25,9 +24,9 @@ public extension Font {
         .custom(monoFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// DM Sans at an exact point size, scaled relative to the nearest TextStyle.
+    /// Instrument Sans at an exact point size.
     static func dsSansPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .custom(sansFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
     /// Fragment Mono at an exact point size, scaled relative to the nearest TextStyle.
@@ -101,11 +100,25 @@ private func dsSize(_ style: Font.TextStyle) -> CGFloat {
 // MARK: - Face name helpers
 
 private func monoFaceName(_ weight: Font.Weight) -> String {
-    // Fira Code — the BLOCKS mono face (body, terminal, list rows, captions, code).
     switch weight {
-    case .black, .heavy, .bold:          return "FiraCode-Bold"
-    case .semibold:                      return "FiraCode-SemiBold"
-    case .medium:                        return "FiraCode-Medium"
-    default:                             return "FiraCode-Regular"
+    case .black, .heavy, .bold:          return "JetBrainsMono-Bold"
+    case .semibold, .medium:             return "JetBrainsMono-Medium"
+    default:                             return "JetBrainsMono-Regular"
+    }
+}
+
+private func sansFaceName(_ weight: Font.Weight) -> String {
+    switch weight {
+    case .black, .heavy, .bold:          return "InstrumentSans-Bold"
+    case .semibold:                      return "InstrumentSans-SemiBold"
+    case .medium:                        return "InstrumentSans-Medium"
+    default:                             return "InstrumentSans-Regular"
+    }
+}
+
+private func displayFaceName(_ weight: Font.Weight) -> String {
+    switch weight {
+    case .black, .heavy, .bold, .semibold, .medium: return "PlaywriteUSModern-Regular"
+    default:                                          return "PlaywriteUSModern-Regular"
     }
 }

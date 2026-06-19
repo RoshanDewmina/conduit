@@ -1,14 +1,12 @@
 import SwiftUI
 
-// MARK: - DSScreenHeader — the BLOCKS large-title header (Head1 pattern)
-// Lowercase Chakra Petch title with a blinking blue `_` cursor, a `~/conduit › {sub} · {count}`
-// breadcrumb, and the famicom spectrum rule. Used by Sessions / Inbox / Settings.
+// MARK: - DSScreenHeader — the standard product-page header
+// System-style title, concise breadcrumb, and optional trailing control.
 
 public struct DSScreenHeader<Trailing: View>: View {
     let title: String
     let breadcrumb: String?
     let count: String?
-    let spectrumMode: SpectrumMode
     let trailing: Trailing
 
     @Environment(\.conduitTokens) private var t
@@ -17,13 +15,11 @@ public struct DSScreenHeader<Trailing: View>: View {
         _ title: String,
         breadcrumb: String? = nil,
         count: String? = nil,
-        spectrumMode: SpectrumMode = .idle,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.title = title
         self.breadcrumb = breadcrumb
         self.count = count
-        self.spectrumMode = spectrumMode
         self.trailing = trailing()
     }
 
@@ -58,14 +54,11 @@ public struct DSScreenHeader<Trailing: View>: View {
     }
 }
 
-// MARK: - DSDetailHeader — BLOCKS header for pushed/sheet detail screens
-// Square back button + lowercase Chakra Petch title with blue `_` cursor + spectrum rule.
-// Replaces the system navigation bar (rounded Cancel/Save pills + SF title) on pushed screens.
+// MARK: - DSDetailHeader — native-style detail chrome for pushed or sheet screens.
 
 public struct DSDetailHeader<Trailing: View>: View {
     let title: String
     let onBack: (() -> Void)?
-    let spectrumMode: SpectrumMode
     let trailing: Trailing
 
     @Environment(\.conduitTokens) private var t
@@ -73,12 +66,10 @@ public struct DSDetailHeader<Trailing: View>: View {
     public init(
         _ title: String,
         onBack: (() -> Void)? = nil,
-        spectrumMode: SpectrumMode = .idle,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.title = title
         self.onBack = onBack
-        self.spectrumMode = spectrumMode
         self.trailing = trailing()
     }
 
@@ -114,7 +105,7 @@ public struct DSDetailHeader<Trailing: View>: View {
     }
 }
 
-// MARK: - DSIconButton — square bordered action button (the BLOCKS `+` in the header)
+// MARK: - DSIconButton — standard 44-point icon control.
 
 public struct DSIconButton: View {
     let icon: DSIcon

@@ -1,8 +1,7 @@
 import Foundation
 import CoreText
 
-/// Registers the bundled BLOCKS fonts — Chakra Petch (display) + Fira Code (mono) — at app launch.
-/// Call once from ConduitApp.init() before any view renders.
+/// Registers the bundled display, UI, and technical typefaces at app launch.
 @MainActor
 public enum DesignSystemFonts {
     private static var didRegister = false
@@ -11,14 +10,9 @@ public enum DesignSystemFonts {
         guard !didRegister else { return }
         didRegister = true
         let names = [
-            "ChakraPetch-Regular",
-            "ChakraPetch-Medium",
-            "ChakraPetch-SemiBold",
-            "ChakraPetch-Bold",
-            "FiraCode-Regular",
-            "FiraCode-Medium",
-            "FiraCode-SemiBold",
-            "FiraCode-Bold",
+            "PlaywriteUSModern",
+            "InstrumentSans",
+            "JetBrainsMono",
         ]
         for name in names {
             guard let url = Bundle.module.url(forResource: name, withExtension: "ttf") else {
