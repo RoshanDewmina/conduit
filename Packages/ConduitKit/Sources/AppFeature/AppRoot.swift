@@ -901,7 +901,6 @@ public struct AppRoot: View {
                                     DSIconView(.list, size: 18, color: t.text)
                                         .frame(width: 50, height: 50)
                                         .background(t.surface2.opacity(0.94), in: Circle())
-                                        .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
                                         .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
                                 }
                                 .buttonStyle(.plain)

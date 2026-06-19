@@ -117,8 +117,12 @@ private func sansFaceName(_ weight: Font.Weight) -> String {
 }
 
 private func displayFaceName(_ weight: Font.Weight) -> String {
+    // Display headlines use Instrument Sans (bold) — distinct from body via
+    // size/weight, no script/cursive face. Was PlaywriteUSModern; swapped out
+    // per design feedback. Re-point here to change the display face globally.
     switch weight {
-    case .black, .heavy, .bold, .semibold, .medium: return "PlaywriteUSModern-Regular"
-    default:                                          return "PlaywriteUSModern-Regular"
+    case .black, .heavy, .bold: return "InstrumentSans-Bold"
+    case .semibold:             return "InstrumentSans-SemiBold"
+    default:                    return "InstrumentSans-Medium"
     }
 }
