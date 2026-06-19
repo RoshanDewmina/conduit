@@ -346,6 +346,9 @@ public struct AppRoot: View {
             }
             if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { _ in
+            selectedTab = .inbox
+        }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("conduitE2ERunOutput"))) { note in
@@ -568,6 +571,16 @@ public struct AppRoot: View {
             // subscriber). Done after configureCloudServices so the relay backend
             // is configured.
             await drainPendingApprovalActions(env: env)
+            for approvalID in OpenApprovalBuffer.shared.drain() {
+                // Cold launch: route to Inbox, then re-post so the now-mounted
+                // InboxView observer opens the detail sheet. REVIEW intent only —
+                // never auto-decides (ApprovalActionBuffer handles decisions separately).
+                selectedTab = .inbox
+                NotificationCenter.default.post(
+                    name: .conduitOpenApproval, object: nil,
+                    userInfo: ["approvalId": approvalID]
+                )
+            }
             await env.syncEngine.start()
         }
         .task {
