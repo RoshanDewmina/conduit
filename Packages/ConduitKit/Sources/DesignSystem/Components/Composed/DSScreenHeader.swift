@@ -28,38 +28,29 @@ public struct DSScreenHeader<Trailing: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                HStack(spacing: 0) {
-                    Text(title.lowercased())
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.text)
-                    Text("_")
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.accent)
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                Text(title)
+                    .font(.dsDisplayPt(30, weight: .bold))
+                    .foregroundStyle(t.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 8)
                 trailing
             }
             if breadcrumb != nil || count != nil {
                 HStack(spacing: 8) {
                     if let breadcrumb {
-                        Text("~/conduit").foregroundStyle(t.text4)
-                        Text("›").foregroundStyle(t.accent)
-                        Text(breadcrumb).foregroundStyle(t.text3)
+                        Text(breadcrumb).foregroundStyle(t.text2)
                     }
                     Spacer(minLength: 8)
                     if let count {
-                        Text(count).foregroundStyle(t.text2)
+                        Text(count).foregroundStyle(t.text3)
                     }
                 }
-                .font(.dsMonoPt(11))
+                .font(.dsSansPt(14))
                 .lineLimit(1)
             }
-            SpectrumBar(mode: spectrumMode, height: 3)
-                .opacity(0.75)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
@@ -92,40 +83,30 @@ public struct DSDetailHeader<Trailing: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                if let onBack {
-                    Button(action: onBack) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(t.text)
-                            .frame(width: 36, height: 36)
-                            .background(t.surface2)
-                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                    .strokeBorder(t.border, lineWidth: 1))
-                            // 36pt visual, 44pt touch target (Apple HIG minimum).
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                HStack(spacing: 0) {
-                    Text(title.lowercased())
-                        .font(.dsDisplayPt(24, weight: .bold))
+        HStack(spacing: 10) {
+            if let onBack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(t.text)
-                    Text("_")
-                        .font(.dsDisplayPt(24, weight: .bold))
-                        .foregroundStyle(t.accent)
+                        .frame(width: 36, height: 36)
+                        .background(t.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.border, lineWidth: 1))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+            }
+            Text(title)
+                .font(.dsDisplayPt(24, weight: .bold))
+                .foregroundStyle(t.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                Spacer(minLength: 8)
-                trailing
-            }
-            SpectrumBar(mode: spectrumMode, height: 3)
-                .opacity(0.75)
+            Spacer(minLength: 8)
+            trailing
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)

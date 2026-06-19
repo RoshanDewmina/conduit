@@ -119,7 +119,7 @@ public struct OnboardingRedesignView: View {
                 .textCase(.uppercase)
 
             Text(current.title)
-                .font(.system(size: 34, weight: .bold, design: .monospaced))
+                .font(.dsDisplayPt(34, weight: .bold))
                 .foregroundStyle(t.text)
                 .tracking(0)
                 .lineLimit(3)
@@ -309,7 +309,7 @@ private struct ConduitPairingCard: View {
                         .tracking(1.1)
                         .foregroundStyle(t.text3)
                     Text(displayCode)
-                        .font(.system(size: 30, weight: .bold, design: .monospaced))
+                        .font(.dsDisplayPt(30, weight: .bold))
                         .foregroundStyle(t.text)
                         .accessibilityIdentifier("pairingCode")
                     Text(statusLabel)
