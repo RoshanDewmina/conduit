@@ -82,6 +82,10 @@ type liveActivityContentState struct {
 	PendingApprovalID *string  `json:"pendingApprovalID,omitempty"`
 	IsStreaming       bool     `json:"isStreaming"`
 	Cost              *float64 `json:"cost,omitempty"`
+	// LastDecision is a transient confirmation pushed once after a decision
+	// resolves ("approved"/"rejected"); omitted in steady state. Mirrors the
+	// Swift ContentState.lastDecision optional.
+	LastDecision *string `json:"lastDecision,omitempty"`
 	// lastUpdate encoded as a Unix fractional seconds float — matches Swift's
 	// default JSONEncoder Date strategy and ActivityKit's default decoder.
 	LastUpdate float64 `json:"lastUpdate"`

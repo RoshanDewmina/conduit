@@ -216,6 +216,21 @@ struct LiveActivityContentStateTests {
         #expect(json["lastUpdate"] != nil)
     }
 
+    @available(iOS 16.2, *)
+    @Test func lastDecisionRoundTripsAndDefaultsNil() throws {
+        // Default is nil and omitted-friendly.
+        let running = ConduitSessionAttributes.ContentState(status: "connected", isStreaming: true)
+        #expect(running.lastDecision == nil)
+
+        // Set + round-trip through JSON (the wire format ActivityKit uses).
+        let landed = ConduitSessionAttributes.ContentState(
+            status: "connected", pendingApprovals: 0, lastDecision: "approved"
+        )
+        let data = try JSONEncoder().encode(landed)
+        let back = try JSONDecoder().decode(ConduitSessionAttributes.ContentState.self, from: data)
+        #expect(back.lastDecision == "approved")
+    }
+
 #endif // os(iOS)
 }
 

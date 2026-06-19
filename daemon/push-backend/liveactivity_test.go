@@ -227,3 +227,20 @@ func TestApnsTopicFormat(t *testing.T) {
 		t.Errorf("apns-topic = %q, want %q", got, want)
 	}
 }
+
+func TestContentStateLastDecisionOmittedWhenNil(t *testing.T) {
+	cs := liveActivityContentState{Status: "connected", LastUpdate: 1700000000.0}
+	b, err := json.Marshal(cs)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "lastDecision") {
+		t.Fatalf("nil lastDecision must be omitted, got: %s", b)
+	}
+	dec := "approved"
+	cs.LastDecision = &dec
+	b2, _ := json.Marshal(cs)
+	if !strings.Contains(string(b2), `"lastDecision":"approved"`) {
+		t.Fatalf("set lastDecision must serialize, got: %s", b2)
+	}
+}
