@@ -174,6 +174,18 @@ This is meaningfully different from:
 - **Launch:** #7 Product of the Day Jun 14 2026 (83 upvotes); privacy stance: "no telemetry"
 - **Source:** `LAUNCH_STRATEGY_RESEARCH.md` §2.7
 
+#### Blume ("Blume Sidecar") — `blume.codes`
+- **What:** Web-based **desktop** oversight/governance app for AI coding agents. Tagline "Watch every coding agent, effortlessly / Tired of steering your coding agents?" Monitors agent status (working / awaiting approval); **tracks the hidden files, skills, hooks & rules that shape agent behavior** and flags config↔instruction **drift**; approve-before-apply. Runs **locally**; supports Cursor, Claude Code, Codex, omp, Pi.
+- **Overlap with Conduit:** governance/oversight + approve-before-apply + own-host + multi-vendor.
+- **Where it leads Conduit:** **agent-config drift detection** (intended config vs. actual agent behavior) — Conduit has no equivalent.
+- **Gap vs Conduit:** **desktop-first, not phone-native** (no mobile control / push surfaced); no audit chain / blast-radius / risk scoring; technical internals undisclosed.
+- **NOT** to be confused with `blume.page` (an unrelated AI website builder).
+- **Source:** blume.codes (verified 2026-06-19)
+
+#### Orca
+- **What:** Open-source mobile app to run + monitor + direct existing Claude Code agentic sessions from a phone (monitoring/direction focus).
+- **Source:** explainx.ai 2026 mobile-control roundup (verified 2026-06-19)
+
 ---
 
 ## 3. Demand Signals & Pain Points

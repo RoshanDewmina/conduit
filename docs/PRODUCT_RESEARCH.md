@@ -72,11 +72,16 @@ Pieter Levels, a widely-followed indie developer, publicly documented running Cl
 | **OpenAI Codex mobile** | ALL plans incl. Free (iOS + Android) | Approve commands; streams diffs/tests/screenshots; Remote SSH GA | developers.openai.com/codex/remote-connections — HIGH confidence, TechCrunch + official, May 14 2026 |
 | **Cursor cloud agents** | Announced | Mobile companion | MEDIUM confidence — announced but adoption unverified |
 | **GitHub Copilot cloud agent (mobile)** | Announced | Research + code from mobile | MEDIUM confidence — github.blog/changelog/2026-04-08-github-mobile-research-and-code-with-copilot-cloud-agent-anywhere/ |
+| **AgentsRoom** | Desktop (mac/Linux/Win) + iOS/Android companion | Free; **own-host execution via encrypted relay that forwards only opaque blobs**; multi-vendor (Claude, Codex, OpenCode, Gemini, Aider, Grok, Mistral Vibe); push notifications, terminal streaming, live dev-server preview, activity summaries | agentsroom.dev — **HIGH confidence (verified 2026-06-19), closest direct analog to Conduit's own-host + E2E-relay + cross-vendor model.** Tagline "Your Agents Don't Stop When You Leave Your Desk." Gaps vs Conduit: no policy engine / audit chain / risk scoring. |
+| **Orca** | Open-source mobile app | Run + monitor + direct existing Claude Code agentic sessions from mobile | MEDIUM confidence (verified 2026-06-19) — monitoring/direction focus; less feature detail public. |
+| **Blume / "Blume Sidecar"** | Web-based desktop app (local) | Agent **oversight/governance**: monitors agent status (working / awaiting approval), **tracks hidden files, skills, hooks & rules** + flags config↔instruction **drift**, approve-before-apply; agents run **locally**; supports Cursor, Claude Code, Codex, omp, Pi | blume.codes — **HIGH confidence (verified 2026-06-19), governance-adjacent.** Overlaps Conduit's policy/oversight angle; its **agent-config drift detection** is a feature Conduit lacks. Gap vs Conduit: **desktop-first, not phone-native** (no mobile control/notifications surfaced); no audit chain / risk scoring. NOTE: distinct from the unrelated `blume.page` (AI website builder). |
 | **Termius** | Mobile SSH incumbent | $10/mo — termius.com/pricing | Dumb terminal; no agent approvals |
 | **Blink Shell** | Mobile SSH incumbent | $20/yr | Dumb terminal; no agent approvals |
 | **Additional OSS** | Various | Paseo, Companion, Happier, Catnip, Sled, CallMe, PeonPing, Lucarne, CC Pocket | github.com/K9i-0/ccpocket and others |
 
 **Combined OSS GitHub stars (Happy + cmux + CloudCLI): ~54k** — a formidable "free and trusted" signal.
+
+**Name-collision note:** the competitor is **`blume.codes`** (Blume Sidecar, in the table above). The similarly-named **`blume.page`** is an unrelated AI *website builder* ("Websites that evolve, rank, and grow without lifting a finger") — **not** a competitor; don't confuse the two. (Both checked 2026-06-19.)
 
 ### 3.2 Claude Code Platform Capabilities Relevant to Conduit
 **Confidence: HIGH** — official docs
