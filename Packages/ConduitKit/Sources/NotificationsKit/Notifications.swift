@@ -22,6 +22,10 @@ public extension Notification.Name {
     /// register with push-backend. userInfo: ["sessionID": String, "activityToken":
     /// String (hex), "isPushToStart": Bool]
     static let conduitLiveActivityTokenReady = Notification.Name("dev.conduit.liveActivityTokenReady")
+    /// Posted when the user taps a notification/Live-Activity BODY (not an action
+    /// button) to REVIEW an approval. userInfo: ["approvalId": String]. Distinct
+    /// from conduitApprovalAction, which decides. Opens the detail sheet.
+    static let conduitOpenApproval = Notification.Name("dev.conduit.openApproval")
 }
 
 // MARK: - Cold-launch approval action buffer (MAJOR-6)
@@ -74,6 +78,24 @@ public final class ApprovalActionBuffer: @unchecked Sendable {
         let snapshot = pending
         pending.removeAll()
         return snapshot
+    }
+}
+
+/// Buffers a cold-launch "open this approval's detail" intent (a notification/
+/// Live-Activity body tap), mirroring ApprovalActionBuffer but for review, not
+/// decision. AppRoot drains it once the graph is ready and routes to the Inbox.
+public final class OpenApprovalBuffer: @unchecked Sendable {
+    public static let shared = OpenApprovalBuffer()
+    private let lock = NSLock()
+    private var pending: [String] = []
+    private init() {}
+    public func record(approvalID: String) {
+        lock.lock(); defer { lock.unlock() }
+        pending.append(approvalID)
+    }
+    public func drain() -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        let snapshot = pending; pending.removeAll(); return snapshot
     }
 }
 

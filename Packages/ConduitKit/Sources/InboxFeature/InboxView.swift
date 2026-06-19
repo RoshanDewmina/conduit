@@ -123,6 +123,13 @@ public struct InboxView: View {
                 vm.decide(approval.id, decision: .approvedAlways)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { note in
+            guard let idString = note.userInfo?["approvalId"] as? String,
+                  let uuid = UUID(uuidString: idString) else { return }
+            if let match = vm.approvals.first(where: { $0.id.raw == uuid }) {
+                detailApproval = match
+            }
+        }
     }
 
     private var inboxHeader: some View {

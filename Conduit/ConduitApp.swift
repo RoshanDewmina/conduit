@@ -238,6 +238,16 @@ final class ConduitNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
                 object: nil,
                 userInfo: ["sessionId": sessionId]
             )
+            // When the body tap is for an approval, also open the detail sheet.
+            // Record to the buffer first (cold-launch guard) then post for warm case.
+            if !approvalId.isEmpty {
+                OpenApprovalBuffer.shared.record(approvalID: approvalId)
+                NotificationCenter.default.post(
+                    name: .conduitOpenApproval,
+                    object: nil,
+                    userInfo: ["approvalId": approvalId]
+                )
+            }
         default:
             break
         }
