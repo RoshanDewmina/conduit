@@ -60,6 +60,10 @@ public struct InboxView: View {
     @State private var editingApproval: Approval?
     @State private var editedToolInputText = ""
     @State private var scopeSheetApproval: Approval?
+    /// A deep-linked approval id (notification/Live-Activity body tap) whose row
+    /// hasn't loaded yet — on a cold launch `vm.approvals` is empty when the open
+    /// signal arrives. Held until the list loads, then resolved in `.onChange`.
+    @State private var pendingOpenApprovalID: UUID?
 
     public init(
         viewModel: InboxViewModel,
@@ -128,7 +132,19 @@ public struct InboxView: View {
                   let uuid = UUID(uuidString: idString) else { return }
             if let match = vm.approvals.first(where: { $0.id.raw == uuid }) {
                 detailApproval = match
+                pendingOpenApprovalID = nil
+            } else {
+                // Cold launch: approvals not loaded yet. Remember the id and
+                // resolve it once the list arrives (.onChange below). Review
+                // intent only — this opens the detail sheet, never decides.
+                pendingOpenApprovalID = uuid
             }
+        }
+        .onChange(of: vm.approvals.count) { _, _ in
+            guard let uuid = pendingOpenApprovalID,
+                  let match = vm.approvals.first(where: { $0.id.raw == uuid }) else { return }
+            detailApproval = match
+            pendingOpenApprovalID = nil
         }
     }
 
