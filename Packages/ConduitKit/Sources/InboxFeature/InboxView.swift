@@ -140,6 +140,11 @@ public struct InboxView: View {
                 pendingOpenApprovalID = uuid
             }
         }
+        // Resolve a deep-link that arrived before the list loaded. `.count` is a
+        // sufficient trigger here (not a strong identity key) because this only
+        // matters during the cold-launch window when count goes 0→N; outside it
+        // `pendingOpenApprovalID` is nil and the guard short-circuits. The actual
+        // match is still an exact id lookup, so it can never open the wrong sheet.
         .onChange(of: vm.approvals.count) { _, _ in
             guard let uuid = pendingOpenApprovalID,
                   let match = vm.approvals.first(where: { $0.id.raw == uuid }) else { return }
