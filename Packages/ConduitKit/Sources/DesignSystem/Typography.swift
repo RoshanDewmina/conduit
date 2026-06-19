@@ -1,24 +1,23 @@
 import SwiftUI
 
-// MARK: - Font helpers — BLOCKS type system
-// Chakra Petch (display/titles) + Fira Code (mono — body, UI, terminal, labels, code).
-// Body/UI is monospace by design; `dsSans*` is kept as an alias onto Fira Code so existing
-// call-sites flip automatically. Custom fonts don't respond to .weight(), so weight maps to face name.
+// MARK: - Font helpers
+// Shell UI now uses system rounded typography for a calmer, chat-first feel.
+// Monospace remains custom and explicit for paths, commands, code, and terminal output.
 
 public extension Font {
     /// Chakra Petch at the given TextStyle — use for screen titles and large headers.
     static func dsDisplay(_ style: TextStyle, weight: Weight = .semibold) -> Font {
-        .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
+        .system(style, design: .rounded, weight: weight)
     }
 
     /// Chakra Petch at an exact point size, scaled relative to the nearest TextStyle.
     static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
-        .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     /// DM Sans at the given TextStyle with weight.
     static func dsSans(_ style: TextStyle, weight: Weight = .regular) -> Font {
-        .custom(sansFaceName(weight), size: dsSize(style), relativeTo: style)
+        .system(style, design: .rounded, weight: weight)
     }
 
     /// Fragment Mono at the given TextStyle with weight.
@@ -28,7 +27,7 @@ public extension Font {
 
     /// DM Sans at an exact point size, scaled relative to the nearest TextStyle.
     static func dsSansPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
-        .custom(sansFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     /// Fragment Mono at an exact point size, scaled relative to the nearest TextStyle.
@@ -100,21 +99,6 @@ private func dsSize(_ style: Font.TextStyle) -> CGFloat {
 }
 
 // MARK: - Face name helpers
-
-private func displayFaceName(_ weight: Font.Weight) -> String {
-    // Chakra Petch — the BLOCKS display face (wordmark, titles, section heads, tab labels).
-    switch weight {
-    case .black, .heavy, .bold:          return "ChakraPetch-Bold"
-    case .semibold:                      return "ChakraPetch-SemiBold"
-    case .medium:                        return "ChakraPetch-Medium"
-    default:                             return "ChakraPetch-Regular"
-    }
-}
-
-private func sansFaceName(_ weight: Font.Weight) -> String {
-    // BLOCKS is monospace-everything for body/UI text → Fira Code.
-    return monoFaceName(weight)
-}
 
 private func monoFaceName(_ weight: Font.Weight) -> String {
     // Fira Code — the BLOCKS mono face (body, terminal, list rows, captions, code).

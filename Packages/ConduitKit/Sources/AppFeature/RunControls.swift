@@ -82,8 +82,9 @@ struct RunControlBar: View {
         .padding(.horizontal, 18)
         .padding(.top, 12)
         .padding(.bottom, 16)
-        .background(.bar)
-        .overlay(Divider(), alignment: .top)
+        .background(t.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
     }
 
     private var liveControlBar: some View {
@@ -114,10 +115,7 @@ struct RunControlBar: View {
             .disabled(!store.canSetBudget)
         }
         .padding(.horizontal, 18)
-        .padding(.top, 12)
         .padding(.bottom, 16)
-        .background(.bar)
-        .overlay(Divider(), alignment: .top)
     }
 }
 
@@ -132,13 +130,13 @@ struct RunFollowUpBar: View {
 
     var body: some View {
         let textEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return HStack(spacing: 8) {
+        return HStack(spacing: 10) {
             Text("$")
                 .font(.dsMonoPt(15))
-                .foregroundStyle(t.termPrompt)
-                .padding(.leading, 4)
+                .foregroundStyle(t.info)
+                .padding(.leading, 6)
             TextField("follow-up", text: $text, axis: .vertical)
-                .font(.dsMonoPt(15))
+                .font(.dsSansPt(16))
                 .foregroundStyle(t.text)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -156,18 +154,19 @@ struct RunFollowUpBar: View {
                     onSend(value)
                     text = ""
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(textEmpty ? t.text4 : t.accent)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(textEmpty ? t.text4 : t.accentFg)
+                        .frame(width: 34, height: 34)
+                        .background(textEmpty ? t.surface2 : t.accent, in: Circle())
                 }
                 .disabled(textEmpty)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(t.surf2)
-        .clipShape(RoundedRectangle(cornerRadius: t.pill, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: t.pill, style: .continuous).stroke(t.border, lineWidth: 0.5))
+        .background(t.surfaceSunk, in: Capsule())
+        .overlay(Capsule().stroke(t.border.opacity(0.65), lineWidth: 1))
     }
 }
 
@@ -181,15 +180,15 @@ struct BudgetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set daily budget")
-                .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                .font(.dsDisplayPt(22, weight: .bold))
             HStack(spacing: 8) {
                 Text("$").font(.system(size: 16, design: .monospaced)).foregroundStyle(.secondary)
                 TextField("5.00", text: $amount)
                     .font(.system(size: 16, design: .monospaced))
                     .keyboardType(.decimalPad)
             }
-            .padding(.horizontal, 13).frame(height: 46)
-            .background(RoundedRectangle(cornerRadius: 2).stroke(.secondary.opacity(0.3)))
+            .padding(.horizontal, 13).frame(height: 48)
+            .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             // Disabled until the input parses, so "Set cap" can't silently dismiss on bad input.
             DSButton("Set cap", variant: .primary, fullWidth: true) {

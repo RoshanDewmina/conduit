@@ -560,6 +560,8 @@ public struct AppRoot: View {
         })
         .task {
             configureGlobalInbox(env: env)
+            sidebarState.configure(chatRepo: env.chatRepo)
+            await sidebarState.loadRecent()
             await configureCloudServices(env: env)
             // MAJOR-6: replay any approval action tapped from a lock-screen banner
             // while the app was killed (its NotificationCenter post had no live
@@ -595,11 +597,15 @@ public struct AppRoot: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
         .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
             hudStore.pendingApprovals = count
+            sidebarState.pendingApprovalCount = count
             // Keep the real Dynamic Island / lock-screen Live Activity badge
             // live — this is the glanceable signal while Conduit is backgrounded.
             if #available(iOS 16.2, *) {
                 Task { await ConduitLiveActivityManager.shared.updatePendingApprovals(count) }
             }
+        }
+        .onChange(of: fleetStore.slots.count, initial: true) { _, count in
+            sidebarState.fleetSlotCount = count
         }
     }
 
@@ -844,30 +850,39 @@ public struct AppRoot: View {
                                 openDrawer()
                             } label: {
                                 DSIconView(.list, size: 18, color: t.text)
-                                    .frame(width: 36, height: 36)
-                                    .background(t.surface2)
-                                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                                    .frame(width: 50, height: 50)
+                                    .background(t.surface2.opacity(0.94), in: Circle())
+                                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
+                                    .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Open sidebar")
                         }
                     }
+                    .toolbarBackground(.hidden, for: .navigationBar)
             }
             if sidebarState.isDrawerOpen {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .onTapGesture { sidebarState.isDrawerOpen = false }
-                HStack(spacing: 0) {
-                    ConduitSidebarView(state: sidebarState) { dest in
-                        sidebarState.isDrawerOpen = false
-                        sidebarState.previousDestination = sidebarState.selectedDestination
-                        sidebarState.selectedDestination = dest
+                GeometryReader { proxy in
+                    let drawerWidth = min(340, max(0, proxy.size.width - 28))
+                    HStack(spacing: 0) {
+                        ConduitSidebarView(state: sidebarState) { dest in
+                            sidebarState.isDrawerOpen = false
+                            sidebarState.previousDestination = sidebarState.selectedDestination
+                            sidebarState.selectedDestination = dest
+                        }
+                        .frame(width: drawerWidth)
+                        .background(t.bg)
+                        .overlay(alignment: .trailing) {
+                            Rectangle().fill(t.border.opacity(0.65)).frame(width: 1)
+                        }
+                        .shadow(color: .black.opacity(0.30), radius: 26, x: 12, y: 0)
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: 340)
-                    .background(t.surface)
-                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-                    .shadow(color: .black.opacity(0.25), radius: 16, x: 4, y: 0)
-                    Spacer(minLength: 0)
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
                 .transition(.move(edge: .leading))
                 .zIndex(1)
             }

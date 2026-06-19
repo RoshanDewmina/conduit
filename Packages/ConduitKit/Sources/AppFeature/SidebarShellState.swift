@@ -33,9 +33,13 @@ public final class SidebarShellState {
     public var pendingApprovalCount = 0
     public var fleetSlotCount = 0
 
-    private let chatRepo: ChatConversationRepository?
+    private var chatRepo: ChatConversationRepository?
 
     public init(chatRepo: ChatConversationRepository? = nil) {
+        self.chatRepo = chatRepo
+    }
+
+    public func configure(chatRepo: ChatConversationRepository) {
         self.chatRepo = chatRepo
     }
 

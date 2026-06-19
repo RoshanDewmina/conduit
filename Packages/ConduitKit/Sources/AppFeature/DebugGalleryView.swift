@@ -47,6 +47,10 @@ struct DebugGalleryView: View {
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "newchat":        newChatGallery
         case "chat":           chatGallery
+        case "chat-redesign":  ChatShellRedesignGalleryView()
+        case "chat-redesign-system": ChatShellRedesignSingleView(direction: .systemFirst)
+        case "chat-redesign-hybrid": ChatShellRedesignSingleView(direction: .hybridTechnical)
+        case "chat-redesign-clean":  ChatShellRedesignSingleView(direction: .chatAppClean)
         case "components":     fullComponentCatalog
         case "blocks":         BlocksReviewScreen()
         case "session":        DebugSessionHarness()

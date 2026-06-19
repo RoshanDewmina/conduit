@@ -18,147 +18,208 @@ public struct ConduitSidebarView: View {
     }
 
     public var body: some View {
-        List {
-            profileSection
-            newChatSection
-            searchSection
-            recentThreadsSection
-            sessionsSection
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                profileHeader
+                newChatButton
+                searchField
+                primaryNavigation
+                recentThreadsSection
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 58)
+            .padding(.bottom, 28)
         }
-        .scrollIndicators(.hidden)
-        .listStyle(.plain)
         .background(t.bg)
         .tint(t.accent)
         .task { await state.loadRecent() }
     }
 
-    private var newChatSection: some View {
-        Section {
-            Button {
-                onNavigate(.newChat)
-            } label: {
-                HStack(spacing: t.s3) {
-                    DSIconView(.plus, size: 18, color: t.accentFg)
-                    Text("New Task")
-                        .font(.dsMono(.body, weight: .medium))
-                        .foregroundStyle(t.accentFg)
+    private var profileHeader: some View {
+        Button { onNavigate(.settings) } label: {
+            HStack(spacing: 12) {
+                PixelAvatar(seed: "conduit-user", size: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Conduit")
+                        .font(.dsDisplayPt(24, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Text(state.fleetSlotCount > 0 ? "Agents reachable" : "Control from your phone")
+                        .font(.dsSansPt(12, weight: .medium))
+                        .foregroundStyle(t.text3)
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(t.accent)
-                .clipShape(RoundedRectangle(cornerRadius: t.r3))
+                Spacer()
+                DSIconView(.settings, size: 17, color: t.text3)
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .padding(.vertical, t.s1)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open settings")
     }
 
-    private var searchSection: some View {
-        Section {
-            HStack(spacing: t.s2) {
-                DSIconView(.search, size: 16, color: t.text3)
-                TextField("Search threads...", text: $state.searchQuery)
-                    .font(.dsMono(.callout))
-                    .foregroundStyle(t.text)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onChange(of: state.searchQuery) {
-                        Task { await state.performSearch() }
-                    }
+    private var newChatButton: some View {
+        Button { onNavigate(.newChat) } label: {
+            HStack(spacing: 9) {
+                DSIconView(.plus, size: 18, color: t.accentFg)
+                Text("New chat")
+                    .font(.dsSansPt(16, weight: .semibold))
+                    .foregroundStyle(t.accentFg)
+                Spacer()
             }
-            .padding(t.s3)
-            .background(t.surfaceSunk)
-            .clipShape(RoundedRectangle(cornerRadius: t.r2))
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .padding(.horizontal, 18)
+            .background(t.accent, in: Capsule())
+            .shadow(color: t.accent.opacity(0.22), radius: 14, y: 6)
         }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("New chat")
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            DSIconView(.search, size: 17, color: t.text3)
+            TextField("Search chats", text: $state.searchQuery)
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: state.searchQuery) { _, _ in
+                    Task { await state.performSearch() }
+                }
+        }
+        .padding(.horizontal, 15)
+        .frame(height: 48)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(t.border.opacity(0.75), lineWidth: 1)
+        )
+        .accessibilityLabel("Search chats")
+    }
+
+    private var primaryNavigation: some View {
+        VStack(spacing: 6) {
+            SidebarNavRow(
+                title: "Needs attention",
+                subtitle: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount) waiting" : "Approvals and requests",
+                icon: .inbox,
+                badge: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount)" : nil,
+                selected: state.selectedDestination == .needsAttention,
+                action: { onNavigate(.needsAttention) }
+            )
+            SidebarNavRow(
+                title: "Fleet",
+                subtitle: state.fleetSlotCount > 0 ? "\(state.fleetSlotCount) connected" : "Hosts and running agents",
+                icon: .server,
+                badge: state.fleetSlotCount > 0 ? "\(state.fleetSlotCount)" : nil,
+                selected: state.selectedDestination == .fleet,
+                action: { onNavigate(.fleet) }
+            )
+            SidebarNavRow(
+                title: "Settings",
+                subtitle: "Relay, security, and policy",
+                icon: .settings,
+                badge: nil,
+                selected: state.selectedDestination == .settings,
+                action: { onNavigate(.settings) }
+            )
+        }
+        .padding(6)
+        .background(t.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+        )
     }
 
     private var recentThreads: [ChatConversation] {
-        state.searchQuery.isEmpty
+        state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? state.recentThreads
             : state.searchResults.map(\.conversation)
     }
 
     private var recentThreadsSection: some View {
-        Section {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(state.searchQuery.isEmpty ? "Recent" : "Search results")
+                    .font(.dsSansPt(15, weight: .semibold))
+                    .foregroundStyle(t.text2)
+                Spacer()
+                if !recentThreads.isEmpty {
+                    Text("\(recentThreads.count)")
+                        .font(.dsMonoPt(11, weight: .medium))
+                        .foregroundStyle(t.text3)
+                }
+            }
+
             if recentThreads.isEmpty {
-                Text("No threads yet")
-                    .font(.dsMono(.callout))
+                Text(state.searchQuery.isEmpty ? "No chats yet" : "No matching chats")
+                    .font(.dsSansPt(14))
                     .foregroundStyle(t.text3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, t.s2)
-                    .listRowBackground(Color.clear)
+                    .padding(.vertical, 8)
             } else {
-                ForEach(recentThreads) { thread in
-                    Button {
-                        onNavigate(.thread(id: thread.id))
-                    } label: {
-                        ThreadRow(thread: thread, isSelected: false)
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-            }
-        } header: {
-            if !recentThreads.isEmpty {
-                Text("HISTORY")
-                    .dsCapsStyle()
-                    .foregroundStyle(t.text3)
-            }
-        }
-    }
-
-    private var profileSection: some View {
-        Section {
-            Button {
-                onNavigate(.settings)
-            } label: {
-                HStack(spacing: t.s3) {
-                    PixelAvatar(seed: "conduit-user", size: 32)
-                    Text("Conduit")
-                        .font(.dsMono(.callout, weight: .semibold))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    DSIconView(.settings, size: 16, color: t.text3)
-                }
-                .padding(.vertical, t.s1)
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-        }
-    }
-
-    private var sessionsSection: some View {
-        Section {
-            Button {
-                onNavigate(.newChat)
-            } label: {
-                HStack(spacing: t.s3) {
-                    DSIconView(.terminal, size: 18, color: t.text)
-                    Text("Sessions")
-                        .font(.dsMono(.callout, weight: .medium))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    if state.pendingApprovalCount > 0 {
-                        Text("\(state.pendingApprovalCount)")
-                            .font(.dsMono(.caption2, weight: .bold))
-                            .foregroundStyle(t.accentFg)
-                            .padding(.horizontal, t.s2)
-                            .padding(.vertical, t.s1)
-                            .background(t.warn)
-                            .clipShape(Capsule())
-                    } else if state.fleetSlotCount > 0 {
-                        DSChip("\(state.fleetSlotCount)", tone: .ok, variant: .soft, size: .sm)
+                VStack(spacing: 4) {
+                    ForEach(recentThreads) { thread in
+                        Button {
+                            onNavigate(.thread(id: thread.id))
+                        } label: {
+                            ThreadRow(
+                                thread: thread,
+                                isSelected: state.selectedDestination == .thread(id: thread.id)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, t.s1)
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
         }
     }
+}
 
+private struct SidebarNavRow: View {
+    let title: String
+    let subtitle: String
+    let icon: DSIcon
+    let badge: String?
+    let selected: Bool
+    let action: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                DSIconView(icon, size: 18, color: selected ? t.accent : t.text2)
+                    .frame(width: 34, height: 34)
+                    .background(selected ? t.accentSoft : t.surface2.opacity(0.7), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.dsSansPt(15, weight: .semibold))
+                        .foregroundStyle(selected ? t.text : t.text2)
+                    Text(subtitle)
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if let badge {
+                    Text(badge)
+                        .font(.dsMonoPt(11, weight: .bold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(minWidth: 24, minHeight: 24)
+                        .padding(.horizontal, 4)
+                        .background(t.accent, in: Capsule())
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 58)
+            .background(selected ? t.surface2 : Color.clear, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
 }
 
 private struct ThreadRow: View {
@@ -168,29 +229,31 @@ private struct ThreadRow: View {
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
-        HStack(spacing: t.s3) {
+        HStack(spacing: 12) {
             Circle()
-                .fill(thread.status == .active ? t.ok : t.text3)
-                .frame(width: 6, height: 6)
-            VStack(alignment: .leading, spacing: t.s1) {
+                .fill(thread.status == .active ? t.ok : t.text4)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(thread.title.isEmpty ? thread.hostName : thread.title)
-                    .font(.dsMono(.callout, weight: .medium))
-                    .foregroundStyle(isSelected ? t.accent : t.text)
+                    .font(.dsSansPt(15, weight: .medium))
+                    .foregroundStyle(isSelected ? t.text : t.text2)
                     .lineLimit(1)
-                HStack(spacing: t.s1) {
+                HStack(spacing: 4) {
                     Text(thread.hostName)
-                        .font(.dsMono(.caption2))
-                        .foregroundStyle(t.text3)
                     Text("·")
-                        .foregroundStyle(t.text4)
                     Text(thread.lastActivityAt, style: .relative)
-                        .font(.dsMono(.caption2))
-                        .foregroundStyle(t.text4)
                 }
+                .font(.dsSansPt(12))
+                .foregroundStyle(t.text3)
+                .lineLimit(1)
             }
             Spacer()
         }
-        .padding(.vertical, t.s1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(isSelected ? t.surface2 : Color.clear, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .contentShape(Rectangle())
+        .accessibilityLabel(thread.title.isEmpty ? thread.hostName : thread.title)
     }
 }
 #endif

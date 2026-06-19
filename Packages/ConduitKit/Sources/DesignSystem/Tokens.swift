@@ -60,13 +60,13 @@ public struct ConduitTokens: Sendable {
     public var termOk: Color           // oklch(0.74 0.16 150) ≈ #3fc06f
     public var termErr: Color          // oklch(0.70 0.18 27) ≈ #df5a4a
 
-    // MARK: Radii — BLOCKS identity is the square corner (r0). Only sheets round slightly;
-    // dots / avatars / pings use `pill`.
-    public var r1: CGFloat = 0   // cards / blocks
-    public var r2: CGFloat = 2   // chips / tags
-    public var r3: CGFloat = 0   // buttons / inputs
-    public var r4: CGFloat = 0   // block cards
-    public var r5: CGFloat = 4   // sheets / overlays
+    // MARK: Radii — chat shell chrome is soft and tactile; terminal/code surfaces can still
+    // opt into tighter geometry locally when they need a stronger technical read.
+    public var r1: CGFloat = 10  // compact cards / blocks
+    public var r2: CGFloat = 12  // chips / tags
+    public var r3: CGFloat = 16  // buttons / inputs
+    public var r4: CGFloat = 20  // cards
+    public var r5: CGFloat = 30  // sheets / overlays
     public var pill: CGFloat = 999
 
     // MARK: Spacing
@@ -145,18 +145,18 @@ public struct ConduitTokens: Sendable {
 
     // MARK: Prebuilt palettes
 
-    /// Light palette — clean light surfaces, cool near-black text, electric-blue accent, square corners.
+    /// Light palette — warm quiet surfaces, near-black text, warm primary accent.
     /// Secondary to the dark BLOCKS theme; terminal + HUD stay always-dark.
     public static let light = ConduitTokens(
         // Surfaces
-        bg:            Color(.sRGB, red: 0.957, green: 0.957, blue: 0.949, opacity: 1), // #f4f4f2
-        bgTint:        Color(.sRGB, red: 0.925, green: 0.929, blue: 0.918, opacity: 1), // #ecedea
+        bg:            Color(.sRGB, red: 0.957, green: 0.953, blue: 0.929, opacity: 1), // #f4f3ed
+        bgTint:        Color(.sRGB, red: 0.925, green: 0.914, blue: 0.886, opacity: 1), // #ece9e2
         surface:       Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
-        surface2:      Color(.sRGB, red: 0.965, green: 0.965, blue: 0.957, opacity: 1), // #f6f6f4
-        surfaceSunk:   Color(.sRGB, red: 0.925, green: 0.933, blue: 0.941, opacity: 1), // #eceef0
-        border:        Color(.sRGB, red: 0.886, green: 0.890, blue: 0.878, opacity: 1), // #e2e3e0
-        borderStrong:  Color(.sRGB, red: 0.824, green: 0.831, blue: 0.816, opacity: 1), // #d2d4d0
-        divider:       Color(.sRGB, red: 0.925, green: 0.925, blue: 0.918, opacity: 1), // #ececea
+        surface2:      Color(.sRGB, red: 0.965, green: 0.957, blue: 0.933, opacity: 1), // #f6f4ee
+        surfaceSunk:   Color(.sRGB, red: 0.925, green: 0.914, blue: 0.886, opacity: 1), // #ece9e2
+        border:        Color(.sRGB, red: 0.882, green: 0.867, blue: 0.824, opacity: 1), // #e1ddd2
+        borderStrong:  Color(.sRGB, red: 0.804, green: 0.776, blue: 0.706, opacity: 1), // #cdc6b4
+        divider:       Color(.sRGB, red: 0.918, green: 0.902, blue: 0.863, opacity: 1), // #eae6dc
 
         // Text — cool near-black
         text:          Color(.sRGB, red: 0.078, green: 0.086, blue: 0.106, opacity: 1), // #14161b
@@ -165,10 +165,10 @@ public struct ConduitTokens: Sendable {
         text4:         Color(.sRGB, red: 0.431, green: 0.443, blue: 0.478, opacity: 1), // #6e717a
         textOnDark:    Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
 
-        // Accent — electric blue
-        accent:        Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
-        accentInk:     Color(.sRGB, red: 0.114, green: 0.169, blue: 0.722, opacity: 1), // #1d2bb8
-        accentSoft:    Color(.sRGB, red: 0.906, green: 0.914, blue: 1.000, opacity: 1), // #e7e9ff
+        // Accent — warm primary action
+        accent:        Color(.sRGB, red: 0.694, green: 0.306, blue: 0.180, opacity: 1), // #b14e2e
+        accentInk:     Color(.sRGB, red: 0.486, green: 0.180, blue: 0.098, opacity: 1), // #7c2e19
+        accentSoft:    Color(.sRGB, red: 0.973, green: 0.898, blue: 0.847, opacity: 1), // #f8e5d8
         accentFg:      Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
 
         // Semantic
@@ -203,30 +203,30 @@ public struct ConduitTokens: Sendable {
         termErr:          Color(.sRGB, red: 0.878, green: 0.325, blue: 0.247, opacity: 1)  // #e0533f
     )
 
-    /// Dark palette — the primary BLOCKS theme: near-black surfaces, warm-grey ink, electric-blue accent.
+    /// Dark palette — calm chat shell surfaces, warm-grey ink, warm primary accent.
     public static let dark = ConduitTokens(
         // Surfaces
-        bg:            Color(.sRGB, red: 0.039, green: 0.043, blue: 0.051, opacity: 1), // #0a0b0d
-        bgTint:        Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12
-        surface:       Color(.sRGB, red: 0.055, green: 0.059, blue: 0.071, opacity: 1), // #0e0f12 bg-block
-        surface2:      Color(.sRGB, red: 0.067, green: 0.075, blue: 0.090, opacity: 1), // #111317 bg-raised
-        surfaceSunk:   Color(.sRGB, red: 0.082, green: 0.090, blue: 0.110, opacity: 1), // #15171c bg-input
-        border:        Color(.sRGB, red: 0.137, green: 0.149, blue: 0.176, opacity: 1), // #23262d line
-        borderStrong:  Color(.sRGB, red: 0.184, green: 0.204, blue: 0.235, opacity: 1), // #2f343c
-        divider:       Color(.sRGB, red: 0.094, green: 0.102, blue: 0.122, opacity: 1), // #181a1f line-soft
+        bg:            Color(.sRGB, red: 0.098, green: 0.098, blue: 0.090, opacity: 1), // #191917
+        bgTint:        Color(.sRGB, red: 0.121, green: 0.118, blue: 0.106, opacity: 1), // #1f1e1b
+        surface:       Color(.sRGB, red: 0.145, green: 0.141, blue: 0.125, opacity: 1), // #252420
+        surface2:      Color(.sRGB, red: 0.180, green: 0.176, blue: 0.157, opacity: 1), // #2e2d28
+        surfaceSunk:   Color(.sRGB, red: 0.071, green: 0.071, blue: 0.063, opacity: 1), // #121210
+        border:        Color(.sRGB, red: 0.235, green: 0.231, blue: 0.204, opacity: 1), // #3c3b34
+        borderStrong:  Color(.sRGB, red: 0.318, green: 0.306, blue: 0.267, opacity: 1), // #514e44
+        divider:       Color(.sRGB, red: 0.180, green: 0.176, blue: 0.157, opacity: 1), // #2e2d28
 
         // Text
-        text:          Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2 fg
-        text2:         Color(.sRGB, red: 0.541, green: 0.553, blue: 0.588, opacity: 1), // #8a8d96 fg-dim
-        text3:         Color(.sRGB, red: 0.337, green: 0.349, blue: 0.388, opacity: 1), // #565963 fg-faint
-        text4:         Color(.sRGB, red: 0.204, green: 0.216, blue: 0.243, opacity: 1), // #34373e fg-ghost
+        text:          Color(.sRGB, red: 0.918, green: 0.906, blue: 0.867, opacity: 1), // #eae7dd
+        text2:         Color(.sRGB, red: 0.690, green: 0.671, blue: 0.612, opacity: 1), // #b0ab9c
+        text3:         Color(.sRGB, red: 0.494, green: 0.478, blue: 0.431, opacity: 1), // #7e7a6e
+        text4:         Color(.sRGB, red: 0.341, green: 0.329, blue: 0.294, opacity: 1), // #57544b
         textOnDark:    Color(.sRGB, red: 0.914, green: 0.914, blue: 0.886, opacity: 1), // #e9e9e2
 
-        // Accent — electric blue
-        accent:        Color(.sRGB, red: 0.184, green: 0.263, blue: 1.000, opacity: 1), // #2f43ff
-        accentInk:     Color(.sRGB, red: 0.353, green: 0.408, blue: 1.000, opacity: 1), // #5a68ff (legible on dark)
-        accentSoft:    Color(.sRGB, red: 0.102, green: 0.122, blue: 0.302, opacity: 1), // #1a1f4d accent-dim
-        accentFg:      Color(.sRGB, red: 1.000, green: 1.000, blue: 1.000, opacity: 1), // #ffffff
+        // Accent — warm primary action. Blue remains in `info` and terminal progress states.
+        accent:        Color(.sRGB, red: 0.894, green: 0.482, blue: 0.341, opacity: 1), // #e47b57
+        accentInk:     Color(.sRGB, red: 1.000, green: 0.702, blue: 0.573, opacity: 1), // #ffb392
+        accentSoft:    Color(.sRGB, red: 0.239, green: 0.129, blue: 0.086, opacity: 1), // #3d2116
+        accentFg:      Color(.sRGB, red: 0.075, green: 0.063, blue: 0.051, opacity: 1), // #13100d
 
         // Semantic
         ok:            Color(.sRGB, red: 0.212, green: 0.761, blue: 0.420, opacity: 1), // #36c26b
@@ -310,4 +310,3 @@ enum DI {
     }
 }
 #endif
-

@@ -159,13 +159,15 @@ public struct NewChatTabView: View {
                     showComposer = true
                 } label: {
                     DSIconView(.plus, size: 20, color: t.accentFg)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 58, height: 58)
                         .background(t.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        .clipShape(Circle())
+                        .shadow(color: t.accent.opacity(0.28), radius: 18, y: 8)
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 20)
-                .padding(.bottom, 28)
+                .accessibilityLabel("New chat")
+                .padding(.trailing, 22)
+                .padding(.bottom, 30)
             }
         }
         .onAppear {
@@ -179,7 +181,7 @@ public struct NewChatTabView: View {
         }
         .sheet(isPresented: $showComposer) {
             composerSheet
-                .presentationDetents([.height(420), .large])
+                .presentationDetents([.height(500), .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAgentPicker) {
@@ -211,7 +213,7 @@ public struct NewChatTabView: View {
     // MARK: - Active chat header (post-dispatch)
 
     private var chatHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button {
                 Haptics.selection()
                 resetForNewChat()
@@ -219,49 +221,52 @@ public struct NewChatTabView: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(t.text)
-                    .frame(width: 36, height: 36)
-                    .background(t.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 1))
-                    .frame(width: 44, height: 44)
+                    .frame(width: 42, height: 42)
+                    .background(t.surface2, in: Circle())
+                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Text(chatTitle)
-                .font(.dsMonoPt(15, weight: .semibold))
-                .foregroundStyle(t.text)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(chatTitle)
+                    .font(.dsSansPt(17, weight: .semibold))
+                    .foregroundStyle(t.text)
+                    .lineLimit(1)
+                if isStreaming {
+                    Text("Agent is working")
+                        .font(.dsSansPt(12, weight: .medium))
+                        .foregroundStyle(t.text3)
+                }
+            }
             Spacer()
             if isStreaming {
                 HStack(spacing: 5) {
                     Circle().fill(t.ok).frame(width: 6, height: 6)
                     Text("working")
-                        .font(.dsMonoPt(10))
+                        .font(.dsSansPt(12, weight: .semibold))
                         .foregroundStyle(t.ok)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(t.surface2)
-                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(t.okSoft, in: Capsule())
             } else {
                 Button {
                     Haptics.selection()
                     resetForNewChat()
                 } label: {
                     DSIconView(.plus, size: 16, color: t.text2)
-                        .frame(width: 36, height: 36)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        .frame(width: 42, height: 42)
+                        .background(t.surface2, in: Circle())
+                        .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("New chat")
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 12)
+        .background(t.bg.opacity(0.96))
     }
 
     // MARK: - Fleet landing content (pre-dispatch)
@@ -273,10 +278,10 @@ public struct NewChatTabView: View {
                     Spacer()
                     DSIconView(.server, size: 32, color: t.text4)
                     Text("No agents connected")
-                        .font(.dsMonoPt(13))
+                        .font(.dsSansPt(17, weight: .semibold))
                         .foregroundStyle(t.text4)
-                    Text("Pair a host in Settings \u{2192} Relay pairing")
-                        .font(.dsMonoPt(11))
+                    Text("Pair a host in Settings to start dispatching work.")
+                        .font(.dsSansPt(14))
                         .foregroundStyle(t.text4)
                         .multilineTextAlignment(.center)
                     Spacer()
@@ -299,12 +304,11 @@ public struct NewChatTabView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 DSIconView(.server, size: 16, color: agent.isOffline ? t.text4 : t.text2)
-                                    .frame(width: 28, height: 28)
-                                    .background(t.surface2)
-                                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                                    .frame(width: 34, height: 34)
+                                    .background(t.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(agent.name)
-                                        .font(.dsMonoPt(13, weight: .medium))
+                                        .font(.dsSansPt(15, weight: .semibold))
                                         .foregroundStyle(agent.isOffline ? t.text4 : t.text)
                                         .lineLimit(1)
                                     Text(agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
@@ -326,8 +330,11 @@ public struct NewChatTabView: View {
                         }
                     }
                 }
-                .background(t.surface)
-                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                        .strokeBorder(t.border.opacity(0.7), lineWidth: 1)
+                )
                 .padding(.horizontal, 20)
             }
             Spacer()
@@ -340,117 +347,156 @@ public struct NewChatTabView: View {
     private var composerSheet: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("New chat")
-                        .font(.dsDisplayPt(22, weight: .bold))
-                        .foregroundStyle(t.text)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("New chat")
+                            .font(.dsDisplayPt(27, weight: .bold))
+                            .foregroundStyle(t.text)
+                        Text("Describe the work. Conduit will route it through policy before anything runs.")
+                            .font(.dsSansPt(14))
+                            .foregroundStyle(t.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Spacer()
                     Button { showComposer = false } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(t.text2)
-                            .frame(width: 30, height: 30)
-                            .background(t.surface2)
-                            .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                            .frame(width: 42, height: 42)
+                            .background(t.surface2, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close composer")
                 }
+
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $prompt)
-                        .font(.dsSansPt(15))
+                        .font(.dsSansPt(17))
                         .foregroundStyle(t.text)
                         .tint(t.accent)
                         .scrollContentBackground(.hidden)
-                        .frame(minHeight: 80, maxHeight: 140)
-                        .padding(10)
-                        .background(t.surface2)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        .frame(minHeight: 118, maxHeight: 170)
+                        .padding(14)
+                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .strokeBorder(t.border.opacity(0.72), lineWidth: 1)
+                        )
                     if prompt.isEmpty {
-                        Text("Describe a task or just say hi\u{2026}")
-                            .font(.dsSansPt(15))
+                        Text("Describe a task or just say hi...")
+                            .font(.dsSansPt(17))
                             .foregroundStyle(t.text4)
-                            .padding(.horizontal, 14)
-                            .padding(.top, 18)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 22)
                             .allowsHitTesting(false)
                     }
                 }
-                HStack(spacing: 8) {
-                    Button {
+
+                HStack(spacing: 10) {
+                    composerPill(
+                        title: agentLabel,
+                        subtitle: "Agent",
+                        icon: .sparkles,
+                        tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
+                    ) {
                         showComposer = false
                         showAgentPicker = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            DSStatusDot(tone: .accent, size: 7)
-                            Text(agentLabel)
-                                .font(.dsMonoPt(12, weight: .semibold))
-                                .foregroundStyle(t.text)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9))
-                                .foregroundStyle(t.text3)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
-                    Button {
+                    composerPill(
+                        title: machineLabel,
+                        subtitle: "Host",
+                        icon: .server,
+                        tone: t.text3
+                    ) {
                         showComposer = false
                         showAgentPicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(machineLabel)
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(t.text3)
-                                .lineLimit(1)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9))
-                                .foregroundStyle(t.text3)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
                 }
-                HStack {
-                    Button { withAnimation { showOptions.toggle() } } label: {
-                        HStack(spacing: 4) {
-                            Text("Options")
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(showOptions ? t.text : t.text3)
-                            Image(systemName: showOptions ? "chevron.down" : "chevron.right")
-                                .font(.system(size: 9))
-                                .foregroundStyle(t.text3)
-                        }
+
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                        showOptions.toggle()
                     }
-                    .buttonStyle(.plain)
-                    Spacer()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Options")
+                            .font(.dsSansPt(14, weight: .semibold))
+                        Image(systemName: showOptions ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(showOptions ? t.text : t.text3)
                 }
+                .buttonStyle(.plain)
+
                 if showOptions {
                     optionsPanel
                 }
+
                 Button {
                     let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     showComposer = false
                     Task { await sendCurrentPrompt() }
                 } label: {
-                    Text("Send")
-                        .font(.dsMonoPt(14, weight: .semibold))
-                        .foregroundStyle(t.accentFg)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(canSend ? t.accent : t.surfaceSunk)
+                    HStack(spacing: 9) {
+                        Text("Send")
+                            .font(.dsSansPt(16, weight: .semibold))
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundStyle(canSend ? t.accentFg : t.text4)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(canSend ? t.accent : t.surfaceSunk, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
+                .accessibilityLabel("Send chat")
             }
-            .padding(20)
+            .padding(.horizontal, 22)
+            .padding(.top, 16)
+            .padding(.bottom, 20)
         }
         .navigationBarHidden(true)
+    }
+
+    private func composerPill(
+        title: String,
+        subtitle: String,
+        icon: DSIcon,
+        tone: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                DSIconView(icon, size: 15, color: tone)
+                    .frame(width: 32, height: 32)
+                    .background(t.surface2, in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(subtitle)
+                        .font(.dsSansPt(11, weight: .medium))
+                        .foregroundStyle(t.text4)
+                    Text(title)
+                        .font(.dsSansPt(13, weight: .semibold))
+                        .foregroundStyle(t.text2)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 56)
+            .frame(maxWidth: .infinity)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                    .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Conversation turns
@@ -465,13 +511,12 @@ public struct NewChatTabView: View {
         HStack(alignment: .top) {
             Spacer(minLength: 56)
             Text(promptText)
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text)
+                .font(.dsSansPt(16))
+                .foregroundStyle(t.accentFg)
                 .textSelection(.enabled)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(t.surface)
-                .overlay(Rectangle().strokeBorder(t.accent.opacity(0.35), lineWidth: 1))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(t.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
     }
 
@@ -490,9 +535,10 @@ public struct NewChatTabView: View {
                     HStack(spacing: 5) {
                         PixelBox(state: agentState, size: 9, subdivisions: 2)
                         Text(agentState == .thinking ? "thinking\u{2026}" : "streaming")
-                            .font(.dsMonoPt(10))
+                            .font(.dsSansPt(12, weight: .medium))
                             .foregroundStyle(t.text4)
                     }
+                    .padding(.bottom, 2)
                 }
                 if !run.blocks.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -523,15 +569,14 @@ public struct NewChatTabView: View {
     @ViewBuilder
     private var bottomBar: some View {
         if activeRun != nil, let controlStore {
-            VStack(spacing: 0) {
-                Rectangle().fill(t.border).frame(height: 0.5)
+            VStack(spacing: 10) {
                 RunFollowUpBar(
                     text: $followUpText,
                     isErrorState: isErrorState,
                     onSend: { followUp in Task { await sendFollowUp(followUp) } }
                 )
                 .padding(.horizontal, 18)
-                .padding(.top, 8)
+                .padding(.top, 12)
                 RunControlBar(
                     store: controlStore,
                     isTerminal: runIsTerminal,
@@ -540,9 +585,8 @@ public struct NewChatTabView: View {
                     onStop: { confirmStop = true },
                     onShowBudget: { showBudgetSheet = true }
                 )
-                .padding(.top, 8)
             }
-            .background(t.bg.ignoresSafeArea(edges: .bottom))
+            .background(t.bg.opacity(0.96).ignoresSafeArea(edges: .bottom))
         } else {
             bottomToolbar
         }
@@ -575,33 +619,30 @@ public struct NewChatTabView: View {
 
     private var bottomToolbar: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(t.border).frame(height: 0.5)
             HStack(spacing: 8) {
                 // Agent chip
                 Button { showAgentPicker = true } label: {
                     HStack(spacing: 5) {
                         DSStatusDot(tone: .accent, size: 7)
                         Text(agentLabel)
-                            .font(.dsMonoPt(12, weight: .semibold))
+                            .font(.dsSansPt(13, weight: .semibold))
                             .foregroundStyle(t.text)
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(t.surface)
-                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    .padding(.vertical, 8)
+                    .background(t.surface, in: Capsule())
                 }
                 .buttonStyle(.plain)
 
                 // Machine \u{00B7} dir chip
                 Button { showAgentPicker = true } label: {
                     Text(machineLabel)
-                        .font(.dsMonoPt(11))
+                        .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
                         .lineLimit(1)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        .padding(.vertical, 8)
+                        .background(t.surface, in: Capsule())
                 }
                 .buttonStyle(.plain)
 
@@ -610,12 +651,11 @@ public struct NewChatTabView: View {
                 // Options toggle
                 Button { withAnimation { showOptions.toggle() } } label: {
                     Text("Options")
-                        .font(.dsMonoPt(12))
+                        .font(.dsSansPt(12, weight: .medium))
                         .foregroundStyle(showOptions ? t.text : t.text3)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(showOptions ? t.surface : t.bg)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        .padding(.vertical, 8)
+                        .background(showOptions ? t.surface : t.bg, in: Capsule())
                 }
                 .buttonStyle(.plain)
 
@@ -623,10 +663,9 @@ public struct NewChatTabView: View {
                 Button {
                     Task { await sendCurrentPrompt() }
                 } label: {
-                    DSIconView(.send, size: 16, color: canSend ? t.text : t.text4)
-                        .frame(width: 36, height: 36)
-                        .background(canSend ? t.surface : t.bg)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    DSIconView(.send, size: 16, color: canSend ? t.accentFg : t.text4)
+                        .frame(width: 40, height: 40)
+                        .background(canSend ? t.accent : t.surface2, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -765,13 +804,11 @@ public struct NewChatTabView: View {
     // MARK: - Options panel (idle compose state only)
 
     private var optionsPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Rectangle().fill(t.border).frame(height: 0.5)
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("MODEL")
-                    .font(.dsMonoPt(10, weight: .medium))
+                Text("Model")
+                    .font(.dsSansPt(13, weight: .semibold))
                     .foregroundStyle(t.text3)
-                    .tracking(1.0)
                 Menu {
                     Button("Auto (agent default)") { selectedModel = "" }
                     if selectedAgent?.vendor == "claudeCode" || selectedAgent?.vendor == "openrouter" {
@@ -794,21 +831,21 @@ public struct NewChatTabView: View {
                 } label: {
                     HStack {
                         Text(selectedModel.isEmpty ? "Auto (agent default)" : selectedModel)
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text)
+                            .font(.dsSansPt(14, weight: .medium))
+                            .foregroundStyle(t.text2)
+                            .lineLimit(1)
                         Spacer()
                         DSIconView(.chevronDown, size: 12, color: t.text3)
                     }
-                    .padding(10)
-                    .background(t.surfaceSunk)
-                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    .padding(.horizontal, 13)
+                    .frame(height: 46)
+                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("BUDGET CAP")
-                    .font(.dsMonoPt(10, weight: .medium))
+                Text("Budget cap")
+                    .font(.dsSansPt(13, weight: .semibold))
                     .foregroundStyle(t.text3)
-                    .tracking(1.0)
                 HStack(spacing: 6) {
                     Text("$").font(.dsMonoPt(13)).foregroundStyle(t.text3)
                     TextField("None", text: $budgetText)
@@ -816,14 +853,23 @@ public struct NewChatTabView: View {
                         .foregroundStyle(t.text)
                         .keyboardType(.decimalPad)
                 }
-                .padding(10)
-                .background(t.surfaceSunk)
-                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                .padding(.horizontal, 13)
+                .frame(height: 46)
+                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(t.surface)
+        .padding(14)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+        )
+    }
+
+    private var groupedAgents: [(String, [DispatchAgent])] {
+        Dictionary(grouping: agents, by: { $0.hostName ?? "Relay" })
+            .sorted { $0.key < $1.key }
+            .map { ($0.key, $0.value) }
     }
 
     private var agentPickerSheet: some View {
@@ -831,58 +877,75 @@ public struct NewChatTabView: View {
             ZStack {
                 t.bg.ignoresSafeArea()
                 ScrollView {
-                    VStack(spacing: 0) {
-                        let machineGroups = Dictionary(grouping: agents, by: { $0.hostName ?? "Relay" })
-                        ForEach(machineGroups.keys.sorted(), id: \.self) { machine in
-                            Text(machine.uppercased())
-                                .font(.dsMonoPt(10))
-                                .foregroundStyle(t.text4)
-                                .tracking(1.5)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 16)
-                                .padding(.bottom, 6)
-                            let machineAgents = machineGroups[machine] ?? []
-                            ForEach(machineAgents) { agent in
-                                let isSelected = agent.id == selectedAgentID
-                                Button {
-                                    guard !agent.isOffline else { return }
-                                    selectedAgentID = agent.id
-                                    showAgentPicker = false
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        DSStatusDot(tone: agent.isOffline ? .off : .ok, size: 8)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(agent.name)
-                                                .font(.dsMonoPt(14, weight: .semibold))
-                                                .foregroundStyle(agent.isOffline ? t.text4 : t.text)
-                                            Text(agent.vendor.isEmpty ? agent.cwd : "\(agent.vendor) \u{00B7} \(agent.cwd)")
-                                                .font(.dsMonoPt(11))
-                                                .foregroundStyle(t.text3)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        if isSelected {
-                                            DSIconView(.check, size: 14, color: t.accent)
-                                        }
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 14)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(agent.isOffline)
-                                Rectangle().fill(t.border).frame(height: 0.5).padding(.horizontal, 20)
-                            }
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(groupedAgents, id: \.0) { group in
+                            agentPickerGroup(machine: group.0, agents: group.1)
                         }
                     }
-                    .padding(.top, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 28)
                 }
             }
             .navigationTitle("Choose agent")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .presentationBackground(t.bg)
         .presentationDetents([.medium, .large])
+    }
+
+    private func agentPickerGroup(machine: String, agents: [DispatchAgent]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(machine)
+                .font(.dsSansPt(15, weight: .semibold))
+                .foregroundStyle(t.text2)
+                .padding(.horizontal, 4)
+            VStack(spacing: 6) {
+                ForEach(agents) { agent in
+                    agentPickerRow(agent)
+                }
+            }
+            .padding(6)
+            .background(t.surface.opacity(0.76), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+            )
+        }
+    }
+
+    private func agentPickerRow(_ agent: DispatchAgent) -> some View {
+        let isSelected = agent.id == selectedAgentID
+        return Button {
+            guard !agent.isOffline else { return }
+            selectedAgentID = agent.id
+            showAgentPicker = false
+        } label: {
+            HStack(spacing: 12) {
+                DSStatusDot(tone: agent.isOffline ? .off : .ok, size: 8)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(agent.name)
+                        .font(.dsSansPt(16, weight: .semibold))
+                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
+                    Text(agent.vendor.isEmpty ? agent.cwd : "\(agent.vendor) · \(agent.cwd)")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if isSelected {
+                    DSIconView(.check, size: 15, color: t.accent)
+                        .frame(width: 30, height: 30)
+                        .background(t.accentSoft, in: Circle())
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 64)
+            .background(isSelected ? t.surface2 : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(agent.isOffline)
     }
 }
 
@@ -902,9 +965,9 @@ private struct InlineChatToolCard: View {
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
-                .fill(block.status == .running ? t.accent : t.ok)
-                .frame(width: 2)
-            VStack(alignment: .leading, spacing: 4) {
+                .fill(block.status == .running ? t.info : t.ok)
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(block.toolName.uppercased())
                         .font(.dsMonoPt(9, weight: .semibold))
@@ -923,11 +986,15 @@ private struct InlineChatToolCard: View {
                     .lineLimit(3)
                     .textSelection(.enabled)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
-        .background(t.surfaceSunk)
-        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
+                .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+        )
     }
 }
 #endif
