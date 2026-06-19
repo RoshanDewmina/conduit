@@ -15,6 +15,9 @@ public extension Notification.Name {
     /// can refresh approval / run-complete state without the user opening the app.
     /// userInfo: the raw APNs userInfo dictionary forwarded from the push payload.
     static let conduitRemoteApprovalReceived = Notification.Name("dev.conduit.remoteApprovalReceived")
+    /// Posted when the app receives an APNs device token from UIApplicationDelegate.
+    /// userInfo: ["token": String (hex-encoded)]
+    static let conduitAPNSTokenReceived = Notification.Name("dev.conduit.apnsTokenReceived")
 }
 
 // MARK: - Cold-launch approval action buffer (MAJOR-6)
@@ -123,6 +126,12 @@ public struct NotificationFilter: Codable, Sendable, Equatable {
 public actor Notifications {
     public static let shared = Notifications()
     private init() {}
+
+    public var pendingAPNSTokenHex: String?
+
+    public func setPendingAPNSToken(_ token: String) {
+        pendingAPNSTokenHex = token
+    }
 
     // MARK: - Notification filter
 

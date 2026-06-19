@@ -1154,6 +1154,19 @@ public struct AppRoot: View {
             }
         }
 
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .conduitAPNSTokenReceived) {
+                guard let token = notification.userInfo?["token"] as? String,
+                      let channel = self.daemonChannel
+                else { continue }
+                try? await channel.registerAPNSToken(
+                    hexToken: token,
+                    sessionID: DeviceIdentity.sessionID(),
+                    pushBackendURL: Self.pushBackendURL()
+                )
+            }
+        }
+
         // Route the relay/default inbox's decisions to the daemon. Without this the
         // base InboxViewModel only updated local UI state, so approving a relay-
         // delivered approval never released the daemon's blocked hook.
@@ -1445,6 +1458,14 @@ public struct AppRoot: View {
             if !backendURL.isEmpty {
                 let token = (try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)) ?? nil
                 if let token { ApprovalRelay.shared.setRelayToken(token) }
+            }
+            // Forward any APNs token that arrived before the channel was ready.
+            if !backendURL.isEmpty, let hexToken = await Notifications.shared.pendingAPNSTokenHex {
+                try? await channel.registerAPNSToken(
+                    hexToken: hexToken,
+                    sessionID: deviceSessionID,
+                    pushBackendURL: backendURL
+                )
             }
             // Attach the relay so Live Activity / Dynamic Island decisions are
             // forwarded to conduitd, and drain any decisions queued while the

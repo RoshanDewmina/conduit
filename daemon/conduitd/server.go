@@ -957,6 +957,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, events)
 
+	case "conduit.device.register.apns":
+		var p struct {
+			PushBackendURL string `json:"pushBackendURL"`
+			SessionID      string `json:"sessionId"`
+			APNSToken      string `json:"apnsToken"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.APNSToken == "" || p.SessionID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if p.PushBackendURL != "" {
+			go s.postDeviceTokenRegistration(p.PushBackendURL, p.SessionID, p.APNSToken)
+		}
+		s.writeResult(msg.ID, map[string]string{"ok": "true"})
+
 	default:
 		s.writeError(msg.ID, -32601, "method not found")
 	}
@@ -1290,6 +1305,35 @@ func (s *server) postRelayRegistration(backendURL, sessionID, relayToken string)
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		fmt.Fprintf(os.Stderr, "relay-token registration rejected: HTTP %d\n", resp.StatusCode)
+	}
+}
+
+func (s *server) postDeviceTokenRegistration(backendURL, sessionID, hexToken string) {
+	body, err := json.Marshal(map[string]string{
+		"sessionId":   sessionID,
+		"deviceToken": hexToken,
+	})
+	if err != nil {
+		return
+	}
+	endpoint := strings.TrimRight(backendURL, "/") + "/register"
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "apns-token registration POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "apns-token registration rejected: HTTP %d\n", resp.StatusCode)
 	}
 }
 

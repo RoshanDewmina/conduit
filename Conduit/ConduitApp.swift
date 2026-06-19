@@ -117,14 +117,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        guard !pushBackendURL.isEmpty else { return }
-        Task {
-            await Notifications.shared.registerDeviceToken(
-                deviceToken,
-                sessionID: DeviceIdentity.sessionID(),
-                backendURL: pushBackendURL
-            )
-        }
+        let hexToken = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { await Notifications.shared.setPendingAPNSToken(hexToken) }
+        NotificationCenter.default.post(
+            name: .conduitAPNSTokenReceived,
+            object: nil,
+            userInfo: ["token": hexToken]
+        )
     }
 
     func application(

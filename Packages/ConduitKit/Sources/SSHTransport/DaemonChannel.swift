@@ -125,6 +125,17 @@ public actor DaemonChannel {
         return relayToken
     }
 
+    public func registerAPNSToken(hexToken: String, sessionID: String, pushBackendURL: String) async throws {
+        _ = try await sendRPC(
+            method: "conduit.device.register.apns",
+            params: [
+                "pushBackendURL": pushBackendURL,
+                "sessionId": sessionID,
+                "apnsToken": hexToken,
+            ]
+        )
+    }
+
     public static func decisionWireValue(for decision: Approval.Decision) -> String {
         switch decision {
         case .approved: return "approve"
