@@ -1152,6 +1152,15 @@ public struct AppRoot: View {
             url: url,
             sessionID: DeviceIdentity.sessionID()
         )
+        // Begin monitoring the push-to-start token now that the stable sessionID is
+        // available — lets push-backend remotely START a Live Activity when an approval
+        // arrives and none is running (app fully closed). Tokens flow out via the
+        // .conduitLiveActivityTokenReady subscriber in configureE2ERelayBridge.
+        if #available(iOS 17.2, *) {
+            ConduitLiveActivityManager.shared.startPushToStartMonitor(
+                sessionID: DeviceIdentity.sessionID()
+            )
+        }
         configureE2ERelayBridge(env: env)
     }
 
@@ -1195,6 +1204,28 @@ public struct AppRoot: View {
                 try? await channel.registerAPNSToken(
                     hexToken: token,
                     sessionID: DeviceIdentity.sessionID(),
+                    pushBackendURL: Self.pushBackendURL()
+                )
+            }
+        }
+
+        // Forward Live Activity push tokens to push-backend through conduitd, so the
+        // daemon (which holds APPROVAL_RELAY_SECRET) does the authenticated POST — the
+        // app never holds that secret. Producer: ConduitApp.configureLiveActivityTokens
+        // posts .conduitLiveActivityTokenReady when ActivityKit issues/refreshes a
+        // per-activity or push-to-start token. Without this the push-driven Live
+        // Activity has no registered token and can never receive a push.
+        Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(named: .conduitLiveActivityTokenReady) {
+                guard let sessionID = notification.userInfo?["sessionID"] as? String,
+                      let activityToken = notification.userInfo?["activityToken"] as? String,
+                      let isPushToStart = notification.userInfo?["isPushToStart"] as? Bool,
+                      let channel = self.daemonChannel
+                else { continue }
+                try? await channel.registerActivityToken(
+                    activityToken: activityToken,
+                    sessionID: sessionID,
+                    isPushToStart: isPushToStart,
                     pushBackendURL: Self.pushBackendURL()
                 )
             }
