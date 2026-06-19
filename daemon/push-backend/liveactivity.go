@@ -146,6 +146,43 @@ func pushLiveActivityApproval(sessionID, approvalID, riskLevel, redactedSummary 
 	return sendLiveActivityPush(activityToken, payload, 10)
 }
 
+// pushLiveActivityDecision sends a transient "decision landed" content-state so
+// the lock screen / Dynamic Island can confirm a just-resolved approval — including
+// the cold path, where a killed-app Approve is resolved server-side and only a push
+// can confirm it. The widget shows a ✓ for ~4s; a subsequent update/end clears it.
+// PRIVACY: carries only the decision verb, never command text.
+func pushLiveActivityDecision(sessionID, decision string) error {
+	liveActivityRegistry.RLock()
+	rec, ok := liveActivityRegistry.sessions[sessionID]
+	var activityToken string
+	if ok {
+		activityToken = rec.activityToken
+	}
+	liveActivityRegistry.RUnlock()
+	if !ok || activityToken == "" {
+		return nil
+	}
+
+	stale := time.Now().Add(30 * time.Minute).Unix()
+	d := decision
+	contentState := liveActivityContentState{
+		Status:           "connected",
+		PendingApprovals: 0,
+		IsStreaming:      false,
+		LastDecision:     &d,
+		LastUpdate:       float64(time.Now().UnixNano()) / 1e9,
+	}
+	payload := liveActivityPayload{
+		APS: liveActivityAPS{
+			Timestamp:    time.Now().Unix(),
+			Event:        "update",
+			ContentState: contentState,
+			StaleDate:    &stale,
+		},
+	}
+	return sendLiveActivityPush(activityToken, payload, 10)
+}
+
 // pushLiveActivityEnd sends a Live Activity "end" event when the session ends.
 func pushLiveActivityEnd(sessionID string) error {
 	liveActivityRegistry.RLock()

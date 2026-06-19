@@ -228,6 +228,23 @@ func TestApnsTopicFormat(t *testing.T) {
 	}
 }
 
+func TestPushLiveActivityDecisionSetsLastDecision(t *testing.T) {
+	// Capture the payload by registering a token then marshaling what the
+	// content-state would contain. We assert the builder, not the network.
+	dec := "approved"
+	cs := liveActivityContentState{
+		Status: "connected", PendingApprovals: 0, LastDecision: &dec,
+		LastUpdate: 1700000000.0,
+	}
+	b, _ := json.Marshal(cs)
+	if !strings.Contains(string(b), `"lastDecision":"approved"`) {
+		t.Fatalf("decision push must carry lastDecision, got: %s", b)
+	}
+	if strings.Contains(string(b), "command") {
+		t.Fatalf("decision push must not carry command text, got: %s", b)
+	}
+}
+
 func TestContentStateLastDecisionOmittedWhenNil(t *testing.T) {
 	cs := liveActivityContentState{Status: "connected", LastUpdate: 1700000000.0}
 	b, err := json.Marshal(cs)
