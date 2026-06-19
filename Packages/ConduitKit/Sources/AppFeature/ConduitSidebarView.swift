@@ -19,14 +19,14 @@ public struct ConduitSidebarView: View {
 
     public var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 profileHeader
                 newChatButton
                 searchField
                 primaryNavigation
                 recentThreadsSection
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .padding(.top, 58)
             .padding(.bottom, 28)
         }
@@ -38,17 +38,19 @@ public struct ConduitSidebarView: View {
     private var profileHeader: some View {
         Button { onNavigate(.settings) } label: {
             HStack(spacing: 12) {
-                PixelAvatar(seed: "conduit-user", size: 38)
+                PixelAvatar(seed: "conduit-user", size: 42)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Conduit")
                         .font(.dsDisplayPt(24, weight: .bold))
                         .foregroundStyle(t.text)
                     Text(state.fleetSlotCount > 0 ? "Agents reachable" : "Control from your phone")
-                        .font(.dsSansPt(12, weight: .medium))
+                        .font(.dsSansPt(13))
                         .foregroundStyle(t.text3)
                 }
                 Spacer()
-                DSIconView(.settings, size: 17, color: t.text3)
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(t.text3)
             }
             .contentShape(Rectangle())
         }
@@ -59,17 +61,27 @@ public struct ConduitSidebarView: View {
     private var newChatButton: some View {
         Button { onNavigate(.newChat) } label: {
             HStack(spacing: 9) {
-                DSIconView(.plus, size: 18, color: t.accentFg)
-                Text("New chat")
-                    .font(.dsSansPt(16, weight: .semibold))
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(t.accentFg)
+                    .frame(width: 30, height: 30)
+                    .background(t.accent, in: Circle())
+                Text("New chat")
+                .font(.dsSansPt(16, weight: .semibold))
+                    .foregroundStyle(t.text)
                 Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(t.text3)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .padding(.horizontal, 18)
-            .background(t.accent, in: Capsule())
-            .shadow(color: t.accent.opacity(0.22), radius: 14, y: 6)
+            .padding(.horizontal, 14)
+            .frame(height: 58)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New chat")
@@ -98,38 +110,46 @@ public struct ConduitSidebarView: View {
     }
 
     private var primaryNavigation: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 0) {
             SidebarNavRow(
                 title: "Needs attention",
                 subtitle: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount) waiting" : "Approvals and requests",
-                icon: .inbox,
+                systemImage: "tray.full",
                 badge: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount)" : nil,
                 selected: state.selectedDestination == .needsAttention,
                 action: { onNavigate(.needsAttention) }
             )
+            sidebarDivider
             SidebarNavRow(
                 title: "Fleet",
                 subtitle: state.fleetSlotCount > 0 ? "\(state.fleetSlotCount) connected" : "Hosts and running agents",
-                icon: .server,
+                systemImage: "rectangle.3.group",
                 badge: state.fleetSlotCount > 0 ? "\(state.fleetSlotCount)" : nil,
                 selected: state.selectedDestination == .fleet,
                 action: { onNavigate(.fleet) }
             )
+            sidebarDivider
             SidebarNavRow(
                 title: "Settings",
-                subtitle: "Relay, security, and policy",
-                icon: .settings,
+                subtitle: "Appearance, privacy and relay",
+                systemImage: "gearshape",
                 badge: nil,
                 selected: state.selectedDestination == .settings,
                 action: { onNavigate(.settings) }
             )
         }
-        .padding(6)
-        .background(t.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+                .strokeBorder(t.border, lineWidth: 1)
         )
+    }
+
+    private var sidebarDivider: some View {
+        Rectangle()
+            .fill(t.divider)
+            .frame(height: 1)
+            .padding(.leading, 58)
     }
 
     private var recentThreads: [ChatConversation] {
@@ -180,7 +200,7 @@ public struct ConduitSidebarView: View {
 private struct SidebarNavRow: View {
     let title: String
     let subtitle: String
-    let icon: DSIcon
+    let systemImage: String
     let badge: String?
     let selected: Bool
     let action: () -> Void
@@ -190,31 +210,33 @@ private struct SidebarNavRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                DSIconView(icon, size: 18, color: selected ? t.accent : t.text2)
-                    .frame(width: 34, height: 34)
-                    .background(selected ? t.accentSoft : t.surface2.opacity(0.7), in: Circle())
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(selected ? t.accent : t.text2)
+                    .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .foregroundStyle(selected ? t.text : t.text2)
+                    .font(.dsSansPt(15, weight: .semibold))
+                        .foregroundStyle(t.text)
                     Text(subtitle)
-                        .font(.dsSansPt(12))
+                        .font(.dsSansPt(12.5))
                         .foregroundStyle(t.text3)
                         .lineLimit(1)
                 }
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(.dsMonoPt(11, weight: .bold))
-                        .foregroundStyle(t.accentFg)
-                        .frame(minWidth: 24, minHeight: 24)
-                        .padding(.horizontal, 4)
-                        .background(t.accent, in: Capsule())
+                        .font(.dsSansPt(13, weight: .semibold))
+                        .foregroundStyle(t.accentInk)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(t.accentSoft, in: Capsule())
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(height: 58)
-            .background(selected ? t.surface2 : Color.clear, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 66)
+            .background(selected ? t.surface2 : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -1,6 +1,7 @@
 #if DEBUG && os(iOS)
 import SwiftUI
 import ConduitCore
+import AgentKit
 import DesignSystem
 import SessionFeature
 import InboxFeature
@@ -58,6 +59,10 @@ struct DebugGalleryView: View {
         case "statusheader":   AgentStatusHeaderGalleryScreen()
         case "keyboard":       KeyboardGalleryScreen()
         case "inbox-typed":    TypedInboxGalleryScreen()
+        case "shell-inbox":    ShellInboxGalleryScreen()
+        case "shell-fleet":    ShellFleetGalleryScreen()
+        case "shell-settings": ShellSettingsGalleryScreen()
+        case "shell-sidebar":  ShellSidebarGalleryScreen()
         case "features":       FeaturesGalleryScreen()
         case "proof":          ProofCardGalleryScreen()
         case "paywall":        PaywallSheet(featureName: "partial-hunk diff review")
@@ -1716,6 +1721,147 @@ private struct NewChatToolCardPreview: View {
         .background(t.surfaceSunk)
         .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
     }
+}
+
+private struct ShellInboxGalleryScreen: View {
+    @State private var viewModel = InboxViewModel(approvals: Self.approvals)
+
+    var body: some View {
+        InboxView(
+            viewModel: viewModel,
+            title: "Inbox",
+            onOpenHistory: {}
+        )
+    }
+
+    private static let approvals: [Approval] = {
+        let sessionID = SessionID()
+        let now = Date()
+        return [
+            Approval(
+                sessionID: sessionID,
+                agent: .claudeCode,
+                kind: .command,
+                command: "git push origin main --force-with-lease",
+                cwd: "~/command-center",
+                risk: .high,
+                createdAt: now.addingTimeInterval(-8 * 60),
+                toolName: "git push",
+                toolInput: "{\"command\":\"git push origin main --force-with-lease\"}",
+                lastStateChangeAt: now.addingTimeInterval(-8 * 60)
+            ),
+            Approval(
+                sessionID: sessionID,
+                agent: .codex,
+                kind: .fileWrite,
+                command: "Apply the new onboarding copy",
+                cwd: "~/command-center",
+                risk: .medium,
+                createdAt: now.addingTimeInterval(-3 * 60),
+                toolName: "write_file",
+                toolInput: "{\"path\":\"web/app/onboarding.tsx\",\"change\":\"replace welcome copy\"}",
+                lastStateChangeAt: now.addingTimeInterval(-3 * 60)
+            ),
+            Approval(
+                sessionID: sessionID,
+                agent: .opencode,
+                kind: .askQuestion,
+                cwd: "~/command-center",
+                risk: .low,
+                createdAt: now.addingTimeInterval(-70),
+                question: "The release branch is ready. Should I open the pull request now?",
+                choices: ["Open the pull request", "Keep the branch local"],
+                lastStateChangeAt: now.addingTimeInterval(-70)
+            )
+        ]
+    }()
+}
+
+private struct ShellFleetGalleryScreen: View {
+    @State private var store = FleetStore()
+
+    var body: some View {
+        FleetView(
+            store: store,
+            onConnectHost: {},
+            onReconnect: { _ in },
+            onDelete: { _ in },
+            demoHosts: Self.hosts
+        )
+    }
+
+    private static let hosts = [
+        Host(name: "MacBook Air", hostname: "roshans-macbook.local", username: "roshan", tags: ["primary"]),
+        Host(name: "Staging", hostname: "staging.conduit.dev", username: "deploy", tags: ["release"]),
+        Host(name: "Dev VPS", hostname: "dev.example.com", username: "ubuntu", tags: ["work"]),
+        Host(name: "Build runner", hostname: "runner.local", port: 2222, username: "ci", tags: ["ci"])
+    ]
+}
+
+private struct ShellSettingsGalleryScreen: View {
+    @State private var viewModel = SettingsViewModel(keyStore: GalleryAIKeyStore())
+
+    var body: some View {
+        SettingsView(
+            viewModel: viewModel,
+            onResetApp: {}
+        )
+    }
+}
+
+private struct ShellSidebarGalleryScreen: View {
+    @State private var state = SidebarShellState()
+
+    var body: some View {
+        ConduitSidebarView(
+            state: state,
+            onNavigate: { destination in
+                state.selectedDestination = destination
+            }
+        )
+        .task {
+            state.pendingApprovalCount = 3
+            state.fleetSlotCount = 4
+            state.recentThreads = Self.threads
+        }
+    }
+
+    private static let threads = [
+        ChatConversation(
+            title: "Prepare the release candidate",
+            agentID: "claude-code",
+            vendor: "Claude Code",
+            hostName: "MacBook Air",
+            cwd: "~/command-center",
+            status: .active,
+            lastActivityAt: .now.addingTimeInterval(-4 * 60)
+        ),
+        ChatConversation(
+            title: "Review onboarding copy",
+            agentID: "codex",
+            vendor: "Codex",
+            hostName: "Staging",
+            cwd: "~/command-center",
+            status: .completed,
+            lastActivityAt: .now.addingTimeInterval(-48 * 60)
+        ),
+        ChatConversation(
+            title: "Investigate build slowdown",
+            agentID: "opencode",
+            vendor: "OpenCode",
+            hostName: "Build runner",
+            cwd: "~/command-center",
+            status: .failed,
+            lastActivityAt: .now.addingTimeInterval(-3 * 60 * 60)
+        )
+    ]
+}
+
+private struct GalleryAIKeyStore: AIKeyStoring {
+    func storeAPIKey(_ key: String, provider: AIProvider) async throws {}
+    func loadAPIKey(provider: AIProvider) async throws -> String { "" }
+    func deleteAPIKey(provider: AIProvider) async throws {}
+    func hasAPIKey(provider: AIProvider) async -> Bool { false }
 }
 
 #endif

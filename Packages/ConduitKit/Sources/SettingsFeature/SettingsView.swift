@@ -459,28 +459,31 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
-        if let onBack {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            if let onBack {
                 Button(action: onBack) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Back")
-                            .font(.dsMono(.callout, weight: .medium))
-                    }
-                    .foregroundStyle(t.text)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(t.surface2)
-                    .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(t.text2)
+                        .frame(width: 40, height: 40)
+                        .background(t.surface, in: Circle())
+                        .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                Spacer()
+                .accessibilityLabel("Back")
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
+
+            Text("Settings")
+                .font(.dsDisplayPt(30, weight: .bold))
+                .foregroundStyle(t.text)
+            Text("Conduit on this iPhone")
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.text3)
         }
-        DSScreenHeader("settings", breadcrumb: "device & agent")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
 
         if !statusHeaderAgents.isEmpty {
             AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
@@ -542,29 +545,33 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var dataSection: some View {
-        sectionHead("DATA")
-        settingsCard {
-            if let auditRepository {
-                NavigationLink {
-                    AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
-                } label: {
-                    settingsNavRow("Audit & proof", icon: "list.bullet.clipboard", detail: "approval & run history")
+        if auditRepository != nil || daemonChannel != nil {
+            sectionHead("DATA")
+            settingsCard {
+                if let auditRepository {
+                    NavigationLink {
+                        AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
+                    } label: {
+                        settingsNavRow("Audit & proof", icon: "list.bullet.clipboard", detail: "approval & run history")
+                    }
+                    if daemonChannel != nil {
+                        divider
+                    }
                 }
-                divider
-            }
-            if let daemonChannel {
-                NavigationLink {
-                    SecretsView(viewModel: {
-                        let svm = SecretsViewModel()
-                        svm.attach(channel: daemonChannel)
-                        return svm
-                    }())
-                } label: {
-                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                if let daemonChannel {
+                    NavigationLink {
+                        SecretsView(viewModel: {
+                            let svm = SecretsViewModel()
+                            svm.attach(channel: daemonChannel)
+                            return svm
+                        }())
+                    } label: {
+                        settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                    }
                 }
             }
+            .padding(.bottom, 16)
         }
-        .padding(.bottom, 16)
     }
 
     // MARK: - (4) RESET
@@ -661,9 +668,9 @@ public struct SettingsView: View {
 
     private func sectionHead(_ title: String) -> some View {
         Text(title)
-            .font(.dsMonoPt(11, weight: .medium))
-            .tracking(11 * 0.10)
+            .font(.dsSansPt(12, weight: .semibold))
             .foregroundStyle(t.text3)
+            .textCase(.uppercase)
             .padding(.horizontal, 16)
             .padding(.top, 22)
             .padding(.bottom, 6)
@@ -674,9 +681,9 @@ public struct SettingsView: View {
             content()
         }
         .background(t.surface)
-        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(t.border, lineWidth: 1)
         )
         .padding(.horizontal, 16)
@@ -685,11 +692,12 @@ public struct SettingsView: View {
     private func settingsNavRow(_ label: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(t.text2)
-                .frame(width: 20)
+                .frame(width: 28, height: 28)
+                .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(label)
-                .font(.dsSansPt(15))
+                .font(.dsSansPt(16))
                 .foregroundStyle(t.text)
             Spacer()
             Image(systemName: "chevron.right")
@@ -704,15 +712,16 @@ public struct SettingsView: View {
     private func settingsNavRow(_ label: String, icon: String, detail: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(t.text2)
-                .frame(width: 20)
+                .frame(width: 28, height: 28)
+                .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.dsSansPt(15))
+                    .font(.dsSansPt(16))
                     .foregroundStyle(t.text)
                 Text(detail)
-                    .font(.dsMonoPt(11))
+                    .font(.dsSansPt(12.5))
                     .foregroundStyle(t.text3)
             }
             Spacer()
@@ -746,7 +755,7 @@ public struct SettingsView: View {
     }
 
     private var divider: some View {
-        DSDivider(.soft, leadingInset: 16)
+        DSDivider(.soft, leadingInset: 56)
     }
 
     private var versionFooter: some View {

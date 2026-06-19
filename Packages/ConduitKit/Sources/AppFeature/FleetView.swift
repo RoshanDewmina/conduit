@@ -6,7 +6,8 @@ import PersistenceKit
 
 public struct FleetView: View {
     private let store: FleetStore
-    private let hostRepo: HostRepository
+    private let hostRepo: HostRepository?
+    private let demoHosts: [Host]
     private let loopStore: LoopStore?
     private let quotaGuardStore: QuotaGuardStore?
     private let hostHealthStore: HostHealthStore?
@@ -23,7 +24,7 @@ public struct FleetView: View {
 
     public init(
         store: FleetStore,
-        hostRepo: HostRepository,
+        hostRepo: HostRepository? = nil,
         loopStore: LoopStore? = nil,
         quotaGuardStore: QuotaGuardStore? = nil,
         hostHealthStore: HostHealthStore? = nil,
@@ -31,10 +32,12 @@ public struct FleetView: View {
         onReconnect: @escaping (Host) -> Void,
         onDelete: @escaping (Host) -> Void,
         onQuotaGuard: (() -> Void)? = nil,
-        onOpenTerminal: ((UUID) -> Void)? = nil
+        onOpenTerminal: ((UUID) -> Void)? = nil,
+        demoHosts: [Host] = []
     ) {
         self.store = store
         self.hostRepo = hostRepo
+        self.demoHosts = demoHosts
         self.loopStore = loopStore
         self.quotaGuardStore = quotaGuardStore
         self.hostHealthStore = hostHealthStore
@@ -47,7 +50,8 @@ public struct FleetView: View {
 
     private var reconnectableHosts: [Host] {
         let liveIDs = Set(store.slots.map(\.hostID))
-        return savedHosts.filter { !liveIDs.contains($0.id) }
+        let hosts = savedHosts.isEmpty ? demoHosts : savedHosts
+        return hosts.filter { !liveIDs.contains($0.id) }
     }
 
     private var vendorSpend: [(label: String, amount: Double)] {
@@ -88,13 +92,7 @@ public struct FleetView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                DSScreenHeader(
-                    "fleet",
-                    breadcrumb: "agents & spend",
-                    count: reconnectableHosts.isEmpty && store.slots.isEmpty
-                        ? nil
-                        : "\(store.slots.count + reconnectableHosts.count) hosts"
-                )
+                fleetHeader
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -184,11 +182,9 @@ public struct FleetView: View {
                             }
 
                             if !reconnectableHosts.isEmpty {
-                                DSListSectionHead("Saved hosts", count: reconnectableHosts.count)
-                                ForEach(reconnectableHosts) { host in
-                                    savedHostRow(host)
-                                        .padding(.horizontal, 18)
-                                }
+                                sectionHeader("Saved hosts", count: reconnectableHosts.count)
+                                savedHostsGroup(reconnectableHosts)
+                                    .padding(.horizontal, 16)
                             }
                         }
                     }
@@ -209,6 +205,57 @@ public struct FleetView: View {
         }
     }
 
+    private var fleetHeader: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Fleet")
+                    .font(.dsDisplayPt(30, weight: .bold))
+                    .foregroundStyle(t.text)
+                Text(fleetSubtitle)
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+            Button(action: onConnectHost) {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(t.accentFg)
+                    .frame(width: 42, height: 42)
+                    .background(t.accent, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add host")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+    }
+
+    private var fleetSubtitle: String {
+        let hostCount = store.slots.count + reconnectableHosts.count
+        if hostCount == 0 {
+            return "Your connected workspaces"
+        }
+        return hostCount == 1 ? "1 host available" : "\(hostCount) hosts available"
+    }
+
+    private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.dsSansPt(15, weight: .semibold))
+                .foregroundStyle(t.text2)
+            if let count {
+                Text("\(count)")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 2)
+    }
+
     /// Attach a daemon channel to the quota-guard store and start host-health
     /// polling once a connected slot exists. Both calls are idempotent.
     private func startLiveStores() {
@@ -224,22 +271,19 @@ public struct FleetView: View {
         HStack(spacing: 8) {
             Image(systemName: "shield.checkered")
                 .font(.system(size: 13))
-                .foregroundStyle(t.accent)
-            Text("Limits")
-                .font(.dsMonoPt(12, weight: .medium))
-                .foregroundStyle(t.accent)
+                .foregroundStyle(t.info)
+            Text("Usage & limits")
+                .font(.dsSansPt(14, weight: .medium))
+                .foregroundStyle(t.text)
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(t.text4)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(t.accent.opacity(0.06))
-        .overlay(
-            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                .strokeBorder(t.accent.opacity(0.2), lineWidth: 1)
-        )
+        .frame(height: 50)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 
     private var worktreesLink: some View {
@@ -266,48 +310,45 @@ public struct FleetView: View {
 
     private var localAgentBanner: some View {
         HStack(spacing: 10) {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 13))
-                .foregroundStyle(t.risk(0))
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(t.ok)
+                .frame(width: 32, height: 32)
+                .background(t.okSoft, in: Circle())
             Text("\(localAgentCount) agent\(localAgentCount == 1 ? "" : "s") run\(localAgentCount == 1 ? "s" : "") a local model — prompts and code never leave the host.")
-                .font(.dsSansPt(12.5))
+                .font(.dsSansPt(13))
                 .foregroundStyle(t.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(t.risk(0).opacity(0.06))
-        .overlay(
-            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                .strokeBorder(t.risk(0).opacity(0.2), lineWidth: 1)
-        )
+        .padding(.vertical, 12)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 
     private func attentionBanner(agentName: String) -> some View {
         HStack(spacing: 10) {
-            Rectangle()
-                .fill(t.warn)
-                .frame(width: 3)
-
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(t.warn)
+                .frame(width: 32, height: 32)
+                .background(t.warnSoft, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text("waiting for approval")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.warn)
-                Text("\(agentName) needs your decision")
-                    .font(.dsSansPt(13, weight: .semibold))
+                Text("Decision needed")
+                    .font(.dsSansPt(14, weight: .semibold))
                     .foregroundStyle(t.text)
+                Text("\(agentName) is waiting for your approval.")
+                    .font(.dsSansPt(12.5))
+                    .foregroundStyle(t.text3)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 10)
-        .padding(.trailing, 12)
-        .background(t.warnSoft)
-        .overlay(
-            Rectangle()
-                .strokeBorder(t.warn.opacity(0.3), lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 
     private var emptyState: some View {
@@ -318,26 +359,47 @@ public struct FleetView: View {
         )
     }
 
+    private func savedHostsGroup(_ hosts: [Host]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(hosts.enumerated()), id: \.element.id) { index, host in
+                savedHostRow(host)
+                if index < hosts.count - 1 {
+                    Rectangle()
+                        .fill(t.divider)
+                        .frame(height: 1)
+                        .padding(.leading, 66)
+                }
+            }
+        }
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r4, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+    }
+
     private func savedHostRow(_ host: Host) -> some View {
         Button { onReconnect(host) } label: {
             HStack(spacing: 12) {
-                PixelAvatar(seed: host.name, size: 36)
-                VStack(alignment: .leading, spacing: 2) {
+                PixelAvatar(seed: host.name, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(host.name)
-                        .font(.dsSansPt(14, weight: .semibold))
+                        .font(.dsSansPt(16, weight: .semibold))
                         .foregroundStyle(t.text)
                     Text(host.displayAddress)
-                        .font(.dsMonoPt(11))
+                        .font(.dsMonoPt(12))
                         .foregroundStyle(t.text3)
                 }
                 Spacer()
-                DSIconView(.refresh, size: 15, color: t.accent)
-                    .frame(width: 44, height: 44, alignment: .center)
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(t.accent)
+                    .frame(width: 36, height: 36)
+                    .background(t.accentSoft, in: Circle())
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .dsCard()
+        .accessibilityLabel("Reconnect to \(host.name)")
         .contextMenu {
             Button(role: .destructive) {
                 onDelete(host)
@@ -474,7 +536,9 @@ public struct FleetView: View {
     private func refresh() async {
         await store.refreshBridgeStatus()
         summary = FleetSummary(snapshots: store.slots.compactMap(\.bridgeStatus))
-        savedHosts = (try? await hostRepo.all()) ?? []
+        if let hostRepo {
+            savedHosts = (try? await hostRepo.all()) ?? []
+        }
         await loopStore?.refresh()
         await hostHealthStore?.refresh(fleetStore: store)
     }

@@ -86,41 +86,13 @@ public struct InboxView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // ── Big typography header
-                HStack(spacing: 10) {
-                    Text("inbox")
-                        .font(.dsDisplayPt(32, weight: .bold))
-                        .foregroundStyle(t.text)
-                    Spacer()
-                    if pendingCount > 0 {
-                        Text("\(pendingCount) pending")
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text3)
-                    }
-                    if let onOpenHistory {
-                        Button {
-                            Haptics.selection()
-                            onOpenHistory()
-                        } label: {
-                            DSIconView(.hourglass, size: 16, color: t.text2)
-                                .frame(width: 38, height: 38)
-                                .background(t.surface)
-                                .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("History")
-                        .accessibilityIdentifier("inboxHistory")
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                inboxHeader
 
                 if visibleApprovals.filter({ $0.isPending }).isEmpty {
                     inboxHomeDashboard
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 12) {
+                        LazyVStack(spacing: 16) {
                             let pending = visibleApprovals.filter { $0.isPending }
 
                             if !pending.isEmpty {
@@ -131,8 +103,8 @@ public struct InboxView: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 4)
-                        .padding(.bottom, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
                     }
                 }
             }
@@ -151,6 +123,47 @@ public struct InboxView: View {
                 vm.decide(approval.id, decision: .approvedAlways)
             }
         }
+    }
+
+    private var inboxHeader: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .font(.dsDisplayPt(30, weight: .bold))
+                    .foregroundStyle(t.text)
+                Spacer()
+                if let onOpenHistory {
+                    Button {
+                        Haptics.selection()
+                        onOpenHistory()
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(t.text2)
+                            .frame(width: 42, height: 42)
+                            .background(t.surface, in: Circle())
+                            .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("History")
+                    .accessibilityIdentifier("inboxHistory")
+                }
+            }
+
+            if pendingCount > 0 {
+                Text(pendingCount == 1 ? "1 request needs your review." : "\(pendingCount) requests need your review.")
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text2)
+            } else {
+                Text("Approvals and questions from your agents appear here.")
+                    .font(.dsSansPt(15))
+                    .foregroundStyle(t.text3)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Pending card dispatch
@@ -182,9 +195,9 @@ public struct InboxView: View {
                 } else {
                     vm.decide(approval.id, decision: .approved)
                 }
-            }
+            },
+            onOpenDetails: { detailApproval = approval }
         )
-        .onTapGesture { detailApproval = approval }
     }
 
     // MARK: - Detail sheet
