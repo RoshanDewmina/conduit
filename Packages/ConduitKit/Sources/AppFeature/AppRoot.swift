@@ -840,63 +840,74 @@ public struct AppRoot: View {
     }
 
     private func compactRoot(env: AppEnvironment) -> some View {
-        ZStack {
-            t.bg.ignoresSafeArea()
-            NavigationStack {
-                sidebarDetail(for: sidebarState.selectedDestination, env: env)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                openDrawer()
-                            } label: {
-                                DSIconView(.list, size: 18, color: t.text)
-                                    .frame(width: 50, height: 50)
-                                    .background(t.surface2.opacity(0.94), in: Circle())
-                                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
-                                    .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
+        GeometryReader { proxy in
+            let drawerWidth = min(340, max(0, proxy.size.width - 56))
+            let isOpen = sidebarState.isDrawerOpen
+            ZStack(alignment: .leading) {
+                t.bg.ignoresSafeArea()
+
+                // Sidebar pinned left, revealed as the content slides away.
+                ConduitSidebarView(state: sidebarState) { dest in
+                    sidebarState.isDrawerOpen = false
+                    sidebarState.previousDestination = sidebarState.selectedDestination
+                    sidebarState.selectedDestination = dest
+                }
+                .frame(width: drawerWidth)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                // Main content — pushed right and rounded into a card when the drawer is open.
+                NavigationStack {
+                    sidebarDetail(for: sidebarState.selectedDestination, env: env)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    openDrawer()
+                                } label: {
+                                    DSIconView(.list, size: 18, color: t.text)
+                                        .frame(width: 50, height: 50)
+                                        .background(t.surface2.opacity(0.94), in: Circle())
+                                        .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
+                                        .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Open sidebar")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Open sidebar")
+                        }
+                        .toolbarBackground(.hidden, for: .navigationBar)
+                }
+                .background(t.bg)
+                .clipShape(RoundedRectangle(cornerRadius: isOpen ? 32 : 0, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: isOpen ? 32 : 0, style: .continuous)
+                        .strokeBorder(t.border.opacity(isOpen ? 0.6 : 0), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(isOpen ? 0.28 : 0), radius: 24, x: -10, y: 0)
+                .overlay {
+                    if isOpen {
+                        Color.black.opacity(0.12)
+                            .contentShape(Rectangle())
+                            .onTapGesture { sidebarState.isDrawerOpen = false }
+                    }
+                }
+                .offset(x: isOpen ? drawerWidth : 0)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 20, coordinateSpace: .global)
+                    .onChanged { value in
+                        if !sidebarState.isDrawerOpen {
+                            guard value.startLocation.x < 30 else { return }
+                            if value.translation.width > 40 { openDrawer() }
                         }
                     }
-                    .toolbarBackground(.hidden, for: .navigationBar)
-            }
-            if sidebarState.isDrawerOpen {
-                Color.black.opacity(0.45)
-                    .ignoresSafeArea()
-                    .onTapGesture { sidebarState.isDrawerOpen = false }
-                GeometryReader { proxy in
-                    let drawerWidth = min(340, max(0, proxy.size.width - 28))
-                    HStack(spacing: 0) {
-                        ConduitSidebarView(state: sidebarState) { dest in
+                    .onEnded { value in
+                        if sidebarState.isDrawerOpen, value.translation.width < -60 {
                             sidebarState.isDrawerOpen = false
-                            sidebarState.previousDestination = sidebarState.selectedDestination
-                            sidebarState.selectedDestination = dest
                         }
-                        .frame(width: drawerWidth)
-                        .background(t.bg)
-                        .overlay(alignment: .trailing) {
-                            Rectangle().fill(t.border.opacity(0.65)).frame(width: 1)
-                        }
-                        .shadow(color: .black.opacity(0.30), radius: 26, x: 12, y: 0)
-                        Spacer(minLength: 0)
                     }
-                    .ignoresSafeArea()
-                }
-                .transition(.move(edge: .leading))
-                .zIndex(1)
-            }
+            )
+            .animation(.easeInOut(duration: 0.28), value: sidebarState.isDrawerOpen)
         }
-        .gesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .global)
-                .onChanged { value in
-                    guard value.startLocation.x < 30, !sidebarState.isDrawerOpen else { return }
-                    if value.translation.width > 40 {
-                        openDrawer()
-                    }
-                }
-        )
-        .animation(.easeInOut(duration: 0.25), value: sidebarState.isDrawerOpen)
+        .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
                 SessionView(viewModel: vm)
