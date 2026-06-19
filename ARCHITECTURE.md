@@ -2,8 +2,8 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-18 (IA §4.1 refreshed to the shipped **sidebar / New Chat** shell; tab bar deprecated)
-Target platform: iOS 26.0+ deployment (project.yml and Package.swift); verified on iOS 26.4 simulator (Swift 6.2, strict concurrency on)
+Last updated: 2026-06-19 (sidebar shell, Governance, and SSH workspace refresh)
+Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
 ---
@@ -137,8 +137,8 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Conduit
 - **Bundle ID:** `dev.conduit.mobile` (app), `dev.conduit.kit` (frameworks)
-- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 26.4 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
-- **Toolchain:** Xcode 26.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
+- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
 
