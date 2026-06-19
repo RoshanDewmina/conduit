@@ -841,7 +841,7 @@ public struct AppRoot: View {
 
     private func compactRoot(env: AppEnvironment) -> some View {
         GeometryReader { proxy in
-            let drawerWidth = min(340, max(0, proxy.size.width - 56))
+            let drawerWidth = min(340, proxy.size.width * 0.8)
             let isOpen = sidebarState.isDrawerOpen
             ZStack(alignment: .leading) {
                 t.bg.ignoresSafeArea()
@@ -907,7 +907,14 @@ public struct AppRoot: View {
             )
             .animation(.easeInOut(duration: 0.28), value: sidebarState.isDrawerOpen)
         }
-        .ignoresSafeArea(.keyboard)
+        .ignoresSafeArea(.container)
+        .task {
+#if DEBUG
+            if ProcessInfo.processInfo.environment["CONDUIT_DRAWER_OPEN"] == "1" {
+                sidebarState.isDrawerOpen = true
+            }
+#endif
+        }
         .fullScreenCover(isPresented: $isShowingLiveSession) {
             if let vm = activeSessionViewModel {
                 SessionView(viewModel: vm)
