@@ -140,6 +140,15 @@ type launchFunc func(argv []string, cwd, runID string, emit emitFunc) (*procHand
 func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
 	cmd.Dir = expandHome(cwd)
+
+	// For conduitd-dispatched opencode runs, inject CONDUIT_GATE=1 into the
+	// subprocess environment so the opencode PreToolUse hook knows to forward
+	// tool calls to the conduitd approval engine. Interactive opencode sessions
+	// launched by the owner never set CONDUIT_GATE, so they are unaffected.
+	if argv[0] == "opencode" {
+		cmd.Env = append(os.Environ(), "CONDUIT_GATE=1")
+	}
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

@@ -14,6 +14,14 @@
 
 set -u
 
+# Only gate tool calls for conduitd-dispatched opencode runs.
+# The conduitd realLauncher sets CONDUIT_GATE=1 for every opencode process it
+# spawns.  Interactive opencode sessions started by the owner do NOT have this
+# variable, so they pass through silently — the owner's workflow is unaffected.
+if [ "${CONDUIT_GATE:-0}" != "1" ]; then
+  exit 0
+fi
+
 CONDUITD="${CONDUITD:-$HOME/.conduit/bin/conduitd}"
 if [ ! -x "$CONDUITD" ] && [ -x "$HOME/conduitd" ]; then
   CONDUITD="$HOME/conduitd"
