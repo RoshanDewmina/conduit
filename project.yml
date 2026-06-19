@@ -124,8 +124,12 @@ targets:
         embed: true
       - target: ConduitWidget
         embed: true
-      - target: ConduitWatch
-        embed: true
+      # ConduitWatch is intentionally NOT embedded in the iOS app: an embedded
+      # watchOS app/extension makes the iOS .app un-installable on the iOS
+      # Simulator via simctl/XcodeBuildMCP (watchOS-arch binary isn't runnable
+      # there), which is the project's authoritative verification path. The
+      # target still builds standalone via its own scheme. Re-embed only once a
+      # paired-watch-sim or device flow replaces the simctl install path.
 
   ConduitWatch:
     type: application
