@@ -9,8 +9,19 @@
 //   • ApprovalRepository.upserts → manager.updatePendingApprovals(_:)
 //   • SessionViewModel.disconnect() / app shutdown → manager.endAll()
 //
+// Push-driven (Phase 1):
+//   • Activity is requested with pushType: .token so iOS can update it
+//     while the app is away. pushTokenUpdates delivers the per-activity
+//     token; register it with push-backend so the backend can send
+//     APNs content-state payloads even when the app is suspended.
+//   • pushToStartToken / pushToStartTokenUpdates let the backend START
+//     a new activity via APNs when none is running (app fully closed).
+//   • frequentPushesEnabled is observed; the backend is told when it
+//     changes so it can throttle priority-10 pushes appropriately.
+//
 // Requires:
 //   • NSSupportsLiveActivities = YES in Info.plist (set in project.yml)
+//   • NSSupportsLiveActivitiesFrequentUpdates = YES for frequent pushes
 //   • A Widget Extension target that imports this file and renders the
 //     `ActivityAttributes`/`ContentState` — see ConduitLiveActivityWidget
 //     (added via `xcodegen generate` once the widget target is declared).
@@ -66,9 +77,22 @@ public struct ConduitSessionAttributes: ActivityAttributes {
     }
 }
 
+/// Called by the token-monitoring tasks when a new activity or push-to-start
+/// token is available. The registration closure POSTs to push-backend.
+public typealias ActivityTokenRegistration = @Sendable (
+    _ sessionID: String,
+    _ activityToken: String,
+    _ isPushToStart: Bool
+) async -> Void
+
 /// Thin wrapper around ActivityKit for Conduit's session activities. One
 /// activity per active host; calling `start(...)` again for an existing host
 /// updates its content rather than creating a duplicate.
+///
+/// Push path: activities are requested with pushType: .token so iOS delivers
+/// APNs content-state updates even when the app is suspended. The caller
+/// supplies a `tokenRegistration` closure (wired in ConduitApp/AppRoot) that
+/// forwards new tokens to push-backend.
 @available(iOS 16.2, *)
 @MainActor
 public final class ConduitLiveActivityManager {
@@ -78,6 +102,14 @@ public final class ConduitLiveActivityManager {
     // Last content pushed per host, so partial updates (e.g. approval count
     // only) can preserve the other fields instead of resetting them.
     private var lastContent: [String: ConduitSessionAttributes.ContentState] = [:]
+    // Token-monitoring tasks keyed by hostID so they're cancelled on end().
+    private var tokenTasks: [String: Task<Void, Never>] = [:]
+    // Push-to-start token monitor (one per app lifetime).
+    private var pushToStartTask: Task<Void, Never>?
+
+    /// Closure called when an activity or push-to-start push token is ready.
+    /// Set by ConduitApp at launch (alongside the APNs device-token path).
+    public var tokenRegistration: ActivityTokenRegistration?
 
     private init() {}
 
@@ -87,11 +119,19 @@ public final class ConduitLiveActivityManager {
         ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
+    /// True when the OS allows frequent ActivityKit push updates (controlled
+    /// by Settings → Notifications → Conduit). Send to push-backend so it can
+    /// set apns-priority 5 vs 10 accordingly.
+    public var frequentPushesEnabled: Bool {
+        ActivityAuthorizationInfo().frequentPushesEnabled
+    }
+
     /// Start a Live Activity for a host, or update its content if one is
     /// already running.
     public func start(
         hostID: String,
         hostName: String,
+        sessionID: String,
         status: String = "connected",
         agentName: String? = nil,
         pendingApprovals: Int = 0,
@@ -118,13 +158,28 @@ public final class ConduitLiveActivityManager {
             let activity = try Activity.request(
                 attributes: attrs,
                 content: .init(state: content, staleDate: Date().addingTimeInterval(1800)),
-                pushType: nil
+                pushType: .token
             )
             activities[hostID] = activity
             lastContent[hostID] = content
+            startTokenMonitor(for: activity, hostID: hostID, sessionID: sessionID)
         } catch {
             // ActivityKit refuses (off in Settings, system busy, etc.) —
             // silent failure is correct; the in-app inbox still works.
+        }
+    }
+
+    /// Begin observing push-to-start tokens so push-backend can remotely
+    /// START a Live Activity when none is running (app fully closed).
+    /// Call once at app launch from ConduitApp alongside APNs token setup.
+    public func startPushToStartMonitor(sessionID: String) {
+        guard pushToStartTask == nil else { return }
+        guard #available(iOS 17.2, *) else { return }
+        pushToStartTask = Task { [weak self] in
+            for await tokenData in Activity<ConduitSessionAttributes>.pushToStartTokenUpdates {
+                let hexToken = tokenData.map { String(format: "%02x", $0) }.joined()
+                await self?.tokenRegistration?(sessionID, hexToken, true)
+            }
         }
     }
 
@@ -216,6 +271,8 @@ public final class ConduitLiveActivityManager {
         await activity.end(nil, dismissalPolicy: .immediate)
         activities.removeValue(forKey: hostID)
         lastContent.removeValue(forKey: hostID)
+        tokenTasks[hostID]?.cancel()
+        tokenTasks.removeValue(forKey: hostID)
     }
 
     /// End every activity (e.g. app entering termination).
@@ -223,8 +280,26 @@ public final class ConduitLiveActivityManager {
         for (id, activity) in activities {
             await activity.end(nil, dismissalPolicy: .immediate)
             activities.removeValue(forKey: id)
+            tokenTasks[id]?.cancel()
         }
+        tokenTasks.removeAll()
         lastContent.removeAll()
+    }
+
+    // MARK: - Push token monitoring
+
+    private func startTokenMonitor(
+        for activity: Activity<ConduitSessionAttributes>,
+        hostID: String,
+        sessionID: String
+    ) {
+        tokenTasks[hostID]?.cancel()
+        tokenTasks[hostID] = Task { [weak self] in
+            for await tokenData in activity.pushTokenUpdates {
+                let hexToken = tokenData.map { String(format: "%02x", $0) }.joined()
+                await self?.tokenRegistration?(sessionID, hexToken, false)
+            }
+        }
     }
 }
 

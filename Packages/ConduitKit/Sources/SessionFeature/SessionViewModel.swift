@@ -324,6 +324,7 @@ public final class SessionViewModel {
                 await ConduitLiveActivityManager.shared.start(
                     hostID: host.id.uuidString,
                     hostName: host.name,
+                    sessionID: DeviceIdentity.sessionID(),
                     status: "connected",
                     agentName: liveAgentName,
                     pendingApprovals: livePendingApprovals,

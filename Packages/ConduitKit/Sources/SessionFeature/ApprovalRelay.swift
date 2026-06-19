@@ -4,6 +4,7 @@ import ConduitCore
 import PersistenceKit
 import SSHTransport
 import NotificationsKit
+import SecurityKit
 
 /// Tracks pending decision delivery attempts for staleness detection.
 public struct DecisionDeliveryTracker: Sendable {
@@ -53,10 +54,11 @@ public struct DecisionDeliveryTracker: Sendable {
 ///   4. Otherwise the decision is queued. `setChannel(_:)` drains the queue
 ///      the next time a session connects.
 ///
-/// Cold-launch edge: if the app is never brought to foreground after a
-/// lock-screen decision, the queue is never drained. The DB write (step 2)
-/// and conduitd's 120 s timeout are the backstop — conduitd will mark the
-/// approval timed-out and unblock the agent with an auto-deny.
+/// Cold-launch gate (Phase 1 fix): `backendURL`/`sessionID`/`relayToken` are
+/// persisted to the Keychain with `afterFirstUnlockThisDeviceOnly` so they
+/// survive a process kill and can be hydrated at intent-perform time, enabling
+/// a cold forward without a pre-warmed singleton. The DB write (step 2) and
+/// conduitd's 120 s timeout remain the backstop for truly unrecoverable cases.
 @MainActor
 public final class ApprovalRelay {
     public static let shared = ApprovalRelay()
@@ -75,6 +77,18 @@ public final class ApprovalRelay {
     // Per-session capability token (Tier-2 auth) required by the backend
     // `POST /approval/decision`. Sourced from the DaemonChannel handshake. Secret.
     private var relayToken: String = ""
+
+    /// Keychain service used to persist relay credentials for cold-launch hydration.
+    /// Tests may supply an in-memory instance.
+    internal var credentialKeychain: Keychain = Keychain(
+        service: "dev.conduit.relayCredentials",
+        inMemory: false
+    )
+
+    // Keychain account keys.
+    private static let kcBackendURL  = "backendURL"
+    private static let kcSessionID   = "sessionID"
+    private static let kcRelayToken  = "relayToken"
 
     /// Tracks pending decision deliveries for staleness detection.
     public private(set) var deliveryTracker = DecisionDeliveryTracker()
@@ -125,7 +139,11 @@ public final class ApprovalRelay {
             ]
         )
 
-        // 2. Forward to conduitd (live SSH channel → backend relay → SSH-drain queue).
+        // 2. Hydrate credentials from Keychain in case this is a cold launch
+        //    (no prior foreground connect in this process lifetime).
+        hydrateCredentialsIfNeeded()
+
+        // 3. Forward to conduitd (live SSH channel → backend relay → SSH-drain queue).
         await forwardDecisionOnly(approvalID: approvalID, decision: decision, editedToolInput: nil)
     }
 
@@ -165,7 +183,8 @@ public final class ApprovalRelay {
             }
         }
 
-        // 3. Try backend relay
+        // 3. Try backend relay (hydrate credentials if still empty from cold launch)
+        hydrateCredentialsIfNeeded()
         let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
         if delivered {
             deliveryTracker.recordAcknowledgement(approvalID: approvalID)
@@ -195,6 +214,7 @@ public final class ApprovalRelay {
     public func configureBackend(url: String, sessionID: String) {
         self.backendURL = url
         self.sessionID = sessionID
+        persistCredentials()
     }
 
     /// Store the per-session relay capability token (from the DaemonChannel
@@ -202,6 +222,7 @@ public final class ApprovalRelay {
     public func setRelayToken(_ token: String) {
         guard !token.isEmpty else { return }
         self.relayToken = token
+        persistCredentials()
     }
 
     public static func backendDecisionBody(
@@ -220,6 +241,54 @@ public final class ApprovalRelay {
     }
 
     // MARK: - Private
+
+    /// Persist relay credentials to the Keychain so cold-launch processes can
+    /// hydrate them without waiting for a foreground connect.
+    private func persistCredentials() {
+        let kc = credentialKeychain
+        let url = backendURL
+        let sid = sessionID
+        let tok = relayToken
+        Task {
+            if let d = url.data(using: .utf8), !url.isEmpty {
+                try? await kc.write(d, account: Self.kcBackendURL, accessibility: .afterFirstUnlockThisDeviceOnly)
+            }
+            if let d = sid.data(using: .utf8), !sid.isEmpty {
+                try? await kc.write(d, account: Self.kcSessionID, accessibility: .afterFirstUnlockThisDeviceOnly)
+            }
+            if let d = tok.data(using: .utf8), !tok.isEmpty {
+                try? await kc.write(d, account: Self.kcRelayToken, accessibility: .afterFirstUnlockThisDeviceOnly)
+            }
+        }
+    }
+
+    /// Load relay credentials from Keychain when the in-memory vars are empty
+    /// (i.e. this is a cold-launch process that was never connected to a daemon).
+    /// This is called synchronously but spawns a Task; the relay path's URLSession
+    /// call is also async so the credentials will be populated before the network
+    /// request fires.
+    private func hydrateCredentialsIfNeeded() {
+        guard backendURL.isEmpty || sessionID.isEmpty || relayToken.isEmpty else { return }
+        let kc = credentialKeychain
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.backendURL.isEmpty,
+               let d = try? await kc.read(account: Self.kcBackendURL),
+               let s = String(data: d, encoding: .utf8), !s.isEmpty {
+                self.backendURL = s
+            }
+            if self.sessionID.isEmpty,
+               let d = try? await kc.read(account: Self.kcSessionID),
+               let s = String(data: d, encoding: .utf8), !s.isEmpty {
+                self.sessionID = s
+            }
+            if self.relayToken.isEmpty,
+               let d = try? await kc.read(account: Self.kcRelayToken),
+               let s = String(data: d, encoding: .utf8), !s.isEmpty {
+                self.relayToken = s
+            }
+        }
+    }
 
     /// POST a decision to the backend relay. Returns `true` only on a 2xx
     /// response so the caller can decide whether to keep the decision queued for

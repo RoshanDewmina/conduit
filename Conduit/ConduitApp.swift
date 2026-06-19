@@ -3,6 +3,7 @@ import AppFeature
 import ConduitCore
 import DesignSystem
 import NotificationsKit
+import SessionFeature
 import SettingsFeature
 import UserNotifications
 #if canImport(Sentry)
@@ -10,6 +11,9 @@ import Sentry
 #endif
 #if canImport(UIKit)
 import UIKit
+#endif
+#if canImport(ActivityKit)
+import ActivityKit
 #endif
 
 /// Push backend HTTPS URL, injected from build config via Info.plist.
@@ -110,7 +114,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // Foreground banner + action-response handling.
         UNUserNotificationCenter.current().delegate = notificationDelegate
         application.registerForRemoteNotifications()
+        configureLiveActivityTokens()
         return true
+    }
+
+    /// Wire up Live Activity push token registration alongside the APNs device-token path.
+    /// Sets the tokenRegistration closure on ConduitLiveActivityManager so new activity
+    /// tokens and the push-to-start token are forwarded to push-backend.
+    /// The merge owner must also call manager.startPushToStartMonitor(sessionID:) from
+    /// AppRoot once the stable sessionID is available (i.e. after configureCloudServices).
+    private func configureLiveActivityTokens() {
+        #if os(iOS)
+        if #available(iOS 16.2, *) {
+            let manager = ConduitLiveActivityManager.shared
+            manager.tokenRegistration = { sessionID, activityToken, isPushToStart in
+                NotificationCenter.default.post(
+                    name: .conduitLiveActivityTokenReady,
+                    object: nil,
+                    userInfo: [
+                        "sessionID": sessionID,
+                        "activityToken": activityToken,
+                        "isPushToStart": isPushToStart,
+                    ]
+                )
+            }
+        }
+        #endif
     }
 
     func application(

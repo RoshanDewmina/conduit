@@ -87,6 +87,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/relay", handleWebSocketRelay)
 	mux.HandleFunc("POST /register", handleRegister)
+	mux.HandleFunc("POST /register-activity-token", handleRegisterActivityToken)
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
 	mux.HandleFunc("/approval/decision", handlePostDecision)
@@ -205,6 +206,7 @@ func startRelayJanitor() {
 			evictExpiredDecisionsLocked(now)
 			decisions.Unlock()
 			evictExpiredDevices(now)
+			evictExpiredActivityTokens(now)
 		}
 	}()
 }
@@ -313,7 +315,9 @@ func pushRunComplete(deviceToken string, ev runCompleteEvent) error {
 	if !ok {
 		title = fmt.Sprintf("Run failed · %s", ev.HostName)
 	}
-	body := fmt.Sprintf("%s — exit %d", ev.Command, ev.ExitCode)
+	// PRIVACY: never expose raw command text on the lock screen. Use tool category + exit code.
+	tool := classifyTool(ev.Command)
+	body := fmt.Sprintf("%s — exit %d", tool, ev.ExitCode)
 
 	payload := map[string]any{
 		"aps": map[string]any{
@@ -368,10 +372,10 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 		risk = "unknown"
 	}
 	title := fmt.Sprintf("Approval needed · %s", ev.HostName)
-	body := ev.Command
-	if body == "" {
-		body = "Agent action pending"
-	}
+	// PRIVACY: never put raw command text, file paths, env values, or secrets
+	// in the APNs alert body — it appears on the lock screen. Use a redacted
+	// summary (risk + tool category). Full detail is fetched in-app post-unlock.
+	body := redactSummary(risk, ev.Command)
 
 	payload := map[string]any{
 		"aps": map[string]any{
@@ -409,7 +413,43 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("APNs returned %d", resp.StatusCode)
 	}
+
+	// Also update the Live Activity (best-effort; errors don't fail the alert push).
+	_ = pushLiveActivityApproval(ev.SessionID, ev.ID, risk, body, nil)
+
 	return nil
+}
+
+// registerActivityTokenRequest is the body for POST /register-activity-token.
+type registerActivityTokenRequest struct {
+	SessionID      string `json:"sessionId"`
+	ActivityToken  string `json:"activityToken,omitempty"`
+	IsPushToStart  bool   `json:"isPushToStart,omitempty"`
+}
+
+// handleRegisterActivityToken: POST /register-activity-token
+// Guarded by the same Tier-1 control-plane secret as /register.
+// The iOS app posts here whenever its Live Activity push token (or the
+// push-to-start token) changes.
+func handleRegisterActivityToken(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var req registerActivityTokenRequest
+	if !decodeRelayJSON(w, r, &req) {
+		return
+	}
+	if req.SessionID == "" || req.ActivityToken == "" {
+		http.Error(w, "sessionId and activityToken required", http.StatusBadRequest)
+		return
+	}
+	if len(req.SessionID) > maxSessionIDLen || len(req.ActivityToken) > maxDeviceTokenLen {
+		http.Error(w, "field too large", http.StatusBadRequest)
+		return
+	}
+	registerActivityToken(req.SessionID, req.ActivityToken, req.IsPushToStart)
+	log.Printf("registered activity token for session %s (pushToStart=%t)", req.SessionID, req.IsPushToStart)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func makeJWT(keyID, teamID string, key *ecdsa.PrivateKey) (string, error) {

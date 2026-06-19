@@ -18,6 +18,10 @@ public extension Notification.Name {
     /// Posted when the app receives an APNs device token from UIApplicationDelegate.
     /// userInfo: ["token": String (hex-encoded)]
     static let conduitAPNSTokenReceived = Notification.Name("dev.conduit.apnsTokenReceived")
+    /// Posted when a Live Activity push token or push-to-start token is ready to
+    /// register with push-backend. userInfo: ["sessionID": String, "activityToken":
+    /// String (hex), "isPushToStart": Bool]
+    static let conduitLiveActivityTokenReady = Notification.Name("dev.conduit.liveActivityTokenReady")
 }
 
 // MARK: - Cold-launch approval action buffer (MAJOR-6)
