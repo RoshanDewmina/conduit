@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -107,7 +108,6 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 	rec.CreatedAt = time.Now().Unix()
 
 	decisions.Lock()
-	defer decisions.Unlock()
 	evictExpiredDecisionsLocked(rec.CreatedAt)
 
 	existing := decisions.bySession[rec.SessionID]
@@ -118,19 +118,38 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 		if existing[i].ApprovalID == rec.ApprovalID {
 			existing[i] = rec
 			decisions.bySession[rec.SessionID] = existing
+			decisions.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 	}
 	if len(existing) >= maxDecisionsPerSession {
+		decisions.Unlock()
 		http.Error(w, "too many pending decisions for session", http.StatusTooManyRequests)
 		return
 	}
 	if _, ok := decisions.bySession[rec.SessionID]; !ok && len(decisions.bySession) >= maxDecisionSessions {
+		decisions.Unlock()
 		http.Error(w, "decision capacity reached", http.StatusServiceUnavailable)
 		return
 	}
 	decisions.bySession[rec.SessionID] = append(existing, rec)
+	sessionID := rec.SessionID
+	rawDecision := rec.Decision
+	decisions.Unlock()
+
+	var decisionVerb string
+	switch rawDecision {
+	case "approve", "approveAlways":
+		decisionVerb = "approved"
+	default:
+		decisionVerb = "rejected"
+	}
+	// Confirm the decision on the lock-screen Live Activity (incl. cold path).
+	if err := pushLiveActivityDecision(sessionID, decisionVerb); err != nil {
+		log.Printf("live-activity decision push failed: %v", err)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

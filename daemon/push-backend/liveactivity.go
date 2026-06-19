@@ -82,6 +82,10 @@ type liveActivityContentState struct {
 	PendingApprovalID *string  `json:"pendingApprovalID,omitempty"`
 	IsStreaming       bool     `json:"isStreaming"`
 	Cost              *float64 `json:"cost,omitempty"`
+	// LastDecision is a transient confirmation pushed once after a decision
+	// resolves ("approved"/"rejected"); omitted in steady state. Mirrors the
+	// Swift ContentState.lastDecision optional.
+	LastDecision *string `json:"lastDecision,omitempty"`
 	// lastUpdate encoded as a Unix fractional seconds float — matches Swift's
 	// default JSONEncoder Date strategy and ActivityKit's default decoder.
 	LastUpdate float64 `json:"lastUpdate"`
@@ -139,6 +143,43 @@ func pushLiveActivityApproval(sessionID, approvalID, riskLevel, redactedSummary 
 		},
 	}
 
+	return sendLiveActivityPush(activityToken, payload, 10)
+}
+
+// pushLiveActivityDecision sends a transient "decision landed" content-state so
+// the lock screen / Dynamic Island can confirm a just-resolved approval — including
+// the cold path, where a killed-app Approve is resolved server-side and only a push
+// can confirm it. The widget shows a ✓ for ~4s; a subsequent update/end clears it.
+// PRIVACY: carries only the decision verb, never command text.
+func pushLiveActivityDecision(sessionID, decision string) error {
+	liveActivityRegistry.RLock()
+	rec, ok := liveActivityRegistry.sessions[sessionID]
+	var activityToken string
+	if ok {
+		activityToken = rec.activityToken
+	}
+	liveActivityRegistry.RUnlock()
+	if !ok || activityToken == "" {
+		return nil
+	}
+
+	stale := time.Now().Add(30 * time.Minute).Unix()
+	d := decision
+	contentState := liveActivityContentState{
+		Status:           "connected",
+		PendingApprovals: 0,
+		IsStreaming:      false,
+		LastDecision:     &d,
+		LastUpdate:       float64(time.Now().UnixNano()) / 1e9,
+	}
+	payload := liveActivityPayload{
+		APS: liveActivityAPS{
+			Timestamp:    time.Now().Unix(),
+			Event:        "update",
+			ContentState: contentState,
+			StaleDate:    &stale,
+		},
+	}
 	return sendLiveActivityPush(activityToken, payload, 10)
 }
 

@@ -42,7 +42,7 @@ struct ConduitSessionLiveActivity: Widget {
                     } else if let cost = context.state.cost, cost > 0 {
                         Text(formatCost(cost))
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(costColor(for: context.state))
                     }
                 }
 
@@ -75,7 +75,7 @@ struct ConduitSessionLiveActivity: Widget {
                             if let cost = context.state.cost, cost > 0 {
                                 Text(formatCost(cost))
                                     .font(.caption2.monospaced())
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(costColor(for: context.state))
                             }
                         }
                     }
@@ -115,7 +115,7 @@ struct ConduitSessionLiveActivity: Widget {
                         Text("·")
                             .foregroundStyle(.tertiary)
                         Text(formatCost(cost))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(costColor(for: context.state))
                     }
                 }
                 .font(.caption.monospaced())
@@ -201,46 +201,59 @@ struct ConduitSessionLiveActivity: Widget {
     // MARK: - Status Colors (ok=green, warn=amber, danger=red)
 
     private func statusColor(for state: ConduitSessionAttributes.ContentState) -> Color {
-        if state.pendingApprovals > 0 {
+        let p = LiveActivityPresentation.resolve(state, budget: nil)
+        switch p.primary {
+        case .needsYou:
             return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (warn)
-        }
-        if state.isStreaming {
+        case .decisionLanded(let approved):
+            return approved
+                ? Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1)  // green (approved)
+                : Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1)  // red (rejected)
+        case .running:
             return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue (streaming)
-        }
-        switch state.status {
-        case "connected":
-            return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green (ok)
-        case "reconnecting":
-            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (warn)
-        case "error":
-            return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (danger)
-        case "suspended":
-            return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1) // dim
-        default:
-            return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1) // green (ok)
+        case .idle:
+            switch state.status {
+            case "reconnecting": return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1)
+            case "error":        return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1)
+            case "suspended":    return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1)
+            default:             return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1)
+            }
         }
     }
 
     private func statusLabel(for state: ConduitSessionAttributes.ContentState) -> String {
-        if state.pendingApprovals > 0 {
-            return "\(state.pendingApprovals) pending"
-        }
-        if state.isStreaming {
-            return "streaming"
-        }
-        switch state.status {
-        case "connected":    return "connected"
-        case "reconnecting": return "reconnecting"
-        case "error":        return "error"
-        case "suspended":    return "suspended"
-        default:             return state.status
+        let p = LiveActivityPresentation.resolve(state, budget: nil)
+        switch p.primary {
+        case .needsYou(let count): return count == 1 ? "1 pending" : "\(count) pending"
+        case .decisionLanded(let approved): return approved ? "Approved ✓" : "Rejected ✓"
+        case .running: return "streaming"
+        case .idle:
+            switch state.status {
+            case "connected":    return "connected"
+            case "reconnecting": return "reconnecting"
+            case "error":        return "error"
+            case "suspended":    return "suspended"
+            default:             return state.status
+            }
         }
     }
 
     private func shortStatus(for state: ConduitSessionAttributes.ContentState) -> String {
-        if state.pendingApprovals > 0 { return "\(state.pendingApprovals)" }
-        if state.isStreaming { return "..." }
-        return state.status.prefix(3).lowercased() + "..."
+        let p = LiveActivityPresentation.resolve(state, budget: nil)
+        switch p.primary {
+        case .needsYou(let count): return "\(count)"
+        case .decisionLanded:      return "✓"
+        case .running:             return "..."
+        case .idle:                return String(state.status.prefix(3)).lowercased() + "..."
+        }
+    }
+
+    private func costColor(for state: ConduitSessionAttributes.ContentState) -> Color {
+        switch LiveActivityPresentation.resolve(state, budget: nil).costLevel {
+        case .over:    return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red
+        case .warning: return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber
+        default:       return .secondary
+        }
     }
 
     private func formatCost(_ cost: Double) -> String {

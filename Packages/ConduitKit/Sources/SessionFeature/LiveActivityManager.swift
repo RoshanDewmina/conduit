@@ -47,6 +47,10 @@ public struct ConduitSessionAttributes: ActivityAttributes {
         public var pendingApprovalID: String?
         public var isStreaming: Bool        // agent is actively executing (drives the blue glyph)
         public var cost: Double?            // accumulated cost in USD
+        /// Transient confirmation of a just-resolved decision: "approved" / "rejected" / nil.
+        /// Pushed once by push-backend after a decision resolves (incl. the cold path), shown
+        /// as a ✓ for ~4s, then cleared. nil in steady state.
+        public var lastDecision: String?
         public var lastUpdate: Date
 
         public init(
@@ -56,6 +60,7 @@ public struct ConduitSessionAttributes: ActivityAttributes {
             pendingApprovalID: String? = nil,
             isStreaming: Bool = false,
             cost: Double? = nil,
+            lastDecision: String? = nil,
             lastUpdate: Date = .now
         ) {
             self.status = status
@@ -64,6 +69,7 @@ public struct ConduitSessionAttributes: ActivityAttributes {
             self.pendingApprovalID = pendingApprovalID
             self.isStreaming = isStreaming
             self.cost = cost
+            self.lastDecision = lastDecision
             self.lastUpdate = lastUpdate
         }
     }

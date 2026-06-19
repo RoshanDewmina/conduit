@@ -60,6 +60,10 @@ public struct InboxView: View {
     @State private var editingApproval: Approval?
     @State private var editedToolInputText = ""
     @State private var scopeSheetApproval: Approval?
+    /// A deep-linked approval id (notification/Live-Activity body tap) whose row
+    /// hasn't loaded yet — on a cold launch `vm.approvals` is empty when the open
+    /// signal arrives. Held until the list loads, then resolved in `.onChange`.
+    @State private var pendingOpenApprovalID: UUID?
 
     public init(
         viewModel: InboxViewModel,
@@ -122,6 +126,30 @@ public struct InboxView: View {
                 Task { await onSetPolicy?(policyYAML) }
                 vm.decide(approval.id, decision: .approvedAlways)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { note in
+            guard let idString = note.userInfo?["approvalId"] as? String,
+                  let uuid = UUID(uuidString: idString) else { return }
+            if let match = vm.approvals.first(where: { $0.id.raw == uuid }) {
+                detailApproval = match
+                pendingOpenApprovalID = nil
+            } else {
+                // Cold launch: approvals not loaded yet. Remember the id and
+                // resolve it once the list arrives (.onChange below). Review
+                // intent only — this opens the detail sheet, never decides.
+                pendingOpenApprovalID = uuid
+            }
+        }
+        // Resolve a deep-link that arrived before the list loaded. `.count` is a
+        // sufficient trigger here (not a strong identity key) because this only
+        // matters during the cold-launch window when count goes 0→N; outside it
+        // `pendingOpenApprovalID` is nil and the guard short-circuits. The actual
+        // match is still an exact id lookup, so it can never open the wrong sheet.
+        .onChange(of: vm.approvals.count) { _, _ in
+            guard let uuid = pendingOpenApprovalID,
+                  let match = vm.approvals.first(where: { $0.id.raw == uuid }) else { return }
+            detailApproval = match
+            pendingOpenApprovalID = nil
         }
     }
 
@@ -206,57 +234,67 @@ public struct InboxView: View {
     private func detailSheet(_ approval: Approval) -> some View {
         let isCritical = approval.risk.rawValue >= 3
         let br = approval.blastRadius ?? ApprovalBlastRadius(matchedRule: "policy rule")
-        InboxApprovalDetail(
-            agentKey: agentKey(approval.agent),
-            agentName: agentName(approval.agent),
-            hostLabel: approval.cwd,
-            cwd: approval.cwd,
-            sessionID: approval.sessionID.uuidString,
-            timeLabel: pendingTimeLabel(approval),
-            question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
-            toolName: approval.toolName ?? approval.command,
-            args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
-            command: approval.command,
-            risk: approval.risk.rawValue,
-            isCritical: isCritical,
-            matchedRule: br.matchedRule,
-            onDeny: {
-                vm.decide(approval.id, decision: .rejected)
-                detailApproval = nil
-            },
-            onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
-                editedToolInputText = editableToolInput(for: approval)
-                editingApproval = approval
-                detailApproval = nil
-            } : nil,
-            onAllowAlways: {
-                Task {
-                    if isCritical {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
-                        catch {
-                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
-                            return
-                        }
-                    }
+        VStack(spacing: 0) {
+            InboxApprovalDetail(
+                agentKey: agentKey(approval.agent),
+                agentName: agentName(approval.agent),
+                hostLabel: approval.cwd,
+                cwd: approval.cwd,
+                sessionID: approval.sessionID.uuidString,
+                timeLabel: pendingTimeLabel(approval),
+                question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
+                toolName: approval.toolName ?? approval.command,
+                args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
+                command: approval.command,
+                risk: approval.risk.rawValue,
+                isCritical: isCritical,
+                matchedRule: br.matchedRule,
+                onDeny: {
+                    vm.decide(approval.id, decision: .rejected)
                     detailApproval = nil
-                    scopeSheetApproval = approval
+                },
+                onEditAndRun: (approval.toolInput != nil || approval.command != nil) ? {
+                    editedToolInputText = editableToolInput(for: approval)
+                    editingApproval = approval
+                    detailApproval = nil
+                } : nil,
+                onAllowAlways: {
+                    Task {
+                        if isCritical {
+                            do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
+                            catch {
+                                if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                                return
+                            }
+                        }
+                        detailApproval = nil
+                        scopeSheetApproval = approval
+                    }
+                },
+                onApprove: {
+                    Task {
+                        if isCritical {
+                            do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
+                            catch {
+                                if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                                return
+                            }
+                        }
+                        vm.decide(approval.id, decision: .approved)
+                        Haptics.success()
+                        detailApproval = nil
+                    }
                 }
-            },
-            onApprove: {
-                Task {
-                    if isCritical {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
-                        catch {
-                            if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
-                            return
-                        }
-                    }
-                    vm.decide(approval.id, decision: .approved)
-                    Haptics.success()
-                    detailApproval = nil
+            )
+
+            if approval.kind == .patch, let patch = approval.patch {
+                let diff = UnifiedDiffParser.parse(patch)
+                if !diff.files.isEmpty {
+                    DiffView(diff: diff)
+                        .frame(maxHeight: 280)
                 }
             }
-        )
+        }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
