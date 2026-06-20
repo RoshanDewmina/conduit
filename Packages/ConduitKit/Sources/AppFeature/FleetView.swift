@@ -87,110 +87,73 @@ public struct FleetView: View {
             .count
     }
 
+    // MARK: - Board focus model
+
+    /// The primary live slot — the board's machine-detail subject. Falls back to
+    /// the first live slot so the single-machine composition always has a host.
+    private var focusSlot: FleetStore.Slot? {
+        store.slots.first { store.connectionState(for: $0).isLive } ?? store.slots.first
+    }
+
+    /// Agents on the focused host (board: "AGENTS ON THIS HOST").
+    private var focusAgents: [AgentVendorStatus] {
+        focusSlot?.bridgeStatus?.agents ?? []
+    }
+
+    /// Total spend across the focused host's agents (board: "USAGE TODAY").
+    private var focusUsageUSD: Double {
+        focusAgents.compactMap(\.usageUSD).reduce(0, +)
+    }
+
+    /// The live loop to surface in the "RUNNING NOW" band, if any.
+    private var runningLoop: Loop? {
+        loopStore?.activeLoops.first { $0.status == .running }
+            ?? loopStore?.activeLoops.first
+    }
+
     public var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
-
+        ConduitPage {
             VStack(spacing: 0) {
-                fleetHeader
+                machineHeader
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         if localAgentCount > 0 {
                             localAgentBanner
-                                .padding(.horizontal, 18)
                         }
 
                         if let agentName = pendingAgentName {
                             attentionBanner(agentName: agentName)
-                                .padding(.horizontal, 18)
                         }
 
-                        if let loopStore, !loopStore.activeLoops.isEmpty {
-                            DSListSectionHead("Active Loops", count: loopStore.activeLoops.count)
-                            ForEach(loopStore.activeLoops) { loop in
-                                NavigationLink {
-                                    LoopDetailView(loop: loop, ciEventLoader: ciEventLoader(for: loop), gitStore: gitStore(for: loop))
-                                } label: {
-                                    loopRow(loop)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.horizontal, 18)
-                            }
-                        }
-
-                        if let onQuotaGuard, quotaGuardStore != nil {
-                            Button(action: onQuotaGuard) {
-                                quotaGuardEntry
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 18)
+                        if let loop = runningLoop {
+                            runningNowBand(loop)
                         }
 
                         if store.slots.isEmpty && reconnectableHosts.isEmpty {
                             emptyState
-                                .padding(.horizontal, 18)
                                 .padding(.top, 4)
                         } else {
-                            ForEach(store.slots) { slot in
-                                let slotState = store.connectionState(for: slot)
-                                HStack(spacing: 6) {
-                                    DSStatusDot(tone: slotTone(slotState), pulse: slotState == .connecting, size: 7)
-                                    DSListSectionHead(slot.hostName, count: slot.bridgeStatus?.agents.count)
-                                    E2ERelayStatusBadge(state: .init(relayState: slot.relayState))
-                                    if let health = hostHealthStore?.health(for: slot.hostID) {
-                                        HostHealthBadge(health: health)
-                                    }
-                                    // Finding #5: explicit one-tap drill-in to the
-                                    // block terminal. Connecting lands on monitoring;
-                                    // the terminal is opened intentionally from here.
-                                    if let onOpenTerminal, slotState.isLive {
-                                        Button {
-                                            Haptics.selection()
-                                            onOpenTerminal(slot.id)
-                                        } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "terminal")
-                                                    .font(.system(size: 11, weight: .semibold))
-                                                Text("terminal")
-                                                    .font(.dsMonoPt(11, weight: .medium))
-                                            }
-                                            .foregroundStyle(t.accent)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(t.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.trailing, 18)
-                                        .accessibilityLabel("Open terminal for \(slot.hostName)")
-                                    }
-                                }
-                                // Only surface agents / a "Refreshing…" placeholder
-                                // once the bridge is actually live — a connecting or
-                                // failed slot must say so honestly (Finding #9).
-                                if slotState.isLive, let snap = slot.bridgeStatus {
-                                    ForEach(snap.agents) { agent in
-                                        agentRow(agent)
-                                            .padding(.horizontal, 18)
-                                    }
-                                } else {
-                                    Text(slotStatusLine(slotState))
-                                        .font(.dsMonoPt(12))
-                                        .foregroundStyle(slotState == .failed ? t.danger : t.text3)
-                                        .padding(.horizontal, 18)
-                                }
+                            agentsSection
+
+                            statCardsRow
+
+                            if let onQuotaGuard, quotaGuardStore != nil {
+                                Button(action: onQuotaGuard) { quotaGuardEntry }
+                                    .buttonStyle(.plain)
                             }
 
                             if !reconnectableHosts.isEmpty {
-                                sectionHeader("Saved hosts", count: reconnectableHosts.count)
-                                savedHostsGroup(reconnectableHosts)
-                                    .padding(.horizontal, 16)
+                                savedHostsSection
                             }
+
+                            actionButtons
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 28)
                 }
                 .refreshable { await refresh() }
             }
@@ -205,56 +168,352 @@ public struct FleetView: View {
         }
     }
 
-    private var fleetHeader: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Fleet")
-                    .font(.dsDisplayPt(30, weight: .bold))
+    // MARK: - Header (board: serif-italic status + Bricolage name + RELAY chip)
+
+    private var machineHeader: some View {
+        let slot = focusSlot
+        let state = slot.map { store.connectionState(for: $0) }
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(statusLine(state))
+                    .font(.dsEditorialPt(16))
+                    .foregroundStyle(statusColor(state))
+                    .lineLimit(1)
+                Text(machineName)
+                    .font(.dsDisplayPt(24, weight: .bold))
+                    .tracking(-0.4)
                     .foregroundStyle(t.text)
-                Text(fleetSubtitle)
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            Spacer()
-            Button(action: onConnectHost) {
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .semibold))
+            Spacer(minLength: 8)
+            relayChip(state)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(machineName), \(statusLine(state))")
+    }
+
+    private var machineName: String {
+        focusSlot?.hostName
+            ?? reconnectableHosts.first?.name
+            ?? "Machines"
+    }
+
+    @ViewBuilder
+    private func relayChip(_ state: Session.ConnectionState?) -> some View {
+        let paired = state == .relayPaired
+        Text(paired ? "RELAY" : "DIRECT")
+            .font(.dsMonoPt(9.5, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(paired ? t.ok : t.text3)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                (paired ? t.ok : t.text3).opacity(0.16),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            .accessibilityLabel(paired ? "Relay paired" : "Direct connection")
+    }
+
+    private func statusLine(_ state: Session.ConnectionState?) -> String {
+        switch state {
+        case .connected, .relayPaired: return "online · healthy"
+        case .connecting:              return "connecting…"
+        case .failed:                  return "offline · unreachable"
+        case .offline, .none:          return reconnectableHosts.isEmpty ? "no host connected" : "offline · saved"
+        }
+    }
+
+    private func statusColor(_ state: Session.ConnectionState?) -> Color {
+        switch state {
+        case .connected, .relayPaired: return t.ok
+        case .connecting:              return t.warn
+        case .failed:                  return t.danger
+        case .offline, .none:          return t.text3
+        }
+    }
+
+    // MARK: - RUNNING NOW band (board: accent fill, eyebrow + title + step + bar)
+
+    private func runningNowBand(_ loop: Loop) -> some View {
+        Button {
+            Haptics.selection()
+            if let slot = focusSlot, let onOpenTerminal { onOpenTerminal(slot.id) }
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("RUNNING NOW")
+                        .font(.dsMonoPt(9.5, weight: .medium))
+                        .tracking(1.2)
+                        .foregroundStyle(t.accentFg.opacity(0.82))
+                    Spacer(minLength: 8)
+                    if let step = loop.currentStep {
+                        Text(step)
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.accentFg.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                }
+                Text(loop.goal)
+                    .font(.dsSansPt(15, weight: .semibold))
                     .foregroundStyle(t.accentFg)
-                    .frame(width: 42, height: 42)
-                    .background(t.accent, in: Circle())
+                    .lineLimit(2)
+                loopProgressBar
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(t.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Running now: \(loop.goal)")
+        .accessibilityHint(focusSlot != nil && onOpenTerminal != nil ? "Opens the live terminal" : "")
+    }
+
+    private var loopProgressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(t.accentFg.opacity(0.22))
+                Capsule()
+                    .fill(t.accentFg)
+                    .frame(width: max(12, geo.size.width * 0.62))
+            }
+        }
+        .frame(height: 5)
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Agents on this host
+
+    private var agentsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ConduitSectionLabel("Agents on this host")
+
+            VStack(spacing: 0) {
+                let slot = focusSlot
+                let state = slot.map { store.connectionState(for: $0) }
+                if let state, state.isLive, !focusAgents.isEmpty {
+                    ForEach(Array(focusAgents.enumerated()), id: \.element.id) { index, agent in
+                        agentRow(agent)
+                        if index < focusAgents.count - 1 { rowDivider }
+                    }
+                    rowDivider
+                } else if slot != nil {
+                    statusRow(slotStatusLine(state ?? .offline), tone: state == .failed ? t.danger : t.text3)
+                    rowDivider
+                } else {
+                    statusRow("No agents connected.", tone: t.text3)
+                    rowDivider
+                }
+
+                openTerminalRow
+            }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        }
+    }
+
+    private var rowDivider: some View {
+        Rectangle().fill(t.divider).frame(height: 1).padding(.leading, 15)
+    }
+
+    private func agentRow(_ a: AgentVendorStatus) -> some View {
+        let running = a.loggedIn == true
+        return HStack(spacing: 11) {
+            initialTile(a.displayName)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(a.displayName)
+                    .font(.dsSansPt(13.5, weight: .semibold))
+                    .foregroundStyle(t.text)
+                if let model = a.model {
+                    Text(model)
+                        .font(.dsMonoPt(10))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            if let badge = privacyVariant(a) {
+                PrivacyBadge(badge)
+            }
+            DSStatusDot(tone: running ? .ok : .off, pulse: running, size: 8)
+            Text(running ? "running" : "idle")
+                .font(.dsMonoPt(10.5))
+                .foregroundStyle(running ? t.ok : t.text4)
+                .frame(width: 52, alignment: .leading)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(a.displayName), \(running ? "running" : "idle")")
+    }
+
+    /// Board's dark ">_" terminal tile + "Open terminal" + chevron.
+    private var openTerminalRow: some View {
+        Button {
+            Haptics.selection()
+            if let slot = focusSlot, let onOpenTerminal { onOpenTerminal(slot.id) }
+        } label: {
+            HStack(spacing: 11) {
+                Text(">_")
+                    .font(.dsMonoPt(12, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.75, green: 0.81, blue: 0.62))
+                    .frame(width: 28, height: 28)
+                    .background(Color(red: 0.11, green: 0.10, blue: 0.09), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text("Open terminal")
+                    .font(.dsSansPt(13.5, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(focusSlot == nil || onOpenTerminal == nil)
+        .accessibilityLabel("Open terminal")
+    }
+
+    private func initialTile(_ name: String) -> some View {
+        Text(agentInitial(name))
+            .font(.dsDisplayPt(11, weight: .bold))
+            .foregroundStyle(t.accentFg)
+            .frame(width: 28, height: 28)
+            .background(t.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func agentInitial(_ name: String) -> String {
+        let key = name.lowercased()
+        if key.contains("codex") { return "Cx" }
+        if key.contains("claude") { return "C" }
+        if key.contains("kimi") { return "K" }
+        if key.contains("opencode") || key.contains("open") { return "O" }
+        return String(name.prefix(1)).uppercased()
+    }
+
+    private func statusRow(_ text: String, tone: Color) -> some View {
+        HStack {
+            Text(text)
+                .font(.dsMonoPt(12))
+                .foregroundStyle(tone)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Stat cards (board: USAGE TODAY / CONNECTION)
+
+    private var statCardsRow: some View {
+        let state = focusSlot.map { store.connectionState(for: $0) }
+        return HStack(spacing: 11) {
+            statCard(
+                label: "Usage today",
+                value: usageDisplay,
+                valueColor: t.text
+            )
+            statCard(
+                label: "Connection",
+                value: connectionLabel(state),
+                valueColor: statusColor(state)
+            )
+        }
+    }
+
+    private var usageDisplay: String {
+        let spend = focusUsageUSD
+        if spend <= 0 { return "$0.00" }
+        return String(format: "$%.2f", spend)
+    }
+
+    private func connectionLabel(_ state: Session.ConnectionState?) -> String {
+        switch state {
+        case .connected, .relayPaired: return "Healthy"
+        case .connecting:              return "Connecting"
+        case .failed:                  return "Unreachable"
+        case .offline, .none:          return "Offline"
+        }
+    }
+
+    private func statCard(label: String, value: String, valueColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.dsMonoPt(9.5, weight: .medium))
+                .tracking(0.8)
+                .foregroundStyle(t.text4)
+            Text(value)
+                .font(.dsDisplayPt(15, weight: .bold))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
+    }
+
+    // MARK: - Action buttons (board: Reconnect (light) + Add host (dark))
+
+    private var actionButtons: some View {
+        HStack(spacing: 11) {
+            Button {
+                Haptics.selection()
+                if let host = reconnectableHosts.first ?? savedHosts.first { onReconnect(host) }
+            } label: {
+                Text("Reconnect")
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text2)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(t.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(reconnectableHosts.isEmpty && savedHosts.isEmpty)
+            .accessibilityLabel("Reconnect")
+
+            Button {
+                Haptics.selection()
+                onConnectHost()
+            } label: {
+                Text("+ Add host")
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.bg)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(t.text, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Add host")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
     }
 
-    private var fleetSubtitle: String {
-        let hostCount = store.slots.count + reconnectableHosts.count
-        if hostCount == 0 {
-            return "Your connected workspaces"
+    // MARK: - Saved hosts (kept for multi-host data)
+
+    private var savedHostsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ConduitSectionLabel("Saved hosts", detail: "\(reconnectableHosts.count)")
+            savedHostsGroup(reconnectableHosts)
         }
-        return hostCount == 1 ? "1 host available" : "\(hostCount) hosts available"
     }
 
-    private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
-        HStack {
-            Text(title)
-                .font(.dsSansPt(15, weight: .semibold))
-                .foregroundStyle(t.text2)
-            if let count {
-                Text("\(count)")
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 2)
-    }
+    // MARK: - Live stores
 
     /// Attach a daemon channel to the quota-guard store and start host-health
     /// polling once a connected slot exists. Both calls are idempotent.
@@ -286,28 +545,6 @@ public struct FleetView: View {
         .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 
-    private var worktreesLink: some View {
-        HStack(spacing: 12) {
-            DSIconView(.folder, size: 18, color: t.accent)
-                .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Branches & Worktrees")
-                    .font(.dsSansPt(14, weight: .medium))
-                    .foregroundStyle(t.text)
-                Text("Multi-branch supervision")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(t.text4)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .dsCard()
-    }
-
     private var localAgentBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.shield.fill")
@@ -328,27 +565,18 @@ public struct FleetView: View {
     }
 
     private func attentionBanner(agentName: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(t.warn)
-                .frame(width: 32, height: 32)
-                .background(t.warnSoft, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Decision needed")
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.text)
-                Text("\(agentName) is waiting for your approval.")
-                    .font(.dsSansPt(12.5))
-                    .foregroundStyle(t.text3)
-            }
+        ConduitAttentionBand(
+            eyebrow: "Decision needed",
+            title: agentName,
+            detail: "\(agentName) is waiting for your approval.",
+            tone: .attention,
+            action: pendingApprovalAction
+        )
+    }
 
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+    private var pendingApprovalAction: (() -> Void)? {
+        guard let slot = store.firstSlotWithPendingApprovals(), let onOpenTerminal else { return nil }
+        return { onOpenTerminal(slot.id) }
     }
 
     private var emptyState: some View {
@@ -410,36 +638,6 @@ public struct FleetView: View {
         }
     }
 
-    private func agentRow(_ a: AgentVendorStatus) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(a.displayName)
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.text)
-                Text(a.model ?? (a.loggedIn == true ? "logged in" : "not logged in"))
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                HStack(spacing: 6) {
-                    DSStatusDot(tone: a.loggedIn == true ? .ok : .off, size: 7)
-                    Text(a.loggedIn == true ? "running" : "idle")
-                        .font(.dsMonoPt(10))
-                        .foregroundStyle(t.text3)
-                    if let badge = privacyVariant(a) {
-                        PrivacyBadge(badge)
-                    }
-                }
-                .padding(.top, 2)
-            }
-            Spacer()
-            if let usd = a.usageUSD {
-                Text(String(format: "$%.2f", usd))
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text2)
-            }
-        }
-        .dsCard()
-    }
-
     private func privacyVariant(_ a: AgentVendorStatus) -> PrivacyBadgeVariant? {
         if let isLocalModel = a.isLocalModel {
             return isLocalModel ? .local : (a.dataLeavesHost == true ? .cloud(provider: a.displayName) : .e2eRelay)
@@ -448,44 +646,6 @@ public struct FleetView: View {
             return .local
         }
         return nil
-    }
-
-    private func loopRow(_ loop: Loop) -> some View {
-        HStack(spacing: 12) {
-            DSStatusDot(
-                tone: loopStatusDotTone(loop.status),
-                pulse: loop.status == .running,
-                size: 8
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loop.goal)
-                    .font(.dsSansPt(14, weight: .medium))
-                    .foregroundStyle(t.text)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(loop.agent)
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                    if let model = loop.model {
-                        Text("· \(model)")
-                            .font(.dsMonoPt(11))
-                            .foregroundStyle(t.text4)
-                    }
-                }
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                DSChip(loop.status.rawValue, tone: loopChipTone(loop.status), variant: .outlined, size: .sm)
-                if loop.spendUSD > 0 {
-                    Text(String(format: "$%.2f", loop.spendUSD))
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .dsCard()
     }
 
     /// Build a CI-event loader for a loop, sourced from the daemon channel of
@@ -510,28 +670,6 @@ public struct FleetView: View {
         return GitStore(channel: channel, workdir: workdir)
     }
 
-    private func loopStatusDotTone(_ status: Loop.Status) -> DSStatusDotTone {
-        switch status {
-        case .running:   return .ok
-        case .blocked:   return .warn
-        case .paused:    return .info
-        case .completed: return .ok
-        case .failed:    return .danger
-        case .cancelled: return .off
-        }
-    }
-
-    private func loopChipTone(_ status: Loop.Status) -> DSChipTone {
-        switch status {
-        case .running:   return .ok
-        case .blocked:   return .warn
-        case .paused:    return .info
-        case .completed: return .ok
-        case .failed:    return .danger
-        case .cancelled: return .neutral
-        }
-    }
-
     @MainActor
     private func refresh() async {
         await store.refreshBridgeStatus()
@@ -541,15 +679,6 @@ public struct FleetView: View {
         }
         await loopStore?.refresh()
         await hostHealthStore?.refresh(fleetStore: store)
-    }
-
-    private func slotTone(_ state: Session.ConnectionState) -> DSStatusDotTone {
-        switch state {
-        case .connected, .relayPaired: return .ok
-        case .connecting:              return .warn
-        case .failed:                  return .danger
-        case .offline:                 return .off
-        }
     }
 
     private func slotStatusLine(_ state: Session.ConnectionState) -> String {

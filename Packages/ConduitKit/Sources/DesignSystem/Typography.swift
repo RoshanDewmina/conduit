@@ -1,37 +1,47 @@
 import SwiftUI
 
 // MARK: - Font helpers
-// Shell UI uses a compact brand face, a readable UI face, and explicit mono.
+// The app mirrors the approved editorial system: expressive display, readable
+// body, restrained serif accents, and explicit mono for technical context.
 
 public extension Font {
-    /// Playwrite US Modern is reserved for short brand/display moments.
+    /// Bricolage Grotesque for headlines and strong hierarchy.
     static func dsDisplay(_ style: TextStyle, weight: Weight = .semibold) -> Font {
         .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Playwrite US Modern at an exact point size.
+    /// Bricolage Grotesque at an exact point size.
     static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
         .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
-    /// Instrument Sans at the given TextStyle with weight.
+    /// Hanken Grotesk for body copy and controls.
     static func dsSans(_ style: TextStyle, weight: Weight = .regular) -> Font {
         .custom(sansFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Fragment Mono at the given TextStyle with weight.
+    /// JetBrains Mono for technical context.
     static func dsMono(_ style: TextStyle, weight: Weight = .regular) -> Font {
         .custom(monoFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
-    /// Instrument Sans at an exact point size.
+    /// Hanken Grotesk at an exact point size.
     static func dsSansPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
         .custom(sansFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
     }
 
-    /// Fragment Mono at an exact point size, scaled relative to the nearest TextStyle.
+    /// JetBrains Mono at an exact point size, scaled relative to the nearest TextStyle.
     static func dsMonoPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
         .custom(monoFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+    }
+
+    /// Instrument Serif is deliberately reserved for short, italic editorial cues.
+    static func dsEditorial(_ style: TextStyle) -> Font {
+        .custom("InstrumentSerif-Italic", size: dsSize(style), relativeTo: style)
+    }
+
+    static func dsEditorialPt(_ size: CGFloat) -> Font {
+        .custom("InstrumentSerif-Italic", size: size, relativeTo: nearestTextStyle(size))
     }
 }
 
@@ -109,20 +119,20 @@ private func monoFaceName(_ weight: Font.Weight) -> String {
 
 private func sansFaceName(_ weight: Font.Weight) -> String {
     switch weight {
-    case .black, .heavy, .bold:          return "InstrumentSans-Bold"
-    case .semibold:                      return "InstrumentSans-SemiBold"
-    case .medium:                        return "InstrumentSans-Medium"
-    default:                             return "InstrumentSans-Regular"
+    case .black, .heavy:                 return "HankenGrotesk-Black"
+    case .bold:                          return "HankenGrotesk-Bold"
+    case .semibold:                      return "HankenGrotesk-SemiBold"
+    case .medium:                        return "HankenGrotesk-Medium"
+    default:                             return "HankenGrotesk-Regular"
     }
 }
 
 private func displayFaceName(_ weight: Font.Weight) -> String {
-    // Display headlines use Instrument Sans (bold) — distinct from body via
-    // size/weight, no script/cursive face. Was PlaywriteUSModern; swapped out
-    // per design feedback. Re-point here to change the display face globally.
     switch weight {
-    case .black, .heavy, .bold: return "InstrumentSans-Bold"
-    case .semibold:             return "InstrumentSans-SemiBold"
-    default:                    return "InstrumentSans-Medium"
+    case .black, .heavy:        return "BricolageGrotesque-ExtraBold"
+    case .bold:                 return "BricolageGrotesque-Bold"
+    case .semibold:             return "BricolageGrotesque-SemiBold"
+    case .medium:               return "BricolageGrotesque-Medium"
+    default:                    return "BricolageGrotesque-Regular"
     }
 }

@@ -473,6 +473,9 @@ public struct SettingsView: View {
                 .accessibilityLabel("Back")
             }
 
+            Text("make it yours")
+                .font(.dsEditorialPt(17))
+                .foregroundStyle(t.accent)
             Text("Settings")
                 .font(.dsDisplayPt(30, weight: .bold))
                 .foregroundStyle(t.text)
@@ -668,8 +671,9 @@ public struct SettingsView: View {
 
     private func sectionHead(_ title: String) -> some View {
         Text(title)
-            .font(.dsSansPt(12, weight: .semibold))
-            .foregroundStyle(t.text3)
+            .font(.dsMonoPt(10, weight: .medium))
+            .tracking(1.1)
+            .foregroundStyle(t.text4)
             .textCase(.uppercase)
             .padding(.horizontal, 16)
             .padding(.top, 22)

@@ -18,7 +18,10 @@ public struct SessionWorkspaceContainer: View {
     private let viewModel: SessionViewModel
     private let onSwitchHost: () -> Void
 
-    @State private var route: WorkspaceRoute?
+    @State private var showDrawer = false
+    @State private var tab: WorkspaceTab = .terminal
+
+    @Environment(\.conduitTokens) private var t
 
     public init(viewModel: SessionViewModel, onSwitchHost: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -26,117 +29,134 @@ public struct SessionWorkspaceContainer: View {
     }
 
     public var body: some View {
-        SessionView(viewModel: viewModel, onOpenWorkspace: { route = .launcher })
-            .sheet(item: $route) { selectedRoute in
-                routeView(selectedRoute)
-            }
-    }
-
-    @ViewBuilder
-    private func routeView(_ selectedRoute: WorkspaceRoute) -> some View {
-        switch selectedRoute {
-        case .launcher:
-            WorkspaceLauncherView { selection in
-                if selection == .terminal {
-                    route = nil
-                } else {
-                    route = selection
-                }
-            }
-            .presentationDetents([.height(356)])
-            .presentationDragIndicator(.visible)
-
-        case .environment:
-            DSReviewSheet("Environment") {
-                WorkspaceEnvironmentView(
-                    session: viewModel.session,
-                    host: viewModel.host,
-                    workdir: viewModel.cwd,
-                    onOpenReview: { route = .review },
-                    onOpenFiles: { route = .files },
-                    onOpenBrowser: { route = .browser },
-                    onSwitchHost: {
-                        route = nil
-                        onSwitchHost()
-                    }
-                )
-            }
-            .presentationDetents([.medium, .large])
-
-        case .review:
-            DSReviewSheet("Review") {
-                WorkspaceReviewView(session: viewModel.session, workdir: viewModel.cwd)
-            }
+        SessionView(viewModel: viewModel, onOpenWorkspace: {
+            Haptics.selection()
+            showDrawer = true
+        })
+        .sheet(isPresented: $showDrawer) {
+            WorkspaceDrawer(
+                tab: $tab,
+                viewModel: viewModel,
+                onSwitchHost: { showDrawer = false; onSwitchHost() },
+                onClose: { showDrawer = false }
+            )
             .presentationDetents([.large])
-
-        case .browser:
-            DSReviewSheet("Preview") {
-                HostPreviewView(session: viewModel.session, host: viewModel.host)
-            }
-            .presentationDetents([.large])
-
-        case .files:
-            DSReviewSheet("Files") {
-                HostFilesView(session: viewModel.session, initialPath: viewModel.cwd)
-            }
-            .presentationDetents([.large])
-
-        case .terminal:
-            EmptyView()
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(26)
+            .presentationBackground(ConduitTokens.dark.termBg)
         }
     }
 }
 
-private struct WorkspaceLauncherView: View {
-    let onSelect: (WorkspaceRoute) -> Void
+/// The Warp-style workspace drawer: one dark slide-up sheet with a segmented
+/// Terminal · Files · Diff · Preview tab bar that swaps the full tool view.
+/// Replaces the old launcher + per-tool sheet stack (the board's "C" drawer).
+public enum WorkspaceTab: String, CaseIterable, Identifiable {
+    case terminal, files, diff, preview
+    public var id: String { rawValue }
 
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Capsule()
-                .fill(t.text4)
-                .frame(width: 36, height: 5)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-
-            Text("Workspace")
-                .font(.dsSansPt(20, weight: .semibold))
-                .foregroundStyle(t.text)
-                .padding(.horizontal, 20)
-
-            VStack(spacing: 8) {
-                workspaceButton("Review", systemImage: "plusminus", route: .review)
-                workspaceButton("Terminal", systemImage: "terminal", route: .terminal)
-                workspaceButton("Browser", systemImage: "globe", route: .browser)
-                workspaceButton("Files", systemImage: "folder", route: .files)
-            }
-            .padding(.horizontal, 16)
+    var title: String {
+        switch self {
+        case .terminal: "Terminal"
+        case .files:    "Files"
+        case .diff:     "Diff"
+        case .preview:  "Preview"
         }
-        .padding(.bottom, 18)
-        .background(t.bg)
     }
 
-    private func workspaceButton(_ title: String, systemImage: String, route: WorkspaceRoute) -> some View {
-        Button { onSelect(route) } label: {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 17, weight: .medium))
-                    .frame(width: 24)
-                Text(title)
-                    .font(.dsSansPt(17, weight: .medium))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(t.text4)
-            }
-            .foregroundStyle(t.text)
-            .padding(.horizontal, 16)
-            .frame(height: 52)
-            .conduitGlassChrome(cornerRadius: 14, interactive: true)
+    var icon: String {
+        switch self {
+        case .terminal: "chevron.left.forwardslash.chevron.right"
+        case .files:    "folder"
+        case .diff:     "plusminus"
+        case .preview:  "globe"
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Open \(title)")
+    }
+}
+
+private struct WorkspaceDrawer: View {
+    @Binding var tab: WorkspaceTab
+    let viewModel: SessionViewModel
+    let onSwitchHost: () -> Void
+    let onClose: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // Always-dark terminal palette so the drawer reads as the board's midnight surface.
+    private let term = ConduitTokens.dark
+    private let tabActive = Color(.sRGB, red: 0.847, green: 0.478, blue: 0.322, opacity: 1) // #D87A52
+    private let tabActiveInk = Color(.sRGB, red: 0.102, green: 0.078, blue: 0.067, opacity: 1) // #1a1411
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(term.termBorderStrong)
+                .frame(width: 40, height: 4)
+                .padding(.top, 13)
+                .padding(.bottom, 14)
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+
+            tabBar.padding(.horizontal, 16)
+
+            content
+                .padding(.top, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(term.termBg.ignoresSafeArea())
+        .environment(\.conduitTokens, term)
+        .preferredColorScheme(.dark)
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(WorkspaceTab.allCases) { item in
+                let active = tab == item
+                Button {
+                    Haptics.selection()
+                    withAnimation(ConduitMotion.resolved(.smooth(duration: 0.18, extraBounce: 0), reduceMotion: reduceMotion)) {
+                        tab = item
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: item.icon).font(.system(size: 11, weight: .semibold))
+                        Text(item.title).font(.dsSansPt(11.5, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(active ? tabActiveInk : term.termText3)
+                    .background(active ? tabActive : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityValue(active ? "selected" : "")
+            }
+        }
+        .padding(3)
+        .background(term.termSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(term.termBorder, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch tab {
+        case .terminal:
+            WorkspaceEnvironmentView(
+                session: viewModel.session,
+                host: viewModel.host,
+                workdir: viewModel.cwd,
+                onOpenReview: { tab = .diff },
+                onOpenFiles: { tab = .files },
+                onOpenBrowser: { tab = .preview },
+                onSwitchHost: onSwitchHost
+            )
+        case .files:
+            HostFilesView(session: viewModel.session, initialPath: viewModel.cwd)
+        case .diff:
+            WorkspaceReviewView(session: viewModel.session, workdir: viewModel.cwd)
+        case .preview:
+            HostPreviewView(session: viewModel.session, host: viewModel.host)
+        }
     }
 }
 

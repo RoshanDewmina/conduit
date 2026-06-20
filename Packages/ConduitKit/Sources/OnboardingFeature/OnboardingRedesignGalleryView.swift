@@ -11,6 +11,12 @@ import SSHTransport
 /// bridge → Default policy. Pairing is real (drives the app-wide `E2ERelayClient`
 /// with a real 6-digit code); the chosen policy tier is persisted and pushed to the
 /// daemon on first connect via `OnboardingPolicy`.
+///
+/// Visuals are a faithful reproduction of the `Conduit App.dc.html` onboarding board:
+/// a terracotta editorial hero (grid texture + lavender pixel mark, Instrument Serif
+/// italic kicker over a Bricolage display title), then a per-step block — value rows,
+/// pairing digit-boxes, or policy cards — with a black/orange CTA and an always-present
+/// "I've already set up Conduit" link.
 public struct OnboardingRedesignView: View {
     let onContinue: () -> Void
     let onAlreadyUseConduit: () -> Void
@@ -24,6 +30,7 @@ public struct OnboardingRedesignView: View {
 
     @AppStorage("conduit.onboarding.autonomyPreset") private var storedPreset: String = ""
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let steps = OnboardingRedesignStep.all
 
@@ -49,17 +56,13 @@ public struct OnboardingRedesignView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            header
+            hero
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
-                    headline
-                    primaryBlock
-                }
-                .frame(maxWidth: 560, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 24)
+                primaryBlock
+                    .frame(maxWidth: 560, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 24)
+                    .padding(.bottom, 24)
             }
             footer
         }
@@ -71,103 +74,142 @@ public struct OnboardingRedesignView: View {
         .onAppear { if current.kind == .pair { startPairingIfNeeded() } }
     }
 
-    private var header: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Button {
-                    guard step > 0 else { return }
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { step -= 1 }
-                } label: {
-                    DSIconView(.arrowReturn, size: 17, color: step > 0 ? t.text2 : t.text4)
-                        .frame(width: 38, height: 38)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(step == 0)
-                .accessibilityLabel("Back")
-                .accessibilityIdentifier("onboardingBack")
+    // MARK: Hero (terracotta editorial header — shared across steps)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("CONDUIT SETUP")
-                        .font(.dsMonoPt(10, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(t.text3)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                    DSProgressSegmented(total: steps.count, done: step, active: step)
-                }
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            headerRow
+                .padding(.horizontal, 26)
+                .padding(.top, 6)
 
-                Spacer()
-
-                Text("\(step + 1) / \(steps.count)")
-                    .font(.dsMonoPt(12, weight: .medium))
-                    .foregroundStyle(t.text3)
+            VStack(alignment: .leading, spacing: 0) {
+                OnboardingBrandMark()
+                    .padding(.bottom, 18)
+                Text(current.eyebrow)
+                    .font(.dsEditorialPt(20))
+                    .foregroundStyle(OnboardingPalette.heroKicker)
+                Text(current.title)
+                    .font(.dsDisplayPt(34, weight: .heavy))
+                    .tracking(-1)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 5)
+                Text(current.body)
+                    .font(.dsSansPt(13))
+                    .lineSpacing(3)
+                    .foregroundStyle(.white.opacity(0.88))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 292, alignment: .leading)
+                    .padding(.top, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 28)
+            .padding(.top, 22)
         }
+        .padding(.bottom, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(heroBackground.ignoresSafeArea(edges: .top))
     }
 
-    private var headline: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(current.eyebrow)
-                .font(.dsMonoPt(11, weight: .medium))
-                .tracking(1.1)
-                .foregroundStyle(t.accent)
-                .textCase(.uppercase)
-
-            Text(current.title)
-                .font(.dsDisplayPt(34, weight: .bold))
-                .foregroundStyle(t.text)
-                .tracking(0)
-                .lineLimit(3)
-                .minimumScaleFactor(0.84)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(current.body)
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text2)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 360, alignment: .leading)
+    private var heroBackground: some View {
+        ZStack(alignment: .bottomTrailing) {
+            LinearGradient(colors: [t.accent, t.accentInk], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Canvas { ctx, size in
+                var y: CGFloat = 0
+                while y <= size.height {
+                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)),
+                             with: .color(.white.opacity(0.05)))
+                    y += 30
+                }
+            }
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 190, height: 190)
+                .offset(x: 34, y: 46)
         }
+        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous))
     }
+
+    private var headerRow: some View {
+        HStack(spacing: 9) {
+            Button {
+                guard step > 0 else { return }
+                withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step -= 1 }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+            .opacity(step > 0 ? 1 : 0)
+            .disabled(step == 0)
+            .accessibilityLabel("Back")
+            .accessibilityIdentifier("onboardingBack")
+
+            ForEach(0..<steps.count, id: \.self) { i in
+                Capsule(style: .continuous)
+                    .fill(i <= step ? Color.white : Color.white.opacity(0.4))
+                    .frame(width: i == step ? 22 : 7, height: 7)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: step)
+            }
+
+            Spacer(minLength: 0)
+
+            Button("Skip") { onAlreadyUseConduit() }
+                .font(.dsMonoPt(12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .accessibilityIdentifier("onboardingSkip")
+        }
+        .frame(height: 20)
+    }
+
+    // MARK: Per-step primary block
 
     @ViewBuilder
     private var primaryBlock: some View {
         switch current.kind {
         case .value:
-            ConduitLoopCard()
+            OnboardingValueRows().padding(.horizontal, 28).padding(.top, 12)
         case .pair:
-            ConduitPairingCard(client: client, pairingCode: pairingCode)
+            OnboardingPairingBlock(client: client, pairingCode: pairingCode)
+                .padding(.horizontal, 24)
         case .policy:
-            ConduitPolicyCard(selectedLevel: $selectedLevel)
+            OnboardingPolicyCards(selectedLevel: $selectedLevel).padding(.horizontal, 24)
         }
     }
 
+    // MARK: Footer CTA
+
     private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(t.border)
-                .frame(height: 0.5)
-            VStack(spacing: 10) {
-                DSButton(current.primaryAction, variant: .primary, size: .lg, fullWidth: true) {
-                    advanceOrFinish()
+        VStack(spacing: 11) {
+            Button { advanceOrFinish() } label: {
+                HStack(spacing: 8) {
+                    Text(current.primaryAction)
+                    if current.ctaArrow { Text("→") }
                 }
-                if let secondary = current.secondaryAction {
-                    Button(secondary) { handleSecondary() }
-                        .font(.dsMonoPt(12, weight: .medium))
-                        .foregroundStyle(t.text3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                }
+                .font(.dsDisplayPt(16, weight: .bold))
+                .foregroundStyle(current.kind == .value ? Color.white : t.accentFg)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(current.kind == .value ? t.text : t.accent)
+                )
+                .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 10)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 16)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("onboardingPrimary")
+
+            Button("I've already set up Conduit") { onAlreadyUseConduit() }
+                .font(.dsSansPt(14, weight: .semibold))
+                .foregroundStyle(t.text3)
+                .accessibilityIdentifier("onboardingAlreadySetUp")
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
+        .padding(.bottom, 16)
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
@@ -175,15 +217,11 @@ public struct OnboardingRedesignView: View {
 
     private func advanceOrFinish() {
         if step < steps.count - 1 {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { step += 1 }
+            Haptics.selection()
+            withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step += 1 }
         } else {
             finish()
         }
-    }
-
-    private func handleSecondary() {
-        // The only secondary action is "I already use Conduit" on the value step.
-        if current.kind == .value { onAlreadyUseConduit() }
     }
 
     private func startPairingIfNeeded() {
@@ -199,7 +237,218 @@ public struct OnboardingRedesignView: View {
         storedPreset = selectedLevel.mappedPreset.rawValue
         // Push this tier's starter policy on the first daemon connect (see OnboardingPolicy).
         OnboardingPolicy.markPending(selectedLevel)
+        Haptics.success()
         onContinue()
+    }
+}
+
+// MARK: - Shared palette (board sand-theme literals not in the semantic token set)
+
+private enum OnboardingPalette {
+    /// Peach kicker used over the terracotta hero (`heroKicker` #F6D8C5).
+    static let heroKicker = Color(.sRGB, red: 0.965, green: 0.847, blue: 0.773, opacity: 1)
+}
+
+// MARK: - Lavender pixel brand-mark
+
+private struct OnboardingBrandMark: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(
+                AngularGradient(
+                    colors: [
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1), // #8b6fb0
+                        Color(.sRGB, red: 0.690, green: 0.561, blue: 0.808, opacity: 1), // #b08fce
+                        Color(.sRGB, red: 0.435, green: 0.353, blue: 0.588, opacity: 1), // #6f5a96
+                        Color(.sRGB, red: 0.616, green: 0.498, blue: 0.753, opacity: 1), // #9d7fc0
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1)
+                    ],
+                    center: .center,
+                    angle: .degrees(45)
+                )
+            )
+            .overlay(
+                Canvas { ctx, size in
+                    var x: CGFloat = 0
+                    while x <= size.width { ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.12))); x += 11 }
+                    var y: CGFloat = 0
+                    while y <= size.height { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.12))); y += 11 }
+                }
+            )
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.85), lineWidth: 2))
+            .frame(width: 56, height: 56)
+            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 8)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Step 0 · value rows
+
+private struct OnboardingValueRows: View {
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            row(title: "Approve actions from afar", detail: "Allow or deny risky steps in a tap") {
+                Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)).foregroundStyle(t.accent)
+            }
+            row(title: "Watch the terminal stream live", detail: "Every command, as it runs") {
+                Text("›_").font(.dsMonoPt(15, weight: .semibold)).foregroundStyle(t.accent)
+            }
+            row(title: "Policy guardrails per host", detail: "Rules enforce on every machine") {
+                Image(systemName: "shield.fill").font(.system(size: 15)).foregroundStyle(t.accent)
+            }
+        }
+    }
+
+    private func row<Icon: View>(title: String, detail: String, @ViewBuilder icon: () -> Icon) -> some View {
+        HStack(spacing: 15) {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(t.surface2)
+                .frame(width: 44, height: 44)
+                .overlay(icon())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.dsSansPt(15, weight: .semibold)).foregroundStyle(t.text)
+                Text(detail).font(.dsSansPt(12.5)).foregroundStyle(t.text4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+// MARK: - Step 1 · pairing
+
+private struct OnboardingPairingBlock: View {
+    @ObservedObject var client: E2ERelayClient
+    let pairingCode: String
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("ENTER PAIRING CODE")
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(1.4)
+                .foregroundStyle(t.text4)
+                .padding(.leading, 4)
+                .padding(.bottom, 14)
+
+            HStack(spacing: 9) {
+                ForEach(0..<6, id: \.self) { i in
+                    let digit = digitAt(i)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(t.surface)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(i == firstEmptyIndex ? t.accent : t.border, lineWidth: 1.5)
+                        )
+                        .overlay(
+                            Text(digit)
+                                .font(.dsDisplayPt(26, weight: .bold))
+                                .foregroundStyle(t.text)
+                        )
+                        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 8)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Pairing code")
+            .accessibilityValue(pairingCode)
+            .accessibilityIdentifier("pairingCode")
+
+            HStack(spacing: 4) {
+                Text("or")
+                Text("scan the QR on your desktop").foregroundStyle(t.accent).fontWeight(.semibold)
+            }
+            .font(.dsSansPt(13))
+            .foregroundStyle(t.text4)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 18)
+
+            Text(statusLabel)
+                .font(.dsSansPt(12))
+                .foregroundStyle(isPaired ? t.accent : t.text4)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 8)
+        }
+        .onChange(of: client.pairingState) { _, state in
+            switch state {
+            case .paired:        Haptics.success()
+            case .pairingFailed: Haptics.error()
+            case .unpaired, .waitingForPeer: break
+            }
+        }
+    }
+
+    private func digitAt(_ i: Int) -> String {
+        guard i < pairingCode.count else { return "" }
+        let idx = pairingCode.index(pairingCode.startIndex, offsetBy: i)
+        return String(pairingCode[idx])
+    }
+
+    private var firstEmptyIndex: Int { pairingCode.count < 6 ? pairingCode.count : -1 }
+    private var isPaired: Bool { client.pairingState == .paired }
+
+    private var statusLabel: String {
+        switch client.pairingState {
+        case .unpaired, .waitingForPeer: return "Waiting for the host to pair…"
+        case .paired:                    return "Paired ✓"
+        case .pairingFailed:             return "Pairing failed — tap back to retry"
+        }
+    }
+}
+
+// MARK: - Step 2 · policy cards
+
+private struct OnboardingPolicyCards: View {
+    @Binding var selectedLevel: OnboardingCautionLevel
+
+    @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 11) {
+            ForEach(OnboardingCautionLevel.allCases) { level in
+                let isSelected = selectedLevel == level
+                Button {
+                    Haptics.selection()
+                    withAnimation(ConduitMotion.resolved(.smooth(duration: 0.18, extraBounce: 0), reduceMotion: reduceMotion)) {
+                        selectedLevel = level
+                    }
+                } label: {
+                    HStack(spacing: 13) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(isSelected ? t.accent : t.borderStrong, lineWidth: 2)
+                                .frame(width: 24, height: 24)
+                            Circle()
+                                .fill(isSelected ? t.accent : .clear)
+                                .frame(width: 9, height: 9)
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(level.title).font(.dsDisplayPt(16, weight: .bold)).foregroundStyle(t.text)
+                            Text(level.detail).font(.dsSansPt(12.5)).foregroundStyle(t.text4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(15)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous).fill(t.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(isSelected ? t.accent : t.border, lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(isSelected ? 0.16 : 0.05), radius: isSelected ? 14 : 3, x: 0, y: isSelected ? 6 : 1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("policyPreset_\(level.rawValue)")
+                .accessibilityValue(isSelected ? "selected" : "unselected")
+            }
+        }
     }
 }
 
@@ -217,219 +466,45 @@ public struct OnboardingRedesignGalleryView: View {
     }
 }
 
-// MARK: - Cards
-
-private struct ConduitLoopCard: View {
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            loopRow(number: "01", title: "Agent pauses", detail: "A risky command, file write, or question stops the run.")
-            divider
-            loopRow(number: "02", title: "You decide", detail: "Approve, deny, edit, or make a scoped rule from your phone.")
-            divider
-            loopRow(number: "03", title: "Work resumes", detail: "The host keeps running with the policy you chose.")
-        }
-        .padding(16)
-        .background(t.surface)
-        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-    }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(t.border)
-            .frame(height: 0.5)
-    }
-
-    private func loopRow(number: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(number)
-                .font(.dsMonoPt(11, weight: .bold))
-                .foregroundStyle(t.accent)
-                .frame(width: 30, alignment: .leading)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.dsSansPt(15, weight: .semibold))
-                    .foregroundStyle(t.text)
-                Text(detail)
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-private struct ConduitPairingCard: View {
-    @ObservedObject var client: E2ERelayClient
-    let pairingCode: String
-
-    @Environment(\.conduitTokens) private var t
-    @State private var didCopy = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("$ curl -fsSL conduit.dev/install | sh")
-                        .font(.dsMonoPt(13))
-                        .foregroundStyle(t.text)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Installs conduitd, then pairs this phone to the host.")
-                        .font(.dsSansPt(13))
-                        .foregroundStyle(t.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Button {
-                    UIPasteboard.general.string = "curl -fsSL conduit.dev/install | sh"
-                    didCopy = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        didCopy = false
-                    }
-                } label: {
-                    Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 14))
-                        .foregroundStyle(t.text3)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .background(t.surfaceSunk)
-            .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-
-            HStack(spacing: 14) {
-                DotMatrixView(state: .working, cols: 7, rows: 7, cell: 6, dot: 3)
-                    .frame(width: 64, height: 64)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("PAIRING CODE")
-                        .font(.dsMonoPt(9, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(t.text3)
-                    Text(displayCode)
-                        .font(.dsDisplayPt(30, weight: .bold))
-                        .foregroundStyle(t.text)
-                        .accessibilityIdentifier("pairingCode")
-                    Text(statusLabel)
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(isPaired ? t.accent : t.text3)
-                }
-            }
-        }
-        .padding(16)
-        .background(t.surface)
-        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
-    }
-
-    private var isPaired: Bool { client.pairingState == .paired }
-
-    private var displayCode: String {
-        let digits = pairingCode
-        guard digits.count == 6 else { return digits.isEmpty ? "— — —" : digits }
-        let mid = digits.index(digits.startIndex, offsetBy: 3)
-        return "\(digits[..<mid]) \(digits[mid...])"
-    }
-
-    private var statusLabel: String {
-        switch client.pairingState {
-        case .unpaired, .waitingForPeer: return "Waiting for the host to pair…"
-        case .paired:                    return "Paired ✓"
-        case .pairingFailed:             return "Pairing failed — tap back to retry"
-        }
-    }
-}
-
-private struct ConduitPolicyCard: View {
-    @Binding var selectedLevel: OnboardingCautionLevel
-
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ForEach(OnboardingCautionLevel.allCases) { level in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.14)) { selectedLevel = level }
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        DSStatusDot(tone: selectedLevel == level ? .accent : .off, size: 9)
-                            .padding(.top, 5)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(level.title)
-                                    .font(.dsSansPt(15, weight: .semibold))
-                                    .foregroundStyle(t.text)
-                                if level.recommended {
-                                    DSChip("recommended", tone: .accent, variant: .soft, size: .sm)
-                                }
-                            }
-                            Text(level.detail)
-                                .font(.dsSansPt(13))
-                                .foregroundStyle(t.text3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(selectedLevel == level ? t.accentSoft : t.surface)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(selectedLevel == level ? t.accent : t.border, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("policyPreset_\(level.rawValue)")
-                .accessibilityValue(selectedLevel == level ? "selected" : "unselected")
-            }
-        }
-    }
-}
-
 // MARK: - Step model
 
 private struct OnboardingRedesignStep: Identifiable {
-    enum Kind {
-        case value
-        case pair
-        case policy
-    }
+    enum Kind { case value, pair, policy }
 
     let id: String
     let eyebrow: String
     let title: String
     let body: String
     let primaryAction: String
-    let secondaryAction: String?
+    let ctaArrow: Bool
     let kind: Kind
 
     static let all: [OnboardingRedesignStep] = [
         .init(
             id: "value",
-            eyebrow: "Why Conduit",
-            title: "Agents ask. You approve. Work resumes.",
-            body: "Conduit puts risky agent actions on your phone so you can keep work moving without opening the terminal.",
-            primaryAction: "Get started",
-            secondaryAction: nil,
+            eyebrow: "your machines,",
+            title: "in your pocket.",
+            body: "Conduit is mission control for the coding agents running on your own machines. Here's what you get:",
+            primaryAction: "Connect a machine",
+            ctaArrow: true,
             kind: .value
         ),
         .init(
             id: "pair",
-            eyebrow: "Pair the bridge",
-            title: "Connect the machine where agents run.",
-            body: "Install the local bridge once. It enforces policy, sends approval requests, and keeps your host reachable.",
-            primaryAction: "Continue",
-            secondaryAction: nil,
+            eyebrow: "step one",
+            title: "Pair the bridge.",
+            body: "End-to-end encrypted — your code never leaves your machines.",
+            primaryAction: "Pair & continue",
+            ctaArrow: false,
             kind: .pair
         ),
         .init(
             id: "policy",
-            eyebrow: "Default policy",
-            title: "Choose how cautious Conduit should be.",
-            body: "Start balanced. You can tighten or loosen individual rules later from Settings.",
-            primaryAction: "Connect and finish",
-            secondaryAction: nil,
+            eyebrow: "last thing",
+            title: "How much rope?",
+            body: "Set how freely agents act. You can fine-tune this per host later.",
+            primaryAction: "Enter Conduit",
+            ctaArrow: true,
             kind: .policy
         ),
     ]
@@ -437,6 +512,6 @@ private struct OnboardingRedesignStep: Identifiable {
 
 #Preview("Onboarding redesign gallery") {
     OnboardingRedesignGalleryView()
-        .environment(\.conduitTokens, .dark)
+        .environment(\.conduitTokens, .light)
 }
 #endif

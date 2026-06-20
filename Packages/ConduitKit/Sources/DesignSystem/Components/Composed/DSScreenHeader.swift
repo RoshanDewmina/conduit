@@ -24,7 +24,13 @@ public struct DSScreenHeader<Trailing: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
+            if let breadcrumb {
+                Text(breadcrumb)
+                    .font(.dsEditorialPt(17))
+                    .foregroundStyle(t.accent)
+                    .lineLimit(1)
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .font(.dsDisplayPt(30, weight: .bold))
@@ -34,18 +40,11 @@ public struct DSScreenHeader<Trailing: View>: View {
                 Spacer(minLength: 8)
                 trailing
             }
-            if breadcrumb != nil || count != nil {
-                HStack(spacing: 8) {
-                    if let breadcrumb {
-                        Text(breadcrumb).foregroundStyle(t.text2)
-                    }
-                    Spacer(minLength: 8)
-                    if let count {
-                        Text(count).foregroundStyle(t.text3)
-                    }
-                }
-                .font(.dsSansPt(14))
-                .lineLimit(1)
+            if let count {
+                Text(count)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text4)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 16)

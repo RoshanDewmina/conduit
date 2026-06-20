@@ -1,32 +1,30 @@
-#if os(iOS)
 import Foundation
 import Observation
 import ConduitCore
 import PersistenceKit
 
 public enum SidebarDestination: Hashable, Sendable {
+    case home
     case newChat
     case thread(id: String)
-    case sessions
     case needsAttention
-    case governance
-    case fleet
+    /// Machine Detail — a pushed depth screen reached from a Home machine tap, not a root.
+    case machines
     case settings
 }
 
 public enum SidebarSection: Hashable, Sendable {
+    case home
     case actions
     case search
     case recentThreads
     case needsAttention
-    case governance
-    case fleet
     case settings
 }
 
 @MainActor @Observable
 public final class SidebarShellState {
-    public var selectedDestination: SidebarDestination = .newChat
+    public var selectedDestination: SidebarDestination = .home
     public var previousDestination: SidebarDestination? = nil
     public var isDrawerOpen = false
     public var searchQuery = ""
@@ -43,6 +41,20 @@ public final class SidebarShellState {
 
     public func configure(chatRepo: ChatConversationRepository) {
         self.chatRepo = chatRepo
+    }
+
+    /// The only route reducer for the sidebar shell. Keeping this transition here
+    /// makes compact and split-view navigation agree about history and drawer state.
+    public func navigate(to destination: SidebarDestination) {
+        if selectedDestination != destination {
+            previousDestination = selectedDestination
+            selectedDestination = destination
+        }
+        isDrawerOpen = false
+    }
+
+    public func returnToPreviousDestination() {
+        navigate(to: previousDestination ?? .home)
     }
 
     public func loadRecent() async {
@@ -63,4 +75,3 @@ public final class SidebarShellState {
         }
     }
 }
-#endif

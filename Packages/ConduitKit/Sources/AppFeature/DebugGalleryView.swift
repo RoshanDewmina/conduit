@@ -46,6 +46,7 @@ struct DebugGalleryView: View {
         case "onboarding-redesign-policy": OnboardingRedesignGalleryView(startStep: 2)
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
+        case "home":           homeGallery
         case "newchat":        newChatGallery
         case "chat":           chatGallery
         case "components":     fullComponentCatalog
@@ -59,6 +60,8 @@ struct DebugGalleryView: View {
         case "shell-fleet":    ShellFleetGalleryScreen()
         case "shell-settings": ShellSettingsGalleryScreen()
         case "shell-sidebar":  ShellSidebarGalleryScreen()
+        case "governance":     GovernanceView(actions: BridgeSessionActions(), onOpenSettings: {}, onOpenInbox: {}, onOpenFleet: {})
+        case "newchat-real":   newChatRealGallery
         case "scaffold-demo":  ScaffoldDemoScreen()
         case "features":       FeaturesGalleryScreen()
         case "proof":          ProofCardGalleryScreen()
@@ -73,6 +76,58 @@ struct DebugGalleryView: View {
     }
 
     // MARK: - Reskin review screen (before/after + populated mocks + full library)
+
+    private var homeGallery: some View {
+        ConduitHomeView(
+            fleetStore: FleetStore(),
+            recentThreads: Self.homeThreads,
+            pendingApprovalCount: 2,
+            onOpenSidebar: {},
+            onNewChat: {},
+            onOpenInbox: {},
+            onOpenMachines: {},
+            onOpenThread: { _ in }
+        )
+    }
+
+    private static let homeThreads = [
+        ChatConversation(
+            title: "Fix auth redirect loop",
+            agentID: "claude-code",
+            vendor: "Claude Code",
+            hostName: "mac-studio",
+            cwd: "~/projects/conduit",
+            status: .active,
+            lastActivityAt: .now.addingTimeInterval(-2 * 60)
+        ),
+        ChatConversation(
+            title: "Migrate Postgres schema",
+            agentID: "codex",
+            vendor: "Codex",
+            hostName: "mac-studio",
+            cwd: "~/projects/conduit",
+            status: .active,
+            lastActivityAt: .now.addingTimeInterval(-9 * 60)
+        ),
+        ChatConversation(
+            title: "Write integration tests",
+            agentID: "opencode",
+            vendor: "OpenCode",
+            hostName: "mac-studio",
+            cwd: "~/projects/api",
+            status: .completed,
+            lastActivityAt: .now.addingTimeInterval(-26 * 60)
+        ),
+        ChatConversation(
+            title: "Audit relay reconnect path",
+            agentID: "kimi",
+            vendor: "Kimi",
+            hostName: "vps-fra",
+            cwd: "~/srv/relay",
+            status: .completed,
+            lastActivityAt: .now.addingTimeInterval(-3 * 3600)
+        ),
+    ]
 
     private var reviewScreen: some View {
         ScrollView {
@@ -620,6 +675,22 @@ struct DebugGalleryView: View {
     }
 
     // MARK: - Chat hero (legacy route)
+
+    private var newChatRealGallery: some View {
+        NewChatTabView(
+            agents: [
+                DispatchAgent(id: "mac-studio|claudeCode", name: "Claude Code", cwd: "~/projects/conduit", isOffline: false, hostName: "mac-studio"),
+                DispatchAgent(id: "vps-fra|codex", name: "Codex", cwd: "~/projects/api", isOffline: false, hostName: "vps-fra"),
+                DispatchAgent(id: "vps-fra|opencode", name: "OpenCode", cwd: "~/projects/api", isOffline: false, hostName: "vps-fra")
+            ],
+            runOutputStore: RunOutputStore(),
+            chatRepo: nil,
+            fleetStore: FleetStore(),
+            onDispatch: { _, _, _, _, _ in .blocked("gallery") },
+            onNewTask: {},
+            onOpenWorkspace: { _ in }
+        )
+    }
 
     private var newChatGallery: some View {
         ScrollView {
@@ -1834,7 +1905,7 @@ private struct ShellSidebarGalleryScreen: View {
         ConduitSidebarView(
             state: state,
             onNavigate: { destination in
-                state.selectedDestination = destination
+                state.navigate(to: destination)
             }
         )
         .task {

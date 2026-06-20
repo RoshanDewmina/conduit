@@ -15,8 +15,9 @@ public struct DSSectionGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
                 Text(title)
-                    .font(.dsSansPt(13, weight: .semibold))
-                    .foregroundStyle(t.text3)
+                    .font(.dsMonoPt(10, weight: .medium))
+                    .tracking(1.1)
+                    .foregroundStyle(t.text4)
                     .textCase(.uppercase)
             }
             VStack(spacing: 0) {

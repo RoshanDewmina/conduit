@@ -2,7 +2,7 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-19 (sidebar shell, Governance, and SSH workspace refresh)
+Last updated: 2026-06-20 (editorial Command Home redesign and workspace refresh)
 Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
@@ -31,7 +31,7 @@ the reason for rejection.
 **What Conduit is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/ConduitKit/` (SwiftUI, 21 SPM targets). **Sidebar / New Chat shell** (see §4.1).
+1. **iOS app** — `Packages/ConduitKit/` (SwiftUI, 21 SPM targets). **Sidebar / Command Home shell** (see §4.1).
 2. **`conduitd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/conduitd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
@@ -49,11 +49,11 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 > session holder.
 
 ### V1 scope (locked 2026-06-18; transport corrected 2026-06-19)
-- **V1 ships:** the sidebar/New Chat shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, fleet (≤3), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+- **V1 ships:** the sidebar/Command Home shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, machine detail (≤3 live sessions), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
 - **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
 
 ### Implemented (✅ verified in code / tests)
-- **Sidebar/New Chat IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
+- **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
 - **conduitd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
@@ -231,10 +231,10 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation — **sidebar / New Chat shell** (shipped 2026-06-18)
+### 4.1 Top-level navigation — **sidebar / Command Home shell** (redesigned 2026-06-20)
 
 The home is **not** a tab bar. It is a **sidebar/drawer shell** (ChatGPT/Claude-app
-style) whose default surface is **New Chat**. Source of truth:
+style) whose default surface is **Command Home**. Source of truth:
 `AppFeature/AppRoot.swift` (`compactRoot` = drawer overlay on iPhone, `regularRoot`
 = `NavigationSplitView` on iPad), `ConduitSidebarView.swift`, `SidebarShellState.swift`.
 
@@ -242,21 +242,22 @@ Navigation is driven by `SidebarDestination`, not `enum Tab`:
 
 | Sidebar destination | Surface | Notes |
 |---|---|---|
-| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | **Default first surface.** Durable, backed by `ChatConversationRepository`. |
+| **Home** (`.home`) | `ConduitHomeView` — attention, machines, recent work | **Default first surface.** Opens New Chat from its primary action. |
+| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | Durable, backed by `ChatConversationRepository`. |
 | **Thread** (`.thread(id)`) | `NewChatTabView(initialConversationID:)` | Resume a persisted conversation from the sidebar's Recent list. |
 | **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | Inbox is the system of record for approvals; History/Activity is a sheet off Inbox, not a root. |
-| **Fleet** (`.fleet`) | `FleetView` — hosts + active session slots (≤3) | Opens a slot's live block terminal as an intentional drill-in. |
+| **Machines** (`.machines`) | `FleetView` — hosts + active session slots (≤3) | Machine detail opens a slot's live block terminal as an intentional drill-in. |
 | **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security / Advanced / Account. |
 
 > **Deprecated:** the earlier `enum Tab { inbox, fleet, newchat, settings }` **tab bar**
 > and the `Inbox / Fleet / Activity / Settings` and `Inbox / Fleet / Control / Settings`
 > layouts. The `Tab` enum still exists in `AppRoot.swift` but is **vestigial** — only
-> `rootDestination(.inbox/.fleet)` is reached, from inside `sidebarDetail`. `Activity` and
+> `rootDestination(.inbox)` is reached, from inside `sidebarDetail`. `Activity` and
 > `Control` are **not** root surfaces; Activity history lives in Recent Threads / the Inbox
 > History sheet / audit detail. Do **not** reintroduce a tab bar.
 >
 > The chat-based session/terminal surface is a **depth** destination reached from
-> Fleet/Inbox, never a root.
+> Machines/Inbox, never a root.
 
 ### 4.2 Session screen layout
 

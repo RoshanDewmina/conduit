@@ -4,7 +4,8 @@
 
 - **Source of truth for what Conduit is and where it stands:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
   — **§0.1 (current-state snapshot: implemented / partial / planned / deprecated / priorities)** and
-  **§4.1 (navigation)**. The app home is a **sidebar / New Chat shell** (durable chat threads), *not* a
+  **§4.1 (navigation)**. The app home is a **sidebar / Command Home shell**; New Chat and durable threads
+  remain depth destinations, not a tab bar.
   tab bar; the old `enum Tab` is vestigial. `docs/CONDUIT_PROJECT_DOSSIER.md` is **archived** — don't cite it.
 - **Issue tracker:** `docs/KNOWN_ISSUES.md`. **Launch state:** `docs/PUBLISH_READINESS_CHECKLIST.md`.
   **Invariants:** `docs/agent-contract.md`.

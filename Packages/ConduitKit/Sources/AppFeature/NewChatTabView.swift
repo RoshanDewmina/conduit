@@ -140,16 +140,8 @@ public struct NewChatTabView: View {
                         .padding(.top, 16)
                         .padding(.bottom, 8)
                     }
-                } else if let repo = chatRepo {
-                    SessionsListView(
-                        chatRepo: repo,
-                        fleetStore: fleetStore,
-                        onOpenThread: { id in
-                            Task { await loadConversation(id: id) }
-                        }
-                    )
                 } else {
-                    fleetLandingContent
+                    newChatLandingContent
                 }
                 if activeRun != nil {
                     bottomBar
@@ -157,20 +149,8 @@ public struct NewChatTabView: View {
             }
             .background(t.bg.ignoresSafeArea())
             if activeRun == nil && !isHistorical {
-                Button {
-                    Haptics.medium()
-                    showComposer = true
-                } label: {
-                    DSIconView(.plus, size: 20, color: t.accentFg)
-                        .frame(width: 58, height: 58)
-                        .background(t.accent)
-                        .clipShape(Circle())
-                        .shadow(color: t.accent.opacity(0.28), radius: 18, y: 8)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("New chat")
-                .padding(.trailing, 22)
-                .padding(.bottom, 30)
+                landingComposeBar
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
         .onAppear {
@@ -211,6 +191,125 @@ public struct NewChatTabView: View {
         } message: {
             Text(dispatchErrorMessage ?? "")
         }
+    }
+
+    // MARK: - Landing compose bar (board: collapsed sheet w/ model + budget pills)
+
+    private var modelPillLabel: String {
+        if !selectedModel.isEmpty { return selectedModel }
+        switch selectedAgent?.vendor {
+        case "claudeCode": return "Sonnet 4.5"
+        case "codex":      return "GPT-5 Codex"
+        case "opencode":   return "DeepSeek V4"
+        case "kimi":       return "Kimi K2.7"
+        default:           return "Auto"
+        }
+    }
+
+    private var budgetPillLabel: String {
+        let trimmed = budgetText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Double(trimmed), value > 0 else { return "Cap $5" }
+        return "Cap $\(value.formatted(.number.precision(.fractionLength(0...2))))"
+    }
+
+    private var landingComposeBar: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(t.border)
+                .frame(width: 40, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
+
+            Button {
+                Haptics.medium()
+                showComposer = true
+            } label: {
+                HStack {
+                    Text(selectedAgent == nil ? "Pick an agent to start\u{2026}" : "Describe a task for \(agentLabel)\u{2026}")
+                        .font(.dsSansPt(14.5))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 34)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open composer")
+            .padding(.horizontal, 20)
+
+            HStack(spacing: 8) {
+                // Model pill
+                Button { showComposer = true } label: {
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(t.accent)
+                            .frame(width: 7, height: 7)
+                        Text(modelPillLabel)
+                            .font(.dsSansPt(12, weight: .medium))
+                            .foregroundStyle(t.text3)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Model \(modelPillLabel)")
+
+                // Budget pill
+                Button { showComposer = true } label: {
+                    Text(budgetPillLabel)
+                        .font(.dsSansPt(12, weight: .medium))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(t.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Budget \(budgetPillLabel)")
+
+                Spacer(minLength: 0)
+
+                // Send → opens composer
+                Button {
+                    Haptics.medium()
+                    showComposer = true
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(width: 42, height: 42)
+                        .background(t.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New chat")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 22)
+        }
+        .background(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(topLeading: 24, bottomLeading: 0, bottomTrailing: 0, topTrailing: 24),
+                style: .continuous
+            )
+            .fill(t.surface)
+            .ignoresSafeArea(edges: .bottom)
+        )
+        .overlay(alignment: .top) {
+            Rectangle().fill(t.border).frame(height: 1)
+        }
+        .shadow(color: .black.opacity(0.10), radius: 18, y: -6)
     }
 
     // MARK: - Active chat header (post-dispatch)
@@ -287,8 +386,18 @@ public struct NewChatTabView: View {
 
     // MARK: - Fleet landing content (pre-dispatch)
 
+    private var newChatLandingContent: some View {
+        VStack(spacing: 0) {
+            ConduitScreenHeader(
+                kicker: "Let's get to work —",
+                title: "What should your agents do next?"
+            )
+            fleetLandingContent
+        }
+    }
+
     private var fleetLandingContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        Group {
             if agents.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
@@ -302,60 +411,160 @@ public struct NewChatTabView: View {
                         .multilineTextAlignment(.center)
                     Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 24)
             } else {
-                Text("AGENTS")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text4)
-                    .tracking(2)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                VStack(spacing: 0) {
-                    ForEach(agents) { agent in
-                        Button {
-                            selectedAgentID = agent.id
-                            showComposer = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                DSIconView(.server, size: 16, color: agent.isOffline ? t.text4 : t.text2)
-                                    .frame(width: 34, height: 34)
-                                    .background(t.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(agent.name)
-                                        .font(.dsSansPt(15, weight: .semibold))
-                                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
-                                        .lineLimit(1)
-                                    Text(agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                                        .font(.dsMonoPt(10))
-                                        .foregroundStyle(t.text4)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                Circle()
-                                    .fill(agent.isOffline ? t.text4 : t.ok)
-                                    .frame(width: 7, height: 7)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // PICK AN AGENT
+                        ConduitSectionLabel("Pick an agent")
+                            .padding(.horizontal, 24)
+                            .padding(.top, 18)
+                            .padding(.bottom, 11)
+                        VStack(spacing: 10) {
+                            ForEach(agents) { agent in
+                                agentPickCard(agent)
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
                         }
-                        .buttonStyle(.plain)
-                        if agent.id != agents.last?.id {
-                            Rectangle().fill(t.border).frame(height: 0.5).padding(.leading, 20)
+                        .padding(.horizontal, 20)
+
+                        // PROJECT
+                        if !projectChips.isEmpty {
+                            ConduitSectionLabel("Project")
+                                .padding(.horizontal, 24)
+                                .padding(.top, 20)
+                                .padding(.bottom, 11)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 9) {
+                                    ForEach(projectChips, id: \.self) { path in
+                                        projectChip(path)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
                         }
                     }
+                    .padding(.bottom, 150)
                 }
-                .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                        .strokeBorder(t.border.opacity(0.7), lineWidth: 1)
-                )
-                .padding(.horizontal, 20)
             }
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    // MARK: - Board agent card (initial tile · name · machine · status · selected check)
+
+    private func agentPickCard(_ agent: DispatchAgent) -> some View {
+        let isSelected = agent.id == selectedAgentID
+        return Button {
+            Haptics.selection()
+            selectedAgentID = agent.id
+        } label: {
+            HStack(spacing: 12) {
+                Text(Self.vendorInitial(agent))
+                    .font(.dsDisplayPt(15, weight: .bold))
+                    .foregroundStyle(isSelected ? t.accentFg : t.text2)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        isSelected ? t.accent : t.surface2,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(agent.name)
+                        .font(.dsSansPt(14.5, weight: .semibold))
+                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
+                        .lineLimit(1)
+                    Text("\(agent.hostName ?? agent.name) \u{00B7} \(agent.isOffline ? "offline" : "ready")")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                ZStack {
+                    if isSelected {
+                        Circle()
+                            .fill(t.accent)
+                            .frame(width: 22, height: 22)
+                            .overlay(
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(t.accentFg)
+                            )
+                    } else {
+                        Circle()
+                            .fill(agent.isOffline ? t.text4 : t.ok)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                .frame(width: 22, alignment: .trailing)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(isSelected ? t.accent : t.border, lineWidth: isSelected ? 1.5 : 1)
+            )
+            .shadow(color: .black.opacity(isSelected ? 0.08 : 0.04), radius: isSelected ? 10 : 6, y: 3)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(agent.isOffline)
+        .conduitMotion(ConduitMotion.emphasis, value: isSelected)
+        .accessibilityLabel("\(agent.name), \(agent.isOffline ? "offline" : "ready")")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    // MARK: - Project chips
+
+    /// Distinct working directories across agents, with the selected agent's cwd first.
+    private var projectChips: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        if let sel = selectedAgent {
+            let p = sel.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            seen.insert(p); ordered.append(p)
+        }
+        for agent in agents {
+            let p = agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            if seen.insert(p).inserted { ordered.append(p) }
+        }
+        return ordered
+    }
+
+    private func projectChip(_ path: String) -> some View {
+        let isSelected = selectedAgent.map {
+            $0.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~") == path
+        } ?? false
+        return HStack(spacing: 8) {
+            Image(systemName: "folder")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? t.accentFg : t.text3)
+            Text(path)
+                .font(.dsMonoPt(11.5, weight: .medium))
+                .foregroundStyle(isSelected ? t.accentFg : t.text2)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .background(
+            isSelected ? t.accent : t.surface,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(isSelected ? Color.clear : t.border, lineWidth: 1)
+        )
+        .accessibilityLabel("Project \(path)\(isSelected ? ", selected" : "")")
+    }
+
+    static func vendorInitial(_ agent: DispatchAgent) -> String {
+        let key = agent.vendor.isEmpty ? agent.name.lowercased() : agent.vendor.lowercased()
+        if key.contains("codex") { return "Cx" }
+        if key.contains("claude") { return "C" }
+        if key.contains("kimi") { return "K" }
+        if key.contains("opencode") || key.contains("open") { return "O" }
+        return String((agent.vendor.isEmpty ? agent.name : agent.vendor).prefix(1)).uppercased()
     }
 
     // MARK: - Composer bottom sheet

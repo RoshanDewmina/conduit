@@ -10,9 +10,8 @@
 /// XCUITest event injection DOES work here (see `TapInjectionProofTests`), so this
 /// exercises `advance()` / the back button / preset selection for real.
 ///
-/// NOTE: on this branch the redesign is gallery-only — `AppRoot`'s first-run path
-/// still presents the legacy `OnboardingView`. This test guards the prototype's
-/// step machine; it does not assert the redesign ships to first-run users.
+/// `AppRoot` presents this redesign on first run. The gallery route keeps this
+/// state-machine test deterministic without relying on pairing infrastructure.
 @MainActor
 final class OnboardingRedesignNavTests: XCTestCase {
 
@@ -25,7 +24,7 @@ final class OnboardingRedesignNavTests: XCTestCase {
         return app
     }
 
-    /// Forward: "Get started" → "Continue" walks 1/3 → 2/3 → 3/3, and the back
+/// Forward: "Connect a machine" → "Pair and continue" walks 1/3 → 2/3 → 3/3, and the back
     /// button flips from disabled (step 1) to enabled (step 2+).
     func testForwardNavigationAdvancesCounter() {
         let app = launchRedesign()
@@ -33,23 +32,23 @@ final class OnboardingRedesignNavTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30),
                       "Redesign should open on step 1 of 3")
-        XCTAssertTrue(app.staticTexts["Agents ask. You approve. Work resumes."].exists,
+        XCTAssertTrue(app.staticTexts["in your pocket."].exists,
                       "Step 1 title")
         XCTAssertFalse(app.buttons["onboardingBack"].isEnabled,
                        "Back should be disabled on step 1")
 
-        app.buttons["Get started"].tap()
+        app.buttons["Connect a machine"].tap()
         XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10),
-                      "Tapping 'Get started' should advance to step 2")
-        XCTAssertTrue(app.staticTexts["Connect the machine where agents run."].exists,
+                      "Tapping 'Connect a machine' should advance to step 2")
+        XCTAssertTrue(app.staticTexts["Pair the bridge."].exists,
                       "Step 2 title")
         XCTAssertTrue(app.buttons["onboardingBack"].isEnabled,
                       "Back should become enabled on step 2")
 
-        app.buttons["Continue"].tap()
+        app.buttons["Pair and continue"].tap()
         XCTAssertTrue(app.staticTexts["3 / 3"].waitForExistence(timeout: 10),
-                      "Tapping 'Continue' should advance to step 3")
-        XCTAssertTrue(app.staticTexts["Choose how cautious Conduit should be."].exists,
+                      "Tapping 'Pair and continue' should advance to step 3")
+        XCTAssertTrue(app.staticTexts["How much rope?"].exists,
                       "Step 3 title")
     }
 
@@ -59,9 +58,9 @@ final class OnboardingRedesignNavTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30))
-        app.buttons["Get started"].tap()
+        app.buttons["Connect a machine"].tap()
         XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10))
-        app.buttons["Continue"].tap()
+        app.buttons["Pair and continue"].tap()
         XCTAssertTrue(app.staticTexts["3 / 3"].waitForExistence(timeout: 10))
 
         app.buttons["onboardingBack"].tap()
@@ -82,10 +81,10 @@ final class OnboardingRedesignNavTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30))
-        app.buttons["Get started"].tap()
+        app.buttons["Connect a machine"].tap()
         XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10))
-        app.buttons["Continue"].tap()
-        XCTAssertTrue(app.staticTexts["Choose how cautious Conduit should be."].waitForExistence(timeout: 10))
+        app.buttons["Pair and continue"].tap()
+        XCTAssertTrue(app.staticTexts["How much rope?"].waitForExistence(timeout: 10))
 
         let balanced = app.buttons["policyPreset_balanced"]
         let cautious = app.buttons["policyPreset_cautious"]

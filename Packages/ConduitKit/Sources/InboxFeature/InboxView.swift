@@ -86,29 +86,32 @@ public struct InboxView: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
-
+        ConduitPage {
             VStack(spacing: 0) {
                 inboxHeader
 
                 if visibleApprovals.filter({ $0.isPending }).isEmpty {
                     inboxHomeDashboard
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            let pending = visibleApprovals.filter { $0.isPending }
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            waitingBand
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 4)
 
-                            if !pending.isEmpty {
-                                ForEach(pending) { approval in
+                            ForEach(Array(pendingGroups.enumerated()), id: \.offset) { _, group in
+                                ConduitSectionLabel(group.label)
+                                    .padding(.horizontal, 22)
+                                    .padding(.top, 6)
+                                ForEach(group.approvals) { approval in
                                     pendingCard(approval)
-                                        .padding(.horizontal, 16)
+                                        .padding(.horizontal, 20)
                                 }
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 12)
-                        .padding(.bottom, 24)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 14)
+                        .padding(.bottom, 28)
                     }
                 }
             }
@@ -154,44 +157,85 @@ public struct InboxView: View {
     }
 
     private var inboxHeader: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(pendingCount > 0 ? (pendingCount == 1 ? "one agent is waiting" : "\(pendingCount) agents are waiting") : "nothing pending")
+                    .font(.dsEditorialPt(17))
+                    .foregroundStyle(t.accent)
                 Text(title)
-                    .font(.dsDisplayPt(30, weight: .bold))
+                    .font(.dsDisplayPt(28, weight: .bold))
+                    .tracking(-0.5)
                     .foregroundStyle(t.text)
-                Spacer()
-                if let onOpenHistory {
-                    Button {
-                        Haptics.selection()
-                        onOpenHistory()
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(t.text2)
-                            .frame(width: 42, height: 42)
-                            .background(t.surface, in: Circle())
-                            .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("History")
-                    .accessibilityIdentifier("inboxHistory")
-                }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
 
-            if pendingCount > 0 {
-                Text(pendingCount == 1 ? "1 request needs your review." : "\(pendingCount) requests need your review.")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text2)
-            } else {
-                Text("Approvals and questions from your agents appear here.")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text3)
+            Spacer(minLength: 0)
+
+            if let onOpenHistory {
+                Button {
+                    Haptics.selection()
+                    onOpenHistory()
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(t.text3)
+                        .frame(width: 44, height: 44)
+                        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("History")
+                .accessibilityIdentifier("inboxHistory")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Signature "WAITING ON YOU" band
+
+    private var waitingBand: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("WAITING ON YOU")
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(1.0)
+                .foregroundStyle(t.accentFg.opacity(0.82))
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(pendingCount)")
+                    .font(.dsDisplayPt(34, weight: .bold))
+                    .foregroundStyle(t.accentFg)
+                Text(pendingCount == 1 ? "conversation blocked" : "conversations blocked")
+                    .font(.dsSansPt(13.5, weight: .medium))
+                    .foregroundStyle(t.accentFg.opacity(0.92))
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(t.accentFg.opacity(0.9))
+            }
+        }
         .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(pendingCount) conversations blocked, waiting on you")
+    }
+
+    // MARK: - Pending grouping (board: NEEDS YOUR APPROVAL / PATCH REVIEW)
+
+    private struct PendingGroup { let label: String; let approvals: [Approval] }
+
+    private var pendingGroups: [PendingGroup] {
+        let pending = visibleApprovals.filter { $0.isPending }
+        let patches = pending.filter { $0.kind == .patch }
+        let rest = pending.filter { $0.kind != .patch }
+        var groups: [PendingGroup] = []
+        if !rest.isEmpty { groups.append(PendingGroup(label: "Needs your approval", approvals: rest)) }
+        if !patches.isEmpty { groups.append(PendingGroup(label: "Patch review", approvals: patches)) }
+        return groups
     }
 
     // MARK: - Pending card dispatch
@@ -199,22 +243,27 @@ public struct InboxView: View {
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
         let isCritical = approval.risk.rawValue >= 3
-        InboxApprovalCard(
-            agentKey: agentKey(approval.agent),
+        InboxBoardCard(
+            bandLabel: bandLabel(for: approval),
+            agentInitial: agentInitial(approval.agent),
             agentName: agentName(approval.agent),
-            timeLabel: pendingTimeLabel(approval),
-            question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
-            toolName: approval.toolName ?? approval.command,
-            args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
-            risk: approval.risk.rawValue,
+            submeta: submeta(for: approval),
+            riskLabel: riskLabel(approval.risk),
+            riskColor: t.risk(approval.risk.rawValue),
+            riskBackground: t.riskSoft(approval.risk.rawValue),
+            bodyLead: bodyLead(for: approval),
+            codeFragment: codeFragment(for: approval),
+            bodyTail: bodyTail(for: approval),
             isCritical: isCritical,
-            onDeny: { vm.decide(approval.id, decision: .rejected) },
-            onApprove: {
+            primaryLabel: approval.kind == .askQuestion ? "Answer" : "Approve",
+            secondaryLabel: approval.kind == .patch ? "Review diff" : "Deny",
+            onPrimary: {
                 if isCritical {
                     Task {
                         do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
                         catch {
                             if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                            Haptics.error()
                             return
                         }
                         vm.decide(approval.id, decision: .approved)
@@ -222,10 +271,102 @@ public struct InboxView: View {
                     }
                 } else {
                     vm.decide(approval.id, decision: .approved)
+                    Haptics.success()
+                }
+            },
+            onSecondary: {
+                // Patch review opens the detail sheet (with diff); everything else denies.
+                if approval.kind == .patch {
+                    detailApproval = approval
+                } else {
+                    vm.decide(approval.id, decision: .rejected)
                 }
             },
             onOpenDetails: { detailApproval = approval }
         )
+    }
+
+    // MARK: - Board card content mapping
+
+    private func bandLabel(for approval: Approval) -> String {
+        approval.kind == .patch ? "Patch review" : "Needs your approval"
+    }
+
+    private func agentInitial(_ source: Approval.AgentSource) -> String {
+        switch source {
+        case .claudeCode: return "C"
+        case .codex:      return "Cx"
+        case .cursor:     return "Cu"
+        case .opencode:   return "O"
+        case .devin:      return "D"
+        case .unknown:    return "A"
+        }
+    }
+
+    private func submeta(for approval: Approval) -> String {
+        let host = lastPathComponent(approval.cwd)
+        return "\(host) · \(pendingTimeLabel(approval))"
+    }
+
+    private func lastPathComponent(_ path: String) -> String {
+        let trimmed = path.hasSuffix("/") ? String(path.dropLast()) : path
+        let comp = trimmed.split(separator: "/").last.map(String.init) ?? trimmed
+        return comp.isEmpty ? path : comp
+    }
+
+    private func riskLabel(_ risk: Approval.Risk) -> String {
+        switch risk {
+        case .low:      return "LOW"
+        case .medium:   return "MEDIUM"
+        case .high:     return "HIGH RISK"
+        case .critical: return "CRITICAL"
+        }
+    }
+
+    /// The board renders the body as "lead text  <mono code chip>  tail text".
+    /// For questions there is no command, so the whole question becomes the lead.
+    private func bodyLead(for approval: Approval) -> String {
+        switch approval.kind {
+        case .askQuestion:
+            return approval.question ?? "What should I do next?"
+        case .patch:
+            return "Apply a patch to"
+        case .fileWrite:
+            return "Wants to write"
+        case .fileDelete:
+            return "Wants to delete"
+        case .network:
+            return "Wants to reach"
+        case .credential:
+            return "Wants to access"
+        case .browser:
+            return "Wants to run a browser action on"
+        case .callMCP:
+            return "Wants to call"
+        case .command:
+            return "Wants to run"
+        }
+    }
+
+    private func codeFragment(for approval: Approval) -> String? {
+        switch approval.kind {
+        case .askQuestion:
+            return nil
+        case .patch:
+            return approval.toolName ?? "the working tree"
+        default:
+            return approval.command ?? approval.toolName ?? summarizedToolInput(approval)
+        }
+    }
+
+    private func bodyTail(for approval: Approval) -> String? {
+        switch approval.kind {
+        case .command:    return "in the project root."
+        case .patch:      return nil
+        case .fileWrite,
+             .fileDelete: return "in the project."
+        default:          return nil
+        }
     }
 
     // MARK: - Detail sheet
@@ -264,6 +405,7 @@ public struct InboxView: View {
                             do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
                             catch {
                                 if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                                Haptics.error()
                                 return
                             }
                         }
@@ -277,6 +419,7 @@ public struct InboxView: View {
                             do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
                             catch {
                                 if let ce = error as? ConduitCore.ConduitError, case .cancelled = ce { return }
+                                Haptics.error()
                                 return
                             }
                         }
@@ -449,18 +592,30 @@ public struct InboxView: View {
 
     @ViewBuilder
     private var inboxHomeDashboard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 8) {
-                    DSStatusDot(tone: .ok, size: 9)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                VStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(t.okSoft)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(t.ok)
+                    }
+                    .frame(width: 60, height: 60)
+
                     Text("You're all caught up")
-                        .font(.dsSansPt(16, weight: .semibold))
+                        .font(.dsDisplayPt(21, weight: .bold))
                         .foregroundStyle(t.text)
+                    Text("Every agent is cleared to run. Nice.")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text4)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("No approvals are waiting. New requests from your agents will appear here.")
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 30)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity)
 
                 HStack(spacing: 10) {
                     dashboardStat(value: "\(handledTodayCount)", label: "handled today")
@@ -469,6 +624,8 @@ public struct InboxView: View {
                         label: "last decision"
                     )
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 26)
 
                 if onOpenHistory != nil {
                     Button {
@@ -478,42 +635,39 @@ public struct InboxView: View {
                         HStack(spacing: 8) {
                             DSIconView(.hourglass, size: 15, color: t.text2)
                             Text("View decision history")
-                                .font(.dsSansPt(14, weight: .medium))
-                                .foregroundStyle(t.text)
-                            Spacer(minLength: 0)
-                            DSIconView(.chevronRight, size: 13, color: t.text4)
+                                .font(.dsSansPt(14, weight: .semibold))
+                                .foregroundStyle(t.text2)
                         }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 11)
+                        .background(t.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.border, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .padding(.top, 18)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
         }
     }
 
     private func dashboardStat(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                .font(.dsDisplayPt(24, weight: .bold))
                 .foregroundStyle(t.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
                 .font(.dsMonoPt(10, weight: .medium))
                 .tracking(0.5)
-                .foregroundStyle(t.text3)
+                .foregroundStyle(t.text4)
                 .textCase(.uppercase)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(t.surface)
-        .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
+        .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 
     // MARK: - Mapping helpers
@@ -537,20 +691,6 @@ public struct InboxView: View {
         case .opencode:   "OpenCode"
         case .devin:      "Devin"
         case .unknown:    "Agent"
-        }
-    }
-
-    private func defaultActionVerb(for kind: Approval.Kind) -> String {
-        switch kind {
-        case .command:      "run a command"
-        case .patch:        "apply a patch"
-        case .fileWrite:    "write a file"
-        case .fileDelete:   "delete a file"
-        case .network:      "make a network call"
-        case .credential:   "access a credential"
-        case .browser:      "perform a browser action"
-        case .callMCP:      "call an MCP tool"
-        case .askQuestion:  "ask a question"
         }
     }
 
@@ -668,6 +808,145 @@ private func buildPolicyYAML(for approval: Approval, rule: ScopedAllowRule) -> S
     }
 
     return lines.joined(separator: "\n")
+}
+
+// MARK: - Board-faithful approval card
+
+/// Pixel-faithful reproduction of the design board's Inbox approval card:
+/// a per-card band header (pulse dot + uppercase-mono label), an agent row
+/// (square initial tile, name, "machine · time" submeta, risk badge), a body
+/// line with the command rendered as an inline mono chip, and two buttons —
+/// dark-filled primary + outlined secondary.
+private struct InboxBoardCard: View {
+    let bandLabel: String
+    let agentInitial: String
+    let agentName: String
+    let submeta: String
+    let riskLabel: String
+    let riskColor: Color
+    let riskBackground: Color
+    let bodyLead: String
+    let codeFragment: String?
+    let bodyTail: String?
+    let isCritical: Bool
+    let primaryLabel: String
+    let secondaryLabel: String
+    let onPrimary: () -> Void
+    let onSecondary: () -> Void
+    let onOpenDetails: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        VStack(spacing: 0) {
+            bandHeader
+            cardBody
+        }
+        .background(t.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var bandHeader: some View {
+        HStack(spacing: 7) {
+            DSStatusDot(tone: .warn, pulse: true, size: 6)
+            Text(bandLabel.uppercased())
+                .font(.dsMonoPt(10, weight: .medium))
+                .tracking(0.6)
+                .foregroundStyle(t.text3)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface2)
+    }
+
+    private var cardBody: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 10) {
+                Text(agentInitial)
+                    .font(.dsDisplayPt(13, weight: .bold))
+                    .foregroundStyle(t.accentFg)
+                    .frame(width: 30, height: 30)
+                    .background(t.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(agentName)
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    Text(submeta)
+                        .font(.dsSansPt(11.5))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(riskLabel)
+                    .font(.dsMonoPt(10, weight: .semibold))
+                    .foregroundStyle(riskColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(riskBackground, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+
+            bodyLine
+
+            if isCritical {
+                Label("Face ID required to approve", systemImage: "faceid")
+                    .font(.dsSansPt(12, weight: .medium))
+                    .foregroundStyle(t.warn)
+            }
+
+            HStack(spacing: 9) {
+                Button(action: { Haptics.selection(); onPrimary() }) {
+                    Text(primaryLabel)
+                        .font(.dsSansPt(13.5, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .foregroundStyle(t.surface)
+                        .background(t.text, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { Haptics.selection(); onSecondary() }) {
+                    Text(secondaryLabel)
+                        .font(.dsSansPt(13.5, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .foregroundStyle(t.text3)
+                        .background(t.surface2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+        .onTapGesture { onOpenDetails() }
+    }
+
+    /// "<lead> <mono chip> <tail>" rendered as wrapping inline text so the
+    /// command reads as a code fragment exactly like the board.
+    private var bodyLine: some View {
+        let lead = Text(bodyLead + (codeFragment != nil ? " " : ""))
+            .font(.dsSansPt(13))
+            .foregroundStyle(t.text2)
+        let code = codeFragment.map { frag in
+            Text(frag)
+                .font(.dsMonoPt(11.5))
+                .foregroundStyle(t.accent)
+        } ?? Text("")
+        let tail = bodyTail.map { Text(" " + $0).font(.dsSansPt(13)).foregroundStyle(t.text2) } ?? Text("")
+        return (lead + code + tail)
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel([bodyLead, codeFragment, bodyTail].compactMap { $0 }.joined(separator: " "))
+    }
 }
 
 #endif

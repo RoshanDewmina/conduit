@@ -143,7 +143,7 @@ public struct AppRoot: View {
     @State private var showingQuotaGuard = false
     @State private var showingHistory = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
-    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "light"
     @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -212,12 +212,12 @@ public struct AppRoot: View {
         if let destination = ProcessInfo.processInfo.environment["CONDUIT_DESTINATION"] {
             let state = SidebarShellState()
             switch destination {
-            case "inbox": state.selectedDestination = .needsAttention
-            case "governance": state.selectedDestination = .governance
-            case "fleet": state.selectedDestination = .fleet
-            case "sessions": state.selectedDestination = .sessions
-            case "settings": state.selectedDestination = .settings
-            default: state.selectedDestination = .newChat
+            case "inbox": state.navigate(to: .needsAttention)
+            case "governance": state.navigate(to: .settings)
+            case "machines": state.navigate(to: .machines)
+            case "sessions": state.navigate(to: .home)
+            case "settings": state.navigate(to: .settings)
+            default: state.navigate(to: .home)
             }
             _sidebarState = State(initialValue: state)
         }
@@ -324,7 +324,7 @@ public struct AppRoot: View {
             if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { _ in
-            sidebarState.selectedDestination = .needsAttention
+            sidebarState.navigate(to: .needsAttention)
         }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
@@ -448,11 +448,11 @@ public struct AppRoot: View {
                 OnboardingRedesignView(
                     onContinue: {
                         onboardingSeen = true
-                        sidebarState.selectedDestination = .newChat
+                        sidebarState.navigate(to: .home)
                     },
                     onAlreadyUseConduit: {
                         onboardingSeen = true
-                        sidebarState.selectedDestination = .fleet
+                        sidebarState.navigate(to: .machines)
                     },
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
@@ -467,7 +467,7 @@ public struct AppRoot: View {
                 onComplete: { host in
                     showingProvisioningWizard = false
                     onboardingSeen = true
-                    sidebarState.selectedDestination = .fleet
+                    sidebarState.navigate(to: .machines)
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         openSession(host: host, env: env)
@@ -586,7 +586,7 @@ public struct AppRoot: View {
                 // Cold launch: route to Inbox, then re-post so the now-mounted
                 // InboxView observer opens the detail sheet. REVIEW intent only —
                 // never auto-decides (ApprovalActionBuffer handles decisions separately).
-                sidebarState.selectedDestination = .needsAttention
+                sidebarState.navigate(to: .needsAttention)
                 NotificationCenter.default.post(
                     name: .conduitOpenApproval, object: nil,
                     userInfo: ["approvalId": approvalID]
@@ -883,9 +883,7 @@ public struct AppRoot: View {
 
                 // Sidebar pinned left, revealed as the content slides away.
                 ConduitSidebarView(state: sidebarState) { dest in
-                    sidebarState.isDrawerOpen = false
-                    sidebarState.previousDestination = sidebarState.selectedDestination
-                    sidebarState.selectedDestination = dest
+                    sidebarState.navigate(to: dest)
                 }
                 .frame(width: drawerWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -894,7 +892,8 @@ public struct AppRoot: View {
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
                         .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
+                            if sidebarState.selectedDestination != .home {
+                                ToolbarItem(placement: .topBarLeading) {
                                 Button {
                                     openDrawer()
                                 } label: {
@@ -905,6 +904,7 @@ public struct AppRoot: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Open sidebar")
+                                }
                             }
                         }
                         .toolbarBackground(.hidden, for: .navigationBar)
@@ -939,7 +939,7 @@ public struct AppRoot: View {
                         }
                     }
             )
-            .animation(.easeInOut(duration: 0.28), value: sidebarState.isDrawerOpen)
+            .conduitMotion(ConduitMotion.navigation, value: sidebarState.isDrawerOpen)
         }
         .ignoresSafeArea(.container)
         .task {
@@ -955,7 +955,7 @@ public struct AppRoot: View {
                     viewModel: vm,
                     onSwitchHost: {
                         isShowingLiveSession = false
-                        sidebarState.selectedDestination = .fleet
+                        sidebarState.navigate(to: .machines)
                     }
                 )
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
@@ -968,8 +968,7 @@ public struct AppRoot: View {
             t.bg.ignoresSafeArea()
             NavigationSplitView {
                 ConduitSidebarView(state: sidebarState) { dest in
-                    sidebarState.previousDestination = sidebarState.selectedDestination
-                    sidebarState.selectedDestination = dest
+                    sidebarState.navigate(to: dest)
                 }
             } detail: {
                 NavigationStack {
@@ -984,7 +983,7 @@ public struct AppRoot: View {
                     viewModel: vm,
                     onSwitchHost: {
                         isShowingLiveSession = false
-                        sidebarState.selectedDestination = .fleet
+                        sidebarState.navigate(to: .machines)
                     }
                 )
                     .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
@@ -1020,7 +1019,7 @@ public struct AppRoot: View {
     private func jumpToUnreadLiveSession() {
         guard let slot = fleetStore.firstSlotWithPendingApprovals() else { return }
         selectFleetSlot(slot.id)
-        sidebarState.selectedDestination = .needsAttention
+        sidebarState.navigate(to: .needsAttention)
         isShowingLiveSession = true
     }
 
@@ -1077,7 +1076,7 @@ public struct AppRoot: View {
                     await MainActor.run {
                         UserDefaults.standard.removeObject(forKey: "dev.conduit.debugSeeded")
                         appLockEnabled = false
-                        sidebarState.selectedDestination = .newChat
+                        sidebarState.navigate(to: .home)
                         onboardingSeen = false
                     }
                 }
@@ -1096,6 +1095,8 @@ public struct AppRoot: View {
     @ViewBuilder
     private func sidebarDetail(for dest: SidebarDestination, env: AppEnvironment) -> some View {
         switch dest {
+        case .home:
+            homeDestination()
         case .newChat:
             NewChatTabView(
                 agents: dispatchAgents(),
@@ -1105,7 +1106,7 @@ public struct AppRoot: View {
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
-                onNewTask: { sidebarState.selectedDestination = .newChat },
+                onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) }
             )
         case .thread(let id):
@@ -1117,31 +1118,36 @@ public struct AppRoot: View {
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
-                onNewTask: { sidebarState.selectedDestination = .newChat },
+                onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
                 initialConversationID: id
             )
             .id(id)
-        case .sessions:
-            SessionsListView(
-                chatRepo: env.chatRepo,
-                fleetStore: fleetStore,
-                onOpenThread: { id in sidebarState.selectedDestination = .thread(id: id) }
-            )
         case .needsAttention:
             inboxDestination()
-        case .governance:
-            GovernanceView(
-                actions: bridgeSessionActions(),
-                onOpenSettings: { sidebarState.selectedDestination = .settings },
-                onOpenInbox: { sidebarState.selectedDestination = .needsAttention },
-                onOpenFleet: { sidebarState.selectedDestination = .fleet }
-            )
-        case .fleet:
+        case .machines:
             fleetDestination(env: env)
         case .settings:
             settingsDestination(env: env)
         }
+    }
+
+    private func homeDestination() -> some View {
+        ConduitHomeView(
+            fleetStore: fleetStore,
+            recentThreads: sidebarState.recentThreads,
+            pendingApprovalCount: activeInboxViewModel.approvals.filter(\.isPending).count,
+            onOpenSidebar: homeSidebarAction,
+            onNewChat: { sidebarState.navigate(to: .newChat) },
+            onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
+            onOpenMachines: { sidebarState.navigate(to: .machines) },
+            onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) }
+        )
+    }
+
+    private var homeSidebarAction: (() -> Void)? {
+        guard horizontalSizeClass != .regular else { return nil }
+        return { openDrawer() }
     }
 
     private func configureCloudServices(env: AppEnvironment) async {
@@ -1465,7 +1471,7 @@ public struct AppRoot: View {
                 // as a monitored slot; the terminal becomes an intentional
                 // drill-in via the per-slot "open terminal" affordance (which
                 // sets `isShowingLiveSession`). Do NOT auto-present it here.
-                self.sidebarState.selectedDestination = .fleet
+                self.sidebarState.navigate(to: .machines)
                 // MAJOR-4: re-arm the approval pipeline after a reconnect. The
                 // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
                 // recreate + restart them and re-point the relay so new approvals
@@ -1611,7 +1617,7 @@ private struct SettingsWithLibraryView: View {
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             onBack: {
-                sidebarShellState.selectedDestination = sidebarShellState.previousDestination ?? .newChat
+                sidebarShellState.returnToPreviousDestination()
             }
         )
         .toolbar(.hidden, for: .navigationBar)

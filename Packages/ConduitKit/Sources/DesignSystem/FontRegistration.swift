@@ -1,7 +1,7 @@
 import Foundation
 import CoreText
 
-/// Registers the bundled display, UI, and technical typefaces at app launch.
+/// Registers the bundled editorial, UI, and technical typefaces at app launch.
 @MainActor
 public enum DesignSystemFonts {
     private static var didRegister = false
@@ -10,8 +10,10 @@ public enum DesignSystemFonts {
         guard !didRegister else { return }
         didRegister = true
         let names = [
-            "PlaywriteUSModern",
-            "InstrumentSans",
+            "BricolageGrotesque",
+            "HankenGrotesk",
+            "InstrumentSerif-Regular",
+            "InstrumentSerif-Italic",
             "JetBrainsMono",
         ]
         for name in names {

@@ -46,7 +46,10 @@ public struct DSScreen<Trailing: View, Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(t.bg.ignoresSafeArea())
+        .background(
+            LinearGradient(colors: [t.bg, t.bgTint], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        )
     }
 
     @ViewBuilder private var header: some View {

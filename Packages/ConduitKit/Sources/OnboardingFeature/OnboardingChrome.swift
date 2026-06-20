@@ -19,15 +19,15 @@ public enum OnboardingCautionLevel: String, CaseIterable, Identifiable, Sendable
         switch self {
         case .cautious: return "Cautious"
         case .balanced: return "Balanced"
-        case .bypass:   return "Bypass"
+        case .bypass:   return "Autonomous"
         }
     }
 
     public var detail: String {
         switch self {
-        case .cautious: return "Auto-allow read-only · ask on every write · deny secrets & network"
-        case .balanced: return "Auto-allow safe writes · ask on deletes, network & secrets"
-        case .bypass:   return "Auto-allow everything except critical · for trusted repos"
+        case .cautious: return "Approve every action myself"
+        case .balanced: return "Auto-approve low-risk, ask the rest"
+        case .bypass:   return "Only stop me for high-risk"
         }
     }
 
