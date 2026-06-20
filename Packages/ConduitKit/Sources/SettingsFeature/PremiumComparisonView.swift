@@ -5,9 +5,17 @@ import StoreKit
 
 public struct PremiumComparisonView: View {
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
     @State private var pm = PurchaseManager.shared
+    @State private var isRestoring = false
 
     public init() {}
+
+    /// Surfaces a StoreKit failure from `purchaseState` so nothing fails silently.
+    private var purchaseError: String? {
+        if case .error(let message) = pm.purchaseState { return message }
+        return nil
+    }
 
     private struct ComparisonRow {
         let feature: String
@@ -31,7 +39,7 @@ public struct PremiumComparisonView: View {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                DSScreenHeader("upgrade", breadcrumb: "free vs pro")
+                DSDetailHeader("upgrade", onBack: { dismiss() })
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -110,30 +118,48 @@ public struct PremiumComparisonView: View {
                 VStack(spacing: 8) {
                     DSDivider(.line)
                     VStack(spacing: 8) {
-                        DSButton(
-                            "unlock pro · \(pm.product?.displayPrice ?? "$14.99") once",
-                            variant: .primary,
-                            mono: true,
-                            isLoading: {
-                                if case .purchasing = pm.purchaseState { return true }
-                                return false
-                            }(),
-                            fullWidth: true,
-                            action: { Task { await pm.purchase() } }
-                        )
-                        .disabled({
-                            switch pm.purchaseState {
-                            case .purchasing, .purchased: return true
-                            default: return false
-                            }
-                        }())
+                        // Visible failure surface — App Store review requires no silent errors.
+                        if let purchaseError {
+                            DSQuoteBlock(title: "purchase failed", message: purchaseError, tone: .danger)
+                                .accessibilityIdentifier("upgrade.purchaseError")
+                        }
 
-                        Button("restore purchase") {
-                            Task { await pm.restore() }
+                        if pm.isPro {
+                            DSQuoteBlock(title: "pro unlocked", message: "Every Pro feature is active on this account.", tone: .ok)
+                                .accessibilityIdentifier("upgrade.proActive")
+                        } else {
+                            DSButton(
+                                "unlock pro · \(pm.product?.displayPrice ?? "$14.99") once",
+                                variant: .primary,
+                                mono: true,
+                                isLoading: {
+                                    if case .purchasing = pm.purchaseState { return true }
+                                    return false
+                                }(),
+                                fullWidth: true,
+                                action: { Task { await pm.purchase() } }
+                            )
+                            .disabled({
+                                switch pm.purchaseState {
+                                case .purchasing, .purchased: return true
+                                default: return false
+                                }
+                            }())
+                            .accessibilityIdentifier("upgrade.purchase")
+                        }
+
+                        Button(isRestoring ? "restoring…" : "restore purchase") {
+                            Task {
+                                isRestoring = true
+                                await pm.restore()
+                                isRestoring = false
+                            }
                         }
                         .font(.dsMonoPt(11))
                         .foregroundStyle(t.accent)
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .disabled(isRestoring)
+                        .accessibilityIdentifier("upgrade.restore")
 
                         Text("one-time · yours forever · no subscription")
                             .font(.dsMonoPt(10))
@@ -146,6 +172,7 @@ public struct PremiumComparisonView: View {
                 .background(t.bg)
             }
         }
+        .navigationBarHidden(true)
         .task { await pm.load() }
     }
 }

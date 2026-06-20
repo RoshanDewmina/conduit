@@ -394,7 +394,7 @@ public struct SettingsView: View {
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @State private var showResetConfirmation = false
-    @State private var confirmingStop = false
+    @State private var purchases = PurchaseManager.shared
     @Environment(\.conduitTokens) private var t
 
     private static let supportedProviders: [AIProvider] = [.anthropic, .openai]
@@ -441,6 +441,7 @@ public struct SettingsView: View {
                     profileCard
                     policyGovernanceSection
                     generalSection
+                    terminalSection
                     connectionSection
                     dataSection
                     resetSection
@@ -455,6 +456,7 @@ public struct SettingsView: View {
             }
         }
         .task { await vm.load() }
+        .task { await purchases.load() }
     }
 
     // MARK: - (0) Header
@@ -496,28 +498,37 @@ public struct SettingsView: View {
     // MARK: - Profile card
 
     private var profileCard: some View {
-        HStack(spacing: 14) {
-            SettingsBrandMark()
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Roshan")
-                    .font(.dsDisplayPt(17, weight: .bold))
-                    .foregroundStyle(t.text)
-                Text("roshan · conduit.dev")
-                    .font(.dsMonoPt(12))
+        NavigationLink {
+            BillingView(backendURL: backendURL)
+        } label: {
+            HStack(spacing: 14) {
+                SettingsBrandMark()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Roshan")
+                        .font(.dsDisplayPt(17, weight: .bold))
+                        .foregroundStyle(t.text)
+                    Text(purchases.isPro ? "Conduit Pro · manage" : "Free plan · upgrade")
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text4)
+                }
+                Spacer(minLength: 0)
+                Text(purchases.isPro ? "PRO" : "FREE")
+                    .font(.dsMonoPt(10, weight: .bold))
+                    .foregroundStyle(purchases.isPro ? t.accent : t.text3)
+                    .padding(.horizontal, 9).padding(.vertical, 4)
+                    .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(t.text4)
             }
-            Spacer(minLength: 0)
-            Text("PRO")
-                .font(.dsMonoPt(10, weight: .bold))
-                .foregroundStyle(t.accent)
-                .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(16)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .contentShape(Rectangle())
         }
-        .padding(16)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.border, lineWidth: 1))
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Policy & Governance (folded in from the former Governance root — accent, not green)
@@ -651,12 +662,23 @@ public struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
-    private var colorSchemeLabel: String {
-        switch colorSchemePref {
-        case "light": return "light"
-        case "dark":  return "dark"
-        default:      return "system"
+    // MARK: - TERMINAL & KEYS
+
+    @ViewBuilder
+    private var terminalSection: some View {
+        sectionHead("TERMINAL & KEYS")
+        settingsCard {
+            NavigationLink { TerminalSettingsView() } label: {
+                settingsNavRow("Terminal", icon: "terminal", detail: "font, scrollback, gestures")
+            }
+            if let sshKeyStore {
+                divider
+                NavigationLink { SSHKeysView(keyStore: sshKeyStore) } label: {
+                    settingsNavRow("SSH keys", icon: "key.horizontal.fill", detail: "generate, import, manage")
+                }
+            }
         }
+        .padding(.bottom, 16)
     }
 
     // MARK: - CONNECTION
@@ -680,17 +702,25 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var dataSection: some View {
-        if let daemonChannel {
+        if daemonChannel != nil || syncEngine != nil {
             sectionHead("DATA")
-            settingsCard {
-                NavigationLink {
-                    SecretsView(viewModel: {
-                        let svm = SecretsViewModel()
-                        svm.attach(channel: daemonChannel)
-                        return svm
-                    }())
-                } label: {
-                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+            VStack(spacing: 11) {
+                if let syncEngine {
+                    SyncStatusView(engine: syncEngine)
+                        .padding(.horizontal, 16)
+                }
+                if let daemonChannel {
+                    settingsCard {
+                        NavigationLink {
+                            SecretsView(viewModel: {
+                                let svm = SecretsViewModel()
+                                svm.attach(channel: daemonChannel)
+                                return svm
+                            }())
+                        } label: {
+                            settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
+                        }
+                    }
                 }
             }
             .padding(.bottom, 16)
@@ -728,65 +758,6 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - Provider row
-
-    @ViewBuilder
-    private func providerRow(_ provider: AIProvider, binding: Binding<String>, hasKey: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(provider.displayName)
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.text)
-                Spacer()
-                if hasKey {
-                    DSChip("configured", tone: .ok, variant: .soft, size: .sm)
-                    Button("Remove", role: .destructive) {
-                        Task { await vm.remove(provider) }
-                    }
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.danger)
-                } else {
-                    DSChip("not set", tone: .neutral, variant: .soft, size: .sm)
-                }
-            }
-            SecureField(hasKey ? "Replace API key" : "Paste API key", text: binding)
-                .font(.dsMonoPt(13))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(10)
-                .background(t.surfaceSunk)
-                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            if hasKey {
-                HStack(alignment: .top, spacing: 8) {
-                    Button {
-                        Task { await vm.testKey(provider: provider) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if vm.isTestingKey && vm.testKeyProvider == provider {
-                                ProgressView().scaleEffect(0.75)
-                                Text("Testing…")
-                            } else {
-                                Image(systemName: "bolt.fill").font(.system(size: 12))
-                                Text("Test key")
-                            }
-                        }
-                        .font(.dsSansPt(13, weight: .medium))
-                        .foregroundStyle(vm.canTestKey ? t.accent : t.text3)
-                    }
-                    .disabled(!vm.canTestKey)
-                    if let result = vm.testKeyResult, vm.testKeyProvider == provider {
-                        Text(result)
-                            .font(.dsMonoPt(12))
-                            .foregroundStyle(result.hasPrefix("Error") ? t.danger : t.accent)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     // MARK: - Layout helpers
 
     private func sectionHead(_ title: String) -> some View {
@@ -813,26 +784,6 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
     }
 
-    private func settingsNavRow(_ label: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(t.text2)
-                .frame(width: 28, height: 28)
-                .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(label)
-                .font(.dsSansPt(16))
-                .foregroundStyle(t.text)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(t.text4)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-
     private func settingsNavRow(_ label: String, icon: String, detail: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -856,26 +807,6 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
-    }
-
-    private func settingsInfoRow(_ label: String, icon: String, detail: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(t.text2)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text)
-                Text(detail)
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     private var divider: some View {

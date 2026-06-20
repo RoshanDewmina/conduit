@@ -10,6 +10,13 @@ public struct BillingView: View {
     @State private var creditBalance: CreditBalance?
     @State private var usageTodayUSD: Double = 0
     @State private var billingLoadError: String?
+    @State private var isRestoring = false
+
+    /// Surfaces a StoreKit failure from `purchaseState` so nothing fails silently.
+    private var purchaseError: String? {
+        if case .error(let message) = pm.purchaseState { return message }
+        return nil
+    }
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -85,14 +92,32 @@ public struct BillingView: View {
                             .padding(.vertical, 14)
                         }
 
+                        // Visible failure surface — App Store review requires no silent errors.
+                        if let purchaseError {
+                            cardDivider
+                            DSQuoteBlock(title: "purchase failed", message: purchaseError, tone: .danger)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .accessibilityIdentifier("billing.purchaseError")
+                        }
+
                         cardDivider
 
-                        // Restore row
+                        // Restore row — App Store review requires a restore path.
                         Button {
-                            Task { await pm.restore() }
+                            Task {
+                                isRestoring = true
+                                await pm.restore()
+                                isRestoring = false
+                            }
                         } label: {
-                            HStack {
-                                Text("restore purchase")
+                            HStack(spacing: 12) {
+                                if isRestoring {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(t.accent)
+                                }
+                                Text(isRestoring ? "restoring…" : "restore purchase")
                                     .font(.dsMonoPt(12))
                                     .foregroundStyle(t.accent)
                                 Spacer()
@@ -102,6 +127,8 @@ public struct BillingView: View {
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
+                        .disabled(isRestoring)
+                        .accessibilityIdentifier("billing.restore")
                     }
                     .padding(.bottom, 24)
 
