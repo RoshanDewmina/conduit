@@ -438,8 +438,10 @@ public struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
+                    profileCard
+                    policyGovernanceSection
                     generalSection
-                    policyHostsSection
+                    connectionSection
                     dataSection
                     resetSection
                     versionFooter
@@ -474,14 +476,11 @@ public struct SettingsView: View {
             }
 
             Text("make it yours")
-                .font(.dsEditorialPt(17))
+                .font(.dsEditorialPt(15))
                 .foregroundStyle(t.accent)
             Text("Settings")
-                .font(.dsDisplayPt(30, weight: .bold))
+                .font(.dsDisplayPt(23, weight: .bold))
                 .foregroundStyle(t.text)
-            Text("Conduit on this iPhone")
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -494,29 +493,162 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - (1) GENERAL
+    // MARK: - Profile card
+
+    private var profileCard: some View {
+        HStack(spacing: 14) {
+            SettingsBrandMark()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Roshan")
+                    .font(.dsDisplayPt(17, weight: .bold))
+                    .foregroundStyle(t.text)
+                Text("roshan · conduit.dev")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text4)
+            }
+            Spacer(minLength: 0)
+            Text("PRO")
+                .font(.dsMonoPt(10, weight: .bold))
+                .foregroundStyle(t.accent)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .padding(16)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+    }
+
+    // MARK: - Policy & Governance (folded in from the former Governance root — accent, not green)
+
+    @ViewBuilder
+    private var policyGovernanceSection: some View {
+        sectionHead("POLICY & GOVERNANCE")
+        VStack(spacing: 11) {
+            NavigationLink {
+                AutonomyLevelView()
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("POLICY BRIDGE")
+                            .font(.dsMonoPt(9.5, weight: .medium))
+                            .tracking(1.0)
+                            .foregroundStyle(t.accentFg.opacity(0.82))
+                        Spacer(minLength: 0)
+                        DSStatusDot(tone: .ok, pulse: true, size: 9)
+                    }
+                    Text("All clear")
+                        .font(.dsDisplayPt(22, weight: .bold))
+                        .foregroundStyle(t.accentFg)
+                    Text("Rules enforcing across your connected agents.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(t.accentFg.opacity(0.92))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(colors: [t.accent, t.accentInk], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
+            }
+            .buttonStyle(.plain)
+
+            settingsCard {
+                NavigationLink { AutonomyLevelView() } label: {
+                    autonomyValueRow
+                }
+                if auditRepository != nil {
+                    divider
+                    NavigationLink {
+                        AuditView(viewModel: AuditViewModel(repository: auditRepository!), daemonChannel: daemonChannel)
+                    } label: {
+                        settingsNavRow("Enforcement log", icon: "list.bullet.clipboard", detail: "approval & run history")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+
+    private var autonomyValueRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(t.text2)
+                .frame(width: 28, height: 28)
+                .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text("Default autonomy")
+                .font(.dsSansPt(16))
+                .foregroundStyle(t.text)
+            Spacer()
+            Text(autonomyLabel)
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text3)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private var autonomyLabel: String {
+        let raw = UserDefaults.standard.string(forKey: "inbox.autonomyPreset") ?? AutonomyPreset.alwaysAsk.rawValue
+        return (AutonomyPreset(rawValue: raw) ?? .alwaysAsk).shortLabel
+    }
+
+    // MARK: - GENERAL (board 2×2 grid)
 
     @ViewBuilder
     private var generalSection: some View {
         sectionHead("GENERAL")
-        settingsCard {
-            NavigationLink { NotificationsSettingsView() } label: {
-                settingsNavRow("Notifications", icon: "bell", detail: "push severity & quiet hours")
-            }
-            divider
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)], spacing: 11) {
             NavigationLink { AppearanceSettingsView() } label: {
-                settingsNavRow("Appearance", icon: "paintbrush", detail: colorSchemeLabel)
-            }
-            divider
-            NavigationLink { TrustPrivacyView() } label: {
-                settingsNavRow("Security & privacy", icon: "checkmark.shield", detail: "data handling · host-key TOFU")
-            }
-            divider
+                settingsGridCard("Appearance", icon: "circle.lefthalf.filled", tint: t.accent, detail: "Theme & mode")
+            }.buttonStyle(.plain)
             NavigationLink { ProviderKeysView(viewModel: vm) } label: {
-                settingsNavRow("Provider keys", icon: "key.horizontal", detail: "Anthropic · OpenAI — sent direct to provider")
-            }
+                settingsGridCard("Provider keys", icon: "key.horizontal", tint: t.ok, detail: providerKeyDetail)
+            }.buttonStyle(.plain)
+            NavigationLink { NotificationsSettingsView() } label: {
+                settingsGridCard("Notifications", icon: "bell", tint: t.text2, detail: "Push severity")
+            }.buttonStyle(.plain)
+            NavigationLink { TrustPrivacyView() } label: {
+                settingsGridCard("Security", icon: "lock", tint: t.warn, detail: "Face ID · TOFU")
+            }.buttonStyle(.plain)
         }
+        .padding(.horizontal, 16)
         .padding(.bottom, 16)
+    }
+
+    private var providerKeyDetail: String {
+        let n = (vm.hasAnthropicKey ? 1 : 0) + (vm.hasOpenAIKey ? 1 : 0)
+        return n == 0 ? "Not set" : "\(n) connected"
+    }
+
+    private func settingsGridCard(_ title: String, icon: String, tint: Color, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(t.surface2, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .padding(.bottom, 11)
+            Text(title)
+                .font(.dsSansPt(13.5, weight: .semibold))
+                .foregroundStyle(t.text)
+            Text(detail)
+                .font(.dsSansPt(11))
+                .foregroundStyle(t.text4)
+                .padding(.top, 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .contentShape(Rectangle())
     }
 
     private var colorSchemeLabel: String {
@@ -527,11 +659,11 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - (2) POLICY & HOSTS
+    // MARK: - CONNECTION
 
     @ViewBuilder
-    private var policyHostsSection: some View {
-        sectionHead("POLICY & HOSTS")
+    private var connectionSection: some View {
+        sectionHead("CONNECTION")
         settingsCard {
             NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
@@ -548,29 +680,17 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var dataSection: some View {
-        if auditRepository != nil || daemonChannel != nil {
+        if let daemonChannel {
             sectionHead("DATA")
             settingsCard {
-                if let auditRepository {
-                    NavigationLink {
-                        AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
-                    } label: {
-                        settingsNavRow("Audit & proof", icon: "list.bullet.clipboard", detail: "approval & run history")
-                    }
-                    if daemonChannel != nil {
-                        divider
-                    }
-                }
-                if let daemonChannel {
-                    NavigationLink {
-                        SecretsView(viewModel: {
-                            let svm = SecretsViewModel()
-                            svm.attach(channel: daemonChannel)
-                            return svm
-                        }())
-                    } label: {
-                        settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
-                    }
+                NavigationLink {
+                    SecretsView(viewModel: {
+                        let svm = SecretsViewModel()
+                        svm.attach(channel: daemonChannel)
+                        return svm
+                    }())
+                } label: {
+                    settingsNavRow("Secrets", icon: "key.fill", detail: "brokered credentials")
                 }
             }
             .padding(.bottom, 16)
@@ -774,6 +894,36 @@ public struct SettingsView: View {
         .padding(.bottom, 36)
     }
 
+}
+
+// MARK: - Lavender pixel brand-mark (matches onboarding / sidebar)
+
+private struct SettingsBrandMark: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(
+                AngularGradient(
+                    colors: [
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1),
+                        Color(.sRGB, red: 0.690, green: 0.561, blue: 0.808, opacity: 1),
+                        Color(.sRGB, red: 0.435, green: 0.353, blue: 0.588, opacity: 1),
+                        Color(.sRGB, red: 0.616, green: 0.498, blue: 0.753, opacity: 1),
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1)
+                    ],
+                    center: .center, angle: .degrees(45)
+                )
+            )
+            .overlay(
+                Canvas { ctx, size in
+                    var x: CGFloat = 0
+                    while x <= size.width { ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.12))); x += 10 }
+                    var y: CGFloat = 0
+                    while y <= size.height { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.12))); y += 10 }
+                }
+            )
+            .frame(width: 50, height: 50)
+            .accessibilityHidden(true)
+    }
 }
 
 // MARK: - Autonomy Level Detail
