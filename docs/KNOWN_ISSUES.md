@@ -1,5 +1,18 @@
 # Conduit — Known Issues & Pre-Launch Audit (canonical)
 
+> **2026-06-20 editorial redesign — deferred perf items.** The pixel-faithful redesign +
+> IA refactor shipped (see git log on `codex/ios27-shell-workspace`). Cheap perf wins done:
+> all `.repeatForever()` animations confirmed Reduce-Motion-gated; 711 lines of dead code
+> removed (SessionsListView, GovernanceView, WorkspaceRoute enum). **Deferred (real, but
+> high-risk — warrant a dedicated session with live-harness regression testing, NOT bundled
+> into a UI pass):** (1) `SessionViewModel` is ~1218 lines / 30+ `@Observable` props — a single
+> property change invalidates the whole session view; split into focused sub-stores
+> (connection / block-render / keyboard) without regressing the sacred terminal pipeline.
+> (2) `AppRoot.mainBody` getter type-checks at ~328ms (>300ms limit) — compile-time only, on a
+> load-bearing `.task`/`.onChange` lifecycle chain; decompose only with care. (3) Optional:
+> further decompose `NewChatTabView`/`SessionView` bodies. The redesigned screens themselves
+> profile fine; these are pre-existing hotspots.
+
 > **Compiled:** 2026-06-19 · branch `master` (updated).
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
