@@ -8,7 +8,7 @@ public enum SidebarDestination: Hashable, Sendable {
     case newChat
     case thread(id: String)
     case needsAttention
-    /// Machine Detail — a pushed depth screen reached from a Home machine tap, not a root.
+    /// Machine Detail (Fleet) — a primary sidebar root, also reachable from a Home machine tap.
     case machines
     case settings
 }

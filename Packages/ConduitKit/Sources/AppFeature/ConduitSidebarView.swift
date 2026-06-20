@@ -149,6 +149,13 @@ public struct ConduitSidebarView: View {
                 action: { onNavigate(.needsAttention) }
             )
             SidebarNavRow(
+                icon: "desktopcomputer",
+                title: "Machines",
+                badge: nil,
+                selected: state.selectedDestination == .machines,
+                action: { onNavigate(.machines) }
+            )
+            SidebarNavRow(
                 icon: "gearshape",
                 title: "Settings",
                 badge: nil,

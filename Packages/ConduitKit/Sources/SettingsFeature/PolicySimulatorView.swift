@@ -8,6 +8,7 @@ public struct PolicySimulatorView: View {
     let simulate: (@Sendable (_ yaml: String, _ periodDays: Int) async throws -> PolicySimulation)?
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     @State private var yamlText: String
     @State private var simulation: PolicySimulation?
@@ -25,26 +26,28 @@ public struct PolicySimulatorView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                headerSection
-                periodSelector
-                yamlEditor
-                runButton
-                if let sim = simulation {
-                    resultsSection(sim)
-                } else if let msg = statusMessage {
-                    Text(msg)
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 12)
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("policy simulator", onBack: { dismiss() })
+                    headerSection
+                    periodSelector
+                    yamlEditor
+                    runButton
+                    if let sim = simulation {
+                        resultsSection(sim)
+                    } else if let msg = statusMessage {
+                        Text(msg)
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                            .padding(.horizontal, 18)
+                            .padding(.top, 12)
+                    }
                 }
             }
         }
-        .background(t.bg)
-        .navigationTitle("Policy simulator")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
     }
 
     // MARK: - Header
@@ -62,7 +65,7 @@ public struct PolicySimulatorView: View {
                 .lineSpacing(2)
         }
         .padding(.horizontal, 18)
-        .padding(.top, 20)
+        .padding(.top, 16)
         .padding(.bottom, 16)
     }
 
