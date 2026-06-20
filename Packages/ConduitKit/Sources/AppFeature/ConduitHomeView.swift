@@ -59,34 +59,22 @@ public struct ConduitHomeView: View {
     private var topRow: some View {
         HStack(spacing: 12) {
             if let onOpenSidebar {
-                Button {
-                    Haptics.selection()
-                    onOpenSidebar()
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(t.text3)
-                        .frame(width: 38, height: 38)
-                        .background(t.surface, in: Circle())
-                        .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open navigation")
+                DSCircleButton(
+                    "line.3.horizontal",
+                    diameter: 38,
+                    accessibilityLabel: "Open navigation",
+                    action: onOpenSidebar
+                )
             }
             Spacer(minLength: 0)
-            Button {
-                Haptics.selection()
-                onNewChat()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(t.accentFg)
-                    .frame(width: 38, height: 38)
-                    .background(t.accent, in: Circle())
-                    .shadow(color: .black.opacity(0.3), radius: 9, x: 0, y: 6)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Start a new chat")
+            DSCircleButton(
+                "plus",
+                kind: .accent,
+                diameter: 38,
+                accessibilityLabel: "Start a new chat",
+                action: onNewChat
+            )
+            .shadow(color: .black.opacity(0.3), radius: 9, x: 0, y: 6)
         }
         .padding(.horizontal, 22)
         .padding(.top, 8)

@@ -40,7 +40,7 @@ public struct SessionWorkspaceContainer: View {
                 onSwitchHost: { showDrawer = false; onSwitchHost() },
                 onClose: { showDrawer = false }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(26)
             .presentationBackground(ConduitTokens.dark.termBg)
@@ -105,13 +105,11 @@ private struct WorkspaceDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Capsule()
-                .fill(term.termBorderStrong)
-                .frame(width: 40, height: 4)
-                .padding(.top, 13)
-                .padding(.bottom, 14)
+            ConduitGrabHandle(on: .dark)
                 .contentShape(Rectangle())
                 .onTapGesture { onClose() }
+                .padding(.top, 4)
+                .padding(.bottom, 8)
 
             tabBar.padding(.horizontal, 16)
 

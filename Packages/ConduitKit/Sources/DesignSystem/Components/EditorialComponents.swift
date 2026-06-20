@@ -73,22 +73,11 @@ public struct ConduitScreenHeader<Trailing: View>: View {
     public var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
             if let leadingAction {
-                Button {
-                    Haptics.selection()
-                    leadingAction()
-                } label: {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(t.text3)
-                        .frame(width: 44, height: 44)
-                        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 1)
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open navigation")
+                DSCircleButton(
+                    "line.3.horizontal",
+                    accessibilityLabel: "Open navigation",
+                    action: leadingAction
+                )
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -218,6 +207,30 @@ public struct ConduitAttentionBand: View {
         case .safe: return t.ok
         case .working: return t.warnSoft
         }
+    }
+}
+
+/// The single grab handle for every bottom drawer/sheet. Place at the very top of a
+/// drawer's content so all drawers read identically (and the dark workspace drawer
+/// gets a visible handle the native `.presentationDragIndicator` can't reliably show).
+public struct ConduitGrabHandle: View {
+    public enum Surface { case light, dark }
+    private let surface: Surface
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(on surface: Surface = .light) {
+        self.surface = surface
+    }
+
+    public var body: some View {
+        Capsule()
+            .fill(surface == .dark ? Color.white.opacity(0.28) : t.text4.opacity(0.55))
+            .frame(width: 38, height: 5)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+            .accessibilityHidden(true)
     }
 }
 

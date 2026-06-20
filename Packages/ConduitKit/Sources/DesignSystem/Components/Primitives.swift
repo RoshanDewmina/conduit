@@ -22,21 +22,27 @@ public struct DSStatusDot: View {
     }
 
     public var body: some View {
-        ZStack {
-            if pulse {
-                Circle()
-                    .stroke(dotColor.opacity(pulseOpacity), lineWidth: 1.5)
-                    .frame(width: size * pulseScale, height: size * pulseScale)
-                    .onAppear {
-                        guard !reduceMotion else { return }
-                        withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
-                            pulseScale = 2.2
-                            pulseOpacity = 0
+        // The solid dot owns the layout footprint (size×size). The pulse ring is an
+        // overlay drawn with scaleEffect, so its growth is a render transform that
+        // never resizes the parent — otherwise the expanding ring reflows whatever
+        // band/row contains the dot once per cycle ("expand and reset" bug).
+        Circle()
+            .fill(dotColor)
+            .frame(width: size, height: size)
+            .overlay {
+                if pulse {
+                    Circle()
+                        .stroke(dotColor.opacity(pulseOpacity), lineWidth: 1.5)
+                        .scaleEffect(pulseScale)
+                        .onAppear {
+                            guard !reduceMotion else { return }
+                            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
+                                pulseScale = 2.2
+                                pulseOpacity = 0
+                            }
                         }
-                    }
+                }
             }
-            Circle().fill(dotColor).frame(width: size, height: size)
-        }
     }
 
     private var dotColor: Color {
@@ -49,6 +55,52 @@ public struct DSStatusDot: View {
         case .accent:  return t.accent
         case .off:     return t.text4
         }
+    }
+}
+
+// MARK: - DSCircleButton
+// The single circular toolbar/drawer button. Surface fill, NO border — this is the
+// one source of truth so the "stray border around the drawer button" regression
+// can't reappear per-screen. 44pt hit target with a configurable visual diameter.
+
+public struct DSCircleButton: View {
+    public enum Kind { case surface, accent }
+
+    private let systemName: String
+    private let kind: Kind
+    private let diameter: CGFloat
+    private let accessibilityLabel: String
+    private let action: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    public init(
+        _ systemName: String,
+        kind: Kind = .surface,
+        diameter: CGFloat = 44,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) {
+        self.systemName = systemName
+        self.kind = kind
+        self.diameter = diameter
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
+    }
+
+    public var body: some View {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: diameter * 0.36, weight: .semibold))
+                .foregroundStyle(kind == .accent ? t.accentFg : t.text3)
+                .frame(width: diameter, height: diameter)
+                .background(kind == .accent ? t.accent : t.surface, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
