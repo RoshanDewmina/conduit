@@ -92,64 +92,75 @@ public final class SecretsViewModel {
 public struct SecretsView: View {
     @State private var vm: SecretsViewModel
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: SecretsViewModel) {
         _vm = State(initialValue: viewModel)
     }
 
     public var body: some View {
-        List {
-            if !vm.pendingRequests.isEmpty {
-                Section("Pending Requests") {
-                    ForEach(vm.pendingRequests) { pending in
-                        PendingSecretRow(
-                            request: pending,
-                            onAuthorize: { scope in
-                                Task { await vm.authorize(pending.request.id, scope: scope) }
-                            },
-                            onDeny: {
-                                Task { await vm.revoke(pending.request.id) }
-                            }
-                        )
-                    }
-                }
-            }
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("secrets", onBack: { dismiss() })
 
-            Section("Stored Secrets") {
-                if vm.secrets.isEmpty, !vm.isLoading {
-                    ContentUnavailableView(
-                        "No secrets stored",
-                        systemImage: "key.fill",
-                        description: Text("Add credentials to let agents use them with scoped authorization.")
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(vm.secrets) { secret in
-                        SecretRow(secret: secret) {
-                            Task { await vm.delete(secret.id) }
+                    Text("Stored credentials let agents act on your behalf with scoped, time-limited authorization. The secret value stays on the daemon and is never sent to an agent.")
+                        .font(.dsSansPt(14))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                        .padding(.bottom, 16)
+
+                    if !vm.pendingRequests.isEmpty {
+                        sectionHead("PENDING REQUESTS")
+                        card {
+                            ForEach(Array(vm.pendingRequests.enumerated()), id: \.element.id) { index, pending in
+                                if index > 0 { hairline }
+                                PendingSecretRow(
+                                    request: pending,
+                                    onAuthorize: { scope in
+                                        Task { await vm.authorize(pending.request.id, scope: scope) }
+                                    },
+                                    onDeny: {
+                                        Task { await vm.revoke(pending.request.id) }
+                                    }
+                                )
+                            }
                         }
                     }
-                }
-            }
 
-            if !vm.secrets.isEmpty {
-                Section {
-                    Text("\(vm.secrets.count) secret\(vm.secrets.count == 1 ? "" : "s") stored")
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(t.text3)
-                        .frame(maxWidth: .infinity)
+                    sectionHead("STORED SECRETS")
+                    if vm.secrets.isEmpty, !vm.isLoading {
+                        emptyState
+                    } else {
+                        card {
+                            ForEach(Array(vm.secrets.enumerated()), id: \.element.id) { index, secret in
+                                if index > 0 { hairline }
+                                SecretRow(secret: secret) {
+                                    Task { await vm.delete(secret.id) }
+                                }
+                            }
+                        }
+                    }
+
+                    addButton
+
+                    if !vm.secrets.isEmpty {
+                        Text("\(vm.secrets.count) secret\(vm.secrets.count == 1 ? "" : "s") stored")
+                            .font(.dsSansPt(12))
+                            .foregroundStyle(t.text3)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 14)
+                            .padding(.bottom, 36)
+                    } else {
+                        Color.clear.frame(height: 36)
+                    }
                 }
             }
         }
-        .navigationTitle("Secrets")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { vm.showAddSheet = true } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("Add secret")
-            }
-        }
+        .navigationBarHidden(true)
         .sheet(isPresented: $vm.showAddSheet) {
             AddSecretSheet(vm: vm)
         }
@@ -163,6 +174,76 @@ public struct SecretsView: View {
             Text(vm.errorMessage ?? "")
         }
     }
+
+    private var addButton: some View {
+        Button { vm.showAddSheet = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.dsSansPt(13, weight: .semibold))
+                Text("Add secret")
+                    .font(.dsSansPt(14, weight: .medium))
+            }
+            .foregroundStyle(t.accentFg)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(t.accent)
+            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .accessibilityLabel("Add secret")
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "key.fill")
+                .font(.system(size: 28))
+                .foregroundStyle(t.text4)
+            Text("No secrets stored")
+                .font(.dsSansPt(15, weight: .medium))
+                .foregroundStyle(t.text2)
+            Text("Add credentials to let agents use them with scoped authorization.")
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 18)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                .strokeBorder(t.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 18)
+    }
+
+    private func sectionHead(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 6)
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 18)
+    }
+
+    private var hairline: some View {
+        DSDivider(.soft, leadingInset: 16)
+    }
 }
 
 private struct SecretRow: View {
@@ -171,49 +252,49 @@ private struct SecretRow: View {
     @Environment(\.conduitTokens) private var t
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
                 Image(systemName: iconForType(secret.type))
+                    .font(.system(size: 14))
                     .foregroundStyle(t.accent)
-                    .frame(width: 20)
+                    .frame(width: 20, alignment: .center)
                 Text(secret.name)
                     .font(.dsSansPt(15, weight: .medium))
-                    .foregroundStyle(t.text1)
-                Spacer()
+                    .foregroundStyle(t.text)
+                Spacer(minLength: 8)
                 if secret.useCount > 0 {
                     Text("\(secret.useCount)×")
                         .font(.dsMonoPt(11))
                         .foregroundStyle(t.text3)
                 }
+                Button(role: .destructive) { onDelete() } label: {
+                    Image(systemName: "trash")
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.danger)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete secret \(secret.name)")
             }
             if !secret.scope.isEmpty {
                 Text("Scope: \(secret.scope)")
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text2)
+                    .padding(.leading, 30)
             }
-            HStack {
-                Text(secret.type.rawValue)
-                    .font(.dsMonoPt(10))
-                    .foregroundStyle(t.text3)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(t.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            HStack(spacing: 8) {
+                DSChip(secret.type.rawValue, tone: .neutral, variant: .soft, size: .sm)
                 if let lastUsed = secret.lastUsedAt {
                     Text("Last used \(lastUsed.formatted(.relative(presentation: .named)))")
                         .font(.dsSansPt(11))
                         .foregroundStyle(t.text3)
                 }
-                Spacer()
-                Button(role: .destructive) { onDelete() } label: {
-                    Image(systemName: "trash")
-                        .font(.dsSansPt(12))
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Delete secret \(secret.name)")
+                Spacer(minLength: 0)
             }
+            .padding(.leading, 30)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func iconForType(_ type: SecretRequest.CredentialType) -> String {
@@ -235,36 +316,68 @@ private struct PendingSecretRow: View {
     @State private var scopeText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "key.fill")
-                    .foregroundStyle(.orange)
+                    .font(.system(size: 14))
+                    .foregroundStyle(t.warn)
+                    .frame(width: 20, alignment: .center)
                 Text("\(request.request.agent) requests \(request.request.credentialType.rawValue)")
                     .font(.dsSansPt(14, weight: .medium))
-                    .foregroundStyle(t.text1)
+                    .foregroundStyle(t.text)
+                Spacer(minLength: 0)
             }
-            Text("Tool: \(request.request.toolName)")
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.text2)
-            Text("Requested scope: \(request.request.requestedScope)")
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.text2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Tool: \(request.request.toolName)")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text2)
+                Text("Requested scope: \(request.request.requestedScope)")
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text2)
+            }
+            .padding(.leading, 30)
+
             TextField("Authorize scope (e.g. read:repo)", text: $scopeText)
-                .textFieldStyle(.roundedBorder)
-                .font(.dsMonoPt(12))
-            HStack {
-                Button("Deny") { onDeny() }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                Button("Authorize") {
+                .font(.dsMonoPt(13))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(10)
+                .background(t.surfaceSunk)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                .padding(.leading, 30)
+
+            HStack(spacing: 10) {
+                Button { onDeny() } label: {
+                    Text("Deny")
+                        .font(.dsSansPt(14, weight: .medium))
+                        .foregroundStyle(t.danger)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(t.danger.opacity(0.4), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Deny request")
+
+                Button {
                     let scope = scopeText.isEmpty ? request.request.requestedScope : scopeText
                     onAuthorize(scope)
+                } label: {
+                    Text("Authorize")
+                        .font(.dsSansPt(14, weight: .medium))
+                        .foregroundStyle(t.accentFg)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(t.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(t.accent)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Authorize request")
             }
+            .padding(.leading, 30)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 
@@ -273,57 +386,140 @@ private struct AddSecretSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.conduitTokens) private var t
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Credential Details") {
-                    TextField("Name (e.g. GitHub PAT)", text: Binding(
-                        get: { vm.newSecretName },
-                        set: { vm.newSecretName = $0 }
-                    ))
-                    Picker("Type", selection: Binding(
-                        get: { vm.newSecretType },
-                        set: { vm.newSecretType = $0 }
-                    )) {
-                        Text("API Key").tag(SecretRequest.CredentialType.apiKey)
-                        Text("SSH Key").tag(SecretRequest.CredentialType.sshKey)
-                        Text("Token").tag(SecretRequest.CredentialType.token)
-                        Text("Password").tag(SecretRequest.CredentialType.password)
-                        Text("OAuth").tag(SecretRequest.CredentialType.oauth)
-                    }
-                    TextField("Scope (e.g. read:repo)", text: Binding(
-                        get: { vm.newSecretScope },
-                        set: { vm.newSecretScope = $0 }
-                    ))
-                    SecureField("Secret value", text: Binding(
-                        get: { vm.newSecretValue },
-                        set: { vm.newSecretValue = $0 }
-                    ))
-                }
+    private var canAdd: Bool {
+        !vm.newSecretName.isEmpty && !vm.newSecretValue.isEmpty
+    }
 
-                Section {
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("add secret", onBack: { dismiss() })
+
+                    sectionHead("CREDENTIAL DETAILS")
+                    card {
+                        fieldRow(label: "Name") {
+                            TextField("e.g. GitHub PAT", text: Binding(
+                                get: { vm.newSecretName },
+                                set: { vm.newSecretName = $0 }
+                            ))
+                            .font(.dsSansPt(14))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(10)
+                            .background(t.surfaceSunk)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        }
+                        hairline
+                        fieldRow(label: "Type") {
+                            Picker("Type", selection: Binding(
+                                get: { vm.newSecretType },
+                                set: { vm.newSecretType = $0 }
+                            )) {
+                                Text("API Key").tag(SecretRequest.CredentialType.apiKey)
+                                Text("SSH Key").tag(SecretRequest.CredentialType.sshKey)
+                                Text("Token").tag(SecretRequest.CredentialType.token)
+                                Text("Password").tag(SecretRequest.CredentialType.password)
+                                Text("OAuth").tag(SecretRequest.CredentialType.oauth)
+                            }
+                            .pickerStyle(.menu)
+                            .tint(t.accent)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        hairline
+                        fieldRow(label: "Scope") {
+                            TextField("e.g. read:repo", text: Binding(
+                                get: { vm.newSecretScope },
+                                set: { vm.newSecretScope = $0 }
+                            ))
+                            .font(.dsMonoPt(13))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(10)
+                            .background(t.surfaceSunk)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        }
+                        hairline
+                        fieldRow(label: "Secret value") {
+                            SecureField("Secret value", text: Binding(
+                                get: { vm.newSecretValue },
+                                set: { vm.newSecretValue = $0 }
+                            ))
+                            .font(.dsMonoPt(13))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(10)
+                            .background(t.surfaceSunk)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        }
+                    }
+
                     Text("The secret value is stored on the daemon and never sent to agents. Agents receive only scoped, time-limited access tokens.")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
-                }
-            }
-            .navigationTitle("Add Secret")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 16)
+
+                    Button {
                         Task {
                             await vm.addSecret()
                             dismiss()
                         }
+                    } label: {
+                        Text("Add secret")
+                            .font(.dsSansPt(15, weight: .semibold))
+                            .foregroundStyle(canAdd ? t.accentFg : t.text4)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(canAdd ? t.accent : t.surfaceSunk)
+                            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                     }
-                    .disabled(vm.newSecretName.isEmpty || vm.newSecretValue.isEmpty)
+                    .buttonStyle(.plain)
+                    .disabled(!canAdd)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 22)
+                    .padding(.bottom, 36)
                 }
             }
         }
+        .navigationBarHidden(true)
+    }
+
+    private func fieldRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.dsMonoPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func sectionHead(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 6)
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 18)
+    }
+
+    private var hairline: some View {
+        DSDivider(.soft, leadingInset: 16)
     }
 }
 #endif

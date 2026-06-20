@@ -34,37 +34,38 @@ public struct TerminalSettingsView: View {
     public init() {}
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("terminal", onBack: { dismiss() })
+
                     // ── Display
-                    sectionHead("Display")
+                    sectionHead("DISPLAY")
                     settingsCard {
-                        pickerRow(label: "Font Size", options: fontSizes.map { ($0.label, $0.value) }, value: $fontSize)
+                        menuRow(label: "Font Size", options: fontSizes.map { ($0.label, $0.value) }, value: $fontSize, mono: true)
                         cardDivider
-                        stringPickerRow(label: "Theme", options: themes, value: $themeName)
+                        menuRow(label: "Theme", options: themes.map { ($0, $0) }, value: $themeName)
                         cardDivider
-                        pickerRow(label: "Scrollback", options: scrollbackOptions.map { ($0.label, $0.value) }, value: $scrollback)
+                        menuRow(label: "Scrollback", options: scrollbackOptions.map { ($0.label, $0.value) }, value: $scrollback, mono: true)
                     }
-                    .padding(.bottom, 16)
 
                     // ── Behaviour
-                    sectionHead("Behaviour")
+                    sectionHead("BEHAVIOUR")
                     settingsCard {
-                        pickerRow(label: "Keep-Alive", options: keepAliveOptions.map { ($0.label, $0.value) }, value: $keepAlive)
+                        menuRow(label: "Keep-Alive", options: keepAliveOptions.map { ($0.label, $0.value) }, value: $keepAlive)
                         cardDivider
                         toggleRow(label: "Prevent Screen Sleep", isOn: $preventSleep)
                         cardDivider
                         toggleRow(label: "Haptic Feedback on Keys", isOn: $hapticFeedback)
                     }
-                    .padding(.bottom, 16)
 
                     // ── Gestures
-                    sectionHead("Gestures")
+                    sectionHead("GESTURES")
                     settingsCard {
                         toggleRow(label: "Trackpad cursor (long-press + drag)", isOn: $gestureTrackpadEnabled)
                         cardDivider
@@ -72,16 +73,15 @@ public struct TerminalSettingsView: View {
                         cardDivider
                         toggleRow(label: "Swipe up for alternate keys", isOn: $gestureSwipeAlternates)
                         cardDivider
-                        pickerRow(
+                        menuRow(
                             label: "Cursor Sensitivity",
                             options: sensitivityOptions.map { ($0.label, $0.value) },
                             value: $gestureCursorSensitivity
                         )
                     }
-                    .padding(.bottom, 16)
 
                     // ── Shortcut Bar
-                    sectionHead("Shortcut Bar")
+                    sectionHead("SHORTCUT BAR")
                     settingsCard {
                         NavigationLink {
                             ShortcutBarEditor()
@@ -89,85 +89,86 @@ public struct TerminalSettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Customize keyboard rail")
-                                        .font(.dsSansPt(15))
+                                        .font(.dsSansPt(16, weight: .medium))
                                         .foregroundStyle(t.text)
                                     Text("Reorder or hide keys above the keyboard.")
                                         .font(.dsSansPt(12))
                                         .foregroundStyle(t.text3)
                                 }
                                 Spacer()
-                                DSIconView(.chevronRight, size: 14, color: t.text3)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(t.text4)
                             }
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .frame(minHeight: 58)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.bottom, 16)
 
                     // ── Shell Integration
-                    sectionHead("Shell Integration")
+                    sectionHead("SHELL INTEGRATION")
                     settingsCard {
                         ShellIntegrationDiagnosticsRow()
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
                     }
-                    .padding(.bottom, 16)
 
                     Text("Theme changes take effect in the next session.")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 16)
 
                     #if DEBUG
-                    sectionHead("Debug")
+                    sectionHead("DEBUG")
                     settingsCard {
                         DebugProBypassToggle()
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
                     }
-                    .padding(.bottom, 16)
                     #endif
 
                     Spacer(minLength: 40)
                 }
-                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
         }
-        .navigationTitle("Terminal")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
     }
 
     // MARK: - Layout helpers
 
     private func sectionHead(_ label: String) -> some View {
-        Text(label.uppercased())
-            .font(.dsSansPt(11, weight: .semibold))
+        Text(label)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
             .foregroundStyle(t.text3)
-            .tracking(0.5)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
             .padding(.bottom, 6)
     }
 
     private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0) { content() }
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
             )
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 18)
     }
 
     private var cardDivider: some View {
-        t.border.frame(height: 0.5).padding(.horizontal, 16)
+        DSDivider(.soft, leadingInset: 16)
     }
 
     private func toggleRow(label: String, isOn: Binding<Bool>) -> some View {
         HStack {
             Text(label)
-                .font(.dsSansPt(15))
+                .font(.dsSansPt(16))
                 .foregroundStyle(t.text)
             Spacer()
             Toggle("", isOn: isOn)
@@ -175,43 +176,51 @@ public struct TerminalSettingsView: View {
                 .tint(t.accent)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .frame(minHeight: 52)
     }
 
-    private func pickerRow<V: Hashable>(label: String, options: [(String, V)], value: Binding<V>) -> some View {
-        HStack {
-            Text(label)
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text)
-            Spacer()
-            Picker("", selection: value) {
-                ForEach(options, id: \.0) { item in
-                    Text(item.0).tag(item.1)
+    /// A labeled row whose trailing control is a `Menu` showing the current value + chevron,
+    /// replacing the stock `.pickerStyle(.menu)` look. `mono` renders the value in the mono face
+    /// (used for numeric font-size / scrollback values).
+    private func menuRow<V: Hashable>(
+        label: String,
+        options: [(String, V)],
+        value: Binding<V>,
+        mono: Bool = false
+    ) -> some View {
+        let current = options.first { $0.1 == value.wrappedValue }?.0 ?? ""
+        return Menu {
+            ForEach(options, id: \.0) { item in
+                Button {
+                    value.wrappedValue = item.1
+                } label: {
+                    if item.1 == value.wrappedValue {
+                        Label(item.0, systemImage: "checkmark")
+                    } else {
+                        Text(item.0)
+                    }
                 }
             }
-            .pickerStyle(.menu)
-            .tint(t.accent)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func stringPickerRow(label: String, options: [String], value: Binding<String>) -> some View {
-        HStack {
-            Text(label)
-                .font(.dsSansPt(15))
-                .foregroundStyle(t.text)
-            Spacer()
-            Picker("", selection: value) {
-                ForEach(options, id: \.self) { opt in
-                    Text(opt).tag(opt)
-                }
+        } label: {
+            HStack(spacing: 12) {
+                Text(label)
+                    .font(.dsSansPt(16))
+                    .foregroundStyle(t.text)
+                Spacer()
+                Text(current)
+                    .font(mono ? .dsMonoPt(13) : .dsSansPt(13))
+                    .foregroundStyle(t.accent)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(t.text4)
             }
-            .pickerStyle(.menu)
-            .tint(t.accent)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(current)
     }
 }
 

@@ -62,6 +62,10 @@ struct DebugGalleryView: View {
         case "shell-sidebar":  ShellSidebarGalleryScreen()
         case "governance":     GovernanceView(actions: BridgeSessionActions(), onOpenSettings: {}, onOpenInbox: {}, onOpenFleet: {})
         case "newchat-real":   newChatRealGallery
+        case "settings-shortcuts": NavigationStack { ShortcutBarEditor() }
+        case "settings-terminal":  NavigationStack { TerminalSettingsView() }
+        case "settings-secrets":   NavigationStack { SecretsView(viewModel: SecretsViewModel()) }
+        case "settings-policy":    NavigationStack { PolicyEditorView(cwd: "~/projects/conduit", initialYAML: Self.samplePolicyYAML, onReload: {}) }
         case "scaffold-demo":  ScaffoldDemoScreen()
         case "features":       FeaturesGalleryScreen()
         case "proof":          ProofCardGalleryScreen()
@@ -810,6 +814,20 @@ struct DebugGalleryView: View {
 // MARK: - Sample data
 
 extension DebugGalleryView {
+    static let samplePolicyYAML = """
+    version: 1
+    presets:
+      - safe-reads
+      - auto-commit
+    rules:
+      - match: "git push*"
+        effect: ask
+      - match: "rm -rf*"
+        effect: deny
+      - match: "npm test*"
+        effect: allow
+    """
+
     static let sampleDiff = """
     diff --git a/src/app.swift b/src/app.swift
     index 1a2b3c4..5d6e7f8 100644

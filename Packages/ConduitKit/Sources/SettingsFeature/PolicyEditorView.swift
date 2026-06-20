@@ -15,6 +15,7 @@ public struct PolicyEditorView: View {
     private let simulate: (@Sendable (_ yaml: String, _ periodDays: Int) async throws -> PolicySimulation)?
 
     @Environment(\.conduitTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(
         cwd: String,
@@ -32,74 +33,78 @@ public struct PolicyEditorView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                allowAlwaysRulesSection
-                presetSection
-                rulesSection
-                yamlSection
-                actionsSection
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("agent policy", onBack: { dismiss() })
+                    allowAlwaysRulesSection
+                    presetSection
+                    rulesSection
+                    yamlSection
+                    actionsSection
+                }
             }
         }
-        .background(t.bg)
-        .navigationTitle("Agent policy")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .onAppear {
             loadActiveAllowRules()
         }
+    }
+
+    // MARK: - Section label
+
+    private func sectionHead(_ title: String) -> some View {
+        Text(title)
+            .font(.dsMonoPt(11, weight: .medium))
+            .tracking(11 * 0.10)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 6)
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(t.surface)
+            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 18)
+    }
+
+    private var hairline: some View {
+        DSDivider(.soft, leadingInset: 16)
     }
 
     // MARK: - Active allow-always rules
 
     private var allowAlwaysRulesSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("ACTIVE ALLOW-ALWAYS RULES")
-                .font(.dsMonoPt(10, weight: .semibold))
-                .tracking(10 * 0.12)
-                .foregroundStyle(t.text3)
-                .padding(.horizontal, 18)
-                .padding(.top, 22)
-                .padding(.bottom, 8)
+            sectionHead("ACTIVE ALLOW-ALWAYS RULES")
 
             if activeAllowRules.isEmpty {
-                VStack(spacing: 6) {
-                    Text("No active allow-always rules")
-                        .font(.dsSansPt(13))
-                        .foregroundStyle(t.text3)
-                    Text("Rules created from the inbox will appear here.")
-                        .font(.dsSansPt(11))
-                        .foregroundStyle(t.text4)
+                card {
+                    VStack(spacing: 6) {
+                        Text("No active allow-always rules")
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
+                        Text("Rules created from the inbox will appear here.")
+                            .font(.dsSansPt(11))
+                            .foregroundStyle(t.text4)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(t.surface)
-                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: t.r1, style: .continuous)
-                        .strokeBorder(t.border, lineWidth: 1)
-                )
-                .padding(.horizontal, 18)
-                .padding(.bottom, 8)
             } else {
-                VStack(spacing: 0) {
+                card {
                     ForEach(Array(activeAllowRules.enumerated()), id: \.element.id) { idx, rule in
-                        if idx > 0 {
-                            Rectangle()
-                                .fill(t.divider)
-                                .frame(height: 1)
-                                .padding(.leading, 18)
-                        }
+                        if idx > 0 { hairline }
                         allowAlwaysRuleRow(rule)
                     }
                 }
-                .background(t.surface)
-                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: t.r1, style: .continuous)
-                        .strokeBorder(t.border, lineWidth: 1)
-                )
-                .padding(.horizontal, 18)
-                .padding(.bottom, 8)
             }
         }
     }
@@ -203,13 +208,7 @@ public struct PolicyEditorView: View {
 
     private var presetSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("SAFE PRESETS")
-                .font(.dsMonoPt(10, weight: .semibold))
-                .tracking(10 * 0.12)
-                .foregroundStyle(t.text3)
-                .padding(.horizontal, 18)
-                .padding(.top, 22)
-                .padding(.bottom, 8)
+            sectionHead("SAFE PRESETS")
 
             DSAutonomyPresetBar(preset: $preset)
                 .onChange(of: preset) { _, newValue in
@@ -222,39 +221,18 @@ public struct PolicyEditorView: View {
 
     private var rulesSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("RULES")
-                .font(.dsMonoPt(10, weight: .semibold))
-                .tracking(10 * 0.12)
-                .foregroundStyle(t.text3)
-                .padding(.horizontal, 18)
-                .padding(.top, 22)
-                .padding(.bottom, 2)
+            sectionHead("RULES")
 
-            VStack(spacing: 0) {
+            card {
                 ForEach(Array(parsedRules.enumerated()), id: \.offset) { idx, rule in
-                    if idx > 0 {
-                        Rectangle()
-                            .fill(t.divider)
-                            .frame(height: 1)
-                            .padding(.leading, 18)
-                    }
+                    if idx > 0 { hairline }
                     ruleRow(rule)
                 }
 
-                Rectangle()
-                    .fill(t.divider)
-                    .frame(height: 1)
-                    .padding(.leading, 18)
+                hairline
 
                 failSafeRow
             }
-            .background(t.surface)
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r1, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 1)
-            )
-            .padding(.horizontal, 18)
-            .padding(.top, 6)
         }
     }
 
@@ -296,32 +274,28 @@ public struct PolicyEditorView: View {
 
     private var yamlSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("POLICY YAML")
-                .font(.dsMonoPt(10, weight: .semibold))
-                .tracking(10 * 0.12)
-                .foregroundStyle(t.text3)
-                .padding(.horizontal, 18)
-                .padding(.top, 22)
-                .padding(.bottom, 8)
+            sectionHead("POLICY YAML")
 
             Text("Edit on the bridge host at ~/.conduit/policy.yaml — reload after external edits.")
                 .font(.dsSansPt(12))
                 .foregroundStyle(t.text3)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 18)
                 .padding(.bottom, 8)
 
             TextEditor(text: $yamlText)
-                .font(.dsMonoPt(12))
+                .font(.dsMonoPt(12.5))
                 .foregroundStyle(t.termText)
                 .scrollContentBackground(.hidden)
                 .background(t.termSurface)
                 .frame(minHeight: 220)
-                .clipShape(RoundedRectangle(cornerRadius: t.r1, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: t.r1, style: .continuous)
+                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                         .strokeBorder(t.termBorder, lineWidth: 1)
                 )
                 .padding(.horizontal, 18)
+                .accessibilityLabel("Policy YAML editor")
         }
     }
 
