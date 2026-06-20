@@ -1,18 +1,5 @@
 import Foundation
 
-/// The app-level workspace presenter uses one route instead of one Boolean per
-/// sheet. It is deliberately cross-platform so routing can be unit tested.
-public enum WorkspaceRoute: String, Identifiable, Sendable {
-    case launcher
-    case environment
-    case review
-    case terminal
-    case browser
-    case files
-
-    public var id: String { rawValue }
-}
-
 public enum WorkspaceTransportAccess: Equatable, Sendable {
     case sshConnected
     case sshRequired

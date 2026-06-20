@@ -60,7 +60,6 @@ struct DebugGalleryView: View {
         case "shell-fleet":    ShellFleetGalleryScreen()
         case "shell-settings": ShellSettingsGalleryScreen()
         case "shell-sidebar":  ShellSidebarGalleryScreen()
-        case "governance":     GovernanceView(actions: BridgeSessionActions(), onOpenSettings: {}, onOpenInbox: {}, onOpenFleet: {})
         case "newchat-real":   newChatRealGallery
         case "settings-shortcuts": NavigationStack { ShortcutBarEditor() }
         case "settings-terminal":  NavigationStack { TerminalSettingsView() }

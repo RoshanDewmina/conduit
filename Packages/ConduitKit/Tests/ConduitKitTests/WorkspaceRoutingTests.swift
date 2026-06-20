@@ -3,12 +3,6 @@ import Testing
 
 @Suite("Workspace routing")
 struct WorkspaceRoutingTests {
-    @Test("launcher routes are stable and unique")
-    func routesAreStable() {
-        let routes: [WorkspaceRoute] = [.launcher, .environment, .review, .terminal, .browser, .files]
-        #expect(Set(routes.map(\.id)).count == routes.count)
-    }
-
     @Test("dirty branch changes require explicit confirmation")
     func dirtyBranchProtection() {
         #expect(WorkspaceBranchGuard.needsConfirmation(currentBranch: "main", targetBranch: "release", isClean: false))
