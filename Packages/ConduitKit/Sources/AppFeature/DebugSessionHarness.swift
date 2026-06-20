@@ -39,7 +39,7 @@ public struct DebugSessionHarness: View {
     }
 
     public var body: some View {
-        SessionView(viewModel: vm)
+        SessionWorkspaceContainer(viewModel: vm, onSwitchHost: {})
             .task {
                 guard !started else { return }
                 started = true

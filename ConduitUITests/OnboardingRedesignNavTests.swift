@@ -12,6 +12,9 @@
 ///
 /// `AppRoot` presents this redesign on first run. The gallery route keeps this
 /// state-machine test deterministic without relying on pairing infrastructure.
+/// The editorial redesign replaced the "N / 3" counter with step dots + Skip, so
+/// step identity is asserted via each step's title instead, and the per-step CTA is
+/// tapped by its stable `onboardingPrimary` identifier (its label changes per step).
 @MainActor
 final class OnboardingRedesignNavTests: XCTestCase {
 
@@ -24,51 +27,45 @@ final class OnboardingRedesignNavTests: XCTestCase {
         return app
     }
 
-/// Forward: "Connect a machine" → "Pair and continue" walks 1/3 → 2/3 → 3/3, and the back
-    /// button flips from disabled (step 1) to enabled (step 2+).
+    /// Forward: the primary CTA walks Why → Pair → Policy, and the back button flips
+    /// from disabled (step 1) to enabled (step 2+).
     func testForwardNavigationAdvancesCounter() {
         let app = launchRedesign()
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30),
-                      "Redesign should open on step 1 of 3")
-        XCTAssertTrue(app.staticTexts["in your pocket."].exists,
-                      "Step 1 title")
+        XCTAssertTrue(app.staticTexts["in your pocket."].waitForExistence(timeout: 30),
+                      "Redesign should open on step 1 (Why Conduit)")
         XCTAssertFalse(app.buttons["onboardingBack"].isEnabled,
                        "Back should be disabled on step 1")
 
-        app.buttons["Connect a machine"].tap()
-        XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10),
-                      "Tapping 'Connect a machine' should advance to step 2")
-        XCTAssertTrue(app.staticTexts["Pair the bridge."].exists,
-                      "Step 2 title")
+        app.buttons["onboardingPrimary"].tap()
+        XCTAssertTrue(app.staticTexts["Pair the bridge."].waitForExistence(timeout: 10),
+                      "Tapping the primary CTA should advance to the pairing step")
         XCTAssertTrue(app.buttons["onboardingBack"].isEnabled,
                       "Back should become enabled on step 2")
 
-        app.buttons["Pair and continue"].tap()
-        XCTAssertTrue(app.staticTexts["3 / 3"].waitForExistence(timeout: 10),
-                      "Tapping 'Pair and continue' should advance to step 3")
-        XCTAssertTrue(app.staticTexts["How much rope?"].exists,
-                      "Step 3 title")
+        app.buttons["onboardingPrimary"].tap()
+        XCTAssertTrue(app.staticTexts["How much rope?"].waitForExistence(timeout: 10),
+                      "Tapping the primary CTA again should advance to the policy step")
     }
 
-    /// Back button retreats 3/3 → 2/3 → 1/3 and is disabled again at step 1.
+    /// Back button retreats Policy → Pair → Why and is disabled again at step 1.
     func testBackNavigationRetreatsCounter() {
         let app = launchRedesign()
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30))
-        app.buttons["Connect a machine"].tap()
-        XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10))
-        app.buttons["Pair and continue"].tap()
-        XCTAssertTrue(app.staticTexts["3 / 3"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["in your pocket."].waitForExistence(timeout: 30))
+        app.buttons["onboardingPrimary"].tap()
+        XCTAssertTrue(app.staticTexts["Pair the bridge."].waitForExistence(timeout: 10))
+        app.buttons["onboardingPrimary"].tap()
+        XCTAssertTrue(app.staticTexts["How much rope?"].waitForExistence(timeout: 10))
 
         app.buttons["onboardingBack"].tap()
-        XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10),
-                      "Back from step 3 should return to step 2")
+        XCTAssertTrue(app.staticTexts["Pair the bridge."].waitForExistence(timeout: 10),
+                      "Back from step 3 should return to the pairing step")
 
         app.buttons["onboardingBack"].tap()
-        XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.staticTexts["in your pocket."].waitForExistence(timeout: 10),
                       "Back from step 2 should return to step 1")
         XCTAssertFalse(app.buttons["onboardingBack"].isEnabled,
                        "Back should be disabled again on step 1")
@@ -80,10 +77,10 @@ final class OnboardingRedesignNavTests: XCTestCase {
         let app = launchRedesign()
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["1 / 3"].waitForExistence(timeout: 30))
-        app.buttons["Connect a machine"].tap()
-        XCTAssertTrue(app.staticTexts["2 / 3"].waitForExistence(timeout: 10))
-        app.buttons["Pair and continue"].tap()
+        XCTAssertTrue(app.staticTexts["in your pocket."].waitForExistence(timeout: 30))
+        app.buttons["onboardingPrimary"].tap()
+        XCTAssertTrue(app.staticTexts["Pair the bridge."].waitForExistence(timeout: 10))
+        app.buttons["onboardingPrimary"].tap()
         XCTAssertTrue(app.staticTexts["How much rope?"].waitForExistence(timeout: 10))
 
         let balanced = app.buttons["policyPreset_balanced"]

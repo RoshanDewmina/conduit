@@ -19,7 +19,7 @@ public struct SessionWorkspaceContainer: View {
     private let onSwitchHost: () -> Void
 
     @State private var showDrawer = false
-    @State private var tab: WorkspaceTab = .terminal
+    @State private var tab: WorkspaceTab = .workspace
 
     @Environment(\.conduitTokens) private var t
 
@@ -45,31 +45,47 @@ public struct SessionWorkspaceContainer: View {
             .presentationCornerRadius(26)
             .presentationBackground(ConduitTokens.dark.termBg)
         }
+        #if DEBUG
+        // Visual-verification hook: auto-open the workspace drawer a moment after the
+        // session screen appears so the live-SSH harness can screenshot it without a
+        // tap (HID taps don't fire SwiftUI actions on the headless iOS 27 sim).
+        .task {
+            guard ProcessInfo.processInfo.environment["CONDUIT_TEST_OPEN_WORKSPACE"] == "1" else { return }
+            try? await Task.sleep(for: .seconds(2))
+            if let raw = ProcessInfo.processInfo.environment["CONDUIT_TEST_WORKSPACE_TAB"],
+               let preset = WorkspaceTab(rawValue: raw) {
+                tab = preset
+            }
+            showDrawer = true
+        }
+        #endif
     }
 }
 
 /// The Warp-style workspace drawer: one dark slide-up sheet with a segmented
-/// Terminal · Files · Diff · Preview tab bar that swaps the full tool view.
+/// Workspace · Files · Diff · Preview tab bar that swaps the full tool view.
 /// Replaces the old launcher + per-tool sheet stack (the board's "C" drawer).
+/// The session screen itself is the live terminal, so the drawer's first tab is
+/// the git/environment Workspace rather than a duplicate terminal.
 public enum WorkspaceTab: String, CaseIterable, Identifiable {
-    case terminal, files, diff, preview
+    case workspace, files, diff, preview
     public var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .terminal: "Terminal"
-        case .files:    "Files"
-        case .diff:     "Diff"
-        case .preview:  "Preview"
+        case .workspace: "Workspace"
+        case .files:     "Files"
+        case .diff:      "Diff"
+        case .preview:   "Preview"
         }
     }
 
     var icon: String {
         switch self {
-        case .terminal: "chevron.left.forwardslash.chevron.right"
-        case .files:    "folder"
-        case .diff:     "plusminus"
-        case .preview:  "globe"
+        case .workspace: "arrow.triangle.branch"
+        case .files:     "folder"
+        case .diff:      "plusminus"
+        case .preview:   "globe"
         }
     }
 }
@@ -140,7 +156,7 @@ private struct WorkspaceDrawer: View {
     @ViewBuilder
     private var content: some View {
         switch tab {
-        case .terminal:
+        case .workspace:
             WorkspaceEnvironmentView(
                 session: viewModel.session,
                 host: viewModel.host,
@@ -485,42 +501,43 @@ private struct HostFilesView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Text(path)
-                    .font(.dsMonoPt(12))
+                Text(displayPath)
+                    .font(.dsMonoPt(10))
+                    .tracking(0.4)
                     .foregroundStyle(t.text3)
                     .lineLimit(1)
                     .truncationMode(.head)
                 Spacer()
-                Button { goUp() } label: { Image(systemName: "arrow.up") }
-                    .buttonStyle(.bordered)
-                    .disabled(path == "/" || path == "~")
-                    .accessibilityLabel("Parent folder")
-            }
-            .padding(16)
-
-            if let errorMessage {
-                Text(errorMessage).font(.dsSansPt(13)).foregroundStyle(t.danger).padding(.horizontal, 16)
-            }
-
-            List(entries) { entry in
-                Button { open(entry) } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: entry.isDirectory ? "folder.fill" : "doc.text")
-                            .foregroundStyle(entry.isDirectory ? t.accent : t.text3)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.name).font(.dsMonoPt(13, weight: entry.isDirectory ? .semibold : .regular))
-                            if let bytes = entry.sizeBytes, !entry.isDirectory {
-                                Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
-                                    .font(.dsMonoPt(10)).foregroundStyle(t.text4)
-                            }
-                        }
-                        Spacer()
-                        if entry.isDirectory { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(t.text4) }
-                    }
+                Button { goUp() } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(t.termText2)
+                        .frame(width: 30, height: 30)
+                        .background(t.termSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(t.termBorder, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .disabled(path == "/" || path == "~")
+                .accessibilityLabel("Parent folder")
             }
-            .listStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+
+            if let errorMessage {
+                Text(errorMessage).font(.dsSansPt(12)).foregroundStyle(t.termErr)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+            }
+
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(entries) { entry in
+                        fileRow(entry)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 16)
+            }
         }
         .task { path = initialPath; await load() }
         .task(id: path) { await load() }
@@ -530,6 +547,43 @@ private struct HostFilesView: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    private var displayPath: String { path }
+
+    private func fileRow(_ entry: SFTPEntry) -> some View {
+        Button { open(entry) } label: {
+            HStack(spacing: 9) {
+                if entry.isDirectory {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(t.termText3)
+                        .frame(width: 10)
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(t.termAccent)
+                } else {
+                    Text("›")
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(Color(.sRGB, red: 0.435, green: 0.608, blue: 0.820, opacity: 1)) // #6f9bd1
+                        .frame(width: 10)
+                }
+                Text(entry.name)
+                    .font(.dsMonoPt(12.5, weight: entry.isDirectory ? .medium : .regular))
+                    .foregroundStyle(entry.isDirectory ? t.termText : t.termText2)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if let bytes = entry.sizeBytes, !entry.isDirectory {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.termText3)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func load() async {
@@ -578,29 +632,52 @@ private struct HostPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Menu {
-                    ForEach(ports, id: \.self) { port in
-                        Button("localhost:\(port)") { portText = String(port); openPreview() }
-                    }
-                } label: {
-                    Label("Detected ports", systemImage: "dot.radiowaves.left.and.right")
-                        .font(.dsSansPt(14, weight: .medium))
+            // Board browser chrome: nav glyphs + a mono URL pill + port menu/open.
+            HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold)).foregroundStyle(t.termText3)
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(t.termText3)
+                    Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold)).foregroundStyle(t.termText3)
                 }
-                .disabled(ports.isEmpty)
-
-                TextField("Port", text: $portText)
-                    .keyboardType(.numberPad)
-                    .font(.dsMonoPt(14))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 86)
-
-                Button("Open", action: openPreview)
-                    .buttonStyle(.borderedProminent)
-                    .tint(t.accent)
-                    .disabled(HostPreviewPort.parse(portText) == nil)
+                HStack(spacing: 6) {
+                    Text("localhost:")
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.termText3)
+                    TextField("port", text: $portText)
+                        .keyboardType(.numberPad)
+                        .font(.dsMonoPt(11))
+                        .foregroundStyle(t.termText2)
+                        .frame(width: 54)
+                    Spacer(minLength: 0)
+                    if !ports.isEmpty {
+                        Menu {
+                            ForEach(ports, id: \.self) { port in
+                                Button("localhost:\(port)") { portText = String(port); openPreview() }
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(t.termText3)
+                        }
+                    }
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(Color(.sRGB, red: 0.051, green: 0.043, blue: 0.035, opacity: 1), in: RoundedRectangle(cornerRadius: 6, style: .continuous)) // #0d0b09
+                Button(action: openPreview) {
+                    Text("Open")
+                        .font(.dsSansPt(12, weight: .semibold))
+                        .foregroundStyle(t.accentFg)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(t.termAccent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(HostPreviewPort.parse(portText) == nil)
+                .opacity(HostPreviewPort.parse(portText) == nil ? 0.5 : 1)
             }
-            .padding(16)
+            .padding(12)
+            .background(t.termSurface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(t.termBorder, lineWidth: 1))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
 
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
