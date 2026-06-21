@@ -55,6 +55,7 @@ public struct NewChatTabView: View {
     @State private var customCwd: String = ""
     @State private var showAgentPicker = false
     @State private var showWorkspacePicker = false
+    @State private var showComposer = false
     @State private var showOptions = false
     @State private var selectedModel: String = ""
     @State private var budgetText: String = ""
@@ -139,7 +140,7 @@ public struct NewChatTabView: View {
                 }
                 bottomBar
             } else {
-                composerForm
+                composerLanding
             }
         }
         .background(t.bg.ignoresSafeArea())
@@ -176,6 +177,14 @@ public struct NewChatTabView: View {
         ) {
             BudgetSheet { usd in Task { await controlStore?.setBudget(usd) } }
         }
+        .bottomDrawer(
+            isPresented: $showComposer,
+            title: "New chat",
+            subtitle: "Describe the work. Conduit routes it through policy before anything runs.",
+            detents: [.medium, .large]
+        ) {
+            composerDrawerContent
+        }
         .sheet(item: $selectedArtifact) { artifact in
             ChatArtifactDetailView(artifact: artifact)
         }
@@ -198,24 +207,56 @@ public struct NewChatTabView: View {
         }
     }
 
-    // MARK: - Composer form (the single New Chat surface — native scroll form)
+    // MARK: - Composer landing (calm idle surface) + drawer
 
-    /// One always-visible native form. No grow/collapse drawer, no GeometryReader
-    /// height feedback — the system keyboard pushes the ScrollView up on its own.
-    private var composerForm: some View {
+    /// The idle New Chat surface: a calm title and a single entry point that opens
+    /// the composer as a bottom drawer. The fields live inside the drawer so the
+    /// landing stays quiet and there's no full-page form to scroll.
+    private var composerLanding: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            VStack(spacing: 10) {
+                DSIconView(.sparkles, size: 30, color: t.accent)
+                Text("New chat")
+                    .font(.dsDisplayPt(28, weight: .bold))
+                    .foregroundStyle(t.text)
+                Text("Describe the work. Conduit routes it through policy before anything runs.")
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text3)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 28)
+            }
+            Button {
+                Haptics.selection()
+                showComposer = true
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("New chat")
+                        .font(.dsSansPt(16, weight: .semibold))
+                }
+                .foregroundStyle(t.accentFg)
+                .padding(.horizontal, 22)
+                .frame(height: 52)
+                .background(t.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Start a new chat")
+            Spacer()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+    }
+
+    /// The composer fields, presented inside the bottom drawer. Same controls and
+    /// wiring as before — prompt, Agent/Host/Project pills, Options, Send — just
+    /// hosted in a native sheet (presentationDetents) instead of a full page.
+    private var composerDrawerContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("New chat")
-                        .font(.dsDisplayPt(26, weight: .bold))
-                        .foregroundStyle(t.text)
-                    Text("Describe the work. Conduit routes it through policy before anything runs.")
-                        .font(.dsSansPt(13))
-                        .foregroundStyle(t.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 8)
-
                 TextField("Describe a task or just say hi…", text: $prompt, axis: .vertical)
                     .font(.dsSansPt(16))
                     .foregroundStyle(t.text)
@@ -281,6 +322,7 @@ public struct NewChatTabView: View {
                     let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     composeFocused = false
+                    showComposer = false
                     Task { await sendCurrentPrompt() }
                 } label: {
                     HStack(spacing: 9) {
@@ -299,6 +341,7 @@ public struct NewChatTabView: View {
                 .accessibilityLabel("Send chat")
             }
             .padding(.horizontal, 20)
+            .padding(.top, 4)
             .padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -389,15 +432,27 @@ public struct NewChatTabView: View {
                     }
                     .padding(.bottom, 2)
                 }
-                // One dark terminal block card per turn: command lines + streamed
-                // output, colored like a real terminal (mockup A).
-                DarkTerminalBlockCard(
-                    host: selectedAgent?.hostName ?? "relay",
-                    command: run.blocks.first.map { blockCommand($0) },
-                    output: run.text,
-                    state: isLast && isErrorState ? .error : (isLast && isStreaming ? .running : .done)
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // A turn with command/tool blocks is a terminal turn: its streamed
+                // output (run.text) belongs in the dark macOS-window card, one per
+                // command. A turn with no blocks is a plain reply — show its prose
+                // as a normal left-aligned bubble.
+                if run.blocks.isEmpty {
+                    if !run.text.isEmpty {
+                        DarkAssistantBubble(run.text)
+                    }
+                } else {
+                    ForEach(Array(run.blocks.enumerated()), id: \.element.id) { index, block in
+                        DarkTerminalBlockCard(
+                            host: selectedAgent?.hostName ?? "relay",
+                            command: blockCommand(block),
+                            // The run's combined output stream isn't split per block;
+                            // attach it to the last (most recent) command card.
+                            output: index == run.blocks.count - 1 ? run.text : "",
+                            state: isLast && isErrorState ? .error : (block.status == .running ? .running : .done)
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 persistedArtifacts(for: turn.runId)
             }
         } else {

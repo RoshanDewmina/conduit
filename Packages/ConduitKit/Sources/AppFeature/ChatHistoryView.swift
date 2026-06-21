@@ -69,13 +69,20 @@ public struct ChatHistoryView: View {
     private func assistantBlock(_ turn: ConduitCore.ChatTurn) -> some View {
         let text = turn.assistantText.isEmpty ? (turn.errorMessage ?? "") : turn.assistantText
         VStack(alignment: .leading, spacing: 6) {
-            DarkTerminalBlockCard(
-                host: hostName,
-                command: nil,
-                output: text.isEmpty ? "(no output recorded)" : text,
-                state: turn.status == .failed ? .error : .done
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // History records prose only (no tool blocks are persisted), so a
+            // recorded reply is a plain bubble. A failed turn keeps the dark
+            // terminal card so its error reads as terminal output.
+            if turn.status == .failed {
+                DarkTerminalBlockCard(
+                    host: hostName,
+                    command: nil,
+                    output: text.isEmpty ? "(no output recorded)" : text,
+                    state: .error
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                DarkAssistantBubble(text.isEmpty ? "(no output recorded)" : text)
+            }
             let artifacts = artifactsByRun[turn.runID] ?? []
             if !artifacts.isEmpty {
                 ForEach(artifacts) { artifact in

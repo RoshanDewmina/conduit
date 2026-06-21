@@ -1,9 +1,11 @@
 # AGENTS.md — Conduit (root agent contract)
 
-> The entry point for **any** AI agent (Codex, OpenCode, Kimi, Claude Code) working in this repo.
-> Claude Code also reads `CLAUDE.md`. Keep this file short; it points at the canonical sources
-> rather than duplicating them. Scoped `AGENTS.md` files exist under `web/`, `marketing/`, and
-> `docs/conduit-ui-prototype/` and apply **only** within those directories.
+> The shared contract for AI agents in this repo. **Codex** and **OpenCode** read this file
+> natively; **Claude Code** imports it from `CLAUDE.md` (via `@AGENTS.md`) and adds Claude-specific
+> tooling there. **Kimi Code** reads its own global `~/.kimi-code/KIMI.md`, **not** this file —
+> mirror the rules below there if you drive Kimi in this repo. Keep this file short; it points at
+> canonical sources rather than duplicating them. Scoped `AGENTS.md` files under `web/`,
+> `marketing/`, and `docs/conduit-ui-prototype/` apply **only** within those directories.
 
 ## What Conduit is
 
@@ -29,7 +31,7 @@ Three layers: the **iOS app** (`Packages/ConduitKit/`), the **`conduitd`** resid
 - **`git status` changes are other agents' / the owner's work** — do not revert them unless asked.
 - **Verify before claiming done.** ConduitKit Swift change → `cd Packages/ConduitKit && swift build` (+ `swift test` if behavior changed). iOS UI / app-shell / strict-concurrency risk → the **XcodeBuildMCP app-target** build (plain `swift build` skips `#if os(iOS)` code). Daemon change → `go test ./...` **from `daemon/conduitd`** (not the repo root). See the `conduit-verification-gate` skill.
 - **No dead code / back-compat shims / speculative abstractions** (`agent-contract.md` §3). Delete cleanly.
-- **Security is fail-closed.** Keep the TOFU host-key prompt on production paths; keys stay in Keychain behind `BiometricGate`; never log secrets. Hooks default to hold-on-unreachable.
+- **Security is fail-closed.** Keep the TOFU host-key prompt on production paths; keys stay in Keychain behind `BiometricGate`; never log secrets. Hooks default to hold-on-unreachable. Full threat model: `docs/legal/SECURITY_ARCHITECTURE.md`.
 - **Vendor CLI adapters drift fast** — before changing `daemon/conduitd/dispatch.go`, re-verify `which`/`--version`/`--help` and run the `vendor-cli-adapter-audit` skill. Never `sh -c` an interpolated prompt; build explicit argv.
 
 ## Project skills

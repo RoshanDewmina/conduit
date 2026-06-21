@@ -28,9 +28,8 @@ Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
 *.instrumentscli
 .dmux/
 
-# Local agent scratch worktrees and installed skills (Claude Code tooling)
+# Local agent scratch worktrees (Claude Code tooling). Skills are handled below.
 .claude/worktrees/
-.claude/skills/
 
 # AI agent tooling dotfiles (Claude Code, Cursor, Goose, Kiro, etc.)
 # New agents drop a dot-dir at repo root — catch them all with this glob.
@@ -95,8 +94,13 @@ daemon/push-backend/push-backend
 # Claude Code / superpowers lock file
 skills-lock.json
 
-# Claude Code plugin skill symlinks (user-local tooling state)
-.claude/skills/
+# Claude Code skills: ignore auto-installed/symlinked skills, but TRACK the hand-authored
+# Conduit project skills so a clean checkout / teammate / fresh machine gets them.
+.claude/skills/*
+!.claude/skills/README.md
+!.claude/skills/conduit-*
+!.claude/skills/agent-session-history-reader
+!.claude/skills/vendor-cli-adapter-audit
 
 # Remotion/animations node_modules
 animations/node_modules/

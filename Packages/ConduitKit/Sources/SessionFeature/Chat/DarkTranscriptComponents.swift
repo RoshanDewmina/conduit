@@ -27,7 +27,42 @@ public struct DarkUserBubble: View {
     }
 }
 
+// MARK: - Assistant prose bubble (left-aligned, neutral surface)
+//
+// The agent's natural-language reply. Mirrors DarkUserBubble's geometry but on a
+// neutral surface and left-aligned — terminal/command output gets the dark
+// DarkTerminalBlockCard instead, so prose never wears the macOS-window chrome.
+
+public struct DarkAssistantBubble: View {
+    private let text: String
+    @Environment(\.conduitTokens) private var t
+
+    public init(_ text: String) { self.text = text }
+
+    public var body: some View {
+        HStack(alignment: .top) {
+            Text(text)
+                .font(.dsSansPt(16))
+                .foregroundStyle(t.text)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .background(t.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
+                )
+            Spacer(minLength: 56)
+        }
+    }
+}
+
 // MARK: - Terminal block card (dark, traffic-light header + mono body)
+//
+// Collapsed by default — caps the body to the last few lines and a fixed height so
+// a long command's scrollback doesn't dominate the transcript. Tap anywhere to
+// expand to the full, scrollable output; tap again to re-collapse.
 
 public struct DarkTerminalBlockCard: View {
     public enum State { case running, done, error }
@@ -36,7 +71,13 @@ public struct DarkTerminalBlockCard: View {
     private let command: String?
     private let output: String
     private let state: State
+
+    /// Lines kept visible while collapsed.
+    private let collapsedLineCount = 8
+
+    @State private var expanded = false
     @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(host: String, command: String?, output: String, state: State) {
         self.host = host
@@ -47,44 +88,8 @@ public struct DarkTerminalBlockCard: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Title strip: 3 traffic lights + "zsh — host"
-            HStack(spacing: 7) {
-                Circle().fill(Color(red: 0.86, green: 0.45, blue: 0.30)).frame(width: 9, height: 9)
-                Circle().fill(t.termText3.opacity(0.55)).frame(width: 9, height: 9)
-                Circle().fill(t.termText3.opacity(0.35)).frame(width: 9, height: 9)
-                Text("zsh — \(host)")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.termText3)
-                    .padding(.leading, 4)
-                Spacer(minLength: 0)
-                if state == .error {
-                    Text("ERROR")
-                        .font(.dsMonoPt(9.5, weight: .bold))
-                        .tracking(0.6)
-                        .foregroundStyle(t.danger)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(t.danger.opacity(0.16), in: Capsule())
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(t.termSurface2)
-
-            // Body: colored mono output
-            VStack(alignment: .leading, spacing: 3) {
-                if let command, !command.isEmpty {
-                    Text("→ \(command)")
-                        .foregroundStyle(t.termAccent)
-                }
-                ForEach(Array(outputLines.enumerated()), id: \.offset) { _, line in
-                    Text(line.text)
-                        .foregroundStyle(line.color)
-                }
-            }
-            .font(.dsMonoPt(12.5))
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            header
+            body(for: expanded ? outputLines : Array(outputLines.suffix(collapsedLineCount)))
         }
         .background(t.termBg)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -92,6 +97,78 @@ public struct DarkTerminalBlockCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(state == .error ? t.danger.opacity(0.4) : t.termText3.opacity(0.18), lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture {
+            guard isExpandable else { return }
+            Haptics.selection()
+            withAnimation(ConduitMotion.resolved(.smooth(duration: 0.26, extraBounce: 0), reduceMotion: reduceMotion)) {
+                expanded.toggle()
+            }
+        }
+        .accessibilityAddTraits(isExpandable ? .isButton : [])
+        .accessibilityHint(isExpandable ? (expanded ? "Collapse output" : "Expand full output") : "")
+    }
+
+    /// More lines than the collapsed cap fit — only then is tapping meaningful.
+    private var isExpandable: Bool { outputLines.count > collapsedLineCount }
+
+    private var header: some View {
+        HStack(spacing: 7) {
+            Circle().fill(Color(red: 0.86, green: 0.45, blue: 0.30)).frame(width: 9, height: 9)
+            Circle().fill(t.termText3.opacity(0.55)).frame(width: 9, height: 9)
+            Circle().fill(t.termText3.opacity(0.35)).frame(width: 9, height: 9)
+            Text("zsh — \(host)")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.termText3)
+                .padding(.leading, 4)
+            Spacer(minLength: 0)
+            if state == .error {
+                Text("ERROR")
+                    .font(.dsMonoPt(9.5, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(t.danger)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(t.danger.opacity(0.16), in: Capsule())
+            }
+            if isExpandable {
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(t.termText3)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(t.termSurface2)
+    }
+
+    @ViewBuilder
+    private func body(for lines: [Line]) -> some View {
+        let content = VStack(alignment: .leading, spacing: 3) {
+            if let command, !command.isEmpty {
+                Text("→ \(command)")
+                    .foregroundStyle(t.termAccent)
+            }
+            if isExpandable && !expanded {
+                Text("… \(outputLines.count - collapsedLineCount) earlier lines — tap to expand")
+                    .font(.dsMonoPt(10.5))
+                    .foregroundStyle(t.termText3.opacity(0.8))
+            }
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line.text)
+                    .foregroundStyle(line.color)
+            }
+        }
+        .font(.dsMonoPt(12.5))
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+
+        if expanded {
+            ScrollView { content }
+                .frame(maxHeight: 420)
+        } else {
+            content
+        }
     }
 
     private struct Line { let text: String; let color: Color }
