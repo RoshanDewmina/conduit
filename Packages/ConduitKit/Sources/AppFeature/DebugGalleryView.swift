@@ -706,11 +706,17 @@ struct DebugGalleryView: View {
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    // Plain conversational reply → a normal assistant bubble, no terminal chrome.
+                    DarkUserBubble("can you fix the auth redirect loop?")
+                    DarkAssistantBubble("Sure — the redirect guard was missing a return after the 302. I patched it and I'll run the suite to confirm.")
+
+                    // A command turn → the macOS terminal card. Long output so the
+                    // collapsed cap + "tap to expand" affordance is visible.
                     DarkUserBubble("run the auth test suite")
                     DarkTerminalBlockCard(
                         host: "mac-studio",
-                        command: "claude \"run the auth test suite\"",
-                        output: "→ npm test -- auth\n\nPASS src/auth.test.ts\nPASS src/redirect.test.ts\nPASS src/session.test.ts\n\nTests: 12 passed, 12 total\nDone in 1.24s ✓",
+                        command: "npm test -- auth",
+                        output: "→ npm test -- auth\n\nPASS src/auth.test.ts\nPASS src/redirect.test.ts\nPASS src/session.test.ts\nPASS src/token.test.ts\nPASS src/guard.test.ts\nPASS src/logout.test.ts\nPASS src/refresh.test.ts\nPASS src/csrf.test.ts\nPASS src/cookie.test.ts\n\nTests: 12 passed, 12 total\nDone in 1.24s ✓",
                         state: .done
                     )
                     DarkUserBubble("now break it")
