@@ -1274,6 +1274,13 @@ public struct AppRoot: View {
         // manual-code path (client.pairingCode = code; connect()). Debug-only.
         if let code = ProcessInfo.processInfo.environment["CONDUIT_RELAY_CODE"],
            code.count == 6 {
+            // Fresh keypair for this pairing (beginPairingSession also rotates the
+            // code, so apply the daemon's code afterward). This avoids reusing a
+            // restored keypair from a prior pairing, which — combined with the old
+            // non-idempotent connect() — produced a stale session key the daemon's
+            // frames couldn't decrypt. connect() is now idempotent, so this is the
+            // single authoritative channel.
+            env.e2eRelayClient.beginPairingSession()
             env.e2eRelayClient.pairingCode = code
             env.e2eRelayClient.connect()
         }

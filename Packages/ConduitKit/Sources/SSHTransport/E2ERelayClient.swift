@@ -197,8 +197,22 @@ public final class E2ERelayClient: ObservableObject {
 
     public func connect() {
         Self.logger.info("connect() called, relayHost=\(self.relayURL.host ?? "", privacy: .public) code=\(self.pairingCode, privacy: .private)")
-        connectionState = .connecting
+        // Idempotent: tear down any prior connection BEFORE starting a new one.
+        // Without this, a second connect() (e.g. restoreStoredPairing's reconnect
+        // followed by an explicit re-pair, or the debug auto-pair) leaked the old
+        // webSocketTask — its one-shot receive loop kept re-arming on the shared
+        // `webSocketTask` property, and the stale `sessionKey` from the abandoned
+        // channel made the daemon's encrypted frames fail to decrypt (the relay
+        // approval silently never rendered). Cancel the old socket + keepalive and
+        // reset pairing state so exactly one channel + one session key is live.
         reconnectTask?.cancel()
+        keepaliveTask?.cancel()
+        keepaliveTask = nil
+        webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        webSocketTask = nil
+        sessionKey = nil
+        pairingState = .unpaired
+        connectionState = .connecting
         reconnectTask = Task { [weak self] in
             await self?.doConnect()
         }

@@ -177,6 +177,60 @@ final class TapInjectionProofTests: XCTestCase {
                       "Tapping a saved host should fire onReconnect → present the connect prompt")
     }
 
+    /// Live relay approval proof (opt-in). Closes the one leaf the host-side relay
+    /// round-trip couldn't reach via idb: tapping APPROVE on a card delivered over
+    /// the production E2E relay. The host harness (see
+    /// scripts/validation/relay-approval-e2e.sh) stands up a resident daemon paired
+    /// to the same relay code, fires a `fileWrite` escalation ~after pairing, and
+    /// asserts the blocked hook unblocks (exit 0) + audit shows `approve` once this
+    /// test taps APPROVE. Runner env is supplied via `TEST_RUNNER_*` by that script.
+    func testRelayApprovalUnblocksHostHook() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["CONDUIT_RELAY_E2E"] == "1" else {
+            throw XCTSkip("Set CONDUIT_RELAY_E2E=1 (+ CONDUIT_RELAY_URL/CONDUIT_RELAY_CODE/CONDUIT_PUSH_BACKEND_URL) via the relay-approval-e2e.sh harness")
+        }
+        let app = XCUIApplication()
+        // Bypass first-launch onboarding (a fresh install otherwise shows the
+        // onboarding view, where the relay auto-pair never runs). Setting the
+        // @AppStorage("onboardingSeen") default via the argument domain reaches the
+        // post-onboarding shell WITHOUT seeding demo approvals, so the only Inbox
+        // card is the relay-delivered one.
+        app.launchArguments += ["-onboardingSeen", "YES"]
+        // Pair to the live relay headlessly (DEBUG seam) and land on the Inbox so
+        // the relay-delivered card is on screen the moment it arrives.
+        app.launchEnvironment["CONDUIT_RELAY_URL"] = env["CONDUIT_RELAY_URL"] ?? ""
+        app.launchEnvironment["CONDUIT_RELAY_CODE"] = env["CONDUIT_RELAY_CODE"] ?? ""
+        app.launchEnvironment["CONDUIT_PUSH_BACKEND_URL"] = env["CONDUIT_PUSH_BACKEND_URL"] ?? ""
+        app.launchEnvironment["CONDUIT_DESTINATION"] = "inbox"
+
+        // Cold-start quirk: a just-installed app does NOT pair on its very first
+        // launch (the relay client / store finish initializing only after the
+        // first run — the daemon sees the socket drop, then a clean reconnect).
+        // Launch once to initialize, then relaunch to actually pair. Verified
+        // manually: 1st launch no pair, 2nd launch pairs in ~4s.
+        app.launch()
+        sleep(8)
+        app.terminate()
+        app.launch()
+        defer { app.terminate() }
+
+        // The host fires the escalation a few seconds after the app pairs; wait
+        // generously for the relay-delivered APPROVE control to surface.
+        let approve = app.buttons["Approve"].firstMatch
+        XCTAssertTrue(approve.waitForExistence(timeout: 120),
+                      "A relay-delivered escalation should surface an Approve button in the Inbox")
+        approve.tap()
+
+        // The decision rides the relay back to the daemon; the card should leave
+        // PENDING (its Approve control disappears). The host script independently
+        // asserts the hook unblocked (exit 0) and audit recorded `approve`.
+        let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Approve"))
+        let deadline = Date().addingTimeInterval(15)
+        while approveButtons.count > 0 && Date() < deadline { usleep(300_000) }
+        XCTAssertEqual(approveButtons.count, 0,
+                       "After approving the relay card, no pending Approve control should remain")
+    }
+
     /// Strict localhost SSH proof, opt-in only because it needs macOS Remote Login
     /// plus a Keychain-backed password. In simulator-env mode, the password is set
     /// in the Device Hub app-launch environment; the test runner receives only a
