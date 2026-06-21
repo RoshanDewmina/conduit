@@ -72,6 +72,8 @@ public struct NewChatTabView: View {
     // Persistence
     @State private var conversationID: String?
     @State private var recentConversations: [ChatConversation] = []
+    @State private var artifactsByRun: [String: [ChatArtifact]] = [:]
+    @State private var selectedArtifact: ChatArtifact?
     /// Repurposed: drives the landing compose drawer's expanded state (grows in
     /// place — NOT a separate sheet).
     @State private var showComposer = false
@@ -166,12 +168,19 @@ public struct NewChatTabView: View {
             guard let cid = initialConversationID, turns.isEmpty else { return }
             await loadConversation(id: cid)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .conduitChatArtifactPersisted)) { note in
+            guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
+            Task { await loadArtifacts() }
+        }
         .sheet(isPresented: $showAgentPicker) {
             agentPickerSheet
         }
         .sheet(isPresented: $showBudgetSheet) {
             BudgetSheet { usd in Task { await controlStore?.setBudget(usd) } }
                 .presentationDetents([.height(260)])
+        }
+        .sheet(item: $selectedArtifact) { artifact in
+            ChatArtifactDetailView(artifact: artifact)
         }
         .confirmationDialog("Stop this run?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Stop run", role: .destructive) {
@@ -800,6 +809,7 @@ public struct NewChatTabView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                persistedArtifacts(for: turn.runId)
                 if !run.text.isEmpty {
                     StreamingOutputText(text: run.text, isStreaming: isLast && isStreaming)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -811,6 +821,26 @@ public struct NewChatTabView: View {
                 Text("thinking\u{2026}")
                     .font(.dsMonoPt(12))
                     .foregroundStyle(t.text4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func persistedArtifacts(for runID: String) -> some View {
+        let artifacts = artifactsByRun[runID] ?? []
+        if !artifacts.isEmpty {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("RUN ARTIFACTS")
+                    .font(.dsMonoPt(9, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundStyle(t.text4)
+                ForEach(artifacts) { artifact in
+                    ChatArtifactCard(artifact: artifact) {
+                        Haptics.selection()
+                        selectedArtifact = artifact
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -953,7 +983,7 @@ public struct NewChatTabView: View {
                 Task {
                     let conv = try? await chatRepo.createConversation(
                         title: chatTitle, agentID: agent.vendor.isEmpty ? agent.name : agent.vendor,
-                        hostName: agent.name, hostID: agent.hostID, cwd: agent.cwd
+                        hostName: agent.hostName ?? agent.name, hostID: agent.hostID, cwd: agent.cwd
                     )
                     conversationID = conv?.id
                     _ = try? await chatRepo.appendTurn(
@@ -1022,6 +1052,8 @@ public struct NewChatTabView: View {
         followUpText = ""
         dispatchErrorMessage = nil
         conversationID = nil
+        artifactsByRun = [:]
+        selectedArtifact = nil
         isHistorical = false
         showComposer = false
         showOptions = false
@@ -1031,6 +1063,7 @@ public struct NewChatTabView: View {
         guard let repo = chatRepo else { return }
         guard let conv = try? await repo.conversation(id: cid) else { return }
         let persisted = (try? await repo.turns(conversationID: cid)) ?? []
+        let artifacts = (try? await repo.artifacts(conversationID: cid)) ?? []
         await MainActor.run {
             chatTitle = conv.title
             conversationID = cid
@@ -1040,7 +1073,16 @@ public struct NewChatTabView: View {
                 runOutputStore.appendOutput(RunOutputParams(runId: p.runID, stream: "stdout", chunk: p.assistantText, seq: 0))
             }
             turns = persisted.map { ChatTurn(prompt: $0.prompt, runId: $0.runID) }
+            artifactsByRun = Dictionary(grouping: artifacts, by: \.runID)
             isHistorical = true
+        }
+    }
+
+    private func loadArtifacts() async {
+        guard let repo = chatRepo, let conversationID else { return }
+        let artifacts = (try? await repo.artifacts(conversationID: conversationID)) ?? []
+        await MainActor.run {
+            artifactsByRun = Dictionary(grouping: artifacts, by: \.runID)
         }
     }
 

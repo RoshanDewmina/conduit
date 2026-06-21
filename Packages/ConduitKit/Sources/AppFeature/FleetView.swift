@@ -7,6 +7,7 @@ import PersistenceKit
 public struct FleetView: View {
     private let store: FleetStore
     private let hostRepo: HostRepository?
+    private let chatRepo: ChatConversationRepository?
     private let demoHosts: [Host]
     private let loopStore: LoopStore?
     private let quotaGuardStore: QuotaGuardStore?
@@ -17,6 +18,7 @@ public struct FleetView: View {
     private let onQuotaGuard: (() -> Void)?
     /// Open the live block terminal for a given slot (Finding #5 drill-in).
     private let onOpenTerminal: ((UUID) -> Void)?
+    private let onOpenThread: ((String) -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
 
@@ -25,6 +27,7 @@ public struct FleetView: View {
     public init(
         store: FleetStore,
         hostRepo: HostRepository? = nil,
+        chatRepo: ChatConversationRepository? = nil,
         loopStore: LoopStore? = nil,
         quotaGuardStore: QuotaGuardStore? = nil,
         hostHealthStore: HostHealthStore? = nil,
@@ -33,10 +36,12 @@ public struct FleetView: View {
         onDelete: @escaping (Host) -> Void,
         onQuotaGuard: (() -> Void)? = nil,
         onOpenTerminal: ((UUID) -> Void)? = nil,
+        onOpenThread: ((String) -> Void)? = nil,
         demoHosts: [Host] = []
     ) {
         self.store = store
         self.hostRepo = hostRepo
+        self.chatRepo = chatRepo
         self.demoHosts = demoHosts
         self.loopStore = loopStore
         self.quotaGuardStore = quotaGuardStore
@@ -46,6 +51,7 @@ public struct FleetView: View {
         self.onDelete = onDelete
         self.onQuotaGuard = onQuotaGuard
         self.onOpenTerminal = onOpenTerminal
+        self.onOpenThread = onOpenThread
     }
 
     private var reconnectableHosts: [Host] {
@@ -161,9 +167,25 @@ public struct FleetView: View {
         .task {
             startLiveStores()
             await refresh()
+#if DEBUG
+            // UI-test reseeding starts from the root task and can finish just
+            // after this destination first queries the repository. One bounded
+            // follow-up keeps the deterministic fixture honest without adding
+            // polling behavior to production Fleet.
+            if savedHosts.isEmpty, ProcessInfo.processInfo.environment["CONDUIT_UITEST_RESEED"] == "1" {
+                try? await Task.sleep(for: .seconds(1))
+                await refresh()
+            }
+#endif
         }
         .onChange(of: store.slots.count) {
             startLiveStores()
+            Task { await refresh() }
+        }
+        // Debug reseeding and a future external host import both write through the
+        // repository rather than FleetStore. Refresh the persistent host slice so
+        // an already-mounted Machines view never gets stuck on its empty state.
+        .onReceive(NotificationCenter.default.publisher(for: .conduitSavedHostsDidChange)) { _ in
             Task { await refresh() }
         }
     }
@@ -326,7 +348,10 @@ public struct FleetView: View {
 
     private func agentRow(_ a: AgentVendorStatus) -> some View {
         let running = a.loggedIn == true
-        return HStack(spacing: 11) {
+        return Button {
+            openRelatedThread(agent: a)
+        } label: {
+            HStack(spacing: 11) {
             initialTile(a.displayName)
             VStack(alignment: .leading, spacing: 1) {
                 Text(a.displayName)
@@ -348,12 +373,38 @@ public struct FleetView: View {
                 .font(.dsMonoPt(10.5))
                 .foregroundStyle(running ? t.ok : t.text4)
                 .frame(width: 52, alignment: .leading)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
         .accessibilityLabel("\(a.displayName), \(running ? "running" : "idle")")
+        .accessibilityHint("Opens this agent's latest related chat, or its terminal when none exists.")
+    }
+
+    private func openRelatedThread(agent: AgentVendorStatus) {
+        guard let slot = focusSlot else { return }
+        Haptics.selection()
+        guard let chatRepo, let onOpenThread else {
+            onOpenTerminal?(slot.id)
+            return
+        }
+        Task {
+            let conversation = await FleetThreadMapper.findConversation(
+                hostName: slot.hostName,
+                agentID: agent.agent,
+                cwd: slot.sessionViewModel.cwd,
+                chatRepo: chatRepo
+            )
+            await MainActor.run {
+                if let conversation {
+                    onOpenThread(conversation.id)
+                } else {
+                    onOpenTerminal?(slot.id)
+                }
+            }
+        }
     }
 
     /// Board's dark ">_" terminal tile + "Open terminal" + chevron.

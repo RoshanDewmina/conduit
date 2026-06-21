@@ -942,7 +942,9 @@ private struct InboxBoardCard: View {
                 .foregroundStyle(t.accent)
         } ?? Text("")
         let tail = bodyTail.map { Text(" " + $0).font(.dsSansPt(13)).foregroundStyle(t.text2) } ?? Text("")
-        return (lead + code + tail)
+        // `Text + Text` is deprecated on iOS 26+. Interpolation preserves the
+        // individual fonts and colors while remaining compatible with iOS 27.
+        return Text("\(lead)\(code)\(tail)")
             .lineSpacing(2)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel([bodyLead, codeFragment, bodyTail].compactMap { $0 }.joined(separator: " "))

@@ -8,6 +8,7 @@ public struct ConduitHomeView: View {
     private let fleetStore: FleetStore
     private let recentThreads: [ChatConversation]
     private let pendingApprovalCount: Int
+    private let profileEmail: String?
     private let onOpenSidebar: (() -> Void)?
     private let onNewChat: () -> Void
     private let onOpenInbox: () -> Void
@@ -21,6 +22,7 @@ public struct ConduitHomeView: View {
         fleetStore: FleetStore,
         recentThreads: [ChatConversation],
         pendingApprovalCount: Int,
+        profileEmail: String? = nil,
         onOpenSidebar: (() -> Void)? = nil,
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
@@ -30,6 +32,7 @@ public struct ConduitHomeView: View {
         self.fleetStore = fleetStore
         self.recentThreads = recentThreads
         self.pendingApprovalCount = pendingApprovalCount
+        self.profileEmail = profileEmail
         self.onOpenSidebar = onOpenSidebar
         self.onNewChat = onNewChat
         self.onOpenInbox = onOpenInbox
@@ -82,7 +85,7 @@ public struct ConduitHomeView: View {
 
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(Self.timeGreeting)
+            Text(timeGreeting)
                 .font(.dsEditorialPt(19))
                 .foregroundStyle(t.accent)
             Text(homeHeadline)
@@ -234,7 +237,7 @@ public struct ConduitHomeView: View {
         return pendingApprovalCount == 1 ? "1 agent needs you." : "\(pendingApprovalCount) agents need you."
     }
 
-    private static var timeGreeting: String {
+    private var timeGreeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
         let part: String
         switch hour {
@@ -243,7 +246,7 @@ public struct ConduitHomeView: View {
         case 17..<22: part = "Good evening"
         default: part = "Good evening"
         }
-        return "\(part), Roshan"
+        return profileEmail.map { "\(part), \($0)" } ?? part
     }
 }
 

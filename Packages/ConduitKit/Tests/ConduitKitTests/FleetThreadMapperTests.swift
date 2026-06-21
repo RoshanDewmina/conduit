@@ -76,4 +76,18 @@ struct FleetThreadMapperTests {
         )
         #expect(match?.title == "Active session")
     }
+
+    @Test("findConversation reaches legacy combined host labels")
+    func legacyHostLabel() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        _ = try await repo.createConversation(
+            title: "Legacy thread", agentID: "codex",
+            hostName: "Codex · prod-1", hostID: "h1", cwd: "/workspace"
+        )
+        let match = await FleetThreadMapper.findConversation(
+            hostName: "prod-1", agentID: "codex", cwd: "/workspace", chatRepo: repo
+        )
+        #expect(match?.title == "Legacy thread")
+    }
 }

@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import AccountKit
 import DesignSystem
 import ConduitCore
 import SecurityKit
@@ -23,10 +24,14 @@ public struct OnboardingRedesignView: View {
     let onSetupWorkspace: () -> Void
 
     @StateObject private var client: E2ERelayClient
+    private let accountSession: AccountSessionController?
     @State private var step: Int
     @State private var selectedLevel: OnboardingCautionLevel = .balanced
     @State private var pairingCode = ""
     @State private var didStartPairing = false
+    @State private var showDeviceBindingScanner = false
+    @State private var deviceBindingMessage: String?
+    @State private var deviceBindingIsError = false
 
     @AppStorage("conduit.onboarding.autonomyPreset") private var storedPreset: String = ""
     @Environment(\.conduitTokens) private var t
@@ -39,11 +44,13 @@ public struct OnboardingRedesignView: View {
         onAlreadyUseConduit: @escaping () -> Void = {},
         onSetupWorkspace: @escaping () -> Void = {},
         relayClient: E2ERelayClient? = nil,
+        accountSession: AccountSessionController? = nil,
         startStep: Int = 0
     ) {
         self.onContinue = onContinue
         self.onAlreadyUseConduit = onAlreadyUseConduit
         self.onSetupWorkspace = onSetupWorkspace
+        self.accountSession = accountSession
         let resolved = relayClient ?? E2ERelayClient(
             relayURL: RelaySettings.url(),
             pairingCode: PairingCrypto.generatePairingCode()
@@ -55,16 +62,22 @@ public struct OnboardingRedesignView: View {
     private var current: OnboardingRedesignStep { steps[step] }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            hero
-            ScrollView(.vertical, showsIndicators: false) {
-                primaryBlock
-                    .frame(maxWidth: 560, alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 24)
-                    .padding(.bottom, 24)
+        Group {
+            if let accountSession, accountSession.mode == nil {
+                AccountEntryView(account: accountSession, onComplete: {})
+            } else {
+                VStack(spacing: 0) {
+                    hero
+                    ScrollView(.vertical, showsIndicators: false) {
+                        primaryBlock
+                            .frame(maxWidth: 560, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 24)
+                            .padding(.bottom, 24)
+                    }
+                    footer
+                }
             }
-            footer
         }
         .background(t.bg.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
@@ -72,6 +85,25 @@ public struct OnboardingRedesignView: View {
             if steps[new].kind == .pair { startPairingIfNeeded() }
         }
         .onAppear { if current.kind == .pair { startPairingIfNeeded() } }
+        .sheet(isPresented: $showDeviceBindingScanner) {
+            OnboardingScanScreen(
+                onScan: { payload in
+                    showDeviceBindingScanner = false
+                    bindAccountDevice(scannedPayload: payload)
+                },
+                onUnavailable: { reason in
+                    showDeviceBindingScanner = false
+                    deviceBindingMessage = reason
+                    deviceBindingIsError = true
+                    Haptics.warning()
+                },
+                onEnterCodeInstead: {
+                    showDeviceBindingScanner = false
+                    deviceBindingMessage = "Use the QR scanner on a physical device to bind a daemon."
+                    deviceBindingIsError = true
+                }
+            )
+        }
     }
 
     // MARK: Hero (terracotta editorial header — shared across steps)
@@ -173,7 +205,14 @@ public struct OnboardingRedesignView: View {
         case .value:
             OnboardingValueRows().padding(.horizontal, 28).padding(.top, 12)
         case .pair:
-            OnboardingPairingBlock(client: client, pairingCode: pairingCode)
+            OnboardingPairingBlock(
+                client: client,
+                pairingCode: pairingCode,
+                canBindAccountDevice: accountSession?.isStandardAccount == true,
+                deviceBindingMessage: deviceBindingMessage,
+                deviceBindingIsError: deviceBindingIsError,
+                onBindAccountDevice: { showDeviceBindingScanner = true }
+            )
                 .padding(.horizontal, 24)
         case .policy:
             OnboardingPolicyCards(selectedLevel: $selectedLevel).padding(.horizontal, 24)
@@ -239,6 +278,32 @@ public struct OnboardingRedesignView: View {
         OnboardingPolicy.markPending(selectedLevel)
         Haptics.success()
         onContinue()
+    }
+
+    private func bindAccountDevice(scannedPayload: String) {
+        guard let challenge = OnboardingPairing.extractDeviceBinding(fromScanned: scannedPayload) else {
+            deviceBindingMessage = "That QR code can pair the relay, but it is not an account device-binding challenge."
+            deviceBindingIsError = true
+            Haptics.error()
+            return
+        }
+        guard let accountSession else { return }
+        Task {
+            do {
+                try await accountSession.bindDaemonDevice(
+                    challengeID: challenge.challengeID,
+                    secret: challenge.secret,
+                    backendURL: challenge.backendURL
+                )
+                deviceBindingMessage = "Device authorized. The daemon will finish binding without your password."
+                deviceBindingIsError = false
+                Haptics.success()
+            } catch {
+                deviceBindingMessage = "Couldn't authorize this device. Check the account session and try again."
+                deviceBindingIsError = true
+                Haptics.error()
+            }
+        }
     }
 }
 
@@ -321,6 +386,10 @@ private struct OnboardingValueRows: View {
 private struct OnboardingPairingBlock: View {
     @ObservedObject var client: E2ERelayClient
     let pairingCode: String
+    let canBindAccountDevice: Bool
+    let deviceBindingMessage: String?
+    let deviceBindingIsError: Bool
+    let onBindAccountDevice: () -> Void
 
     @Environment(\.conduitTokens) private var t
 
@@ -371,6 +440,32 @@ private struct OnboardingPairingBlock: View {
                 .foregroundStyle(isPaired ? t.accent : t.text4)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 8)
+
+            if canBindAccountDevice {
+                Button(action: onBindAccountDevice) {
+                    Label("bind this daemon to my account", systemImage: "qrcode.viewfinder")
+                        .font(.dsSansPt(13, weight: .semibold))
+                        .foregroundStyle(t.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 18)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("accountDeviceBinding")
+                Text("Scans a one-time daemon challenge. Conduit never asks for your account password on the host.")
+                    .font(.dsSansPt(11.5))
+                    .foregroundStyle(t.text4)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+                if let deviceBindingMessage {
+                    Text(deviceBindingMessage)
+                        .font(.dsSansPt(12, weight: .medium))
+                        .foregroundStyle(deviceBindingIsError ? t.danger : t.ok)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                }
+            }
         }
         .onChange(of: client.pairingState) { _, state in
             switch state {

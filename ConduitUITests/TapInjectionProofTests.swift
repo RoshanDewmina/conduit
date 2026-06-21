@@ -17,11 +17,14 @@ final class TapInjectionProofTests: XCTestCase {
     }
 
     /// Launch the app in a deterministic, freshly-reseeded state, optionally
-    /// landing directly on a tab (CONDUIT_TAB: inbox/fleet/activity/settings).
-    private func launchReseeded(tab: String? = nil) -> XCUIApplication {
+    /// landing directly on a supported sidebar destination.  Destinations are a
+    /// DEBUG-only test seam in AppRoot; production navigation remains the
+    /// sidebar/New Chat shell.
+    private func launchReseeded(destination: String? = nil, drawerOpen: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["CONDUIT_UITEST_RESEED"] = "1"
-        if let tab { app.launchEnvironment["CONDUIT_TAB"] = tab }
+        if let destination { app.launchEnvironment["CONDUIT_DESTINATION"] = destination }
+        if drawerOpen { app.launchEnvironment["CONDUIT_DRAWER_OPEN"] = "1" }
         app.launch()
         return app
     }
@@ -49,42 +52,37 @@ final class TapInjectionProofTests: XCTestCase {
         }
     }
 
-    /// Cleanest proof of HID/event injection: switching tabs. Independent of any
-    /// approval-decision wiring — if the tap lands, the Inbox-only breadcrumb leaves.
+    /// Cleanest proof of HID/event injection: switching sidebar destinations.
+    /// Independent of approval-decision wiring — it proves a tap lands, closes
+    /// the compact drawer, and renders the selected destination.
     func testTapInjectionViaTabSwitch() throws {
-        throw XCTSkip("IA migration: asserts the superseded tab-bar nav (Settings/Inbox tab buttons, 'inbox' default header). The app home is now the sidebar/New Chat shell. Re-enable with sidebar-shell navigation once that IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
-        let app = launchReseeded()
+        let app = launchReseeded(destination: "inbox", drawerOpen: true)
         defer { app.terminate() }
 
-        // The redesign replaced the "agent approvals" breadcrumb with a lowercase
-        // "inbox" header (InboxView). Assert on that as the inbox-tab marker.
-        let inboxBreadcrumb = app.staticTexts["inbox"]
-        XCTAssertTrue(inboxBreadcrumb.waitForExistence(timeout: 30),
-                      "Inbox should be the default tab with the 'inbox' header")
+        let inboxTitle = app.staticTexts["Inbox"]
+        XCTAssertTrue(inboxTitle.waitForExistence(timeout: 30),
+                      "Reseeded sidebar Inbox should render its title")
 
-        let settingsTab = app.buttons["Settings"]
-        // 20s, not 5s: a cold relaunch on a contended sim (right after a build or the
-        // prior test's teardown) can take >5s to lay out the tab bar — that timeout
-        // was the only thing flaking here; the injection itself is reliable.
-        XCTAssertTrue(settingsTab.waitForExistence(timeout: 20), "Settings tab button should exist")
-        settingsTab.tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 20), "Settings sidebar row should exist")
+        settings.tap()
 
-        XCTAssertTrue(inboxBreadcrumb.waitForNonExistence(timeout: 10),
-                      "After tapping Settings the Inbox breadcrumb should disappear — proves event injection")
+        XCTAssertTrue(app.staticTexts["GENERAL"].waitForExistence(timeout: 10),
+                      "After tapping Settings, its General section should render")
 
-        // And back, to prove repeated injection.
-        let inboxTab = app.buttons["Inbox"]
-        XCTAssertTrue(inboxTab.waitForExistence(timeout: 20), "Inbox tab button should exist")
-        inboxTab.tap()
-        XCTAssertTrue(inboxBreadcrumb.waitForExistence(timeout: 10),
-                      "Tapping Inbox should return to the approvals breadcrumb")
+        // Settings intentionally uses its in-content back affordance, rather
+        // than fighting its custom header with a second navigation bar.
+        let back = app.buttons["Back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 10), "Settings should expose its Back control")
+        back.tap()
+        XCTAssertTrue(inboxTitle.waitForExistence(timeout: 10),
+                      "Settings Back should return to the previous Inbox destination")
     }
 
     /// The real verification goal: tap APPROVE on a seeded pending card and confirm
     /// the decision applies (the card leaves PENDING → APPROVE-button count drops).
     func testApproveDecisionApplies() throws {
-        throw XCTSkip("IA migration: depends on Inbox being the default tab surface; the home is now the sidebar/New Chat shell, so the seeded approval cards aren't reachable via the old nav. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
-        let app = launchReseeded()
+        let app = launchReseeded(destination: "inbox")
         defer { app.terminate() }
 
         let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Approve"))
@@ -108,10 +106,15 @@ final class TapInjectionProofTests: XCTestCase {
     /// Phase-5 app-lock opt-in: Settings → Security → "Require Face ID on launch"
     /// starts OFF (reseed clears `appLockEnabled`) and the toggle flips it ON.
     func testFaceIDToggleOptIn() throws {
-        throw XCTSkip("IA migration: CONDUIT_TAB=settings no longer lands on a Settings tab; Settings is now a sidebar destination. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
-        let app = launchReseeded(tab: "settings")
+        let app = launchReseeded(destination: "settings")
         defer { app.terminate() }
 
+        let securityCard = app.buttons["Security"].firstMatch
+        if securityCard.waitForExistence(timeout: 10) {
+            securityCard.tap()
+        } else {
+            app.staticTexts["Security"].firstMatch.tap()
+        }
         let toggle = app.switches["Require Face ID on launch"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 30),
                       "Settings → Security should expose the Face ID app-lock toggle")
@@ -139,11 +142,14 @@ final class TapInjectionProofTests: XCTestCase {
     /// which (for a password host) presents the connect prompt. Proves the reconnect
     /// wiring without needing a live SSH endpoint.
     func testSavedHostReconnectPresentsPrompt() throws {
-        throw XCTSkip("IA migration: CONDUIT_TAB=fleet no longer lands on a Fleet tab; Fleet is now a sidebar destination. Re-enable with sidebar navigation once the IA lands — see docs/KNOWN_ISSUES.md (UI-IA-1).")
-        let app = launchReseeded(tab: "fleet")
+        let app = launchReseeded(destination: "machines")
         defer { app.terminate() }
 
-        let savedHeader = app.staticTexts["Saved hosts"]
+        // The design system renders section labels in uppercase; match the
+        // semantic label case-insensitively rather than asserting its casing.
+        let savedHeader = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Saved hosts")
+        ).firstMatch
         XCTAssertTrue(savedHeader.waitForExistence(timeout: 30),
                       "Fleet should list the seeded saved hosts under a 'Saved hosts' section")
 
@@ -153,10 +159,10 @@ final class TapInjectionProofTests: XCTestCase {
             .matching(NSPredicate(format: "label CONTAINS[c] %@", "Dev VPS")).firstMatch
         XCTAssertTrue(devVPS.waitForExistence(timeout: 10),
                       "Seeded 'Dev VPS' host row should exist")
-        // Tap the row cell, not the inner Text: tapping the static label inside a
-        // SwiftUI List-row Button doesn't reliably activate the button.
-        let hostCell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", "Dev VPS")).firstMatch
-        if hostCell.exists { hostCell.tap() } else { app.staticTexts["Dev VPS"].tap() }
+        let reconnect = app.buttons["Reconnect to Dev VPS"]
+        XCTAssertTrue(reconnect.waitForExistence(timeout: 10),
+                      "Seeded host should expose a labelled reconnect control")
+        reconnect.tap()
 
         // The seeded hosts use password auth → openSession presents PasswordPromptView.
         // Accept any of its stable elements as proof the prompt presented.
@@ -195,7 +201,7 @@ final class TapInjectionProofTests: XCTestCase {
             app.launchEnvironment["CONDUIT_TEST_PORT"] = runnerEnv["CONDUIT_TEST_PORT"] ?? "22"
             app.launchEnvironment["CONDUIT_TEST_USER"] = runnerEnv["CONDUIT_TEST_USER"] ?? NSUserName()
             app.launchEnvironment["CONDUIT_TEST_PW"] = testPassword
-            app.launchEnvironment["CONDUIT_TAB"] = "fleet"
+            app.launchEnvironment["CONDUIT_DESTINATION"] = "machines"
             app.launch()
         }
         defer { app.terminate() }

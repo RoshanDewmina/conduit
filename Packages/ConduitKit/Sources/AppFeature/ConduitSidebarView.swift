@@ -7,14 +7,17 @@ import ConduitCore
 public struct ConduitSidebarView: View {
     @Bindable var state: SidebarShellState
     let onNavigate: (SidebarDestination) -> Void
+    let profileLabel: String
 
     @Environment(\.conduitTokens) private var t
 
     public init(
         state: SidebarShellState,
+        profileLabel: String = "Conduit",
         onNavigate: @escaping (SidebarDestination) -> Void
     ) {
         self.state = state
+        self.profileLabel = profileLabel
         self.onNavigate = onNavigate
     }
 
@@ -63,7 +66,7 @@ public struct ConduitSidebarView: View {
             HStack(spacing: 13) {
                 SidebarBrandMark()
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Roshan")
+                    Text(profileLabel)
                         .font(.dsDisplayPt(20, weight: .bold))
                         .tracking(-0.02 * 20)
                         .foregroundStyle(t.text)

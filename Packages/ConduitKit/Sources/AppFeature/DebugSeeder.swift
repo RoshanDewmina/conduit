@@ -38,6 +38,7 @@ public enum DebugSeeder {
             try? await env.hostRepo.delete(id: host.id)
         }
         await seedHosts(env.hostRepo)
+        NotificationCenter.default.post(name: .conduitSavedHostsDidChange, object: nil)
         UserDefaults.standard.removeObject(forKey: "appLockEnabled")
         UserDefaults.standard.set(true, forKey: "onboardingSeen")
         UserDefaults.standard.set(true, forKey: seededKey)

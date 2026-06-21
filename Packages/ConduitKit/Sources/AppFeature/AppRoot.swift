@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import Observation
 import ConduitCore
+import AccountKit
 import PersistenceKit
 import SecurityKit
 import SSHTransport
@@ -40,6 +41,7 @@ public final class AppEnvironment {
     public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
     public let e2eRelayClient: E2ERelayClient
+    public let accountSession: AccountSessionController
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -78,6 +80,9 @@ public final class AppEnvironment {
         if E2ERelayClient.hasStoredPairing {
             e2eRelayClient.restoreStoredPairing()
         }
+        self.accountSession = AccountSessionController(
+            client: SupabaseAccountClient(configuration: .fromBundle())
+        )
     }
 
     public func aiClient(provider: AIProvider? = nil, managedOpenRouterKey: String? = nil) async -> (any AIClient)? {
@@ -171,7 +176,6 @@ public struct AppRoot: View {
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
-    @State private var showingHostedAgents = false
     @State private var showingRelayWorkspaceUnavailable = false
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
@@ -265,6 +269,11 @@ public struct AppRoot: View {
         }
         .task { watchConnector.activate() }
         .task { await pm.load() }
+        .task {
+            if case .ready(let env) = environment {
+                await env.accountSession.restore()
+            }
+        }
         .task {
             if case .ready(let env) = environment {
                 await configureCloudServices(env: env)
@@ -363,6 +372,11 @@ public struct AppRoot: View {
                     status: ChatArtifact.Status(rawValue: event.status) ?? .running
                 )
                 try? await env.chatRepo.upsertArtifact(artifact)
+                NotificationCenter.default.post(
+                    name: .conduitChatArtifactPersisted,
+                    object: nil,
+                    userInfo: ["conversationID": turn.conversationID]
+                )
             }
         }
         // Relay-delivered approvals: the E2E bridge posts conduitE2EApprovalReceived,
@@ -457,7 +471,8 @@ public struct AppRoot: View {
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
                     },
-                    relayClient: env.e2eRelayClient
+                    relayClient: env.e2eRelayClient,
+                    accountSession: env.accountSession
                 )
             }
         }
@@ -486,21 +501,7 @@ public struct AppRoot: View {
                 AddHostView(
                     repository: env.hostRepo,
                     keyStore: env.keyStore,
-                    hasCloudEntitlement: pm.hasCloudEntitlement,
-                    cloudUpgradeEligible: pm.externalStripeEligible,
                     onCancel: { addHostPresented = false },
-                    onUseHosted: {
-                        // Dismiss the add-host sheet, then open the Hosted Agents
-                        // screen so the user lands on the cloud surface directly
-                        // (a sheet can't present over another mid-dismiss, so we
-                        // sequence it after a short delay — same pattern as
-                        // openSession below).
-                        addHostPresented = false
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(350))
-                            showingHostedAgents = true
-                        }
-                    },
                     onConnectAndSave: { host in
                         addHostPresented = false
                         workspacesRevision = UUID()
@@ -510,13 +511,6 @@ public struct AppRoot: View {
                         }
                     }
                 )
-            }
-        }
-        .sheet(isPresented: $showingHostedAgents) {
-            if let agentStore {
-                NavigationStack {
-                    AgentsView(store: agentStore, statusChannel: fleetStore.slots.first?.channel)
-                }
             }
         }
         .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
@@ -882,7 +876,7 @@ public struct AppRoot: View {
                 t.bg.ignoresSafeArea()
 
                 // Sidebar pinned left, revealed as the content slides away.
-                ConduitSidebarView(state: sidebarState) { dest in
+                ConduitSidebarView(state: sidebarState, profileLabel: profileLabel(for: env)) { dest in
                     sidebarState.navigate(to: dest)
                 }
                 .frame(width: drawerWidth)
@@ -967,7 +961,7 @@ public struct AppRoot: View {
         ZStack {
             t.bg.ignoresSafeArea()
             NavigationSplitView {
-                ConduitSidebarView(state: sidebarState) { dest in
+                ConduitSidebarView(state: sidebarState, profileLabel: profileLabel(for: env)) { dest in
                     sidebarState.navigate(to: dest)
                 }
             } detail: {
@@ -1043,6 +1037,7 @@ public struct AppRoot: View {
         FleetView(
             store: fleetStore,
             hostRepo: env.hostRepo,
+            chatRepo: env.chatRepo,
             loopStore: env.loopStore,
             quotaGuardStore: env.quotaGuardStore,
             hostHealthStore: env.hostHealthStore,
@@ -1053,6 +1048,9 @@ public struct AppRoot: View {
             onOpenTerminal: { slotID in
                 selectFleetSlot(slotID)
                 isShowingLiveSession = true
+            },
+            onOpenThread: { id in
+                sidebarState.navigate(to: .thread(id: id))
             }
         )
         .id(workspacesRevision)
@@ -1068,6 +1066,7 @@ public struct AppRoot: View {
             sshKeyStore: env.keyStore,
             daemonChannel: daemonChannel,
             e2eRelayClient: env.e2eRelayClient,
+            accountSession: env.accountSession,
             quotaGuardStore: env.quotaGuardStore,
             onResetApp: {
                 let db = env.database
@@ -1088,6 +1087,9 @@ public struct AppRoot: View {
                     }
                 }
             },
+            onAccountSignedOut: {
+                onboardingSeen = false
+            },
             sidebarShellState: sidebarState
         )
     }
@@ -1096,7 +1098,7 @@ public struct AppRoot: View {
     private func sidebarDetail(for dest: SidebarDestination, env: AppEnvironment) -> some View {
         switch dest {
         case .home:
-            homeDestination()
+            homeDestination(env: env)
         case .newChat:
             NewChatTabView(
                 agents: dispatchAgents(),
@@ -1132,17 +1134,22 @@ public struct AppRoot: View {
         }
     }
 
-    private func homeDestination() -> some View {
+    private func homeDestination(env: AppEnvironment) -> some View {
         ConduitHomeView(
             fleetStore: fleetStore,
             recentThreads: sidebarState.recentThreads,
             pendingApprovalCount: activeInboxViewModel.approvals.filter(\.isPending).count,
+            profileEmail: env.accountSession.email,
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
             onOpenMachines: { sidebarState.navigate(to: .machines) },
             onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) }
         )
+    }
+
+    private func profileLabel(for env: AppEnvironment) -> String {
+        env.accountSession.email ?? (env.accountSession.isOfflineSelfHosted ? "Self-hosted offline" : "Conduit")
     }
 
     private var homeSidebarAction: (() -> Void)? {
@@ -1152,7 +1159,8 @@ public struct AppRoot: View {
 
     private func configureCloudServices(env: AppEnvironment) async {
         let url = Self.pushBackendURL()
-        pm.configure(backendURL: url)
+        await env.accountSession.restore()
+        pm.configure(backendURL: url, accountAccessToken: env.accountSession.session?.accessToken)
         await pm.refreshCloudEntitlement(backendURL: url)
         if agentStore == nil {
             agentStore = AgentStore(
@@ -1561,6 +1569,11 @@ public struct AppRoot: View {
     }
 }
 
+extension Notification.Name {
+    static let conduitChatArtifactPersisted = Notification.Name("conduitChatArtifactPersisted")
+    static let conduitSavedHostsDidChange = Notification.Name("conduitSavedHostsDidChange")
+}
+
 private struct LaunchLockView: View {
     let onUnlock: () async -> Void
     @Environment(\.conduitTokens) private var t
@@ -1596,9 +1609,11 @@ private struct SettingsWithLibraryView: View {
     var sshKeyStore: KeyStore? = nil
     var daemonChannel: DaemonChannel? = nil
     var e2eRelayClient: E2ERelayClient? = nil
+    let accountSession: AccountSessionController
     var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
     var onEmergencyStop: (() -> Void)? = nil
+    var onAccountSignedOut: (() -> Void)? = nil
     // Sidebar back navigation — use @Bindable so the mutation goes through the
     // observable directly, avoiding closure-capture staleness through deep view trees.
     @Bindable var sidebarShellState: SidebarShellState
@@ -1616,6 +1631,8 @@ private struct SettingsWithLibraryView: View {
             e2eRelayClient: e2eRelayClient,
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
+            accountSession: accountSession,
+            onAccountSignedOut: onAccountSignedOut,
             onBack: {
                 sidebarShellState.returnToPreviousDestination()
             }

@@ -21,9 +21,9 @@ public struct AddHostView: View {
     let onCancel: () -> Void
     let onConnectAndSave: (Host) -> Void
 
-    // MARK: - Hosted / Conduit Cloud
-    // Entitlement + upgrade-eligibility are injected (the entitlement source
-    // lives in SettingsFeature, which this module must not depend on).
+    // MARK: - V2 retained capability
+    // The underlying hosted-runtime implementation stays compiled for V2, but
+    // V1 deliberately offers only a user-owned host in this entry flow.
     private let hasCloudEntitlement: Bool
     private let cloudUpgradeEligible: Bool
     private let onUseHosted: (() -> Void)?
@@ -120,12 +120,6 @@ public struct AddHostView: View {
                 // ── Header
                 DSDetailHeader("add host", onBack: onCancel)
 
-                // ── Source mode picker (BYO SSH vs Conduit Cloud)
-                modePicker
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 4)
-
                 Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
                     .font(.dsMonoPt(11))
                     .foregroundStyle(t.text3)
@@ -134,7 +128,7 @@ public struct AddHostView: View {
                     .padding(.bottom, 8)
 
                 // ── Clipboard banner (V3) — BYO only
-                if mode == .byo, showClipboardBanner, let result = clipboardBannerResult {
+                if showClipboardBanner, let result = clipboardBannerResult {
                     clipboardBanner(result)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
@@ -144,56 +138,44 @@ public struct AddHostView: View {
                 // ── Body
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        if mode == .byo {
-                            // ── Paste field section
-                            pasteSection
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
+                        // ── Paste field section
+                        pasteSection
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
 
-                            // ── Authentication (inline — Finding #12)
-                            authSection
-                                .padding(.horizontal, 16)
-                                .padding(.top, 16)
+                        // ── Authentication (inline — Finding #12)
+                        authSection
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
 
-                            // ── Advanced disclosure (tmux · startup · full editor)
-                            advancedSection
-                                .padding(.horizontal, 16)
-                                .padding(.top, 16)
+                        // ── Advanced disclosure (tmux · startup · full editor)
+                        advancedSection
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
 
-                            // ── Error
-                            if let err = saveError {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(t.danger)
-                                    Text(err)
-                                        .font(.dsSansPt(13))
-                                        .foregroundStyle(t.danger)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
+                        // ── Error
+                        if let err = saveError {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(t.danger)
+                                Text(err)
+                                    .font(.dsSansPt(13))
+                                    .foregroundStyle(t.danger)
                             }
-                        } else {
-                            // ── Conduit Cloud panel
-                            hostedPanel
-                                .padding(.horizontal, 16)
-                                .padding(.top, 12)
-                                .transition(.opacity)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
                         }
 
                         Spacer(minLength: 40)
                     }
                 }
 
-                // ── Footer CTA — BYO only (hosted has its own in-panel CTA)
-                if mode == .byo {
-                    footerCTA
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                footerCTA
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .navigationBarHidden(true)
-        .animation(.easeInOut(duration: 0.2), value: mode)
         .animation(.easeInOut(duration: 0.2), value: showClipboardBanner)
         .animation(.easeInOut(duration: 0.2), value: parsed != nil)
         .animation(.easeInOut(duration: 0.2), value: advancedExpanded)

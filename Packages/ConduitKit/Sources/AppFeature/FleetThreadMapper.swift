@@ -12,7 +12,12 @@ public struct FleetThreadMapper {
     ) async -> ChatConversation? {
         let recent = try? await chatRepo.recent(limit: 100)
         return recent?.first { conv in
-            conv.hostName == hostName
+            let isCurrentHost = conv.hostName == hostName
+            // Pre-V1 conversations saved the combined display name
+            // "Agent · host". Keep those durable threads reachable while all
+            // new conversations save the canonical host name.
+            let isLegacyHost = conv.hostName.hasSuffix(" · \(hostName)")
+            return (isCurrentHost || isLegacyHost)
                 && conv.agentID == agentID
                 && conv.cwd == cwd
                 && conv.status == .active
