@@ -8,11 +8,13 @@ import Foundation
 /// be exercised against your own `push-backend` deployment.
 public enum RelaySettings {
 
-    // TODO: swap for wss://relay.conduit.dev once the production relay is deployed
-    // (Task #6). Temporary: points at the hermes-box Tailscale Funnel relay so
-    // pairing is zero-config — users never set this; the Settings override is for
+    // The live hosted relay (Cloud Run) — the same push-backend service the app
+    // targets via CONDUIT_PUSH_BACKEND_URL (push-backend doubles as the blind
+    // /ws/relay). Pairing is zero-config: the daemon's `conduitd pair` defaults to
+    // this same host (see relay_install_helper.go), so phone + daemon rendezvous
+    // out of the box. Users never set this; the Settings override is for
     // self-hosters running their own relay.
-    public static let defaultURLString = "wss://hermes-box.tail8c17ee.ts.net:8443"
+    public static let defaultURLString = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
     private static let overrideKey = "conduit.relayURL"
 
     /// The configured relay URL string (override → env → default).
