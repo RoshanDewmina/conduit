@@ -11,6 +11,7 @@ public struct AccountEntryView: View {
     private let onComplete: () -> Void
 
     @State private var route: Route = .choice
+    @State private var name = ""
     @State private var email = ""
     @State private var password = ""
     @State private var isWorking = false
@@ -22,7 +23,7 @@ public struct AccountEntryView: View {
     @Environment(\.conduitTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum Route { case choice, signIn, signUp }
+    private enum Route { case choice, signIn, signUp, offline }
 
     public init(account: AccountSessionController, onComplete: @escaping () -> Void) {
         _account = Bindable(account)
@@ -36,7 +37,7 @@ public struct AccountEntryView: View {
                     .font(.dsMonoPt(11, weight: .bold))
                     .tracking(2)
                     .foregroundStyle(t.text3)
-                Text(route == .choice ? "Choose how\nyou connect." : (route == .signUp ? "Create your\nConduit account." : "Welcome back."))
+                Text(headline)
                     .font(.dsDisplayPt(34, weight: .heavy))
                     .foregroundStyle(t.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -45,10 +46,10 @@ public struct AccountEntryView: View {
                     .foregroundStyle(t.text3)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if route == .choice {
-                    choiceCards
-                } else {
-                    credentialsForm
+                switch route {
+                case .choice:  choiceCards
+                case .offline: offlineForm
+                default:       credentialsForm
                 }
 
                 if let message {
@@ -74,6 +75,15 @@ public struct AccountEntryView: View {
         }
     }
 
+    private var headline: String {
+        switch route {
+        case .choice:  "Choose how\nyou connect."
+        case .signUp:  "Create your\nConduit account."
+        case .signIn:  "Welcome back."
+        case .offline: "What should we\ncall you?"
+        }
+    }
+
     private var subtitle: String {
         switch route {
         case .choice:
@@ -82,6 +92,8 @@ public struct AccountEntryView: View {
             "Email confirmation is required. Your password is never shared with conduitd."
         case .signIn:
             "Use the email and password for your Conduit account."
+        case .offline:
+            "Your name personalizes the app on this device. No account, no Supabase — you pair directly with your own host."
         }
     }
 
@@ -103,11 +115,9 @@ public struct AccountEntryView: View {
             .accessibilityIdentifier("accountStandardChoice")
 
             Button {
-                Task {
-                    await account.useSelfHostedOffline()
-                    Haptics.success()
-                    onComplete()
-                }
+                Haptics.selection()
+                route = .offline
+                message = nil
             } label: {
                 accountChoiceCard(
                     title: "Self-hosted offline",
@@ -151,8 +161,57 @@ public struct AccountEntryView: View {
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(emphasized ? t.accent.opacity(0.55) : t.border, lineWidth: 1))
     }
 
+    @ViewBuilder
+    private func labeledField(_ label: String) -> some View {
+        Text(label).font(.dsMonoPt(10, weight: .medium)).tracking(1).foregroundStyle(t.text4)
+    }
+
+    private var offlineForm: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                labeledField("YOUR NAME")
+                TextField("Ada Lovelace", text: $name)
+                    .textContentType(.name)
+                    .textInputAutocapitalization(.words)
+                    .padding(13)
+                    .background(t.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                    .accessibilityIdentifier("offlineNameField")
+            }
+            DSButton("continue", variant: .primary, size: .lg, isLoading: isWorking, fullWidth: true) {
+                Task {
+                    isWorking = true
+                    await account.useSelfHostedOffline(name: name)
+                    isWorking = false
+                    Haptics.success()
+                    onComplete()
+                }
+            }
+            .disabled(isWorking || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("offlineContinue")
+
+            Button("Back") { Haptics.selection(); route = .choice; message = nil }
+                .font(.dsSansPt(13, weight: .semibold))
+                .foregroundStyle(t.accent)
+        }
+        .padding(16)
+        .background(t.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
     private var credentialsForm: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if route == .signUp {
+                VStack(alignment: .leading, spacing: 7) {
+                    labeledField("YOUR NAME")
+                    TextField("Ada Lovelace", text: $name)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .padding(13)
+                        .background(t.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                        .accessibilityIdentifier("accountNameField")
+                }
+            }
             VStack(alignment: .leading, spacing: 7) {
                 Text("EMAIL").font(.dsMonoPt(10, weight: .medium)).tracking(1).foregroundStyle(t.text4)
                 TextField("you@example.com", text: $email)
@@ -174,7 +233,12 @@ public struct AccountEntryView: View {
             DSButton(route == .signUp ? "create account" : "sign in", variant: .primary, size: .lg, isLoading: isWorking, fullWidth: true) {
                 Task { await submitCredentials() }
             }
-            .disabled(isWorking || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
+            .disabled(
+                isWorking
+                || (route == .signUp && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || password.isEmpty
+            )
             .accessibilityIdentifier(route == .signUp ? "accountSignUp" : "accountSignIn")
 
             HStack {
@@ -237,7 +301,7 @@ public struct AccountEntryView: View {
         defer { isWorking = false }
         do {
             if route == .signUp {
-                let result = try await account.signUp(email: email, password: password)
+                let result = try await account.signUp(name: name, email: email, password: password)
                 if result.confirmationRequired {
                     message = "Check your email to confirm your account, then sign in."
                     messageIsError = false

@@ -111,6 +111,7 @@ public struct ConduitSidebarView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New chat")
+        .coachmarkAnchor("newChat")
     }
 
     // MARK: - Search (board hides it, but functionality is preserved)
@@ -151,6 +152,7 @@ public struct ConduitSidebarView: View {
                 selected: state.selectedDestination == .needsAttention,
                 action: { onNavigate(.needsAttention) }
             )
+            .coachmarkAnchor("inbox")
             SidebarNavRow(
                 icon: "desktopcomputer",
                 title: "Machines",
@@ -158,6 +160,7 @@ public struct ConduitSidebarView: View {
                 selected: state.selectedDestination == .machines,
                 action: { onNavigate(.machines) }
             )
+            .coachmarkAnchor("terminal")
             SidebarNavRow(
                 icon: "gearshape",
                 title: "Settings",
@@ -165,6 +168,7 @@ public struct ConduitSidebarView: View {
                 selected: state.selectedDestination == .settings,
                 action: { onNavigate(.settings) }
             )
+            .coachmarkAnchor("settings")
         }
     }
 

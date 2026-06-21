@@ -183,6 +183,29 @@ public struct AppRoot: View {
     @State private var relayBridgeIsActive: Bool = false
     @State private var relayHostName: String?
     @State private var sidebarState = SidebarShellState()
+    @State private var coachTour = CoachmarkTourState(steps: AppRoot.coachmarkSteps)
+
+    /// One-time interactive tour shown after onboarding. Targets resolve against
+    /// the sidebar anchors; steps with an unresolved target render centered.
+    private static let coachmarkSteps: [CoachmarkStep] = [
+        CoachmarkStep(id: "newChat", targetID: "newChat",
+                      title: "Start a new thread",
+                      body: "Tap here to spin up a fresh chat and dispatch an agent on one of your machines.",
+                      systemImage: "plus.bubble"),
+        CoachmarkStep(id: "inbox", targetID: "inbox",
+                      title: "Approvals live here",
+                      body: "Risky commands and spend limits that need your sign-off appear in the Inbox — approve or reject in a tap.",
+                      usesPixelBoxHero: true),
+        CoachmarkStep(id: "terminal", targetID: "terminal",
+                      title: "Your machines & terminal",
+                      body: "Connect a machine to open a live, Warp-style terminal and watch agents work in real time.",
+                      systemImage: "desktopcomputer"),
+        CoachmarkStep(id: "settings", targetID: "settings",
+                      title: "You're all set",
+                      body: "Connection, security, and billing all live in Settings. Enjoy Conduit!",
+                      systemImage: "checkmark.circle",
+                      primaryActionTitle: "Got it"),
+    ]
 
     private var isPro: Bool {
         #if DEBUG
@@ -471,6 +494,12 @@ public struct AppRoot: View {
                     onSetupWorkspace: {
                         showingProvisioningWizard = true
                     },
+                    onEnableSSH: {
+                        // Optional SSH onboarding step → finish onboarding and land
+                        // on Machines, where "Add a machine" lives (in-app keygen).
+                        onboardingSeen = true
+                        sidebarState.navigate(to: .machines)
+                    },
                     relayClient: env.e2eRelayClient,
                     accountSession: env.accountSession
                 )
@@ -624,6 +653,16 @@ public struct AppRoot: View {
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
+        }
+        // One-time interactive coach-mark tour, shown once the app shell is up.
+        .coachmarkTour(coachTour)
+        .task {
+            guard onboardingSeen, !CoachmarkTourState.hasSeenTour else { return }
+            // Let the shell settle; open the drawer on compact so sidebar anchors
+            // resolve, then start. Targets that aren't on-screen render centered.
+            if horizontalSizeClass != .regular { openDrawer() }
+            try? await Task.sleep(for: .milliseconds(550))
+            coachTour.start()
         }
     }
 
@@ -1149,7 +1188,10 @@ public struct AppRoot: View {
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {
-        env.accountSession.email ?? (env.accountSession.isOfflineSelfHosted ? "Self-hosted offline" : "Conduit")
+        // Prefer the user's name (captured at onboarding for both account and
+        // offline users), then fall back to email, then a neutral default.
+        if let name = env.accountSession.displayName { return name }
+        return env.accountSession.email ?? (env.accountSession.isOfflineSelfHosted ? "Self-hosted offline" : "Conduit")
     }
 
     private var homeSidebarAction: (() -> Void)? {

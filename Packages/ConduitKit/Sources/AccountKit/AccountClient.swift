@@ -7,10 +7,22 @@ import SecurityKit
 /// network project or credentials.
 public protocol AccountClient: Sendable {
     func signUp(email: String, password: String) async throws -> AccountSignUpResult
+    /// Sign up carrying the user's display name (stored in the account's
+    /// `user_metadata.name`). A protocol requirement with a default below, so
+    /// existing conformers (tests/mocks) keep working while Supabase overrides it.
+    func signUp(name: String, email: String, password: String) async throws -> AccountSignUpResult
     func signIn(email: String, password: String) async throws -> AccountSession
     func restoreSession(_ session: AccountSession) async throws -> AccountSession
     func requestPasswordReset(email: String, redirectURL: URL) async throws
     func completePasswordReset(callbackURL: URL, newPassword: String) async throws -> AccountSession
+}
+
+public extension AccountClient {
+    // Default: ignore the name (offline/mock/test conformers). SupabaseAccountClient
+    // overrides this to persist it into user_metadata.
+    func signUp(name: String, email: String, password: String) async throws -> AccountSignUpResult {
+        try await signUp(email: email, password: password)
+    }
 }
 
 public enum AccountMode: String, Codable, Sendable, Equatable {
@@ -218,6 +230,26 @@ public final class AccountSessionController {
     public var isStandardAccount: Bool { mode == .standard && session != nil }
     public var isOfflineSelfHosted: Bool { mode == .selfHostedOffline }
 
+    /// The user's display name, captured during onboarding and used to personalize
+    /// the app (sidebar, settings). Persisted locally so it works for both standard
+    /// accounts and offline self-hosted users, independent of any network session.
+    private static let displayNameKey = "conduit.account.displayName"
+    public var displayName: String? {
+        let v = UserDefaults.standard.string(forKey: Self.displayNameKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (v?.isEmpty == false) ? v : nil
+    }
+    public static var storedDisplayName: String? {
+        let v = UserDefaults.standard.string(forKey: displayNameKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (v?.isEmpty == false) ? v : nil
+    }
+    private func persistDisplayName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        UserDefaults.standard.set(trimmed, forKey: Self.displayNameKey)
+    }
+
     public func restore() async {
         guard !isRestoring else { return }
         isRestoring = true
@@ -236,8 +268,15 @@ public final class AccountSessionController {
     }
 
     public func signUp(email: String, password: String) async throws -> AccountSignUpResult {
+        try await signUp(name: "", email: email, password: password)
+    }
+
+    public func signUp(name: String, email: String, password: String) async throws -> AccountSignUpResult {
         guard password.count >= 12 else { throw AccountError.passwordTooShort }
-        let result = try await client.signUp(email: email, password: password)
+        // Persist the name locally first so the app can personalize immediately,
+        // even when sign-up requires email confirmation before a session exists.
+        persistDisplayName(name)
+        let result = try await client.signUp(name: name, email: email, password: password)
         if let session = result.session {
             try await store.save(session)
             self.session = session
@@ -266,7 +305,8 @@ public final class AccountSessionController {
         }
     }
 
-    public func useSelfHostedOffline() async {
+    public func useSelfHostedOffline(name: String = "") async {
+        persistDisplayName(name)
         try? await store.clear()
         await store.setOfflineMode()
         session = nil
@@ -355,10 +395,19 @@ public struct SupabaseAccountClient: AccountClient {
     }
 
     public func signUp(email: String, password: String) async throws -> AccountSignUpResult {
+        try await signUp(name: "", email: email, password: password)
+    }
+
+    public func signUp(name: String, email: String, password: String) async throws -> AccountSignUpResult {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let response: AuthResponse = try await request(
             path: "signup",
             method: "POST",
-            body: SignUpBody(email: email, password: password)
+            body: SignUpBody(
+                email: email,
+                password: password,
+                data: trimmed.isEmpty ? nil : SignUpMetadata(name: trimmed)
+            )
         )
         let session = response.session.map(AccountSession.init)
         return AccountSignUpResult(session: session, confirmationRequired: session == nil)
@@ -443,7 +492,13 @@ public struct SupabaseAccountClient: AccountClient {
 }
 
 private struct EmptyResponse: Decodable {}
-private struct SignUpBody: Encodable { let email: String; let password: String }
+private struct SignUpMetadata: Encodable { let name: String }
+private struct SignUpBody: Encodable {
+    let email: String
+    let password: String
+    // Supabase GoTrue stores `data` into the user's user_metadata at sign-up.
+    var data: SignUpMetadata? = nil
+}
 private struct DeviceBindPayload: Encodable { let challengeID: String; let secret: String }
 private struct CallbackToken { let accessToken: String; let refreshToken: String; let expiresAt: Date }
 private struct AuthUser: Decodable { let id: String; let email: String }

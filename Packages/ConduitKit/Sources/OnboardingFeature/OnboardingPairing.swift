@@ -41,6 +41,21 @@ public enum OnboardingPairing {
         return normalize(payload)
     }
 
+    /// Extract the pairing code AND the relay URL from a scanned `conduitd pair` QR
+    /// (full JSON). The relay is returned only when the QR carries a valid one (so a
+    /// self-hoster's phone adopts their relay); callers fall back to the shipped relay
+    /// otherwise. A plain typed code returns `(code, nil)`. Returns nil if no valid
+    /// 6-digit code is present.
+    public static func extractPairing(fromScanned payload: String) -> (code: String, relay: URL?)? {
+        if let data = payload.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(Payload.self, from: data),
+           let code = normalize(decoded.code) {
+            return (code, URL(string: decoded.relay))
+        }
+        if let code = normalize(payload) { return (code, nil) }
+        return nil
+    }
+
     public struct DeviceBindingChallenge: Sendable, Equatable {
         public let backendURL: URL
         public let challengeID: String
