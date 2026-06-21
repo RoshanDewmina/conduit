@@ -62,25 +62,33 @@ public struct ConduitSidebarView: View {
     // MARK: - Header
 
     private var profileHeader: some View {
-        Button { onNavigate(.settings) } label: {
-            HStack(spacing: 13) {
-                SidebarBrandMark()
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profileLabel)
-                        .font(.dsDisplayPt(20, weight: .bold))
-                        .tracking(-0.02 * 20)
-                        .foregroundStyle(t.text)
-                    Text("Settings & account ›")
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(t.text3)
+        HStack(spacing: 13) {
+            Button { onNavigate(.settings) } label: {
+                HStack(spacing: 13) {
+                    SidebarBrandMark()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(profileLabel)
+                            .font(.dsDisplayPt(20, weight: .bold))
+                            .tracking(-0.02 * 20)
+                            .foregroundStyle(t.text)
+                        Text("Settings & account ›")
+                            .font(.dsSansPt(12))
+                            .foregroundStyle(t.text3)
+                    }
                 }
-                Spacer(minLength: 8)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings and account")
+            .accessibilityHint("Opens settings")
+            Spacer(minLength: 8)
+            DSCircleButton(
+                "gearshape",
+                diameter: 40,
+                accessibilityLabel: "Settings",
+                action: { onNavigate(.settings) }
+            )
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings and account")
-        .accessibilityHint("Opens settings")
         .coachmarkAnchor("settings")
     }
 
