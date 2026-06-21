@@ -113,11 +113,15 @@ private extension View {
     func conduitGlassCircle(kind: DSCircleButton.Kind, tint: Color, fallbackSurface: Color) -> some View {
 #if os(iOS)
         if #available(iOS 26.0, *) {
-            if kind == .accent {
-                self.buttonStyle(.glassProminent).tint(tint).clipShape(Circle())
-            } else {
-                self.buttonStyle(.glass).clipShape(Circle())
-            }
+            // Use the glassEffect MODIFIER (not .buttonStyle(.glass), which adds its
+            // own horizontal padding and renders an oval when clipped to a circle).
+            // The label is already a fixed diameter×diameter square, so a circular
+            // glass shape stays a clean circle.
+            self.buttonStyle(.plain)
+                .glassEffect(
+                    kind == .accent ? .regular.tint(tint).interactive() : .regular.interactive(),
+                    in: Circle()
+                )
         } else {
             self.background(kind == .accent ? tint : fallbackSurface, in: Circle()).buttonStyle(.plain)
         }
