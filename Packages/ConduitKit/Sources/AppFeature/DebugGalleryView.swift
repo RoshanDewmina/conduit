@@ -696,53 +696,38 @@ struct DebugGalleryView: View {
     }
 
     private var newChatGallery: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // User bubble
-                HStack(alignment: .top) {
-                    Spacer(minLength: 56)
-                    Text("Build the project and check for errors")
-                        .font(.dsSansPt(15))
-                        .foregroundStyle(t.text)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(t.surface)
-                        .overlay(Rectangle().strokeBorder(t.accent.opacity(0.35), lineWidth: 1))
+        // Renders the NEW dark transcript components (mockup A) for visual review.
+        VStack(spacing: 0) {
+            DarkTranscriptHeader(
+                title: "Fix auth redirect",
+                subtitle: "Claude Code · mac-studio",
+                isLive: true,
+                onBack: {}, onWorkspace: {}, onNew: {}
+            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    DarkUserBubble("run the auth test suite")
+                    DarkTerminalBlockCard(
+                        host: "mac-studio",
+                        command: "claude \"run the auth test suite\"",
+                        output: "→ npm test -- auth\n\nPASS src/auth.test.ts\nPASS src/redirect.test.ts\nPASS src/session.test.ts\n\nTests: 12 passed, 12 total\nDone in 1.24s ✓",
+                        state: .done
+                    )
+                    DarkUserBubble("now break it")
+                    DarkTerminalBlockCard(
+                        host: "mac-studio",
+                        command: "npm run start:prod",
+                        output: "An unexpected error occurred.\nFAIL: could not bind port 3000",
+                        state: .error
+                    )
                 }
-                // Assistant turn — tool cards + prose
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 5) {
-                        PixelBox(state: .streaming, size: 9, subdivisions: 2)
-                        Text("streaming")
-                            .font(.dsMonoPt(10))
-                            .foregroundStyle(t.text4)
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        NewChatToolCardPreview(
-                            toolName: "Bash",
-                            inputJSON: #"{"command":"git status"}"#,
-                            status: .done
-                        )
-                        NewChatToolCardPreview(
-                            toolName: "Bash",
-                            inputJSON: #"{"command":"swift build --configuration release"}"#,
-                            status: .running
-                        )
-                        NewChatToolCardPreview(
-                            toolName: "Read",
-                            inputJSON: #"{"path":"Sources/AppFeature/NewChatTabView.swift"}"#,
-                            status: .running
-                        )
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    StreamingOutputText(text: "Analysing build output…", isStreaming: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
         }
-        .background(t.bg.ignoresSafeArea())
+        .environment(\.conduitTokens, .dark)
+        .preferredColorScheme(.dark)
+        .background(ConduitTokens.dark.termBg.ignoresSafeArea())
     }
 
     private var chatGallery: some View {
