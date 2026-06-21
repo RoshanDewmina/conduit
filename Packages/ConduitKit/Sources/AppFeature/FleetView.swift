@@ -210,12 +210,19 @@ public struct FleetView: View {
             }
             Spacer(minLength: 8)
             relayChip(state)
+            // Always-visible add affordance — the bottom "+ Add host" button sits
+            // below the fold, so surface a glass + here too.
+            DSCircleButton(
+                "plus",
+                kind: .accent,
+                diameter: 38,
+                accessibilityLabel: "Add a machine",
+                action: onConnectHost
+            )
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 10)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(machineName), \(statusLine(state))")
     }
 
     private var machineName: String {
