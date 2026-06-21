@@ -910,6 +910,38 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, map[string]interface{}{"files": files})
 
+	case "agent.fs.ls":
+		var p struct {
+			Path string `json:"path"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		res, err := s.fsList(p.Path)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
+	case "agent.git.clone":
+		var p struct {
+			Repo      string `json:"repo"`
+			ParentDir string `json:"parentDir"`
+			Name      string `json:"name"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Repo == "" {
+			s.writeError(msg.ID, -32602, "repo required")
+			return
+		}
+		// A clone writes to the host filesystem and may fetch credentials —
+		// audit it like the other privileged git writes.
+		s.auditEntry(AuditEntry{Action: "git-clone", Kind: "git", Command: "clone " + p.Repo})
+		res, err := s.gitClone(p.Repo, p.ParentDir, p.Name)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
 	case "agent.git.ship":
 		var p shipParams
 		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" || p.Message == "" {

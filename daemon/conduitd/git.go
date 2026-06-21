@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -213,6 +215,94 @@ func (s *server) gitChangedFiles(workdir, baseBranch, branch string) ([]gitChang
 func (s *server) currentBranch(workdir string) (string, error) {
 	out, err := s.gitRun(workdir, "git", "rev-parse", "--abbrev-ref", "HEAD")
 	return strings.TrimSpace(out), err
+}
+
+// ── clone (Add Workspace → From GitHub Repo) ──────────────────────────────
+
+type gitCloneResult struct {
+	Path   string `json:"path"`   // absolute clone destination on the host
+	Branch string `json:"branch"` // checked-out branch after clone
+}
+
+// validateRepoURL accepts only the git remote forms we expect from the phone:
+// https(s)://, ssh://, or scp-style user@host:path. It rejects anything that
+// looks like a local path or a flag so a caller can't smuggle `--upload-pack`
+// or a filesystem path into the clone argv.
+func validateRepoURL(repo string) error {
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		return errors.New("repo URL required")
+	}
+	if strings.HasPrefix(repo, "-") {
+		return errors.New("invalid repo URL")
+	}
+	switch {
+	case strings.HasPrefix(repo, "https://"), strings.HasPrefix(repo, "http://"),
+		strings.HasPrefix(repo, "ssh://"):
+		return nil
+	case strings.Contains(repo, "@") && strings.Contains(repo, ":"):
+		return nil // scp-style: git@github.com:owner/repo.git
+	default:
+		return errors.New("repo must be an https or ssh git URL")
+	}
+}
+
+// repoDirName derives the destination directory name from a clone URL, mirroring
+// git's own default (the last path segment minus a trailing ".git").
+func repoDirName(repo string) string {
+	repo = strings.TrimRight(strings.TrimSpace(repo), "/")
+	repo = strings.TrimSuffix(repo, ".git")
+	if i := strings.LastIndexAny(repo, "/:"); i >= 0 {
+		repo = repo[i+1:]
+	}
+	return repo
+}
+
+// gitClone clones repo into parentDir using the host's existing git/credential
+// configuration (HTTPS token cache, gh, or SSH key) — Conduit adds no auth of
+// its own. parentDir is confined to the user's home; the derived directory name
+// is sanitized so it can't traverse out of it.
+func (s *server) gitClone(repo, parentDir, name string) (gitCloneResult, error) {
+	if err := validateRepoURL(repo); err != nil {
+		return gitCloneResult{}, err
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return gitCloneResult{}, err
+	}
+	parent := expandHome(parentDir)
+	if parent == "" {
+		parent = home
+	}
+	if !filepath.IsAbs(parent) {
+		parent = filepath.Join(home, parent)
+	}
+	parent = filepath.Clean(parent)
+	if !withinHome(home, parent) {
+		return gitCloneResult{}, errors.New("destination is outside the home directory")
+	}
+
+	dirName := strings.TrimSpace(name)
+	if dirName == "" {
+		dirName = repoDirName(repo)
+	}
+	// A directory name only — no separators, no traversal.
+	if dirName == "" || strings.ContainsAny(dirName, "/\\") || strings.Contains(dirName, "..") {
+		return gitCloneResult{}, errors.New("invalid destination name")
+	}
+	dest := filepath.Join(parent, dirName)
+	if _, err := os.Stat(dest); err == nil {
+		return gitCloneResult{}, fmt.Errorf("%s already exists", dirName)
+	}
+
+	// Explicit argv, run in parentDir. `--` terminates options so the URL can
+	// never be parsed as a flag.
+	if _, err := s.gitRun(parent, "git", "clone", "--", repo, dirName); err != nil {
+		return gitCloneResult{}, err
+	}
+	branch, _ := s.currentBranch(dest)
+	return gitCloneResult{Path: dest, Branch: branch}, nil
 }
 
 // gitShip stages + commits + pushes the worktree, then optionally opens a PR.
