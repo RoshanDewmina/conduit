@@ -23,7 +23,7 @@ settings:
     # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
     # Example: https://conduit-push-HASH-ts.a.run.app
-    CONDUIT_PUSH_BACKEND_URL: "https://35.201.3.231.sslip.io"
+    CONDUIT_PUSH_BACKEND_URL: "https://conduit-push-y4wpy6zeva-ts.a.run.app"
     # Standard account configuration is injected by local/CI build settings.
     # The repository intentionally contains no Supabase project credentials.
     CONDUIT_SUPABASE_URL: ""
