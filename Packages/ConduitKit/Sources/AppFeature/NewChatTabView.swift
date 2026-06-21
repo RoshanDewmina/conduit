@@ -49,7 +49,12 @@ public struct NewChatTabView: View {
 
     @State private var prompt: String = ""
     @State private var selectedAgentID: String = ""
+    /// Empty ⇒ use the selected agent's default cwd. A non-empty value is an explicit
+    /// project directory the user picked for this run (the Omnara "in [workspace]" slot).
+    @State private var selectedCwd: String = ""
+    @State private var customCwd: String = ""
     @State private var showAgentPicker = false
+    @State private var showWorkspacePicker = false
     @State private var showOptions = false
     @State private var selectedModel: String = ""
     @State private var budgetText: String = ""
@@ -156,6 +161,14 @@ public struct NewChatTabView: View {
             agentPickerContent
         }
         .bottomDrawer(
+            isPresented: $showWorkspacePicker,
+            title: "Project",
+            subtitle: "Where this run works. Defaults to the agent's directory.",
+            detents: [.medium, .large]
+        ) {
+            workspacePickerContent
+        }
+        .bottomDrawer(
             isPresented: $showBudgetSheet,
             title: "Budget cap",
             subtitle: "Set a daily limit for this run.",
@@ -233,6 +246,16 @@ public struct NewChatTabView: View {
                     ) {
                         showAgentPicker = true
                     }
+                }
+
+                composerPill(
+                    title: workspaceLabel,
+                    subtitle: "Project",
+                    icon: .folder,
+                    tone: t.text3
+                ) {
+                    customCwd = ""
+                    showWorkspacePicker = true
                 }
 
                 Button {
@@ -461,10 +484,36 @@ public struct NewChatTabView: View {
     }
 
     private var machineLabel: String {
-        guard let agent = selectedAgent else { return "No host" }
-        let name = agent.name
-        let dir = agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-        return "\(name) \u{00B7} \(dir)"
+        selectedAgent?.hostName ?? selectedAgent?.name ?? "No host"
+    }
+
+    /// The directory the run launches in: an explicitly-picked project, else the
+    /// selected agent's default cwd.
+    private var effectiveCwd: String {
+        selectedCwd.isEmpty ? (selectedAgent?.cwd ?? "~") : selectedCwd
+    }
+
+    private func displayPath(_ path: String) -> String {
+        path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    private var workspaceLabel: String {
+        let p = displayPath(effectiveCwd)
+        return p.isEmpty ? "~" : p
+    }
+
+    /// Distinct known project directories across the connected agents, selected
+    /// agent's cwd first — the quick-pick list in the Project drawer.
+    private var projectDirs: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        if let sel = selectedAgent, !sel.cwd.isEmpty {
+            seen.insert(sel.cwd); ordered.append(sel.cwd)
+        }
+        for agent in agents where !agent.cwd.isEmpty {
+            if seen.insert(agent.cwd).inserted { ordered.append(agent.cwd) }
+        }
+        return ordered
     }
 
     private var canSend: Bool {
@@ -537,7 +586,8 @@ public struct NewChatTabView: View {
         let budget = Double(budgetText.trimmingCharacters(in: .whitespacesAndNewlines))
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = selectedModel.isEmpty ? nil : selectedModel
-        let outcome = await onDispatch(agent.id, agent.cwd, trimmedPrompt, budget, model)
+        let cwd = effectiveCwd
+        let outcome = await onDispatch(agent.id, cwd, trimmedPrompt, budget, model)
         switch outcome {
         case .started(let run):
             chatTitle = titleFromPrompt(trimmedPrompt)
@@ -553,7 +603,7 @@ public struct NewChatTabView: View {
                 Task {
                     let conv = try? await chatRepo.createConversation(
                         title: chatTitle, agentID: agent.vendor.isEmpty ? agent.name : agent.vendor,
-                        hostName: agent.hostName ?? agent.name, hostID: agent.hostID, cwd: agent.cwd
+                        hostName: agent.hostName ?? agent.name, hostID: agent.hostID, cwd: cwd
                     )
                     conversationID = conv?.id
                     _ = try? await chatRepo.appendTurn(
@@ -718,6 +768,80 @@ public struct NewChatTabView: View {
             .map { ($0.key, $0.value) }
     }
 
+    // MARK: - Workspace (project directory) picker
+
+    private var workspacePickerContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if !projectDirs.isEmpty {
+                    VStack(spacing: 6) {
+                        ForEach(projectDirs, id: \.self) { dir in
+                            workspaceRow(dir)
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Custom path")
+                        .font(.dsSansPt(13, weight: .semibold))
+                        .foregroundStyle(t.text3)
+                    HStack(spacing: 8) {
+                        TextField("~/projects/my-app", text: $customCwd)
+                            .font(.dsMonoPt(13))
+                            .foregroundStyle(t.text)
+                            .tint(t.accent)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .onSubmit { useCustomCwd() }
+                            .padding(.horizontal, 12)
+                            .frame(height: 46)
+                            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        DSButton("Use", variant: .secondary, size: .sm) { useCustomCwd() }
+                            .disabled(customCwd.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 28)
+        }
+    }
+
+    private func workspaceRow(_ dir: String) -> some View {
+        let isSelected = dir == effectiveCwd
+        return Button {
+            Haptics.selection()
+            selectedCwd = dir
+            showWorkspacePicker = false
+        } label: {
+            HStack(spacing: 12) {
+                DSIconView(.folder, size: 15, color: isSelected ? t.accent : t.text3)
+                Text(displayPath(dir))
+                    .font(.dsMonoPt(12.5))
+                    .foregroundStyle(isSelected ? t.text : t.text2)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if isSelected {
+                    DSIconView(.check, size: 15, color: t.accent)
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 52)
+            .background(isSelected ? t.surface2 : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func useCustomCwd() {
+        let trimmed = customCwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Haptics.selection()
+        selectedCwd = trimmed
+        showWorkspacePicker = false
+    }
+
     private var agentPickerContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -756,6 +880,7 @@ public struct NewChatTabView: View {
         return Button {
             guard !agent.isOffline else { return }
             selectedAgentID = agent.id
+            selectedCwd = ""
             showAgentPicker = false
         } label: {
             HStack(spacing: 12) {
