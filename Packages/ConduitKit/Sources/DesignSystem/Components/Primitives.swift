@@ -99,35 +99,8 @@ public struct DSCircleButton: View {
                 .frame(width: diameter, height: diameter)
                 .contentShape(Circle())
         }
-        .conduitGlassCircle(kind: kind, tint: t.accent, fallbackSurface: t.surface)
+        .conduitGlassCircle(tint: kind == .accent ? t.accent : nil, fallbackSurface: t.surface)
         .accessibilityLabel(accessibilityLabel)
-    }
-}
-
-/// Applies Apple's native Liquid Glass button styling (iOS 26+) to a circular
-/// control, with a graceful filled fallback on older OSes. Centralizing it here
-/// means every `DSCircleButton` across the app gets the same glass affordance —
-/// one component, consistent chrome, less code to manage.
-private extension View {
-    @ViewBuilder
-    func conduitGlassCircle(kind: DSCircleButton.Kind, tint: Color, fallbackSurface: Color) -> some View {
-#if os(iOS)
-        if #available(iOS 26.0, *) {
-            // Use the glassEffect MODIFIER (not .buttonStyle(.glass), which adds its
-            // own horizontal padding and renders an oval when clipped to a circle).
-            // The label is already a fixed diameter×diameter square, so a circular
-            // glass shape stays a clean circle.
-            self.buttonStyle(.plain)
-                .glassEffect(
-                    kind == .accent ? .regular.tint(tint).interactive() : .regular.interactive(),
-                    in: Circle()
-                )
-        } else {
-            self.background(kind == .accent ? tint : fallbackSurface, in: Circle()).buttonStyle(.plain)
-        }
-#else
-        self.background(kind == .accent ? tint : fallbackSurface, in: Circle()).buttonStyle(.plain)
-#endif
     }
 }
 

@@ -1,5 +1,21 @@
 import SwiftUI
 
+public enum ConduitAppearance: String, CaseIterable, Sendable {
+    case light
+    case dark
+    case system
+
+    public static let storageKey = "conduitAppearance"
+
+    public var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .light: .light
+        case .dark: .dark
+        case .system: nil
+        }
+    }
+}
+
 // MARK: - Design tokens — Conduit editorial system
 // The sand palette is the approved light shell. Dark adapts the same semantic
 // roles while the terminal remains an intentionally darker working surface.
@@ -266,13 +282,24 @@ public extension View {
     func conduitTokens() -> some View {
         modifier(ConduitTokensModifier())
     }
+
+    func conduitTokens(appearance: ConduitAppearance) -> some View {
+        modifier(ConduitTokensModifier(appearance: appearance))
+    }
 }
 
 private struct ConduitTokensModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+
+    let appearance: ConduitAppearance?
+
+    init(appearance: ConduitAppearance? = nil) {
+        self.appearance = appearance
+    }
+
     func body(content: Content) -> some View {
-        content
-            .environment(\.conduitTokens, colorScheme == .dark ? .dark : .light)
+        let resolvedScheme = appearance?.preferredColorScheme ?? colorScheme
+        content.environment(\.conduitTokens, resolvedScheme == .dark ? .dark : .light)
     }
 }
 

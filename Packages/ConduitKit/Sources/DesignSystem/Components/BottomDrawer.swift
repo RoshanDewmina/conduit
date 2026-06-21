@@ -1,122 +1,128 @@
 import SwiftUI
 
-// Reusable bottom-drawer container with keyboard-style slide animation.
-// Uses cubic-bezier(0.2, 0, 0, 1) ≈ SwiftUI .spring(response:0.38, dampingFraction:0.86)
-// Presented via sheet with .presentationDetents for native iOS drag behaviour.
-// Callers use .bottomDrawer(isPresented:) for a sheet-based presentation, or
-// embed BottomDrawerContent directly for inline use.
+public enum ConduitDrawerSurface: Sendable {
+    case standard
+    case workspace
+}
 
-// MARK: - Sheet modifier (preferred for Diff + File preview)
+public struct ConduitDrawer<Content: View>: View {
+    private let title: String?
+    private let subtitle: String?
+    private let detents: Set<PresentationDetent>
+    private let surface: ConduitDrawerSurface
+    private let content: Content
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.conduitTokens) private var t
+
+    public init(
+        title: String? = nil,
+        subtitle: String? = nil,
+        detents: Set<PresentationDetent> = [.medium, .large],
+        surface: ConduitDrawerSurface = .standard,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.detents = detents
+        self.surface = surface
+        self.content = content()
+    }
+
+    private var tokens: ConduitTokens { surface == .workspace ? .dark : t }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            ConduitGrabHandle(on: surface == .workspace ? .dark : .light)
+            if let title {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.dsDisplayPt(24, weight: .bold))
+                            .foregroundStyle(tokens.text)
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.dsSansPt(13))
+                                .foregroundStyle(tokens.text3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    DSCircleButton("xmark", accessibilityLabel: "Dismiss", action: dismiss.callAsFunction)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .background(tokens.bg)
+        .environment(\.conduitTokens, tokens)
+        .preferredColorScheme(surface == .workspace ? .dark : nil)
+        .presentationDetents(detents)
+        .presentationContentInteraction(.scrolls)
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(surface == .workspace ? 26 : 30)
+        .presentationBackground(tokens.bg)
+    }
+}
 
 public struct BottomDrawerSheet<DrawerContent: View>: ViewModifier {
     @Binding var isPresented: Bool
+    let title: String?
+    let subtitle: String?
     let detents: Set<PresentationDetent>
+    let surface: ConduitDrawerSurface
     let drawerContent: () -> DrawerContent
 
     public init(
         isPresented: Binding<Bool>,
+        title: String? = nil,
+        subtitle: String? = nil,
         detents: Set<PresentationDetent> = [.medium, .large],
+        surface: ConduitDrawerSurface = .standard,
         @ViewBuilder content: @escaping () -> DrawerContent
     ) {
         self._isPresented = isPresented
+        self.title = title
+        self.subtitle = subtitle
         self.detents = detents
+        self.surface = surface
         self.drawerContent = content
     }
 
     public func body(content: Content) -> some View {
         content
             .sheet(isPresented: $isPresented) {
-                DrawerShell(detents: detents, content: drawerContent)
+                ConduitDrawer(
+                    title: title,
+                    subtitle: subtitle,
+                    detents: detents,
+                    surface: surface,
+                    content: drawerContent
+                )
             }
     }
 }
-
-// MARK: - Drawer shell (the actual drawer UI)
-
-struct DrawerShell<Content: View>: View {
-    let detents: Set<PresentationDetent>
-    let content: () -> Content
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.conduitTokens) private var t
-
-    var body: some View {
-        NavigationStack {
-            content()
-                .background(t.surf1)
-        }
-        .presentationDetents(detents)
-        .presentationDragIndicator(.visible)
-        .presentationBackground(t.surf1)
-    }
-}
-
-// MARK: - View extension
 
 public extension View {
     func bottomDrawer<C: View>(
         isPresented: Binding<Bool>,
+        title: String? = nil,
+        subtitle: String? = nil,
         detents: Set<PresentationDetent> = [.medium, .large],
+        surface: ConduitDrawerSurface = .standard,
         @ViewBuilder content: @escaping () -> C
     ) -> some View {
-        modifier(BottomDrawerSheet(isPresented: isPresented, detents: detents, content: content))
+        modifier(
+            BottomDrawerSheet(
+                isPresented: isPresented,
+                title: title,
+                subtitle: subtitle,
+                detents: detents,
+                surface: surface,
+                content: content
+            )
+        )
     }
-}
-
-// MARK: - Standalone inline drawer (for overlay within parent views)
-
-public struct InlineBottomDrawer<Content: View>: View {
-    @Binding var isPresented: Bool
-    let content: () -> Content
-
-    @Environment(\.conduitTokens) private var t
-    @State private var dragOffset: CGFloat = 0
-
-    public init(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) {
-        self._isPresented = isPresented
-        self.content = content
-    }
-
-    public var body: some View {
-        ZStack(alignment: .bottom) {
-            if isPresented {
-                // Dimmed scrim
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .onTapGesture { dismiss() }
-                    .transition(.opacity)
-
-                // Drawer card
-                VStack(spacing: 0) {
-                    // Drag handle
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(t.surf3)
-                        .frame(width: 36, height: 4)
-                        .padding(.top, 10)
-                        .padding(.bottom, 6)
-
-                    content()
-                }
-                .background(t.surf1)
-                .clipShape(RoundedRectangle(cornerRadius: t.radiusXL, style: .continuous))
-                .offset(y: max(0, dragOffset))
-                .gesture(
-                    DragGesture()
-                        .onChanged { dragOffset = $0.translation.height }
-                        .onEnded { if $0.translation.height > 80 { dismiss() } else {
-                            withAnimation(drawerSpring) { dragOffset = 0 }
-                        }}
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(drawerSpring, value: isPresented)
-    }
-
-    private func dismiss() {
-        withAnimation(drawerSpring) { isPresented = false }
-    }
-
-    // keyboard-slide spring: response=0.38s, damping≈0.86 ≈ cubic-bezier(0.2,0,0,1)
-    private let drawerSpring = Animation.spring(response: 0.38, dampingFraction: 0.86)
 }

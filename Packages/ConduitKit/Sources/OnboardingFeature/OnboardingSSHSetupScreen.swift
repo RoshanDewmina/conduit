@@ -60,19 +60,7 @@ public struct OnboardingSSHSetupScreen: View {
                     OnboardingSSHStepRow(
                         number: 3,
                         title: "Add your machine in Conduit",
-                        detail: "Tap “Add a machine” below and paste ssh you@your-computer.local — using the username and name from step 2."
-                    )
-
-                    OnboardingSSHStepRow(
-                        number: 4,
-                        title: "Generate a key (one tap)",
-                        detail: "In Add Machine, pick Ed25519 and tap Generate key. Conduit creates and stores it securely on your phone."
-                    )
-
-                    OnboardingSSHStepRow(
-                        number: 5,
-                        title: "Authorize it",
-                        detail: "Copy the one line Conduit shows and paste it into your Mac's Terminal — it appends your key to ~/.ssh/authorized_keys. Then tap Connect & Save."
+                        detail: "Tap “Add a machine” below, paste ssh you@your-computer.local, then follow the short key setup inside Conduit."
                     )
                 }
                 .padding(.horizontal, 24)

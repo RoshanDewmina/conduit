@@ -102,6 +102,7 @@ public struct DSButton: View {
             RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: hasBorder ? borderLineWidth : 0)
         )
+        .conduitGlassChrome(cornerRadius: t.r3, interactive: true)
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
         // Filled CTAs get a neutral "clearly disabled" treatment (sunk surface +

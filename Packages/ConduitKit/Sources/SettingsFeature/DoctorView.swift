@@ -71,29 +71,6 @@ public struct DoctorView: View {
         .navigationBarHidden(true)
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("conduit doctor")
-                    .font(.dsMonoPt(18, weight: .bold))
-                    .foregroundStyle(t.text)
-                Spacer()
-                DSButton("Run", systemImage: "stethoscope", variant: .secondary, size: .sm) {
-                    Task { await vm.runDoctor() }
-                }
-                .disabled(vm.isLoading)
-            }
-            Text("health check")
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.text3)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
-    }
-
     // MARK: - Report card
 
     private func reportCard(_ report: DoctorReport) -> some View {
@@ -196,17 +173,12 @@ public struct DoctorView: View {
     // MARK: - Prompt / error / loading
 
     private var promptCard: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "stethoscope")
-                .font(.system(size: 32))
-                .foregroundStyle(t.text4)
-            Text("Run a health check to diagnose daemon setup issues.")
-                .font(.dsSansPt(14))
-                .foregroundStyle(t.text3)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        DSEmptyState(
+            icon: .shield,
+            title: "Run a health check",
+            subtitle: "Diagnose daemon setup issues before dispatching work.",
+            action: ("Run health check", { Task { await vm.runDoctor() } })
+        )
     }
 
     private var loadingCard: some View {
@@ -217,24 +189,16 @@ public struct DoctorView: View {
                 .foregroundStyle(t.text3)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 44)
     }
 
     private func errorCard(_ message: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 24))
-                .foregroundStyle(t.danger)
-            Text("Failed to run doctor")
-                .font(.dsSansPt(14, weight: .semibold))
-                .foregroundStyle(t.text)
-            Text(message)
-                .font(.dsMonoPt(12))
-                .foregroundStyle(t.danger)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        DSEmptyState(
+            icon: .alertTri,
+            title: "Failed to run doctor",
+            subtitle: message,
+            action: ("Try again", { Task { await vm.runDoctor() } })
+        )
     }
 }
 #endif

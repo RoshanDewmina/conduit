@@ -259,6 +259,7 @@ let package = Package(
                 "SessionFeature",
                 "SettingsFeature",
                 "AppFeature",
+                "DesignSystem",
             ],
             swiftSettings: swiftSettings
         ),

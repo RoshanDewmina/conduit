@@ -2,10 +2,8 @@
 import SwiftUI
 import DesignSystem
 
-// Shared dark "transcript thread" chat components (owner mockup A). Used by both
-// the relay New Chat surface and the SSH session view so the two read identically.
-// Everything here renders on the dark terminal palette (term* tokens) regardless
-// of the app's light/dark theme — the chat is always dark by design.
+// Shared transcript components. Terminal blocks retain the intentionally-dark
+// terminal palette, while surrounding chat chrome follows the selected app theme.
 
 // MARK: - User bubble (right-aligned orange)
 
@@ -117,7 +115,7 @@ public struct DarkTerminalBlockCard: View {
     }
 }
 
-// MARK: - Dark transcript header
+// MARK: - Transcript header
 
 public struct DarkTranscriptHeader: View {
     private let title: String
@@ -150,23 +148,23 @@ public struct DarkTranscriptHeader: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.dsDisplayPt(19, weight: .bold))
-                    .foregroundStyle(t.termText)
+                    .foregroundStyle(t.text)
                     .lineLimit(1)
                 if let subtitle {
                     Text(subtitle)
                         .font(.dsMonoPt(11))
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(t.text3)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
             if isLive {
                 HStack(spacing: 5) {
-                    Circle().fill(t.termOk).frame(width: 7, height: 7)
-                    Text("live").font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.termOk)
+                    Circle().fill(t.ok).frame(width: 7, height: 7)
+                    Text("live").font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.ok)
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(t.termOk.opacity(0.14), in: Capsule())
+                .background(t.okSoft, in: Capsule())
             }
             DSCircleButton("square.grid.2x2", diameter: 38, accessibilityLabel: "Open workspace", action: onWorkspace)
             if let onNew {

@@ -34,16 +34,13 @@ public struct SessionWorkspaceContainer: View {
             showDrawer = true
         })
         .sheet(isPresented: $showDrawer) {
-            WorkspaceDrawer(
-                tab: $tab,
-                viewModel: viewModel,
-                onSwitchHost: { showDrawer = false; onSwitchHost() },
-                onClose: { showDrawer = false }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.hidden)
-            .presentationCornerRadius(26)
-            .presentationBackground(ConduitTokens.dark.termBg)
+            ConduitDrawer(detents: [.medium, .large], surface: .workspace) {
+                WorkspaceDrawer(
+                    tab: $tab,
+                    viewModel: viewModel,
+                    onSwitchHost: { showDrawer = false; onSwitchHost() }
+                )
+            }
         }
         #if DEBUG
         // Visual-verification hook: auto-open the workspace drawer a moment after the
@@ -94,32 +91,24 @@ private struct WorkspaceDrawer: View {
     @Binding var tab: WorkspaceTab
     let viewModel: SessionViewModel
     let onSwitchHost: () -> Void
-    let onClose: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Always-dark terminal palette so the drawer reads as the board's midnight surface.
     private let term = ConduitTokens.dark
-    private let tabActive = Color(.sRGB, red: 0.847, green: 0.478, blue: 0.322, opacity: 1) // #D87A52
-    private let tabActiveInk = Color(.sRGB, red: 0.102, green: 0.078, blue: 0.067, opacity: 1) // #1a1411
+    private var tabActive: Color { term.accent }
+    private var tabActiveInk: Color { term.accentFg }
 
     var body: some View {
         VStack(spacing: 0) {
-            ConduitGrabHandle(on: .dark)
-                .contentShape(Rectangle())
-                .onTapGesture { onClose() }
-                .padding(.top, 4)
-                .padding(.bottom, 8)
-
             tabBar.padding(.horizontal, 16)
+                .padding(.top, 4)
 
             content
                 .padding(.top, 14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(term.termBg.ignoresSafeArea())
-        .environment(\.conduitTokens, term)
-        .preferredColorScheme(.dark)
     }
 
     private var tabBar: some View {

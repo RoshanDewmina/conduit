@@ -414,7 +414,7 @@ public struct SettingsView: View {
     public var onAccountSignedOut: (() -> Void)? = nil
     private let accountSession: AccountSessionController?
     public var onBack: (() -> Void)? = nil
-    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @AppStorage(ConduitAppearance.storageKey) private var colorSchemePref: String = ConduitAppearance.light.rawValue
     @State private var showResetConfirmation = false
     @State private var purchases = PurchaseManager.shared
     @Environment(\.conduitTokens) private var t
@@ -489,31 +489,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let onBack {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(t.text2)
-                        .frame(width: 40, height: 40)
-                        .background(t.surface, in: Circle())
-                        .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
-            }
-
-            Text("make it yours")
-                .font(.dsEditorialPt(15))
-                .foregroundStyle(t.accent)
-            Text("Settings")
-                .font(.dsDisplayPt(23, weight: .bold))
-                .foregroundStyle(t.text)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        DSDetailHeader("Settings", breadcrumb: "make it yours", onBack: onBack)
 
         if !statusHeaderAgents.isEmpty {
             AgentStatusHeader(agents: statusHeaderAgents, onTap: onTapStatusHeader)
@@ -1061,7 +1037,7 @@ private struct NotificationsSettingsView: View {
 // MARK: - Appearance Settings
 
 private struct AppearanceSettingsView: View {
-    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
+    @AppStorage(ConduitAppearance.storageKey) private var colorSchemePref: String = ConduitAppearance.light.rawValue
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
@@ -1101,8 +1077,14 @@ private struct AppearanceSettingsView: View {
                                 }
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(colorSchemePref == key ? t.accentSoft : t.surface)
-                                .overlay(Rectangle().strokeBorder(colorSchemePref == key ? t.accent : t.border, lineWidth: 1))
+                                .background(
+                                    colorSchemePref == key ? t.accentSoft : t.surface,
+                                    in: RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                        .strokeBorder(colorSchemePref == key ? t.accent : t.border, lineWidth: 1)
+                                )
                             }
                             .buttonStyle(.plain)
                         }

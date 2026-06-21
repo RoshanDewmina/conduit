@@ -57,6 +57,7 @@ public struct DSScreenHeader<Trailing: View>: View {
 
 public struct DSDetailHeader<Trailing: View>: View {
     let title: String
+    let breadcrumb: String?
     let onBack: (() -> Void)?
     let trailing: Trailing
 
@@ -64,10 +65,12 @@ public struct DSDetailHeader<Trailing: View>: View {
 
     public init(
         _ title: String,
+        breadcrumb: String? = nil,
         onBack: (() -> Void)? = nil,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.title = title
+        self.breadcrumb = breadcrumb
         self.onBack = onBack
         self.trailing = trailing()
     }
@@ -75,29 +78,31 @@ public struct DSDetailHeader<Trailing: View>: View {
     public var body: some View {
         HStack(spacing: 10) {
             if let onBack {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(t.text)
-                        .frame(width: 36, height: 36)
-                        .background(t.surface2)
-                        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 1))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                DSCircleButton(
+                    "chevron.left",
+                    accessibilityLabel: "Back",
+                    action: onBack
+                )
             }
-            Text(title)
-                .font(.dsDisplayPt(24, weight: .bold))
-                .foregroundStyle(t.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            VStack(alignment: .leading, spacing: 3) {
+                if let breadcrumb {
+                    Text(breadcrumb)
+                        .font(.dsEditorialPt(15))
+                        .foregroundStyle(t.accent)
+                        .lineLimit(1)
+                }
+                Text(title)
+                    .font(.dsDisplayPt(24, weight: .bold))
+                    .foregroundStyle(t.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             Spacer(minLength: 8)
             trailing
         }
+        // Fixed row height pins the back button to the same vertical position on
+        // every detail page, regardless of whether the page adds a trailing control.
+        .frame(minHeight: 44)
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 12)
@@ -123,16 +128,11 @@ public struct DSIconButton: View {
         Button(action: action) {
             DSIconView(icon, size: 17, color: t.text)
                 .frame(width: 36, height: 36)
-                .background(t.surface2)
-                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                        .strokeBorder(t.border, lineWidth: 1))
                 // 36pt visual, 44pt touch target (Apple HIG minimum).
                 .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .conduitGlassCircle(fallbackSurface: t.surface)
         .accessibilityLabel(accessibilityLabel ?? "")
     }
 }

@@ -72,8 +72,10 @@ public struct OnboardingRedesignView: View {
 
     public var body: some View {
         Group {
-            if let accountSession, accountSession.mode == nil {
-                AccountEntryView(account: accountSession, onComplete: {})
+            // Start with the product value. Account creation follows the first
+            // screen so people understand why Conduit asks for identity details.
+            if current.kind != .value, let accountSession, accountSession.mode == nil {
+                AccountEntryView(account: accountSession, onComplete: advanceAfterAccount)
             } else if current.kind == .sshSetup {
                 // The optional SSH step renders its own header + CTAs (no shared
                 // hero/footer), so present it standalone like the account gate.
@@ -257,22 +259,13 @@ public struct OnboardingRedesignView: View {
 
     private var footer: some View {
         VStack(spacing: 11) {
-            Button { advanceOrFinish() } label: {
-                HStack(spacing: 8) {
-                    Text(current.primaryAction)
-                    if current.ctaArrow { Text("→") }
-                }
-                .font(.dsDisplayPt(16, weight: .bold))
-                .foregroundStyle(current.kind == .value ? Color.white : t.accentFg)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 17)
-                .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(current.kind == .value ? t.text : t.accent)
-                )
-                .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 10)
-            }
-            .buttonStyle(.plain)
+            DSButton(
+                current.ctaArrow ? "\(current.primaryAction) →" : current.primaryAction,
+                variant: .primary,
+                size: .lg,
+                fullWidth: true,
+                action: advanceOrFinish
+            )
             .accessibilityIdentifier("onboardingPrimary")
         }
         .padding(.horizontal, 24)
@@ -289,6 +282,15 @@ public struct OnboardingRedesignView: View {
             withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step += 1 }
         } else {
             finish()
+        }
+    }
+
+    private func advanceAfterAccount() {
+        Haptics.success()
+        // AccountEntry only appears after the value screen. Keep the pair step
+        // selected rather than requiring an extra, anonymous onboarding state.
+        if step == 0 {
+            step = min(1, steps.count - 1)
         }
     }
 
@@ -637,7 +639,7 @@ private struct OnboardingRedesignStep: Identifiable {
             eyebrow: "your machines,",
             title: "in your pocket.",
             body: "Conduit is mission control for the coding agents running on your own machines. Here's what you get:",
-            primaryAction: "Connect a machine",
+            primaryAction: "Continue",
             ctaArrow: true,
             kind: .value
         ),

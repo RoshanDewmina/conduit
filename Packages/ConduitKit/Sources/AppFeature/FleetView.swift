@@ -526,39 +526,22 @@ public struct FleetView: View {
         .accessibilityLabel("\(label): \(value)")
     }
 
-    // MARK: - Action buttons (board: Reconnect (light) + Add host (dark))
+    // MARK: - Action buttons
 
     private var actionButtons: some View {
         HStack(spacing: 11) {
-            Button {
+            DSButton("Reconnect", systemImage: "arrow.clockwise", variant: .secondary, fullWidth: true) {
                 Haptics.selection()
                 if let host = reconnectableHosts.first ?? savedHosts.first { onReconnect(host) }
-            } label: {
-                Text("Reconnect")
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.text2)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(t.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(t.border, lineWidth: 1))
             }
-            .buttonStyle(.plain)
             .disabled(reconnectableHosts.isEmpty && savedHosts.isEmpty)
             .accessibilityLabel("Reconnect")
 
-            Button {
+            DSButton("Add a machine", icon: .plus, variant: .primary, fullWidth: true) {
                 Haptics.selection()
                 onConnectHost()
-            } label: {
-                Text("+ Add host")
-                    .font(.dsSansPt(14, weight: .semibold))
-                    .foregroundStyle(t.bg)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(t.text, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add host")
+            .accessibilityLabel("Add a machine")
         }
     }
 

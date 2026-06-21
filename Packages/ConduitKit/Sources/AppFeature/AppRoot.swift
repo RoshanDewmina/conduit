@@ -129,13 +129,30 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 // MARK: - Root view
 
+/// Every secondary app flow enters through this route so presentation behavior
+/// does not drift across screens as new sheets are added.
+private enum AppDrawerRoute: Identifiable {
+    case addMachine
+    case relayPairing
+    case addHost
+    case editHost(Host)
+    case activity
+
+    var id: String {
+        switch self {
+        case .addMachine: "add-machine"
+        case .relayPairing: "relay-pairing"
+        case .addHost: "add-host"
+        case .editHost(let host): "edit-host-\(host.id)"
+        case .activity: "activity"
+        }
+    }
+}
+
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
     @State private var sessionViewModel: SessionViewModel?
-    @State private var addHostPresented = false
-    @State private var addMachineChooser = false
-    @State private var relayPairPresented = false
-    @State private var editingHost: Host?
+    @State private var drawerRoute: AppDrawerRoute?
     @State private var workspacesRevision = UUID()
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
@@ -148,21 +165,18 @@ public struct AppRoot: View {
     @State private var approvalIngest: ApprovalIngest?
     @State private var showingProvisioningWizard = false
     @State private var showingQuotaGuard = false
-    @State private var showingHistory = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
-    @AppStorage("conduitColorScheme") private var colorSchemePref: String = "light"
+    @AppStorage(ConduitAppearance.storageKey) private var colorSchemePref: String = ConduitAppearance.light.rawValue
     @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var systemScheme
 
-    private var preferredScheme: ColorScheme? {
-        switch colorSchemePref {
-        case "light": return .light
-        case "dark":  return .dark
-        default:      return nil
-        }
+    private var appearance: ConduitAppearance {
+        ConduitAppearance(rawValue: colorSchemePref) ?? .light
     }
+
+    private var preferredScheme: ColorScheme? { appearance.preferredColorScheme }
 
     /// The scheme actually in effect: the Settings override if set, else the system.
     /// Drives the token palette so it always matches `preferredScheme`.
@@ -257,7 +271,9 @@ public struct AppRoot: View {
     public var body: some View {
         #if DEBUG
         if let gallery = ProcessInfo.processInfo.environment["CONDUIT_GALLERY"] {
-            DebugGalleryView(route: gallery).conduitTokens()
+            DebugGalleryView(route: gallery)
+                .conduitTokens(appearance: appearance)
+                .preferredColorScheme(preferredScheme)
         } else {
             mainBody.environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
         }
@@ -508,7 +524,8 @@ public struct AppRoot: View {
             }
         }
         .sheet(isPresented: $showingProvisioningWizard) {
-            ProvisioningWizard(
+            ConduitDrawer(detents: [.large]) {
+                ProvisioningWizard(
                 hostRepo: env.hostRepo,
                 onComplete: { host in
                     showingProvisioningWizard = false
@@ -520,62 +537,17 @@ public struct AppRoot: View {
                     }
                 },
                 onCancel: { showingProvisioningWizard = false }
-            )
+                )
+            }
         }
         .sheet(isPresented: $showingQuotaGuard) {
-            NavigationStack {
+            ConduitDrawer(title: "Usage & limits", detents: [.large]) {
                 QuotaGuardView(store: env.quotaGuardStore)
             }
         }
-        // Adding a machine offers BOTH transports: relay pairing (the easy V1 path —
-        // no SSH, scan a code) and a direct SSH host (for the live terminal).
-        .confirmationDialog("Add a machine", isPresented: $addMachineChooser, titleVisibility: .visible) {
-            Button("Pair over relay (recommended)") { relayPairPresented = true }
-            Button("Connect over SSH") { addHostPresented = true }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Relay pairing runs agents and approvals with no SSH setup. SSH adds a live terminal.")
-        }
-        .sheet(isPresented: $relayPairPresented) {
-            NavigationStack {
-                E2ERelayPairingView(client: env.e2eRelayClient)
-            }
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $addHostPresented) {
-            NavigationStack {
-                AddHostView(
-                    repository: env.hostRepo,
-                    keyStore: env.keyStore,
-                    onCancel: { addHostPresented = false },
-                    onConnectAndSave: { host in
-                        addHostPresented = false
-                        workspacesRevision = UUID()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            openSession(host: host, env: env)
-                        }
-                    }
-                )
-            }
-        }
         .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
-            RelayWorkspaceUnavailableView()
-                .presentationDetents([.height(310)])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $editingHost) { host in
-            NavigationStack {
-                HostEditorView(
-                    viewModel: HostEditorViewModel(
-                        repository: env.hostRepo,
-                        keyStore: env.keyStore,
-                        existingHost: host
-                    ) { _ in
-                        editingHost = nil
-                        workspacesRevision = UUID()
-                    }
-                )
+            ConduitDrawer(detents: [.height(310)]) {
+                RelayWorkspaceUnavailableView()
             }
         }
         .sheet(item: $passwordPromptHost) { host in
@@ -589,6 +561,9 @@ public struct AppRoot: View {
             }
             .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
             .preferredColorScheme(preferredScheme)
+        }
+        .sheet(item: $drawerRoute) { route in
+            drawerDestination(route, env: env)
         }
         // Re-prompt after consecutive auth failures on an existing session,
         // reusing the same SessionViewModel rather than creating a new one.
@@ -722,6 +697,69 @@ public struct AppRoot: View {
             daemonChannel = slot.channel
             approvalIngest = slot.ingest
             hudStore.session = slot.sessionViewModel
+        }
+    }
+
+    @ViewBuilder
+    private func drawerDestination(_ route: AppDrawerRoute, env: AppEnvironment) -> some View {
+        switch route {
+        case .addMachine:
+            ConduitDrawer(
+                title: "Add a machine",
+                subtitle: "Relay is the recommended path. SSH adds a live terminal.",
+                detents: [.medium, .large]
+            ) {
+                MachineConnectionChooser(
+                    onRelay: { drawerRoute = .relayPairing },
+                    onSSH: { drawerRoute = .addHost }
+                )
+            }
+        case .relayPairing:
+            ConduitDrawer(detents: [.large]) {
+                E2ERelayPairingView(client: env.e2eRelayClient)
+            }
+        case .addHost:
+            ConduitDrawer(detents: [.large]) {
+                AddHostView(
+                    repository: env.hostRepo,
+                    keyStore: env.keyStore,
+                    onCancel: { drawerRoute = nil },
+                    onConnectAndSave: { host in
+                        drawerRoute = nil
+                        workspacesRevision = UUID()
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            openSession(host: host, env: env)
+                        }
+                    }
+                )
+            }
+        case .editHost(let host):
+            ConduitDrawer(detents: [.large]) {
+                HostEditorView(
+                    viewModel: HostEditorViewModel(
+                        repository: env.hostRepo,
+                        keyStore: env.keyStore,
+                        existingHost: host
+                    ) { _ in
+                        drawerRoute = nil
+                        workspacesRevision = UUID()
+                    }
+                )
+            }
+        case .activity:
+            ConduitDrawer(
+                title: "Activity",
+                subtitle: "What Conduit recorded while you were away.",
+                detents: [.large]
+            ) {
+                ActivityView(
+                    actions: bridgeSessionActions(),
+                    auditRepository: env.auditRepo,
+                    daemonChannel: daemonChannel,
+                    showsHeader: false
+                )
+            }
         }
     }
 
@@ -941,21 +979,25 @@ public struct AppRoot: View {
                 // Main content — pushed right and rounded into a card when the drawer is open.
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
-                        .toolbar {
+                        // Do not place a glass control in the navigation toolbar:
+                        // UIKit wraps it in a second circular chrome layer. Root
+                        // surfaces own exactly one shared control instead.
+                        .safeAreaInset(edge: .top, spacing: 0) {
                             if sidebarState.selectedDestination != .home {
-                                ToolbarItem(placement: .topBarLeading) {
-                                    // Same glass hamburger as the Home top row, for a
-                                    // consistent drawer affordance across every destination.
+                                HStack {
                                     DSCircleButton(
                                         "line.3.horizontal",
-                                        diameter: 38,
+                                        diameter: 40,
                                         accessibilityLabel: "Open navigation",
                                         action: openDrawer
                                     )
+                                    Spacer()
                                 }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 8)
+                                .background(t.bg.opacity(0.96))
                             }
                         }
-                        .toolbarBackground(.hidden, for: .navigationBar)
                 }
                 .background(t.bg)
                 .clipShape(RoundedRectangle(cornerRadius: isOpen ? 32 : 0, style: .continuous))
@@ -1071,21 +1113,15 @@ public struct AppRoot: View {
         isShowingLiveSession = true
     }
 
-    private func inboxDestination() -> some View {
+    private func inboxDestination(env: AppEnvironment) -> some View {
         let actions = bridgeSessionActions()
         return InboxView(
             viewModel: activeInboxViewModel,
             statusHeaderAgents: [],
             onTapStatusHeader: {},
             onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) },
-            onOpenHistory: { showingHistory = true }
+            onOpenHistory: { drawerRoute = .activity }
         )
-        .sheet(isPresented: $showingHistory) {
-            ActivityView(actions: bridgeSessionActions())
-                .padding(.top, 8)
-                .presentationDragIndicator(.visible)
-                .presentationDetents([.large])
-        }
     }
 
     private func fleetDestination(env: AppEnvironment) -> some View {
@@ -1096,7 +1132,7 @@ public struct AppRoot: View {
             loopStore: env.loopStore,
             quotaGuardStore: env.quotaGuardStore,
             hostHealthStore: env.hostHealthStore,
-            onConnectHost: { addMachineChooser = true },
+            onConnectHost: { drawerRoute = .addMachine },
             onReconnect: { host in openSession(host: host, env: env) },
             onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
             onQuotaGuard: { showingQuotaGuard = true },
@@ -1167,21 +1203,15 @@ public struct AppRoot: View {
                 onOpenWorkspace: { agent in openWorkspace(for: agent) }
             )
         case .thread(let id):
-            NewChatTabView(
-                agents: dispatchAgents(),
-                runOutputStore: runOutputStore,
+            ChatHistoryView(
+                conversationID: id,
                 chatRepo: env.chatRepo,
-                fleetStore: fleetStore,
-                onDispatch: { agentID, cwd, prompt, budget, model in
-                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
-                },
-                onNewTask: { sidebarState.navigate(to: .newChat) },
-                onOpenWorkspace: { agent in openWorkspace(for: agent) },
-                initialConversationID: id
+                onBack: { sidebarState.navigate(to: .home) },
+                onNewChat: { sidebarState.navigate(to: .newChat) }
             )
             .id(id)
         case .needsAttention:
-            inboxDestination()
+            inboxDestination(env: env)
         case .machines:
             fleetDestination(env: env)
         case .settings:
@@ -1639,6 +1669,79 @@ extension Notification.Name {
     static let conduitSavedHostsDidChange = Notification.Name("conduitSavedHostsDidChange")
 }
 
+private struct MachineConnectionChooser: View {
+    let onRelay: () -> Void
+    let onSSH: () -> Void
+
+    @Environment(\.conduitTokens) private var t
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            choice(
+                title: "Pair over relay",
+                detail: "Recommended. Run agents and receive approvals without configuring SSH.",
+                icon: "link",
+                action: onRelay,
+                emphasized: true
+            )
+            choice(
+                title: "Connect over SSH",
+                detail: "Advanced. Adds a live terminal, files, diffs, and browser preview.",
+                icon: "terminal",
+                action: onSSH,
+                emphasized: false
+            )
+            Text("You can add SSH later from Machines. Relay never becomes a remote shell.")
+                .font(.dsSansPt(12))
+                .foregroundStyle(t.text3)
+                .padding(.top, 2)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
+    private func choice(
+        title: String,
+        detail: String,
+        icon: String,
+        action: @escaping () -> Void,
+        emphasized: Bool
+    ) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(emphasized ? t.accentFg : t.accent)
+                    .frame(width: 40, height: 40)
+                    .background(emphasized ? t.accent : t.accentSoft, in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.dsSansPt(16, weight: .semibold))
+                        .foregroundStyle(t.text)
+                    Text(detail)
+                        .font(.dsSansPt(12.5))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(t.text4)
+                    .padding(.top, 14)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(emphasized ? t.accent.opacity(0.6) : t.border, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .conduitGlassChrome(cornerRadius: t.r4, interactive: true)
+    }
+}
+
 private struct LaunchLockView: View {
     let onUnlock: () async -> Void
     @Environment(\.conduitTokens) private var t
@@ -1698,14 +1801,16 @@ private struct SettingsWithLibraryView: View {
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             accountSession: accountSession,
             onAccountSignedOut: onAccountSignedOut,
-            // Settings is a top-level sidebar destination, not a pushed screen — so
-            // it shows the shared drawer hamburger (from compactRoot's toolbar),
-            // not a back chevron. Pass no onBack to suppress the in-content button.
+            // Settings is a top-level sidebar destination. The compact shell
+            // provides the single glass navigation button, so suppress an
+            // in-content back affordance here.
             onBack: nil
         )
         .sheet(isPresented: $showLimits) {
             if let store = quotaGuardStore {
-                QuotaGuardView(store: store)
+                ConduitDrawer(title: "Usage & limits", detents: [.large]) {
+                    QuotaGuardView(store: store)
+                }
             }
         }
     }

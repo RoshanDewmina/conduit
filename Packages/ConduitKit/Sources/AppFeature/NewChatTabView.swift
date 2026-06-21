@@ -46,10 +46,8 @@ public struct NewChatTabView: View {
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
-    let initialConversationID: String?
 
     @State private var prompt: String = ""
-    @State private var isHistorical = false
     @State private var selectedAgentID: String = ""
     @State private var showAgentPicker = false
     @State private var showOptions = false
@@ -61,7 +59,6 @@ public struct NewChatTabView: View {
     @State private var activeRun: ActiveChatRun?
     @State private var controlStore: RunControlStore?
     @State private var chatTitle: String = "new chat"
-    @State private var sentPrompt: String = ""
     // One conversation = an ordered list of (prompt, runId) turns. The first is the
     // initial dispatch; each follow-up appends a new turn under a new runId.
     @State private var turns: [ChatTurn] = []
@@ -72,12 +69,8 @@ public struct NewChatTabView: View {
 
     // Persistence
     @State private var conversationID: String?
-    @State private var recentConversations: [ChatConversation] = []
     @State private var artifactsByRun: [String: [ChatArtifact]] = [:]
     @State private var selectedArtifact: ChatArtifact?
-    /// Repurposed: drives the landing compose drawer's expanded state (grows in
-    /// place — NOT a separate sheet).
-    @State private var showComposer = false
     @FocusState private var composeFocused: Bool
 
     @Environment(\.conduitTokens) private var t
@@ -90,8 +83,7 @@ public struct NewChatTabView: View {
         fleetStore: FleetStore,
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void,
-        onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
-        initialConversationID: String? = nil
+        onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in }
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
@@ -100,7 +92,6 @@ public struct NewChatTabView: View {
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
-        self.initialConversationID = initialConversationID
     }
 
     // MARK: - Derived run state (mirrors RunDetailView's, scoped to this thread's run)
@@ -130,59 +121,47 @@ public struct NewChatTabView: View {
         currentRun?.status == "failed" || (controlStore?.lastError != nil && controlStore?.status != .running)
     }
 
-    private var inTranscript: Bool { activeRun != nil || isHistorical }
-
     public var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                if inTranscript {
-                    darkChatHeader
-                    ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
-                        VStack(alignment: .leading, spacing: 18) {
-                            ForEach(turns) { turn in
-                                turnView(turn)
-                            }
+        VStack(spacing: 0) {
+            if activeRun != nil {
+                darkChatHeader
+                ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        ForEach(turns) { turn in
+                            turnView(turn)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
                     }
-                    if activeRun != nil {
-                        bottomBar
-                    }
-                } else {
-                    newChatLandingContent
                 }
-            }
-            .background((inTranscript ? ConduitTokens.dark.termBg : t.bg).ignoresSafeArea())
-            if activeRun == nil && !isHistorical {
-                landingComposeBar
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                bottomBar
+            } else {
+                composerForm
             }
         }
-        // The transcript is always dark (owner mockup A); the landing keeps the
-        // app's editorial light theme.
-        .environment(\.conduitTokens, inTranscript ? .dark : t)
-        .preferredColorScheme(inTranscript ? .dark : nil)
+        .background(t.bg.ignoresSafeArea())
         .onAppear {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
             }
         }
-        .task {
-            guard let cid = initialConversationID, turns.isEmpty else { return }
-            await loadConversation(id: cid)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .conduitChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
             Task { await loadArtifacts() }
         }
-        .sheet(isPresented: $showAgentPicker) {
-            agentPickerSheet
+        .bottomDrawer(
+            isPresented: $showAgentPicker,
+            title: "Choose agent",
+            subtitle: "Choose where this work should run.",
+            detents: [.medium, .large]
+        ) {
+            agentPickerContent
         }
-        .sheet(isPresented: $showBudgetSheet) {
+        .bottomDrawer(
+            isPresented: $showBudgetSheet,
+            title: "Budget cap",
+            subtitle: "Set a daily limit for this run.",
+            detents: [.height(300)]
+        ) {
             BudgetSheet { usd in Task { await controlStore?.setBudget(usd) } }
-                .presentationDetents([.height(260)])
         }
         .sheet(item: $selectedArtifact) { artifact in
             ChatArtifactDetailView(artifact: artifact)
@@ -206,197 +185,29 @@ public struct NewChatTabView: View {
         }
     }
 
-    // MARK: - Landing compose bar (board: collapsed sheet w/ model + budget pills)
+    // MARK: - Composer form (the single New Chat surface — native scroll form)
 
-    private var modelPillLabel: String {
-        if !selectedModel.isEmpty { return selectedModel }
-        switch selectedAgent?.vendor {
-        case "claudeCode": return "Sonnet 4.5"
-        case "codex":      return "GPT-5 Codex"
-        case "opencode":   return "DeepSeek V4"
-        case "kimi":       return "Kimi K2.7"
-        default:           return "Auto"
-        }
-    }
-
-    private var budgetPillLabel: String {
-        let trimmed = budgetText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value = Double(trimmed), value > 0 else { return "Cap $5" }
-        return "Cap $\(value.formatted(.number.precision(.fractionLength(0...2))))"
-    }
-
-    /// ONE drawer that grows in place — collapsed shows a short prompt + model/budget
-    /// pills; expanded (focused) grows to a tall composer with the multiline editor,
-    /// Agent/Host/Options controls, and Send — all in the SAME container. No nested sheet.
-    private var landingComposeBar: some View {
-        VStack(spacing: 0) {
-            ConduitGrabHandle()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if showComposer {
-                        Haptics.selection()
-                        collapseComposer()
-                    } else {
-                        Haptics.medium()
-                        expandComposer()
-                    }
-                }
-
-            if showComposer {
-                expandedComposerContent
-            } else {
-                collapsedComposerContent
-            }
-        }
-        .background(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(topLeading: 24, bottomLeading: 0, bottomTrailing: 0, topTrailing: 24),
-                style: .continuous
-            )
-            .fill(t.surface)
-            .ignoresSafeArea(edges: .bottom)
-        )
-        .overlay(alignment: .top) {
-            Rectangle().fill(t.border).frame(height: 1)
-        }
-        .shadow(color: .black.opacity(0.10), radius: 18, y: -6)
-        .conduitMotion(ConduitMotion.navigation, value: showComposer)
-    }
-
-    private func expandComposer() {
-        withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) {
-            showComposer = true
-        }
-        composeFocused = true
-    }
-
-    private func collapseComposer() {
-        composeFocused = false
-        withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) {
-            showComposer = false
-            showOptions = false
-        }
-    }
-
-    // MARK: Collapsed compose bar (short prompt + model/budget pills)
-
-    private var collapsedComposerContent: some View {
-        VStack(spacing: 0) {
-            Button {
-                Haptics.medium()
-                expandComposer()
-            } label: {
-                HStack {
-                    Text(selectedAgent == nil ? "Pick an agent to start\u{2026}" : "Describe a task for \(agentLabel)\u{2026}")
-                        .font(.dsSansPt(14.5))
-                        .foregroundStyle(t.text4)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: 34)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open composer")
-            .padding(.horizontal, 20)
-
-            HStack(spacing: 8) {
-                // Model pill
-                Button { expandComposer() } label: {
-                    HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(t.accent)
-                            .frame(width: 7, height: 7)
-                        Text(modelPillLabel)
-                            .font(.dsSansPt(12, weight: .medium))
-                            .foregroundStyle(t.text3)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 7)
-                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Model \(modelPillLabel)")
-
-                // Budget pill
-                Button { expandComposer() } label: {
-                    Text(budgetPillLabel)
-                        .font(.dsSansPt(12, weight: .medium))
-                        .foregroundStyle(t.text3)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .strokeBorder(t.border, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Budget \(budgetPillLabel)")
-
-                Spacer(minLength: 0)
-
-                // Send → expands the drawer in place
-                Button {
-                    Haptics.medium()
-                    expandComposer()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(t.accentFg)
-                        .frame(width: 42, height: 42)
-                        .background(t.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("New chat")
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
-            .padding(.bottom, 22)
-        }
-    }
-
-    // MARK: Expanded compose drawer (grows in place — multiline editor + controls + Send)
-
-    private var expandedComposerContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
+    /// One always-visible native form. No grow/collapse drawer, no GeometryReader
+    /// height feedback — the system keyboard pushes the ScrollView up on its own.
+    private var composerForm: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("New chat")
-                        .font(.dsDisplayPt(22, weight: .bold))
+                        .font(.dsDisplayPt(26, weight: .bold))
                         .foregroundStyle(t.text)
                     Text("Describe the work. Conduit routes it through policy before anything runs.")
                         .font(.dsSansPt(13))
                         .foregroundStyle(t.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
-                Button {
-                    Haptics.selection()
-                    collapseComposer()
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(t.text2)
-                        .frame(width: 40, height: 40)
-                        .background(t.surface2, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Collapse composer")
-            }
+                .padding(.top, 8)
 
-            ZStack(alignment: .topLeading) {
-                TextField("Describe a task or just say hi...", text: $prompt, axis: .vertical)
+                TextField("Describe a task or just say hi…", text: $prompt, axis: .vertical)
                     .font(.dsSansPt(16))
                     .foregroundStyle(t.text)
                     .tint(t.accent)
-                    .lineLimit(3...8)
+                    .lineLimit(4...12)
                     .focused($composeFocused)
                     .padding(14)
                     .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -404,325 +215,70 @@ public struct NewChatTabView: View {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(t.border.opacity(0.72), lineWidth: 1)
                     )
-            }
 
-            HStack(spacing: 10) {
-                composerPill(
-                    title: agentLabel,
-                    subtitle: "Agent",
-                    icon: .sparkles,
-                    tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
-                ) {
-                    showAgentPicker = true
+                HStack(spacing: 10) {
+                    composerPill(
+                        title: agentLabel,
+                        subtitle: "Agent",
+                        icon: .sparkles,
+                        tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
+                    ) {
+                        showAgentPicker = true
+                    }
+                    composerPill(
+                        title: machineLabel,
+                        subtitle: "Host",
+                        icon: .server,
+                        tone: t.text3
+                    ) {
+                        showAgentPicker = true
+                    }
                 }
-                composerPill(
-                    title: machineLabel,
-                    subtitle: "Host",
-                    icon: .server,
-                    tone: t.text3
-                ) {
-                    showAgentPicker = true
-                }
-            }
 
-            Button {
-                withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) {
-                    showOptions.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Options")
-                        .font(.dsSansPt(14, weight: .semibold))
-                    Image(systemName: showOptions ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(showOptions ? t.text : t.text3)
-            }
-            .buttonStyle(.plain)
-
-            if showOptions {
-                optionsPanel
-            }
-
-            Button {
-                let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                composeFocused = false
-                Task { await sendCurrentPrompt() }
-            } label: {
-                HStack(spacing: 9) {
-                    Text("Send")
-                        .font(.dsSansPt(16, weight: .semibold))
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                }
-                .foregroundStyle(canSend ? t.accentFg : t.text4)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(canSend ? t.accent : t.surfaceSunk, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .accessibilityLabel("Send chat")
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 22)
-    }
-
-    // MARK: - Active chat header (post-dispatch)
-
-    private var chatHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                Haptics.selection()
-                resetForNewChat()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(t.text)
-                    .frame(width: 42, height: 42)
-                    .background(t.surface2, in: Circle())
-                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(chatTitle)
-                    .font(.dsSansPt(17, weight: .semibold))
-                    .foregroundStyle(t.text)
-                    .lineLimit(1)
-                if isStreaming {
-                    Text("Agent is working")
-                        .font(.dsSansPt(12, weight: .medium))
-                        .foregroundStyle(t.text3)
-                }
-            }
-            Spacer()
-            Button {
-                Haptics.selection()
-                onOpenWorkspace(selectedAgent)
-            } label: {
-                Image(systemName: "rectangle.3.group")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(t.text2)
-                    .frame(width: 42, height: 42)
-                    .background(t.surface2, in: Circle())
-                    .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open workspace")
-            if isStreaming {
-                HStack(spacing: 5) {
-                    Circle().fill(t.ok).frame(width: 6, height: 6)
-                    Text("working")
-                        .font(.dsSansPt(12, weight: .semibold))
-                        .foregroundStyle(t.ok)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(t.okSoft, in: Capsule())
-            } else {
                 Button {
-                    Haptics.selection()
-                    resetForNewChat()
+                    withAnimation(ConduitMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) {
+                        showOptions.toggle()
+                    }
                 } label: {
-                    DSIconView(.plus, size: 16, color: t.text2)
-                        .frame(width: 42, height: 42)
-                        .background(t.surface2, in: Circle())
-                        .overlay(Circle().strokeBorder(t.border.opacity(0.8), lineWidth: 1))
+                    HStack(spacing: 8) {
+                        Text("Options")
+                            .font(.dsSansPt(14, weight: .semibold))
+                        Image(systemName: showOptions ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(showOptions ? t.text : t.text3)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("New chat")
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
-        .background(t.bg.opacity(0.96))
-    }
 
-    // MARK: - Fleet landing content (pre-dispatch)
-
-    private var newChatLandingContent: some View {
-        VStack(spacing: 0) {
-            ConduitScreenHeader(
-                kicker: "Let's get to work —",
-                title: "What should your agents do next?"
-            )
-            fleetLandingContent
-        }
-    }
-
-    private var fleetLandingContent: some View {
-        Group {
-            if agents.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    DSIconView(.server, size: 32, color: t.text4)
-                    Text("No agents connected")
-                        .font(.dsSansPt(17, weight: .semibold))
-                        .foregroundStyle(t.text4)
-                    Text("Pair a host in Settings to start dispatching work.")
-                        .font(.dsSansPt(14))
-                        .foregroundStyle(t.text4)
-                        .multilineTextAlignment(.center)
-                    Spacer()
+                if showOptions {
+                    optionsPanel
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 24)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // PICK AN AGENT
-                        ConduitSectionLabel("Pick an agent")
-                            .padding(.horizontal, 24)
-                            .padding(.top, 18)
-                            .padding(.bottom, 11)
-                        VStack(spacing: 10) {
-                            ForEach(agents) { agent in
-                                agentPickCard(agent)
-                            }
-                        }
-                        .padding(.horizontal, 20)
 
-                        // PROJECT
-                        if !projectChips.isEmpty {
-                            ConduitSectionLabel("Project")
-                                .padding(.horizontal, 24)
-                                .padding(.top, 20)
-                                .padding(.bottom, 11)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 9) {
-                                    ForEach(projectChips, id: \.self) { path in
-                                        projectChip(path)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                            }
-                        }
+                Button {
+                    let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    composeFocused = false
+                    Task { await sendCurrentPrompt() }
+                } label: {
+                    HStack(spacing: 9) {
+                        Text("Send")
+                            .font(.dsSansPt(16, weight: .semibold))
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
                     }
-                    .padding(.bottom, 150)
+                    .foregroundStyle(canSend ? t.accentFg : t.text4)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(canSend ? t.accent : t.surfaceSunk, in: Capsule())
                 }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("Send chat")
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    // MARK: - Board agent card (initial tile · name · machine · status · selected check)
-
-    private func agentPickCard(_ agent: DispatchAgent) -> some View {
-        let isSelected = agent.id == selectedAgentID
-        return Button {
-            Haptics.selection()
-            selectedAgentID = agent.id
-        } label: {
-            HStack(spacing: 12) {
-                Text(Self.vendorInitial(agent))
-                    .font(.dsDisplayPt(15, weight: .bold))
-                    .foregroundStyle(isSelected ? t.accentFg : t.text2)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        isSelected ? t.accent : t.surface2,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(agent.name)
-                        .font(.dsSansPt(14.5, weight: .semibold))
-                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
-                        .lineLimit(1)
-                    Text("\(agent.hostName ?? agent.name) \u{00B7} \(agent.isOffline ? "offline" : "ready")")
-                        .font(.dsSansPt(12))
-                        .foregroundStyle(t.text4)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                ZStack {
-                    if isSelected {
-                        Circle()
-                            .fill(t.accent)
-                            .frame(width: 22, height: 22)
-                            .overlay(
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(t.accentFg)
-                            )
-                    } else {
-                        Circle()
-                            .fill(agent.isOffline ? t.text4 : t.ok)
-                            .frame(width: 8, height: 8)
-                    }
-                }
-                .frame(width: 22, alignment: .trailing)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? t.accent : t.border, lineWidth: isSelected ? 1.5 : 1)
-            )
-            .shadow(color: .black.opacity(isSelected ? 0.08 : 0.04), radius: isSelected ? 10 : 6, y: 3)
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(agent.isOffline)
-        .conduitMotion(ConduitMotion.emphasis, value: isSelected)
-        .accessibilityLabel("\(agent.name), \(agent.isOffline ? "offline" : "ready")")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    // MARK: - Project chips
-
-    /// Distinct working directories across agents, with the selected agent's cwd first.
-    private var projectChips: [String] {
-        var seen = Set<String>()
-        var ordered: [String] = []
-        if let sel = selectedAgent {
-            let p = sel.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-            seen.insert(p); ordered.append(p)
-        }
-        for agent in agents {
-            let p = agent.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-            if seen.insert(p).inserted { ordered.append(p) }
-        }
-        return ordered
-    }
-
-    private func projectChip(_ path: String) -> some View {
-        let isSelected = selectedAgent.map {
-            $0.cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~") == path
-        } ?? false
-        return HStack(spacing: 8) {
-            Image(systemName: "folder")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? t.accentFg : t.text3)
-            Text(path)
-                .font(.dsMonoPt(11.5, weight: .medium))
-                .foregroundStyle(isSelected ? t.accentFg : t.text2)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .background(
-            isSelected ? t.accent : t.surface,
-            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(isSelected ? Color.clear : t.border, lineWidth: 1)
-        )
-        .accessibilityLabel("Project \(path)\(isSelected ? ", selected" : "")")
-    }
-
-    static func vendorInitial(_ agent: DispatchAgent) -> String {
-        let key = agent.vendor.isEmpty ? agent.name.lowercased() : agent.vendor.lowercased()
-        if key.contains("codex") { return "Cx" }
-        if key.contains("claude") { return "C" }
-        if key.contains("kimi") { return "K" }
-        if key.contains("opencode") || key.contains("open") { return "O" }
-        return String((agent.vendor.isEmpty ? agent.name : agent.vendor).prefix(1)).uppercased()
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Composer pill (Agent / Host control)
@@ -777,7 +333,8 @@ public struct NewChatTabView: View {
         DarkUserBubble(promptText)
     }
 
-    // Dark transcript header (owner mockup A). Reads the dark-injected tokens.
+    // Transcript chrome follows the app theme; only the terminal output card is
+    // intentionally dark so an active conversation doesn't create a second app skin.
     private var darkChatHeader: some View {
         DarkTranscriptHeader(
             title: chatTitle,
@@ -984,14 +541,12 @@ public struct NewChatTabView: View {
         switch outcome {
         case .started(let run):
             chatTitle = titleFromPrompt(trimmedPrompt)
-            sentPrompt = trimmedPrompt
             activeRun = run
             turns = [ChatTurn(prompt: trimmedPrompt, runId: run.runId)]
             controlStore = RunControlStore(channel: run.channel, runId: run.runId)
             prompt = ""
             selectedModel = ""
             budgetText = ""
-            showComposer = false
             showOptions = false
             // Persist conversation + turn
             if let chatRepo {
@@ -1061,7 +616,6 @@ public struct NewChatTabView: View {
         activeRun = nil
         controlStore = nil
         chatTitle = "new task"
-        sentPrompt = ""
         turns = []
         prompt = ""
         followUpText = ""
@@ -1069,28 +623,7 @@ public struct NewChatTabView: View {
         conversationID = nil
         artifactsByRun = [:]
         selectedArtifact = nil
-        isHistorical = false
-        showComposer = false
         showOptions = false
-    }
-
-    private func loadConversation(id cid: String) async {
-        guard let repo = chatRepo else { return }
-        guard let conv = try? await repo.conversation(id: cid) else { return }
-        let persisted = (try? await repo.turns(conversationID: cid)) ?? []
-        let artifacts = (try? await repo.artifacts(conversationID: cid)) ?? []
-        await MainActor.run {
-            chatTitle = conv.title
-            conversationID = cid
-            turns = []
-            for p in persisted {
-                runOutputStore.register(runId: p.runID, status: "exited")
-                runOutputStore.appendOutput(RunOutputParams(runId: p.runID, stream: "stdout", chunk: p.assistantText, seq: 0))
-            }
-            turns = persisted.map { ChatTurn(prompt: $0.prompt, runId: $0.runID) }
-            artifactsByRun = Dictionary(grouping: artifacts, by: \.runID)
-            isHistorical = true
-        }
     }
 
     private func loadArtifacts() async {
@@ -1185,26 +718,17 @@ public struct NewChatTabView: View {
             .map { ($0.key, $0.value) }
     }
 
-    private var agentPickerSheet: some View {
-        NavigationStack {
-            ZStack {
-                t.bg.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(groupedAgents, id: \.0) { group in
-                            agentPickerGroup(machine: group.0, agents: group.1)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 28)
+    private var agentPickerContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(groupedAgents, id: \.0) { group in
+                    agentPickerGroup(machine: group.0, agents: group.1)
                 }
             }
-            .navigationTitle("Choose agent")
-            .navigationBarTitleDisplayMode(.inline)
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 28)
         }
-        .presentationBackground(t.bg)
-        .presentationDetents([.medium, .large])
     }
 
     private func agentPickerGroup(machine: String, agents: [DispatchAgent]) -> some View {

@@ -75,17 +75,13 @@ public struct ConduitSidebarView: View {
                         .foregroundStyle(t.text3)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(t.text2)
-                    .frame(width: 30, height: 30)
-                    .background(t.surface2, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Settings and account")
         .accessibilityHint("Opens settings")
+        .coachmarkAnchor("settings")
     }
 
     // MARK: - New chat CTA
@@ -161,14 +157,6 @@ public struct ConduitSidebarView: View {
                 action: { onNavigate(.machines) }
             )
             .coachmarkAnchor("terminal")
-            SidebarNavRow(
-                icon: "gearshape",
-                title: "Settings",
-                badge: nil,
-                selected: state.selectedDestination == .settings,
-                action: { onNavigate(.settings) }
-            )
-            .coachmarkAnchor("settings")
         }
     }
 
