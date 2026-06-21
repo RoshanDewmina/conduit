@@ -26,6 +26,39 @@
 
 ---
 
+## 0. P0 tester-readiness blockers — VERIFIED DOWN (2026-06-20)
+
+> Found while assessing "can self-hosted testers use this yet?". Both block the V1 relay loop;
+> neither is an app-code bug. Tracked here; owned by the daemon/infra lane.
+
+- **`TESTER-1` — The V1 relay is unreachable.** `curl https://35.201.3.231.sslip.io/health`
+  (the URL baked into `project.yml:26` `CONDUIT_PUSH_BACKEND_URL`) returns nothing. V1's transport is
+  the E2E relay (phone ↔ `push-backend` ↔ daemon), so the entire control loop is dead until it is
+  redeployed. **Note the drift:** §A of `PUBLISH_READINESS_CHECKLIST.md` claims a 2026-06-19 Cloud Run
+  rebuild (`conduit-push`, australia-southeast1), but the app ships the `sslip.io` URL — reconcile which
+  instance is canonical and point `project.yml` at the live one.
+- **`TESTER-2` — The `conduitd` install one-liner 404s.** The only published GitHub release is stale
+  `v0.1.0` (2026-05-24, pre-policy/pre-relay-fix). Its asset names use hyphens
+  (`conduitd-darwin-arm64`) but `daemon/conduitd/install.sh` fetches underscores
+  (`conduitd_darwin_arm64`); there is also no `SHA256SUMS`, no `install.sh` asset, and no darwin-amd64
+  binary. `curl … | sh` cannot succeed. Fix: cut a fresh release from current source for
+  darwin/linux × amd64/arm64 with `SHA256SUMS`, reconcile the naming, and add a release CI job
+  (only `ci.yml` exists today).
+
+## 0.1 Account / device management — COMPLETED (2026-06-20)
+
+- Codex's account-identity stack (Supabase email/password, self-hosted offline mode, QR device
+  bind/redeem, HS256 JWT verification, billing rebound to JWT subject) verified green: 414 SPM tests,
+  app-target UI tests 7/7 on iPhone + iPad, all 3 Go modules, resident smoke 4/4.
+- **Device-management screen added** (`SettingsFeature/DeviceManagementView.swift`): Settings →
+  Connection → Devices (standard-account only) lists bound daemons and revokes them against
+  `GET /v1/devices` + `POST /v1/devices/{id}/revoke`. Covered by `AccountSessionTests`.
+- **Residual release gates** (owner-configured, not code bugs): production Supabase project + SMTP +
+  `SUPABASE_JWT_SECRET`; **HS256-only** verifier (add JWKS if the project signs RS256); physical-device
+  APNs/biometric/StoreKit/Watch pass per `OWNER_DEVICE_CHECKLIST.md`.
+
+---
+
 ## 1. Build & test baseline — VERIFIED GREEN (2026-06-18)
 
 | Target | Command | Result |

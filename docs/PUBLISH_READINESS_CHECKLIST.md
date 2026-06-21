@@ -36,7 +36,8 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 
 ## B. Engineering — finish/verify before publish (things we can do)
 
-- [ ] **B1 — Reconcile the current working tree before release.** Review and commit/stash/discard uncommitted changes on this branch.
+- [x] **B1 — Reconcile the current working tree before release.** ✅ 2026-06-20: Codex's account-identity + V1-surface WIP verified (414 SPM tests, app-target UI 7/7 iPhone+iPad, all 3 Go modules, resident smoke 4/4) and committed to `codex/ios27-shell-workspace`; device-management screen added. No secrets staged (Supabase config is `$(...)` placeholders).
+- [ ] **B0 — Restore the tester loop (P0, blocks any external testing).** Two blockers verified down 2026-06-20 (see `KNOWN_ISSUES.md` §0): (a) the V1 relay at the baked-in `https://35.201.3.231.sslip.io` is unreachable — redeploy `push-backend` and point `project.yml:26` at the live instance (reconcile the §A Cloud Run vs. sslip.io drift); (b) the `conduitd` `curl|sh` installer 404s — cut a fresh release from current source with matching asset names + `SHA256SUMS`. Until both are green, no self-hosted tester can connect.
 - [x] **B2 — Make the live app↔daemon relay repeatable.** ✅ `scripts/relay-regression.sh` created. Run it to verify the loop.
 - [ ] **B3 — Green *app-target* Release build + clean archive.** Requires Xcode (watchOS runtime gate). SPM passes, but full Xcode scheme catches strict-concurrency breaks SPM misses.
 - [ ] **B4 — Rebuild/repackage conduitd from Go source.** `scripts/release-conduitd.sh` must emit the Go build.
