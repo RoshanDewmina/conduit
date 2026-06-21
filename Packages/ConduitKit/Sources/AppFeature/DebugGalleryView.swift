@@ -711,6 +711,10 @@ struct DebugGalleryView: View {
                     DarkUserBubble("can you fix the auth redirect loop?")
                     DarkAssistantBubble("Sure — the redirect guard was missing a return after the 302. I patched it and I'll run the suite to confirm.")
 
+                    // The working indicator (replaces the old pixel-grid box).
+                    DarkUserBubble("now run the tests")
+                    DarkTypingIndicator()
+
                     // A command turn → the macOS terminal card. Long output so the
                     // collapsed cap + "tap to expand" affordance is visible.
                     DarkUserBubble("run the auth test suite")

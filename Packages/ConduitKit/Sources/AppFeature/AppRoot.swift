@@ -390,7 +390,16 @@ public struct AppRoot: View {
             runOutputStore.updateStatus(params)
             if case .ready(let env) = environment,
                params.status == "exited" || params.status == "failed" {
+                // Persist the run's accumulated output back onto the turn so the
+                // history view shows the real reply on reopen instead of
+                // "(no output recorded)". (The live store is in-memory only.)
+                let finalText = runOutputStore.run(params.runId)?.text ?? ""
                 Task {
+                    try? await env.chatRepo.updateTurnOutput(
+                        runID: params.runId,
+                        assistantText: finalText,
+                        status: params.status == "exited" && params.exitCode == 0 ? .completed : .failed
+                    )
                     try? await env.chatRepo.updateArtifactStatuses(
                         runID: params.runId,
                         status: params.status == "exited" && params.exitCode == 0 ? .done : .failed
@@ -984,6 +993,16 @@ public struct AppRoot: View {
         sidebarState.isDrawerOpen = true
     }
 
+    /// Chat destinations render their own top chrome (a dark transcript header or
+    /// the composer landing's own bar), so the shell must NOT add its beige
+    /// hamburger inset above them — that was the beige seam over the dark chat.
+    private func isChatDestination(_ dest: SidebarDestination) -> Bool {
+        switch dest {
+        case .thread, .newChat: return true
+        default: return false
+        }
+    }
+
     private func compactRoot(env: AppEnvironment) -> some View {
         GeometryReader { proxy in
             let drawerWidth = min(340, proxy.size.width * 0.8)
@@ -1011,7 +1030,10 @@ public struct AppRoot: View {
                         // UIKit wraps it in a second circular chrome layer. Root
                         // surfaces own exactly one shared control instead.
                         .safeAreaInset(edge: .top, spacing: 0) {
-                            if sidebarState.selectedDestination != .home {
+                            // Chat destinations own their top chrome; everything else
+                            // (Inbox, Machines, Settings) gets the shell hamburger bar.
+                            if sidebarState.selectedDestination != .home,
+                               !isChatDestination(sidebarState.selectedDestination) {
                                 HStack {
                                     DSCircleButton(
                                         "line.3.horizontal",
@@ -1233,7 +1255,8 @@ public struct AppRoot: View {
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
                 onNewTask: { sidebarState.navigate(to: .newChat) },
-                onOpenWorkspace: { agent in openWorkspace(for: agent) }
+                onOpenWorkspace: { agent in openWorkspace(for: agent) },
+                onOpenSidebar: openDrawer
             )
         case .thread(let id):
             ChatHistoryView(
@@ -1243,6 +1266,7 @@ public struct AppRoot: View {
                 onNewChat: { sidebarState.navigate(to: .newChat) }
             )
             .id(id)
+            .environment(\.conduitTokens, .dark)
         case .needsAttention:
             inboxDestination(env: env)
         case .machines:

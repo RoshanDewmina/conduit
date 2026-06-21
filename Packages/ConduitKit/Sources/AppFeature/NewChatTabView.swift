@@ -46,6 +46,7 @@ public struct NewChatTabView: View {
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
+    var onOpenSidebar: () -> Void = {}
 
     @State private var prompt: String = ""
     @State private var selectedAgentID: String = ""
@@ -89,7 +90,8 @@ public struct NewChatTabView: View {
         fleetStore: FleetStore,
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void,
-        onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in }
+        onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
+        onOpenSidebar: @escaping () -> Void = {}
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
@@ -98,6 +100,7 @@ public struct NewChatTabView: View {
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
+        self.onOpenSidebar = onOpenSidebar
     }
 
     // MARK: - Derived run state (mirrors RunDetailView's, scoped to this thread's run)
@@ -143,7 +146,10 @@ public struct NewChatTabView: View {
                 composerLanding
             }
         }
-        .background(t.bg.ignoresSafeArea())
+        // The active-run transcript is dark by design; theme that state dark so the
+        // background fills to the top with no beige seam. Composer landing stays light.
+        .background((activeRun != nil ? ConduitTokens.dark.bg : t.bg).ignoresSafeArea())
+        .environment(\.conduitTokens, activeRun != nil ? .dark : t)
         .onAppear {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
@@ -214,6 +220,17 @@ public struct NewChatTabView: View {
     /// landing stays quiet and there's no full-page form to scroll.
     private var composerLanding: some View {
         VStack(spacing: 20) {
+            HStack {
+                DSCircleButton(
+                    "line.3.horizontal",
+                    diameter: 40,
+                    accessibilityLabel: "Open navigation",
+                    action: onOpenSidebar
+                )
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
             Spacer()
             VStack(spacing: 10) {
                 DSIconView(.sparkles, size: 30, color: t.accent)
@@ -423,15 +440,6 @@ public struct NewChatTabView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if let run, !run.text.isEmpty || !run.blocks.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                if isLast && isStreaming {
-                    HStack(spacing: 5) {
-                        PixelBox(state: agentState, size: 9, subdivisions: 2)
-                        Text(agentState == .thinking ? "thinking\u{2026}" : "streaming")
-                            .font(.dsSansPt(12, weight: .medium))
-                            .foregroundStyle(t.text4)
-                    }
-                    .padding(.bottom, 2)
-                }
                 // A turn with command/tool blocks is a terminal turn: its streamed
                 // output (run.text) belongs in the dark macOS-window card, one per
                 // command. A turn with no blocks is a plain reply — show its prose
@@ -455,14 +463,13 @@ public struct NewChatTabView: View {
                 }
                 persistedArtifacts(for: turn.runId)
             }
+            .transition(.opacity)
         } else {
-            HStack(spacing: 6) {
-                PixelBox(state: .thinking, size: 10, subdivisions: 2)
-                Text("thinking\u{2026}")
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text4)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // No output yet — the agent is working. Calm typing indicator instead
+            // of the old pixel-grid box; it morphs into the reply when text lands.
+            DarkTypingIndicator()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
         }
     }
 

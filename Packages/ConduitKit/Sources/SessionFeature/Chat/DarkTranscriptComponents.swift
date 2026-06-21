@@ -58,6 +58,61 @@ public struct DarkAssistantBubble: View {
     }
 }
 
+// MARK: - Typing indicator (the agent is working)
+//
+// Replaces the old pixel-grid + "thinking…/streaming" label. A calm row of three
+// dots that breathe in a gentle stagger, inside an assistant-bubble surface — it
+// reads as "composing a reply" and morphs into the real reply when text arrives.
+// Designed to be quiet enough to watch for a long run.
+
+public struct DarkTypingIndicator: View {
+    @Environment(\.conduitTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase = 0.0
+
+    public init() {}
+
+    public var body: some View {
+        HStack(alignment: .top) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(t.text3)
+                        .frame(width: 7, height: 7)
+                        .opacity(dotOpacity(i))
+                        .scaleEffect(dotScale(i))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
+            )
+            .accessibilityLabel("Agent is working")
+            Spacer(minLength: 56)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                phase = 1.0
+            }
+        }
+    }
+
+    // Each dot is offset in the cycle so the row "breathes" left-to-right.
+    private func dotOpacity(_ i: Int) -> Double {
+        let shifted = (phase + Double(i) * 0.22).truncatingRemainder(dividingBy: 1.0)
+        return 0.35 + 0.55 * (0.5 - abs(shifted - 0.5)) * 2
+    }
+
+    private func dotScale(_ i: Int) -> Double {
+        let shifted = (phase + Double(i) * 0.22).truncatingRemainder(dividingBy: 1.0)
+        return 0.85 + 0.25 * (0.5 - abs(shifted - 0.5)) * 2
+    }
+}
+
 // MARK: - Terminal block card (dark, traffic-light header + mono body)
 //
 // Collapsed by default — caps the body to the last few lines and a fixed height so
