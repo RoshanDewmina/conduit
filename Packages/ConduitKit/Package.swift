@@ -24,6 +24,7 @@ let package = Package(
         // ── Engines (no UIKit) ───────────────────────────────────────────
         .library(name: "ConduitCore",      targets: ["ConduitCore"]),
         .library(name: "SecurityKit",      targets: ["SecurityKit"]),
+        .library(name: "AccountKit",       targets: ["AccountKit"]),
         .library(name: "SSHTransport",     targets: ["SSHTransport"]),
         .library(name: "TerminalEngine",   targets: ["TerminalEngine"]),
         .library(name: "AgentKit",         targets: ["AgentKit"]),
@@ -71,6 +72,11 @@ let package = Package(
                 "ConduitCore",
                 .product(name: "Citadel", package: "Citadel"),
             ],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "AccountKit",
+            dependencies: ["ConduitCore", "SecurityKit"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -142,7 +148,7 @@ let package = Package(
         // Features (UI). Each feature is one-screen-deep + view models.
         .target(
             name: "OnboardingFeature",
-            dependencies: ["DesignSystem", "SecurityKit", "NotificationsKit", "PersistenceKit", "SSHTransport", "AgentKit"],
+            dependencies: ["DesignSystem", "SecurityKit", "AccountKit", "NotificationsKit", "PersistenceKit", "SSHTransport", "AgentKit"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -196,6 +202,7 @@ let package = Package(
             name: "SettingsFeature",
             dependencies: [
                 "ConduitCore",
+                "AccountKit",
                 "DesignSystem",
                 "PersistenceKit",
                 "AgentKit",
@@ -240,6 +247,7 @@ let package = Package(
             name: "ConduitKitTests",
             dependencies: [
                 "ConduitCore",
+                "AccountKit",
                 "SecurityKit",
                 "SSHTransport",
                 "TerminalEngine",

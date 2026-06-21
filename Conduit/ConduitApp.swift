@@ -86,14 +86,21 @@ struct ConduitApp: App {
     private var appRoot: some View {
         AppRoot()
             .onOpenURL { url in
-                guard url.scheme == "conduit", url.host == "billing" else { return }
-                // Store the return URL so BillingView / settings can surface it.
-                UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
-                // Refresh StoreKit entitlements — the user may have completed a
-                // purchase (StoreKit or Stripe) and returned via the deep link.
-                Task {
-                    await PurchaseManager.shared.restore()
-                    await PurchaseManager.shared.refreshCloudEntitlement()
+                guard url.scheme == "conduit" else { return }
+                switch url.host {
+                case "billing":
+                    // Store the return URL so BillingView / settings can surface it.
+                    UserDefaults.standard.set(url.absoluteString, forKey: "dev.conduit.lastBillingReturnURL")
+                    // Refresh StoreKit entitlements — the user may have completed a
+                    // purchase (StoreKit or Stripe) and returned via the deep link.
+                    Task {
+                        await PurchaseManager.shared.restore()
+                        await PurchaseManager.shared.refreshCloudEntitlement()
+                    }
+                case "auth":
+                    NotificationCenter.default.post(name: .conduitAuthCallback, object: url)
+                default:
+                    break
                 }
             }
     }
@@ -121,8 +128,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// Wire up Live Activity push token registration alongside the APNs device-token path.
     /// Sets the tokenRegistration closure on ConduitLiveActivityManager so new activity
     /// tokens and the push-to-start token are forwarded to push-backend.
-    /// The merge owner must also call manager.startPushToStartMonitor(sessionID:) from
-    /// AppRoot once the stable sessionID is available (i.e. after configureCloudServices).
+    /// AppRoot starts the push-to-start monitor once the stable session ID is
+    /// available and forwards every token through the daemon-held relay secret.
     private func configureLiveActivityTokens() {
         #if os(iOS)
         if #available(iOS 16.2, *) {

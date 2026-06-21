@@ -33,6 +33,10 @@
 	<true/>
 	<key>CONDUIT_PUSH_BACKEND_URL</key>
 	<string>$(CONDUIT_PUSH_BACKEND_URL)</string>
+	<key>CONDUIT_SUPABASE_PUBLISHABLE_KEY</key>
+	<string>$(CONDUIT_SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>CONDUIT_SUPABASE_URL</key>
+	<string>$(CONDUIT_SUPABASE_URL)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>

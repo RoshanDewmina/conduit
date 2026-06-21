@@ -104,6 +104,7 @@ func main() {
 	registerScheduleRoutes(mux)
 	registerRunLogRoutes(mux)
 	registerOrgRoutes(mux)
+	registerDeviceBindingRoutes(mux)
 	initWebhookRoutes(mux)
 
 	initEntitlementStore()

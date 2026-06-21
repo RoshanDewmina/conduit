@@ -88,6 +88,20 @@ func handleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	var accountUser *authenticatedUser
+	if supabaseJWTConfigured() {
+		user, ok := requireAuthenticatedUser(w, r)
+		if !ok {
+			return
+		}
+		accountUser = &user
+		// Never trust customerId or email supplied by a standard-account client.
+		req.CustomerID = ""
+		req.Email = user.Email
+		if entitlement, ok := lookupEntitlementForUser(user.ID); ok {
+			req.CustomerID = entitlement.CustomerID
+		}
+	}
 
 	priceID, err := stripePriceID(req.Plan)
 	if err != nil {
@@ -111,6 +125,10 @@ func handleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		values.Set("client_reference_id", req.AppAccountToken)
 		values.Set("metadata[app_account_token]", req.AppAccountToken)
 		values.Set("subscription_data[metadata][app_account_token]", req.AppAccountToken)
+	}
+	if accountUser != nil {
+		values.Set("metadata[conduit_user_id]", accountUser.ID)
+		values.Set("subscription_data[metadata][conduit_user_id]", accountUser.ID)
 	}
 
 	body, status, err := stripePostForm("/v1/checkout/sessions", values)
@@ -136,6 +154,18 @@ func handleBillingPortal(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if supabaseJWTConfigured() {
+		user, ok := requireAuthenticatedUser(w, r)
+		if !ok {
+			return
+		}
+		entitlement, found := lookupEntitlementForUser(user.ID)
+		if !found || entitlement.CustomerID == "" {
+			http.Error(w, "subscription not found", http.StatusNotFound)
+			return
+		}
+		req.CustomerID = entitlement.CustomerID
 	}
 	if req.CustomerID == "" {
 		http.Error(w, "customerId is required", http.StatusBadRequest)
@@ -168,6 +198,18 @@ func handleBillingPortal(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBillingStatus(w http.ResponseWriter, r *http.Request) {
+	if supabaseJWTConfigured() {
+		user, ok := requireAuthenticatedUser(w, r)
+		if !ok {
+			return
+		}
+		if entitlement, found := lookupEntitlementForUser(user.ID); found {
+			writeJSON(w, http.StatusOK, enrichEntitlementForClient(entitlement))
+			return
+		}
+		writeJSON(w, http.StatusOK, subscriptionEntitlement{UserID: user.ID, Status: "not_found", Active: false, UpdatedAt: time.Now().UTC().Format(time.RFC3339)})
+		return
+	}
 	customerID := r.URL.Query().Get("customerId")
 	sessionID := r.URL.Query().Get("checkoutSessionId")
 
@@ -239,6 +281,7 @@ func handleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 		var session stripeSession
 		if err := json.Unmarshal(event.Data.Object, &session); err == nil {
 			entitlement := subscriptionEntitlement{
+				UserID:          session.Metadata["conduit_user_id"],
 				CustomerID:      string(session.Customer),
 				SubscriptionID:  string(session.Subscription),
 				Status:          "checkout_completed",
@@ -379,6 +422,7 @@ func entitlementFromSubscription(sub stripeSubscription) subscriptionEntitlement
 		orgName = sub.Metadata["orgName"]
 	}
 	return subscriptionEntitlement{
+		UserID:           sub.Metadata["conduit_user_id"],
 		CustomerID:       string(sub.Customer),
 		OrgID:            orgID,
 		OrgName:          orgName,

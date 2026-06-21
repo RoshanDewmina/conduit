@@ -24,6 +24,10 @@ settings:
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
     # Example: https://conduit-push-HASH-ts.a.run.app
     CONDUIT_PUSH_BACKEND_URL: "https://35.201.3.231.sslip.io"
+    # Standard account configuration is injected by local/CI build settings.
+    # The repository intentionally contains no Supabase project credentials.
+    CONDUIT_SUPABASE_URL: ""
+    CONDUIT_SUPABASE_PUBLISHABLE_KEY: ""
 
 packages:
   ConduitKit:
@@ -76,6 +80,11 @@ targets:
         # Push backend HTTPS URL — read at runtime by ConduitApp.swift.
         # Set CONDUIT_PUSH_BACKEND_URL in build settings to the Cloud Run service URL.
         CONDUIT_PUSH_BACKEND_URL: "$(CONDUIT_PUSH_BACKEND_URL)"
+        # Standard-account (Supabase) config — read at runtime by AccountConfiguration.fromBundle.
+        # Empty build-setting values leave standard sign-in unavailable (offline pairing still works);
+        # inject real values via local/CI build settings, never committed.
+        CONDUIT_SUPABASE_URL: "$(CONDUIT_SUPABASE_URL)"
+        CONDUIT_SUPABASE_PUBLISHABLE_KEY: "$(CONDUIT_SUPABASE_PUBLISHABLE_KEY)"
         # iCloud/CloudKit gate, read at runtime by SyncKit/CloudSync.swift.
         # MUST stay false while building with Conduit-DeviceTesting.entitlements
         # (no icloud-services entitlement). Flip to true together with the

@@ -130,6 +130,37 @@ func TestBillingEntitlementEndpoint(t *testing.T) {
 	}
 }
 
+func TestBillingEntitlementUsesVerifiedUserInsteadOfClientIdentifier(t *testing.T) {
+	setupTestStores(t)
+	jwtSecret := "billing-jwt-secret"
+	t.Setenv("SUPABASE_JWT_SECRET", jwtSecret)
+	cacheEntitlement(subscriptionEntitlement{
+		UserID: "user-owned", CustomerID: "cus_owned", SubscriptionID: "sub_owned",
+		Status: "active", Active: true, AppAccountToken: "private-token", UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	cacheEntitlement(subscriptionEntitlement{
+		UserID: "user-other", CustomerID: "cus_other", SubscriptionID: "sub_other",
+		Status: "active", Active: true, AppAccountToken: "other-token", UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+
+	mux := http.NewServeMux()
+	registerBillingRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/billing/entitlement?appAccountToken=other-token", nil)
+	req.Header.Set("Authorization", "Bearer "+signedSupabaseToken(t, jwtSecret, "user-owned", "owner@example.com"))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got subscriptionEntitlement
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CustomerID != "cus_owned" || got.UserID != "user-owned" {
+		t.Fatalf("entitlement was not user-bound: %+v", got)
+	}
+}
+
 func TestWebhookUpdatesPersistedEntitlement(t *testing.T) {
 	setupTestStores(t)
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")

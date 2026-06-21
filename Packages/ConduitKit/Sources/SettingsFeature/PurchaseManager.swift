@@ -84,13 +84,15 @@ public final class PurchaseManager {
 
     @ObservationIgnored nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
     @ObservationIgnored private var cachedBackendURL: String?
+    @ObservationIgnored private var accountAccessToken: String?
 
     private init() {
         transactionListener = listenForTransactions()
     }
 
-    public func configure(backendURL: String) {
+    public func configure(backendURL: String, accountAccessToken: String? = nil) {
         cachedBackendURL = backendURL
+        self.accountAccessToken = accountAccessToken
     }
 
     public func load() async {
@@ -181,7 +183,8 @@ public final class PurchaseManager {
             let entitlement = try await client.fetch(
                 customerId: customerId,
                 appAccountToken: appToken,
-                checkoutSessionId: checkoutSessionId
+                checkoutSessionId: checkoutSessionId,
+                accessToken: accountAccessToken
             )
             cloudEntitlement = entitlement
             cloudEntitlementState = .loaded

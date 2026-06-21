@@ -16,6 +16,9 @@ import (
 )
 
 type subscriptionEntitlement struct {
+	// UserID is the verified Supabase auth.users UUID that owns this billing
+	// record. Standard-account reads are keyed exclusively by this value.
+	UserID           string `json:"userId,omitempty"`
 	CustomerID       string `json:"customerId,omitempty"`
 	OrgID            string `json:"orgId,omitempty"`
 	OrgName          string `json:"orgName,omitempty"`
@@ -34,20 +37,22 @@ type subscriptionEntitlement struct {
 }
 
 type entitlementSnapshot struct {
-	ByCustomer     map[string]subscriptionEntitlement `json:"byCustomer"`
-	ByAppToken     map[string]string                  `json:"byAppToken"`
-	ByClientToken  map[string]string                  `json:"byClientToken"`
+	ByCustomer    map[string]subscriptionEntitlement `json:"byCustomer"`
+	ByUser        map[string]string                  `json:"byUser"`
+	ByAppToken    map[string]string                  `json:"byAppToken"`
+	ByClientToken map[string]string                  `json:"byClientToken"`
 }
 
 type entitlementBackend interface {
 	GetByCustomerID(customerID string) (subscriptionEntitlement, bool)
+	GetByUserID(userID string) (subscriptionEntitlement, bool)
 	GetByAppAccountToken(token string) (subscriptionEntitlement, bool)
 	GetByClientToken(token string) (subscriptionEntitlement, bool)
 	Put(entitlement subscriptionEntitlement) error
 }
 
 var (
-	entitlementStoreMu sync.RWMutex
+	entitlementStoreMu     sync.RWMutex
 	activeEntitlementStore entitlementBackend
 )
 
@@ -99,6 +104,7 @@ func newFileEntitlementStore(path string) *fileEntitlementStore {
 		path: path,
 		data: entitlementSnapshot{
 			ByCustomer:    make(map[string]subscriptionEntitlement),
+			ByUser:        make(map[string]string),
 			ByAppToken:    make(map[string]string),
 			ByClientToken: make(map[string]string),
 		},
@@ -108,6 +114,9 @@ func newFileEntitlementStore(path string) *fileEntitlementStore {
 	}
 	if s.data.ByCustomer == nil {
 		s.data.ByCustomer = make(map[string]subscriptionEntitlement)
+	}
+	if s.data.ByUser == nil {
+		s.data.ByUser = make(map[string]string)
 	}
 	if s.data.ByAppToken == nil {
 		s.data.ByAppToken = make(map[string]string)
@@ -121,6 +130,17 @@ func newFileEntitlementStore(path string) *fileEntitlementStore {
 func (s *fileEntitlementStore) GetByCustomerID(customerID string) (subscriptionEntitlement, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	ent, ok := s.data.ByCustomer[customerID]
+	return ent, ok
+}
+
+func (s *fileEntitlementStore) GetByUserID(userID string) (subscriptionEntitlement, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	customerID, ok := s.data.ByUser[userID]
+	if !ok {
+		return subscriptionEntitlement{}, false
+	}
 	ent, ok := s.data.ByCustomer[customerID]
 	return ent, ok
 }
@@ -168,6 +188,9 @@ func (s *fileEntitlementStore) Put(entitlement subscriptionEntitlement) error {
 	if entitlement.AppAccountToken != "" {
 		s.data.ByAppToken[entitlement.AppAccountToken] = entitlement.CustomerID
 	}
+	if entitlement.UserID != "" {
+		s.data.ByUser[entitlement.UserID] = entitlement.CustomerID
+	}
 	s.data.ByClientToken[entitlement.ClientToken] = entitlement.CustomerID
 	return saveJSONFile(s.path, s.data)
 }
@@ -214,6 +237,22 @@ func (s *redisEntitlementStore) GetByCustomerID(customerID string) (subscription
 		return subscriptionEntitlement{}, false
 	}
 	return ent, true
+}
+
+func (s *redisEntitlementStore) GetByUserID(userID string) (subscriptionEntitlement, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	conn, err := dialRedis(ctx, s.url)
+	if err != nil {
+		log.Printf("entitlements redis get user: %v", err)
+		return subscriptionEntitlement{}, false
+	}
+	defer conn.Close()
+	customerID, err := conn.Get(ctx, redisUserKey(userID))
+	if err != nil || customerID == "" {
+		return subscriptionEntitlement{}, false
+	}
+	return s.GetByCustomerID(customerID)
 }
 
 func (s *redisEntitlementStore) GetByAppAccountToken(token string) (subscriptionEntitlement, bool) {
@@ -285,6 +324,11 @@ func (s *redisEntitlementStore) Put(entitlement subscriptionEntitlement) error {
 			return err
 		}
 	}
+	if entitlement.UserID != "" {
+		if err := conn.Set(ctx, redisUserKey(entitlement.UserID), entitlement.CustomerID); err != nil {
+			return err
+		}
+	}
 	if err := conn.Set(ctx, redisClientTokenKey(entitlement.ClientToken), entitlement.CustomerID); err != nil {
 		return err
 	}
@@ -293,6 +337,10 @@ func (s *redisEntitlementStore) Put(entitlement subscriptionEntitlement) error {
 
 func redisCustomerKey(customerID string) string {
 	return fmt.Sprintf("conduit:entitlement:customer:%s", customerID)
+}
+
+func redisUserKey(userID string) string {
+	return fmt.Sprintf("conduit:entitlement:user:%s", userID)
 }
 
 func redisAppTokenKey(token string) string {
@@ -325,6 +373,13 @@ func lookupEntitlement(customerID, appAccountToken string) (subscriptionEntitlem
 		}
 	}
 	return subscriptionEntitlement{}, false
+}
+
+func lookupEntitlementForUser(userID string) (subscriptionEntitlement, bool) {
+	if userID == "" {
+		return subscriptionEntitlement{}, false
+	}
+	return getEntitlementStore().GetByUserID(userID)
 }
 
 // resolveEntitlementFromBearer validates the Authorization: Bearer token and
@@ -392,6 +447,19 @@ func entitlementFromRequest(r *http.Request, bodyCustomerID, bodyAppToken string
 }
 
 func handleBillingEntitlement(w http.ResponseWriter, r *http.Request) {
+	if supabaseJWTConfigured() {
+		user, ok := requireAuthenticatedUser(w, r)
+		if !ok {
+			return
+		}
+		entitlement, found := lookupEntitlementForUser(user.ID)
+		if !found {
+			writeJSON(w, http.StatusOK, subscriptionEntitlement{UserID: user.ID, Status: "not_found", Active: false, UpdatedAt: time.Now().UTC().Format(time.RFC3339)})
+			return
+		}
+		writeJSON(w, http.StatusOK, enrichEntitlementForClient(entitlement))
+		return
+	}
 	req := entitlementFromRequest(r, "", "")
 	if req.CustomerID == "" && req.AppAccountToken == "" {
 		http.Error(w, "customerId or appAccountToken is required", http.StatusBadRequest)

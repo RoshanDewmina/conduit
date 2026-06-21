@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import Observation
+import AccountKit
 import ConduitCore
 import AgentKit
 import DesignSystem
@@ -152,6 +153,7 @@ public final class SettingsViewModel {
 struct TrustPrivacyView: View {
     @Environment(\.conduitTokens) private var t
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("appLockEnabled") private var appLockEnabled = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -229,6 +231,25 @@ struct TrustPrivacyView: View {
                         connRow(active: false, title: "Self-hosted relay", detail: "Run the relay container yourself for full control.")
                         hairline
                         connRow(active: false, title: "Direct / same network", detail: "Skip the relay entirely when on the same LAN.")
+                    }
+
+                    sectionHead("APP LOCK")
+                    card {
+                        Toggle(isOn: $appLockEnabled) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Require Face ID on launch")
+                                    .font(.dsSansPt(15, weight: .semibold))
+                                    .foregroundStyle(t.text)
+                                Text("Lock Conduit when it leaves the foreground. Your device passcode remains the system fallback.")
+                                    .font(.dsSansPt(12))
+                                    .foregroundStyle(t.text3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .tint(t.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .accessibilityLabel("Require Face ID on launch")
                     }
 
                     sectionHead("HOW IT COMPARES")
@@ -390,9 +411,10 @@ public struct SettingsView: View {
     public var onResetApp: (() -> Void)? = nil
     public var onShowLimits: (() -> Void)? = nil
     public var onEmergencyStop: (() -> Void)? = nil
+    public var onAccountSignedOut: (() -> Void)? = nil
+    private let accountSession: AccountSessionController?
     public var onBack: (() -> Void)? = nil
     @AppStorage("conduitColorScheme") private var colorSchemePref: String = "system"
-    @AppStorage("appLockEnabled") private var appLockEnabled = false
     @State private var showResetConfirmation = false
     @State private var purchases = PurchaseManager.shared
     @Environment(\.conduitTokens) private var t
@@ -413,6 +435,8 @@ public struct SettingsView: View {
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
         onShowLimits: (() -> Void)? = nil,
+        accountSession: AccountSessionController? = nil,
+        onAccountSignedOut: (() -> Void)? = nil,
         onBack: (() -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
@@ -428,6 +452,8 @@ public struct SettingsView: View {
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
         self.onShowLimits = onShowLimits
+        self.accountSession = accountSession
+        self.onAccountSignedOut = onAccountSignedOut
         self.onBack = onBack
     }
 
@@ -498,18 +524,21 @@ public struct SettingsView: View {
     // MARK: - Profile card
 
     private var profileCard: some View {
-        NavigationLink {
-            BillingView(backendURL: backendURL)
-        } label: {
-            HStack(spacing: 14) {
+        VStack(spacing: 8) {
+            NavigationLink {
+                BillingView(backendURL: backendURL)
+            } label: {
+                HStack(spacing: 14) {
                 SettingsBrandMark()
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Roshan")
+                    Text(accountSession?.email ?? (accountSession?.isOfflineSelfHosted == true ? "Self-hosted offline" : "Conduit"))
                         .font(.dsDisplayPt(17, weight: .bold))
                         .foregroundStyle(t.text)
-                    Text(purchases.isPro ? "Conduit Pro · manage" : "Free plan · upgrade")
+                    Text(accountSession?.isOfflineSelfHosted == true ? "Local pairing only · no hosted billing" : (purchases.isPro ? "Conduit Pro · manage" : "Free plan · upgrade"))
                         .font(.dsMonoPt(12))
-                        .foregroundStyle(t.text4)
+                        // This is actionable account state, not disabled text.  Keep it
+                        // legible in Dark mode as well as on the lighter surfaces.
+                        .foregroundStyle(t.text3)
                 }
                 Spacer(minLength: 0)
                 Text(purchases.isPro ? "PRO" : "FREE")
@@ -520,15 +549,29 @@ public struct SettingsView: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(t.text4)
+                }
+                .padding(16)
+                .background(t.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                .contentShape(Rectangle())
             }
-            .padding(16)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.border, lineWidth: 1))
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            if accountSession?.isStandardAccount == true {
+                Button("sign out") {
+                    Task {
+                        await accountSession?.signOut()
+                        Haptics.success()
+                        onAccountSignedOut?()
+                    }
+                }
+                .font(.dsMonoPt(11, weight: .medium))
+                .foregroundStyle(t.text3)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityIdentifier("accountSignOut")
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
     }
 
     // MARK: - Policy & Governance (folded in from the former Governance root — accent, not green)
@@ -652,7 +695,7 @@ public struct SettingsView: View {
                 .foregroundStyle(t.text)
             Text(detail)
                 .font(.dsSansPt(11))
-                .foregroundStyle(t.text4)
+                .foregroundStyle(t.text3)
                 .padding(.top, 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -689,6 +732,12 @@ public struct SettingsView: View {
         settingsCard {
             NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
+            }
+            if accountSession?.isStandardAccount == true {
+                divider
+                NavigationLink { DeviceManagementView(backendURL: backendURL, accountSession: accountSession) } label: {
+                    settingsNavRow("Devices", icon: "externaldrive.badge.person.crop", detail: "bound daemons")
+                }
             }
             divider
             NavigationLink { DoctorView(viewModel: DoctorViewModel(actions: bridgeActions)) } label: {
@@ -764,7 +813,7 @@ public struct SettingsView: View {
         Text(title)
             .font(.dsMonoPt(10, weight: .medium))
             .tracking(1.1)
-            .foregroundStyle(t.text4)
+            .foregroundStyle(t.text3)
             .textCase(.uppercase)
             .padding(.horizontal, 16)
             .padding(.top, 22)

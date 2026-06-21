@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -44,10 +45,13 @@ func generatePairingCode() (string, error) {
 // phone can scan the QR shown by conduitd pair and extract the relay URL,
 // pairing code, and the daemon's ephemeral public key.
 type qrPairingPayload struct {
-	V     int    `json:"v"`
-	Relay string `json:"relay"`
-	Code  string `json:"code"`
-	PK    string `json:"pk"`
+	V                int    `json:"v"`
+	Relay            string `json:"relay"`
+	Code             string `json:"code"`
+	PK               string `json:"pk"`
+	AccountBackend   string `json:"accountBackend,omitempty"`
+	AccountChallenge string `json:"accountChallenge,omitempty"`
+	AccountSecret    string `json:"accountSecret,omitempty"`
 }
 
 func printRelayInstructions() {
@@ -77,6 +81,16 @@ func printRelayInstructions() {
 		Relay: relayURL,
 		Code:  code,
 		PK:    pubB64,
+	}
+	if backendURL := strings.TrimSpace(os.Getenv("CONDUIT_ACCOUNT_BACKEND_URL")); backendURL != "" {
+		challenge, err := createAccountDeviceChallenge(backendURL, hostnameForPairing(), publicKeyFingerprint(pubB64))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: account device binding unavailable: %v\n", err)
+		} else {
+			payload.AccountBackend = backendURL
+			payload.AccountChallenge = challenge.ID
+			payload.AccountSecret = challenge.Secret
+		}
 	}
 	qrData, err := json.Marshal(payload)
 	if err != nil {
@@ -135,4 +149,15 @@ func printRelayInstructions() {
 ╚══════════════════════════════════════════╝
 
 `, code, relayURL)
+	if payload.AccountChallenge != "" {
+		fmt.Println("This QR also contains a one-time account device-binding challenge.")
+		fmt.Println("On a signed-in phone, choose “bind this daemon to my account”.")
+		if credential, err := waitForAccountDeviceCredential(payload.AccountBackend, payload.AccountChallenge, payload.AccountSecret, 10*time.Minute); err != nil {
+			fmt.Fprintf(os.Stderr, "account device binding not completed: %v\n", err)
+		} else if err := writeAccountDeviceCredential(credential); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: account device credential was issued but could not be stored: %v\n", err)
+		} else {
+			fmt.Println("Account device binding complete. No account password was requested.")
+		}
+	}
 }

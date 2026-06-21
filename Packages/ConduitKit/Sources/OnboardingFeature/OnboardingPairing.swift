@@ -16,11 +16,17 @@ public enum OnboardingPairing {
         let relay: String
         let code: String
         let pk: String
+        let accountBackend: String?
+        let accountChallenge: String?
+        let accountSecret: String?
     }
 
     /// Render the pairing QR for the current client/code as a SwiftUI `Image`, or nil on failure.
     public static func renderQR(relay: URL, code: String, publicKey: String) -> Image? {
-        let payload = Payload(v: 1, relay: relay.absoluteString, code: code, pk: publicKey)
+        let payload = Payload(
+            v: 1, relay: relay.absoluteString, code: code, pk: publicKey,
+            accountBackend: nil, accountChallenge: nil, accountSecret: nil
+        )
         guard let data = try? JSONEncoder().encode(payload),
               let ui = makeQR(from: data) else { return nil }
         return Image(uiImage: ui)
@@ -33,6 +39,25 @@ public enum OnboardingPairing {
             return normalize(decoded.code)
         }
         return normalize(payload)
+    }
+
+    public struct DeviceBindingChallenge: Sendable, Equatable {
+        public let backendURL: URL
+        public let challengeID: String
+        public let secret: String
+    }
+
+    /// Returns the account-binding material only when the daemon deliberately
+    /// included it in a QR challenge. Legacy/offline relay QR codes continue to
+    /// decode normally and never call the account backend.
+    public static func extractDeviceBinding(fromScanned payload: String) -> DeviceBindingChallenge? {
+        guard let data = payload.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(Payload.self, from: data),
+              let backend = decoded.accountBackend.flatMap(URL.init(string:)),
+              let challengeID = decoded.accountChallenge, challengeID.count >= 16,
+              let secret = decoded.accountSecret, secret.count >= 32
+        else { return nil }
+        return DeviceBindingChallenge(backendURL: backend, challengeID: challengeID, secret: secret)
     }
 
     /// Keep only the digits; return nil unless exactly 6.

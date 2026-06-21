@@ -91,14 +91,18 @@ public struct CloudEntitlementClient: Sendable {
     public func fetch(
         customerId: String?,
         appAccountToken: String? = nil,
-        checkoutSessionId: String? = nil
+        checkoutSessionId: String? = nil,
+        accessToken: String? = nil
     ) async throws -> CloudEntitlement {
         var components = URLComponents(url: baseURL.appendingPathComponent("billing/entitlement"), resolvingAgainstBaseURL: false)!
         var query: [URLQueryItem] = []
-        if let customerId, !customerId.isEmpty {
+        // Standard accounts are server-bound by their verified Supabase JWT.
+        // Do not also send client-controlled customer or app-account identifiers.
+        let usesAccountIdentity = accessToken?.isEmpty == false
+        if !usesAccountIdentity, let customerId, !customerId.isEmpty {
             query.append(URLQueryItem(name: "customerId", value: customerId))
         }
-        if let appAccountToken, !appAccountToken.isEmpty {
+        if !usesAccountIdentity, let appAccountToken, !appAccountToken.isEmpty {
             query.append(URLQueryItem(name: "appAccountToken", value: appAccountToken))
         }
         if let checkoutSessionId, !checkoutSessionId.isEmpty {
@@ -111,6 +115,9 @@ public struct CloudEntitlementClient: Sendable {
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let accessToken, !accessToken.isEmpty {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
 
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 404 {
