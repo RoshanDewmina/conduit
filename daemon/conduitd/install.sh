@@ -234,14 +234,20 @@ if [ "${CONDUIT_INSTALL_SHIM:-}" = "1" ]; then
   install_shim
 fi
 
+# Start the resident daemon as a background service (launchd/systemd) so it's
+# running and ready to pair. Tolerate failure — the user can re-run it manually.
+echo ""
+echo "Starting the Conduit background service…"
+"$TARGET" install 2>&1 | sed 's/^/  /' || echo "  (could not auto-start the service — run '$TARGET install' manually)"
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  conduitd installed at ${TARGET}"
+echo "  ✓ Conduit daemon installed and running."
 echo ""
-echo "  Next steps:"
-echo "  1. Run 'conduitd install' to set up launchd/systemd"
-echo "  2. Run 'conduitd pair' to generate a pairing QR"
-echo "  3. Open Conduit on your phone and scan the QR"
+echo "  Pair your phone — scan the QR below (or type the code):"
+echo "    1. Open Conduit on your iPhone"
+echo "    2. Tap  Settings → Relay Pairing"
+echo "    3. Scan the QR, or enter the 6-digit code"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -250,7 +256,7 @@ if [[ "${CONDUIT_SKIP_PAIR:-}" != "1" ]]; then
 fi
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  For self-host relay setup, see:"
-echo "  daemon/push-backend/SELF_HOST.md"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Re-pair anytime:          $TARGET pair"
+echo "  Diagnose the daemon:      $TARGET doctor"
+echo "  Self-host your own relay: daemon/push-backend/SELF_HOST.md"
+echo ""

@@ -13,10 +13,11 @@ import (
 )
 
 // defaultRelayURL is the fallback blind-relay endpoint used when CONDUIT_RELAY_URL
-// is unset. Self-hosters point CONDUIT_RELAY_URL at their own relay (e.g. a
-// Tailscale Funnel hostname: wss://<host>.<tailnet>.ts.net/ws/relay base, or a
-// GCP VM). See daemon/push-backend/DEPLOY.md.
-const defaultRelayURL = "wss://relay.conduit.dev"
+// is unset. This is the live hosted relay (Cloud Run) the iOS app ships pointed at
+// (project.yml CONDUIT_PUSH_BACKEND_URL), so testers pair out of the box with no
+// extra config. Self-hosters override it via CONDUIT_RELAY_URL to point at their
+// own relay (e.g. a Tailscale Funnel hostname or a GCP VM). See daemon/push-backend/DEPLOY.md.
+const defaultRelayURL = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
 
 // resolveRelayURL returns the relay base URL: CONDUIT_RELAY_URL when set
 // (trimmed), otherwise defaultRelayURL. The single source of truth for the relay
