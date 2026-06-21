@@ -609,44 +609,23 @@ public struct SettingsView: View {
             }
             .buttonStyle(.plain)
 
-            settingsCard {
+            // Match the GENERAL section's 2-up cards so these primary governance
+            // controls read at the same weight, not as cramped list rows.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)], spacing: 11) {
                 NavigationLink { AutonomyLevelView() } label: {
-                    autonomyValueRow
-                }
+                    settingsGridCard("Default autonomy", icon: "slider.horizontal.3", tint: t.accent, detail: autonomyLabel)
+                }.buttonStyle(.plain)
                 if auditRepository != nil {
-                    divider
                     NavigationLink {
                         AuditView(viewModel: AuditViewModel(repository: auditRepository!), daemonChannel: daemonChannel)
                     } label: {
-                        settingsNavRow("Enforcement log", icon: "list.bullet.clipboard", detail: "approval & run history")
-                    }
+                        settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "approval & run history")
+                    }.buttonStyle(.plain)
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
-    }
-
-    private var autonomyValueRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(t.text2)
-                .frame(width: 28, height: 28)
-                .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text("Default autonomy")
-                .font(.dsSansPt(16))
-                .foregroundStyle(t.text)
-            Spacer()
-            Text(autonomyLabel)
-                .font(.dsSansPt(13))
-                .foregroundStyle(t.text3)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(t.text4)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .contentShape(Rectangle())
     }
 
     private var autonomyLabel: String {

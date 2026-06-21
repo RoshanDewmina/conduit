@@ -927,16 +927,14 @@ public struct AppRoot: View {
                         .toolbar {
                             if sidebarState.selectedDestination != .home {
                                 ToolbarItem(placement: .topBarLeading) {
-                                Button {
-                                    openDrawer()
-                                } label: {
-                                    DSIconView(.list, size: 18, color: t.text)
-                                        .frame(width: 50, height: 50)
-                                        .background(t.surface2.opacity(0.94), in: Circle())
-                                        .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Open sidebar")
+                                    // Same glass hamburger as the Home top row, for a
+                                    // consistent drawer affordance across every destination.
+                                    DSCircleButton(
+                                        "line.3.horizontal",
+                                        diameter: 38,
+                                        accessibilityLabel: "Open navigation",
+                                        action: openDrawer
+                                    )
                                 }
                             }
                         }
@@ -1682,11 +1680,11 @@ private struct SettingsWithLibraryView: View {
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             accountSession: accountSession,
             onAccountSignedOut: onAccountSignedOut,
-            onBack: {
-                sidebarShellState.returnToPreviousDestination()
-            }
+            // Settings is a top-level sidebar destination, not a pushed screen — so
+            // it shows the shared drawer hamburger (from compactRoot's toolbar),
+            // not a back chevron. Pass no onBack to suppress the in-content button.
+            onBack: nil
         )
-        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showLimits) {
             if let store = quotaGuardStore {
                 QuotaGuardView(store: store)

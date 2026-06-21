@@ -234,16 +234,27 @@ private struct CoachmarkOverlay: View {
     private func focusRing(around rect: CGRect) -> some View {
         let inset: CGFloat = 8
         let ringRect = rect.insetBy(dx: -inset, dy: -inset)
+        let corner = t.r3 + inset * 0.5
         TimelineView(.animation(paused: reduceMotion)) { timeline in
+            // `cycle` runs 0→1 each ~1.6s; `breathe` is a smooth 0↔1 sine.
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-            let pulse = reduceMotion ? 0 : (0.5 + 0.5 * sin(phase * 2.4))
-            RoundedRectangle(cornerRadius: t.r3 + inset * 0.5, style: .continuous)
-                .strokeBorder(t.accent.opacity(0.9), lineWidth: 2)
-                .frame(width: ringRect.width, height: ringRect.height)
-                .position(x: ringRect.midX, y: ringRect.midY)
-                .shadow(color: t.accent.opacity(0.55 + 0.25 * pulse), radius: 6 + 6 * pulse)
-                .scaleEffect(1 + 0.015 * pulse)
-                .accessibilityHidden(true)
+            let cycle = reduceMotion ? 0 : (phase.truncatingRemainder(dividingBy: 1.6) / 1.6)
+            let breathe = reduceMotion ? 0 : (0.5 + 0.5 * sin(phase * 3.0))
+            ZStack {
+                // Expanding "radar" pulse: grows outward and fades, on a loop.
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .strokeBorder(t.accent.opacity(reduceMotion ? 0 : (1 - cycle) * 0.7), lineWidth: 2.5)
+                    .frame(width: ringRect.width, height: ringRect.height)
+                    .scaleEffect(1 + 0.28 * cycle)
+                // Solid breathing ring on the target.
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .strokeBorder(t.accent.opacity(0.95), lineWidth: 2.5)
+                    .frame(width: ringRect.width, height: ringRect.height)
+                    .shadow(color: t.accent.opacity(0.5 + 0.4 * breathe), radius: 7 + 9 * breathe)
+                    .scaleEffect(1 + 0.04 * breathe)
+            }
+            .position(x: ringRect.midX, y: ringRect.midY)
+            .accessibilityHidden(true)
         }
     }
 
