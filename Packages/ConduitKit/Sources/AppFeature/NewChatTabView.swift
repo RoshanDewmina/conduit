@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import SessionFeature
 import AgentKit
 import PersistenceKit
 
@@ -129,36 +130,40 @@ public struct NewChatTabView: View {
         currentRun?.status == "failed" || (controlStore?.lastError != nil && controlStore?.status != .running)
     }
 
+    private var inTranscript: Bool { activeRun != nil || isHistorical }
+
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
-                if activeRun != nil || isHistorical {
-                    chatHeader
-                }
-                if activeRun != nil || isHistorical {
+                if inTranscript {
+                    darkChatHeader
                     ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 18) {
                             ForEach(turns) { turn in
                                 turnView(turn)
                             }
                         }
                         .padding(.horizontal, 18)
-                        .padding(.top, 16)
+                        .padding(.top, 12)
                         .padding(.bottom, 8)
+                    }
+                    if activeRun != nil {
+                        bottomBar
                     }
                 } else {
                     newChatLandingContent
                 }
-                if activeRun != nil {
-                    bottomBar
-                }
             }
-            .background(t.bg.ignoresSafeArea())
+            .background((inTranscript ? ConduitTokens.dark.termBg : t.bg).ignoresSafeArea())
             if activeRun == nil && !isHistorical {
                 landingComposeBar
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
+        // The transcript is always dark (owner mockup A); the landing keeps the
+        // app's editorial light theme.
+        .environment(\.conduitTokens, inTranscript ? .dark : t)
+        .preferredColorScheme(inTranscript ? .dark : nil)
         .onAppear {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
@@ -769,16 +774,19 @@ public struct NewChatTabView: View {
     }
 
     private func userTurn(_ promptText: String) -> some View {
-        HStack(alignment: .top) {
-            Spacer(minLength: 56)
-            Text(promptText)
-                .font(.dsSansPt(16))
-                .foregroundStyle(t.accentFg)
-                .textSelection(.enabled)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(t.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
+        DarkUserBubble(promptText)
+    }
+
+    // Dark transcript header (owner mockup A). Reads the dark-injected tokens.
+    private var darkChatHeader: some View {
+        DarkTranscriptHeader(
+            title: chatTitle,
+            subtitle: "\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "relay")",
+            isLive: isStreaming,
+            onBack: { Haptics.selection(); resetForNewChat() },
+            onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
+            onNew: { Haptics.selection(); resetForNewChat() }
+        )
     }
 
     @ViewBuilder
@@ -801,19 +809,16 @@ public struct NewChatTabView: View {
                     }
                     .padding(.bottom, 2)
                 }
-                if !run.blocks.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(run.blocks) { block in
-                            InlineChatToolCard(block: block)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                // One dark terminal block card per turn: command lines + streamed
+                // output, colored like a real terminal (mockup A).
+                DarkTerminalBlockCard(
+                    host: selectedAgent?.hostName ?? "relay",
+                    command: run.blocks.first.map { blockCommand($0) },
+                    output: run.text,
+                    state: isLast && isErrorState ? .error : (isLast && isStreaming ? .running : .done)
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
                 persistedArtifacts(for: turn.runId)
-                if !run.text.isEmpty {
-                    StreamingOutputText(text: run.text, isStreaming: isLast && isStreaming)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
         } else {
             HStack(spacing: 6) {
@@ -824,6 +829,16 @@ public struct NewChatTabView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// Extract a human command string from a relay tool block's input JSON.
+    private func blockCommand(_ block: RunOutputStore.ToolBlock) -> String {
+        guard let data = block.inputJSON.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return block.toolName }
+        if let cmd = json["command"] as? String { return cmd }
+        if let path = json["path"] as? String { return path }
+        return block.toolName
     }
 
     @ViewBuilder
@@ -1247,52 +1262,4 @@ public struct NewChatTabView: View {
     }
 }
 
-private struct InlineChatToolCard: View {
-    let block: RunOutputStore.ToolBlock
-    @Environment(\.conduitTokens) private var t
-
-    private var command: String {
-        guard let data = block.inputJSON.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return block.toolName }
-        if let cmd = json["command"] as? String { return cmd }
-        if let path = json["path"] as? String { return path }
-        return block.toolName
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(block.status == .running ? t.info : t.ok)
-                .frame(width: 3)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(block.toolName.uppercased())
-                        .font(.dsMonoPt(9, weight: .semibold))
-                        .foregroundStyle(t.text4)
-                        .tracking(0.8)
-                    Spacer()
-                    if block.status == .running {
-                        PixelBox(state: .streaming, size: 7, subdivisions: 2)
-                    } else {
-                        DSStatusDot(tone: .ok, size: 6)
-                    }
-                }
-                Text(command)
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text)
-                    .lineLimit(3)
-                    .textSelection(.enabled)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-        }
-        .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r2, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: t.r2, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: t.r2, style: .continuous)
-                .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
-        )
-    }
-}
 #endif
