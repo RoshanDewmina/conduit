@@ -24,10 +24,12 @@ settings:
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
     # Example: https://conduit-push-HASH-ts.a.run.app
     CONDUIT_PUSH_BACKEND_URL: "https://conduit-push-y4wpy6zeva-ts.a.run.app"
-    # Standard account configuration is injected by local/CI build settings.
-    # The repository intentionally contains no Supabase project credentials.
-    CONDUIT_SUPABASE_URL: ""
-    CONDUIT_SUPABASE_PUBLISHABLE_KEY: ""
+    # Standard account configuration (Supabase project sfuqarvoxfupvadsvejb).
+    # The PUBLISHABLE/anon key is a PUBLIC client key (RLS-protected) and ships in
+    # the app binary by design, so it's committed here. NEVER put the service-role
+    # key (or the JWT secret) here — those are server-side secrets.
+    CONDUIT_SUPABASE_URL: "https://sfuqarvoxfupvadsvejb.supabase.co"
+    CONDUIT_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmdXFhcnZveGZ1cHZhZHN2ZWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5OTU1MTEsImV4cCI6MjA5NzU3MTUxMX0.qQCNAR3VQvilyySnx7037bicekJt3jL_TNH2GnZ_CaE"
 
 packages:
   ConduitKit:
