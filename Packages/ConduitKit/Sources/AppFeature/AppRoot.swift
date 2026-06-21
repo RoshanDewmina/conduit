@@ -979,6 +979,12 @@ public struct AppRoot: View {
                 // Main content — pushed right and rounded into a card when the drawer is open.
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
+                        // Every Conduit page brings its own header and the shell
+                        // supplies the hamburger below, so the system navigation
+                        // bar is never wanted — hiding it here (once) removes the
+                        // empty-bar hairline that showed on pages (Inbox, Machines)
+                        // which didn't individually hide it.
+                        .toolbar(.hidden, for: .navigationBar)
                         // Do not place a glass control in the navigation toolbar:
                         // UIKit wraps it in a second circular chrome layer. Root
                         // surfaces own exactly one shared control instead.
@@ -1063,6 +1069,7 @@ public struct AppRoot: View {
             } detail: {
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
+                        .toolbar(.hidden, for: .navigationBar)
                 }
             }
             .task { await sidebarState.loadRecent() }
