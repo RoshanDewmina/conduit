@@ -323,11 +323,13 @@ public struct AppRoot: View {
         .task {
             if onboardingSeen {
                 Notifications.shared.registerCategories()
+                _ = await Notifications.shared.requestAuthorization()
             }
         }
         .onChange(of: onboardingSeen) { _, seen in
             if seen {
                 Notifications.shared.registerCategories()
+                Task { _ = await Notifications.shared.requestAuthorization() }
             }
         }
         .sheet(isPresented: $showingPaywall) {
