@@ -133,6 +133,8 @@ public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
     @State private var sessionViewModel: SessionViewModel?
     @State private var addHostPresented = false
+    @State private var addMachineChooser = false
+    @State private var relayPairPresented = false
     @State private var editingHost: Host?
     @State private var workspacesRevision = UUID()
     @State private var passwordPromptHost: Host?
@@ -524,6 +526,21 @@ public struct AppRoot: View {
             NavigationStack {
                 QuotaGuardView(store: env.quotaGuardStore)
             }
+        }
+        // Adding a machine offers BOTH transports: relay pairing (the easy V1 path —
+        // no SSH, scan a code) and a direct SSH host (for the live terminal).
+        .confirmationDialog("Add a machine", isPresented: $addMachineChooser, titleVisibility: .visible) {
+            Button("Pair over relay (recommended)") { relayPairPresented = true }
+            Button("Connect over SSH") { addHostPresented = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Relay pairing runs agents and approvals with no SSH setup. SSH adds a live terminal.")
+        }
+        .sheet(isPresented: $relayPairPresented) {
+            NavigationStack {
+                E2ERelayPairingView(client: env.e2eRelayClient)
+            }
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $addHostPresented) {
             NavigationStack {
@@ -1064,9 +1081,10 @@ public struct AppRoot: View {
             onOpenHistory: { showingHistory = true }
         )
         .sheet(isPresented: $showingHistory) {
-            NavigationStack {
-                ActivityView(actions: bridgeSessionActions())
-            }
+            ActivityView(actions: bridgeSessionActions())
+                .padding(.top, 8)
+                .presentationDragIndicator(.visible)
+                .presentationDetents([.large])
         }
     }
 
@@ -1078,7 +1096,7 @@ public struct AppRoot: View {
             loopStore: env.loopStore,
             quotaGuardStore: env.quotaGuardStore,
             hostHealthStore: env.hostHealthStore,
-            onConnectHost: { addHostPresented = true },
+            onConnectHost: { addMachineChooser = true },
             onReconnect: { host in openSession(host: host, env: env) },
             onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
             onQuotaGuard: { showingQuotaGuard = true },
