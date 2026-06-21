@@ -246,6 +246,9 @@ func newServer(home string) *server {
 	s.poller = newDecisionPoller(s.applyDecision)
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
+	// Launch escalation is relaxed only for agents whose per-action hook is
+	// verifiably wired (Claude today); everything else stays fail-closed.
+	s.dispatcher.hookWired = hookWiredForAgent(home)
 	// Dispatched runs stream stdout/stderr + status back to the phone through the
 	// same serialized writer the approval-pending notification uses.
 	s.dispatcher.emit = s.emitNotification
@@ -274,9 +277,24 @@ func (s *server) applyDecision(id, decision, editedToolInput string) (ApprovalEv
 }
 
 // policyEffect adapts the policy engine to the dispatcher's evaluator signature.
-func (s *server) policyEffect(event ApprovalEvent) (string, string) {
+func (s *server) policyEffect(event ApprovalEvent) (string, string, bool) {
 	res := s.policy.evaluate(event)
-	return string(res.Effect), res.MatchedRule
+	return string(res.Effect), res.MatchedRule, res.FromDefault
+}
+
+// hookWiredForAgent reports whether a per-action PreToolUse hook is verifiably
+// installed for the given agent binary, gating relaxLaunchEscalation. Only Claude
+// has a wiring we can confirm today; OpenCode's hook install is still a TODO (see
+// install.go) and Codex/Kimi have no per-action hook, so those stay fail-closed.
+func hookWiredForAgent(home string) func(string) bool {
+	return func(bin string) bool {
+		switch bin {
+		case "claude":
+			return claudeHookWired(claudeSettingsPath(home))
+		default:
+			return false
+		}
+	}
 }
 
 func (s *server) auditEntry(e AuditEntry) { _ = s.audit.append(e) }

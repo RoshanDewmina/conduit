@@ -101,7 +101,7 @@ func TestRunControlRPCs(t *testing.T) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	run := s.dispatcher.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
-		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+		func(ApprovalEvent) (string, string, bool) { return "allow", "ok", false }, func(AuditEntry) {})
 	if run.RunID == "" {
 		t.Fatalf("dispatch did not start a run: %+v", run)
 	}

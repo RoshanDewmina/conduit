@@ -220,15 +220,24 @@ func requiresConduitGate(argv []string) bool {
 
 // relaxLaunchEscalation decides whether an agent *launch* (dispatch or continue)
 // still needs pre-approval. Launching an agent isn't the dangerous act — the
-// tools it runs are, and for hook-gated agents (Claude/OpenCode) the PreToolUse
-// hook (CONDUIT_GATE=1) governs every tool action. Pre-approving the launch on
-// top of that forces an approval before *every* message, which breaks normal
-// chat. So for hook-gated agents an "ask" on the launch becomes "allow"; the
-// per-action hook remains the real gate. Agents without a per-action hook
-// (Codex, Kimi) have no other guard, so their launch escalation is preserved.
-// An explicit "deny" is always honored regardless of agent.
-func relaxLaunchEscalation(effect string, argv []string) string {
-	if effect == "ask" && requiresConduitGate(argv) {
+// tools it runs are. When the per-action PreToolUse hook is verifiably wired for
+// this agent, that hook is the real gate, so forcing an approval before every
+// message is redundant and breaks normal chat. In that case a fail-closed
+// *default* "ask" on the launch is relaxed to "allow".
+//
+// It is deliberately NOT relaxed (fail-closed) when:
+//   - the ask came from an explicit policy rule (fromDefault == false) — the
+//     author meant it, so we never silently downgrade an explicit rule;
+//   - the agent's hook is not verifiably wired (hookWired nil or false) — e.g.
+//     OpenCode, whose hook install is still a TODO (see install.go), and
+//     Codex/Kimi, which have no per-action hook — so the launch escalates and the
+//     owner is prompted, rather than running ungated;
+//   - the effect is "deny" — always honored.
+func relaxLaunchEscalation(effect string, fromDefault bool, argv []string, hookWired func(string) bool) string {
+	if effect != "ask" || !fromDefault || len(argv) == 0 || hookWired == nil {
+		return effect
+	}
+	if hookWired(argv[0]) {
 		return "allow"
 	}
 	return effect
@@ -492,8 +501,9 @@ type dispatchRun struct {
 	handle    *procHandle
 }
 
-// policyEvalFunc returns the policy effect ("allow"|"ask"|"deny") and matched rule.
-type policyEvalFunc func(ApprovalEvent) (effect string, rule string)
+// policyEvalFunc returns the policy effect ("allow"|"ask"|"deny"), the matched
+// rule, and whether the effect came from the fail-closed default (no rule matched).
+type policyEvalFunc func(ApprovalEvent) (effect string, rule string, fromDefault bool)
 
 // providerSpend tracks per-provider spend with daily/monthly caps and burn rate.
 type providerSpend struct {
@@ -557,6 +567,10 @@ type dispatcher struct {
 	launch        launchFunc
 	audit         func(AuditEntry) // run-control audit sink; no-op until wired by the server
 	emit          emitFunc         // run-output/status notifier; nil until wired by the server
+	// hookWired reports whether a per-action PreToolUse hook is verifiably wired
+	// for the given agent binary (argv[0]). Nil ⇒ treat as not wired (fail-closed:
+	// launches escalate). Set by the server from the real install state.
+	hookWired func(string) bool
 }
 
 func newDispatcher() *dispatcher {
@@ -858,8 +872,8 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		Risk:       1,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
-	effect, rule := evalFn(event)
-	effect = relaxLaunchEscalation(effect, argv)
+	effect, rule, fromDefault := evalFn(event)
+	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "dispatch-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
@@ -973,8 +987,8 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 		RunID:      runID,
 	}
-	effect, rule := evalFn(event)
-	effect = relaxLaunchEscalation(effect, argv)
+	effect, rule, fromDefault := evalFn(event)
+	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "continue-denied", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})

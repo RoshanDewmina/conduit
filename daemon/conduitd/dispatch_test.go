@@ -8,8 +8,8 @@ import (
 )
 
 // allowEval / denyEval / askEval are policy stubs for dispatch tests.
-func allowEval(ApprovalEvent) (string, string) { return "allow", "test-allow" }
-func denyEval(ApprovalEvent) (string, string)  { return "deny", "deny-network" }
+func allowEval(ApprovalEvent) (string, string, bool) { return "allow", "test-allow", false }
+func denyEval(ApprovalEvent) (string, string, bool)  { return "deny", "deny-network", false }
 
 func noAudit(AuditEntry) {}
 
@@ -111,7 +111,7 @@ func TestProcHandlePauseResumeRecorded(t *testing.T) {
 		}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi"},
-		func(ApprovalEvent) (string, string) { return "allow", "test-allow" },
+		func(ApprovalEvent) (string, string, bool) { return "allow", "test-allow", false },
 		func(AuditEntry) {})
 	if res.Status != "started" {
 		t.Fatalf("want started, got %q (%s)", res.Status, res.Message)
@@ -221,7 +221,7 @@ func TestSetBudgetKillsRunOverCap(t *testing.T) {
 	}
 	// dispatch with no cap so it always admits; the cap is set after spend accrues.
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi"},
-		func(ApprovalEvent) (string, string) { return "allow", "test-allow" },
+		func(ApprovalEvent) (string, string, bool) { return "allow", "test-allow", false },
 		func(AuditEntry) {})
 
 	// Lowering the cap below current spend must kill the run immediately.
@@ -244,7 +244,7 @@ func TestSpendUpdateEnforcesPerRunCap(t *testing.T) {
 		return &procHandle{kill: func() { killed = true }, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", BudgetUSD: 5.00},
-		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+		func(ApprovalEvent) (string, string, bool) { return "allow", "ok", false }, func(AuditEntry) {})
 	d.setSpentUSD(4.99) // under cap — still running
 	if killed {
 		t.Fatal("killed under cap")
@@ -270,7 +270,7 @@ func TestRunControlActionsAreAudited(t *testing.T) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
-		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+		func(ApprovalEvent) (string, string, bool) { return "allow", "ok", false }, func(AuditEntry) {})
 
 	d.pause(res.RunID)
 	d.resume(res.RunID)
@@ -292,7 +292,7 @@ func TestBudgetExceededIsAudited(t *testing.T) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x", BudgetUSD: 5.00},
-		func(ApprovalEvent) (string, string) { return "allow", "ok" }, func(AuditEntry) {})
+		func(ApprovalEvent) (string, string, bool) { return "allow", "ok", false }, func(AuditEntry) {})
 	d.setSpentUSD(5.00) // hits the cap → enforceBudgets stops the run
 
 	found := false
