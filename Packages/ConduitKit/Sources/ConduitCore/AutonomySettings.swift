@@ -18,12 +18,20 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
     /// The agent's own risk assessment gates the rest.
     case agentDecides
 
+    /// Full bypass — nothing pauses. Every action runs without asking, of any
+    /// kind or risk. The deliberate "I'm driving, don't stop me" mode (the Claude
+    /// Code bypassPermissions equivalent). Never inferred; only an explicit,
+    /// owner-set choice produces it, and a conversation in this mode shows a
+    /// persistent indicator. Actions are still audited.
+    case bypass
+
     public var label: String {
         switch self {
         case .autoReads:      return "Auto-approve reads"
         case .autoSafeWrites: return "Auto-approve safe writes"
         case .alwaysAsk:      return "Always ask"
         case .agentDecides:   return "Critical only"
+        case .bypass:         return "Full bypass"
         }
     }
 
@@ -33,6 +41,7 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
         case .autoSafeWrites: return "Safe writes"
         case .alwaysAsk:      return "Always ask"
         case .agentDecides:   return "Critical only"
+        case .bypass:         return "Full bypass"
         }
     }
 
@@ -46,6 +55,8 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
             return "Every agent action requires your approval before it runs."
         case .agentDecides:
             return "Only critical-risk actions ask. Low, medium, and high-risk actions can run automatically."
+        case .bypass:
+            return "Nothing pauses — the agent runs every action without asking. Use only while you're driving this machine yourself."
         }
     }
 
@@ -63,6 +74,9 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
             return risk <= .medium
         case .agentDecides:
             return risk < .critical
+        case .bypass:
+            // Nothing surfaces — every action is auto-approved.
+            return true
         }
     }
 }

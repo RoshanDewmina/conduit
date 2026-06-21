@@ -387,6 +387,7 @@ public struct PolicyEditorView: View {
         case .autoReads:      return Self.balancedPreset
         case .autoSafeWrites: return Self.balancedPreset
         case .agentDecides:   return Self.permissivePreset
+        case .bypass:         return Self.permissivePreset
         }
     }
 
