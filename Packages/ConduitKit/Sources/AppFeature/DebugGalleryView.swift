@@ -58,6 +58,7 @@ struct DebugGalleryView: View {
         case "inbox-typed":    TypedInboxGalleryScreen()
         case "shell-inbox":    ShellInboxGalleryScreen()
         case "shell-fleet":    ShellFleetGalleryScreen()
+        case "shell-fleet-relay": ShellFleetRelayGalleryScreen()
         case "shell-settings": ShellSettingsGalleryScreen()
         case "shell-sidebar":  ShellSidebarGalleryScreen()
         case "newchat-real":   newChatRealGallery
@@ -1872,6 +1873,26 @@ private struct ShellFleetGalleryScreen: View {
         Host(name: "Dev VPS", hostname: "dev.example.com", username: "ubuntu", tags: ["work"]),
         Host(name: "Build runner", hostname: "runner.local", port: 2222, username: "ci", tags: ["ci"])
     ]
+}
+
+/// Relay-only Machines: no SSH slots/hosts, but a relay-paired daemon — exercises
+/// the relayMachineCard so the "my machine is connected but not showing" fix is
+/// visible in the sim.
+private struct ShellFleetRelayGalleryScreen: View {
+    @State private var store = FleetStore()
+
+    var body: some View {
+        FleetView(
+            store: store,
+            onConnectHost: {},
+            onReconnect: { _ in },
+            onDelete: { _ in },
+            relayActive: true,
+            relayHostName: "Roshans-MacBook-Air.local",
+            relayAgentLabels: ["Claude Code", "Codex", "OpenCode", "Kimi"],
+            onOpenRelayChat: {}
+        )
+    }
 }
 
 private struct ShellSettingsGalleryScreen: View {

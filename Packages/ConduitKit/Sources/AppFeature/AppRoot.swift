@@ -1151,7 +1151,11 @@ public struct AppRoot: View {
             },
             onOpenThread: { id in
                 sidebarState.navigate(to: .thread(id: id))
-            }
+            },
+            relayActive: relayBridgeIsActive,
+            relayHostName: relayHostName,
+            relayAgentLabels: relayBridgeIsActive ? ["Claude Code", "Codex", "OpenCode", "Kimi"] : [],
+            onOpenRelayChat: { sidebarState.navigate(to: .newChat) }
         )
         .id(workspacesRevision)
     }

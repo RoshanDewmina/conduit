@@ -19,6 +19,13 @@ public struct FleetView: View {
     /// Open the live block terminal for a given slot (Finding #5 drill-in).
     private let onOpenTerminal: ((UUID) -> Void)?
     private let onOpenThread: ((String) -> Void)?
+    /// Relay-paired machine: the daemon is reachable over the blind relay rather
+    /// than a direct SSH slot, so it has no FleetStore slot. Surfaced as its own
+    /// card so a relay-only user sees their connected machine here.
+    private let relayActive: Bool
+    private let relayHostName: String?
+    private let relayAgentLabels: [String]
+    private let onOpenRelayChat: (() -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
 
@@ -37,6 +44,10 @@ public struct FleetView: View {
         onQuotaGuard: (() -> Void)? = nil,
         onOpenTerminal: ((UUID) -> Void)? = nil,
         onOpenThread: ((String) -> Void)? = nil,
+        relayActive: Bool = false,
+        relayHostName: String? = nil,
+        relayAgentLabels: [String] = [],
+        onOpenRelayChat: (() -> Void)? = nil,
         demoHosts: [Host] = []
     ) {
         self.store = store
@@ -52,6 +63,10 @@ public struct FleetView: View {
         self.onQuotaGuard = onQuotaGuard
         self.onOpenTerminal = onOpenTerminal
         self.onOpenThread = onOpenThread
+        self.relayActive = relayActive
+        self.relayHostName = relayHostName
+        self.relayAgentLabels = relayAgentLabels
+        self.onOpenRelayChat = onOpenRelayChat
     }
 
     private var reconnectableHosts: [Host] {
@@ -136,9 +151,19 @@ public struct FleetView: View {
                             runningNowBand(loop)
                         }
 
+                        if relayActive {
+                            relayMachineCard
+                        }
+
                         if store.slots.isEmpty && reconnectableHosts.isEmpty {
-                            emptyState
-                                .padding(.top, 4)
+                            // No SSH host. Show the empty prompt only when there's
+                            // also no relay machine above; either way keep the
+                            // action buttons so the user can still add a machine.
+                            if !relayActive {
+                                emptyState
+                                    .padding(.top, 4)
+                            }
+                            actionButtons
                         } else {
                             agentsSection
 
@@ -194,7 +219,10 @@ public struct FleetView: View {
 
     private var machineHeader: some View {
         let slot = focusSlot
+        // With no SSH slot but an active relay, the machine IS connected — reflect
+        // relayPaired so the header reads "online · relay", not "no host connected".
         let state = slot.map { store.connectionState(for: $0) }
+            ?? (relayActive ? .relayPaired : nil)
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(statusLine(state))
@@ -228,7 +256,7 @@ public struct FleetView: View {
     private var machineName: String {
         focusSlot?.hostName
             ?? reconnectableHosts.first?.name
-            ?? "Machines"
+            ?? (relayActive ? (relayHostName ?? "Relay machine") : "Machines")
     }
 
     @ViewBuilder
@@ -245,6 +273,51 @@ public struct FleetView: View {
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
             .accessibilityLabel(paired ? "Relay paired" : "Direct connection")
+    }
+
+    // MARK: - Relay machine card (the daemon reached over the blind relay)
+
+    private var relayMachineCard: some View {
+        let host = relayHostName ?? "Relay machine"
+        let agentsLine = relayAgentLabels.isEmpty
+            ? "Connected over relay"
+            : relayAgentLabels.joined(separator: " · ")
+        return Button {
+            Haptics.selection()
+            onOpenRelayChat?()
+        } label: {
+            HStack(spacing: 12) {
+                PixelAvatar(seed: host, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(host)
+                            .font(.dsSansPt(16, weight: .semibold))
+                            .foregroundStyle(t.text)
+                            .lineLimit(1)
+                        relayChip(.relayPaired)
+                    }
+                    Text(agentsLine)
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 5) {
+                    Circle().fill(t.ok).frame(width: 7, height: 7)
+                    Text("online")
+                        .font(.dsMonoPt(11, weight: .medium))
+                        .foregroundStyle(t.ok)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: t.r4, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(host), connected over relay")
+        .accessibilityHint("Opens a new chat on this machine")
     }
 
     private func statusLine(_ state: Session.ConnectionState?) -> String {
