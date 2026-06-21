@@ -138,15 +138,30 @@ type emitFunc func(method string, params any)
 type launchFunc func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error)
 
 func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
-	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
-	cmd.Dir = expandHome(cwd)
-
-	// The Claude and OpenCode hooks are installed in each vendor's normal
-	// settings scope. Gate them explicitly so only Conduit-dispatched runs enter
-	// the approval path; an owner's interactive session remains untouched.
+	// Build the child env with an augmented PATH first: under launchd the daemon
+	// inherits a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that does not include
+	// where the agent CLIs live (Homebrew, ~/.local/bin, Kimi's bin).
+	env := agentLaunchEnvironment()
 	if requiresConduitGate(argv) {
-		cmd.Env = conduitGateEnvironment(os.Environ())
+		// The Claude and OpenCode hooks are installed in each vendor's normal
+		// settings scope. Gate them explicitly so only Conduit-dispatched runs
+		// enter the approval path; an owner's interactive session is untouched.
+		env = conduitGateEnvironment(env)
 	}
+
+	// Resolve the binary against the AUGMENTED PATH ourselves and pass an absolute
+	// path. exec.Command resolves a bare name using the daemon's own (minimal)
+	// PATH at call time — cmd.Env does NOT affect that lookup — so without this the
+	// run fails "executable file not found in $PATH" under launchd.
+	bin := argv[0]
+	if !strings.Contains(bin, "/") {
+		if resolved := lookPathIn(bin, env); resolved != "" {
+			bin = resolved
+		}
+	}
+	cmd := exec.Command(bin, argv[1:]...) // explicit argv, no shell
+	cmd.Dir = expandHome(cwd)
+	cmd.Env = env
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -241,6 +256,73 @@ func relaxLaunchEscalation(effect string, fromDefault bool, argv []string, hookW
 		return "allow"
 	}
 	return effect
+}
+
+// agentLaunchEnvironment returns the parent environment with PATH augmented to
+// include the directories agent CLIs are commonly installed in. Under launchd the
+// daemon's inherited PATH is minimal and would not find the vendor binaries; the
+// user's own dirs are preserved first, missing standard/agent dirs appended.
+func agentLaunchEnvironment() []string {
+	extra := []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"}
+	if home, err := os.UserHomeDir(); err == nil {
+		extra = append(extra,
+			filepath.Join(home, ".local", "bin"),
+			filepath.Join(home, ".kimi-code", "bin"),
+			filepath.Join(home, ".conduit", "bin"),
+		)
+	}
+	env := os.Environ()
+	result := make([]string, 0, len(env)+1)
+	pathFound := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			pathFound = true
+			seen := map[string]bool{}
+			merged := []string{}
+			for _, p := range strings.Split(strings.TrimPrefix(e, "PATH="), ":") {
+				if p != "" && !seen[p] {
+					seen[p] = true
+					merged = append(merged, p)
+				}
+			}
+			for _, d := range extra {
+				if !seen[d] {
+					seen[d] = true
+					merged = append(merged, d)
+				}
+			}
+			result = append(result, "PATH="+strings.Join(merged, ":"))
+		} else {
+			result = append(result, e)
+		}
+	}
+	if !pathFound {
+		result = append(result, "PATH="+strings.Join(extra, ":"))
+	}
+	return result
+}
+
+// lookPathIn resolves an executable name against the PATH carried in env (not the
+// process's own PATH), returning the absolute path or "" if not found. Used so a
+// launchd-spawned daemon with a minimal inherited PATH can still locate agent CLIs.
+func lookPathIn(name string, env []string) string {
+	var pathValue string
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			pathValue = strings.TrimPrefix(e, "PATH=")
+			break
+		}
+	}
+	for _, dir := range strings.Split(pathValue, ":") {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // conduitGateEnvironment replaces any inherited value rather than appending a
