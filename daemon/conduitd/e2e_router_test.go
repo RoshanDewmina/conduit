@@ -54,11 +54,14 @@ func TestE2ERouterDispatch(t *testing.T) {
 	router := newE2ERouter(nil, srv)
 	router.client = client
 
+	// Use a non-hook agent (codex): its launch escalation is preserved under the
+	// fail-closed default, so this still exercises the router's escalation path.
+	// (Hook-gated agents like claude/opencode now launch and rely on the
+	// per-action PreToolUse hook — see relaxLaunchEscalation + dispatch_launchgate_test.)
 	dispatchPayload, _ := json.Marshal(map[string]interface{}{
-		"agent":  "opencode",
+		"agent":  "codex",
 		"cwd":    "/tmp",
 		"prompt": "test task",
-		"model":  "deepseek-v4",
 	})
 	router.handleMessage("agentDispatch", dispatchPayload)
 
@@ -78,7 +81,7 @@ func TestE2ERouterDispatch(t *testing.T) {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	if result.Status != "needsApproval" {
-		t.Fatalf("expected needsApproval (default policy escalates), got %q", result.Status)
+		t.Fatalf("expected needsApproval (default policy escalates a non-hook agent), got %q", result.Status)
 	}
 }
 

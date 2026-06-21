@@ -141,12 +141,11 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	cmd := exec.Command(argv[0], argv[1:]...) // explicit argv, no shell
 	cmd.Dir = expandHome(cwd)
 
-	// For conduitd-dispatched opencode runs, inject CONDUIT_GATE=1 into the
-	// subprocess environment so the opencode PreToolUse hook knows to forward
-	// tool calls to the conduitd approval engine. Interactive opencode sessions
-	// launched by the owner never set CONDUIT_GATE, so they are unaffected.
-	if argv[0] == "opencode" {
-		cmd.Env = append(os.Environ(), "CONDUIT_GATE=1")
+	// The Claude and OpenCode hooks are installed in each vendor's normal
+	// settings scope. Gate them explicitly so only Conduit-dispatched runs enter
+	// the approval path; an owner's interactive session remains untouched.
+	if requiresConduitGate(argv) {
+		cmd.Env = conduitGateEnvironment(os.Environ())
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -212,6 +211,41 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	}, nil
 }
 
+func requiresConduitGate(argv []string) bool {
+	if len(argv) == 0 {
+		return false
+	}
+	return argv[0] == "claude" || argv[0] == "opencode"
+}
+
+// relaxLaunchEscalation decides whether an agent *launch* (dispatch or continue)
+// still needs pre-approval. Launching an agent isn't the dangerous act — the
+// tools it runs are, and for hook-gated agents (Claude/OpenCode) the PreToolUse
+// hook (CONDUIT_GATE=1) governs every tool action. Pre-approving the launch on
+// top of that forces an approval before *every* message, which breaks normal
+// chat. So for hook-gated agents an "ask" on the launch becomes "allow"; the
+// per-action hook remains the real gate. Agents without a per-action hook
+// (Codex, Kimi) have no other guard, so their launch escalation is preserved.
+// An explicit "deny" is always honored regardless of agent.
+func relaxLaunchEscalation(effect string, argv []string) string {
+	if effect == "ask" && requiresConduitGate(argv) {
+		return "allow"
+	}
+	return effect
+}
+
+// conduitGateEnvironment replaces any inherited value rather than appending a
+// duplicate. That makes the dispatch contract deterministic on every platform.
+func conduitGateEnvironment(environment []string) []string {
+	result := make([]string, 0, len(environment)+1)
+	for _, entry := range environment {
+		if !strings.HasPrefix(entry, "CONDUIT_GATE=") {
+			result = append(result, entry)
+		}
+	}
+	return append(result, "CONDUIT_GATE=1")
+}
+
 func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, done *sync.WaitGroup, streamJSON bool) {
 	if stream == "stdout" && streamJSON {
 		streamJSONOutput(emit, runID, r, seq, done)
@@ -245,12 +279,12 @@ func emitToolArtifact(emit emitFunc, runID, toolID, toolName, inputJSON string) 
 		"runId": runID, "toolId": toolID, "toolName": toolName, "inputJSON": inputJSON,
 	})
 	emit("agent.artifact", map[string]any{
-		"artifactID": toolID,
-		"runID":      runID,
-		"kind":       "tool",
-		"title":      toolName,
+		"artifactID":  toolID,
+		"runID":       runID,
+		"kind":        "tool",
+		"title":       toolName,
 		"payloadJSON": inputJSON,
-		"status":     "running",
+		"status":      "running",
 	})
 }
 
@@ -463,13 +497,13 @@ type policyEvalFunc func(ApprovalEvent) (effect string, rule string)
 
 // providerSpend tracks per-provider spend with daily/monthly caps and burn rate.
 type providerSpend struct {
-	todayUSD           float64
-	monthUSD           float64
-	dailyCap           float64
-	monthlyCap         float64
-	burnRate           float64 // USD per hour
+	todayUSD            float64
+	monthUSD            float64
+	dailyCap            float64
+	monthlyCap          float64
+	burnRate            float64 // USD per hour
 	projectedDailyTotal float64
-	lastUpdate         time.Time
+	lastUpdate          time.Time
 	// currentMonth is the calendar month (year*100+month) monthUSD accumulates
 	// within; a sample from a different month resets monthUSD.
 	currentMonth int
@@ -516,13 +550,13 @@ type QuotaGuardResult struct {
 }
 
 type dispatcher struct {
-	mu             sync.Mutex
-	runs           map[string]*dispatchRun
-	spentUSD       float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
-	providerSpend  map[string]*providerSpend
-	launch         launchFunc
-	audit          func(AuditEntry) // run-control audit sink; no-op until wired by the server
-	emit           emitFunc         // run-output/status notifier; nil until wired by the server
+	mu            sync.Mutex
+	runs          map[string]*dispatchRun
+	spentUSD      float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
+	providerSpend map[string]*providerSpend
+	launch        launchFunc
+	audit         func(AuditEntry) // run-control audit sink; no-op until wired by the server
+	emit          emitFunc         // run-output/status notifier; nil until wired by the server
 }
 
 func newDispatcher() *dispatcher {
@@ -825,6 +859,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
 	effect, rule := evalFn(event)
+	effect = relaxLaunchEscalation(effect, argv)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "dispatch-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
@@ -939,6 +974,7 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 		RunID:      runID,
 	}
 	effect, rule := evalFn(event)
+	effect = relaxLaunchEscalation(effect, argv)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "continue-denied", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
