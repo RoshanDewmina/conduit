@@ -10,9 +10,9 @@ set -euo pipefail
 # GitHub Releases, verifies SHA256, installs to ~/.conduit/bin/conduitd,
 # and starts the pairing flow.
 #
-# Usage (canonical GitHub Releases source):
-#   curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh
-#   curl -fsSL https://github.com/RoshanDewmina/conduit/releases/latest/download/install.sh | sh -s -- --hooks claude
+# Usage (canonical public GCS distribution bucket):
+#   curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh
+#   curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh -s -- --hooks claude
 # (Once a custom domain is set, a vanity URL like https://get.<domain>/install.sh can redirect here.)
 #
 # Flags:
@@ -21,15 +21,18 @@ set -euo pipefail
 #   --download-base <url>  Base URL for prebuilt binaries (dev/testing)
 #
 # Environment:
-#   CONDUIT_RELEASE_BASE   Base URL for GitHub Releases downloads (default: see below)
+#   CONDUIT_RELEASE_BASE   Base URL for prebuilt-binary downloads (default: see below)
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Tolerate being piped to `sh` (no BASH_SOURCE) under `set -u`; fall back to $0.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo .)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.conduit/bin}"
 HOOKS_MODE="none"
 FROM_SOURCE="false"
 
-DEFAULT_RELEASE_BASE="https://github.com/RoshanDewmina/conduit/releases/latest/download"
+# Public GCS distribution bucket (source repo is private, so release assets are
+# hosted on a public Cloud Storage bucket rather than GitHub Releases).
+DEFAULT_RELEASE_BASE="https://storage.googleapis.com/conduit-dist-f1c2466d"
 DOWNLOAD_BASE="${CONDUIT_RELEASE_BASE:-$DEFAULT_RELEASE_BASE}"
 
 while [[ $# -gt 0 ]]; do
