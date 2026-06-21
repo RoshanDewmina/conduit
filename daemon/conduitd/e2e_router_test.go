@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -179,6 +180,92 @@ func TestE2ERouterContinue(t *testing.T) {
 	}
 	if result.Status != "started" || result.RunID == "" || result.RunID == first.RunID {
 		t.Fatalf("continue: want started + new runId, got %+v", result)
+	}
+}
+
+// TestE2ERouterFsList verifies that an inbound agentFsList message reaches
+// server.fsList and replies with fsListResult carrying the home-folded path and
+// directory-first entries.
+func TestE2ERouterFsList(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	mustMkdir(t, filepath.Join(home, "projects"))
+	mustWrite(t, filepath.Join(home, "notes.txt"))
+
+	srv := newServer(t.TempDir())
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"path": "~"})
+	router.handleMessage("agentFsList", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "fsListResult" {
+		t.Fatalf("expected fsListResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Path    string    `json:"path"`
+			Parent  string    `json:"parent"`
+			Entries []fsEntry `json:"entries"`
+			Error   string    `json:"error"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if env.Payload.Error != "" {
+		t.Fatalf("unexpected error: %q", env.Payload.Error)
+	}
+	if env.Payload.Path != "~" {
+		t.Errorf("path = %q, want ~", env.Payload.Path)
+	}
+	want := []fsEntry{{Name: "projects", IsDir: true}, {Name: "notes.txt", IsDir: false}}
+	if len(env.Payload.Entries) != len(want) {
+		t.Fatalf("entries = %+v, want %+v", env.Payload.Entries, want)
+	}
+	for i, w := range want {
+		if env.Payload.Entries[i] != w {
+			t.Errorf("entries[%d] = %+v, want %+v", i, env.Payload.Entries[i], w)
+		}
+	}
+}
+
+// TestE2ERouterFsListRejectsEscape verifies a path outside the home directory
+// comes back as an error field (fail-closed) with an empty (non-null) entries list.
+func TestE2ERouterFsListRejectsEscape(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := newServer(t.TempDir())
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"path": "/etc"})
+	router.handleMessage("agentFsList", payload)
+
+	_, data := client.lastMessage()
+	var env struct {
+		Payload struct {
+			Entries []fsEntry `json:"entries"`
+			Error   string    `json:"error"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if env.Payload.Error == "" {
+		t.Fatal("expected an error for a path outside home")
+	}
+	if env.Payload.Entries == nil {
+		t.Fatal("expected entries to be [] not null")
 	}
 }
 

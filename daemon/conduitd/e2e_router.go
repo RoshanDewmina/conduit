@@ -129,6 +129,37 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("dispatchResult", data)
 
+	case "agentFsList":
+		var params struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(payload, &params); err != nil {
+			log.Printf("e2e: unmarshal agentFsList failed: %v", err)
+			return
+		}
+		// Mirror the dispatch arm: marshal the result (or an error string) under
+		// {type, payload} and let r.client.sendMessage encrypt/wrap it. The phone
+		// decodes the same shape via RelayInnerEnvelope<RelayDirListing>.
+		res, err := r.server.fsList(params.Path)
+		entries := res.Entries
+		if entries == nil {
+			entries = []fsEntry{} // emit [] not null so the phone always decodes
+		}
+		payloadOut := map[string]interface{}{
+			"path":    res.Path,
+			"parent":  res.Parent,
+			"entries": entries,
+		}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{
+			"type":    "fsListResult",
+			"payload": payloadOut,
+		}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("fsListResult", data)
+
 	case "agentRunControl":
 		var p struct {
 			RunID  string `json:"runId"`

@@ -14,6 +14,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var messageTask: Task<Void, Never>?
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
+    private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -116,6 +117,20 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Lists a host directory through the E2E relay. Mirrors `sendDispatch`:
+    /// sends `agentFsList` with the requested path and awaits the daemon's
+    /// `fsListResult`. The daemon's `fsList` is home-confined and fails closed,
+    /// so an out-of-home path comes back as an `error` field, surfaced here as a
+    /// thrown `RelayFSError.host`.
+    public func relayListDir(_ path: String) async throws -> RelayDirListing {
+        guard isActive else { throw E2EError.notPaired }
+        struct ListParams: Codable, Sendable { let path: String }
+        try await relayClient.send(type: "agentFsList", payload: ListParams(path: path))
+        return try await withCheckedThrowingContinuation { c in
+            self.fsListContinuation = c
+        }
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
@@ -196,6 +211,24 @@ public final class E2ERelayBridge: ObservableObject {
                 userInfo: ["params": env.payload]
             )
 
+        case "fsListResult":
+            // Same envelope unwrap as dispatchResult. The daemon includes an
+            // `error` field when fsList fails closed (e.g. path outside home);
+            // surface it as a thrown error so the browser shows an error state.
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<RelayDirListing>.self, from: message.payload
+            )
+            if let listing = envelope?.payload {
+                if let err = listing.error, !err.isEmpty {
+                    fsListContinuation?.resume(throwing: RelayFSError.host(err))
+                } else {
+                    fsListContinuation?.resume(returning: listing)
+                }
+            } else {
+                fsListContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            fsListContinuation = nil
+
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(
                 E2ERelayMessage.RelayInnerEnvelope<AgentArtifactEvent>.self, from: message.payload
@@ -208,6 +241,47 @@ public final class E2ERelayBridge: ObservableObject {
 
         default:
             break
+        }
+    }
+}
+
+/// A directory listing returned by the daemon's `fsList` over the relay. Keys
+/// mirror the Go `fsListResult` JSON (`path`, `parent`, `entries[].name/.isDir`),
+/// plus an optional `error` the router sets when the home-confined `fsList` fails.
+public struct RelayDirListing: Codable, Sendable {
+    public let path: String
+    public let parent: String?
+    public let entries: [RelayDirEntry]
+    public let error: String?
+
+    public init(path: String, parent: String?, entries: [RelayDirEntry], error: String? = nil) {
+        self.path = path
+        self.parent = parent
+        self.entries = entries
+        self.error = error
+    }
+}
+
+public struct RelayDirEntry: Codable, Sendable, Identifiable, Hashable {
+    public let name: String
+    public let isDir: Bool
+
+    public var id: String { name }
+
+    public init(name: String, isDir: Bool) {
+        self.name = name
+        self.isDir = isDir
+    }
+}
+
+/// A host-side filesystem error reported by the daemon over the relay (e.g. a
+/// path outside the home directory, or a stat/readdir failure).
+public enum RelayFSError: Error, LocalizedError {
+    case host(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .host(let message): return message
         }
     }
 }

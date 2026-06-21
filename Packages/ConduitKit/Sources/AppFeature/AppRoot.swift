@@ -193,6 +193,7 @@ public struct AppRoot: View {
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
     @State private var showingRelayWorkspaceUnavailable = false
+    @State private var showingRelayFileBrowser = false
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var e2eBridge: E2ERelayBridge?
@@ -552,6 +553,13 @@ public struct AppRoot: View {
                 RelayWorkspaceUnavailableView()
             }
         }
+        .sheet(isPresented: $showingRelayFileBrowser) {
+            if let bridge = e2eBridge {
+                RelayFileBrowserView(bridge: bridge)
+                    .environment(\.conduitTokens, effectiveScheme == .dark ? .dark : .light)
+                    .preferredColorScheme(preferredScheme)
+            }
+        }
         .sheet(item: $passwordPromptHost) { host in
             PasswordPromptView(host: host) { password in
                 passwordPromptHost = nil
@@ -683,9 +691,21 @@ public struct AppRoot: View {
             selectFleetSlot(slot.id)
             isShowingLiveSession = true
         } else if agent?.id.hasPrefix("e2e|") == true || agent?.hostID == nil {
-            showingRelayWorkspaceUnavailable = true
+            presentRelayWorkspace()
         } else if activeSessionViewModel != nil {
             isShowingLiveSession = true
+        } else {
+            presentRelayWorkspace()
+        }
+    }
+
+    /// A relay-backed agent has no live SSH terminal, but a paired relay can still
+    /// browse the host's files (read-only) over `agent.fs.ls`. Prefer that over the
+    /// dead-end "workspace unavailable" sheet when the bridge is active.
+    @MainActor
+    private func presentRelayWorkspace() {
+        if relayBridgeIsActive, e2eBridge != nil {
+            showingRelayFileBrowser = true
         } else {
             showingRelayWorkspaceUnavailable = true
         }
