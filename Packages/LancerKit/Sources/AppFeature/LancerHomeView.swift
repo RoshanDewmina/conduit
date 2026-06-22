@@ -9,6 +9,10 @@ public struct LancerHomeView: View {
     private let recentThreads: [ChatConversation]
     private let pendingApprovalCount: Int
     private let profileEmail: String?
+    /// A relay-paired host, if any. Relay hosts aren't `fleetStore` slots (they're
+    /// the E2E bridge), so Home must be told about them explicitly or they never
+    /// appear here even while connected.
+    private let relayHostName: String?
     private let onOpenSidebar: (() -> Void)?
     private let onNewChat: () -> Void
     private let onOpenInbox: () -> Void
@@ -23,6 +27,7 @@ public struct LancerHomeView: View {
         recentThreads: [ChatConversation],
         pendingApprovalCount: Int,
         profileEmail: String? = nil,
+        relayHostName: String? = nil,
         onOpenSidebar: (() -> Void)? = nil,
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
@@ -33,6 +38,7 @@ public struct LancerHomeView: View {
         self.recentThreads = recentThreads
         self.pendingApprovalCount = pendingApprovalCount
         self.profileEmail = profileEmail
+        self.relayHostName = relayHostName
         self.onOpenSidebar = onOpenSidebar
         self.onNewChat = onNewChat
         self.onOpenInbox = onOpenInbox
@@ -215,7 +221,10 @@ public struct LancerHomeView: View {
     /// what the Machines page lists.
     private var machines: [HomeMachine] {
         let byHost = Dictionary(grouping: recentThreads, by: \.hostName)
-        let allHosts = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
+        var allHosts = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
+        // Relay-paired hosts aren't fleet slots — fold the active one in so a
+        // connected relay machine shows even before it has any chat history.
+        if let relayHostName { allHosts.insert(relayHostName) }
         return allHosts
             .map { host -> HomeMachine in
                 let byProject = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)

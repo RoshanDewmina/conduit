@@ -1058,6 +1058,31 @@ public struct AppRoot: View {
         }
     }
 
+    /// Left-edge swipe that opens the drawer. Attached only to a thin leading strip
+    /// (not the whole screen) so it can't intercept button taps in the page body.
+    private func openDragGesture(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($drawerDrag) { value, state, _ in
+                state = max(0, value.translation.width)
+            }
+            .onEnded { value in
+                if value.predictedEndTranslation.width > drawerWidth * 0.3 { openDrawer() }
+            }
+    }
+
+    /// Leftward swipe on the scrim that closes the drawer (only attached while open).
+    private func closeDragGesture(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($drawerDrag) { value, state, _ in
+                state = min(0, value.translation.width)
+            }
+            .onEnded { value in
+                if value.predictedEndTranslation.width < -drawerWidth * 0.3 {
+                    sidebarState.isDrawerOpen = false
+                }
+            }
+    }
+
     private func compactRoot(env: AppEnvironment) -> some View {
         GeometryReader { proxy in
             let drawerWidth = min(340, proxy.size.width * 0.8)
@@ -1115,38 +1140,30 @@ public struct AppRoot: View {
                 .background(t.bg)
                 .overlay {
                     // Scrim dims the page as it slides aside; while open the whole
-                    // page is the tap-to-close target. Strictly non-interactive when
-                    // closed so it never swallows taps on the page's own buttons.
+                    // page is the tap-to-close target AND a swipe-to-close surface.
+                    // Strictly non-interactive when closed so it never swallows taps
+                    // on the page's own buttons.
                     Color.black.opacity(0.32 * progress)
                         .allowsHitTesting(isOpen)
                         .contentShape(Rectangle())
                         .onTapGesture { sidebarState.isDrawerOpen = false }
+                        .gesture(isOpen ? closeDragGesture(drawerWidth: drawerWidth) : nil)
                 }
                 .offset(x: translate)
                 .shadow(color: .black.opacity(0.18 * progress), radius: 16, x: -8, y: 0)
             }
-            .gesture(
-                DragGesture(minimumDistance: 12, coordinateSpace: .global)
-                    .updating($drawerDrag) { value, state, _ in
-                        if sidebarState.isDrawerOpen {
-                            // Track a leftward swipe to close.
-                            state = min(0, value.translation.width)
-                        } else if value.startLocation.x < 32 {
-                            // Track a left-edge swipe to open.
-                            state = max(0, value.translation.width)
-                        }
-                    }
-                    .onEnded { value in
-                        let predicted = value.predictedEndTranslation.width
-                        if sidebarState.isDrawerOpen {
-                            if predicted < -drawerWidth * 0.3 {
-                                sidebarState.isDrawerOpen = false
-                            }
-                        } else if value.startLocation.x < 32, predicted > drawerWidth * 0.3 {
-                            openDrawer()
-                        }
-                    }
-            )
+            // Swipe-to-OPEN lives on a thin leading-edge strip ONLY (never the whole
+            // screen) so the root no longer runs a global DragGesture that competed
+            // with — and on a real device swallowed — taps on the page's buttons.
+            .overlay(alignment: .leading) {
+                if !isOpen {
+                    Color.clear
+                        .frame(width: 20)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .gesture(openDragGesture(drawerWidth: drawerWidth))
+                }
+            }
             .lancerMotion(LancerMotion.navigation, value: sidebarState.isDrawerOpen)
         }
         .ignoresSafeArea(.container)
@@ -1356,6 +1373,7 @@ public struct AppRoot: View {
             recentThreads: sidebarState.recentThreads,
             pendingApprovalCount: activeInboxViewModel.approvals.filter(\.isPending).count,
             profileEmail: env.accountSession.email,
+            relayHostName: relayBridgeIsActive ? (relayHostName ?? "Relay host") : nil,
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
