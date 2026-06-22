@@ -940,6 +940,17 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, res)
 
+	case "agent.commands.list":
+		var p struct {
+			Cwd    string `json:"cwd"`
+			Vendor string `json:"vendor"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		// Read-only scan of the workspace's command/skill dirs. Never errors —
+		// an empty list is a valid answer (no custom commands), so the composer
+		// autocomplete degrades gracefully.
+		s.writeResult(msg.ID, map[string]interface{}{"commands": listAgentCommands(p.Cwd, p.Vendor)})
+
 	case "agent.git.clone":
 		var p struct {
 			Repo      string `json:"repo"`

@@ -899,6 +899,18 @@ public struct AppRoot: View {
     }
 
     @MainActor
+    /// Fetch an agent's live slash-commands for the composer autocomplete. Resolves
+    /// a connected SSH slot's daemon channel. ponytail: relay-only hosts return []
+    /// here (the relay protocol has no commands-forward message yet) — Lancer's own
+    /// app-commands still autocomplete client-side; add `agentCommandsList` relay
+    /// forwarding to light up live commands over the relay too.
+    private func loadAgentCommands(cwd: String, vendor: String) async -> [AgentCommand] {
+        guard let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first
+        else { return [] }
+        return (try? await slot.channel.listCommands(cwd: cwd, vendor: vendor)) ?? []
+    }
+
     private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .blocked("Unknown agent.") }
@@ -1270,7 +1282,8 @@ public struct AppRoot: View {
                 },
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
-                onOpenSidebar: openDrawer
+                onOpenSidebar: openDrawer,
+                loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) }
             )
         case .thread(let id):
             ChatHistoryView(

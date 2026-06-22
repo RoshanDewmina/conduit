@@ -489,6 +489,15 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: DispatchResult.self)
     }
 
+    /// List the slash-commands available to a vendor in a workspace (project + user
+    /// custom commands, skills, and built-ins). Read-only; returns [] on any error so
+    /// the composer's "/" autocomplete degrades gracefully rather than blocking input.
+    public func listCommands(cwd: String, vendor: String) async throws -> [AgentCommand] {
+        let data = try await sendRPC(method: "agent.commands.list", params: ["cwd": cwd, "vendor": vendor])
+        struct Wrap: Decodable { let commands: [AgentCommand] }
+        return (try? Self.decodeResult(data, as: Wrap.self))?.commands ?? []
+    }
+
     @discardableResult
     public func cancelRun(runId: String) async throws -> Bool {
         let data = try await sendRPC(method: "agent.cancel", params: ["runId": runId])

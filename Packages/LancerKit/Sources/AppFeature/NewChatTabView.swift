@@ -47,6 +47,9 @@ public struct NewChatTabView: View {
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
     var onOpenSidebar: () -> Void = {}
+    /// Fetches the agent's live slash-commands for a workspace (daemon-backed).
+    /// Defaults to none so previews/tests don't need a live channel.
+    var loadCommands: (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
 
     @State private var prompt: String = ""
     @State private var selectedAgentID: String = ""
@@ -91,7 +94,8 @@ public struct NewChatTabView: View {
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
-        onOpenSidebar: @escaping () -> Void = {}
+        onOpenSidebar: @escaping () -> Void = {},
+        loadCommands: @escaping (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
@@ -101,6 +105,45 @@ public struct NewChatTabView: View {
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
+        self.loadCommands = loadCommands
+    }
+
+    // MARK: - Slash commands
+
+    /// Lancer's own composer commands — client-side actions, distinct from the
+    /// agent's live commands. `kind: "lancer"` so the autocomplete badges them "app".
+    private static let lancerCommands: [AgentCommand] = [
+        AgentCommand(name: "/new", description: "Start a fresh chat", source: "lancer", kind: "lancer"),
+        AgentCommand(name: "/clear", description: "Clear this draft", source: "lancer", kind: "lancer"),
+        AgentCommand(name: "/model", description: "Choose the model", source: "lancer", kind: "lancer"),
+        AgentCommand(name: "/budget", description: "Set a budget cap", source: "lancer", kind: "lancer"),
+        AgentCommand(name: "/agent", description: "Switch agent or host", source: "lancer", kind: "lancer"),
+        AgentCommand(name: "/workspace", description: "Pick the project directory", source: "lancer", kind: "lancer"),
+    ]
+
+    @State private var agentCommands: [AgentCommand] = []
+
+    private func refreshCommands() async {
+        guard let agent = selectedAgent, !agent.isOffline else { agentCommands = []; return }
+        let cmds = await loadCommands(effectiveCwd, agent.vendor)
+        await MainActor.run { agentCommands = cmds }
+    }
+
+    /// A composer `/` pick: Lancer commands run their action; agent commands insert
+    /// their token into the prompt so the user keeps typing the rest of the request.
+    private func handleComposerPick(_ cmd: AgentCommand) {
+        if cmd.kind == "lancer" {
+            prompt = ""
+            switch cmd.name {
+            case "/new", "/clear": prompt = ""
+            case "/model", "/budget": showOptions = true
+            case "/agent": showAgentPicker = true
+            case "/workspace": customCwd = ""; showWorkspacePicker = true
+            default: break
+            }
+        } else {
+            prompt = cmd.name + " "
+        }
     }
 
     // MARK: - Derived run state (mirrors RunDetailView's, scoped to this thread's run)
@@ -154,6 +197,10 @@ public struct NewChatTabView: View {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
             }
+        }
+        .task(id: selectedAgentID) { await refreshCommands() }
+        .onChange(of: showComposer) { _, open in
+            if open { Task { await refreshCommands() } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
@@ -274,7 +321,13 @@ public struct NewChatTabView: View {
     private var composerDrawerContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                TextField("Describe a task or just say hi…", text: $prompt, axis: .vertical)
+                CommandAutocompleteBar(
+                    query: prompt,
+                    lancerCommands: Self.lancerCommands,
+                    agentCommands: agentCommands,
+                    onPick: handleComposerPick
+                )
+                TextField("Describe a task, or type / for commands…", text: $prompt, axis: .vertical)
                     .font(.dsSansPt(16))
                     .foregroundStyle(t.text)
                     .tint(t.accent)
