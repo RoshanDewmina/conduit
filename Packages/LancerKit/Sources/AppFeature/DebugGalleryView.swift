@@ -62,6 +62,9 @@ struct DebugGalleryView: View {
         case "shell-settings": ShellSettingsGalleryScreen()
         case "shell-sidebar":  ShellSidebarGalleryScreen()
         case "newchat-real":   newChatRealGallery
+        case "chat-overlays":  chatOverlaysGallery
+        case "chat-overlays-light": chatOverlaysGallery.environment(\.lancerTokens, .light)
+        case "chat-overlays-dark":  chatOverlaysGallery.environment(\.lancerTokens, .dark)
         case "settings-shortcuts": NavigationStack { ShortcutBarEditor() }
         case "settings-terminal":  NavigationStack { TerminalSettingsView() }
         case "settings-secrets":   NavigationStack { SecretsView(viewModel: SecretsViewModel()) }
@@ -676,6 +679,51 @@ struct DebugGalleryView: View {
             DSSearchField(text: $searchDemo, placeholder: "Search…")
             DSKey("⌘K")
         }
+    }
+
+    // MARK: - Chat composer overlays (autocomplete + @-mention), rendered directly
+    // with active queries so the floating bars actually appear for visual review.
+
+    private var chatOverlaysGallery: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("/ command autocomplete")
+                    .font(.dsSansPt(13, weight: .semibold)).foregroundStyle(t.text3)
+                CommandAutocompleteBar(
+                    query: "/re",
+                    lancerCommands: [
+                        AgentCommand(name: "/new", description: "Start a fresh chat", source: "lancer", kind: "lancer"),
+                        AgentCommand(name: "/resume", description: "Resume a run", source: "lancer", kind: "lancer"),
+                    ],
+                    agentCommands: [
+                        AgentCommand(name: "/review", description: "Review the current changes", source: "project", kind: "command"),
+                        AgentCommand(name: "/deep-research", description: "Fan-out web research", source: "user", kind: "skill"),
+                        AgentCommand(name: "/refactor", description: "Refactor selection", source: "project", kind: "command"),
+                    ],
+                    onPick: { _ in }
+                )
+
+                Text("@ file mention")
+                    .font(.dsSansPt(13, weight: .semibold)).foregroundStyle(t.text3)
+                FileMentionBar(
+                    query: "look at @App",
+                    files: ["AppRoot.swift", "AppFeature/", "AppDelegate.swift", "README.md", "Package.swift"],
+                    onPick: { _ in }
+                )
+
+                Text("code card (syntax highlight + copy + wrap)")
+                    .font(.dsSansPt(13, weight: .semibold)).foregroundStyle(t.text3)
+                DarkCodeCard(language: "swift", code: """
+                func greet(_ name: String) -> String {
+                    // a friendly hello
+                    let msg = "Hi, \\(name)!"
+                    return msg
+                }
+                """)
+            }
+            .padding(20)
+        }
+        .background(t.bg.ignoresSafeArea())
     }
 
     // MARK: - Chat hero (legacy route)

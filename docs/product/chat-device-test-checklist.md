@@ -63,6 +63,28 @@
 - [ ] Tapping **Approve** on the lock screen unblocks the agent **without** foregrounding the app.
       (Full steps: `docs/LIVE_LOOP_RUNBOOK.md` Phase 5c.)
 
+## Simulator pre-verification (done 2026-06-22, before device pass)
+
+What was verified on the iPhone 17 Pro simulator (gallery routes), so the device pass can focus on
+real taps + the live loop:
+
+- **Builds/tests:** `swift build` + app-target `build_sim` SUCCEEDED; **419 LancerKit tests / 68
+  suites + 8 HostServiceClient + all Go daemon tests pass.**
+- **Rendered + screenshotted (dark + forced-light):** markdown reply with bold/inline-code/ordered
+  list; `swift` code card with syntax highlighting (keyword/string/comment tints) + Copy + wrap;
+  `/` autocomplete (LANCER + AGENT sections, filtered by `/re`); `@` file mention (filtered by
+  `@App`); inline composer; sidebar (search, nav, recent threads, relay footer). Route
+  `chat-overlays[-light|-dark]` added as the fixture.
+- **Accessibility tree audited** (real interaction proof, since sim HID taps don't fire SwiftUI
+  actions here): composer — Send correctly **disabled when empty**, agent chip / options / hamburger
+  all labeled; `/` + `@` rows are enabled AXButtons with combined labels + badges; code card Copy /
+  wrap present; sidebar thread rows (which host rename/pin/delete context menus) present + labeled.
+
+**Not verifiable on the simulator — must be the device pass (§1–§7 below):** firing button actions
+(tap-and-observe), long-press context menus (rename/delete/pin/edit-resend) actually opening, live
+streaming/resume/regenerate against a real daemon, and APNs (§7). These are exactly what the device
+checklist covers.
+
 ## Report
 Note pass/fail per section + any screenshot. Failures in §3–§6 are chat-experience regressions;
 §7 is the V1 launch gate. Update `docs/product/chat-parity-checklist.md` if a feature's real-device
