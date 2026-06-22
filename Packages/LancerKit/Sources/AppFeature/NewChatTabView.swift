@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import DesignSystem
 import SessionFeature
 import AgentKit
@@ -524,6 +525,18 @@ public struct NewChatTabView: View {
 
     private func userTurn(_ promptText: String) -> some View {
         DarkUserBubble(promptText)
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = promptText
+                    Haptics.success()
+                } label: { Label("Copy", systemImage: "doc.on.doc") }
+                Button {
+                    // Edit & resend: load this prompt into the follow-up field for
+                    // editing; sending it continues the run as a fresh turn.
+                    Haptics.selection()
+                    followUpText = promptText
+                } label: { Label("Edit & resend", systemImage: "pencil") }
+            }
     }
 
     // Transcript chrome follows the app theme; only the terminal output card is
@@ -922,26 +935,12 @@ public struct NewChatTabView: View {
                     .foregroundStyle(t.text3)
                 Menu {
                     Button("Auto (agent default)") { selectedModel = "" }
-                    if selectedAgent?.vendor == "claudeCode" || selectedAgent?.vendor == "openrouter" {
-                        Button("Claude Sonnet 4") { selectedModel = "claude-sonnet-4" }
-                        Button("Claude Haiku 4") { selectedModel = "claude-haiku-4" }
-                    }
-                    if selectedAgent?.vendor == "opencode" || selectedAgent?.vendor == "openrouter" {
-                        Button("DeepSeek V4 Flash (free)") { selectedModel = "opencode/deepseek-v4-flash-free" }
-                        Button("MiMo V2.5 (free)") { selectedModel = "opencode/mimo-v2.5-free" }
-                    }
-                    if selectedAgent?.vendor == "codex" || selectedAgent?.vendor == "openrouter" {
-                        Button("GPT-5 Codex") { selectedModel = "openai/gpt-5-codex" }
-                    }
-                    if selectedAgent?.vendor == "kimi" || selectedAgent?.vendor == "openrouter" {
-                        Button("Kimi K2.7 Code") { selectedModel = "kimi-code/kimi-for-coding" }
-                    }
-                    if selectedAgent?.vendor == "openrouter" {
-                        Button("Gemini 2.5 Pro") { selectedModel = "google/gemini-2.5-pro" }
+                    ForEach(ModelCatalog.models(for: selectedAgent?.vendor ?? ""), id: \.id) { model in
+                        Button(model.label) { selectedModel = model.id }
                     }
                 } label: {
                     HStack {
-                        Text(selectedModel.isEmpty ? "Auto (agent default)" : selectedModel)
+                        Text(selectedModel.isEmpty ? "Auto (agent default)" : ModelCatalog.label(for: selectedModel))
                             .font(.dsSansPt(14, weight: .medium))
                             .foregroundStyle(t.text2)
                             .lineLimit(1)

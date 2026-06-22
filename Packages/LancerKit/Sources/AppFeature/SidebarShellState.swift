@@ -30,6 +30,9 @@ public final class SidebarShellState {
     public var searchQuery = ""
     public var recentThreads: [ChatConversation] = []
     public var searchResults: [ChatConversationSearchResult] = []
+    /// Pinned conversation ids, persisted in UserDefaults (ponytail: no schema
+    /// change — a small id set the sidebar sorts to the top is all pinning needs).
+    public var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: SidebarShellState.pinnedKey) ?? [])
     public var pendingApprovalCount = 0
     public var fleetSlotCount = 0
 
@@ -97,4 +100,22 @@ public final class SidebarShellState {
             await performSearch()
         }
     }
+
+    public func isPinned(_ id: String) -> Bool { pinnedIDs.contains(id) }
+
+    /// Toggle a conversation's pinned state (persisted). Pinned threads sort to the
+    /// top of the recent list.
+    public func togglePinned(_ id: String) {
+        if pinnedIDs.contains(id) { pinnedIDs.remove(id) } else { pinnedIDs.insert(id) }
+        UserDefaults.standard.set(Array(pinnedIDs), forKey: Self.pinnedKey)
+    }
+
+    /// Recent threads with pinned ones first (each group keeps its recency order).
+    public var orderedRecentThreads: [ChatConversation] {
+        let pinned = recentThreads.filter { pinnedIDs.contains($0.id) }
+        let rest = recentThreads.filter { !pinnedIDs.contains($0.id) }
+        return pinned + rest
+    }
+
+    static let pinnedKey = "lancer.pinnedConversations"
 }

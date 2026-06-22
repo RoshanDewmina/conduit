@@ -215,7 +215,7 @@ public struct LancerSidebarView: View {
 
     private var recentThreads: [ChatConversation] {
         state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? state.recentThreads
+            ? state.orderedRecentThreads
             : state.searchResults.map(\.conversation)
     }
 
@@ -236,11 +236,18 @@ public struct LancerSidebarView: View {
                     } label: {
                         ThreadRow(
                             thread: thread,
-                            isSelected: state.selectedDestination == .thread(id: thread.id)
+                            isSelected: state.selectedDestination == .thread(id: thread.id),
+                            isPinned: state.isPinned(thread.id)
                         )
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        Button {
+                            state.togglePinned(thread.id)
+                        } label: {
+                            Label(state.isPinned(thread.id) ? "Unpin" : "Pin",
+                                  systemImage: state.isPinned(thread.id) ? "pin.slash" : "pin")
+                        }
                         Button {
                             renameText = thread.title
                             renamingThread = thread
@@ -360,6 +367,7 @@ private struct SidebarNavRow: View {
 private struct ThreadRow: View {
     let thread: ChatConversation
     let isSelected: Bool
+    var isPinned: Bool = false
 
     @Environment(\.lancerTokens) private var t
 
@@ -394,6 +402,12 @@ private struct ThreadRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(t.text4)
+                    .accessibilityLabel("Pinned")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
