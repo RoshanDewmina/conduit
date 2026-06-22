@@ -51,6 +51,8 @@ public struct NewChatTabView: View {
     /// Fetches the agent's live slash-commands for a workspace (daemon-backed).
     /// Defaults to none so previews/tests don't need a live channel.
     var loadCommands: (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
+    /// Fetches workspace file/dir names for @-mention autocomplete. Defaults to none.
+    var loadFiles: (_ cwd: String) async -> [String] = { _ in [] }
 
     @State private var prompt: String = ""
     @State private var selectedAgentID: String = ""
@@ -96,7 +98,8 @@ public struct NewChatTabView: View {
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         onOpenSidebar: @escaping () -> Void = {},
-        loadCommands: @escaping (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
+        loadCommands: @escaping (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] },
+        loadFiles: @escaping (_ cwd: String) async -> [String] = { _ in [] }
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
@@ -107,6 +110,7 @@ public struct NewChatTabView: View {
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
         self.loadCommands = loadCommands
+        self.loadFiles = loadFiles
     }
 
     // MARK: - Slash commands
@@ -123,11 +127,26 @@ public struct NewChatTabView: View {
     ]
 
     @State private var agentCommands: [AgentCommand] = []
+    @State private var workspaceFiles: [String] = []
 
     private func refreshCommands() async {
         guard let agent = selectedAgent, !agent.isOffline else { agentCommands = []; return }
         let cmds = await loadCommands(effectiveCwd, agent.vendor)
         await MainActor.run { agentCommands = cmds }
+    }
+
+    /// Fetch workspace files lazily, only once the user starts an @-mention, so we
+    /// don't list the host on every composer open.
+    private func refreshFilesIfMentioning() async {
+        guard FileMentionBar.activeToken(in: prompt) != nil, workspaceFiles.isEmpty else { return }
+        let files = await loadFiles(effectiveCwd)
+        await MainActor.run { workspaceFiles = files }
+    }
+
+    /// Replace the trailing "@token" with the picked file path + a trailing space.
+    private func insertFileMention(_ file: String) {
+        guard let at = prompt.lastIndex(of: "@") else { return }
+        prompt = String(prompt[..<at]) + "@" + file + " "
     }
 
     /// A composer `/` pick: Lancer commands run their action; agent commands insert
@@ -202,6 +221,9 @@ public struct NewChatTabView: View {
         .task(id: selectedAgentID) { await refreshCommands() }
         .onChange(of: showComposer) { _, open in
             if open { Task { await refreshCommands() } }
+        }
+        .onChange(of: prompt) { _, _ in
+            Task { await refreshFilesIfMentioning() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
@@ -311,8 +333,11 @@ public struct NewChatTabView: View {
             )
             .padding(.horizontal, 14)
 
+            FileMentionBar(query: prompt, files: workspaceFiles, onPick: insertFileMention)
+                .padding(.horizontal, 14)
+
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Message, or type / for commands…", text: $prompt, axis: .vertical)
+                TextField("Message — / for commands, @ for files…", text: $prompt, axis: .vertical)
                     .font(.dsSansPt(16))
                     .foregroundStyle(t.text)
                     .tint(t.accent)

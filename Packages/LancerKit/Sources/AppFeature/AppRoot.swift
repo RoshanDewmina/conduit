@@ -944,6 +944,15 @@ public struct AppRoot: View {
         return nil
     }
 
+    /// List a workspace's files/dirs for the composer's @-mention autocomplete.
+    /// Uses the relay bridge's read-only agent.fs.ls (the only fs-listing transport
+    /// today). Dirs get a trailing "/". Returns [] if no relay is active.
+    private func loadWorkspaceFiles(cwd: String) async -> [String] {
+        guard let bridge = e2eBridge, relayBridgeIsActive,
+              let listing = try? await bridge.relayListDir(cwd) else { return [] }
+        return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
+    }
+
     private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .blocked("Unknown agent.") }
@@ -1316,7 +1325,8 @@ public struct AppRoot: View {
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
                 onOpenSidebar: openDrawer,
-                loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) }
+                loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) },
+                loadFiles: { cwd in await loadWorkspaceFiles(cwd: cwd) }
             )
         case .thread(let id):
             ChatHistoryView(

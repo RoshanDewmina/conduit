@@ -21,7 +21,7 @@ dropped, so "not built" never reads as an oversight.
 | Terminal/command output cards | 🟡 | ✅ | ✅ | — | `DarkTerminalBlockCard` |
 | Run artifacts (files/diffs) | 🟡 | ✅ | 🟡 | P1 | `ChatArtifactCard` exists; widen coverage |
 | Typing/working indicator | ✅ | ✅ | ✅ | — | `DarkTypingIndicator` |
-| Edit & resend a message | ✅ | ✅ | ⬜ | P2 | |
+| Edit & resend a message | ✅ | ✅ | ✅ | P2 | long-press user turn → edit prompt → resend |
 | Regenerate / retry | ✅ | ✅ | ✅ | P2 | re-runs last prompt as a fresh turn |
 | Stop generation | ✅ | ✅ | ✅ | — | `RunControlBar` / `controlStore.stop` |
 
@@ -32,8 +32,8 @@ dropped, so "not built" never reads as an oversight.
 | `/` command autocomplete | ✅ | ✅ | ✅ | P0 | Lancer cmds + live agent cmds over SSH **and relay** (Phase 2 + P1) |
 | Always-visible composer | ✅ | ✅ | ✅ | P1 | bottom-pinned inline composer (Phase 4) |
 | Multi-line growing input | ✅ | ✅ | ✅ | — | `axis: .vertical`, `lineLimit(4...12)` |
-| Model picker | ✅ | ✅ | 🟡 | P1 | hardcoded list → real source (Phase 4) |
-| @-file / context mentions | ✅ | ✅ | ⬜ | P2 | could reuse `agent.fs.ls` |
+| Model picker | ✅ | ✅ | ✅ | P1 | per-vendor ModelCatalog table |
+| @-file / context mentions | ✅ | ✅ | ✅ | P2 | `@` autocompletes workspace files via `agent.fs.ls` (relay) |
 | Attachments / images in | ✅ | 🟡 | ⛔ | — | n/a: phone steers headless agents, not a vision chat |
 | Voice input | ✅ | ⬜ | ⛔ | — | n/a for a control plane |
 | Budget / cost cap on send | ⬜ | ⬜ | ✅ | — | Lancer-specific governance edge |
@@ -47,7 +47,7 @@ dropped, so "not built" never reads as an oversight.
 | Search conversations | ✅ | ✅ | ✅ | P1 | sidebar search (FTS) live as you type |
 | Rename | ✅ | ✅ | ✅ | P1 | context-menu rename (P1) |
 | Delete | ✅ | ✅ | ✅ | P1 | context-menu delete + confirm (P1) |
-| Pin / star | ✅ | ⬜ | ⬜ | P2 | optional |
+| Pin / star | ✅ | ⬜ | ✅ | P2 | pinned threads sort to top (UserDefaults) |
 | Share / export transcript | ✅ | ✅ | ✅ | P2 | ShareLink exports markdown from the header |
 | Multi-turn context retention | ✅ | ✅ | ✅ | — | per-vendor continue-most-recent |
 
@@ -63,5 +63,10 @@ dropped, so "not built" never reads as an oversight.
 
 ## Priority rollup
 - **P0:** ✅ markdown + code blocks + copy · ✅ `/` autocomplete · ✅ resume from history.
-- **P1:** ✅ inline composer · ✅ search/rename/delete · ✅ relay command-forwarding · _todo:_ real model picker, wider artifacts.
-- **P2:** ✅ syntax highlight · ✅ regenerate · ✅ share/export · _todo:_ edit/resend, pin, @-mentions.
+- **P1:** ✅ inline composer · ✅ search/rename/delete · ✅ relay command-forwarding · ✅ model picker · _todo:_ wider artifacts.
+- **P2:** ✅ syntax highlight · ✅ regenerate · ✅ share/export · ✅ edit/resend · ✅ pin · ✅ @-mentions.
+
+**Status: chat surface is feature-complete vs Claude/Codex for a control plane.** Everything not
+✅ is either `⛔ n/a` (voice, image-gen, web search — wrong product) or low-value tail (wider
+artifact cards). Remaining work is the **on-device QA pass** (`chat-device-test-checklist.md`) and
+the **governed-loop launch gate** (`LIVE_LOOP_RUNBOOK.md` Phase 5c).
