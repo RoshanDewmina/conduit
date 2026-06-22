@@ -36,15 +36,30 @@ public struct DarkUserBubble: View {
 
 public struct DarkAssistantBubble: View {
     private let text: String
+    private let author: String?
     @State private var copied = false
     @Environment(\.lancerTokens) private var t
 
-    public init(_ text: String) { self.text = text }
+    public init(_ text: String, author: String? = nil) {
+        self.text = text
+        self.author = author
+    }
 
     public var body: some View {
         // Assistant content renders full-width (Claude/ChatGPT style) so markdown
-        // prose and fenced code cards have room — only user turns wear a bubble.
-        VStack(alignment: .leading, spacing: 6) {
+        // prose and fenced code cards have room — only user turns wear a bubble. A
+        // small author row gives the reply clear authorship (the user bubble already
+        // reads as "you" via its accent fill).
+        VStack(alignment: .leading, spacing: 8) {
+            if let author {
+                HStack(spacing: 6) {
+                    Circle().fill(t.accent).frame(width: 6, height: 6)
+                    Text(author)
+                        .font(.dsMonoPt(11, weight: .semibold))
+                        .tracking(0.3)
+                        .foregroundStyle(t.text3)
+                }
+            }
             MarkdownText(text, textColor: t.text)
             copyButton
         }
@@ -316,26 +331,37 @@ public struct DarkTranscriptHeader: View {
                         .lineLimit(1)
                 }
             }
+            .layoutPriority(1)   // the title/machine wins width over trailing chrome
             Spacer(minLength: 8)
             if isLive {
                 HStack(spacing: 5) {
                     Circle().fill(t.ok).frame(width: 7, height: 7)
                     Text("live").font(.dsMonoPt(11, weight: .medium)).foregroundStyle(t.ok)
                 }
+                .fixedSize()   // never let the badge compress its label to two lines
                 .padding(.horizontal, 9).padding(.vertical, 5)
                 .background(t.okSoft, in: Capsule())
             }
-            if let shareText {
-                ShareLink(item: shareText()) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(t.text2)
-                        .frame(width: 38, height: 38)
-                        .background(t.surface2, in: Circle())
+            // Secondary actions (Share, Open workspace) live in an overflow menu so
+            // they don't crowd the title into a "My mach…" truncation. Only the
+            // primary New-thread action keeps a dedicated circle button.
+            Menu {
+                if let shareText {
+                    ShareLink(item: shareText()) {
+                        Label("Share transcript", systemImage: "square.and.arrow.up")
+                    }
                 }
-                .accessibilityLabel("Share transcript")
+                Button { onWorkspace() } label: {
+                    Label("Open workspace", systemImage: "folder")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(t.text2)
+                    .frame(width: 38, height: 38)
+                    .background(t.surface2, in: Circle())
             }
-            DSCircleButton("square.grid.2x2", diameter: 38, accessibilityLabel: "Open workspace", action: onWorkspace)
+            .accessibilityLabel("More actions")
             if let onNew {
                 DSCircleButton("plus", diameter: 38, accessibilityLabel: "New thread", action: onNew)
             }

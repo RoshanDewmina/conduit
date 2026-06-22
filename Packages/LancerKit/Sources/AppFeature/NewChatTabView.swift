@@ -608,7 +608,7 @@ public struct NewChatTabView: View {
                 // as a normal left-aligned bubble.
                 if run.blocks.isEmpty {
                     if !run.text.isEmpty {
-                        DarkAssistantBubble(run.text)
+                        DarkAssistantBubble(run.text, author: agentLabel)
                     }
                 } else {
                     ForEach(Array(run.blocks.enumerated()), id: \.element.id) { index, block in

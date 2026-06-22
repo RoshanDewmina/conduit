@@ -777,7 +777,7 @@ struct DebugGalleryView: View {
                     2. Covered it with a regression test in `redirect.test.ts`.
 
                     Run `npm test -- auth` to confirm.
-                    """)
+                    """, author: "Claude")
 
                     // The working indicator (replaces the old pixel-grid box).
                     DarkUserBubble("now run the tests")
