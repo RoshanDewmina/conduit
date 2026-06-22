@@ -11,6 +11,11 @@ public struct LancerSidebarView: View {
 
     @Environment(\.lancerTokens) private var t
 
+    // Rename/delete flow state for the recent-thread context menu.
+    @State private var renamingThread: ChatConversation?
+    @State private var renameText: String = ""
+    @State private var deletingThread: ChatConversation?
+
     public init(
         state: SidebarShellState,
         profileLabel: String = "Lancer",
@@ -57,6 +62,35 @@ public struct LancerSidebarView: View {
         .background(t.surface)
         .tint(t.accent)
         .task { await state.loadRecent() }
+        .alert("Rename chat", isPresented: Binding(
+            get: { renamingThread != nil },
+            set: { if !$0 { renamingThread = nil } }
+        )) {
+            TextField("Title", text: $renameText)
+            Button("Rename") {
+                if let id = renamingThread?.id {
+                    let title = renameText
+                    Task { await state.renameConversation(id, to: title) }
+                }
+                renamingThread = nil
+            }
+            Button("Cancel", role: .cancel) { renamingThread = nil }
+        }
+        .confirmationDialog(
+            "Delete this chat?",
+            isPresented: Binding(get: { deletingThread != nil }, set: { if !$0 { deletingThread = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let id = deletingThread?.id {
+                    Task { await state.deleteConversation(id) }
+                }
+                deletingThread = nil
+            }
+            Button("Cancel", role: .cancel) { deletingThread = nil }
+        } message: {
+            Text("This removes the conversation and its history from this device.")
+        }
     }
 
     // MARK: - Header
@@ -206,6 +240,15 @@ public struct LancerSidebarView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            renameText = thread.title
+                            renamingThread = thread
+                        } label: { Label("Rename", systemImage: "pencil") }
+                        Button(role: .destructive) {
+                            deletingThread = thread
+                        } label: { Label("Delete", systemImage: "trash") }
+                    }
                 }
             }
         }

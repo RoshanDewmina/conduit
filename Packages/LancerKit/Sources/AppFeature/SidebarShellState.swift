@@ -74,4 +74,27 @@ public final class SidebarShellState {
             searchResults = []
         }
     }
+
+    /// Delete a conversation and refresh the recent list (+ search results if a
+    /// query is active) so the row disappears immediately.
+    public func deleteConversation(_ id: String) async {
+        guard let repo = chatRepo else { return }
+        try? await repo.deleteConversation(id)
+        await loadRecent()
+        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await performSearch()
+        }
+    }
+
+    /// Rename a conversation and refresh so the new title shows immediately.
+    public func renameConversation(_ id: String, to title: String) async {
+        guard let repo = chatRepo else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        try? await repo.updateConversationTitle(id, title: trimmed)
+        await loadRecent()
+        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await performSearch()
+        }
+    }
 }
