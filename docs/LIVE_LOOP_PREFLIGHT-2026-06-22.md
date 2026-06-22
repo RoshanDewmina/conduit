@@ -65,3 +65,20 @@ Needs a physical device, App Store Connect, APNs secrets on the running backend,
   relay host vs what the code actually uses (#15).
 - **11 owner-gated** items remain; the gating milestone is A #7 (lock-screen Approve while app closed).
 - Resolve both flags before the device session or Phase 5c will fail silently.
+
+## RESOLUTION — 2026-06-22 (both flags + the real root cause)
+- **#14 fixed:** added `aps-environment: production` to `Lancer-DeviceTesting.entitlements`, so a
+  device build signed with either entitlements set now receives push (no silent-no-push footgun).
+- **#15 fixed:** runbook §5a now names `conduit-push-…run.app` (Cloud Run) as the authoritative
+  APNs backend, not the sslip.io box.
+- **ROOT CAUSE FOUND & FIXED (this is almost certainly why A #7 never passed):** verified read-only
+  on the *running* `conduit-push` Cloud Run service (`australia-southeast1`) that all 5 APNs env
+  keys are set (`APNS_BUNDLE_ID`/`APNS_KEY_ID`/`APNS_TEAM_ID`/`APPROVAL_RELAY_SECRET` + the literal
+  key-path env) — **but the `APNS_KEY` secret volume was declared and never
+  mounted** (`volumeMounts: []` on revision `…-00007-mh8`), so the `.p8` did not exist at the
+  configured key path and APNs failed silently at first send. Mounted it via
+  `gcloud run services update --update-secrets` → new revision `conduit-push-00008-wkw`,
+  100% traffic, `/health` 200, mount now present at `/secrets`. Rollback target if needed:
+  `…-00007-mh8`.
+- **Still owner-gated:** the actual on-device lock-screen Approve-while-closed run (A #7) — now
+  unblocked on the backend side; needs a physical iPhone to confirm.

@@ -177,7 +177,7 @@ From the **New Chat** surface (the app home), dispatch a run and then continue i
 ## PHASE 5 — Notifications: relay + APNs (the unproven product promise)
 
 ### 5a. Backend secrets (owner-gated, one-time)
-The relay/APNs lives in the deployed `push-backend` (`https://35.201.3.231.sslip.io/health` → 200). `/health` does **not** prove APNs is configured (push reads env lazily at first send). Confirm these are set on the *running* instance (`docs/push-backend-deploy-env.md`):
+The relay/APNs lives in the deployed `push-backend`. **The shipping app + daemon talk to `https://conduit-push-y4wpy6zeva-ts.a.run.app` (Cloud Run)** — this is the backend the device registers its APNs token against, so it is the one that must hold the APNs secrets. (`RelaySettings.defaultURLString`, `relay_install_helper.go:defaultRelayURL`, and `project.yml:26 LANCER_PUSH_BACKEND_URL` all point here; the older `https://35.201.3.231.sslip.io` Caddy box is a different deployment and is **not** where push fires — verifying secrets there proves nothing.) `/health` does **not** prove APNs is configured (push reads env lazily at first send). Confirm these are set on the *running* conduit-push Cloud Run instance (`docs/push-backend-deploy-env.md`):
 `APPROVAL_RELAY_SECRET`, `APNS_KEY_ID=L8LVU9X82W`, `APNS_TEAM_ID=39HM2X8GS6`, `APNS_BUNDLE_ID=dev.lancer.mobile`, `APNS_KEY_PATH=/secrets/apns.p8`. `.p8` source: `~/Downloads/Personal-Docs/AuthKey_L8LVU9X82W.p8` (never commit).
 
 ### 5b. Relay pairing (works on sim — proves the decision-relay path, not APNs delivery)
