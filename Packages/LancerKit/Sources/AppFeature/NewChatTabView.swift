@@ -89,6 +89,13 @@ public struct NewChatTabView: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Tokens resolved for the CURRENT surface. The active-run transcript is dark by
+    /// design and applies `.environment(\.lancerTokens, .dark)` to its children — but
+    /// `self.t` still reads the PARENT (the app's light/dark scheme), so any chrome
+    /// drawn directly in this struct (the footer, Regenerate) would mismatch the dark
+    /// transcript. Reading `tk` instead keeps the whole active-run surface coherent.
+    private var tk: LancerTokens { activeRun != nil ? .dark : t }
+
     public init(
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
@@ -343,6 +350,12 @@ public struct NewChatTabView: View {
                     .tint(t.accent)
                     .lineLimit(1...6)
                     .focused($composeFocused)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { composeFocused = false }
+                        }
+                    }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
                     .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -657,30 +670,16 @@ public struct NewChatTabView: View {
     @ViewBuilder
     private var bottomBar: some View {
         if activeRun != nil, let controlStore {
-            VStack(spacing: 10) {
-                if runIsTerminal, !turns.isEmpty {
-                    HStack {
-                        Button {
-                            Haptics.selection()
-                            Task { await regenerateLast() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text("Regenerate")
-                                    .font(.dsSansPt(13, weight: .semibold))
-                            }
-                            .foregroundStyle(t.text2)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(t.surface, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Regenerate the last response")
-                        Spacer()
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
+            VStack(spacing: 0) {
+                // Terminal: one slim status+regenerate line, then the composer is the
+                // primary element. Live: the composer plus the Stop/Pause/Budget
+                // controls. The old heavy "Run complete" filled bar + a separate
+                // Regenerate row read as cluttered against the short transcript.
+                if runIsTerminal {
+                    terminalStatusRow
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
                 }
                 RunFollowUpBar(
                     text: $followUpText,
@@ -688,19 +687,56 @@ public struct NewChatTabView: View {
                     onSend: { followUp in Task { await sendFollowUp(followUp) } }
                 )
                 .padding(.horizontal, 18)
-                .padding(.top, 12)
-                RunControlBar(
-                    store: controlStore,
-                    isTerminal: runIsTerminal,
-                    failed: currentRun?.status == "failed",
-                    exitCode: currentRun?.exitCode,
-                    onStop: { confirmStop = true },
-                    onShowBudget: { showBudgetSheet = true }
-                )
+                .padding(.top, runIsTerminal ? 0 : 12)
+                .padding(.bottom, runIsTerminal ? 12 : 0)
+                if !runIsTerminal {
+                    RunControlBar(
+                        store: controlStore,
+                        isTerminal: false,
+                        failed: false,
+                        exitCode: nil,
+                        onStop: { confirmStop = true },
+                        onShowBudget: { showBudgetSheet = true }
+                    )
+                    .padding(.top, 12)
+                }
             }
-            .background(t.bg.opacity(0.96).ignoresSafeArea(edges: .bottom))
+            .background(tk.bg.opacity(0.96).ignoresSafeArea(edges: .bottom))
         } else {
             bottomToolbar
+        }
+    }
+
+    /// Slim "run finished" line: a status dot + label on the left, Regenerate as a
+    /// quiet trailing action. Replaces the old full-width filled status bar.
+    private var terminalStatusRow: some View {
+        let failed = currentRun?.status == "failed"
+        return HStack(spacing: 7) {
+            Image(systemName: failed ? "xmark.circle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(failed ? tk.termErr : tk.termPrompt)
+            Text(failed
+                 ? "Run failed\(currentRun?.exitCode.map { " · exit \($0)" } ?? "")"
+                 : "Run complete")
+                .font(.dsMonoPt(12, weight: .medium))
+                .foregroundStyle(tk.text3)
+            Spacer(minLength: 8)
+            if !turns.isEmpty {
+                Button {
+                    Haptics.selection()
+                    Task { await regenerateLast() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Regenerate")
+                            .font(.dsSansPt(12.5, weight: .semibold))
+                    }
+                    .foregroundStyle(tk.text2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Regenerate the last response")
+            }
         }
     }
 

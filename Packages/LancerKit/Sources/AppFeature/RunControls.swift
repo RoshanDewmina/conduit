@@ -127,6 +127,7 @@ struct RunFollowUpBar: View {
     let onSend: (String) -> Void
 
     @Environment(\.lancerTokens) private var t
+    @FocusState private var focused: Bool
 
     var body: some View {
         let textEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -140,6 +141,13 @@ struct RunFollowUpBar: View {
                 .foregroundStyle(t.text)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($focused)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { focused = false }
+                    }
+                }
                 .disabled(isErrorState)
             if isErrorState {
                 DSButton("Reconnect", systemImage: "arrow.clockwise", variant: .primary) {
