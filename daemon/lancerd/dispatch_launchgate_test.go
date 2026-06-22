@@ -106,6 +106,33 @@ func TestDispatchCodexUnderAskDefaultNeedsApproval(t *testing.T) {
 	}
 }
 
+// Regression for the owner's live bug: under the REAL bundled policy (no
+// policy.yaml), a plain Claude dispatch must START, not return needsApproval.
+// The synthetic askDefaultEval tests missed this because the bundled policy
+// matches `ask-medium` (an explicit rule, fromDefault=false) for a medium-risk
+// dispatch — which relaxLaunchEscalation never downgrades. The fix scores a
+// hook-wired agent's launch as low-risk so `allow-low-readonly` allows it.
+func TestDispatchClaudeUnderBundledPolicyStarts(t *testing.T) {
+	engine := newPolicyEngine(t.TempDir()) // no policy.yaml → bundled default
+	bundledEval := func(event ApprovalEvent) (string, string, bool) {
+		res := engine.evaluate(event)
+		return string(res.Effect), res.MatchedRule, res.FromDefault
+	}
+
+	d := newTestDispatcher() // hookWired = claudeWired
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "Hi"}, bundledEval, noAudit)
+	if res.Status != "started" {
+		t.Fatalf("claude dispatch under bundled policy (hook wired) → %q (rule %s), want started", res.Status, res.Rule)
+	}
+
+	// Fail-closed counterpart: a hook-less agent under the same bundled policy
+	// still escalates (its launch is medium → ask-medium).
+	res = d.dispatch(dispatchParams{Agent: "codex", CWD: "/repo", Prompt: "Hi"}, bundledEval, noAudit)
+	if res.Status != "needsApproval" {
+		t.Fatalf("codex dispatch under bundled policy (no hook) → %q, want needsApproval", res.Status)
+	}
+}
+
 // A deny rule still blocks a hook-gated agent.
 func TestDispatchClaudeDenyStillDenied(t *testing.T) {
 	d := newTestDispatcher()

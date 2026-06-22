@@ -258,6 +258,24 @@ func relaxLaunchEscalation(effect string, fromDefault bool, argv []string, hookW
 	return effect
 }
 
+// launchRisk scores how risky *starting* an agent is — distinct from what the
+// agent later does. For an agent whose per-action PreToolUse hook is verifiably
+// wired (Claude today), every tool call is intercepted and gated, so the launch
+// itself is low-risk and the bundled policy's `allow-low-readonly` lets a plain
+// message ("Hi") run immediately. For a hook-less agent (Codex/Kimi, or Claude
+// before `install`) the launch is the only guard, so it stays medium and the
+// bundled `ask-medium` rule escalates it — fail-closed.
+//
+// This is why scoring every dispatch as medium (the old behavior) wrongly blocked
+// even hook-wired agents: `ask-medium` matched as an explicit rule, which
+// relaxLaunchEscalation never downgrades.
+func (d *dispatcher) launchRisk(argv []string) int {
+	if len(argv) > 0 && d.hookWired != nil && d.hookWired(argv[0]) {
+		return 0 // low — the hook gates every subsequent tool call
+	}
+	return 1 // medium — no per-action gate; the launch escalation is the guard
+}
+
 // agentLaunchEnvironment returns the parent environment with PATH augmented to
 // include the directories agent CLIs are commonly installed in. Under launchd the
 // daemon's inherited PATH is minimal and would not find the vendor binaries; the
@@ -951,7 +969,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		Kind:       "command",
 		Command:    "[dispatch] " + strings.Join(argv, " "),
 		CWD:        p.CWD,
-		Risk:       1,
+		Risk:       d.launchRisk(argv),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
 	effect, rule, fromDefault := evalFn(event)
@@ -1058,14 +1076,15 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, run.BudgetUSD)}
 	}
 
-	// Policy gate (fail-closed at medium risk, same as dispatch).
+	// Policy gate (same risk scoring as dispatch: low for a hook-wired agent whose
+	// tools are gated per-action, medium otherwise).
 	event := ApprovalEvent{
 		ApprovalID: newUUID(),
 		Agent:      normalizeAgentSource(run.Agent),
 		Kind:       "command",
 		Command:    "[continue] " + strings.Join(argv, " "),
 		CWD:        run.CWD,
-		Risk:       1,
+		Risk:       d.launchRisk(argv),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 		RunID:      runID,
 	}

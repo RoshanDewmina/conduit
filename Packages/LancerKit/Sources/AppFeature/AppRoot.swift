@@ -894,7 +894,10 @@ public struct AppRoot: View {
                 }
                 agents.append(DispatchAgent(
                     id: "relay|\(agentID)",
-                    name: "\(displayName) · Relay",
+                    // Just the agent name — the picker groups by machine and shows
+                    // the host name as the section header. "Relay" is the transport,
+                    // not the machine's name, so it must never be the label.
+                    name: displayName,
                     cwd: "~",
                     isOffline: !relayBridgeIsActive,
                     hostID: nil,

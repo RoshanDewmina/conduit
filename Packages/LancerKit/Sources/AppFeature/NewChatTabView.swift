@@ -569,7 +569,7 @@ public struct NewChatTabView: View {
     private var darkChatHeader: some View {
         DarkTranscriptHeader(
             title: chatTitle,
-            subtitle: "\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "relay")",
+            subtitle: "\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "My machine")",
             isLive: isStreaming,
             onBack: { Haptics.selection(); resetForNewChat() },
             onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
@@ -600,7 +600,7 @@ public struct NewChatTabView: View {
                 } else {
                     ForEach(Array(run.blocks.enumerated()), id: \.element.id) { index, block in
                         DarkTerminalBlockCard(
-                            host: selectedAgent?.hostName ?? "relay",
+                            host: selectedAgent?.hostName ?? "My machine",
                             command: blockCommand(block),
                             // The run's combined output stream isn't split per block;
                             // attach it to the last (most recent) command card.
@@ -907,7 +907,7 @@ public struct NewChatTabView: View {
 
     /// Plain-text export of the live conversation, shared via the header.
     private func transcriptText() -> String {
-        var out = "# \(chatTitle)\n\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "relay")\n\n"
+        var out = "# \(chatTitle)\n\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "My machine")\n\n"
         for turn in turns {
             let reply = runOutputStore.run(turn.runId)?.text ?? ""
             out += "## You\n\(turn.prompt)\n\n## \(agentLabel)\n\(reply)\n\n"
@@ -1002,7 +1002,9 @@ public struct NewChatTabView: View {
     }
 
     private var groupedAgents: [(String, [DispatchAgent])] {
-        Dictionary(grouping: agents, by: { $0.hostName ?? "Relay" })
+        // Group by the machine's real name. Fall back to a neutral label (never the
+        // transport word "Relay") until the daemon reports its hostname.
+        Dictionary(grouping: agents, by: { $0.hostName ?? "My machine" })
             .sorted { $0.key < $1.key }
             .map { ($0.key, $0.value) }
     }
