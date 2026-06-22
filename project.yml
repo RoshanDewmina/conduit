@@ -293,6 +293,34 @@ targets:
       - target: Lancer
       - sdk: AppIntents.framework
 
+  LancerMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: LancerMac
+    info:
+      path: LancerMac/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSUIElement: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mac
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        ENABLE_HARDENED_RUNTIME: "YES"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        SWIFT_VERSION: "6.2"
+    dependencies:
+      - package: LancerKit
+        product: HostControlKit
+      - package: LancerKit
+        product: DesignSystem
+
 schemes:
   Lancer:
     build:
@@ -306,5 +334,14 @@ schemes:
       config: Debug
       targets:
         - LancerUITests
+    archive:
+      config: Release
+
+  LancerMac:
+    build:
+      targets:
+        LancerMac: all
+    run:
+      config: Debug
     archive:
       config: Release

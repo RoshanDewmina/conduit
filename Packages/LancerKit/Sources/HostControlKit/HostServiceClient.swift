@@ -8,9 +8,8 @@ public enum HostServiceError: Error, Sendable, Equatable {
     case rpc(code: Int, message: String)
     case decoding
     case socket(String)
-    // ponytail: handshake/version negotiation lands later; the threat model
-    // already commits to it, so the case exists now to avoid a breaking
-    // enum change when it's wired up.
+    /// Thrown when a successful `hello` handshake reports a
+    /// `protocolVersion` that doesn't match `HostServiceClient.protocolVersion`.
     case versionMismatch
 }
 
@@ -21,17 +20,35 @@ public enum HostServiceError: Error, Sendable, Equatable {
 /// One actor instance owns one connection. Not reentrant-safe across
 /// reconnects — callers that need retry/backoff build it on top.
 public actor HostServiceClient {
+    /// JSON-RPC handshake protocol version this client speaks. Bumped only
+    /// in lockstep with the daemon's wire contract.
+    public static let protocolVersion = 1
+
     private let socketPath: String
+    private let token: String
     private var fd: Int32 = -1
     private var nextID: Int = 1
 
-    /// - Parameter socketPathOverride: explicit socket path, bypassing the
-    ///   `~/.lancer` / `~/.conduit` resolution. Used by tests.
-    public init(socketPathOverride: String? = nil) {
+    /// `lancerd`'s reported version string from the most recent successful
+    /// `hello` handshake. `nil` until `connect()` succeeds.
+    public private(set) var serviceVersion: String?
+
+    /// - Parameters:
+    ///   - socketPathOverride: explicit socket path, bypassing the
+    ///     `~/.lancer` / `~/.conduit` resolution. Used by tests.
+    ///   - tokenOverride: explicit IPC token, bypassing the
+    ///     `~/.lancer/ipc-token` / `~/.conduit/ipc-token` resolution. Used by
+    ///     tests.
+    public init(socketPathOverride: String? = nil, tokenOverride: String? = nil) {
         if let override = socketPathOverride {
             socketPath = override
         } else {
             socketPath = Self.resolveSocketPath()
+        }
+        if let tokenOverride {
+            token = tokenOverride
+        } else {
+            token = Self.resolveToken()
         }
     }
 
@@ -55,6 +72,22 @@ public actor HostServiceClient {
         // current name so the resulting connect() failure points at the
         // right path.
         return lancerSock
+    }
+
+    /// Reads the local IPC auth token from `~/.lancer/ipc-token`, falling
+    /// back to the pre-rebrand `~/.conduit/ipc-token`. Returns an empty
+    /// string (never throws/crashes) if neither file exists — the daemon
+    /// will reject the empty token with -32001, which `connect()` surfaces
+    /// as `HostServiceError.rpc`.
+    private static func resolveToken() -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [home + "/.lancer/ipc-token", home + "/.conduit/ipc-token"]
+        for path in candidates {
+            if let raw = try? String(contentsOfFile: path, encoding: .utf8) {
+                return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return ""
     }
 
     /// Opens the `AF_UNIX`/`SOCK_STREAM` connection. Safe to call once per
@@ -98,12 +131,75 @@ public actor HostServiceClient {
         }
 
         fd = newFD
+
+        try await performHandshake()
+    }
+
+    /// Sends the first framed message on a freshly-opened socket: a
+    /// `hello` JSON-RPC request carrying the protocol version and the local
+    /// IPC token. A JSON-RPC `error` response (bad token → -32001, version
+    /// mismatch the daemon itself detects → -32002) surfaces uniformly as
+    /// `HostServiceError.rpc(code:message:)` via `rawRequest`. Only a
+    /// *successful* `hello` whose `result.protocolVersion` disagrees with
+    /// ours throws the dedicated `.versionMismatch` case.
+    private func performHandshake() async throws {
+        let helloParams: [String: Any] = [
+            "protocolVersion": Self.protocolVersion,
+            "token": token,
+        ]
+        let result = try await rawRequest(method: "hello", paramsObject: helloParams)
+
+        guard let resultDict = result as? [String: Any],
+              let reportedVersion = (resultDict["protocolVersion"] as? Int) ?? (resultDict["protocolVersion"] as? NSNumber)?.intValue,
+              let reportedServiceVersion = resultDict["serviceVersion"] as? String else {
+            throw HostServiceError.decoding
+        }
+
+        guard reportedVersion == Self.protocolVersion else {
+            throw HostServiceError.versionMismatch
+        }
+
+        serviceVersion = reportedServiceVersion
     }
 
     /// Sends a JSON-RPC 2.0 request and returns the raw `result` payload as
     /// `Data` (an empty/`"ok"`/`"pong"` string result is re-encoded as JSON
     /// so callers can decode it uniformly).
     public func request(method: String, params: Encodable? = nil) async throws -> Data {
+        var paramsObject: Any?
+        if let params {
+            let encoder = JSONEncoder()
+            let paramsData = try encoder.encode(AnyEncodable(params))
+            guard let decoded = try? JSONSerialization.jsonObject(with: paramsData) else {
+                throw HostServiceError.decoding
+            }
+            paramsObject = decoded
+        }
+
+        let result = try await rawRequest(method: method, paramsObject: paramsObject)
+
+        // Scalar results ("pong", "ok") aren't valid top-level JSON on their
+        // own from JSONSerialization's perspective for re-encoding into a
+        // typed decode, so wrap them as a bare JSON string/bool/number.
+        if JSONSerialization.isValidJSONObject(result) || result is [Any] {
+            return try JSONSerialization.data(withJSONObject: result as Any)
+        }
+        if let s = result as? String {
+            return try JSONEncoder().encode(s)
+        }
+        if let b = result as? Bool {
+            return try JSONEncoder().encode(b)
+        }
+        if let n = result as? NSNumber {
+            return try JSONEncoder().encode(n.doubleValue)
+        }
+        throw HostServiceError.decoding
+    }
+
+    /// Shared framing/correlation/error-handling core used by both the
+    /// `hello` handshake and `request(method:params:)`. Returns the decoded
+    /// `result` value (still `Any` — callers downcast as needed).
+    private func rawRequest(method: String, paramsObject: Any? = nil) async throws -> Any {
         guard fd >= 0 else { throw HostServiceError.notConnected }
 
         let id = nextID
@@ -114,12 +210,7 @@ public actor HostServiceClient {
             "id": id,
             "method": method,
         ]
-        if let params {
-            let encoder = JSONEncoder()
-            let paramsData = try encoder.encode(AnyEncodable(params))
-            guard let paramsObject = try? JSONSerialization.jsonObject(with: paramsData) else {
-                throw HostServiceError.decoding
-            }
+        if let paramsObject {
             payload["params"] = paramsObject
         }
 
@@ -150,22 +241,7 @@ public actor HostServiceClient {
             throw HostServiceError.decoding
         }
 
-        // Scalar results ("pong", "ok") aren't valid top-level JSON on their
-        // own from JSONSerialization's perspective for re-encoding into a
-        // typed decode, so wrap them as a bare JSON string/bool/number.
-        if JSONSerialization.isValidJSONObject(result) || result is [Any] {
-            return try JSONSerialization.data(withJSONObject: result)
-        }
-        if let s = result as? String {
-            return try JSONEncoder().encode(s)
-        }
-        if let b = result as? Bool {
-            return try JSONEncoder().encode(b)
-        }
-        if let n = result as? NSNumber {
-            return try JSONEncoder().encode(n.doubleValue)
-        }
-        throw HostServiceError.decoding
+        return result
     }
 
     // MARK: - Convenience methods

@@ -26,6 +26,9 @@ func runDaemon() error {
 	if err != nil {
 		return err
 	}
+	if _, err := ensureIPCToken(); err != nil {
+		return fmt.Errorf("ensure ipc token: %w", err)
+	}
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
 
 	// Wire E2E relay if a pairing config exists.
@@ -89,6 +92,13 @@ func (r *resident) restoreQueue() error {
 }
 
 func (r *resident) handleConnection(conn net.Conn) {
+	// Defense-in-depth on top of the 0700 state dir: reject any peer whose UID
+	// is not the daemon owner's. Same-user hook/attach/shim/control clients pass.
+	if uid, err := peerUID(conn); err != nil || uid != uint32(os.Getuid()) {
+		conn.Close()
+		return
+	}
+
 	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	first, framed, err := readFirstMessage(conn)
 	if err != nil {
@@ -99,6 +109,10 @@ func (r *resident) handleConnection(conn net.Conn) {
 
 	if framed && isAttachHello(first) {
 		r.serveAttach(conn, first)
+		return
+	}
+	if framed && isHelloControl(first) {
+		r.serveControl(conn, first)
 		return
 	}
 	if !framed {

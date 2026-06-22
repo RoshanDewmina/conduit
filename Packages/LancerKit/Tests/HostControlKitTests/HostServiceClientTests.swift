@@ -67,6 +67,27 @@ private final class FakeDaemonServer: @unchecked Sendable {
         return (connFD, json)
     }
 
+    /// Accepts a connection, services the `hello` handshake with a default
+    /// success reply, and returns the connFD plus the *next* framed request
+    /// (the test's actual method call) for the caller to assert on/respond
+    /// to — mirrors `acceptOneRequest()`'s shape but with the handshake
+    /// already out of the way.
+    func acceptHandshakeThenOneRequest(
+        protocolVersion: Int = 1,
+        serviceVersion: String = "test-1.0"
+    ) throws -> (connFD: Int32, requestJSON: [String: Any]) {
+        let connFD = accept(listenFD, nil, nil)
+        guard connFD >= 0 else { throw TestSetupError.socket("accept() failed") }
+
+        try respondToHandshake(connFD: connFD, server: self, protocolVersion: protocolVersion, serviceVersion: serviceVersion)
+
+        let frameData = try Self.readFramedBlocking(fd: connFD)
+        guard let json = (try? JSONSerialization.jsonObject(with: frameData)) as? [String: Any] else {
+            throw TestSetupError.socket("failed to parse request JSON")
+        }
+        return (connFD, json)
+    }
+
     /// Reads the raw bytes of exactly one frame (4-byte BE length + payload)
     /// directly off the socket — used both to drive the fake server and, in
     /// the dedicated framing test, to assert on exact wire bytes.
@@ -146,6 +167,53 @@ private func makeTempSocketPath() -> String {
     return "/tmp/hck-\(shortID).sock"
 }
 
+private let testToken = "deadbeefcafef00d"
+
+/// Reads and asserts on the `hello` handshake request, then writes back a
+/// success response. Returns the parsed `hello` request JSON for tests that
+/// want to assert on its contents.
+@discardableResult
+private func respondToHandshake(
+    connFD: Int32,
+    server: FakeDaemonServer,
+    protocolVersion: Int = 1,
+    serviceVersion: String = "test-1.0"
+) throws -> [String: Any] {
+    let helloJSON = (try? JSONSerialization.jsonObject(
+        with: FakeDaemonServer.readFramedBlocking(fd: connFD)
+    )) as? [String: Any]
+    guard let helloJSON else {
+        throw FakeDaemonServer.TestSetupError.socket("failed to parse hello request")
+    }
+    let id = helloJSON["id"] as? Int
+    let response = try JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0",
+        "id": id as Any,
+        "result": ["protocolVersion": protocolVersion, "serviceVersion": serviceVersion],
+    ])
+    try FakeDaemonServer.writeFramedBlocking(fd: connFD, json: response)
+    return helloJSON
+}
+
+/// Same as `respondToHandshake` but replies with a JSON-RPC `error` instead
+/// of a success result — for the rejection-path tests.
+private func respondToHandshakeWithError(connFD: Int32, code: Int, message: String) throws -> [String: Any] {
+    let helloJSON = (try? JSONSerialization.jsonObject(
+        with: FakeDaemonServer.readFramedBlocking(fd: connFD)
+    )) as? [String: Any]
+    guard let helloJSON else {
+        throw FakeDaemonServer.TestSetupError.socket("failed to parse hello request")
+    }
+    let id = helloJSON["id"] as? Int
+    let response = try JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0",
+        "id": id as Any,
+        "error": ["code": code, "message": message],
+    ])
+    try FakeDaemonServer.writeFramedBlocking(fd: connFD, json: response)
+    return helloJSON
+}
+
 @Suite("HostServiceClient")
 struct HostServiceClientTests {
     @Test("ping round-trips and returns pong")
@@ -156,7 +224,7 @@ struct HostServiceClientTests {
         defer { server.stop() }
 
         let serverTask = Task {
-            let (connFD, request) = try server.acceptOneRequest()
+            let (connFD, request) = try server.acceptHandshakeThenOneRequest()
             defer { close(connFD) }
             #expect(request["method"] as? String == "ping")
             #expect(request["jsonrpc"] as? String == "2.0")
@@ -169,7 +237,7 @@ struct HostServiceClientTests {
             try FakeDaemonServer.writeFramedBlocking(fd: connFD, json: response)
         }
 
-        let client = HostServiceClient(socketPathOverride: socketPath)
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
         try await client.connect()
         let result = try await client.ping()
         #expect(result == "pong")
@@ -185,7 +253,7 @@ struct HostServiceClientTests {
         defer { server.stop() }
 
         let serverTask = Task {
-            let (connFD, request) = try server.acceptOneRequest()
+            let (connFD, request) = try server.acceptHandshakeThenOneRequest()
             defer { close(connFD) }
             let id = request["id"] as? Int
             let response = try JSONSerialization.data(withJSONObject: [
@@ -196,7 +264,7 @@ struct HostServiceClientTests {
             try FakeDaemonServer.writeFramedBlocking(fd: connFD, json: response)
         }
 
-        let client = HostServiceClient(socketPathOverride: socketPath)
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
         try await client.connect()
 
         await #expect(throws: HostServiceError.rpc(code: -32601, message: "method not found")) {
@@ -214,7 +282,7 @@ struct HostServiceClientTests {
         defer { server.stop() }
 
         let serverTask = Task {
-            let (connFD, request) = try server.acceptOneRequest()
+            let (connFD, request) = try server.acceptHandshakeThenOneRequest()
             defer { close(connFD) }
             let id = request["id"] as? Int
             // Echo a deliberately distinctive result so we know this exact
@@ -228,13 +296,13 @@ struct HostServiceClientTests {
             return id
         }
 
-        let client = HostServiceClient(socketPathOverride: socketPath)
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
         try await client.connect()
         let report = try await client.doctor()
         #expect(report.daemonVersion == "9.9.9")
 
         let requestID = try await serverTask.value
-        #expect(requestID == 1) // first request from a fresh client
+        #expect(requestID == 2) // id 1 is consumed by the hello handshake; doctor is the 2nd request
     }
 
     @Test("wire framing is exactly 4-byte big-endian length prefix + payload")
@@ -248,6 +316,10 @@ struct HostServiceClientTests {
             let connFD = accept(server.listenFD, nil, nil)
             #expect(connFD >= 0)
             defer { close(connFD) }
+
+            // Service the hello handshake first so connect() succeeds; the
+            // frame we want to assert on is the subsequent ping request.
+            _ = try respondToHandshake(connFD: connFD, server: server)
 
             // Read the raw bytes of the frame (length prefix included) so we
             // can assert on the wire format itself, not just the decoded payload.
@@ -282,5 +354,68 @@ struct HostServiceClientTests {
         let payloadBytes = rawFrame.suffix(from: rawFrame.startIndex + 4)
         let json = try JSONSerialization.jsonObject(with: Data(payloadBytes)) as? [String: Any]
         #expect(json?["method"] as? String == "ping")
+    }
+
+    @Test("handshake exposes the daemon's reported service version")
+    func handshakeServiceVersion() async throws {
+        let socketPath = makeTempSocketPath()
+        let server = FakeDaemonServer(socketPath: socketPath)
+        try server.start()
+        defer { server.stop() }
+
+        let serverTask = Task {
+            let connFD = accept(server.listenFD, nil, nil)
+            #expect(connFD >= 0)
+            defer { close(connFD) }
+            _ = try respondToHandshake(connFD: connFD, server: server, protocolVersion: 1, serviceVersion: "lancerd-2.3.4")
+        }
+
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
+        try await client.connect()
+        let reported = await client.serviceVersion
+        #expect(reported == "lancerd-2.3.4")
+        try await serverTask.value
+    }
+
+    @Test("handshake protocol-version disagreement throws versionMismatch")
+    func handshakeVersionMismatch() async throws {
+        let socketPath = makeTempSocketPath()
+        let server = FakeDaemonServer(socketPath: socketPath)
+        try server.start()
+        defer { server.stop() }
+
+        let serverTask = Task {
+            let connFD = accept(server.listenFD, nil, nil)
+            #expect(connFD >= 0)
+            defer { close(connFD) }
+            _ = try respondToHandshake(connFD: connFD, server: server, protocolVersion: 2, serviceVersion: "future")
+        }
+
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
+        await #expect(throws: HostServiceError.versionMismatch) {
+            try await client.connect()
+        }
+        try await serverTask.value
+    }
+
+    @Test("handshake rejection (-32001) surfaces as HostServiceError.rpc")
+    func handshakeUnauthorized() async throws {
+        let socketPath = makeTempSocketPath()
+        let server = FakeDaemonServer(socketPath: socketPath)
+        try server.start()
+        defer { server.stop() }
+
+        let serverTask = Task {
+            let connFD = accept(server.listenFD, nil, nil)
+            #expect(connFD >= 0)
+            defer { close(connFD) }
+            _ = try respondToHandshakeWithError(connFD: connFD, code: -32001, message: "unauthorized")
+        }
+
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: "wrong")
+        await #expect(throws: HostServiceError.rpc(code: -32001, message: "unauthorized")) {
+            try await client.connect()
+        }
+        try await serverTask.value
     }
 }
