@@ -209,7 +209,12 @@ private struct CoachmarkOverlay: View {
             }
         }
         .ignoresSafeArea()
-        .allowsHitTesting(state.isActive)
+        // Only swallow touches when a step is actually on screen. If isActive is
+        // true but currentStep is nil (steps reconfigured, index out of range,
+        // mid-transition), this overlay draws nothing — it must stay transparent
+        // to hits, or it becomes an invisible full-screen tap-blocker that traps
+        // the user with no way to advance/skip the tour.
+        .allowsHitTesting(state.isActive && state.currentStep != nil)
     }
 
     // MARK: Scrim with spotlight cut-out

@@ -666,16 +666,12 @@ public struct AppRoot: View {
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
         }
-        // One-time interactive coach-mark tour, shown once the app shell is up.
+        // One-time interactive coach-mark tour. Overlay stays installed (cheap,
+        // inert while inactive) but auto-start is OFF: on-device it mis-rendered
+        // and trapped all input (auto-opened the drawer, then ate every tap with
+        // no visible step to advance). ponytail: re-enable auto-start only after
+        // the tour is verified working on a physical device.
         .coachmarkTour(coachTour)
-        .task {
-            guard onboardingSeen, !CoachmarkTourState.hasSeenTour else { return }
-            // Let the shell settle; open the drawer on compact so sidebar anchors
-            // resolve, then start. Targets that aren't on-screen render centered.
-            if horizontalSizeClass != .regular { openDrawer() }
-            try? await Task.sleep(for: .milliseconds(550))
-            coachTour.start()
-        }
     }
 
     private var activeInboxViewModel: InboxViewModel {
@@ -1018,7 +1014,6 @@ public struct AppRoot: View {
             let resting = isOpen ? drawerWidth : 0
             let translate = max(0, min(drawerWidth, resting + drawerDrag))
             let progress = drawerWidth > 0 ? translate / drawerWidth : 0
-            let cornerRadius = 30 * progress
             ZStack(alignment: .leading) {
                 t.bg.ignoresSafeArea()
 
@@ -1029,8 +1024,9 @@ public struct AppRoot: View {
                 .frame(width: drawerWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
 
-                // Main content — slides right, shrinks slightly, and rounds into a
-                // dimmed card when the drawer is open.
+                // Main content — slides right at full size (ChatGPT/Claude style:
+                // pure translation, no scale or corner rounding), dimmed by a scrim
+                // when the drawer is open.
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
                         // Every Lancer page brings its own header and the shell
@@ -1063,22 +1059,17 @@ public struct AppRoot: View {
                         }
                 }
                 .background(t.bg)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(t.border.opacity(0.6 * progress), lineWidth: 1)
-                )
                 .overlay {
-                    // Scrim dims the page as it recedes; the whole card is the
-                    // close target while open.
+                    // Scrim dims the page as it slides aside; while open the whole
+                    // page is the tap-to-close target. Strictly non-interactive when
+                    // closed so it never swallows taps on the page's own buttons.
                     Color.black.opacity(0.32 * progress)
-                        .allowsHitTesting(progress > 0.01)
+                        .allowsHitTesting(isOpen)
                         .contentShape(Rectangle())
                         .onTapGesture { sidebarState.isDrawerOpen = false }
                 }
-                .scaleEffect(1 - 0.08 * progress, anchor: .leading)
                 .offset(x: translate)
-                .shadow(color: .black.opacity(0.28 * progress), radius: 24, x: -10, y: 0)
+                .shadow(color: .black.opacity(0.18 * progress), radius: 16, x: -8, y: 0)
             }
             .gesture(
                 DragGesture(minimumDistance: 12, coordinateSpace: .global)
