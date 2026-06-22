@@ -200,6 +200,7 @@ public struct AppRoot: View {
     @State private var relayBridgeIsActive: Bool = false
     @State private var relayHostName: String?
     @State private var sidebarState = SidebarShellState()
+    @GestureState private var drawerDrag: CGFloat = 0
     @State private var coachTour = CoachmarkTourState(steps: AppRoot.coachmarkSteps)
 
     /// One-time interactive tour shown after onboarding. Targets resolve against
@@ -986,7 +987,11 @@ public struct AppRoot: View {
         }
     }
 
-    @Environment(\.conduitTokens) private var t
+    // Derive shell tokens from the resolved scheme directly. Reading
+    // @Environment(\.conduitTokens) here would resolve ABOVE AppRoot — where the
+    // app sets the token environment (see body) — and yield the default LIGHT
+    // palette, which leaked through as a white status-bar strip on inset pages.
+    private var t: ConduitTokens { effectiveScheme == .dark ? .dark : .light }
 
     private func openDrawer() {
         Task { await sidebarState.loadRecent() }
@@ -1007,17 +1012,25 @@ public struct AppRoot: View {
         GeometryReader { proxy in
             let drawerWidth = min(340, proxy.size.width * 0.8)
             let isOpen = sidebarState.isDrawerOpen
+            // A single 0…1 driver: the open/closed bool, nudged by the live drag so
+            // the card, scrim, corner radius, and scale all move together — the
+            // ChatGPT/Claude drawer feel comes from one transform, not four.
+            let resting = isOpen ? drawerWidth : 0
+            let translate = max(0, min(drawerWidth, resting + drawerDrag))
+            let progress = drawerWidth > 0 ? translate / drawerWidth : 0
+            let cornerRadius = 30 * progress
             ZStack(alignment: .leading) {
                 t.bg.ignoresSafeArea()
 
-                // Sidebar pinned left, revealed as the content slides away.
+                // Sidebar pinned left, revealed underneath as the content slides away.
                 ConduitSidebarView(state: sidebarState, profileLabel: profileLabel(for: env)) { dest in
                     sidebarState.navigate(to: dest)
                 }
                 .frame(width: drawerWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
 
-                // Main content — pushed right and rounded into a card when the drawer is open.
+                // Main content — slides right, shrinks slightly, and rounds into a
+                // dimmed card when the drawer is open.
                 NavigationStack {
                     sidebarDetail(for: sidebarState.selectedDestination, env: env)
                         // Every Conduit page brings its own header and the shell
@@ -1050,32 +1063,42 @@ public struct AppRoot: View {
                         }
                 }
                 .background(t.bg)
-                .clipShape(RoundedRectangle(cornerRadius: isOpen ? 32 : 0, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: isOpen ? 32 : 0, style: .continuous)
-                        .strokeBorder(t.border.opacity(isOpen ? 0.6 : 0), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(t.border.opacity(0.6 * progress), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(isOpen ? 0.28 : 0), radius: 24, x: -10, y: 0)
                 .overlay {
-                    if isOpen {
-                        Color.black.opacity(0.12)
-                            .contentShape(Rectangle())
-                            .onTapGesture { sidebarState.isDrawerOpen = false }
-                    }
+                    // Scrim dims the page as it recedes; the whole card is the
+                    // close target while open.
+                    Color.black.opacity(0.32 * progress)
+                        .allowsHitTesting(progress > 0.01)
+                        .contentShape(Rectangle())
+                        .onTapGesture { sidebarState.isDrawerOpen = false }
                 }
-                .offset(x: isOpen ? drawerWidth : 0)
+                .scaleEffect(1 - 0.08 * progress, anchor: .leading)
+                .offset(x: translate)
+                .shadow(color: .black.opacity(0.28 * progress), radius: 24, x: -10, y: 0)
             }
             .gesture(
-                DragGesture(minimumDistance: 20, coordinateSpace: .global)
-                    .onChanged { value in
-                        if !sidebarState.isDrawerOpen {
-                            guard value.startLocation.x < 30 else { return }
-                            if value.translation.width > 40 { openDrawer() }
+                DragGesture(minimumDistance: 12, coordinateSpace: .global)
+                    .updating($drawerDrag) { value, state, _ in
+                        if sidebarState.isDrawerOpen {
+                            // Track a leftward swipe to close.
+                            state = min(0, value.translation.width)
+                        } else if value.startLocation.x < 32 {
+                            // Track a left-edge swipe to open.
+                            state = max(0, value.translation.width)
                         }
                     }
                     .onEnded { value in
-                        if sidebarState.isDrawerOpen, value.translation.width < -60 {
-                            sidebarState.isDrawerOpen = false
+                        let predicted = value.predictedEndTranslation.width
+                        if sidebarState.isDrawerOpen {
+                            if predicted < -drawerWidth * 0.3 {
+                                sidebarState.isDrawerOpen = false
+                            }
+                        } else if value.startLocation.x < 32, predicted > drawerWidth * 0.3 {
+                            openDrawer()
                         }
                     }
             )

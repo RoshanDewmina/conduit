@@ -7,7 +7,6 @@ import DesignSystem
 public struct E2ERelayPairingView: View {
     @ObservedObject private var client: E2ERelayClient
     @State private var ownedClient: E2ERelayClient?
-    @State private var relayURL: String = ""
     @State private var pairingCode: String = ""
     @State private var showGeneratedCode = false
     @Environment(\.conduitTokens) private var t
@@ -23,7 +22,6 @@ public struct E2ERelayPairingView: View {
         )
         _client = ObservedObject(initialValue: resolved)
         _ownedClient = State(initialValue: client == nil ? resolved : nil)
-        _relayURL = State(initialValue: RelaySettings.urlString())
         // Seed from the client's stable code so navigating back doesn't reset to "000000"
         _pairingCode = State(initialValue: resolved.pairingCode)
         // Default to showing the phone's code — the common flow is: see code → relay-attach on laptop
@@ -82,6 +80,9 @@ public struct E2ERelayPairingView: View {
 
     // MARK: - Relay URL
 
+    // The relay endpoint is fixed to the hosted relay in V1 — shown read-only so
+    // a user can't strand their device on the wrong server. Self-hosters set the
+    // CONDUIT_RELAY_URL env override (see RelaySettings).
     private var relayURLSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("RELAY SERVER")
@@ -90,13 +91,14 @@ public struct E2ERelayPairingView: View {
                 .foregroundStyle(t.text3)
 
             HStack {
-                Image(systemName: "server.rack")
-                    .foregroundStyle(t.text2)
-                TextField("wss://relay.conduit.dev", text: $relayURL)
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(t.text3)
+                Text(RelaySettings.urlString())
                     .font(.dsMonoPt(14))
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .foregroundStyle(t.text)
+                    .foregroundStyle(t.text2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
             }
             .padding(12)
             .background(t.surfaceSunk)
@@ -195,7 +197,7 @@ public struct E2ERelayPairingView: View {
         ) {
             connect()
         }
-        .disabled(relayURL.isEmpty || pairingCode.isEmpty)
+        .disabled(pairingCode.isEmpty)
     }
 
     private var disconnectButton: some View {
@@ -213,9 +215,7 @@ public struct E2ERelayPairingView: View {
     // MARK: - Actions
 
     private func connect() {
-        let normalized = RelaySettings.setURLString(relayURL)
-        relayURL = normalized
-        guard let url = URL(string: normalized) else { return }
+        let url = RelaySettings.url()
         let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard code.count == 6 else { return }
 

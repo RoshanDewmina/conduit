@@ -15,13 +15,18 @@ public enum RelaySettings {
     // out of the box. Users never set this; the Settings override is for
     // self-hosters running their own relay.
     public static let defaultURLString = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
-    private static let overrideKey = "conduit.relayURL"
 
-    /// The configured relay URL string (override → env → default).
+    // Legacy key for a user-set relay override. The override is no longer
+    // honored or settable from the UI — the endpoint is fixed to the hosted
+    // relay in V1. We still clear the key on read so a stale value saved by an
+    // older build (e.g. a dead self-host URL) can't strand a device on a relay
+    // the daemon isn't on. Self-hosters use the CONDUIT_RELAY_URL env override.
+    private static let legacyOverrideKey = "conduit.relayURL"
+
+    /// The relay URL string (env override → default). Users never set this.
     public static func urlString(defaults: UserDefaults = .standard) -> String {
-        if let stored = defaults.string(forKey: overrideKey),
-           !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return stored
+        if defaults.object(forKey: legacyOverrideKey) != nil {
+            defaults.removeObject(forKey: legacyOverrideKey)
         }
         if let env = ProcessInfo.processInfo.environment["CONDUIT_RELAY_URL"],
            !env.isEmpty {
@@ -30,22 +35,9 @@ public enum RelaySettings {
         return defaultURLString
     }
 
-    /// The configured relay URL, falling back to the default if a stored value
+    /// The configured relay URL, falling back to the default if the value
     /// somehow fails to parse.
     public static func url(defaults: UserDefaults = .standard) -> URL {
         URL(string: urlString(defaults: defaults)) ?? URL(string: defaultURLString)!
-    }
-
-    /// Persist a user-supplied relay URL. Empty input clears the override and
-    /// reverts to the default. Returns the normalized value that was stored.
-    @discardableResult
-    public static func setURLString(_ value: String, defaults: UserDefaults = .standard) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            defaults.removeObject(forKey: overrideKey)
-            return defaultURLString
-        }
-        defaults.set(trimmed, forKey: overrideKey)
-        return trimmed
     }
 }
