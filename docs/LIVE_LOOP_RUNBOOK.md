@@ -197,6 +197,75 @@ Simulators cannot receive production APNs. On a real iPhone (signed dev build, P
 
 ---
 
+## PHASE 6 — TestFlight distribution (share with others)
+
+Do Phase 5c first — **never** hand testers a build whose core loop you haven't proven on your own
+device. Phase 6 is owner-gated (Apple ID + App Store Connect GUI); the steps below are the exact
+sequence. Facts pulled from `project.yml`: app bundle `dev.lancer.mobile`, team `39HM2X8GS6`,
+`CODE_SIGN_STYLE: Automatic`, `aps-environment: production`, version `1.0.0 (1)`.
+
+### 6a. App Store Connect record (= checklist D2, one-time)
+1. App Store Connect → **Apps → +** → New App. Platform iOS, bundle ID **`dev.lancer.mobile`**
+   (register it under Certificates, IDs & Profiles first if it's not in the dropdown), SKU `lancer`.
+2. Register App IDs + matching capabilities for **every embedded target** that ships in the archive
+   so automatic signing can mint profiles: `dev.lancer.mobile` (Push, App Groups, CloudKit if
+   `ENABLE_CLOUDKIT` is on), `dev.lancer.mobile.widget`, `dev.lancer.mobile.liveactivity`. (Watch
+   targets are **not** embedded today — `project.yml` leaves the embed commented out — so skip them
+   until re-embedded.)
+3. IAP: create Non-Consumable **`dev.lancer.mobile.pro`**, $14.99. (TestFlight can run without it,
+   but sandbox-testing the purchase needs it to exist — checklist C5.)
+4. Encryption: set **`ITSAppUsesNonExemptEncryption`** (the app uses only standard TLS/ChaCha20 →
+   exempt) so each upload skips the manual compliance prompt.
+
+### 6b. Pre-archive checks
+- `aps-environment` is **production** → the build talks to the **production** APNs + the deployed
+  `push-backend`. That matches the running backend (`APNS_BUNDLE_ID=dev.lancer.mobile`, D1 ✅). Good.
+- Confirm `LANCER_PUSH_BACKEND_URL` is set in the **Release** build settings to the Cloud Run URL
+  (it is **not** committed — inject locally/CI per `project.yml:83`). A blank URL ships a build that
+  can't reach push.
+- Entitlements/CloudKit consistency: if you archive with `Lancer.entitlements` (iCloud on), set
+  `ENABLE_CLOUDKIT=true`; if with `Lancer-DeviceTesting.entitlements`, keep it **false**
+  (`project.yml:91`). Mismatch = validation failure at upload.
+- Bump the build number every upload (App Store Connect rejects a duplicate `CURRENT_PROJECT_VERSION`
+  for the same `MARKETING_VERSION`): `agvtool next-version -all` or bump `CURRENT_PROJECT_VERSION` in
+  `project.yml`, then `xcodegen generate`.
+
+### 6c. Archive + upload
+```bash
+cd /Users/roshansilva/Documents/command-center
+xcodegen generate                      # regenerate Lancer.xcodeproj from project.yml
+xcodebuild -project Lancer.xcodeproj -scheme Lancer \
+  -configuration Release \
+  -destination 'generic/platform=iOS' \
+  -archivePath build/Lancer.xcarchive \
+  archive
+```
+Then either:
+- **Xcode Organizer** (simplest, recommended): Window → Organizer → select the archive →
+  **Distribute App → TestFlight (Internal Only / App Store Connect)** → automatic signing → Upload.
+- **CLI:** `xcodebuild -exportArchive -archivePath build/Lancer.xcarchive -exportPath build/export
+  -exportOptionsPlist ExportOptions.plist` (method `app-store`), then upload `build/export/Lancer.ipa`
+  with **Transporter.app** or `xcrun altool --upload-app`.
+
+Processing on App Store Connect takes ~5–30 min before the build appears in TestFlight.
+
+### 6d. TestFlight testers
+- **Internal** (up to 100, your team members on the account): TestFlight tab → Internal Testing →
+  add testers → they get it **immediately**, no review.
+- **External** (up to 10k, anyone by email/public link): create a group, attach the build → submit
+  for **Beta App Review** (usually <24h for the first build). Add **Test Information** (what to test,
+  a demo pairing flow, contact email) or review bounces it.
+- Tester instructions to send: install **TestFlight** from the App Store → open your invite link →
+  Install Lancer → on first launch **accept notifications** (required for the approval loop) → pair
+  with their own machine's `lancerd` (`curl … | sh` installer + pairing code). Without a paired
+  machine the app has nothing to steer.
+
+🛑 **CHECKPOINT 6:** an external tester on a different Apple ID installs from TestFlight, pairs their
+own machine, and completes one approve-from-lock-screen loop (Phase 5c) end-to-end. That's the
+"others can use it" bar. Update checklist **D5** only after a real tester confirms it.
+
+---
+
 ## Triage (symptom → where to look)
 
 | Symptom | Likely cause | Inspect |
