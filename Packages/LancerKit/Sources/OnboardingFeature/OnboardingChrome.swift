@@ -113,12 +113,13 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
             Color.clear.frame(width: 38, height: 38)
         case .back:
             Button(action: onLeading) {
-                DSIconView(.arrowReturn, size: 17, color: t.text2)
+                DSIconView(.chevronLeft, size: 17, color: t.text2)
                     .frame(width: 38, height: 38)
                     .background(t.surface)
                     .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
         case .close:
             Button(action: onLeading) {
                 DSIconView(.close, size: 17, color: t.text2)
@@ -127,6 +128,7 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
                     .overlay(Rectangle().strokeBorder(t.border, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close")
         }
     }
 }

@@ -16,6 +16,7 @@ public enum DSIcon: String, CaseIterable, Sendable {
     case arrowRight
     case arrowReturn
     case chevronRight
+    case chevronLeft
     case chevronDown
     case more
     case star
@@ -159,6 +160,10 @@ private func draw(icon: DSIcon, ctx: GraphicsContext, color: Color, style: Strok
 
     case .chevronRight:
         var p = Path(); p.move(to: .p(9,6)); p.addLine(to: .p(15,12)); p.addLine(to: .p(9,18))
+        ctx.stroke(p, with: .color(color), style: style)
+
+    case .chevronLeft:
+        var p = Path(); p.move(to: .p(15,6)); p.addLine(to: .p(9,12)); p.addLine(to: .p(15,18))
         ctx.stroke(p, with: .color(color), style: style)
 
     case .chevronDown:

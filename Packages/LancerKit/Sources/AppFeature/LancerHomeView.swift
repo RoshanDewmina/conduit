@@ -11,8 +11,11 @@ public struct LancerHomeView: View {
     private let profileEmail: String?
     /// A relay-paired host, if any. Relay hosts aren't `fleetStore` slots (they're
     /// the E2E bridge), so Home must be told about them explicitly or they never
-    /// appear here even while connected.
+    /// appear here even while connected. Passed whenever a pairing is *stored* (so a
+    /// known host doesn't vanish during reconnect), with `relayHostConnected`
+    /// carrying whether the bridge is live right now (drives the status dot).
     private let relayHostName: String?
+    private let relayHostConnected: Bool
     private let onOpenSidebar: (() -> Void)?
     private let onNewChat: () -> Void
     private let onOpenInbox: () -> Void
@@ -28,6 +31,7 @@ public struct LancerHomeView: View {
         pendingApprovalCount: Int,
         profileEmail: String? = nil,
         relayHostName: String? = nil,
+        relayHostConnected: Bool = false,
         onOpenSidebar: (() -> Void)? = nil,
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
@@ -39,6 +43,7 @@ public struct LancerHomeView: View {
         self.pendingApprovalCount = pendingApprovalCount
         self.profileEmail = profileEmail
         self.relayHostName = relayHostName
+        self.relayHostConnected = relayHostConnected
         self.onOpenSidebar = onOpenSidebar
         self.onNewChat = onNewChat
         self.onOpenInbox = onOpenInbox
@@ -233,7 +238,12 @@ public struct LancerHomeView: View {
                         HomeProject(path: path, sessions: sessions.sorted { $0.lastActivityAt > $1.lastActivityAt })
                     }
                     .sorted { ($0.sessions.first?.lastActivityAt ?? .distantPast) > ($1.sessions.first?.lastActivityAt ?? .distantPast) }
-                let liveState = fleetStore.slots.first { $0.hostName == host }.map { fleetStore.connectionState(for: $0) }
+                var liveState = fleetStore.slots.first { $0.hostName == host }.map { fleetStore.connectionState(for: $0) }
+                // The relay host isn't a fleet slot, so derive its dot from the live
+                // bridge state instead: paired-and-live vs. known-but-reconnecting.
+                if liveState == nil, host == relayHostName {
+                    liveState = relayHostConnected ? .relayPaired : .connecting
+                }
                 return HomeMachine(name: host, projects: projects, liveState: liveState)
             }
             .sorted { ($0.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) > ($1.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) }

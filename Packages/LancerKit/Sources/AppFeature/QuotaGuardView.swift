@@ -6,6 +6,7 @@ import DesignSystem
 public struct QuotaGuardView: View {
     @State private var store: QuotaGuardStore
     @Environment(\.lancerTokens) private var t
+    @Environment(\.dismiss) private var dismiss
 
     public init(store: QuotaGuardStore) {
         _store = State(initialValue: store)
@@ -36,25 +37,16 @@ public struct QuotaGuardView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("limits")
-                    .font(.dsSansPt(28, weight: .bold))
-                    .foregroundStyle(t.text)
-                Text("per-provider budget caps & burn rate")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-            }
-            Spacer()
-            DSIconButton(.settings, accessibilityLabel: "Limits settings") {
+        // Sheet chrome: a Back control to dismiss (this is presented as a sheet and
+        // previously had no explicit way out) + the refresh control as trailing.
+        DSDetailHeader("limits", breadcrumb: "per-provider budget caps & burn rate", onBack: { dismiss() }) {
+            DSIconButton(.settings, accessibilityLabel: "Refresh limits") {
                 Haptics.selection()
                 Task { await store.refresh() }
             }
             .disabled(store.isLoading)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Hero Card

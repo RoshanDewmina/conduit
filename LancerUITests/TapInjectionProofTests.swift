@@ -70,13 +70,19 @@ final class TapInjectionProofTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["GENERAL"].waitForExistence(timeout: 10),
                       "After tapping Settings, its General section should render")
 
-        // Settings intentionally uses its in-content back affordance, rather
-        // than fighting its custom header with a second navigation bar.
-        let back = app.buttons["Back"]
-        XCTAssertTrue(back.waitForExistence(timeout: 10), "Settings should expose its Back control")
-        back.tap()
+        // Settings is a top-level destination in the sidebar shell: it returns via
+        // the hamburger (re-open the drawer) → tap another destination, not a Back
+        // control. (The old in-content Back affordance was removed with the shell.)
+        let hamburger = app.buttons["Open navigation"]
+        XCTAssertTrue(hamburger.waitForExistence(timeout: 10),
+                      "Settings should expose the shell hamburger to re-open the drawer")
+        hamburger.tap()
+
+        let inboxRow = app.buttons["Inbox"]
+        XCTAssertTrue(inboxRow.waitForExistence(timeout: 10), "Re-opened drawer should list the Inbox destination")
+        inboxRow.tap()
         XCTAssertTrue(inboxTitle.waitForExistence(timeout: 10),
-                      "Settings Back should return to the previous Inbox destination")
+                      "Tapping Inbox in the re-opened drawer should return to the Inbox destination")
     }
 
     /// The real verification goal: tap APPROVE on a seeded pending card and confirm

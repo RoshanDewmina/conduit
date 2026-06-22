@@ -29,6 +29,41 @@ func readSettings(t *testing.T, path string) map[string]json.RawMessage {
 	return m
 }
 
+// ensureClaudeHookWiredOnBoot is what lets a plain dispatch launch immediately
+// instead of escalating. It must wire the hook on a fresh install AND repair a
+// stale/mismatched command (the real-world rebrand bug, where settings.json had a
+// non-matching hook entry so claudeHookWired read false and every send blocked).
+func TestEnsureClaudeHookWiredOnBoot(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("LANCER_STATE_DIR", state)
+	home := serverHome()
+	path := claudeSettingsPath(home)
+
+	if claudeHookWired(path) {
+		t.Fatal("precondition: a fresh state dir should not have the hook wired")
+	}
+	ensureClaudeHookWiredOnBoot()
+	if !claudeHookWired(path) {
+		t.Fatal("boot wire should leave the Claude hook wired on a fresh install")
+	}
+
+	// Now simulate a stale/mismatched PreToolUse entry and confirm boot repairs it.
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	stale := `{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"bash ~/.conduit/hooks/conduit-hook.sh"}]}]}}`
+	if err := os.WriteFile(path, []byte(stale), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if claudeHookWired(path) {
+		t.Fatal("a stale conduit-only entry should read as not wired")
+	}
+	ensureClaudeHookWiredOnBoot()
+	if !claudeHookWired(path) {
+		t.Fatal("boot wire should repair a stale/mismatched hook command")
+	}
+}
+
 func TestWireClaudeHookCreatesMissingSettings(t *testing.T) {
 	home := t.TempDir()
 	changed, err := wireClaudeHookSettings(home)

@@ -256,6 +256,12 @@ public struct AccountEntryView: View {
                         .foregroundStyle(t.accent)
                 }
             }
+
+            // Back to the connection-choice screen (this view has no top-bar back).
+            Button("Back") { Haptics.selection(); route = .choice; message = nil }
+                .font(.dsSansPt(13, weight: .semibold))
+                .foregroundStyle(t.text3)
+                .accessibilityLabel("Back to connection choice")
         }
         .padding(16)
         .background(t.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

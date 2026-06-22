@@ -29,6 +29,7 @@ func runDaemon() error {
 	if _, err := ensureIPCToken(); err != nil {
 		return fmt.Errorf("ensure ipc token: %w", err)
 	}
+	ensureClaudeHookWiredOnBoot() // so plain dispatches launch immediately (hook still gates tools)
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
 
 	// Wire E2E relay if a pairing config exists.

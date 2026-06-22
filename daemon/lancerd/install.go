@@ -123,6 +123,22 @@ func lookPathExcluding(name, excludeDir string) string {
 // idempotently wires it into ~/.claude/settings.json so Claude Code actually
 // calls it. Without the settings wiring the interactive approval path never
 // fires (Finding #10).
+// ensureClaudeHookWiredOnBoot wires the Claude PreToolUse hook on daemon startup
+// if it isn't already. This is what lets a plain dispatch ("Hi") launch
+// immediately instead of escalating: relaxLaunchEscalation only relaxes a launch
+// when the per-action hook is verifiably wired, so without this a fresh/rebranded
+// install silently forces approval on every send. Idempotent and best-effort — a
+// wiring failure only means more prompting, never an unintended allow.
+func ensureClaudeHookWiredOnBoot() {
+	home := serverHome()
+	if claudeHookWired(claudeSettingsPath(home)) {
+		return
+	}
+	if err := installClaudeHook(home); err != nil {
+		fmt.Fprintf(os.Stderr, "lancerd: could not auto-wire Claude hook (sends will require approval): %v\n", err)
+	}
+}
+
 func installClaudeHook(home string) error {
 	scriptPath := claudeHookScriptPath(home)
 	if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {

@@ -266,6 +266,13 @@ public struct AppRoot: View {
             }
             _sidebarState = State(initialValue: state)
         }
+        // UI-test seam: simulate a paired, live relay host so Home's machine list can
+        // be verified without a live relay. `configureE2ERelayBridge` early-returns
+        // when this is set so the real bridge subscription doesn't clobber it.
+        if let fakeRelayHost = ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] {
+            _relayHostName = State(initialValue: fakeRelayHost)
+            _relayBridgeIsActive = State(initialValue: true)
+        }
         #endif
     }
 
@@ -1144,10 +1151,15 @@ public struct AppRoot: View {
                     // Strictly non-interactive when closed so it never swallows taps
                     // on the page's own buttons.
                     Color.black.opacity(0.32 * progress)
-                        .allowsHitTesting(isOpen)
                         .contentShape(Rectangle())
                         .onTapGesture { sidebarState.isDrawerOpen = false }
                         .gesture(isOpen ? closeDragGesture(drawerWidth: drawerWidth) : nil)
+                        // Outermost so it gates the WHOLE composed overlay (tap +
+                        // gesture + shape), not just the inner Color. Applied earlier
+                        // it left the tap-to-close gesture live while closed — an
+                        // invisible full-content tap-eater that killed every page
+                        // button (the real "dead buttons" cause).
+                        .allowsHitTesting(isOpen)
                 }
                 .offset(x: translate)
                 .shadow(color: .black.opacity(0.18 * progress), radius: 16, x: -8, y: 0)
@@ -1373,7 +1385,12 @@ public struct AppRoot: View {
             recentThreads: sidebarState.recentThreads,
             pendingApprovalCount: activeInboxViewModel.approvals.filter(\.isPending).count,
             profileEmail: env.accountSession.email,
-            relayHostName: relayBridgeIsActive ? (relayHostName ?? "Relay host") : nil,
+            // Show a paired relay host whenever a pairing is stored — not only while
+            // the bridge is momentarily `.paired` — so a known machine doesn't vanish
+            // from Home during reconnect/waiting-for-peer. The live dot is driven by
+            // `relayBridgeIsActive` via `relayHostConnected`.
+            relayHostName: (E2ERelayClient.hasStoredPairing || relayHostName != nil) ? (relayHostName ?? "Relay host") : nil,
+            relayHostConnected: relayBridgeIsActive,
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
@@ -1432,6 +1449,11 @@ public struct AppRoot: View {
     @MainActor
     private func configureE2ERelayBridge(env: AppEnvironment) {
         guard e2eBridge == nil else { return }
+#if DEBUG
+        // Honor the UI-test relay seam: keep the seeded fake host/active state instead
+        // of letting the real (unpaired) bridge subscription reset them.
+        if ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] != nil { return }
+#endif
         let bridge = E2ERelayBridge(
             relayClient: env.e2eRelayClient,
             approvalRelay: ApprovalRelay.shared
