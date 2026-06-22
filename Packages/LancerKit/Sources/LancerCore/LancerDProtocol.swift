@@ -402,6 +402,12 @@ public struct SessionsListResult: Codable, Sendable {
     public let sessions: [ObservedSession]
 }
 
+/// Vendor ids (e.g. "claudeCode", "codex") whose CLI is installed on the host, so
+/// the phone only offers agents the user actually has.
+public struct AgentsInstalledResult: Codable, Sendable {
+    public let agents: [String]
+}
+
 /// One transcript turn returned by `agent.sessions.transcript`.
 public struct SessionMessage: Codable, Sendable, Hashable {
     public enum Role: String, Codable, Sendable {

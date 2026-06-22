@@ -2225,7 +2225,7 @@ private struct NewChatLiveHarness: View {
             chatRepo: nil,
             fleetStore: FleetStore(),
             onDispatch: { _, _, prompt, _, _ in
-                let runId = await NewChatLiveHarness.seedReply(store: store, prompt: prompt)
+                let runId = NewChatLiveHarness.seedReply(store: store, prompt: prompt)
                 return .started(ActiveChatRun(runId: runId, channel: MockChannel(store: store), title: prompt, subtitle: prompt))
             },
             onNewTask: {},

@@ -367,6 +367,12 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: SessionsListResult.self, dateDecoding: .iso8601).sessions
     }
 
+    /// Vendor ids whose CLI is installed on the host (claude/codex/opencode/kimi).
+    public func installedAgents() async throws -> [String] {
+        let data = try await sendRPC(method: "agent.agents.installed", params: [String: String]())
+        return try Self.decodeResult(data, as: AgentsInstalledResult.self).agents
+    }
+
     /// Fetches transcript turns for an observed session starting at `sinceLine`
     /// (0 for the full transcript). `nextLine` is the cursor to pass on the next
     /// call; `resetRequired` signals the daemon's view of the transcript was

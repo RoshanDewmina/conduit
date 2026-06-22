@@ -17,6 +17,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
     private var commandsListContinuation: CheckedContinuation<[AgentCommand], Error>?
     private var sessionsListContinuation: CheckedContinuation<[ObservedSession], Error>?
+    private var installedAgentsContinuation: CheckedContinuation<[String], Error>?
     private var sessionsTranscriptContinuation: CheckedContinuation<(messages: [SessionMessage], nextLine: Int, resetRequired: Bool), Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
@@ -192,6 +193,16 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Vendor ids whose CLI is installed on the relay-paired host.
+    public func relayInstalledAgents() async throws -> [String] {
+        guard isActive else { throw E2EError.notPaired }
+        struct Empty: Codable, Sendable {}
+        try await relayClient.send(type: "agentAgentsInstalled", payload: Empty())
+        return try await withCheckedThrowingContinuation { c in
+            self.installedAgentsContinuation = c
+        }
+    }
+
     /// Fetches transcript turns for an observed session on the relay-paired host,
     /// starting at `sinceLine`. Mirrors `relayListCommands`: sends `agentSessionsTranscript`,
     /// awaits `sessionsTranscriptResult`.
@@ -334,6 +345,14 @@ public final class E2ERelayBridge: ObservableObject {
             )
             sessionsListContinuation?.resume(returning: envelope?.payload.sessions ?? [])
             sessionsListContinuation = nil
+
+        case "agentsInstalledResult":
+            struct AgentsPayload: Codable { let agents: [String] }
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<AgentsPayload>.self, from: message.payload
+            )
+            installedAgentsContinuation?.resume(returning: envelope?.payload.agents ?? [])
+            installedAgentsContinuation = nil
 
         case "sessionsTranscriptResult":
             let decoder = JSONDecoder()

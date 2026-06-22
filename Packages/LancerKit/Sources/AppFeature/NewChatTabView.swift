@@ -62,6 +62,7 @@ public struct NewChatTabView: View {
     @State private var selectedCwd: String = ""
     @State private var customCwd: String = ""
     @State private var showAgentPicker = false
+    @State private var showMachinePicker = false
     @State private var showWorkspacePicker = false
     @State private var showComposer = false
     @State private var showOptions = false
@@ -83,6 +84,9 @@ public struct NewChatTabView: View {
     /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
     /// so a second tap can't fire a duplicate run (the "superseded" cause).
     @State private var isSending = false
+    /// Recently-used custom project paths, newest first, persisted so a path the
+    /// user typed once is reusable from the picker instead of retyped each time.
+    @AppStorage("lancer.recentProjectPaths") private var recentProjectPathsRaw: String = ""
 
     // Persistence
     @State private var conversationID: String?
@@ -235,10 +239,18 @@ public struct NewChatTabView: View {
         .bottomDrawer(
             isPresented: $showAgentPicker,
             title: "Choose agent",
-            subtitle: "Choose where this work should run.",
+            subtitle: "Pick which agent runs on \(machineLabel).",
             detents: [.medium, .large]
         ) {
             agentPickerContent
+        }
+        .bottomDrawer(
+            isPresented: $showMachinePicker,
+            title: "Choose machine",
+            subtitle: "Pick where this work runs.",
+            detents: [.medium, .large]
+        ) {
+            machinePickerContent
         }
         .bottomDrawer(
             isPresented: $showWorkspacePicker,
@@ -430,7 +442,7 @@ public struct NewChatTabView: View {
                         icon: .server,
                         tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
                     ) {
-                        showAgentPicker = true
+                        showMachinePicker = true
                     }
                     composerPill(
                         title: agentLabel,
@@ -745,6 +757,10 @@ public struct NewChatTabView: View {
         }
         for agent in agents where !agent.cwd.isEmpty {
             if seen.insert(agent.cwd).inserted { ordered.append(agent.cwd) }
+        }
+        // Saved custom paths the user typed before — reusable without retyping.
+        for path in recentProjectPaths where seen.insert(path).inserted {
+            ordered.append(path)
         }
         return ordered
     }
@@ -1085,14 +1101,80 @@ public struct NewChatTabView: View {
         guard !trimmed.isEmpty else { return }
         Haptics.selection()
         selectedCwd = trimmed
+        rememberProjectPath(trimmed)
         showWorkspacePicker = false
     }
 
+    /// Recently-used custom paths (newest first), persisted across launches.
+    private var recentProjectPaths: [String] {
+        recentProjectPathsRaw.split(separator: "\n").map(String.init)
+    }
+
+    /// Save a custom path to the front of the recents (deduped, capped at 8).
+    private func rememberProjectPath(_ path: String) {
+        var recents = recentProjectPaths.filter { $0 != path }
+        recents.insert(path, at: 0)
+        recentProjectPathsRaw = recents.prefix(8).joined(separator: "\n")
+    }
+
+    /// Agent picker, scoped to the currently-selected machine: lists just that
+    /// host's agents. If no machine is selected yet, shows all (grouped by machine).
     private var agentPickerContent: some View {
-        ScrollView {
+        let groups = groupedAgents
+        let scoped = groups.first { $0.0 == machineLabel }.map { [$0] } ?? groups
+        return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(groupedAgents, id: \.0) { group in
+                ForEach(scoped, id: \.0) { group in
                     agentPickerGroup(machine: group.0, agents: group.1)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 28)
+        }
+    }
+
+    /// Machine picker: one row per connected host. Choosing a machine selects its
+    /// first available agent so the run is immediately dispatchable.
+    private var machinePickerContent: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(groupedAgents, id: \.0) { machine, agents in
+                    let firstOnline = agents.first { !$0.isOffline } ?? agents.first
+                    let isSelected = machine == machineLabel
+                    Button {
+                        if let pick = firstOnline {
+                            selectedAgentID = pick.id
+                            selectedCwd = ""
+                        }
+                        showMachinePicker = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            DSIconView(.server, size: 16, color: isSelected ? t.accent : t.text3)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(machine)
+                                    .font(.dsSansPt(15, weight: .semibold))
+                                    .foregroundStyle(t.text)
+                                Text("\(agents.count) agent\(agents.count == 1 ? "" : "s")")
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text4)
+                            }
+                            Spacer(minLength: 0)
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(t.accent)
+                            }
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(isSelected ? t.accentSoft : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                .strokeBorder(isSelected ? t.accent : t.border, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)

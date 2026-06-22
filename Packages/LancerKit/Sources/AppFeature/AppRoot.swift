@@ -200,6 +200,10 @@ public struct AppRoot: View {
     @State private var e2eBridge: E2ERelayBridge?
     @State private var relayBridgeIsActive: Bool = false
     @State private var relayHostName: String?
+    /// Vendor ids the host reports as installed (claude/codex/opencode/kimi). nil
+    /// until the relay reports — until then the relay picker shows all four so a
+    /// just-paired host isn't empty; once known, it's filtered to what's installed.
+    @State private var installedAgentVendors: [String]?
     @State private var sidebarState = SidebarShellState()
     @GestureState private var drawerDrag: CGFloat = 0
     @State private var coachTour = CoachmarkTourState(steps: AppRoot.coachmarkSteps)
@@ -889,7 +893,11 @@ public struct AppRoot: View {
             }
         }
         if e2eBridge != nil {
-            for agentID in ["claudeCode", "codex", "opencode", "kimi"] {
+            // Only offer agents the host actually has installed (reported over the
+            // relay). Until that's known, show all four so a freshly-paired host
+            // isn't empty.
+            let vendors = installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
+            for agentID in vendors {
                 let displayName: String
                 switch agentID {
                 case "claudeCode": displayName = "Claude Code"
@@ -1544,6 +1552,13 @@ public struct AppRoot: View {
         Task { @MainActor in
             for await active in bridge.$isActive.values {
                 relayBridgeIsActive = active
+                // When the relay goes live, ask the host which agent CLIs are
+                // actually installed so the picker only offers those.
+                if active {
+                    if let installed = try? await bridge.relayInstalledAgents(), !installed.isEmpty {
+                        installedAgentVendors = installed
+                    }
+                }
             }
         }
         Task { @MainActor in

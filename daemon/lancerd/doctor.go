@@ -43,6 +43,44 @@ type checkResult struct {
 // lookPathFunc mirrors exec.LookPath so checks stay testable without a real PATH.
 type lookPathFunc func(string) (string, error)
 
+// agentBinaries maps each vendor id (as the phone uses it) to its CLI binary.
+var agentBinaries = []struct{ vendor, binary string }{
+	{"claudeCode", "claude"},
+	{"codex", "codex"},
+	{"opencode", "opencode"},
+	{"kimi", "kimi"},
+}
+
+// installedAgents returns the vendor ids whose CLI is resolvable, so the phone only
+// offers agents the user actually has installed (instead of a hardcoded list). It
+// searches the SAME augmented dirs the dispatcher uses to launch agents — under
+// launchd the daemon's inherited PATH is minimal, so a bare exec.LookPath would
+// find nothing even though the CLIs exist (Homebrew, ~/.local/bin, Kimi's bin).
+func installedAgents(_ lookPathFunc) []string {
+	dirs := []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"}
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs,
+			filepath.Join(home, ".local", "bin"),
+			filepath.Join(home, ".kimi-code", "bin"),
+			filepath.Join(home, ".lancer", "bin"),
+		)
+	}
+	// Also honor the inherited PATH so a non-standard install location still works.
+	dirs = append(dirs, filepath.SplitList(os.Getenv("PATH"))...)
+
+	var out []string
+	for _, a := range agentBinaries {
+		for _, d := range dirs {
+			p := filepath.Join(d, a.binary)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				out = append(out, a.vendor)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // dialFunc mirrors net.DialTimeout so the daemon-reachability check is testable.
 type dialFunc func(network, addr string, timeout time.Duration) (net.Conn, error)
 

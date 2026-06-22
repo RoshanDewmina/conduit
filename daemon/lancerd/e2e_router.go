@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"os/exec"
 )
 
 // relayClient is the minimal interface the e2eRouter needs from a relay
@@ -209,6 +210,11 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		msg := map[string]interface{}{"type": "runContinueResult", "payload": result}
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("runContinueResult", data)
+
+	case "agentAgentsInstalled":
+		payloadOut := map[string]interface{}{"agents": installedAgents(exec.LookPath)}
+		data, _ := json.Marshal(map[string]interface{}{"type": "agentsInstalledResult", "payload": payloadOut})
+		_ = r.client.sendMessage("agentsInstalledResult", data)
 
 	case "agentSessionsList":
 		var p struct {

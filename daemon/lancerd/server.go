@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -680,6 +681,9 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		s.writeResult(msg.ID, report)
+
+	case "agent.agents.installed":
+		s.writeResult(msg.ID, map[string]interface{}{"agents": installedAgents(exec.LookPath)})
 
 	case "agent.sessions.list":
 		var params struct {
