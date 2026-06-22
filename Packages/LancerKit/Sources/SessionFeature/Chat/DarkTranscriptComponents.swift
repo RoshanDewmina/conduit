@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import DesignSystem
 
 // Shared transcript components. Terminal blocks retain the intentionally-dark
@@ -35,26 +36,47 @@ public struct DarkUserBubble: View {
 
 public struct DarkAssistantBubble: View {
     private let text: String
+    @State private var copied = false
     @Environment(\.lancerTokens) private var t
 
     public init(_ text: String) { self.text = text }
 
     public var body: some View {
-        HStack(alignment: .top) {
-            Text(text)
-                .font(.dsSansPt(16))
-                .foregroundStyle(t.text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
-                )
-            Spacer(minLength: 56)
+        // Assistant content renders full-width (Claude/ChatGPT style) so markdown
+        // prose and fenced code cards have room — only user turns wear a bubble.
+        VStack(alignment: .leading, spacing: 6) {
+            MarkdownText(text, textColor: t.text)
+            copyButton
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = text
+                Haptics.success()
+            } label: { Label("Copy message", systemImage: "doc.on.doc") }
+        }
+    }
+
+    private var copyButton: some View {
+        Button {
+            UIPasteboard.general.string = text
+            Haptics.success()
+            withAnimation { copied = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                await MainActor.run { withAnimation { copied = false } }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(copied ? "Copied" : "Copy")
+                    .font(.dsMonoPt(10.5, weight: .medium))
+            }
+            .foregroundStyle(copied ? t.ok : t.text4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Copy message")
     }
 }
 

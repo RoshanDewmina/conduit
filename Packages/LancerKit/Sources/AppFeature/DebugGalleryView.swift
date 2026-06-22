@@ -709,7 +709,22 @@ struct DebugGalleryView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     // Plain conversational reply → a normal assistant bubble, no terminal chrome.
                     DarkUserBubble("can you fix the auth redirect loop?")
-                    DarkAssistantBubble("Sure — the redirect guard was missing a return after the 302. I patched it and I'll run the suite to confirm.")
+                    DarkAssistantBubble("""
+                    Found it — the redirect guard was **missing a `return`** after the 302, so it fell through and looped. Here's the fix:
+
+                    ```swift
+                    guard !session.isValid else {
+                        response.redirect(to: "/login", status: .found)
+                        return // ← was missing
+                    }
+                    ```
+
+                    What I changed:
+                    1. Added the early `return` after the redirect.
+                    2. Covered it with a regression test in `redirect.test.ts`.
+
+                    Run `npm test -- auth` to confirm.
+                    """)
 
                     // The working indicator (replaces the old pixel-grid box).
                     DarkUserBubble("now run the tests")
