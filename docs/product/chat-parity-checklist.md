@@ -17,12 +17,12 @@ dropped, so "not built" never reads as an oversight.
 | Markdown rendering | ✅ | ✅ | ✅ | P0 | `MarkdownText` (Phase 1) |
 | Fenced code blocks (lang + mono) | ✅ | ✅ | ✅ | P0 | `DarkCodeCard` (Phase 1) |
 | Copy code / copy message | ✅ | ✅ | ✅ | P0 | copy buttons on code + message (Phase 1) |
-| Syntax highlighting | ✅ | ✅ | ⬜ | P2 | nice-to-have after code cards land |
+| Syntax highlighting | ✅ | ✅ | ✅ | P2 | regex tokenizer (keywords/strings/comments) in code cards |
 | Terminal/command output cards | 🟡 | ✅ | ✅ | — | `DarkTerminalBlockCard` |
 | Run artifacts (files/diffs) | 🟡 | ✅ | 🟡 | P1 | `ChatArtifactCard` exists; widen coverage |
 | Typing/working indicator | ✅ | ✅ | ✅ | — | `DarkTypingIndicator` |
 | Edit & resend a message | ✅ | ✅ | ⬜ | P2 | |
-| Regenerate / retry | ✅ | ✅ | ⬜ | P2 | |
+| Regenerate / retry | ✅ | ✅ | ✅ | P2 | re-runs last prompt as a fresh turn |
 | Stop generation | ✅ | ✅ | ✅ | — | `RunControlBar` / `controlStore.stop` |
 
 ## Input & composer
@@ -48,7 +48,7 @@ dropped, so "not built" never reads as an oversight.
 | Rename | ✅ | ✅ | ✅ | P1 | context-menu rename (P1) |
 | Delete | ✅ | ✅ | ✅ | P1 | context-menu delete + confirm (P1) |
 | Pin / star | ✅ | ⬜ | ⬜ | P2 | optional |
-| Share / export transcript | ✅ | ✅ | ⬜ | P2 | |
+| Share / export transcript | ✅ | ✅ | ✅ | P2 | ShareLink exports markdown from the header |
 | Multi-turn context retention | ✅ | ✅ | ✅ | — | per-vendor continue-most-recent |
 
 ## Platform & trust
@@ -64,4 +64,4 @@ dropped, so "not built" never reads as an oversight.
 ## Priority rollup
 - **P0:** ✅ markdown + code blocks + copy · ✅ `/` autocomplete · ✅ resume from history.
 - **P1:** ✅ inline composer · ✅ search/rename/delete · ✅ relay command-forwarding · _todo:_ real model picker, wider artifacts.
-- **P2 (later):** syntax highlight, edit/resend, regenerate, pin, share/export, @-mentions.
+- **P2:** ✅ syntax highlight · ✅ regenerate · ✅ share/export · _todo:_ edit/resend, pin, @-mentions.
