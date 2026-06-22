@@ -484,6 +484,8 @@ public enum E2EError: Error, LocalizedError {
     case notPaired
     case encryptFailed
     case decryptFailed
+    case timedOut
+    case superseded
 
     public var errorDescription: String? {
         switch self {
@@ -491,6 +493,8 @@ public enum E2EError: Error, LocalizedError {
         case .notPaired: return "Not paired with daemon"
         case .encryptFailed: return "Encryption failed"
         case .decryptFailed: return "Decryption failed"
+        case .timedOut: return "The machine didn't respond. Make sure it's online, then try again."
+        case .superseded: return "Superseded by a newer request"
         }
     }
 }

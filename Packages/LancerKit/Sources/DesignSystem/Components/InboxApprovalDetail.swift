@@ -27,6 +27,7 @@ public struct InboxApprovalDetail: View {
     let onApprove: () -> Void
 
     @Environment(\.lancerTokens) private var t
+    @State private var showDetails = false
 
     public init(
         agentKey: AgentKey,
@@ -100,63 +101,69 @@ public struct InboxApprovalDetail: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else if let toolName {
-                    // Tool call block
-                    Text("\(Text(agentName).foregroundStyle(t.text))\(Text(" is asking permission to use \(toolName)").foregroundStyle(t.text2))")
-                        .font(.dsMonoPt(12))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // The decision content, scaled to importance: a one-line plain
+                    // statement, then the COMMAND as the hero (mono, prominent), then
+                    // a single context line. Risk is already in the header badge, so
+                    // it's not repeated here.
+                    Text("Wants to run \(toolName)")
+                        .font(.dsSansPt(15, weight: .semibold))
+                        .foregroundStyle(t.text)
 
-                    // Command well
+                    // Command hero
                     HStack(alignment: .top, spacing: 8) {
                         Text("$")
-                            .font(.dsMonoPt(12, weight: .semibold))
-                            .foregroundStyle(t.danger)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(toolName)
-                                .font(.dsMonoPt(12))
-                                .foregroundStyle(t.text)
-                            if let args {
-                                Text(args)
-                                    .font(.dsMonoPt(11))
-                                    .foregroundStyle(t.text3)
-                                    .lineLimit(10)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(.dsMonoPt(13, weight: .semibold))
+                            .foregroundStyle(t.accent)
+                        Text(args ?? toolName)
+                            .font(.dsMonoPt(13))
+                            .foregroundStyle(t.text)
+                            .lineLimit(8)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(t.bg)
-                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .padding(.vertical, 11)
+                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                            .strokeBorder(t.divider, lineWidth: 1)
+                            .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
                     )
+
+                    // One context line: where it runs (the only metadata that helps
+                    // the decision). Path shortened from the home prefix.
+                    Text("in \(displayCwd)")
+                        .font(.dsSansPt(12.5))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
 
-                // Metadata table
-                VStack(alignment: .leading, spacing: 0) {
-                    metadataRow("Host", hostLabel)
-                    Divider().overlay(t.border)
-                    metadataRow("Working Directory", cwd)
-                    Divider().overlay(t.border)
-                    metadataRow("Risk Level", riskLabel(risk))
-                    if let sessionID {
-                        Divider().overlay(t.border)
-                        metadataRow("Session", sessionID)
+                // Everything else (host, session, policy rule) is power-user detail —
+                // collapsed by default so the sheet isn't a wall of metadata.
+                if hasExtraDetails {
+                    DisclosureGroup(isExpanded: $showDetails) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if hostLabel != displayCwd {
+                                metadataRow("Host", hostLabel)
+                                Divider().overlay(t.border)
+                            }
+                            if let matchedRule, !matchedRule.isEmpty {
+                                metadataRow("Policy rule", matchedRule)
+                                if sessionID != nil { Divider().overlay(t.border) }
+                            }
+                            if let sessionID {
+                                metadataRow("Session", sessionID)
+                            }
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        Text("Details")
+                            .font(.dsSansPt(13, weight: .medium))
+                            .foregroundStyle(t.text3)
                     }
-                    if let matchedRule {
-                        Divider().overlay(t.border)
-                        metadataRow("Policy Rule", matchedRule)
-                    }
+                    .tint(t.text3)
                 }
-                .background(t.surface)
-                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                        .strokeBorder(t.border, lineWidth: 1)
-                )
 
                 // Face ID warning for CRITICAL
                 if isCritical {
@@ -204,6 +211,16 @@ public struct InboxApprovalDetail: View {
     }
 
     // MARK: - Helpers
+
+    /// cwd with the home prefix collapsed to `~` so the context line stays short.
+    private var displayCwd: String {
+        cwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    /// Only show the collapsible Details when there's something non-redundant in it.
+    private var hasExtraDetails: Bool {
+        (hostLabel != displayCwd) || (matchedRule.map { !$0.isEmpty } ?? false) || (sessionID != nil)
+    }
 
     @ViewBuilder
     private func metadataRow(_ label: String, _ value: String) -> some View {

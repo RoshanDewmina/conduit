@@ -80,6 +80,20 @@ public final class E2ERelayBridge: ObservableObject {
             model: model, budgetUSD: budgetUSD ?? 0
         )
         try await relayClient.send(type: "agentDispatch", payload: params)
+        // The dispatch reached the daemon, but if its `dispatchResult` reply never
+        // comes back (relay receive path stalled — e.g. after a host reconnect) the
+        // await would hang forever and the Send button would look dead. Bound the
+        // wait so a missing reply surfaces a clear error instead of a silent hang.
+        // A newer dispatch supersedes an in-flight one (avoids a leaked continuation).
+        dispatchContinuation?.resume(throwing: E2EError.superseded)
+        dispatchContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard let self, !Task.isCancelled else { return }
+            self.dispatchContinuation?.resume(throwing: E2EError.timedOut)
+            self.dispatchContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.dispatchContinuation = c
         }
@@ -124,6 +138,17 @@ public final class E2ERelayBridge: ObservableObject {
             type: "agentRunContinue",
             payload: ContinueParams(runId: runId, prompt: prompt, agent: agent, cwd: cwd, model: model, budgetUSD: budgetUSD)
         )
+        // Bound the wait on the daemon's reply so a dropped `runContinueResult` shows
+        // a clear error instead of a silently dead follow-up (same as sendDispatch).
+        continueContinuation?.resume(throwing: E2EError.superseded)
+        continueContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard let self, !Task.isCancelled else { return }
+            self.continueContinuation?.resume(throwing: E2EError.timedOut)
+            self.continueContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.continueContinuation = c
         }
@@ -258,6 +283,18 @@ public final class E2ERelayBridge: ObservableObject {
             ) else { return }
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2ERunStatus"),
+                object: nil,
+                userInfo: ["params": env.payload]
+            )
+
+        case "agentToolStart":
+            // The agent ran a tool (Bash/Edit/Read…) — surfaces as a terminal block
+            // card in the transcript. Mirrors the run-output/status fan-out.
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ToolStartParams>.self, from: message.payload
+            ) else { return }
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerE2EToolStart"),
                 object: nil,
                 userInfo: ["params": env.payload]
             )

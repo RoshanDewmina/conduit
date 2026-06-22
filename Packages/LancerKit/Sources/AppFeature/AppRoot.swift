@@ -394,6 +394,10 @@ public struct AppRoot: View {
             guard let params = note.userInfo?["params"] as? RunOutputParams else { return }
             runOutputStore.appendOutput(params)
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EToolStart"))) { note in
+            guard let params = note.userInfo?["params"] as? ToolStartParams else { return }
+            runOutputStore.appendToolStart(params)
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunStatus"))) { note in
             guard let params = note.userInfo?["params"] as? RunStatusParams else { return }
             runOutputStore.updateStatus(params)
@@ -991,10 +995,14 @@ public struct AppRoot: View {
                         return .blocked(result.message ?? "Couldn't start the run.")
                     }
                     runOutputStore.register(runId: runId)
+                    // Capture this run's agent/cwd/model so a follow-up continues even
+                    // after the original process exits (a one-shot `claude -p` exits as
+                    // soon as it answers, so the daemon no longer has the run in memory).
+                    let fbAgent = parts[1]
                     let channel = RelayRunControl(send: { runId, action in
                         await bridge.sendRunControl(runId: runId, action: action)
                     }, onContinue: { runId, prompt in
-                        try await bridge.sendRunContinue(runId: runId, prompt: prompt)
+                        try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: fbAgent, cwd: cwd, model: model)
                     })
                     return .started(ActiveChatRun(
                         runId: runId,
@@ -1012,6 +1020,9 @@ public struct AppRoot: View {
                     return .blocked(result.message ?? "Couldn't start the run.")
                 }
             } catch {
+                // A superseded request means a newer send replaced this one — benign,
+                // so return an empty block the composer ignores (no scary alert).
+                if case E2EError.superseded = error { return .blocked("") }
                 return .blocked("Relay dispatch failed: \(error.localizedDescription)")
             }
         }

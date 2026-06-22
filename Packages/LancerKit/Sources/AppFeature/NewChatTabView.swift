@@ -5,6 +5,7 @@ import DesignSystem
 import SessionFeature
 import AgentKit
 import PersistenceKit
+import SSHTransport
 
 // MARK: - DispatchAgent
 
@@ -79,6 +80,9 @@ public struct NewChatTabView: View {
     @State private var confirmStop = false
     @State private var showBudgetSheet = false
     @State private var dispatchErrorMessage: String?
+    /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
+    /// so a second tap can't fire a duplicate run (the "superseded" cause).
+    @State private var isSending = false
 
     // Persistence
     @State private var conversationID: String?
@@ -359,9 +363,18 @@ public struct NewChatTabView: View {
                     composeFocused = false
                     Task { await sendCurrentPrompt() }
                 } label: {
-                    DSIconView(.send, size: 17, color: canSend ? t.accentFg : t.text4)
-                        .frame(width: 44, height: 44)
-                        .background(canSend ? t.accent : t.surface2, in: Circle())
+                    ZStack {
+                        Circle()
+                            .fill(canSend || isSending ? t.accent : t.surface2)
+                            .frame(width: 44, height: 44)
+                        if isSending {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(t.accentFg)
+                        } else {
+                            DSIconView(.send, size: 17, color: canSend ? t.accentFg : t.text4)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -737,7 +750,7 @@ public struct NewChatTabView: View {
     }
 
     private var canSend: Bool {
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedAgent != nil && !(selectedAgent?.isOffline ?? true)
+        !isSending && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedAgent != nil && !(selectedAgent?.isOffline ?? true)
     }
 
     private var bottomToolbar: some View {
@@ -803,6 +816,8 @@ public struct NewChatTabView: View {
 
     private func sendCurrentPrompt() async {
         guard let agent = selectedAgent, canSend else { return }
+        isSending = true
+        defer { isSending = false }
         let budget = Double(budgetText.trimmingCharacters(in: .whitespacesAndNewlines))
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = selectedModel.isEmpty ? nil : selectedModel
@@ -832,7 +847,8 @@ public struct NewChatTabView: View {
                 }
             }
         case .blocked(let message):
-            dispatchErrorMessage = message
+            // Empty message == benign supersede (a newer send replaced this one).
+            if !message.isEmpty { dispatchErrorMessage = message }
         }
     }
 
@@ -840,7 +856,9 @@ public struct NewChatTabView: View {
     /// re-passing the daemon's policy + budget gates, then append the continued turn.
     private func sendFollowUp(_ followUp: String) async {
         let trimmed = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let active = activeRun else { return }
+        guard !trimmed.isEmpty, !isSending, let active = activeRun else { return }
+        isSending = true
+        defer { isSending = false }
         followUpText = ""
         do {
             let result = try await active.channel.continueRun(runId: active.runId, prompt: trimmed)
@@ -878,6 +896,8 @@ public struct NewChatTabView: View {
                 dispatchErrorMessage = result.message ?? "Couldn't continue the run."
             }
         } catch {
+            // Benign supersede (a newer follow-up replaced this one) — stay quiet.
+            if case E2EError.superseded = error { return }
             dispatchErrorMessage = "Follow-up failed: \(error.localizedDescription)"
         }
     }

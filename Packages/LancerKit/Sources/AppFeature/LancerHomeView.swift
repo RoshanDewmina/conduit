@@ -400,14 +400,25 @@ private struct MachineTreeCard: View {
     // row chrome) so users don't assume these support approvals/stop — Phase 1 is
     // watch-only.
     private var observedSessionsBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SESSIONS ON THIS MAC")
-                .font(.dsMonoPt(9.5, weight: .medium))
-                .tracking(1.0)
-                .foregroundStyle(t.text4)
-                .padding(.top, 6)
-                .padding(.bottom, 2)
-            ForEach(machine.observedSessions) { session in
+        // Home is a glance: show only the most-recent sessions so the list stays
+        // light to scroll. The daemon already caps + sorts by recency.
+        let shown = Array(machine.observedSessions.prefix(15))
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("SESSIONS ON THIS MAC")
+                    .font(.dsMonoPt(9.5, weight: .medium))
+                    .tracking(1.0)
+                    .foregroundStyle(t.text4)
+                Spacer(minLength: 8)
+                if machine.observedSessions.count > shown.count {
+                    Text("\(shown.count) of \(machine.observedSessions.count)")
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.text4)
+                }
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+            ForEach(shown) { session in
                 observedSessionRow(session)
             }
         }

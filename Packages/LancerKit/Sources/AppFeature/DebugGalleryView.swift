@@ -30,6 +30,7 @@ struct DebugGalleryView: View {
     var body: some View {
         switch route {
         case "drift":          DriftFindingsView(report: Self.sampleDrift)
+        case "trust":          TrustPrivacyView()
         case "orb-connecting": SSHConnectOverlay(phase: .connecting)
         case "orb-connected":  OrbConnectedDemo()
         case "orb-slow":       SSHConnectOverlay(phase: .slow(message: "Still connecting…"))
@@ -50,6 +51,7 @@ struct DebugGalleryView: View {
         case "home":           homeGallery
         case "sessions":       sessionsGallery
         case "newchat":        newChatGallery
+        case "newchat-live":   NewChatLiveHarness()
         case "chat":           chatGallery
         case "components":     fullComponentCatalog
         case "blocks":         BlocksReviewScreen()
@@ -80,6 +82,7 @@ struct DebugGalleryView: View {
         // Phase 6 state atoms
         case "states":         StatesGalleryScreen()
         case "review":         reviewScreen
+        case "approval":       ApprovalDetailGallery()
         default:               reviewScreen
         }
     }
@@ -2149,6 +2152,86 @@ private struct GalleryAIKeyStore: AIKeyStoring {
     func loadAPIKey(provider: AIProvider) async throws -> String { "" }
     func deleteAPIKey(provider: AIProvider) async throws {}
     func hasAPIKey(provider: AIProvider) async -> Bool { false }
+}
+
+// MARK: - Approval detail (LANCER_GALLERY=approval) — redesigned, less-dense sheet
+private struct ApprovalDetailGallery: View {
+    var body: some View {
+        InboxApprovalDetail(
+            agentKey: .claudeCode,
+            agentName: "Claude Code",
+            hostLabel: "/Users/roshansilva",
+            cwd: "/Users/roshansilva/Documents/command-center",
+            sessionID: "51B6DCF1-9341-4146-B990-80AB3C82CD57",
+            timeLabel: "waiting 10m",
+            toolName: "Bash",
+            args: "ssh -o ConnectTimeout=10 hermes-box 'echo \"=== host ===\"; hostname; echo \"=== xurl ===\"; which xurl && xurl version 2>/dev/null'",
+            command: nil,
+            risk: 2,
+            matchedRule: "ask-medium",
+            onDeny: {}, onEditAndRun: {}, onAllowAlways: {}, onApprove: {}
+        )
+    }
+}
+
+// MARK: - Live send/follow-up harness (LANCER_GALLERY=newchat-live)
+//
+// Drives the REAL NewChatTabView with a mock dispatch that returns `.started` and
+// seeds a deterministic reply, so the full compose → chat-transition → follow-up
+// loop is XCUITest-verifiable without a live daemon/relay. Each dispatch/continue
+// echoes "Mock reply to: <prompt>" so the test can assert the transition and that
+// follow-ups append new turns.
+private struct NewChatLiveHarness: View {
+    @State private var store = RunOutputStore()
+
+    private final class MockChannel: RunControlling, @unchecked Sendable {
+        let store: RunOutputStore
+        init(store: RunOutputStore) { self.store = store }
+        func pauseRun(runId: String) async throws -> Bool { true }
+        func resumeRun(runId: String) async throws -> Bool { true }
+        func stopRun(runId: String) async throws -> Bool { true }
+        func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { true }
+        func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+            let newRun = await NewChatLiveHarness.seedReply(store: store, prompt: prompt)
+            return DispatchResult(runId: newRun, status: "started", decision: "allow")
+        }
+    }
+
+    @MainActor
+    static func seedReply(store: RunOutputStore, prompt: String) -> String {
+        let runId = "live-\(UUID().uuidString.prefix(8))"
+        store.register(runId: runId)
+        // A prompt starting with "bash" exercises the terminal-card path (tool block
+        // + command + streamed output); anything else is a plain prose reply. Both
+        // are driven by the same relay event types the real daemon emits.
+        if prompt.lowercased().hasPrefix("bash") {
+            store.appendToolStart(ToolStartParams(runId: runId, toolId: "tool-1", toolName: "Bash", inputJSON: "{\"command\":\"ls -la\"}"))
+            store.appendOutput(RunOutputParams(runId: runId, stream: "stdout", chunk: "total 24\ndrwxr-xr-x  5 user staff  160 Jun 22 README.md\n-rw-r--r--  1 user staff 2048 Jun 22 main.swift", seq: 0))
+        } else {
+            // Stream the reply in a few chunks so the live-typing path is exercised.
+            let reply = "Mock reply to: \(prompt)"
+            for (i, word) in reply.split(separator: " ").enumerated() {
+                store.appendOutput(RunOutputParams(runId: runId, stream: "stdout", chunk: (i == 0 ? "" : " ") + word, seq: i))
+            }
+        }
+        store.updateStatus(RunStatusParams(runId: runId, status: "exited", exitCode: 0))
+        return runId
+    }
+
+    var body: some View {
+        NewChatTabView(
+            agents: [DispatchAgent(id: "relay|claudeCode", name: "Claude Code", cwd: "~", isOffline: false, hostName: "mac-studio")],
+            runOutputStore: store,
+            chatRepo: nil,
+            fleetStore: FleetStore(),
+            onDispatch: { _, _, prompt, _, _ in
+                let runId = await NewChatLiveHarness.seedReply(store: store, prompt: prompt)
+                return .started(ActiveChatRun(runId: runId, channel: MockChannel(store: store), title: prompt, subtitle: prompt))
+            },
+            onNewTask: {},
+            onOpenWorkspace: { _ in }
+        )
+    }
 }
 
 #endif

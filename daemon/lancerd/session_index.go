@@ -88,8 +88,16 @@ func buildSessionIndex(home string) ([]SessionInfo, error) {
 	out = append(out, kimiSessions(home)...)
 
 	sort.Slice(out, func(i, j int) bool { return out[i].LastActivity > out[j].LastActivity })
+	// Cap to the most-recent sessions: the phone is a glanceable surface and
+	// shipping hundreds of historical sessions over the relay is what made the list
+	// scroll-laggy. Recent/active sessions are what matter.
+	if len(out) > maxSessionsReturned {
+		out = out[:maxSessionsReturned]
+	}
 	return out, nil
 }
+
+const maxSessionsReturned = 60
 
 // findSessionTranscriptPath locates the on-disk transcript path for a
 // sessionId via the same scan buildSessionIndex uses, so the transcript RPC

@@ -150,17 +150,31 @@ public final class SettingsViewModel {
 
 // MARK: - TrustPrivacyView
 
-struct TrustPrivacyView: View {
+public struct TrustPrivacyView: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appLockEnabled") private var appLockEnabled = false
 
-    var body: some View {
+    // Live trust controls consolidated into this surface (the "trust center"):
+    // what's paired and how to revoke it, alongside the data-residency cards.
+    private let accountSession: AccountSessionController?
+    private let backendURL: String
+    private let e2eRelayClient: E2ERelayClient?
+
+    public init(accountSession: AccountSessionController? = nil, backendURL: String = "", e2eRelayClient: E2ERelayClient? = nil) {
+        self.accountSession = accountSession
+        self.backendURL = backendURL
+        self.e2eRelayClient = e2eRelayClient
+    }
+
+    public var body: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     DSDetailHeader("trust & privacy", onBack: { dismiss() })
+
+                    pairingSection
 
                     sectionHead("STAYS ON YOUR HOST")
                     card {
@@ -291,6 +305,58 @@ struct TrustPrivacyView: View {
 
     private var hairline: some View {
         DSDivider(.soft, leadingInset: 16)
+    }
+
+    // The actionable trust controls — what's paired and how to revoke — live
+    // here so the trust surface answers "who can act on this" in one place,
+    // not just "what data goes where". Reuses the existing pairing/device views.
+    @ViewBuilder
+    private var pairingSection: some View {
+        sectionHead("PAIRINGS & REVOCATION")
+        card {
+            NavigationLink {
+                E2ERelayPairingView(client: e2eRelayClient)
+            } label: {
+                trustNavRow(icon: "lock.rotation", title: "Relay pairing",
+                            detail: "End-to-end encrypted relay between this phone and your daemon.")
+            }
+            if accountSession?.isStandardAccount == true {
+                hairline
+                NavigationLink {
+                    DeviceManagementView(backendURL: backendURL, accountSession: accountSession)
+                } label: {
+                    trustNavRow(icon: "externaldrive.badge.person.crop", title: "Paired devices",
+                                detail: "See every daemon bound to your account and revoke any of them.")
+                }
+            }
+        }
+    }
+
+    private func trustNavRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(t.text2)
+                .frame(width: 20, alignment: .center)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text(detail)
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(t.text4)
+                .padding(.top, 2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private func privacyRow(icon: String, title: String, detail: String, isGreen: Bool) -> some View {
@@ -627,8 +693,10 @@ public struct SettingsView: View {
             NavigationLink { NotificationsSettingsView() } label: {
                 settingsGridCard("Notifications", icon: "bell", tint: t.text2, detail: "Push severity")
             }.buttonStyle(.plain)
-            NavigationLink { TrustPrivacyView() } label: {
-                settingsGridCard("Security", icon: "lock", tint: t.warn, detail: "Face ID · TOFU")
+            NavigationLink {
+                TrustPrivacyView(accountSession: accountSession, backendURL: backendURL, e2eRelayClient: e2eRelayClient)
+            } label: {
+                settingsGridCard("Security & Trust", icon: "lock", tint: t.warn, detail: "pairings · revoke · Face ID")
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
