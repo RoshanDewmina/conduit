@@ -383,6 +383,7 @@ public struct InboxView: View {
                 cwd: approval.cwd,
                 sessionID: approval.sessionID.uuidString,
                 timeLabel: pendingTimeLabel(approval),
+                summary: ApprovalSummary.derive(from: approval).headline,
                 question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
                 toolName: approval.toolName ?? approval.command,
                 args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,

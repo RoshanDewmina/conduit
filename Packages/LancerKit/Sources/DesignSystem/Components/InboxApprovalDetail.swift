@@ -14,6 +14,7 @@ public struct InboxApprovalDetail: View {
     let cwd: String
     let sessionID: String?
     let timeLabel: String
+    let summary: String?
     let question: String?
     let toolName: String?
     let args: String?
@@ -36,6 +37,7 @@ public struct InboxApprovalDetail: View {
         cwd: String,
         sessionID: String? = nil,
         timeLabel: String,
+        summary: String? = nil,
         question: String? = nil,
         toolName: String? = nil,
         args: String? = nil,
@@ -54,6 +56,7 @@ public struct InboxApprovalDetail: View {
         self.cwd = cwd
         self.sessionID = sessionID
         self.timeLabel = timeLabel
+        self.summary = summary
         self.question = question
         self.toolName = toolName
         self.args = args
@@ -78,6 +81,16 @@ public struct InboxApprovalDetail: View {
                     Text(timeLabel)
                         .font(.dsMonoPt(11))
                         .foregroundStyle(t.text3)
+                }
+
+                // One-glance summary: plain-language statement of what this approval
+                // does (derived on-device via ApprovalSummary.derive), so the decision
+                // is legible before reading the raw command/diff below.
+                if let summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.dsSansPt(15, weight: .semibold))
+                        .foregroundStyle(t.text)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // Content: question or tool call
@@ -105,9 +118,11 @@ public struct InboxApprovalDetail: View {
                     // statement, then the COMMAND as the hero (mono, prominent), then
                     // a single context line. Risk is already in the header badge, so
                     // it's not repeated here.
-                    Text("Wants to run \(toolName)")
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .foregroundStyle(t.text)
+                    if summary == nil {
+                        Text("Wants to run \(toolName)")
+                            .font(.dsSansPt(15, weight: .semibold))
+                            .foregroundStyle(t.text)
+                    }
 
                     // Command hero
                     HStack(alignment: .top, spacing: 8) {

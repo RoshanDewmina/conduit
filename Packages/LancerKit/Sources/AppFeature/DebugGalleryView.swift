@@ -2164,6 +2164,7 @@ private struct ApprovalDetailGallery: View {
             cwd: "/Users/roshansilva/Documents/command-center",
             sessionID: "51B6DCF1-9341-4146-B990-80AB3C82CD57",
             timeLabel: "waiting 10m",
+            summary: "Runs `ssh` · network access",
             toolName: "Bash",
             args: "ssh -o ConnectTimeout=10 hermes-box 'echo \"=== host ===\"; hostname; echo \"=== xurl ===\"; which xurl && xurl version 2>/dev/null'",
             command: nil,
