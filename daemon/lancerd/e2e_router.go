@@ -160,6 +160,24 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("fsListResult", data)
 
+	case "agentCommandsList":
+		var params struct {
+			Cwd    string `json:"cwd"`
+			Vendor string `json:"vendor"`
+		}
+		if err := json.Unmarshal(payload, &params); err != nil {
+			log.Printf("e2e: unmarshal agentCommandsList failed: %v", err)
+			return
+		}
+		// Read-only scan; mirrors the agentFsList arm. The phone decodes the same
+		// {commands:[...]} shape it gets from the direct DaemonChannel RPC.
+		payloadOut := map[string]interface{}{
+			"commands": listAgentCommands(params.Cwd, params.Vendor),
+		}
+		msg := map[string]interface{}{"type": "commandsListResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("commandsListResult", data)
+
 	case "agentRunControl":
 		var p struct {
 			RunID  string `json:"runId"`

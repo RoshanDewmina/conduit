@@ -15,6 +15,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
+    private var commandsListContinuation: CheckedContinuation<[AgentCommand], Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -131,6 +132,18 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Lists the agent's slash-commands for a workspace through the E2E relay.
+    /// Mirrors `relayListDir`: sends `agentCommandsList`, awaits `commandsListResult`.
+    /// Returns [] on failure so the composer autocomplete degrades gracefully.
+    public func relayListCommands(cwd: String, vendor: String) async throws -> [AgentCommand] {
+        guard isActive else { throw E2EError.notPaired }
+        struct CmdParams: Codable, Sendable { let cwd: String; let vendor: String }
+        try await relayClient.send(type: "agentCommandsList", payload: CmdParams(cwd: cwd, vendor: vendor))
+        return try await withCheckedThrowingContinuation { c in
+            self.commandsListContinuation = c
+        }
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
@@ -210,6 +223,14 @@ public final class E2ERelayBridge: ObservableObject {
                 object: nil,
                 userInfo: ["params": env.payload]
             )
+
+        case "commandsListResult":
+            struct CommandsPayload: Codable { let commands: [AgentCommand] }
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<CommandsPayload>.self, from: message.payload
+            )
+            commandsListContinuation?.resume(returning: envelope?.payload.commands ?? [])
+            commandsListContinuation = nil
 
         case "fsListResult":
             // Same envelope unwrap as dispatchResult. The daemon includes an

@@ -899,16 +899,21 @@ public struct AppRoot: View {
     }
 
     @MainActor
-    /// Fetch an agent's live slash-commands for the composer autocomplete. Resolves
-    /// a connected SSH slot's daemon channel. ponytail: relay-only hosts return []
-    /// here (the relay protocol has no commands-forward message yet) — Lancer's own
-    /// app-commands still autocomplete client-side; add `agentCommandsList` relay
-    /// forwarding to light up live commands over the relay too.
+    /// Fetch an agent's live slash-commands for the composer autocomplete. Prefers a
+    /// connected SSH slot's daemon channel; falls back to the relay bridge so a
+    /// relay-paired host (no direct SSH) still lights up live commands. Returns []
+    /// if neither transport is available — Lancer's own app-commands still
+    /// autocomplete client-side.
     private func loadAgentCommands(cwd: String, vendor: String) async -> [AgentCommand] {
-        guard let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first
-        else { return [] }
-        return (try? await slot.channel.listCommands(cwd: cwd, vendor: vendor)) ?? []
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first,
+           let cmds = try? await slot.channel.listCommands(cwd: cwd, vendor: vendor), !cmds.isEmpty {
+            return cmds
+        }
+        if let bridge = e2eBridge, relayBridgeIsActive {
+            return (try? await bridge.relayListCommands(cwd: cwd, vendor: vendor)) ?? []
+        }
+        return []
     }
 
     /// Continue a persisted conversation from History. Resolves the conversation's

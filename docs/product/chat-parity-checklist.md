@@ -29,7 +29,7 @@ dropped, so "not built" never reads as an oversight.
 
 | Feature | Claude mobile | Codex | Lancer | Pri | Note |
 |---|---|---|---|---|---|
-| `/` command autocomplete | ✅ | ✅ | ✅ | P0 | Lancer cmds + live agent cmds over SSH (Phase 2); relay-forward pending |
+| `/` command autocomplete | ✅ | ✅ | ✅ | P0 | Lancer cmds + live agent cmds over SSH **and relay** (Phase 2 + P1) |
 | Always-visible composer | ✅ | ✅ | ✅ | P1 | bottom-pinned inline composer (Phase 4) |
 | Multi-line growing input | ✅ | ✅ | ✅ | — | `axis: .vertical`, `lineLimit(4...12)` |
 | Model picker | ✅ | ✅ | 🟡 | P1 | hardcoded list → real source (Phase 4) |
@@ -44,9 +44,9 @@ dropped, so "not built" never reads as an oversight.
 |---|---|---|---|---|---|
 | Persistent history | ✅ | ✅ | ✅ | — | `ChatConversationRepository` (GRDB) |
 | Resume / continue a past chat | ✅ | ✅ | ✅ | P0 | follow-up bar in History continues the run (Phase 3) |
-| Search conversations | ✅ | ✅ | 🟡 | P1 | sidebar search field unwired (Phase 3) |
-| Rename | ✅ | ✅ | ⬜ | P1 | Phase 3 |
-| Delete | ✅ | ✅ | 🟡 | P1 | repo supports it; wire swipe (Phase 3) |
+| Search conversations | ✅ | ✅ | ✅ | P1 | sidebar search (FTS) live as you type |
+| Rename | ✅ | ✅ | ✅ | P1 | context-menu rename (P1) |
+| Delete | ✅ | ✅ | ✅ | P1 | context-menu delete + confirm (P1) |
 | Pin / star | ✅ | ⬜ | ⬜ | P2 | optional |
 | Share / export transcript | ✅ | ✅ | ⬜ | P2 | |
 | Multi-turn context retention | ✅ | ✅ | ✅ | — | per-vendor continue-most-recent |
@@ -62,6 +62,6 @@ dropped, so "not built" never reads as an oversight.
 | Image generation | ✅ | ⬜ | ⛔ | — | n/a for a coding control plane |
 
 ## Priority rollup
-- **P0 (this round):** ✅ markdown + code blocks + copy · ✅ `/` autocomplete · ✅ resume from history.
-- **P1 (next):** inline composer, real model picker, search/rename/delete, wider artifacts, relay command-forwarding.
+- **P0:** ✅ markdown + code blocks + copy · ✅ `/` autocomplete · ✅ resume from history.
+- **P1:** ✅ inline composer · ✅ search/rename/delete · ✅ relay command-forwarding · _todo:_ real model picker, wider artifacts.
 - **P2 (later):** syntax highlight, edit/resend, regenerate, pin, share/export, @-mentions.
