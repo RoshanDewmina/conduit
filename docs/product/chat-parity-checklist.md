@@ -30,7 +30,7 @@ dropped, so "not built" never reads as an oversight.
 | Feature | Claude mobile | Codex | Lancer | Pri | Note |
 |---|---|---|---|---|---|
 | `/` command autocomplete | ✅ | ✅ | ✅ | P0 | Lancer cmds + live agent cmds over SSH (Phase 2); relay-forward pending |
-| Always-visible composer | ✅ | ✅ | 🟡 | P1 | behind a drawer tap; inline option (Phase 4) |
+| Always-visible composer | ✅ | ✅ | ✅ | P1 | bottom-pinned inline composer (Phase 4) |
 | Multi-line growing input | ✅ | ✅ | ✅ | — | `axis: .vertical`, `lineLimit(4...12)` |
 | Model picker | ✅ | ✅ | 🟡 | P1 | hardcoded list → real source (Phase 4) |
 | @-file / context mentions | ✅ | ✅ | ⬜ | P2 | could reuse `agent.fs.ls` |
