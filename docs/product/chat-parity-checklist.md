@@ -14,9 +14,9 @@ dropped, so "not built" never reads as an oversight.
 | Feature | Claude mobile | Codex | Lancer | Pri | Note |
 |---|---|---|---|---|---|
 | Streaming responses | ✅ | ✅ | ✅ | — | `run.text` streams via RunOutputStore |
-| Markdown rendering | ✅ | ✅ | ⬜ P0 | P0 | plain `Text` today → `MarkdownText` (Phase 1) |
-| Fenced code blocks (lang + mono) | ✅ | ✅ | ⬜ P0 | P0 | `DarkCodeCard` (Phase 1) |
-| Copy code / copy message | ✅ | ✅ | 🟡 | P0 | text-select only; add copy buttons (Phase 1) |
+| Markdown rendering | ✅ | ✅ | ✅ | P0 | `MarkdownText` (Phase 1) |
+| Fenced code blocks (lang + mono) | ✅ | ✅ | ✅ | P0 | `DarkCodeCard` (Phase 1) |
+| Copy code / copy message | ✅ | ✅ | ✅ | P0 | copy buttons on code + message (Phase 1) |
 | Syntax highlighting | ✅ | ✅ | ⬜ | P2 | nice-to-have after code cards land |
 | Terminal/command output cards | 🟡 | ✅ | ✅ | — | `DarkTerminalBlockCard` |
 | Run artifacts (files/diffs) | 🟡 | ✅ | 🟡 | P1 | `ChatArtifactCard` exists; widen coverage |
@@ -29,7 +29,7 @@ dropped, so "not built" never reads as an oversight.
 
 | Feature | Claude mobile | Codex | Lancer | Pri | Note |
 |---|---|---|---|---|---|
-| `/` command autocomplete | ✅ | ✅ | ⬜ P0 | P0 | both Lancer + live agent cmds (Phase 2) |
+| `/` command autocomplete | ✅ | ✅ | ✅ | P0 | Lancer cmds + live agent cmds over SSH (Phase 2); relay-forward pending |
 | Always-visible composer | ✅ | ✅ | 🟡 | P1 | behind a drawer tap; inline option (Phase 4) |
 | Multi-line growing input | ✅ | ✅ | ✅ | — | `axis: .vertical`, `lineLimit(4...12)` |
 | Model picker | ✅ | ✅ | 🟡 | P1 | hardcoded list → real source (Phase 4) |
@@ -43,7 +43,7 @@ dropped, so "not built" never reads as an oversight.
 | Feature | Claude mobile | Codex | Lancer | Pri | Note |
 |---|---|---|---|---|---|
 | Persistent history | ✅ | ✅ | ✅ | — | `ChatConversationRepository` (GRDB) |
-| Resume / continue a past chat | ✅ | ✅ | ⬜ P0 | P0 | read-only today → live (Phase 3) |
+| Resume / continue a past chat | ✅ | ✅ | ✅ | P0 | follow-up bar in History continues the run (Phase 3) |
 | Search conversations | ✅ | ✅ | 🟡 | P1 | sidebar search field unwired (Phase 3) |
 | Rename | ✅ | ✅ | ⬜ | P1 | Phase 3 |
 | Delete | ✅ | ✅ | 🟡 | P1 | repo supports it; wire swipe (Phase 3) |
@@ -62,6 +62,6 @@ dropped, so "not built" never reads as an oversight.
 | Image generation | ✅ | ⬜ | ⛔ | — | n/a for a coding control plane |
 
 ## Priority rollup
-- **P0 (this round):** markdown + code blocks + copy, `/` autocomplete, resume from history.
-- **P1 (next):** inline composer, real model picker, search/rename/delete, wider artifacts.
+- **P0 (this round):** ✅ markdown + code blocks + copy · ✅ `/` autocomplete · ✅ resume from history.
+- **P1 (next):** inline composer, real model picker, search/rename/delete, wider artifacts, relay command-forwarding.
 - **P2 (later):** syntax highlight, edit/resend, regenerate, pin, share/export, @-mentions.

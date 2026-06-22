@@ -911,6 +911,34 @@ public struct AppRoot: View {
         return (try? await slot.channel.listCommands(cwd: cwd, vendor: vendor)) ?? []
     }
 
+    /// Continue a persisted conversation from History. Resolves the conversation's
+    /// host channel (a connected SSH slot, else the relay bridge), continues the run
+    /// under a new runId, registers it for streaming, and returns the ActiveChatRun.
+    /// Returns nil if no live transport can reach the host.
+    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String) async -> ActiveChatRun? {
+        // Prefer the SSH slot that owns this host.
+        if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
+           let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
+            guard let result = try? await slot.channel.continueRun(runId: lastRunID, prompt: prompt),
+                  result.status == "started", let newRunID = result.runId else { return nil }
+            runOutputStore.register(runId: newRunID)
+            return ActiveChatRun(runId: newRunID, channel: slot.channel,
+                                 title: conv.title, subtitle: prompt)
+        }
+        // Fall back to the relay bridge (relay-paired host).
+        if let bridge = e2eBridge, relayBridgeIsActive {
+            guard let result = try? await bridge.sendRunContinue(runId: lastRunID, prompt: prompt),
+                  result.status == "started", let newRunID = result.runId else { return nil }
+            runOutputStore.register(runId: newRunID)
+            let channel = RelayRunControl(
+                send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
+                onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p) }
+            )
+            return ActiveChatRun(runId: newRunID, channel: channel, title: conv.title, subtitle: prompt)
+        }
+        return nil
+    }
+
     private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .blocked("Unknown agent.") }
@@ -1289,8 +1317,12 @@ public struct AppRoot: View {
             ChatHistoryView(
                 conversationID: id,
                 chatRepo: env.chatRepo,
+                runOutputStore: runOutputStore,
                 onBack: { sidebarState.navigate(to: .home) },
-                onNewChat: { sidebarState.navigate(to: .newChat) }
+                onNewChat: { sidebarState.navigate(to: .newChat) },
+                onContinue: { conv, lastRunID, prompt in
+                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt)
+                }
             )
             .id(id)
             .environment(\.lancerTokens, .dark)
