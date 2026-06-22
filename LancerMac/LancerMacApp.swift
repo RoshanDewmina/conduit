@@ -23,5 +23,14 @@ struct LancerMacApp: App {
             ManagementView()
                 .environment(host)
         }
+        // Screenshot/QA harness, mirroring the iOS app's `LANCER_GALLERY`
+        // convention: a MenuBarExtra-only app opens no window on launch, which
+        // makes automated screenshots of the management panes impossible. When
+        // LANCER_MAC_OPEN_MANAGEMENT is set, present the window at launch.
+        .defaultLaunchBehavior(openManagementOnLaunch ? .presented : .automatic)
+    }
+
+    private var openManagementOnLaunch: Bool {
+        ProcessInfo.processInfo.environment["LANCER_MAC_OPEN_MANAGEMENT"] != nil
     }
 }

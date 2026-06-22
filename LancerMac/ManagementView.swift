@@ -22,25 +22,18 @@ private enum Destination: String, CaseIterable, Identifiable {
         }
     }
 
-    var isEnabled: Bool {
-        switch self {
-        case .overview, .diagnostics, .devices: return true
-        case .agentsWorkspaces, .security: return false
-        }
-    }
 }
 
 struct ManagementView: View {
     @Environment(HostModel.self) private var host
     @State private var selection: Destination? = .overview
+    @AppStorage("lancer.mac.firstRunComplete") private var firstRunComplete = false
+    @State private var showFirstRun = false
 
     var body: some View {
         NavigationSplitView {
             List(Destination.allCases, selection: $selection) { destination in
                 Label(destination.rawValue, systemImage: destination.systemImage)
-                    .foregroundStyle(destination.isEnabled ? .primary : .secondary)
-                    .opacity(destination.isEnabled ? 1 : 0.5)
-                    .disabled(!destination.isEnabled)
                     .tag(destination as Destination?)
             }
             .navigationTitle("Lancer")
@@ -52,8 +45,10 @@ struct ManagementView: View {
                 DiagnosticsPane()
             case .devices:
                 DevicesPane()
-            case .agentsWorkspaces, .security:
-                ComingSoonPane(title: selection?.rawValue ?? "")
+            case .agentsWorkspaces:
+                AgentsWorkspacesPane()
+            case .security:
+                SecurityPane()
             }
         }
         .frame(minWidth: 760, minHeight: 480)
@@ -64,6 +59,14 @@ struct ManagementView: View {
             if host.pendingPairingRequest {
                 selection = .devices
             }
+            showFirstRun = !firstRunComplete
+        }
+        .sheet(isPresented: $showFirstRun) {
+            FirstRunView(onFinish: {
+                firstRunComplete = true
+                showFirstRun = false
+            })
+            .environment(host)
         }
     }
 }
@@ -369,21 +372,3 @@ private struct DevicesPane: View {
     }
 }
 
-// MARK: - Coming soon
-
-private struct ComingSoonPane: View {
-    let title: String
-    @Environment(\.lancerTokens) private var tokens
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(title)
-                .font(.dsDisplayPt(22))
-                .foregroundStyle(tokens.text)
-            Text("Coming soon")
-                .font(.dsSansPt(13))
-                .foregroundStyle(tokens.text3)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
