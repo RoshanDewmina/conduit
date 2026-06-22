@@ -16,6 +16,71 @@ public enum LancerAppearance: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Accent theme (user-selectable brand color)
+
+/// The app's brand accent, chosen by the user in Settings. `terracotta` is the
+/// original look and returns the base palette unchanged; the others overwrite only
+/// the accent family (accent / accentInk / accentSoft / accentFg), leaving
+/// surfaces, terminal, and the risk/warn ramp intact.
+public enum LancerAccentTheme: String, CaseIterable, Sendable, Identifiable {
+    case terracotta, indigo, emerald, violet, rose
+
+    public var id: String { rawValue }
+    public static let storageKey = "lancerAccentTheme"
+
+    public var displayName: String {
+        switch self {
+        case .terracotta: "Terracotta"
+        case .indigo:     "Indigo"
+        case .emerald:    "Emerald"
+        case .violet:     "Violet"
+        case .rose:       "Rose"
+        }
+    }
+
+    /// Base accent per scheme. Light/dark pairs are tuned so the accent reads with
+    /// enough contrast on each background.
+    public func accent(_ scheme: ColorScheme) -> Color {
+        let dark = scheme == .dark
+        switch self {
+        case .terracotta: return dark ? rgb(0.894, 0.482, 0.341) : rgb(0.753, 0.357, 0.212)
+        case .indigo:     return dark ? rgb(0.506, 0.549, 0.973) : rgb(0.310, 0.275, 0.898)
+        case .emerald:    return dark ? rgb(0.204, 0.827, 0.600) : rgb(0.122, 0.620, 0.431)
+        case .violet:     return dark ? rgb(0.655, 0.545, 0.980) : rgb(0.486, 0.227, 0.929)
+        case .rose:       return dark ? rgb(0.984, 0.443, 0.522) : rgb(0.882, 0.114, 0.282)
+        }
+    }
+
+    /// Foreground drawn on top of an accent fill.
+    func accentFg(_ scheme: ColorScheme) -> Color {
+        // Terracotta keeps its original dark-mode ink; the saturated themes read
+        // best with white on top in both schemes.
+        if self == .terracotta && scheme == .dark { return rgb(0.075, 0.063, 0.051) }
+        return scheme == .dark ? .white : .white
+    }
+
+    private func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
+        Color(.sRGB, red: r, green: g, blue: b, opacity: 1)
+    }
+}
+
+public extension LancerTokens {
+    /// Returns a copy with the accent family swapped to `theme`. Terracotta is the
+    /// baseline and returns self unchanged so the default look is byte-for-byte the
+    /// same; other themes derive `accentSoft`/`accentInk` from the base accent so a
+    /// single hue drives the whole accent family.
+    func withAccent(_ theme: LancerAccentTheme, scheme: ColorScheme) -> LancerTokens {
+        guard theme != .terracotta else { return self }
+        var copy = self
+        let a = theme.accent(scheme)
+        copy.accent = a
+        copy.accentInk = a
+        copy.accentSoft = a.opacity(scheme == .dark ? 0.22 : 0.14)
+        copy.accentFg = theme.accentFg(scheme)
+        return copy
+    }
+}
+
 // MARK: - Design tokens — Lancer editorial system
 // The sand palette is the approved light shell. Dark adapts the same semantic
 // roles while the terminal remains an intentionally darker working surface.
@@ -290,6 +355,7 @@ public extension View {
 
 private struct LancerTokensModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(LancerAccentTheme.storageKey) private var accentPref = LancerAccentTheme.terracotta.rawValue
 
     let appearance: LancerAppearance?
 
@@ -298,8 +364,10 @@ private struct LancerTokensModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        let resolvedScheme = appearance?.preferredColorScheme ?? colorScheme
-        content.environment(\.lancerTokens, resolvedScheme == .dark ? .dark : .light)
+        let resolvedScheme: ColorScheme = appearance?.preferredColorScheme ?? colorScheme
+        let base = resolvedScheme == .dark ? LancerTokens.dark : .light
+        let theme = LancerAccentTheme(rawValue: accentPref) ?? .terracotta
+        content.environment(\.lancerTokens, base.withAccent(theme, scheme: resolvedScheme))
     }
 }
 

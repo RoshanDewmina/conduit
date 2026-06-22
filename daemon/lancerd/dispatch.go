@@ -1050,40 +1050,62 @@ func (d *dispatcher) resume(runID string) bool {
 	return true
 }
 
+// continueFallback carries enough context to continue a conversation when the
+// daemon no longer holds the original run in memory (the process ended, or the
+// daemon restarted). The phone has this from the persisted conversation, so a
+// "continue" survives a daemon restart instead of dead-ending on "unknown run".
+type continueFallback struct {
+	Agent     string
+	CWD       string
+	Model     string
+	BudgetUSD float64
+}
+
 // continueRun re-launches the vendor CLI to continue an existing run's conversation
 // with a new prompt, as a FRESH process under a NEW runId (avoids the per-launch seq
 // collision in the phone's RunOutputStore). It re-passes the budget + policy gates
 // exactly like dispatch(); a follow-up prompt is new attacker-influenceable input.
-func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
+// When the in-memory run is gone, it falls back to `fb` (agent/cwd/model from the
+// phone's persisted conversation) — `<vendor> --continue` resumes the most recent
+// session in that directory, so leaving a chat and returning still works.
+func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
 	d.mu.Lock()
 	run := d.runs[runID]
 	d.mu.Unlock()
-	if run == nil {
+
+	var agent, cwd, model string
+	var budget float64
+	switch {
+	case run != nil:
+		agent, cwd, model, budget = run.Agent, run.CWD, run.Model, run.BudgetUSD
+	case fb.Agent != "":
+		agent, cwd, model, budget = fb.Agent, fb.CWD, fb.Model, fb.BudgetUSD
+	default:
 		return dispatchResult{Status: "error", Message: "unknown run: " + runID}
 	}
 
-	argv, ok := continueArgv(run.Agent, prompt, run.Model)
+	argv, ok := continueArgv(agent, prompt, model)
 	if !ok {
-		return dispatchResult{Status: "error", Message: "continue not supported for agent: " + run.Agent}
+		return dispatchResult{Status: "error", Message: "continue not supported for agent: " + agent}
 	}
 
 	// Budget gate (shared daily total vs this run's cap).
 	d.mu.Lock()
 	spent := d.spentUSD
 	d.mu.Unlock()
-	if run.BudgetUSD > 0 && spent >= run.BudgetUSD {
-		audit(AuditEntry{Action: "continue-budget-exceeded", Agent: run.Agent, Kind: "dispatch", Command: prompt})
-		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, run.BudgetUSD)}
+	if budget > 0 && spent >= budget {
+		audit(AuditEntry{Action: "continue-budget-exceeded", Agent: agent, Kind: "dispatch", Command: prompt})
+		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, budget)}
 	}
 
 	// Policy gate (same risk scoring as dispatch: low for a hook-wired agent whose
 	// tools are gated per-action, medium otherwise).
 	event := ApprovalEvent{
 		ApprovalID: newUUID(),
-		Agent:      normalizeAgentSource(run.Agent),
+		Agent:      normalizeAgentSource(agent),
 		Kind:       "command",
 		Command:    "[continue] " + strings.Join(argv, " "),
-		CWD:        run.CWD,
+		CWD:        cwd,
 		Risk:       d.launchRisk(argv),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 		RunID:      runID,
@@ -1092,22 +1114,22 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
 	switch effect {
 	case "deny":
-		audit(AuditEntry{Action: "continue-denied", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
+		audit(AuditEntry{Action: "continue-denied", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
-		audit(AuditEntry{Action: "continue-needs-approval", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
+		audit(AuditEntry{Action: "continue-needs-approval", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
 	id := newUUID()
-	handle, err := d.launch(argv, run.CWD, id, d.emit)
+	handle, err := d.launch(argv, cwd, id, d.emit)
 	if err != nil {
-		audit(AuditEntry{Action: "continue-error", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule})
+		audit(AuditEntry{Action: "continue-error", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: run.Agent, Prompt: prompt, CWD: run.CWD, Model: run.Model, Status: "running", BudgetUSD: run.BudgetUSD, handle: handle}
+	d.runs[id] = &dispatchRun{ID: id, Agent: agent, Prompt: prompt, CWD: cwd, Model: model, Status: "running", BudgetUSD: budget, handle: handle}
 	d.mu.Unlock()
-	audit(AuditEntry{Action: "continue-launched", Agent: run.Agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule, ApprovalID: id})
+	audit(AuditEntry{Action: "continue-launched", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }

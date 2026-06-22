@@ -41,6 +41,11 @@ struct MenuBarContentView: View {
                     openWindow(id: "management")
                 }
 
+                Button("Pair device…") {
+                    host.pendingPairingRequest = true
+                    openWindow(id: "management")
+                }
+
                 Button("Pause All") {
                     // TODO: wire to lancerd — no pause-all RPC exists yet.
                 }

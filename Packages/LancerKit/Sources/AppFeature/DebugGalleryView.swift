@@ -29,6 +29,7 @@ struct DebugGalleryView: View {
 
     var body: some View {
         switch route {
+        case "drift":          DriftFindingsView(report: Self.sampleDrift)
         case "orb-connecting": SSHConnectOverlay(phase: .connecting)
         case "orb-connected":  OrbConnectedDemo()
         case "orb-slow":       SSHConnectOverlay(phase: .slow(message: "Still connecting…"))
@@ -47,6 +48,7 @@ struct DebugGalleryView: View {
         case "diff":           DiffView(diff: UnifiedDiffParser.parse(Self.sampleDiff))
         case "filepreview":    FilePreviewView(filename: "Tokens.swift", content: Self.sampleFile)
         case "home":           homeGallery
+        case "sessions":       sessionsGallery
         case "newchat":        newChatGallery
         case "chat":           chatGallery
         case "components":     fullComponentCatalog
@@ -134,6 +136,88 @@ struct DebugGalleryView: View {
             status: .completed,
             lastActivityAt: .now.addingTimeInterval(-3 * 3600)
         ),
+    ]
+
+    // MARK: - Observed sessions (LANCER_GALLERY=sessions)
+
+    private var sessionsGallery: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                LancerHomeView(
+                    fleetStore: FleetStore(),
+                    recentThreads: Self.homeThreads,
+                    pendingApprovalCount: 1,
+                    relayHostName: "mac-studio",
+                    relayHostConnected: true,
+                    onOpenSidebar: {},
+                    onNewChat: {},
+                    onOpenInbox: {},
+                    onOpenMachines: {},
+                    onOpenThread: { _ in },
+                    onOpenObservedSession: { _ in },
+                    loadSessions: { Self.observedSessionFixtures }
+                )
+                .frame(height: 760)
+
+                Text("Transcript viewer (watch-only)")
+                    .font(.dsMonoPt(10))
+                    .foregroundStyle(t.text4)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                ObservedSessionView(
+                    sessionId: Self.observedSessionFixtures[0].sessionId,
+                    title: Self.observedSessionFixtures[0].title,
+                    hostName: "mac-studio",
+                    loadTranscript: { _ in (Self.observedTranscriptFixture, Self.observedTranscriptFixture.count, false) },
+                    onBack: {}
+                )
+                .frame(height: 640)
+            }
+        }
+        .background(t.bg)
+    }
+
+    private static let observedSessionFixtures: [ObservedSession] = [
+        ObservedSession(
+            sessionId: "11111111-1111-1111-1111-111111111111",
+            provider: "claudeCode",
+            title: "Refactor billing webhook handler",
+            cwd: "/Users/dev/projects/lancer",
+            state: .working,
+            source: .lancerManaged,
+            lastActivity: .now.addingTimeInterval(-30),
+            messageCount: 14
+        ),
+        ObservedSession(
+            sessionId: "22222222-2222-2222-2222-222222222222",
+            provider: "claudeCode",
+            title: "Investigate flaky CI test",
+            cwd: "/Users/dev/projects/lancer",
+            state: .waitingForInput,
+            source: .providerManaged,
+            lastActivity: .now.addingTimeInterval(-5 * 60),
+            messageCount: 8
+        ),
+        ObservedSession(
+            sessionId: "33333333-3333-3333-3333-333333333333",
+            provider: "claudeCode",
+            title: "Draft release notes",
+            cwd: "/Users/dev/projects/api",
+            state: .recentlyActive,
+            source: .transcriptObserved,
+            lastActivity: .now.addingTimeInterval(-40 * 60),
+            messageCount: 22
+        ),
+    ]
+
+    private static let observedTranscriptFixture: [SessionMessage] = [
+        SessionMessage(role: .user, text: "Can you fix the webhook signature check?"),
+        SessionMessage(role: .assistant, text: "Sure — looking at `billing/webhook.go` now."),
+        SessionMessage(role: .toolCall, text: "rg \"VerifySignature\" billing/", toolName: "Bash"),
+        SessionMessage(role: .toolResult, text: "billing/webhook.go:42:func VerifySignature(payload []byte, sig string) bool {"),
+        SessionMessage(role: .assistant, text: "Found it. The HMAC comparison isn't constant-time — patching that now."),
+        SessionMessage(role: .system, text: "Session continued from a previous transcript."),
     ]
 
     private var reviewScreen: some View {
@@ -890,6 +974,19 @@ extension DebugGalleryView {
       - match: "npm test*"
         effect: allow
     """
+
+    static let sampleDrift = DriftReport(
+        root: "/Users/dev/acme",
+        scanned: 14,
+        findings: [
+            DriftFinding(file: "CLAUDE.md", line: 3, kind: "dead-import", ref: "RTK.md",
+                         message: "imported file does not exist"),
+            DriftFinding(file: "AGENTS.md", line: 12, kind: "dead-link", ref: "docs/ARCHIVED.md",
+                         message: "linked file does not exist"),
+            DriftFinding(file: ".claude/rules/api.md", line: 7, kind: "dead-link", ref: "../skills/old.md",
+                         message: "linked file does not exist"),
+        ]
+    )
 
     static let sampleDiff = """
     diff --git a/src/app.swift b/src/app.swift

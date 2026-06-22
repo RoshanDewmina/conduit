@@ -63,7 +63,7 @@ func TestContinueClaudeUnderAskDefaultStarts(t *testing.T) {
 	if first.Status != "started" {
 		t.Fatalf("setup dispatch → %q, want started", first.Status)
 	}
-	cont := d.continueRun(first.RunID, "again", askDefaultEval, noAudit)
+	cont := d.continueRun(first.RunID, "again", continueFallback{}, askDefaultEval, noAudit)
 	if cont.Status != "started" {
 		t.Fatalf("claude continue (hook wired) → %q (%s), want started", cont.Status, cont.Message)
 	}
@@ -130,6 +130,29 @@ func TestDispatchClaudeUnderBundledPolicyStarts(t *testing.T) {
 	res = d.dispatch(dispatchParams{Agent: "codex", CWD: "/repo", Prompt: "Hi"}, bundledEval, noAudit)
 	if res.Status != "needsApproval" {
 		t.Fatalf("codex dispatch under bundled policy (no hook) → %q, want needsApproval", res.Status)
+	}
+}
+
+// Durable continue: when the in-memory run is gone (process ended / daemon
+// restarted), a continue with no fallback errors, but one WITH the phone-supplied
+// fallback (agent/cwd/model from the persisted conversation) still starts. This is
+// the "left a chat and came back, Couldn't continue" fix.
+func TestContinueWithFallbackWhenRunForgotten(t *testing.T) {
+	d := newTestDispatcher()
+
+	// No in-memory run + no fallback → unknown run (unchanged behavior).
+	if res := d.continueRun("gone", "again", continueFallback{}, askDefaultEval, noAudit); res.Status != "error" {
+		t.Fatalf("continue with no run and no fallback → %q, want error", res.Status)
+	}
+
+	// No in-memory run + fallback context → continues anyway.
+	fb := continueFallback{Agent: "claudeCode", CWD: "/repo", Model: ""}
+	res := d.continueRun("gone", "again", fb, askDefaultEval, noAudit)
+	if res.Status != "started" {
+		t.Fatalf("continue with fallback (run forgotten) → %q (%s), want started", res.Status, res.Message)
+	}
+	if res.RunID == "" {
+		t.Fatal("durable continue must allocate a new runId")
 	}
 }
 

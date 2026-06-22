@@ -11,6 +11,10 @@ public enum SidebarDestination: Hashable, Sendable {
     /// Machine Detail (Fleet) — a primary sidebar root, also reachable from a Home machine tap.
     case machines
     case settings
+    /// A read-only transcript viewer for a session discovered on the host but not
+    /// dispatched by Lancer (watch-only, Phase 1). `title`/`hostName` travel with
+    /// the route since observed sessions aren't persisted in `recentThreads`.
+    case observedSession(sessionId: String, title: String, hostName: String)
 }
 
 public enum SidebarSection: Hashable, Sendable {

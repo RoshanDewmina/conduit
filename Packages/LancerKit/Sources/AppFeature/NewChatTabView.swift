@@ -89,13 +89,6 @@ public struct NewChatTabView: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Tokens resolved for the CURRENT surface. The active-run transcript is dark by
-    /// design and applies `.environment(\.lancerTokens, .dark)` to its children — but
-    /// `self.t` still reads the PARENT (the app's light/dark scheme), so any chrome
-    /// drawn directly in this struct (the footer, Regenerate) would mismatch the dark
-    /// transcript. Reading `tk` instead keeps the whole active-run surface coherent.
-    private var tk: LancerTokens { activeRun != nil ? .dark : t }
-
     public init(
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
@@ -163,7 +156,7 @@ public struct NewChatTabView: View {
             prompt = ""
             switch cmd.name {
             case "/new", "/clear": prompt = ""
-            case "/model", "/budget": showOptions = true
+            case "/model", "/budget": showComposer = true
             case "/agent": showAgentPicker = true
             case "/workspace": customCwd = ""; showWorkspacePicker = true
             default: break
@@ -216,10 +209,9 @@ public struct NewChatTabView: View {
                 composerLanding
             }
         }
-        // The active-run transcript is dark by design; theme that state dark so the
-        // background fills to the top with no beige seam. Composer landing stays light.
-        .background((activeRun != nil ? LancerTokens.dark.bg : t.bg).ignoresSafeArea())
-        .environment(\.lancerTokens, activeRun != nil ? .dark : t)
+        // Chat follows the app's light/dark scheme (inherits the parent's tokens);
+        // terminal blocks keep their own terminal palette via term* tokens.
+        .background(t.bg.ignoresSafeArea())
         .onAppear {
             if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
                 selectedAgentID = first.id
@@ -262,11 +254,11 @@ public struct NewChatTabView: View {
         }
         .bottomDrawer(
             isPresented: $showComposer,
-            title: "New chat",
-            subtitle: "Describe the work. Lancer routes it through policy before anything runs.",
+            title: "Run settings",
+            subtitle: "Choose where this runs and which model to use.",
             detents: [.medium, .large]
         ) {
-            composerDrawerContent
+            runSettingsContent
         }
         .sheet(item: $selectedArtifact) { artifact in
             ChatArtifactDetailView(artifact: artifact)
@@ -411,45 +403,27 @@ public struct NewChatTabView: View {
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
-    /// The composer fields, presented inside the bottom drawer. Same controls and
-    /// wiring as before — prompt, Agent/Host/Project pills, Options, Send — just
-    /// hosted in a native sheet (presentationDetents) instead of a full page.
-    private var composerDrawerContent: some View {
+    /// Config-only sheet opened by the composer's settings control: choose the
+    /// machine, agent, project directory, model, and budget for the run. The prompt
+    /// and Send live on the inline composer landing — this sheet never duplicates
+    /// them; it just configures where/how the next message runs and is dismissed.
+    private var runSettingsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                CommandAutocompleteBar(
-                    query: prompt,
-                    lancerCommands: Self.lancerCommands,
-                    agentCommands: agentCommands,
-                    onPick: handleComposerPick
-                )
-                TextField("Describe a task, or type / for commands…", text: $prompt, axis: .vertical)
-                    .font(.dsSansPt(16))
-                    .foregroundStyle(t.text)
-                    .tint(t.accent)
-                    .lineLimit(4...12)
-                    .focused($composeFocused)
-                    .padding(14)
-                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(t.border.opacity(0.72), lineWidth: 1)
-                    )
-
                 HStack(spacing: 10) {
                     composerPill(
-                        title: agentLabel,
-                        subtitle: "Agent",
-                        icon: .sparkles,
+                        title: machineLabel,
+                        subtitle: "Machine",
+                        icon: .server,
                         tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
                     ) {
                         showAgentPicker = true
                     }
                     composerPill(
-                        title: machineLabel,
-                        subtitle: "Host",
-                        icon: .server,
-                        tone: t.text3
+                        title: agentLabel,
+                        subtitle: "Agent",
+                        icon: .sparkles,
+                        tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
                     ) {
                         showAgentPicker = true
                     }
@@ -465,46 +439,21 @@ public struct NewChatTabView: View {
                     showWorkspacePicker = true
                 }
 
-                Button {
-                    withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) {
-                        showOptions.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Options")
-                            .font(.dsSansPt(14, weight: .semibold))
-                        Image(systemName: showOptions ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 11, weight: .bold))
-                    }
-                    .foregroundStyle(showOptions ? t.text : t.text3)
-                }
-                .buttonStyle(.plain)
-
-                if showOptions {
-                    optionsPanel
-                }
+                optionsPanel
 
                 Button {
-                    let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    composeFocused = false
+                    Haptics.selection()
                     showComposer = false
-                    Task { await sendCurrentPrompt() }
                 } label: {
-                    HStack(spacing: 9) {
-                        Text("Send")
-                            .font(.dsSansPt(16, weight: .semibold))
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 15, weight: .bold))
-                    }
-                    .foregroundStyle(canSend ? t.accentFg : t.text4)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(canSend ? t.accent : t.surfaceSunk, in: Capsule())
+                    Text("Done")
+                        .font(.dsSansPt(16, weight: .semibold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(t.accent, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(!canSend)
-                .accessibilityLabel("Send chat")
+                .accessibilityLabel("Done configuring the run")
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
@@ -701,7 +650,7 @@ public struct NewChatTabView: View {
                     .padding(.top, 12)
                 }
             }
-            .background(tk.bg.opacity(0.96).ignoresSafeArea(edges: .bottom))
+            .background(t.bg.opacity(0.96).ignoresSafeArea(edges: .bottom))
         } else {
             bottomToolbar
         }
@@ -714,12 +663,12 @@ public struct NewChatTabView: View {
         return HStack(spacing: 7) {
             Image(systemName: failed ? "xmark.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 13))
-                .foregroundStyle(failed ? tk.termErr : tk.termPrompt)
+                .foregroundStyle(failed ? t.termErr : t.termPrompt)
             Text(failed
                  ? "Run failed\(currentRun?.exitCode.map { " · exit \($0)" } ?? "")"
                  : "Run complete")
                 .font(.dsMonoPt(12, weight: .medium))
-                .foregroundStyle(tk.text3)
+                .foregroundStyle(t.text3)
             Spacer(minLength: 8)
             if !turns.isEmpty {
                 Button {
@@ -732,7 +681,7 @@ public struct NewChatTabView: View {
                         Text("Regenerate")
                             .font(.dsSansPt(12.5, weight: .semibold))
                     }
-                    .foregroundStyle(tk.text2)
+                    .foregroundStyle(t.text2)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Regenerate the last response")

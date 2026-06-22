@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import LancerCore
+import UniformTypeIdentifiers
 
 private enum Destination: String, CaseIterable, Identifiable {
     case overview = "Overview"
@@ -23,8 +24,8 @@ private enum Destination: String, CaseIterable, Identifiable {
 
     var isEnabled: Bool {
         switch self {
-        case .overview, .diagnostics: return true
-        case .devices, .agentsWorkspaces, .security: return false
+        case .overview, .diagnostics, .devices: return true
+        case .agentsWorkspaces, .security: return false
         }
     }
 }
@@ -49,13 +50,20 @@ struct ManagementView: View {
                 OverviewPane()
             case .diagnostics:
                 DiagnosticsPane()
-            case .devices, .agentsWorkspaces, .security:
+            case .devices:
+                DevicesPane()
+            case .agentsWorkspaces, .security:
                 ComingSoonPane(title: selection?.rawValue ?? "")
             }
         }
         .frame(minWidth: 760, minHeight: 480)
         .task {
             await host.refresh()
+        }
+        .onAppear {
+            if host.pendingPairingRequest {
+                selection = .devices
+            }
         }
     }
 }
@@ -155,6 +163,8 @@ private struct DiagnosticsPane: View {
     @Environment(HostModel.self) private var host
     @Environment(\.lancerTokens) private var tokens
     @State private var isRunning = false
+    @State private var pickingFolder = false
+    @State private var scanning = false
 
     var body: some View {
         ScrollView {
@@ -194,6 +204,8 @@ private struct DiagnosticsPane: View {
                         .foregroundStyle(tokens.text3)
                 }
 
+                driftSection
+
                 GroupBox("Service maintenance") {
                     HStack(spacing: 12) {
                         Button("Restart Service") {
@@ -222,6 +234,81 @@ private struct DiagnosticsPane: View {
         }
     }
 
+    @ViewBuilder
+    private var driftSection: some View {
+        GroupBox("Setup drift") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Dead imports & links across CLAUDE.md, AGENTS.md, skills, and rules.")
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(tokens.text2)
+                    Spacer()
+                    Button {
+                        pickingFolder = true
+                    } label: {
+                        if scanning {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Scan Folder…")
+                        }
+                    }
+                    .disabled(scanning)
+                }
+
+                if let error = host.driftError {
+                    Text(error)
+                        .font(.dsSansPt(12))
+                        .foregroundStyle(tokens.danger)
+                } else if let drift = host.drift {
+                    if drift.findings.isEmpty {
+                        Text("No drift — \(drift.scanned) instruction files clean.")
+                            .font(.dsSansPt(12, weight: .medium))
+                            .foregroundStyle(tokens.ok)
+                    } else {
+                        Text("\(drift.findings.count) finding(s) across \(drift.scanned) files")
+                            .font(.dsSansPt(12, weight: .medium))
+                            .foregroundStyle(tokens.danger)
+                        ForEach(drift.findings) { finding in
+                            driftRow(finding)
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
+            guard case let .success(url) = result else { return }
+            Task {
+                scanning = true
+                let scoped = url.startAccessingSecurityScopedResource()
+                await host.scanDrift(root: url.path)
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                scanning = false
+            }
+        }
+    }
+
+    private func driftRow(_ finding: DriftFinding) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(tokens.danger)
+                .frame(width: 8, height: 8)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(finding.file):\(finding.line)")
+                    .font(.dsSansPt(12, weight: .medium))
+                    .foregroundStyle(tokens.text)
+                Text("\(finding.kind) — \(finding.ref)")
+                    .font(.dsSansPt(11))
+                    .foregroundStyle(tokens.text2)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
     private func checkRow(_ check: DoctorCheckResult) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Circle()
@@ -239,6 +326,46 @@ private struct DiagnosticsPane: View {
             Spacer()
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Devices
+
+private struct DevicesPane: View {
+    @Environment(HostModel.self) private var host
+    @Environment(\.lancerTokens) private var tokens
+    @State private var showingPairing = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Text("Devices")
+                        .font(.dsDisplayPt(22))
+                        .foregroundStyle(tokens.text)
+                    Spacer()
+                    DSButton("Pair device", systemImage: "qrcode", variant: .primary) {
+                        showingPairing = true
+                    }
+                }
+
+                Text("Paired-device management is coming soon. For now, pair a new iPhone by scanning a one-time QR code.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(tokens.text3)
+
+                Spacer()
+            }
+            .padding(24)
+        }
+        .onAppear {
+            if host.pendingPairingRequest {
+                host.pendingPairingRequest = false
+                showingPairing = true
+            }
+        }
+        .sheet(isPresented: $showingPairing) {
+            PairingView()
+        }
     }
 }
 

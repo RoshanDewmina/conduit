@@ -28,6 +28,7 @@ public struct FleetView: View {
     private let onOpenRelayChat: (() -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
+    @State private var showingDriftFindings = false
 
     @Environment(\.lancerTokens) private var t
 
@@ -561,7 +562,45 @@ public struct FleetView: View {
                 value: connectionLabel(state),
                 valueColor: statusColor(state)
             )
+            driftStatCard
         }
+        .sheet(isPresented: $showingDriftFindings) {
+            if let report = focusDrift {
+                DriftFindingsView(report: report)
+            }
+        }
+    }
+
+    // Tappable only when there are findings to drill into; otherwise a plain
+    // read-only summary (Clean / —), matching the other stat cards.
+    @ViewBuilder
+    private var driftStatCard: some View {
+        let card = statCard(label: "Setup drift", value: driftDisplay, valueColor: driftColor)
+        if let report = focusDrift, !report.findings.isEmpty {
+            Button {
+                Haptics.selection()
+                showingDriftFindings = true
+            } label: { card }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows the \(report.findings.count) drift findings")
+        } else {
+            card
+        }
+    }
+
+    private var focusDrift: DriftReport? {
+        guard let hostHealthStore, let id = focusSlot?.hostID else { return nil }
+        return hostHealthStore.drift(for: id)
+    }
+
+    private var driftDisplay: String {
+        guard let report = focusDrift else { return "—" }
+        return report.findings.isEmpty ? "Clean" : "\(report.findings.count)"
+    }
+
+    private var driftColor: Color {
+        guard let report = focusDrift else { return t.text4 }
+        return report.findings.isEmpty ? t.ok : t.danger
     }
 
     private var usageDisplay: String {

@@ -343,6 +343,43 @@ public actor DaemonChannel {
         }
     }
 
+    /// Scans `root` (a repo path) for instruction-file setup drift on the
+    /// remote daemon. Read-only.
+    public func driftScan(root: String) async throws -> DriftReport {
+        let data = try await sendRPC(method: "agent.drift.scan", params: ["root": root])
+        guard let response = DaemonRPCResponse.decode(from: data) else {
+            throw DaemonChannelError.badResponse
+        }
+        switch response {
+        case .driftReport(let report): return report
+        case .error(_, let message): throw DaemonChannelError.rpc(message)
+        default: throw DaemonChannelError.badResponse
+        }
+    }
+
+    // MARK: - Observed sessions (watch-only)
+
+    /// Lists Claude Code (and other vendor) sessions the daemon knows about for
+    /// this host — Lancer-dispatched, vendor-managed, or transcript-observed.
+    /// Read-only; Phase 1 has no send/stop control over these.
+    public func listSessions() async throws -> [ObservedSession] {
+        let data = try await sendRPC(method: "agent.sessions.list", params: [String: String]())
+        return try Self.decodeResult(data, as: SessionsListResult.self, dateDecoding: .iso8601).sessions
+    }
+
+    /// Fetches transcript turns for an observed session starting at `sinceLine`
+    /// (0 for the full transcript). `nextLine` is the cursor to pass on the next
+    /// call; `resetRequired` signals the daemon's view of the transcript was
+    /// rewritten and the caller should re-fetch from line 0.
+    public func fetchTranscript(sessionId: String, sinceLine: Int) async throws -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool) {
+        let data = try await sendRPC(
+            method: "agent.sessions.transcript",
+            params: ["sessionId": sessionId, "sinceLine": sinceLine]
+        )
+        let result = try Self.decodeResult(data, as: SessionsTranscriptResult.self, dateDecoding: .iso8601)
+        return (result.messages, result.nextLine, result.resetRequired)
+    }
+
     // MARK: - CI Events
 
     /// Fetch recent CI/PR events for a repository from the push-backend.
@@ -484,7 +521,22 @@ public actor DaemonChannel {
     /// vendor CLI under a NEW runId (re-passing policy + budget); output streams back
     /// under that new runId via the existing agent.run.output path.
     public func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
-        let params: [String: Any] = ["runId": runId, "prompt": prompt]
+        try await continueRun(runId: runId, prompt: prompt, agent: nil, cwd: nil, model: nil, budgetUSD: nil)
+    }
+
+    /// Continue a run with an optional fallback (agent/cwd/model/budget) used when the
+    /// daemon no longer holds the run in memory (process ended or daemon restarted) —
+    /// supplied from the phone's persisted conversation so a reopened chat can still
+    /// continue instead of dead-ending on "unknown run".
+    public func continueRun(
+        runId: String, prompt: String,
+        agent: String?, cwd: String?, model: String?, budgetUSD: Double?
+    ) async throws -> DispatchResult {
+        var params: [String: Any] = ["runId": runId, "prompt": prompt]
+        if let agent, !agent.isEmpty { params["agent"] = agent }
+        if let cwd, !cwd.isEmpty { params["cwd"] = cwd }
+        if let model, !model.isEmpty { params["model"] = model }
+        if let budgetUSD { params["budgetUSD"] = budgetUSD }
         let data = try await sendRPC(method: "agent.run.continue", params: params)
         return try Self.decodeResult(data, as: DispatchResult.self)
     }
@@ -689,10 +741,16 @@ public actor DaemonChannel {
         return (dict["result"] as? [String: Any]) ?? [:]
     }
 
-    private static func decodeResult<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
+    private static func decodeResult<T: Decodable>(
+        _ data: Data,
+        as type: T.Type,
+        dateDecoding: JSONDecoder.DateDecodingStrategy = .deferredToDate
+    ) throws -> T {
         let result = try decodeResultObject(data)
         let rdata = try JSONSerialization.data(withJSONObject: result)
-        return try JSONDecoder().decode(T.self, from: rdata)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = dateDecoding
+        return try decoder.decode(T.self, from: rdata)
     }
 
     public func stop() {

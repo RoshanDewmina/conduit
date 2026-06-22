@@ -618,6 +618,9 @@ public struct SettingsView: View {
             NavigationLink { AppearanceSettingsView() } label: {
                 settingsGridCard("Appearance", icon: "circle.lefthalf.filled", tint: t.accent, detail: "Theme & mode")
             }.buttonStyle(.plain)
+            NavigationLink { AccentSettingsView() } label: {
+                settingsGridCard("Accent", icon: "paintpalette.fill", tint: t.accent, detail: "Brand color")
+            }.buttonStyle(.plain)
             NavigationLink { ProviderKeysView(viewModel: vm) } label: {
                 settingsGridCard("Provider keys", icon: "key.horizontal", tint: t.ok, detail: providerKeyDetail)
             }.buttonStyle(.plain)
@@ -1031,6 +1034,68 @@ private struct NotificationsSettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Accent Settings
+
+private struct AccentSettingsView: View {
+    @AppStorage(LancerAccentTheme.storageKey) private var accentPref: String = LancerAccentTheme.terracotta.rawValue
+    @Environment(\.lancerTokens) private var t
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            t.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSDetailHeader("accent", onBack: { dismiss() })
+
+                    VStack(spacing: 8) {
+                        ForEach(LancerAccentTheme.allCases) { theme in
+                            let selected = accentPref == theme.rawValue
+                            Button {
+                                Haptics.selection()
+                                withAnimation(.easeInOut(duration: 0.14)) {
+                                    accentPref = theme.rawValue
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Circle()
+                                        .fill(theme.accent(scheme))
+                                        .frame(width: 22, height: 22)
+                                        .overlay(Circle().strokeBorder(t.border, lineWidth: 1))
+                                    Text(theme.displayName)
+                                        .font(.dsSansPt(15, weight: .semibold))
+                                        .foregroundStyle(t.text)
+                                    Spacer(minLength: 0)
+                                    if selected {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(theme.accent(scheme))
+                                    }
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    selected ? theme.accent(scheme).opacity(scheme == .dark ? 0.22 : 0.14) : t.surface,
+                                    in: RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                                        .strokeBorder(selected ? theme.accent(scheme) : t.border, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                }
+            }
+        }
+        .navigationBarHidden(true)
     }
 }
 

@@ -16,6 +16,8 @@ public final class E2ERelayBridge: ObservableObject {
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
     private var commandsListContinuation: CheckedContinuation<[AgentCommand], Error>?
+    private var sessionsListContinuation: CheckedContinuation<[ObservedSession], Error>?
+    private var sessionsTranscriptContinuation: CheckedContinuation<(messages: [SessionMessage], nextLine: Int, resetRequired: Bool), Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -106,12 +108,21 @@ public final class E2ERelayBridge: ObservableObject {
     /// vendor CLI under a NEW runId (re-passing policy + budget) and replies with
     /// `runContinueResult`; output then streams under the new runId. Returns the
     /// result (with the new runId) so the caller can attach the continued turn.
-    public func sendRunContinue(runId: String, prompt: String) async throws -> DispatchResult {
+    public func sendRunContinue(
+        runId: String, prompt: String,
+        agent: String? = nil, cwd: String? = nil, model: String? = nil, budgetUSD: Double? = nil
+    ) async throws -> DispatchResult {
         guard isActive else { throw E2EError.notPaired }
-        struct ContinueParams: Codable, Sendable { let runId: String; let prompt: String }
+        // Optional fallback so a reopened chat continues even after the daemon forgot
+        // the run (process ended / daemon restarted): the daemon reconstructs the
+        // launch from this persisted-conversation context.
+        struct ContinueParams: Codable, Sendable {
+            let runId: String; let prompt: String
+            let agent: String?; let cwd: String?; let model: String?; let budgetUSD: Double?
+        }
         try await relayClient.send(
             type: "agentRunContinue",
-            payload: ContinueParams(runId: runId, prompt: prompt)
+            payload: ContinueParams(runId: runId, prompt: prompt, agent: agent, cwd: cwd, model: model, budgetUSD: budgetUSD)
         )
         return try await withCheckedThrowingContinuation { c in
             self.continueContinuation = c
@@ -141,6 +152,33 @@ public final class E2ERelayBridge: ObservableObject {
         try await relayClient.send(type: "agentCommandsList", payload: CmdParams(cwd: cwd, vendor: vendor))
         return try await withCheckedThrowingContinuation { c in
             self.commandsListContinuation = c
+        }
+    }
+
+    /// Lists Claude Code (and other vendor) sessions on the relay-paired host.
+    /// Mirrors `relayListCommands`: sends `agentSessionsList`, awaits `sessionsListResult`.
+    /// Read-only watch; Phase 1 has no send/stop control over these.
+    public func relayListSessions() async throws -> [ObservedSession] {
+        guard isActive else { throw E2EError.notPaired }
+        struct ListParams: Codable, Sendable {}
+        try await relayClient.send(type: "agentSessionsList", payload: ListParams())
+        return try await withCheckedThrowingContinuation { c in
+            self.sessionsListContinuation = c
+        }
+    }
+
+    /// Fetches transcript turns for an observed session on the relay-paired host,
+    /// starting at `sinceLine`. Mirrors `relayListCommands`: sends `agentSessionsTranscript`,
+    /// awaits `sessionsTranscriptResult`.
+    public func relayFetchTranscript(sessionId: String, sinceLine: Int) async throws -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool) {
+        guard isActive else { throw E2EError.notPaired }
+        struct TranscriptParams: Codable, Sendable { let sessionId: String; let sinceLine: Int }
+        try await relayClient.send(
+            type: "agentSessionsTranscript",
+            payload: TranscriptParams(sessionId: sessionId, sinceLine: sinceLine)
+        )
+        return try await withCheckedThrowingContinuation { c in
+            self.sessionsTranscriptContinuation = c
         }
     }
 
@@ -249,6 +287,29 @@ public final class E2ERelayBridge: ObservableObject {
                 fsListContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             fsListContinuation = nil
+
+        case "sessionsListResult":
+            struct SessionsPayload: Codable { let sessions: [ObservedSession] }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let envelope = try? decoder.decode(
+                E2ERelayMessage.RelayInnerEnvelope<SessionsPayload>.self, from: message.payload
+            )
+            sessionsListContinuation?.resume(returning: envelope?.payload.sessions ?? [])
+            sessionsListContinuation = nil
+
+        case "sessionsTranscriptResult":
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let envelope = try? decoder.decode(
+                E2ERelayMessage.RelayInnerEnvelope<SessionsTranscriptResult>.self, from: message.payload
+            )
+            if let result = envelope?.payload {
+                sessionsTranscriptContinuation?.resume(returning: (result.messages, result.nextLine, result.resetRequired))
+            } else {
+                sessionsTranscriptContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            sessionsTranscriptContinuation = nil
 
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(

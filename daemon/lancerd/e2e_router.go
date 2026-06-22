@@ -191,19 +191,66 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 
 	case "agentRunContinue":
 		var p struct {
-			RunID  string `json:"runId"`
-			Prompt string `json:"prompt"`
+			RunID     string  `json:"runId"`
+			Prompt    string  `json:"prompt"`
+			Agent     string  `json:"agent"`
+			CWD       string  `json:"cwd"`
+			Model     string  `json:"model"`
+			BudgetUSD float64 `json:"budgetUSD"`
 		}
 		if err := json.Unmarshal(payload, &p); err != nil || p.RunID == "" {
 			log.Printf("e2e: unmarshal agentRunContinue failed: %v", err)
 			return
 		}
-		result := r.server.runContinue(p.RunID, p.Prompt)
+		fb := continueFallback{Agent: p.Agent, CWD: p.CWD, Model: p.Model, BudgetUSD: p.BudgetUSD}
+		result := r.server.runContinue(p.RunID, p.Prompt, fb)
 		// Reply with the new runId; continued output streams under it via the
 		// existing agentRunOutput/agentRunStatus fan-out.
 		msg := map[string]interface{}{"type": "runContinueResult", "payload": result}
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("runContinueResult", data)
+
+	case "agentSessionsList":
+		var p struct {
+			HomeDir string `json:"homeDir,omitempty"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			log.Printf("e2e: unmarshal agentSessionsList failed: %v", err)
+			return
+		}
+		sessions, err := buildSessionIndex(p.HomeDir)
+		if sessions == nil {
+			sessions = []SessionInfo{}
+		}
+		payloadOut := map[string]interface{}{"sessions": sessions}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{"type": "sessionsListResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("sessionsListResult", data)
+
+	case "agentSessionsTranscript":
+		var p struct {
+			SessionID string `json:"sessionId"`
+			SinceLine int    `json:"sinceLine"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil || p.SessionID == "" {
+			log.Printf("e2e: unmarshal agentSessionsTranscript failed: %v", err)
+			return
+		}
+		result, err := loadSessionTranscript("", p.SessionID, p.SinceLine)
+		payloadOut := map[string]interface{}{
+			"messages":      result.Messages,
+			"nextLine":      result.NextLine,
+			"resetRequired": result.ResetRequired,
+		}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{"type": "sessionsTranscriptResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("sessionsTranscriptResult", data)
 
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)

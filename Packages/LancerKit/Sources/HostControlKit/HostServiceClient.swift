@@ -267,6 +267,27 @@ public actor HostServiceClient {
         return snapshot
     }
 
+    /// Scans `root` (a repo path) for instruction-file drift — dead imports and
+    /// dead markdown links across CLAUDE.md / AGENTS.md / skills / rules.
+    public func driftScan(root: String) async throws -> DriftReport {
+        let data = try await request(method: "agent.drift.scan", params: ["root": root])
+        guard let report = try? JSONDecoder().decode(DriftReport.self, from: data) else {
+            throw HostServiceError.decoding
+        }
+        return report
+    }
+
+    /// Starts a new phone-pairing session: the daemon mints a one-time relay
+    /// session, a 6-digit code, and a QR payload the Lancer iPhone app scans
+    /// to connect.
+    public func beginPairing() async throws -> PairingPayload {
+        let data = try await request(method: "agent.pair.begin")
+        guard let payload = try? JSONDecoder().decode(PairingPayload.self, from: data) else {
+            throw HostServiceError.decoding
+        }
+        return payload
+    }
+
     // MARK: - Framed I/O
 
     private func writeFramed(_ json: Data) throws {

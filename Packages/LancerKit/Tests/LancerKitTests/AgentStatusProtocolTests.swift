@@ -18,6 +18,31 @@ struct AgentStatusProtocolTests {
         #expect(snapshot.totalUsageUSD == 2.47)
     }
 
+    @Test("agent.drift.scan RPC result decodes")
+    func driftResultDecode() {
+        let json = """
+        {"jsonrpc":"2.0","id":3,"result":{"root":"/repo","scanned":12,"findings":[{"file":"CLAUDE.md","line":3,"kind":"dead-import","ref":"RTK.md","message":"imported file does not exist"}]}}
+        """.data(using: .utf8)!
+        guard case .driftReport(let report) = DaemonRPCResponse.decode(from: json) else {
+            Issue.record("Expected driftReport"); return
+        }
+        #expect(report.scanned == 12)
+        #expect(report.findings.count == 1)
+        #expect(report.findings[0].kind == "dead-import")
+    }
+
+    @Test("empty-findings drift still decodes as driftReport, not doctorReport")
+    func driftCleanDecode() {
+        let json = """
+        {"jsonrpc":"2.0","id":4,"result":{"root":"/repo","scanned":17,"findings":[]}}
+        """.data(using: .utf8)!
+        guard case .driftReport(let report) = DaemonRPCResponse.decode(from: json) else {
+            Issue.record("Expected driftReport"); return
+        }
+        #expect(report.findings.isEmpty)
+        #expect(report.scanned == 17)
+    }
+
     @Test("quota merge honest")
     func quotaMergeHonest() {
         let snapshot = AgentStatusSnapshot(agents: [

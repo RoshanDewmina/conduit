@@ -21,9 +21,15 @@ public struct LancerHomeView: View {
     private let onOpenInbox: () -> Void
     private let onOpenMachines: () -> Void
     private let onOpenThread: (String) -> Void
+    private let onOpenObservedSession: (ObservedSession) -> Void
+    /// Fetches watch-only sessions discovered on the host (Claude Code, etc.) —
+    /// separate from `recentThreads`, which are Lancer-dispatched runs. Defaults to
+    /// `{ [] }` so previews/tests compile without a live daemon.
+    private let loadSessions: () async -> [ObservedSession]
 
     @Environment(\.lancerTokens) private var t
     @State private var collapsed: Set<String> = []
+    @State private var observedSessions: [ObservedSession] = []
 
     public init(
         fleetStore: FleetStore,
@@ -36,7 +42,9 @@ public struct LancerHomeView: View {
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
         onOpenMachines: @escaping () -> Void,
-        onOpenThread: @escaping (String) -> Void
+        onOpenThread: @escaping (String) -> Void,
+        onOpenObservedSession: @escaping (ObservedSession) -> Void = { _ in },
+        loadSessions: @escaping () async -> [ObservedSession] = { [] }
     ) {
         self.fleetStore = fleetStore
         self.recentThreads = recentThreads
@@ -49,6 +57,8 @@ public struct LancerHomeView: View {
         self.onOpenInbox = onOpenInbox
         self.onOpenMachines = onOpenMachines
         self.onOpenThread = onOpenThread
+        self.onOpenObservedSession = onOpenObservedSession
+        self.loadSessions = loadSessions
     }
 
     public var body: some View {
@@ -66,6 +76,9 @@ public struct LancerHomeView: View {
             }
         }
         .accessibilityIdentifier("commandHome")
+        .task {
+            observedSessions = await loadSessions()
+        }
     }
 
     // MARK: Top row — hamburger (glass) + new-chat (accent)
@@ -175,7 +188,8 @@ public struct LancerHomeView: View {
                         isExpanded: !collapsed.contains(machine.id),
                         onToggle: { toggle(machine.id) },
                         onOpenMachine: { Haptics.selection(); onOpenMachines() },
-                        onOpenSession: { id in Haptics.selection(); onOpenThread(id) }
+                        onOpenSession: { id in Haptics.selection(); onOpenThread(id) },
+                        onOpenObservedSession: { session in Haptics.selection(); onOpenObservedSession(session) }
                     )
                     .padding(.horizontal, 18)
                 }
@@ -244,7 +258,16 @@ public struct LancerHomeView: View {
                 if liveState == nil, host == relayHostName {
                     liveState = relayHostConnected ? .relayPaired : .connecting
                 }
-                return HomeMachine(name: host, projects: projects, liveState: liveState)
+                // `loadSessions()` queries whichever host is currently live (the
+                // connected SSH slot or the active relay bridge) — there's no
+                // per-host fan-out yet, so only that machine gets the observed list.
+                let isLiveHost = liveState == .connected || liveState == .relayPaired
+                return HomeMachine(
+                    name: host,
+                    projects: projects,
+                    liveState: liveState,
+                    observedSessions: isLiveHost ? observedSessions : []
+                )
             }
             .sorted { ($0.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) > ($1.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) }
     }
@@ -279,6 +302,7 @@ private struct HomeMachine: Identifiable {
     let name: String
     let projects: [HomeProject]
     let liveState: Session.ConnectionState?
+    let observedSessions: [ObservedSession]
     var id: String { name }
 }
 
@@ -296,6 +320,7 @@ private struct MachineTreeCard: View {
     let onToggle: () -> Void
     let onOpenMachine: () -> Void
     let onOpenSession: (String) -> Void
+    let onOpenObservedSession: (ObservedSession) -> Void
 
     @Environment(\.lancerTokens) private var t
 
@@ -306,6 +331,9 @@ private struct MachineTreeCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(machine.projects) { project in
                         projectBlock(project)
+                    }
+                    if !machine.observedSessions.isEmpty {
+                        observedSessionsBlock
                     }
                 }
                 .padding(.leading, 24)
@@ -366,6 +394,119 @@ private struct MachineTreeCard: View {
             Rectangle().fill(t.border).frame(width: 1.5)
         }
         .padding(.top, 4)
+    }
+
+    // Visually distinct from the dispatched-thread tree above (dashed rule, dimmer
+    // row chrome) so users don't assume these support approvals/stop — Phase 1 is
+    // watch-only.
+    private var observedSessionsBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SESSIONS ON THIS MAC")
+                .font(.dsMonoPt(9.5, weight: .medium))
+                .tracking(1.0)
+                .foregroundStyle(t.text4)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+            ForEach(machine.observedSessions) { session in
+                observedSessionRow(session)
+            }
+        }
+        .padding(.leading, 14)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(t.text4.opacity(0.4)).frame(width: 1.5)
+        }
+        .padding(.top, 4)
+    }
+
+    private func observedSessionRow(_ session: ObservedSession) -> some View {
+        Button { onOpenObservedSession(session) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "eye")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(t.text3)
+                    .frame(width: 24, height: 24)
+                    .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.title.isEmpty ? cwdBasename(session.cwd) : session.title)
+                        .font(.dsSansPt(13, weight: .semibold))
+                        .foregroundStyle(t.text)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(cwdBasename(session.cwd))
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text4)
+                            .lineLimit(1)
+                        Text("·").foregroundStyle(t.text4)
+                        Text(relativeTime(session.lastActivity))
+                            .font(.dsMonoPt(10))
+                            .foregroundStyle(t.text4)
+                    }
+                }
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 4) {
+                    capabilityBadge(session.source)
+                    stateChip(session.state)
+                }
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .background(t.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(t.border)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func capabilityBadge(_ source: SessionSource) -> some View {
+        let label: String
+        switch source {
+        case .lancerManaged: label = "Managed"
+        case .providerManaged: label = "Background"
+        case .transcriptObserved: label = "Observed"
+        }
+        return Text(label)
+            .font(.dsMonoPt(9, weight: .semibold))
+            .tracking(0.3)
+            .foregroundStyle(t.text3)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(t.surface2, in: Capsule())
+    }
+
+    private func stateChip(_ state: ObservedSessionState) -> some View {
+        let (label, tone): (String, DSStatusDotTone) = {
+            switch state {
+            case .working: return ("Working", .ok)
+            case .waitingForInput: return ("Needs input", .warn)
+            case .recentlyActive: return ("Recently active", .accent)
+            case .idle: return ("Idle", .off)
+            case .completed: return ("Completed", .off)
+            case .historical: return ("Historical", .off)
+            case .unknown: return ("Unknown", .off)
+            }
+        }()
+        return HStack(spacing: 4) {
+            DSStatusDot(tone: tone, pulse: state == .working, size: 6)
+            Text(label)
+                .font(.dsMonoPt(9.5))
+                .foregroundStyle(t.text3)
+        }
+    }
+
+    private func cwdBasename(_ path: String) -> String {
+        (path as NSString).lastPathComponent
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let interval = -date.timeIntervalSinceNow
+        if interval < 60 { return "just now" }
+        if interval < 3600 { let m = Int(interval / 60); return "\(m) min\(m == 1 ? "" : "s") ago" }
+        if interval < 86400 { let h = Int(interval / 3600); return "\(h) hr\(h == 1 ? "" : "s") ago" }
+        let d = Int(interval / 86400)
+        return "\(d) day\(d == 1 ? "" : "s") ago"
     }
 
     private func sessionRow(_ session: ChatConversation) -> some View {

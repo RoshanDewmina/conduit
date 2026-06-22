@@ -398,6 +398,43 @@ struct HostServiceClientTests {
         try await serverTask.value
     }
 
+    @Test("beginPairing decodes the daemon's pairing payload")
+    func beginPairingDecodesPayload() async throws {
+        let socketPath = makeTempSocketPath()
+        let server = FakeDaemonServer(socketPath: socketPath)
+        try server.start()
+        defer { server.stop() }
+
+        let serverTask = Task {
+            let (connFD, request) = try server.acceptHandshakeThenOneRequest()
+            defer { close(connFD) }
+            #expect(request["method"] as? String == "agent.pair.begin")
+            let id = request["id"] as? Int
+            let response = try JSONSerialization.data(withJSONObject: [
+                "jsonrpc": "2.0",
+                "id": id as Any,
+                "result": [
+                    "relay": "wss://relay.lancer.dev/session/abc123",
+                    "code": "123456",
+                    "publicKey": "cHVibGljLWtleS1iYXNlNjR1cmw",
+                    "qrPayload": "{\"v\":1,\"relay\":\"wss://relay.lancer.dev/session/abc123\",\"code\":\"123456\",\"pk\":\"cHVibGljLWtleS1iYXNlNjR1cmw\"}",
+                ],
+            ])
+            try FakeDaemonServer.writeFramedBlocking(fd: connFD, json: response)
+        }
+
+        let client = HostServiceClient(socketPathOverride: socketPath, tokenOverride: testToken)
+        try await client.connect()
+        let payload = try await client.beginPairing()
+
+        #expect(payload.relay == "wss://relay.lancer.dev/session/abc123")
+        #expect(payload.code == "123456")
+        #expect(!payload.publicKey.isEmpty)
+        #expect(!payload.qrPayload.isEmpty)
+
+        try await serverTask.value
+    }
+
     @Test("handshake rejection (-32001) surfaces as HostServiceError.rpc")
     func handshakeUnauthorized() async throws {
         let socketPath = makeTempSocketPath()

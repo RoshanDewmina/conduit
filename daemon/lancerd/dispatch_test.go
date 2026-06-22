@@ -61,7 +61,7 @@ func TestContinueRunNewRunIDAndGate(t *testing.T) {
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 	first := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "start"}, allowEval, noAudit)
-	cont := d.continueRun(first.RunID, "next", allowEval, noAudit)
+	cont := d.continueRun(first.RunID, "next", continueFallback{}, allowEval, noAudit)
 	if cont.Status != "started" {
 		t.Fatalf("want started, got %q (%s)", cont.Status, cont.Message)
 	}
@@ -84,7 +84,7 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 		contLaunched = true
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
-	res := d.continueRun(first.RunID, "next", denyEval, noAudit)
+	res := d.continueRun(first.RunID, "next", continueFallback{}, denyEval, noAudit)
 	if res.Status != "denied" {
 		t.Fatalf("want denied, got %q", res.Status)
 	}
@@ -95,7 +95,7 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 
 func TestContinueRunUnknownRun(t *testing.T) {
 	d := newDispatcher()
-	if res := d.continueRun("nope", "x", allowEval, noAudit); res.Status != "error" {
+	if res := d.continueRun("nope", "x", continueFallback{}, allowEval, noAudit); res.Status != "error" {
 		t.Fatalf("want error for unknown run, got %q", res.Status)
 	}
 }

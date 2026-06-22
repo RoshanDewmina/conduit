@@ -333,6 +333,116 @@ public struct AgentArtifactEvent: Codable, Sendable, Hashable {
     }
 }
 
+/// Lifecycle state of a Claude Code (or other vendor) session observed on the
+/// host, as reported by `agent.sessions.list`. Distinct from `ChatConversation.Status`,
+/// which models a Lancer-dispatched run, not an arbitrary host-side session.
+public enum ObservedSessionState: String, Codable, Sendable {
+    case working
+    case waitingForInput
+    case idle
+    case completed
+    case recentlyActive
+    case historical
+    case unknown
+}
+
+/// Where a session's transcript comes from / how much Lancer can do with it.
+/// `lancerManaged` sessions were dispatched by Lancer (full control: stop/continue).
+/// `providerManaged` sessions are running in the vendor CLI's own session store but
+/// not started by Lancer (read-only watch). `transcriptObserved` sessions are
+/// inferred purely from on-disk transcript files (read-only, least live).
+public enum SessionSource: String, Codable, Sendable {
+    case lancerManaged
+    case providerManaged
+    case transcriptObserved
+}
+
+/// A read-only list-item describing a Claude Code (or other vendor) session
+/// discovered on the host. Returned by `agent.sessions.list`.
+public struct ObservedSession: Codable, Sendable, Identifiable, Hashable {
+    public let sessionId: String
+    public let provider: String
+    public let title: String
+    public let cwd: String
+    public let state: ObservedSessionState
+    public let source: SessionSource
+    public let lastActivity: Date
+    public let messageCount: Int
+
+    public var id: String { sessionId }
+
+    public init(
+        sessionId: String,
+        provider: String,
+        title: String,
+        cwd: String,
+        state: ObservedSessionState,
+        source: SessionSource,
+        lastActivity: Date,
+        messageCount: Int
+    ) {
+        self.sessionId = sessionId
+        self.provider = provider
+        self.title = title
+        self.cwd = cwd
+        self.state = state
+        self.source = source
+        self.lastActivity = lastActivity
+        self.messageCount = messageCount
+    }
+}
+
+/// Params for `agent.sessions.list`. No filters in Phase 1 — the daemon returns
+/// every session it knows about for the host.
+public struct SessionsListParams: Codable, Sendable {
+    public init() {}
+}
+
+public struct SessionsListResult: Codable, Sendable {
+    public let sessions: [ObservedSession]
+}
+
+/// One transcript turn returned by `agent.sessions.transcript`.
+public struct SessionMessage: Codable, Sendable, Hashable {
+    public enum Role: String, Codable, Sendable {
+        case user
+        case assistant
+        case toolCall
+        case toolResult
+        case system
+        case unknown
+    }
+
+    public let role: Role
+    public let text: String
+    public let toolName: String?
+    public let timestamp: Date?
+
+    public init(role: Role, text: String, toolName: String? = nil, timestamp: Date? = nil) {
+        self.role = role
+        self.text = text
+        self.toolName = toolName
+        self.timestamp = timestamp
+    }
+}
+
+/// Params for `agent.sessions.transcript`.
+public struct SessionsTranscriptParams: Codable, Sendable {
+    public let sessionId: String
+    public let sinceLine: Int
+
+    public init(sessionId: String, sinceLine: Int) {
+        self.sessionId = sessionId
+        self.sinceLine = sinceLine
+    }
+}
+
+public struct SessionsTranscriptResult: Codable, Sendable {
+    public let messages: [SessionMessage]
+    public let nextLine: Int
+    public let resetRequired: Bool
+}
+
 public struct SessionDiscoveredParams: Codable, Sendable {
     public let sessionId: String
     public let tmuxName: String?
@@ -433,6 +543,7 @@ public enum DaemonRPCResponse: Sendable {
     case doctorReport(DoctorReport)
     case secretsList(SecretsListResult)
     case hostHealth(HostHealth)
+    case driftReport(DriftReport)
     case pong
     case ok
     case error(code: Int, message: String)
@@ -451,6 +562,13 @@ public enum DaemonRPCResponse: Sendable {
         guard JSONSerialization.isValidJSONObject(result),
               let rd = try? JSONSerialization.data(withJSONObject: result) else { return .unknown }
         let dec = JSONDecoder()
+        // Drift first: its required root+scanned+findings keys are distinctive,
+        // so this never shadows the looser-typed results below.
+        if dict["result"] is [String: Any],
+           let drift = try? dec.decode(DriftReport.self, from: rd),
+           (result as? [String: Any])?["findings"] != nil {
+            return .driftReport(drift)
+        }
         if let snap = try? dec.decode(AgentStatusSnapshot.self, from: rd) { return .agentStatus(snap) }
         if let t = try? dec.decode(AuditTailResult.self, from: rd) { return .auditTail(t) }
         if let v = try? dec.decode(AuditVerification.self, from: rd) { return .auditVerification(v) }

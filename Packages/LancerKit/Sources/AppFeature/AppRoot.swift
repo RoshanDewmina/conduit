@@ -167,6 +167,7 @@ public struct AppRoot: View {
     @State private var showingQuotaGuard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage(LancerAppearance.storageKey) private var colorSchemePref: String = LancerAppearance.light.rawValue
+    @AppStorage(LancerAccentTheme.storageKey) private var accentPref: String = LancerAccentTheme.terracotta.rawValue
     @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -284,10 +285,10 @@ public struct AppRoot: View {
                 .lancerTokens(appearance: appearance)
                 .preferredColorScheme(preferredScheme)
         } else {
-            mainBody.environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+            mainBody.environment(\.lancerTokens, tokens)
         }
         #else
-        mainBody.environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+        mainBody.environment(\.lancerTokens, tokens)
         #endif
     }
 
@@ -573,7 +574,7 @@ public struct AppRoot: View {
         .sheet(isPresented: $showingRelayFileBrowser) {
             if let bridge = e2eBridge {
                 RelayFileBrowserView(bridge: bridge)
-                    .environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+                    .environment(\.lancerTokens, tokens)
                     .preferredColorScheme(preferredScheme)
             }
         }
@@ -586,7 +587,7 @@ public struct AppRoot: View {
                     credentialProvider: { .password(password) }
                 )
             }
-            .environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+            .environment(\.lancerTokens, tokens)
             .preferredColorScheme(preferredScheme)
         }
         .sheet(item: $drawerRoute) { route in
@@ -602,7 +603,7 @@ public struct AppRoot: View {
                 PasswordPromptView(host: vm.host) { password in
                     Task { await vm.retryWithNewPassword(password) }
                 }
-                .environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+                .environment(\.lancerTokens, tokens)
                 .preferredColorScheme(preferredScheme)
             }
         }
@@ -931,10 +932,15 @@ public struct AppRoot: View {
     /// under a new runId, registers it for streaming, and returns the ActiveChatRun.
     /// Returns nil if no live transport can reach the host.
     private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String) async -> ActiveChatRun? {
+        // Continue from the conversation's persisted context (agent/cwd/model) as a
+        // fallback, so a reopened chat still continues after the daemon forgot the
+        // run (process ended or daemon restarted) instead of "no longer has this run".
         // Prefer the SSH slot that owns this host.
         if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
            let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
-            guard let result = try? await slot.channel.continueRun(runId: lastRunID, prompt: prompt),
+            guard let result = try? await slot.channel.continueRun(
+                runId: lastRunID, prompt: prompt,
+                agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
                   result.status == "started", let newRunID = result.runId else { return nil }
             runOutputStore.register(runId: newRunID)
             return ActiveChatRun(runId: newRunID, channel: slot.channel,
@@ -942,7 +948,9 @@ public struct AppRoot: View {
         }
         // Fall back to the relay bridge (relay-paired host).
         if let bridge = e2eBridge, relayBridgeIsActive {
-            guard let result = try? await bridge.sendRunContinue(runId: lastRunID, prompt: prompt),
+            guard let result = try? await bridge.sendRunContinue(
+                runId: lastRunID, prompt: prompt,
+                agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
                   result.status == "started", let newRunID = result.runId else { return nil }
             runOutputStore.register(runId: newRunID)
             let channel = RelayRunControl(
@@ -1047,11 +1055,20 @@ public struct AppRoot: View {
         }
     }
 
-    // Derive shell tokens from the resolved scheme directly. Reading
-    // @Environment(\.lancerTokens) here would resolve ABOVE AppRoot — where the
-    // app sets the token environment (see body) — and yield the default LIGHT
-    // palette, which leaked through as a white status-bar strip on inset pages.
-    private var t: LancerTokens { effectiveScheme == .dark ? .dark : .light }
+    // The single source of truth for the app's tokens: the resolved light/dark
+    // palette with the user-selected accent applied. Every `.environment(\.lancerTokens,…)`
+    // injection point and the local `t` helper read this, so changing the accent in
+    // Settings re-themes the whole app.
+    private var tokens: LancerTokens {
+        let base = effectiveScheme == .dark ? LancerTokens.dark : .light
+        let theme = LancerAccentTheme(rawValue: accentPref) ?? .terracotta
+        return base.withAccent(theme, scheme: effectiveScheme == .dark ? .dark : .light)
+    }
+
+    // Derive shell tokens directly (reading @Environment(\.lancerTokens) here would
+    // resolve ABOVE AppRoot and yield the default palette, leaking a white status-bar
+    // strip on inset pages).
+    private var t: LancerTokens { tokens }
 
     private func openDrawer() {
         Task { await sidebarState.loadRecent() }
@@ -1198,7 +1215,7 @@ public struct AppRoot: View {
                         sidebarState.navigate(to: .machines)
                     }
                 )
-                    .environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+                    .environment(\.lancerTokens, tokens)
             }
         }
     }
@@ -1227,7 +1244,7 @@ public struct AppRoot: View {
                         sidebarState.navigate(to: .machines)
                     }
                 )
-                    .environment(\.lancerTokens, effectiveScheme == .dark ? .dark : .light)
+                    .environment(\.lancerTokens, tokens)
             }
         }
     }
@@ -1372,13 +1389,20 @@ public struct AppRoot: View {
                 }
             )
             .id(id)
-            .environment(\.lancerTokens, .dark)
         case .needsAttention:
             inboxDestination(env: env)
         case .machines:
             fleetDestination(env: env)
         case .settings:
             settingsDestination(env: env)
+        case .observedSession(let sessionId, let title, let hostName):
+            ObservedSessionView(
+                sessionId: sessionId,
+                title: title,
+                hostName: hostName,
+                loadTranscript: { sinceLine in await fetchObservedTranscript(sessionId: sessionId, sinceLine: sinceLine) },
+                onBack: { sidebarState.navigate(to: .home) }
+            )
         }
     }
 
@@ -1398,8 +1422,47 @@ public struct AppRoot: View {
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
             onOpenMachines: { sidebarState.navigate(to: .machines) },
-            onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) }
+            onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
+            onOpenObservedSession: { session in
+                sidebarState.navigate(to: .observedSession(
+                    sessionId: session.sessionId,
+                    title: session.title,
+                    hostName: relayHostName ?? "Mac"
+                ))
+            },
+            loadSessions: { await loadObservedSessions() }
         )
+    }
+
+    /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
+    /// "Sessions on this Mac" section. Mirrors `loadAgentCommands`: prefers a
+    /// connected SSH slot's daemon channel, falls back to the relay bridge.
+    /// Read-only — Phase 1 has no send/stop control over these.
+    private func loadObservedSessions() async -> [ObservedSession] {
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first,
+           let sessions = try? await slot.channel.listSessions() {
+            return sessions
+        }
+        if let bridge = e2eBridge, relayBridgeIsActive {
+            return (try? await bridge.relayListSessions()) ?? []
+        }
+        return []
+    }
+
+    /// Fetches transcript turns for an observed session, using the same
+    /// transport-selection order as `loadObservedSessions`.
+    private func fetchObservedTranscript(sessionId: String, sinceLine: Int) async -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool) {
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first,
+           let result = try? await slot.channel.fetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
+            return result
+        }
+        if let bridge = e2eBridge, relayBridgeIsActive,
+           let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
+            return result
+        }
+        return ([], 0, false)
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {

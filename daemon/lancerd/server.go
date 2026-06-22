@@ -374,8 +374,8 @@ func (s *server) runDispatch(p dispatchParams) dispatchResult {
 
 // runContinue continues an existing run with a new prompt (used by the SSH RPC and
 // the E2E relay), re-passing the policy + budget gates via the dispatcher.
-func (s *server) runContinue(runID, prompt string) dispatchResult {
-	return s.dispatcher.continueRun(runID, prompt, s.policyEffect, s.auditEntry)
+func (s *server) runContinue(runID, prompt string, fb continueFallback) dispatchResult {
+	return s.dispatcher.continueRun(runID, prompt, fb, s.policyEffect, s.auditEntry)
 }
 
 // applyRunControl applies a relay-delivered run-control action to a dispatched
@@ -486,6 +486,7 @@ func runServeAttach(conn net.Conn) error {
 
 func runServeLegacy() error {
 	s := newServer(serverHome())
+	ensureClaudeHookWiredOnBoot() // plain dispatches launch immediately (hook still gates tools)
 	s.startScheduler(make(chan struct{}))
 
 	sockPath, err := socketPath()
@@ -554,6 +555,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 
 	case "agent.doctor":
 		s.writeResult(msg.ID, s.collectDoctorReport())
+
+	case "agent.pair.begin":
+		var params pairBeginParams
+		if len(msg.Params) > 0 {
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				s.writeError(msg.ID, -32602, "invalid params")
+				return
+			}
+		}
+		result, err := beginPairing(params)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
 
 	case "agent.audit.tail":
 		var params struct {
@@ -650,6 +666,49 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		health := collectHostHealth()
 		s.writeResult(msg.ID, health)
 
+	case "agent.drift.scan":
+		var params struct {
+			Root string `json:"root"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		if params.Root == "" {
+			params.Root, _ = os.Getwd()
+		}
+		report, err := scanDrift(params.Root)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, report)
+
+	case "agent.sessions.list":
+		var params struct {
+			HomeDir string `json:"homeDir,omitempty"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		sessions, err := buildSessionIndex(params.HomeDir)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]interface{}{"sessions": sessions})
+
+	case "agent.sessions.transcript":
+		var params struct {
+			SessionID string `json:"sessionId"`
+			SinceLine int    `json:"sinceLine"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil || params.SessionID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := loadSessionTranscript("", params.SessionID, params.SinceLine)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
 	case "lancer.device.register":
 		var info registeredDevice
 		if err := json.Unmarshal(msg.Params, &info); err != nil {
@@ -695,14 +754,19 @@ func (s *server) handleMessage(msg *rpcMessage) {
 
 	case "agent.run.continue":
 		var p struct {
-			RunID  string `json:"runId"`
-			Prompt string `json:"prompt"`
+			RunID     string  `json:"runId"`
+			Prompt    string  `json:"prompt"`
+			Agent     string  `json:"agent"`
+			CWD       string  `json:"cwd"`
+			Model     string  `json:"model"`
+			BudgetUSD float64 `json:"budgetUSD"`
 		}
 		if err := json.Unmarshal(msg.Params, &p); err != nil || p.RunID == "" {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		s.writeResult(msg.ID, s.runContinue(p.RunID, p.Prompt))
+		fb := continueFallback{Agent: p.Agent, CWD: p.CWD, Model: p.Model, BudgetUSD: p.BudgetUSD}
+		s.writeResult(msg.ID, s.runContinue(p.RunID, p.Prompt, fb))
 
 	case "agent.cancel":
 		var p struct {
