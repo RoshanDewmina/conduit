@@ -2,21 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** When a user types `claude` (or `codex`) in their host Terminal, the session is launched inside a Conduit-managed tmux container with hooks active from byte zero, registered with `conduitd`, and surfaced in the iOS app as a live, governable session they can attach to and continue.
+**Goal:** When a user types `claude` (or `codex`) in their host Terminal, the session is launched inside a Lancer-managed tmux container with hooks active from byte zero, registered with `lancerd`, and surfaced in the iOS app as a live, governable session they can attach to and continue.
 
-**Architecture:** A three-layer host shim (PATH binary + shell function + `CONDUIT_*` env) intercepts the agent command and hands off to `conduitd` over its existing Unix socket. A new `ShimController` in `conduitd` registers the session, launches the real agent inside `tmux new-session -s conduit-<id>`, and emits `agentStatus` over the relay. The iOS app reuses the existing `TmuxClient` attach path and `AgentResumeBuilder` to open the live block terminal. A read-only **transcript watcher** polls `~/.claude/projects/**` to mirror pre-existing *bare* sessions (started without the shim) and offers a "Take over" action.
+**Architecture:** A three-layer host shim (PATH binary + shell function + `LANCER_*` env) intercepts the agent command and hands off to `lancerd` over its existing Unix socket. A new `ShimController` in `lancerd` registers the session, launches the real agent inside `tmux new-session -s lancer-<id>`, and emits `agentStatus` over the relay. The iOS app reuses the existing `TmuxClient` attach path and `AgentResumeBuilder` to open the live block terminal. A read-only **transcript watcher** polls `~/.claude/projects/**` to mirror pre-existing *bare* sessions (started without the shim) and offers a "Take over" action.
 
-**Tech Stack:** Go (conduitd, `daemon/conduitd/`), POSIX sh / zsh / bash / fish (shim shell integration), Swift 6 strict-concurrency (ConduitKit, `Packages/ConduitKit/Sources/`), tmux ≥ 3.0.
+**Tech Stack:** Go (lancerd, `daemon/lancerd/`), POSIX sh / zsh / bash / fish (shim shell integration), Swift 6 strict-concurrency (LancerKit, `Packages/LancerKit/Sources/`), tmux ≥ 3.0.
 
 ## Global Constraints
 
-- **Shim must fail open.** If `conduitd` is unreachable, the shim execs the real binary unmodified (zero added latency on the failure path). Verbatim rule: a broken Conduit install must never prevent `claude` from running.
+- **Shim must fail open.** If `lancerd` is unreachable, the shim execs the real binary unmodified (zero added latency on the failure path). Verbatim rule: a broken Lancer install must never prevent `claude` from running.
 - **Production paths keep the TOFU host-key prompt** (debug harnesses may auto-trust; the shim/daemon must not).
 - **No second byte source.** The iOS side uses the single unified PTY; never spawn a parallel `SSHShell` (agent-contract.md §5).
-- **tmux session names** must pass `isValidTmuxName` (alphanumeric, `-`, `_`, `.` only) — already enforced in `TmuxClient.swift:70`. Daemon-side names use the same charset: `conduit-<8hexid>`.
-- **Go:** no cobra; extend the hand-rolled `switch os.Args[1]` in `daemon/conduitd/main.go:19`. Tests use the standard `testing` package; run `cd daemon/conduitd && go test ./...`.
-- **Swift app-target build is authoritative** (`mcp__XcodeBuildMCP__build_sim`); `swift build` in `Packages/ConduitKit` is the fast inner loop but skips `#if os(iOS)` code.
-- **Hooks are file-based** (`~/.claude/settings.json` PreToolUse) — already active for ANY `claude` once `conduitd install` ran. The shim's job is session *registration + tmux containment*, not approval governance (that already works for bare sessions).
+- **tmux session names** must pass `isValidTmuxName` (alphanumeric, `-`, `_`, `.` only) — already enforced in `TmuxClient.swift:70`. Daemon-side names use the same charset: `lancer-<8hexid>`.
+- **Go:** no cobra; extend the hand-rolled `switch os.Args[1]` in `daemon/lancerd/main.go:19`. Tests use the standard `testing` package; run `cd daemon/lancerd && go test ./...`.
+- **Swift app-target build is authoritative** (`mcp__XcodeBuildMCP__build_sim`); `swift build` in `Packages/LancerKit` is the fast inner loop but skips `#if os(iOS)` code.
+- **Hooks are file-based** (`~/.claude/settings.json` PreToolUse) — already active for ANY `claude` once `lancerd install` ran. The shim's job is session *registration + tmux containment*, not approval governance (that already works for bare sessions).
 - **Do NOT `git commit` unless the user explicitly asks** (overrides the per-task commit steps below — leave commits staged-and-described; the owner commits).
 
 ---
@@ -25,35 +25,35 @@
 
 | File | New/Mod | Responsibility |
 |---|---|---|
-| `daemon/conduitd/session_registry.go` | New | In-memory `sessionRegistry`: `register/unregister/get/list` shim-spawned sessions keyed by id. |
-| `daemon/conduitd/session_registry_test.go` | New | Unit tests for registry concurrency + lifecycle. |
-| `daemon/conduitd/tmux_session.go` | New | `tmuxLauncher` (a `launchFunc`) that spawns the agent inside `tmux new-session -d` and streams output via `capture-pane` polling. |
-| `daemon/conduitd/tmux_session_test.go` | New | Tests with a fake tmux binary on PATH. |
-| `daemon/conduitd/shim.go` | New | `runShim()` subcommand + `ShimSpawnEvent` JSON type + `handleShimSpawn()` daemon-side handler. |
-| `daemon/conduitd/shim_test.go` | New | Round-trip test: spawn event over socket → registry entry + tmux launch (faked). |
-| `daemon/conduitd/main.go` | Mod (`:19`, `:119`) | Add `case "shim":` → `runShim(os.Args[2:])`; add usage line. |
-| `daemon/conduitd/conn.go` | Mod (`:14-41`) | Recognize the shim raw-JSON event (same envelope family as `agent-hook`). |
-| `daemon/conduitd/resident.go` | Mod (`:91-109`) | Route a shim spawn event to `handleShimSpawn`. |
-| `daemon/conduitd/e2e_router.go` | Mod (`:64-81`) | Wire the currently-unused `sendStatusUpdate()` so shim sessions emit `agentStatus`. |
-| `daemon/conduitd/doctor.go` | Mod (`:71-86`) | Add `checkShimWrapper()` (PATH `claude` resolves to shim?). |
-| `daemon/conduitd/transcript_watcher.go` | New | Poll `~/.claude/projects/**` for new/updated `<sessionId>.jsonl`; expose a read-only mirror list + "bare vs managed" classification. |
-| `daemon/conduitd/transcript_watcher_test.go` | New | Tests over a temp projects dir. |
-| `daemon/conduitd/install.sh` | Mod | Install shim binary + shell integration + env var; idempotent. |
-| `daemon/conduitd/shim/conduit-shim.sh` | New | Reference shell-integration snippet sourced into rc files (function + env). |
-| `Packages/ConduitKit/Sources/ConduitCore/Session.swift` | Mod (`:3-17`) | Add `origin: SessionOrigin` (`.appInitiated`/`.shimDiscovered`/`.bareMirror`). |
-| `Packages/ConduitKit/Sources/ConduitCore/ConduitDProtocol.swift` | Mod (`:272`) | Add `DaemonEvent.sessionDiscovered(SessionDiscoveredParams)`. |
-| `Packages/ConduitKit/Sources/AppFeature/SessionDiscovery.swift` | New | Consumes `sessionDiscovered` events, constructs a `FleetStore.Slot`, calls `fleetStore.add`. |
-| `Packages/ConduitKit/Sources/AppFeature/SessionDiscovery+Test.swift` | Test | Verifies a discovered session becomes a fleet slot in `.shimDiscovered` origin. |
+| `daemon/lancerd/session_registry.go` | New | In-memory `sessionRegistry`: `register/unregister/get/list` shim-spawned sessions keyed by id. |
+| `daemon/lancerd/session_registry_test.go` | New | Unit tests for registry concurrency + lifecycle. |
+| `daemon/lancerd/tmux_session.go` | New | `tmuxLauncher` (a `launchFunc`) that spawns the agent inside `tmux new-session -d` and streams output via `capture-pane` polling. |
+| `daemon/lancerd/tmux_session_test.go` | New | Tests with a fake tmux binary on PATH. |
+| `daemon/lancerd/shim.go` | New | `runShim()` subcommand + `ShimSpawnEvent` JSON type + `handleShimSpawn()` daemon-side handler. |
+| `daemon/lancerd/shim_test.go` | New | Round-trip test: spawn event over socket → registry entry + tmux launch (faked). |
+| `daemon/lancerd/main.go` | Mod (`:19`, `:119`) | Add `case "shim":` → `runShim(os.Args[2:])`; add usage line. |
+| `daemon/lancerd/conn.go` | Mod (`:14-41`) | Recognize the shim raw-JSON event (same envelope family as `agent-hook`). |
+| `daemon/lancerd/resident.go` | Mod (`:91-109`) | Route a shim spawn event to `handleShimSpawn`. |
+| `daemon/lancerd/e2e_router.go` | Mod (`:64-81`) | Wire the currently-unused `sendStatusUpdate()` so shim sessions emit `agentStatus`. |
+| `daemon/lancerd/doctor.go` | Mod (`:71-86`) | Add `checkShimWrapper()` (PATH `claude` resolves to shim?). |
+| `daemon/lancerd/transcript_watcher.go` | New | Poll `~/.claude/projects/**` for new/updated `<sessionId>.jsonl`; expose a read-only mirror list + "bare vs managed" classification. |
+| `daemon/lancerd/transcript_watcher_test.go` | New | Tests over a temp projects dir. |
+| `daemon/lancerd/install.sh` | Mod | Install shim binary + shell integration + env var; idempotent. |
+| `daemon/lancerd/shim/lancer-shim.sh` | New | Reference shell-integration snippet sourced into rc files (function + env). |
+| `Packages/LancerKit/Sources/LancerCore/Session.swift` | Mod (`:3-17`) | Add `origin: SessionOrigin` (`.appInitiated`/`.shimDiscovered`/`.bareMirror`). |
+| `Packages/LancerKit/Sources/LancerCore/LancerDProtocol.swift` | Mod (`:272`) | Add `DaemonEvent.sessionDiscovered(SessionDiscoveredParams)`. |
+| `Packages/LancerKit/Sources/AppFeature/SessionDiscovery.swift` | New | Consumes `sessionDiscovered` events, constructs a `FleetStore.Slot`, calls `fleetStore.add`. |
+| `Packages/LancerKit/Sources/AppFeature/SessionDiscovery+Test.swift` | Test | Verifies a discovered session becomes a fleet slot in `.shimDiscovered` origin. |
 
-> **Parallelization note (for opencode dispatch):** Tasks 1–6 are conduitd-Go and touch disjoint new files except the small shared edits to `main.go`/`resident.go`/`e2e_router.go`/`doctor.go` — assign the shared-file edits to ONE agent (Task 7 "daemon wiring") to avoid collisions, or run Go tasks sequentially on one branch. Task 9 (iOS) and Task 8 (transcript) are independent and can run on separate worktrees in parallel with the Go work.
+> **Parallelization note (for opencode dispatch):** Tasks 1–6 are lancerd-Go and touch disjoint new files except the small shared edits to `main.go`/`resident.go`/`e2e_router.go`/`doctor.go` — assign the shared-file edits to ONE agent (Task 7 "daemon wiring") to avoid collisions, or run Go tasks sequentially on one branch. Task 9 (iOS) and Task 8 (transcript) are independent and can run on separate worktrees in parallel with the Go work.
 
 ---
 
-## Task 1: conduitd session registry
+## Task 1: lancerd session registry
 
 **Files:**
-- Create: `daemon/conduitd/session_registry.go`
-- Test: `daemon/conduitd/session_registry_test.go`
+- Create: `daemon/lancerd/session_registry.go`
+- Test: `daemon/lancerd/session_registry_test.go`
 
 **Interfaces:**
 - Produces:
@@ -71,12 +71,12 @@ import "testing"
 
 func TestSessionRegistryLifecycle(t *testing.T) {
 	r := newSessionRegistry()
-	r.register(ShimSession{ID: "abc123", Agent: "claudeCode", TmuxName: "conduit-abc123", Status: "running"})
+	r.register(ShimSession{ID: "abc123", Agent: "claudeCode", TmuxName: "lancer-abc123", Status: "running"})
 	if r.count() != 1 {
 		t.Fatalf("count = %d, want 1", r.count())
 	}
 	got, ok := r.get("abc123")
-	if !ok || got.TmuxName != "conduit-abc123" {
+	if !ok || got.TmuxName != "lancer-abc123" {
 		t.Fatalf("get = %+v ok=%v", got, ok)
 	}
 	r.unregister("abc123")
@@ -88,7 +88,7 @@ func TestSessionRegistryLifecycle(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestSessionRegistryLifecycle ./...`
+Run: `cd daemon/lancerd && go test -run TestSessionRegistryLifecycle ./...`
 Expected: FAIL — `undefined: newSessionRegistry`.
 
 - [ ] **Step 3: Implement the registry**
@@ -161,18 +161,18 @@ func (r *sessionRegistry) count() int {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run TestSessionRegistryLifecycle ./...`
+Run: `cd daemon/lancerd && go test -run TestSessionRegistryLifecycle ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Add the registry to the server struct**
 
-In `daemon/conduitd/server.go`, add a `sessions *sessionRegistry` field to the `server` struct and initialize it in `newServer()` with `sessions: newSessionRegistry()`. (Find the struct literal in `newServer`; add the field assignment.)
+In `daemon/lancerd/server.go`, add a `sessions *sessionRegistry` field to the `server` struct and initialize it in `newServer()` with `sessions: newSessionRegistry()`. (Find the struct literal in `newServer`; add the field assignment.)
 
 - [ ] **Step 6: Commit (stage only — owner commits)**
 
 ```bash
-git add daemon/conduitd/session_registry.go daemon/conduitd/session_registry_test.go daemon/conduitd/server.go
-git commit -m "feat(conduitd): add in-memory shim session registry"
+git add daemon/lancerd/session_registry.go daemon/lancerd/session_registry_test.go daemon/lancerd/server.go
+git commit -m "feat(lancerd): add in-memory shim session registry"
 ```
 
 ---
@@ -180,8 +180,8 @@ git commit -m "feat(conduitd): add in-memory shim session registry"
 ## Task 2: tmux launcher
 
 **Files:**
-- Create: `daemon/conduitd/tmux_session.go`
-- Test: `daemon/conduitd/tmux_session_test.go`
+- Create: `daemon/lancerd/tmux_session.go`
+- Test: `daemon/lancerd/tmux_session_test.go`
 
 **Interfaces:**
 - Consumes: the existing `launchFunc` signature `func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error)` (`dispatch.go:95`) and `emitFunc` (`dispatch.go:90`).
@@ -215,7 +215,7 @@ func writeFakeTmux(t *testing.T) string {
 
 func TestTmuxLauncherStartsDetachedSession(t *testing.T) {
 	dir := writeFakeTmux(t)
-	launch := tmuxLauncher("conduit-test01")
+	launch := tmuxLauncher("lancer-test01")
 	var statuses []string
 	emit := func(method string, params any) {
 		if method == "agent.run.status" {
@@ -227,7 +227,7 @@ func TestTmuxLauncherStartsDetachedSession(t *testing.T) {
 		t.Fatalf("launch: %v", err)
 	}
 	log, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
-	if !strings.Contains(string(log), "new-session") || !strings.Contains(string(log), "conduit-test01") {
+	if !strings.Contains(string(log), "new-session") || !strings.Contains(string(log), "lancer-test01") {
 		t.Fatalf("tmux not invoked with new-session/name: %q", log)
 	}
 }
@@ -235,7 +235,7 @@ func TestTmuxLauncherStartsDetachedSession(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestTmuxLauncher ./...`
+Run: `cd daemon/lancerd && go test -run TestTmuxLauncher ./...`
 Expected: FAIL — `undefined: tmuxLauncher`.
 
 - [ ] **Step 3: Implement `tmuxLauncher`**
@@ -306,14 +306,14 @@ func pollTmuxPane(ctx context.Context, tmuxName, runID string, emit emitFunc) {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run TestTmuxLauncher ./...`
+Run: `cd daemon/lancerd && go test -run TestTmuxLauncher ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/tmux_session.go daemon/conduitd/tmux_session_test.go
-git commit -m "feat(conduitd): tmux-container launcher with capture-pane streaming"
+git add daemon/lancerd/tmux_session.go daemon/lancerd/tmux_session_test.go
+git commit -m "feat(lancerd): tmux-container launcher with capture-pane streaming"
 ```
 
 ---
@@ -321,18 +321,18 @@ git commit -m "feat(conduitd): tmux-container launcher with capture-pane streami
 ## Task 3: shim spawn-intent IPC (subcommand + handler)
 
 **Files:**
-- Create: `daemon/conduitd/shim.go`
-- Test: `daemon/conduitd/shim_test.go`
-- Modify: `daemon/conduitd/main.go:19,119`, `daemon/conduitd/conn.go:14-41`, `daemon/conduitd/resident.go:91-109`
+- Create: `daemon/lancerd/shim.go`
+- Test: `daemon/lancerd/shim_test.go`
+- Modify: `daemon/lancerd/main.go:19,119`, `daemon/lancerd/conn.go:14-41`, `daemon/lancerd/resident.go:91-109`
 
 **Interfaces:**
 - Produces:
-  - `type ShimSpawnEvent struct { Kind string `json:"conduitKind"`; Agent, CWD string; Argv []string }` (`Kind == "shim.spawn"` discriminates it from an `ApprovalEvent` on the same raw-JSON socket path).
+  - `type ShimSpawnEvent struct { Kind string `json:"lancerKind"`; Agent, CWD string; Argv []string }` (`Kind == "shim.spawn"` discriminates it from an `ApprovalEvent` on the same raw-JSON socket path).
   - `type ShimSpawnReply struct { Action string `json:"action"`; TmuxName string `json:"tmuxName,omitempty"`; Reason string `json:"reason,omitempty"` }` — `Action` is `"attached"` (daemon launched in tmux; shim should exit 0) or `"passthrough"` (shim must exec the real binary).
   - `func runShim(args []string) error` — the client side run on the host.
   - `func (s *server) handleShimSpawn(ev ShimSpawnEvent) ShimSpawnReply` — daemon side.
 
-**Background (verified):** The socket at `~/.conduit/conduitd.sock` carries two protocols distinguished by first byte (`conn.go:14-41`): raw JSON (`{`) for `agent-hook`, length-prefixed framing for `serve`. The shim reuses the **raw-JSON** path. `resident.go:91-109` dispatches raw JSON → `handleHookWithNotify`; add a discriminator so `conduitKind=="shim.spawn"` routes to `handleShimSpawn` instead.
+**Background (verified):** The socket at `~/.lancer/lancerd.sock` carries two protocols distinguished by first byte (`conn.go:14-41`): raw JSON (`{`) for `agent-hook`, length-prefixed framing for `serve`. The shim reuses the **raw-JSON** path. `resident.go:91-109` dispatches raw JSON → `handleHookWithNotify`; add a discriminator so `lancerKind=="shim.spawn"` routes to `handleShimSpawn` instead.
 
 - [ ] **Step 1: Write the failing daemon-side test**
 
@@ -358,7 +358,7 @@ func TestHandleShimSpawnLaunchesTmux(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestHandleShimSpawn ./...`
+Run: `cd daemon/lancerd && go test -run TestHandleShimSpawn ./...`
 Expected: FAIL — `undefined: handleShimSpawn`.
 
 - [ ] **Step 3: Implement `handleShimSpawn` + `runShim` + `ShimSpawnEvent`**
@@ -377,7 +377,7 @@ import (
 )
 
 type ShimSpawnEvent struct {
-	Kind  string   `json:"conduitKind"` // "shim.spawn"
+	Kind  string   `json:"lancerKind"` // "shim.spawn"
 	Agent string   `json:"agent"`
 	CWD   string   `json:"cwd"`
 	Argv  []string `json:"argv"`
@@ -397,7 +397,7 @@ func newSessionID() string {
 
 func (s *server) handleShimSpawn(ev ShimSpawnEvent) ShimSpawnReply {
 	id := newSessionID()
-	tmuxName := "conduit-" + id
+	tmuxName := "lancer-" + id
 	agent := normalizeAgentSource(ev.Agent)
 
 	runID := id
@@ -418,7 +418,7 @@ func (s *server) handleShimSpawn(ev ShimSpawnEvent) ShimSpawnReply {
 // execs the real binary (fail-open).
 func runShim(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: conduitd shim <agent> [args...]")
+		return fmt.Errorf("usage: lancerd shim <agent> [args...]")
 	}
 	agent := args[0]
 	cwd, _ := os.Getwd()
@@ -429,7 +429,7 @@ func runShim(args []string) error {
 		return execRealBinary(agent, args) // fail-open
 	}
 	// Daemon launched it in tmux; print a hint and exit cleanly.
-	fmt.Fprintf(os.Stderr, "[conduit] session attached in tmux %s — open it in the Conduit app.\n", reply.TmuxName)
+	fmt.Fprintf(os.Stderr, "[lancer] session attached in tmux %s — open it in the Lancer app.\n", reply.TmuxName)
 	return nil
 }
 
@@ -450,17 +450,17 @@ func dialShimSpawn(ev ShimSpawnEvent) (ShimSpawnReply, error) {
 }
 
 // execRealBinary replaces the current process with the real agent binary found
-// AFTER the shim on PATH (resolve via $CONDUIT_REAL_<AGENT> or a `.real` suffix).
+// AFTER the shim on PATH (resolve via $LANCER_REAL_<AGENT> or a `.real` suffix).
 func execRealBinary(agent string, args []string) error {
-	real := os.Getenv("CONDUIT_REAL_" + agent) // set by installer; e.g. /opt/homebrew/bin/claude
+	real := os.Getenv("LANCER_REAL_" + agent) // set by installer; e.g. /opt/homebrew/bin/claude
 	if real == "" {
-		return fmt.Errorf("real %s binary not found (CONDUIT_REAL_%s unset)", agent, agent)
+		return fmt.Errorf("real %s binary not found (LANCER_REAL_%s unset)", agent, agent)
 	}
 	return syscall.Exec(real, args, os.Environ())
 }
 ```
 
-> Confirm `sockPath()` is the exported accessor in `paths.go:32` (the report cites `~/.conduit/conduitd.sock`). If it is unexported as `socketPath()`, match that name.
+> Confirm `sockPath()` is the exported accessor in `paths.go:32` (the report cites `~/.lancer/lancerd.sock`). If it is unexported as `socketPath()`, match that name.
 
 - [ ] **Step 4: Wire `main.go` and the socket dispatch**
 
@@ -468,56 +468,56 @@ In `main.go:19` switch, add:
 ```go
 	case "shim":
 		if err := runShim(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "conduitd shim:", err)
+			fmt.Fprintln(os.Stderr, "lancerd shim:", err)
 			os.Exit(1)
 		}
 ```
-Add to `usage()` (`:119`): `  conduitd shim <agent> ...  Intercept an agent launch and hand off to the daemon`.
+Add to `usage()` (`:119`): `  lancerd shim <agent> ...  Intercept an agent launch and hand off to the daemon`.
 
-In `resident.go:91-109` (raw-JSON branch), peek the decoded JSON: if `conduitKind == "shim.spawn"` decode as `ShimSpawnEvent` and reply with `handleShimSpawn`; else keep the existing `handleHookWithNotify` path. (The first-byte detection in `conn.go:14-41` already classifies raw JSON; the discriminator is the `conduitKind` field.)
+In `resident.go:91-109` (raw-JSON branch), peek the decoded JSON: if `lancerKind == "shim.spawn"` decode as `ShimSpawnEvent` and reply with `handleShimSpawn`; else keep the existing `handleHookWithNotify` path. (The first-byte detection in `conn.go:14-41` already classifies raw JSON; the discriminator is the `lancerKind` field.)
 
 - [ ] **Step 5: Run daemon-side test to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run 'TestHandleShimSpawn|TestSessionRegistry|TestTmuxLauncher' ./...`
+Run: `cd daemon/lancerd && go test -run 'TestHandleShimSpawn|TestSessionRegistry|TestTmuxLauncher' ./...`
 Expected: PASS.
 
 - [ ] **Step 6: Build the binary to confirm wiring compiles**
 
-Run: `cd daemon/conduitd && go build ./...`
+Run: `cd daemon/lancerd && go build ./...`
 Expected: no errors.
 
 - [ ] **Step 7: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/shim.go daemon/conduitd/shim_test.go daemon/conduitd/main.go daemon/conduitd/resident.go daemon/conduitd/conn.go
-git commit -m "feat(conduitd): shim spawn-intent subcommand + tmux handoff (fail-open)"
+git add daemon/lancerd/shim.go daemon/lancerd/shim_test.go daemon/lancerd/main.go daemon/lancerd/resident.go daemon/lancerd/conn.go
+git commit -m "feat(lancerd): shim spawn-intent subcommand + tmux handoff (fail-open)"
 ```
 
 ---
 
-## Task 4: conduit-shim binary install + shell integration
+## Task 4: lancer-shim binary install + shell integration
 
 **Files:**
-- Create: `daemon/conduitd/shim/conduit-shim.sh`
-- Modify: `daemon/conduitd/install.sh`
+- Create: `daemon/lancerd/shim/lancer-shim.sh`
+- Modify: `daemon/lancerd/install.sh`
 
 **Interfaces:**
-- Produces: a PATH entry `~/.conduit/bin/claude` (and `codex`) that execs `conduitd shim <agent> "$@"`; a shell function `claude()` sourced into rc files that shadows aliases; env vars `CONDUIT_CLAUDE_WRAPPER_SHIM=1` and `CONDUIT_REAL_claude=<resolved path>`.
+- Produces: a PATH entry `~/.lancer/bin/claude` (and `codex`) that execs `lancerd shim <agent> "$@"`; a shell function `claude()` sourced into rc files that shadows aliases; env vars `LANCER_CLAUDE_WRAPPER_SHIM=1` and `LANCER_REAL_claude=<resolved path>`.
 
 **Background (verified):** `install.sh` already installs the binary + launchd/systemd unit. The three-layer strategy (research doc §1) is required because PATH alone misses alias/function shadowing and non-interactive shells.
 
 - [ ] **Step 1: Author the shell-integration snippet**
 
-Create `daemon/conduitd/shim/conduit-shim.sh`:
+Create `daemon/lancerd/shim/lancer-shim.sh`:
 ```sh
-# Conduit shim — source me from ~/.zshrc / ~/.bashrc (managed block).
+# Lancer shim — source me from ~/.zshrc / ~/.bashrc (managed block).
 # Layer 2: shell function shadows aliases and PATH alike.
-export CONDUIT_CLAUDE_WRAPPER_SHIM=1
-: "${CONDUIT_REAL_claude:=$(command -v claude 2>/dev/null)}"
-export CONDUIT_REAL_claude
+export LANCER_CLAUDE_WRAPPER_SHIM=1
+: "${LANCER_REAL_claude:=$(command -v claude 2>/dev/null)}"
+export LANCER_REAL_claude
 claude() {
-  if [ -x "$HOME/.conduit/bin/claude" ]; then
-    "$HOME/.conduit/bin/claude" "$@"
+  if [ -x "$HOME/.lancer/bin/claude" ]; then
+    "$HOME/.lancer/bin/claude" "$@"
   else
     command claude "$@"
   fi
@@ -528,22 +528,22 @@ claude() {
 - [ ] **Step 2: Add the PATH shim + rc wiring to `install.sh`**
 
 Append an idempotent block to `install.sh` that:
-1. Writes `~/.conduit/bin/claude` (and `codex`) as:
+1. Writes `~/.lancer/bin/claude` (and `codex`) as:
    ```sh
    #!/bin/sh
-   exec "$CONDUITD_BIN" shim claude "$@"
+   exec "$LANCERD_BIN" shim claude "$@"
    ```
-   `chmod +x`. (`$CONDUITD_BIN` is the installed `~/.conduit/bin/conduitd`.)
-2. Resolves the real binary BEFORE inserting `~/.conduit/bin` on PATH, records it as `CONDUIT_REAL_claude` in `~/.conduit/shim.env`.
-3. Inserts a managed, marker-delimited block (`# >>> conduit shim >>>` / `# <<< conduit shim <<<`) into `~/.zshrc` and `~/.bashrc` that prepends `~/.conduit/bin` to PATH and sources `conduit-shim.sh`. Idempotent: skip if the marker already present.
+   `chmod +x`. (`$LANCERD_BIN` is the installed `~/.lancer/bin/lancerd`.)
+2. Resolves the real binary BEFORE inserting `~/.lancer/bin` on PATH, records it as `LANCER_REAL_claude` in `~/.lancer/shim.env`.
+3. Inserts a managed, marker-delimited block (`# >>> lancer shim >>>` / `# <<< lancer shim <<<`) into `~/.zshrc` and `~/.bashrc` that prepends `~/.lancer/bin` to PATH and sources `lancer-shim.sh`. Idempotent: skip if the marker already present.
 
 - [ ] **Step 3: Manual verification (host)**
 
 Run:
 ```bash
-bash daemon/conduitd/install.sh
+bash daemon/lancerd/install.sh
 exec "$SHELL" -l           # reload rc
-command -v claude          # should resolve to ~/.conduit/bin/claude OR hit the function
+command -v claude          # should resolve to ~/.lancer/bin/claude OR hit the function
 type claude                # zsh/bash: should show the function or the shim path
 ```
 Expected: `claude` resolves to the shim. With the daemon stopped, `claude --version` still works (fail-open passthrough).
@@ -551,7 +551,7 @@ Expected: `claude` resolves to the shim. With the daemon stopped, `claude --vers
 - [ ] **Step 4: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/shim/conduit-shim.sh daemon/conduitd/install.sh
+git add daemon/lancerd/shim/lancer-shim.sh daemon/lancerd/install.sh
 git commit -m "feat(installer): three-layer claude shim (PATH + function + env), fail-open"
 ```
 
@@ -560,7 +560,7 @@ git commit -m "feat(installer): three-layer claude shim (PATH + function + env),
 ## Task 5: shim-session status emission over relay
 
 **Files:**
-- Modify: `daemon/conduitd/e2e_router.go:64-81`, `daemon/conduitd/server.go` (add `emitShimStatus`)
+- Modify: `daemon/lancerd/e2e_router.go:64-81`, `daemon/lancerd/server.go` (add `emitShimStatus`)
 
 **Interfaces:**
 - Consumes: `e2eRouter.sendStatusUpdate(...)` (`e2e_router.go:64-81`) — currently defined but **never called** (verified).
@@ -582,7 +582,7 @@ func TestEmitShimStatusCountsSessions(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestEmitShimStatus ./...`
+Run: `cd daemon/lancerd && go test -run TestEmitShimStatus ./...`
 Expected: FAIL — `undefined: shimStatusData`.
 
 - [ ] **Step 3: Implement `shimStatusData` + `emitShimStatus`**
@@ -621,14 +621,14 @@ Match `sendStatusUpdate`'s real parameter list (`e2e_router.go:64`); adapt arg o
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run TestEmitShimStatus ./...`
+Run: `cd daemon/lancerd && go test -run TestEmitShimStatus ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/e2e_router.go daemon/conduitd/server.go
-git commit -m "feat(conduitd): emit agentStatus for shim sessions over relay"
+git add daemon/lancerd/e2e_router.go daemon/lancerd/server.go
+git commit -m "feat(lancerd): emit agentStatus for shim sessions over relay"
 ```
 
 ---
@@ -636,10 +636,10 @@ git commit -m "feat(conduitd): emit agentStatus for shim sessions over relay"
 ## Task 6: doctor — shim wrapper coverage check
 
 **Files:**
-- Modify: `daemon/conduitd/doctor.go:71-86`, `daemon/conduitd/doctor_test.go`
+- Modify: `daemon/lancerd/doctor.go:71-86`, `daemon/lancerd/doctor_test.go`
 
 **Interfaces:**
-- Produces: `func checkShimWrapper() checkResult` — `statusOK` if PATH `claude` resolves under `~/.conduit/bin`, `statusWarn` if the shim binary exists but PATH still points elsewhere, `statusFail` if not installed.
+- Produces: `func checkShimWrapper() checkResult` — `statusOK` if PATH `claude` resolves under `~/.lancer/bin`, `statusWarn` if the shim binary exists but PATH still points elsewhere, `statusFail` if not installed.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -655,7 +655,7 @@ func TestCheckShimWrapper_NotInstalled(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestCheckShimWrapper ./...`
+Run: `cd daemon/lancerd && go test -run TestCheckShimWrapper ./...`
 Expected: FAIL — `undefined: checkShimWrapper`.
 
 - [ ] **Step 3: Implement, following `checkAgentCLIs` (`doctor.go:189`) and `checkHooks` (`doctor.go:224`)**
@@ -667,7 +667,7 @@ func checkShimWrapper() checkResult {
 		return checkResult{name: "shim wrapper", status: statusFail, detail: "claude not on PATH"}
 	}
 	home, _ := os.UserHomeDir()
-	if strings.HasPrefix(p, filepath.Join(home, ".conduit", "bin")) {
+	if strings.HasPrefix(p, filepath.Join(home, ".lancer", "bin")) {
 		return checkResult{name: "shim wrapper", status: statusOK, detail: p}
 	}
 	return checkResult{name: "shim wrapper", status: statusWarn, detail: "claude resolves to " + p + " (shim not first on PATH)"}
@@ -677,14 +677,14 @@ Add `checkShimWrapper()` to the slice built in `collectDoctorResults()` (`doctor
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run 'TestCheckShimWrapper|TestDoctor' ./...`
+Run: `cd daemon/lancerd && go test -run 'TestCheckShimWrapper|TestDoctor' ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/doctor.go daemon/conduitd/doctor_test.go
-git commit -m "feat(conduitd): doctor checks shim wrapper PATH coverage"
+git add daemon/lancerd/doctor.go daemon/lancerd/doctor_test.go
+git commit -m "feat(lancerd): doctor checks shim wrapper PATH coverage"
 ```
 
 ---
@@ -695,39 +695,39 @@ git commit -m "feat(conduitd): doctor checks shim wrapper PATH coverage"
 
 - [ ] **Step 1: Full daemon test + vet**
 
-Run: `cd daemon/conduitd && go vet ./... && go test ./...`
+Run: `cd daemon/lancerd && go vet ./... && go test ./...`
 Expected: all PASS, no vet errors.
 
 - [ ] **Step 2: Cross-build for the host targets the installer ships**
 
-Run: `cd daemon/conduitd && GOOS=darwin GOARCH=arm64 go build -o /tmp/conduitd-darwin ./... && echo OK`
+Run: `cd daemon/lancerd && GOOS=darwin GOARCH=arm64 go build -o /tmp/lancerd-darwin ./... && echo OK`
 Expected: `OK`.
 
 - [ ] **Step 3: Live smoke (host, manual)**
 
 ```bash
 # Start the daemon, then in another shell:
-~/.conduit/bin/conduitd daemon &
-~/.conduit/bin/conduitd shim claude --version
-tmux ls    # expect a conduit-XXXXXXXX session
+~/.lancer/bin/lancerd daemon &
+~/.lancer/bin/lancerd shim claude --version
+tmux ls    # expect a lancer-XXXXXXXX session
 ```
-Expected: `tmux ls` shows `conduit-<id>`; `conduitd doctor` shows the shim-wrapper check.
+Expected: `tmux ls` shows `lancer-<id>`; `lancerd doctor` shows the shim-wrapper check.
 
 ---
 
 ## Task 8: transcript watcher (read-only mirror of bare sessions)
 
 **Files:**
-- Create: `daemon/conduitd/transcript_watcher.go`
-- Test: `daemon/conduitd/transcript_watcher_test.go`
+- Create: `daemon/lancerd/transcript_watcher.go`
+- Test: `daemon/lancerd/transcript_watcher_test.go`
 
 **Interfaces:**
 - Produces:
   - `type BareSession struct { SessionID, ProjectDir, CWD, TranscriptPath string; LastModified time.Time; Managed bool }`
   - `func scanTranscripts(projectsDir string) ([]BareSession, error)` — enumerate `<projectsDir>/*/*.jsonl`, read the FIRST and LAST line to extract `sessionId` + `cwd` (keys verified: every user/assistant line has `sessionId` and `cwd`).
-  - `func classifyBare(b BareSession, running map[string]int) bool` — `Managed=true` when a tmux/conduit-parented process owns the session; else bare.
+  - `func classifyBare(b BareSession, running map[string]int) bool` — `Managed=true` when a tmux/lancer-parented process owns the session; else bare.
 
-**Background (verified):** Layout is `~/.claude/projects/<encoded-project>/<sessionId>.jsonl`; `sessionId` (camelCase) appears on every message line and equals the filename UUID; some sessions are directory-only (handle gracefully). conduitd already counts these files (`agent_status_claude.go:25`) but never reads them. No `fsnotify` in repo — use a poll loop like `relayPairWatcher` (`relaypair.go:59`).
+**Background (verified):** Layout is `~/.claude/projects/<encoded-project>/<sessionId>.jsonl`; `sessionId` (camelCase) appears on every message line and equals the filename UUID; some sessions are directory-only (handle gracefully). lancerd already counts these files (`agent_status_claude.go:25`) but never reads them. No `fsnotify` in repo — use a poll loop like `relayPairWatcher` (`relaypair.go:59`).
 
 - [ ] **Step 1: Write the failing test over a temp projects dir**
 
@@ -752,7 +752,7 @@ func TestScanTranscriptsExtractsSessionID(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestScanTranscripts ./...`
+Run: `cd daemon/lancerd && go test -run TestScanTranscripts ./...`
 Expected: FAIL — `undefined: scanTranscripts`.
 
 - [ ] **Step 3: Implement `scanTranscripts` (read-only; never print message bodies)**
@@ -812,7 +812,7 @@ func firstSessionMeta(path string) (id, cwd string) {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run TestScanTranscripts ./...`
+Run: `cd daemon/lancerd && go test -run TestScanTranscripts ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Add the 5s poll loop + surface bare sessions**
@@ -822,8 +822,8 @@ Add `func (s *server) startTranscriptWatcher()` modeled on `relayPairWatcher` (`
 - [ ] **Step 6: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/transcript_watcher.go daemon/conduitd/transcript_watcher_test.go daemon/conduitd/server.go
-git commit -m "feat(conduitd): read-only transcript watcher for bare claude sessions"
+git add daemon/lancerd/transcript_watcher.go daemon/lancerd/transcript_watcher_test.go daemon/lancerd/server.go
+git commit -m "feat(lancerd): read-only transcript watcher for bare claude sessions"
 ```
 
 > **Deferred to v1.x (out of scope per design):** the "Take over" action (kill bare PID + relaunch under tmux via `--resume`) and live send-keys into truly-bare sessions. The watcher delivers the read-only mirror only; "Take over" is Task-10 material once the read-only mirror is proven.
@@ -833,12 +833,12 @@ git commit -m "feat(conduitd): read-only transcript watcher for bare claude sess
 ## Task 9: iOS — surface a discovered session in the fleet
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/ConduitCore/Session.swift:3-17`, `Packages/ConduitKit/Sources/ConduitCore/ConduitDProtocol.swift:272`
-- Create: `Packages/ConduitKit/Sources/AppFeature/SessionDiscovery.swift`
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/SessionDiscoveryTests.swift`
+- Modify: `Packages/LancerKit/Sources/LancerCore/Session.swift:3-17`, `Packages/LancerKit/Sources/LancerCore/LancerDProtocol.swift:272`
+- Create: `Packages/LancerKit/Sources/AppFeature/SessionDiscovery.swift`
+- Test: `Packages/LancerKit/Tests/LancerKitTests/SessionDiscoveryTests.swift`
 
 **Interfaces:**
-- Consumes: `DaemonEvent` stream (`DaemonChannel.events`, `ConduitDProtocol.swift:272`), `FleetStore.add(_:)` (`FleetStore.swift:95`), `TmuxClient.attachOrCreate(name:)` (`TmuxClient.swift:30`).
+- Consumes: `DaemonEvent` stream (`DaemonChannel.events`, `LancerDProtocol.swift:272`), `FleetStore.add(_:)` (`FleetStore.swift:95`), `TmuxClient.attachOrCreate(name:)` (`TmuxClient.swift:30`).
 - Produces:
   - `enum SessionOrigin: String, Codable, Sendable { case appInitiated, shimDiscovered, bareMirror }` on `Session`.
   - `case sessionDiscovered(SessionDiscoveredParams)` on `DaemonEvent`, where `SessionDiscoveredParams { sessionId: String; tmuxName: String?; agent: String?; cwd: String?; managed: Bool }`.
@@ -851,14 +851,14 @@ git commit -m "feat(conduitd): read-only transcript watcher for bare claude sess
 ```swift
 import XCTest
 @testable import AppFeature
-@testable import ConduitCore
+@testable import LancerCore
 
 @MainActor
 final class SessionDiscoveryTests: XCTestCase {
     func testDiscoveredManagedSessionBecomesShimOriginSlot() async {
         let store = FleetStore()
         let coord = SessionDiscoveryCoordinator(fleetStore: store)
-        let params = SessionDiscoveredParams(sessionId: "abc123", tmuxName: "conduit-abc123",
+        let params = SessionDiscoveredParams(sessionId: "abc123", tmuxName: "lancer-abc123",
                                              agent: "claudeCode", cwd: "/tmp", managed: true)
         coord.handle(params, on: .preview)
         XCTAssertEqual(store.slots.count, 1)
@@ -869,7 +869,7 @@ final class SessionDiscoveryTests: XCTestCase {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run (fast inner loop): `cd Packages/ConduitKit && swift test --filter SessionDiscoveryTests`
+Run (fast inner loop): `cd Packages/LancerKit && swift test --filter SessionDiscoveryTests`
 Expected: FAIL — `SessionDiscoveryCoordinator` / `SessionOrigin` / `SessionDiscoveredParams` undefined.
 
 - [ ] **Step 3: Add `SessionOrigin` to `Session`**
@@ -886,13 +886,13 @@ Add `public var origin: SessionOrigin = .appInitiated` to the `Session` struct a
 
 - [ ] **Step 4: Add the `DaemonEvent` case + params**
 
-In `ConduitDProtocol.swift`, add `case sessionDiscovered(SessionDiscoveredParams)` to `DaemonEvent` and a `SessionDiscoveredParams` Codable struct; extend `DaemonEvent.decode(from:)` to map JSON-RPC method `"session.discovered"` → this case (mirror the `"agent.status"` mapping at `:293`).
+In `LancerDProtocol.swift`, add `case sessionDiscovered(SessionDiscoveredParams)` to `DaemonEvent` and a `SessionDiscoveredParams` Codable struct; extend `DaemonEvent.decode(from:)` to map JSON-RPC method `"session.discovered"` → this case (mirror the `"agent.status"` mapping at `:293`).
 
 - [ ] **Step 5: Implement `SessionDiscoveryCoordinator`**
 
 ```swift
 #if os(iOS)
-import ConduitCore
+import LancerCore
 import PersistenceKit
 
 @MainActor
@@ -915,20 +915,20 @@ Adapt `FleetStore.Slot`'s real initializer (inspect `FleetStore.swift:95`); atta
 
 - [ ] **Step 6: Run the Swift test to verify it passes**
 
-Run: `cd Packages/ConduitKit && swift test --filter SessionDiscoveryTests`
+Run: `cd Packages/LancerKit && swift test --filter SessionDiscoveryTests`
 Expected: PASS.
 
 - [ ] **Step 7: Authoritative app-target build (catches `#if os(iOS)` + strict-concurrency)**
 
-Use `mcp__XcodeBuildMCP__build_sim` (scheme `Conduit`, iPhone 17 Pro). Expected: BUILD SUCCEEDED.
+Use `mcp__XcodeBuildMCP__build_sim` (scheme `Lancer`, iPhone 17 Pro). Expected: BUILD SUCCEEDED.
 
 - [ ] **Step 8: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/ConduitCore/Session.swift \
-        Packages/ConduitKit/Sources/ConduitCore/ConduitDProtocol.swift \
-        Packages/ConduitKit/Sources/AppFeature/SessionDiscovery.swift \
-        Packages/ConduitKit/Tests/ConduitKitTests/SessionDiscoveryTests.swift
+git add Packages/LancerKit/Sources/LancerCore/Session.swift \
+        Packages/LancerKit/Sources/LancerCore/LancerDProtocol.swift \
+        Packages/LancerKit/Sources/AppFeature/SessionDiscovery.swift \
+        Packages/LancerKit/Tests/LancerKitTests/SessionDiscoveryTests.swift
 git commit -m "feat(ios): surface shim-discovered sessions in the fleet"
 ```
 
@@ -938,18 +938,18 @@ git commit -m "feat(ios): surface shim-discovered sessions in the fleet"
 
 - [ ] **Step 1: Daemon suite green**
 
-Run: `cd daemon/conduitd && go test ./...` → all PASS.
+Run: `cd daemon/lancerd && go test ./...` → all PASS.
 
 - [ ] **Step 2: iOS app-target build green**
 
-`mcp__XcodeBuildMCP__build_sim` (Conduit / iPhone 17 Pro) → BUILD SUCCEEDED.
+`mcp__XcodeBuildMCP__build_sim` (Lancer / iPhone 17 Pro) → BUILD SUCCEEDED.
 
 - [ ] **Step 3: Live host walk-through (manual, documented in PR description)**
 
-1. `conduitd install` (installs shim), reload shell.
-2. `conduitd daemon &`.
-3. Type `claude` → confirm a `conduit-<id>` tmux session is created and `conduitd doctor` shows the shim check OK.
-4. In the Conduit app (paired host), confirm the session appears as `.shimDiscovered` and the live block terminal attaches via tmux.
+1. `lancerd install` (installs shim), reload shell.
+2. `lancerd daemon &`.
+3. Type `claude` → confirm a `lancer-<id>` tmux session is created and `lancerd doctor` shows the shim check OK.
+4. In the Lancer app (paired host), confirm the session appears as `.shimDiscovered` and the live block terminal attaches via tmux.
 5. Stop the daemon, type `claude` again → confirm fail-open passthrough (real binary runs, no error).
 6. Start a bare `claude` (bypass via `command claude`) → confirm it appears as a read-only `.bareMirror` after ≤5s.
 
@@ -960,13 +960,13 @@ Run: `cd daemon/conduitd && go test ./...` → all PASS.
 | Design requirement | Task |
 |---|---|
 | PATH shim + shell function + managed env var | Task 4 |
-| `conduitd` receives spawn intent, registers session | Tasks 1, 3 |
-| Launch real agent inside `tmux new-session -s conduit-<id>` | Task 2, 3 |
+| `lancerd` receives spawn intent, registers session | Tasks 1, 3 |
+| Launch real agent inside `tmux new-session -s lancer-<id>` | Task 2, 3 |
 | Hooks active from byte zero | Global Constraints (file-based, already active) + Task 4 env |
 | iOS sees session via relay + attaches via existing tmux path | Tasks 5, 9 |
 | Transcript watcher: read-only mirror of bare sessions | Task 8 |
 | Shim bypass / daemon-down → graceful fallback to real binary | Task 3 (`execRealBinary`), Task 10 step 5 |
-| `conduit doctor` warns on broken wrapper coverage | Task 6 |
+| `lancer doctor` warns on broken wrapper coverage | Task 6 |
 | Out of v1: live send-keys takeover of bare sessions; Agent SDK mode | Excluded (noted in Task 8) |
 
 ## Placeholder scan

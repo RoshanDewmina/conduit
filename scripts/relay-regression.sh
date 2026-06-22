@@ -4,11 +4,11 @@
 # Prereqs: macOS Remote Login on, SSH password in keychain, sim booted
 set -euo pipefail
 
-CONDUIT_KEYCHAIN_SERVICE="conduit-localhost-ssh"
+LANCER_KEYCHAIN_SERVICE="lancer-localhost-ssh"
 SIM_NAME="iPhone 17 Pro"
-BUNDLE_ID="dev.conduit.mobile"
-DERIVED_DATA="/tmp/conduit-dd"
-SCREENSHOT_DIR="/tmp/conduit-relay-regression"
+BUNDLE_ID="dev.lancer.mobile"
+DERIVED_DATA="/tmp/lancer-dd"
+SCREENSHOT_DIR="/tmp/lancer-relay-regression"
 SLEEP_AGENT=15
 
 check_prereqs() {
@@ -21,10 +21,10 @@ check_prereqs() {
   fi
   echo "  Simulator is booted"
 
-  if ! PW=$(security find-generic-password -s "$CONDUIT_KEYCHAIN_SERVICE" -w 2>/dev/null); then
+  if ! PW=$(security find-generic-password -s "$LANCER_KEYCHAIN_SERVICE" -w 2>/dev/null); then
     echo "ERROR: SSH password not found in keychain."
     echo "Store it:"
-    echo "  security add-generic-password -s '$CONDUIT_KEYCHAIN_SERVICE' -a '$USER' -w 'YOUR_PW' -U"
+    echo "  security add-generic-password -s '$LANCER_KEYCHAIN_SERVICE' -a '$USER' -w 'YOUR_PW' -U"
     exit 1
   fi
   echo "  SSH password found in keychain"
@@ -48,7 +48,7 @@ check_prereqs() {
 
 build_app() {
   echo "--- Building app for simulator ---"
-  xcodebuild -project Conduit.xcodeproj -scheme Conduit \
+  xcodebuild -project Lancer.xcodeproj -scheme Lancer \
     -destination "platform=iOS Simulator,name=$SIM_NAME" \
     -derivedDataPath "$DERIVED_DATA" build
   echo "  Build complete"
@@ -61,17 +61,17 @@ launch_session_harness() {
   xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
   sleep 2
 
-  xcrun simctl install booted "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Conduit.app"
+  xcrun simctl install booted "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Lancer.app"
 
   local PW
-  PW=$(security find-generic-password -s "$CONDUIT_KEYCHAIN_SERVICE" -w)
+  PW=$(security find-generic-password -s "$LANCER_KEYCHAIN_SERVICE" -w)
 
   env \
-    SIMCTL_CHILD_CONDUIT_GALLERY=session \
-    SIMCTL_CHILD_CONDUIT_TEST_HOST=127.0.0.1 \
-    SIMCTL_CHILD_CONDUIT_TEST_USER="$USER" \
-    SIMCTL_CHILD_CONDUIT_TEST_PW="$PW" \
-    SIMCTL_CHILD_CONDUIT_TEST_AUTOCMD='claude' \
+    SIMCTL_CHILD_LANCER_GALLERY=session \
+    SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
+    SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
+    SIMCTL_CHILD_LANCER_TEST_PW="$PW" \
+    SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
     xcrun simctl launch booted "$BUNDLE_ID"
 
   echo "  App launched with gallery=session, AUTOCMD=claude"
@@ -122,7 +122,7 @@ print_results() {
   echo ""
   echo "  If approval never appeared, check:"
   echo "    • The SSH daemon channel armed (session header shows green)"
-  echo "    • conduitd is running on the host"
+  echo "    • lancerd is running on the host"
   echo "    • The policy engine escalated (not auto-allowed/denied)"
   echo "============================================================"
 }
@@ -135,7 +135,7 @@ cleanup() {
 }
 
 main() {
-  echo "=== Conduit Relay Regression Test ==="
+  echo "=== Lancer Relay Regression Test ==="
   echo ""
 
   check_prereqs

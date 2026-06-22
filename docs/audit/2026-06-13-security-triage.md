@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-13
 **Reviewer:** Claude Sonnet 4.6 (agent-acba4089)
-**Scope:** Packages/ConduitKit/Sources, daemon/ (conduitd, push-backend, agent-runner)
+**Scope:** Packages/LancerKit/Sources, daemon/ (lancerd, push-backend, agent-runner)
 **Prior baseline:** docs/SECURITY-REVIEW.md (WS-8, 2026-05-31)
 
 ---
@@ -17,7 +17,7 @@
 | exec.Command — dispatch.go | LOW | CLEAN | `agentArgv` builds explicit argv (no shell); `exec.Command(argv[0], argv[1:]...)` is safe |
 | exec.Command — agent-runner/main.go | LOW | CLEAN | argv deserialized from JSON; `exec.CommandContext(ctx, argv[0], argv[1:]...)` — no shell |
 | exec.Command — process_provider.go | LOW | CLEAN | `runnerPath` comes from env (operator-controlled), not user input |
-| Open redirect — billing.go:267 | LOW | FALSE POSITIVE | Target is hardcoded `conduit://` scheme; only `session_id` query-param is appended (URL-escaped); not an open redirect |
+| Open redirect — billing.go:267 | LOW | FALSE POSITIVE | Target is hardcoded `lancer://` scheme; only `session_id` query-param is appended (URL-escaped); not an open redirect |
 | HTTP server without TLS — push-backend | LOW | MITIGATED | `fly.toml` sets `force_https = true`; Fly.io edge terminates TLS; `ListenAndServe` on 8080 only receives proxied traffic |
 | http:// in OrbstackProvisioner | INFO | ACCEPTED | `#if DEBUG`-gated; talks to loopback (OrbStack local API) only |
 | http:// in PreviewKit | INFO | ACCEPTED | Generates a localhost URL for curl over SSH tunnel; NSAllowsLocalNetworking covers this; shell-metas validated + single-quote-escaped |
@@ -25,7 +25,7 @@
 | TOFU auto-trust in production paths | PASS | CLOSED | Auto-trust only in `#if DEBUG && os(iOS)` files; TOFUHostKeyValidator always prompts in Release |
 | Fail-closed policy | PASS | CLOSED | `hookShouldHold` returns true for all mutating kinds when daemon is down; policy engine defaults to `ask` when doc.Default is empty |
 | Secret logging — Swift | PASS | CLEAN | Zero hits in Sources/ near password/secret/token/key variables |
-| Secret logging — Go daemon | PASS | CLEAN | Only run IDs and agent IDs logged; CONDUIT_OPENROUTER_KEY not logged |
+| Secret logging — Go daemon | PASS | CLEAN | Only run IDs and agent IDs logged; LANCER_OPENROUTER_KEY not logged |
 | Audit log redaction — Go | PASS | CLEAN | `redactSecrets()` called on every command field before write; patterns cover sk-/gh-/bearer/api-key forms |
 | Audit log redaction — Swift | PASS | CLEAN | `AuditEvent` stores only structured metadata (no raw credentials) |
 | NSAllowsArbitraryLoads | PASS | CLEAN | Info.plist only has `NSAllowsLocalNetworking: true`; no arbitrary loads |
@@ -50,7 +50,7 @@
 | `generic.secrets.detected-private-key` | ERROR×4 | `OpenSSHKeyParserTests.swift` | FALSE POSITIVE — deliberate test vectors |
 | `dockerfile.missing-user-entrypoint` | ERROR×2 | `agent-runner/Dockerfile`, `push-backend/Dockerfile` | REAL — LOW severity |
 | `go.dangerous-exec-command` | ERROR×3 | `dispatch.go`, `agent-runner/main.go`, `process_provider.go` | FALSE POSITIVE — explicit argv, no shell interpolation |
-| `go.open-redirect` | WARNING×1 | `push-backend/billing.go:267` | FALSE POSITIVE — target is hardcoded `conduit://` scheme |
+| `go.open-redirect` | WARNING×1 | `push-backend/billing.go:267` | FALSE POSITIVE — target is hardcoded `lancer://` scheme |
 | `go.use-tls` | WARNING×1 | `push-backend/main.go:125` | MITIGATED — Fly.io TLS termination enforced by `force_https = true` |
 
 ---
@@ -71,10 +71,10 @@
 **Recommended fix:**
 ```dockerfile
 # agent-runner Dockerfile (after the COPY line)
-RUN adduser --disabled-password --gecos '' conduit
-USER conduit
+RUN adduser --disabled-password --gecos '' lancer
+USER lancer
 ```
-Same pattern for push-backend. Note: the npm global install of `@anthropic-ai/claude-code` must happen before `USER conduit` (root required for global install), or use `--prefix /home/conduit/.npm-global` with `PATH` adjustment.
+Same pattern for push-backend. Note: the npm global install of `@anthropic-ai/claude-code` must happen before `USER lancer` (root required for global install), or use `--prefix /home/lancer/.npm-global` with `PATH` adjustment.
 
 **Severity:** LOW (container isolation still applies; not exploitable from outside without a prior code path into the container)
 
@@ -90,7 +90,7 @@ Same pattern for push-backend. Note: the npm global install of `@anthropic-ai/cl
 
 **Current state:** The finding `fix-backend-relay-auth.md` in `docs/audit/findings/` documents this as a known blocker (B2) that was addressed by adding Tier 2 per-session tokens. The Tier 1 secret requirement is documented but its absence is not enforced at startup (the server starts regardless).
 
-**Recommended fix:** Either fail-fast at startup when `APPROVAL_RELAY_SECRET` is empty in a production environment (check a `CONDUIT_ENV=production` or `FLY_APP_NAME` guard), or document the Fly.io secret-required deployment step prominently in runbooks. The actual deployment using `fly secrets set` should include this variable.
+**Recommended fix:** Either fail-fast at startup when `APPROVAL_RELAY_SECRET` is empty in a production environment (check a `LANCER_ENV=production` or `FLY_APP_NAME` guard), or document the Fly.io secret-required deployment step prominently in runbooks. The actual deployment using `fly secrets set` should include this variable.
 
 **Severity:** MEDIUM — OPEN (infrastructure/operational; not a code bug, but a deployment gate that should be enforced)
 
@@ -103,8 +103,8 @@ Same pattern for push-backend. Note: the npm global install of `@anthropic-ai/cl
 **Assessment (all three):** Semgrep flags these because `exec.Command` receives non-static values. Manual inspection confirms each is safe:
 
 - **dispatch.go:** `agentArgv()` builds `[]string{"claude", "-p", prompt}` via a `switch` on whitelisted agent names; `exec.Command(argv[0], argv[1:]...)` is passed this pre-validated slice. No shell involved.
-- **agent-runner/main.go:51:** `argv` is deserialized from `CONDUIT_COMMAND_ARGV` (a JSON array provided by the control plane operator, not end-users). The call is `exec.CommandContext(ctx, argv[0], argv[1:]...)` — explicit argv.
-- **process_provider.go:20:** `runnerPath` comes from `CONDUIT_RUNNER_PATH` env var (operator-set) or defaults to the literal `"agent-runner"`. No user input reaches this call.
+- **agent-runner/main.go:51:** `argv` is deserialized from `LANCER_COMMAND_ARGV` (a JSON array provided by the control plane operator, not end-users). The call is `exec.CommandContext(ctx, argv[0], argv[1:]...)` — explicit argv.
+- **process_provider.go:20:** `runnerPath` comes from `LANCER_RUNNER_PATH` env var (operator-set) or defaults to the literal `"agent-runner"`. No user input reaches this call.
 
 **Verdict:** All three are FALSE POSITIVES. No shell injection risk.
 
@@ -118,7 +118,7 @@ Same pattern for push-backend. Note: the npm global install of `@anthropic-ai/cl
 ```go
 func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
     sessionID := r.URL.Query().Get("session_id")
-    deepLink := "conduit://billing/complete"
+    deepLink := "lancer://billing/complete"
     if sessionID != "" {
         deepLink += "?checkoutSessionId=" + url.QueryEscape(sessionID)
     }
@@ -126,7 +126,7 @@ func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-**Assessment:** The redirect target is hardcoded to the `conduit://` custom URL scheme. The only user-controlled input (`session_id`) is appended as a URL-escaped query parameter to that fixed prefix. There is no path to redirect to an attacker-controlled domain. The semgrep rule fires because `r` appears in scope, but `r` is only used to extract the query parameter, not to construct the redirect domain.
+**Assessment:** The redirect target is hardcoded to the `lancer://` custom URL scheme. The only user-controlled input (`session_id`) is appended as a URL-escaped query parameter to that fixed prefix. There is no path to redirect to an attacker-controlled domain. The semgrep rule fires because `r` appears in scope, but `r` is only used to extract the query parameter, not to construct the redirect domain.
 
 **Verdict:** FALSE POSITIVE. No open redirect risk.
 
@@ -164,7 +164,7 @@ func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
 
 ### 1. TOFU Host-Key in Production: PASS
 
-- `TOFUHostKeyValidator` always fails with `ConduitError.hostKeyUnknown` for unknown fingerprints in production; the UI then shows a confirmation sheet.
+- `TOFUHostKeyValidator` always fails with `LancerError.hostKeyUnknown` for unknown fingerprints in production; the UI then shows a confirmation sheet.
 - Auto-trust (`autoTrustHostKey: true`) is only reachable through `DebugTerminalHarness.swift` and `DebugSessionHarness.swift`, both of which are wrapped in `#if DEBUG && os(iOS)` at the file level.
 - The `passwordSession(autoTrustHostKey:)` factory method has a default of `false`; no production caller passes `true`.
 - LOW-3 from WS-8 (no compile-time guard on the parameter) is still technically open, but the runtime exposure is zero.
@@ -172,7 +172,7 @@ func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
 ### 2. Fail-Closed Policy: PASS
 
 - `hookShouldHold(kind, risk)` in `hook.go` returns `true` for all mutating kinds (`command`, `patch`, `fileWrite`, `fileDelete`, `network`, `credential`, and all unrecognized kinds) when the daemon socket is unreachable.
-- Read-only kinds only fail-open when `CONDUIT_HOOK_READONLY_FAIL_OPEN=1` is explicitly set — off by default.
+- Read-only kinds only fail-open when `LANCER_HOOK_READONLY_FAIL_OPEN=1` is explicitly set — off by default.
 - The policy engine (`policy/evaluate.go`) defaults to `EffectAsk` when `doc.Default` is empty — never `allow`.
 - `waitWithTimeout` in `approval.go` returns `hookDecision{decision: "deny"}` on timeout — the backstop is always deny.
 - `TestHookMutatingDeniedWhenDaemonDown` and `TestCommandHookHeldWhenDaemonDown` exercise this path.
@@ -180,7 +180,7 @@ func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
 ### 3. No Secret Logging: PASS
 
 - Swift `Sources/` — zero matches for `print(`/`NSLog(`/`os_log(` near password/secret/token/credential/key variable names.
-- Go daemon — logging in `conduitd/` and `agent-runner/` only logs run IDs, agent IDs, and error messages. `CONDUIT_OPENROUTER_KEY` is passed to child env but never appears in a `log.Printf` call.
+- Go daemon — logging in `lancerd/` and `agent-runner/` only logs run IDs, agent IDs, and error messages. `LANCER_OPENROUTER_KEY` is passed to child env but never appears in a `log.Printf` call.
 - `push-backend` logs session IDs and boolean flags (`apns=true/false`, `relay=true/false`) — not device tokens or relay tokens.
 - `audit.go`'s `redactSecrets()` runs on every `command` field before it reaches the log file.
 - **Gap (inherited LOW-5 from WS-8):** `Redactor.swift` on the Swift side does not redact PEM blobs or Bearer tokens. Risk is low (user must paste a key into the terminal and then trigger AI context capture), but remains open.

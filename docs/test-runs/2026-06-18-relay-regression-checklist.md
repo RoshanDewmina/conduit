@@ -10,16 +10,16 @@
   ```bash
   # Deploy via: scripts/deploy-push-backend.sh
   # Or Fly:
-  fly launch --name conduit-push
+  fly launch --name lancer-push
   fly secrets set ...
   fly deploy
   ```
 - [ ] **APNs env vars set** on the push backend (see exact `fly secrets set` command below)
-- [ ] **Physical iPhone** with iOS 17+ running the Conduit Release build
+- [ ] **Physical iPhone** with iOS 17+ running the Lancer Release build
 - [ ] **Push Notifications entitlement** enabled in the app (Xcode → Signing & Capabilities)
 - [ ] **`pushBackendURL`** in the app points to the deployed backend URL (e.g. `https://conduit-push.fly.dev`)
 - [ ] **Remote Login enabled** on the Mac serving as the SSH host (System Settings → General → Sharing → Remote Login: ON)
-- [ ] **Host machine** running `conduitd daemon` with policy.yaml (default:ask for file write / exec)
+- [ ] **Host machine** running `lancerd daemon` with policy.yaml (default:ask for file write / exec)
 
 ## `fly secrets set` — complete env var list
 
@@ -30,9 +30,9 @@ fly secrets set \
   APNS_KEY_ID=ABC123DEFG \
   APNS_TEAM_ID=39HM2X8GS6 \
   APNS_KEY_PATH=/app/AuthKey_ABC123DEFG.p8 \
-  APNS_BUNDLE_ID=dev.conduit.mobile \
+  APNS_BUNDLE_ID=dev.lancer.mobile \
   APPROVAL_RELAY_SECRET="$(openssl rand -hex 32)" \
-  CONDUIT_ENV=production \
+  LANCER_ENV=production \
   PORT=8080 \
   CORS_ALLOW_ORIGIN='*' \
   PUBLIC_BASE_URL='https://conduit-push.fly.dev' \
@@ -60,7 +60,7 @@ fly secrets set \
   OPENROUTER_PROVISIONING_KEY=sk-or-key-... \
   OPENROUTER_SHARED_KEY=sk-or-key-... \
   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
-  GCS_ARTIFACTS_BUCKET=conduit-artifacts-prod \
+  GCS_ARTIFACTS_BUCKET=lancer-artifacts-prod \
   GITHUB_WEBHOOK_SECRET=...
 ```
 
@@ -69,28 +69,28 @@ fly secrets set \
 ### 1. Build the app for device (Release)
 
 ```bash
-xcodebuild -project Conduit.xcodeproj -scheme Conduit \
+xcodebuild -project Lancer.xcodeproj -scheme Lancer \
   -destination 'generic/platform=iOS' \
   -configuration Release \
-  -derivedDataPath /tmp/conduit-device-dd \
+  -derivedDataPath /tmp/lancer-device-dd \
   build
 ```
 
 ### 2. Install on physical iPhone
 
 - Open Xcode → Window → Devices & Simulators
-- Drag the `.app` from `/tmp/conduit-device-dd/Build/Products/Release-iphoneos/` onto the device
+- Drag the `.app` from `/tmp/lancer-device-dd/Build/Products/Release-iphoneos/` onto the device
 - Or use a TestFlight internal build
 
 ### 3. Enable push notifications
 
-- Open Settings → Notifications → Conduit
+- Open Settings → Notifications → Lancer
 - Ensure **Allow Notifications** is ON
 - Ensure **Lock Screen**, **Banner** (temporary), and **Sounds** are ON
 
 ### 4. Start a relay session
 
-- Open Conduit on the iPhone
+- Open Lancer on the iPhone
 - Connect to the test host (e.g. your Mac via SSH)
 - Verify the session header shows **Connected** (green dot)
 - Background the app (press Home button) — the approval push is the test
@@ -100,7 +100,7 @@ xcodebuild -project Conduit.xcodeproj -scheme Conduit \
 On the host machine, SSH in and run a command that hits the `default:ask` policy:
 
 ```bash
-conduitd agent-hook -- PreToolUse --tool fileWrite --input '{"path":"/tmp/test-approval.txt","content":"hello"}'
+lancerd agent-hook -- PreToolUse --tool fileWrite --input '{"path":"/tmp/test-approval.txt","content":"hello"}'
 ```
 
 Or if the resident daemon and Claude agent are running, just let the agent make a tool call that triggers `default:ask`.
@@ -116,19 +116,19 @@ Or if the resident daemon and Claude agent are running, just let the agent make 
 
 - [ ] Force-press or swipe the notification to reveal **Approve / Reject** actions (category: `approval`)
 - [ ] If the app shows notification actions inline on the lock screen, tap **Approve**
-- [ ] If not, unlock the phone, open Conduit, find the approval in Inbox, and tap Approve
+- [ ] If not, unlock the phone, open Lancer, find the approval in Inbox, and tap Approve
 
 ### 8. Verify agent unblocks
 
 - [ ] The pending agent call completes within ~5 seconds of approval
-- [ ] The host-side `conduitd daemon` audit log shows `decision: approve` for the approval ID
+- [ ] The host-side `lancerd daemon` audit log shows `decision: approve` for the approval ID
 - [ ] The agent continues to the next step (or exits cleanly)
 
 ### 9. Verify audit log records the decision
 
 On the host:
 ```bash
-cat ~/.conduit/audit.log | grep -i approve
+cat ~/.lancer/audit.log | grep -i approve
 ```
 
 Expected: a line showing the decision (`approve` or `reject`), the approval ID, the tool, and the rule that matched.
@@ -139,15 +139,15 @@ Expected: a line showing the decision (`approve` or `reject`), the approval ID, 
 |---|---|---|
 | No push arrives | APNs key invalid or backend not deployed | `fly logs`, verify APNS_KEY_ID/APNS_TEAM_ID |
 | Push arrives but no actions | Notification category mismatch | Verify APNs payload `category: "approval"` matches Notification Service Extension |
-| Agent hangs past timeout | Decision never relayed back to conduitd | Check `APPROVAL_RELAY_SECRET` matches between backend and conduitd config |
+| Agent hangs past timeout | Decision never relayed back to lancerd | Check `APPROVAL_RELAY_SECRET` matches between backend and lancerd config |
 | "No device token" in backend logs | App never registered for remote notifications | Check `pushBackendURL` in app; verify APNs token fetch on app launch |
-| Session shows Offline | Daemon channel didn't arm | Reconnect; check SSH host has `conduitd` installed and reachable |
+| Session shows Offline | Daemon channel didn't arm | Reconnect; check SSH host has `lancerd` installed and reachable |
 
 ## Expected outcome
 
 ```
                        ┌──────────┐
-   agent tool call ──► │ conduitd ├──► queue.json (pending)
+   agent tool call ──► │ lancerd ├──► queue.json (pending)
                        └────┬─────┘
                             │ POST /approval
                             ▼
@@ -158,7 +158,7 @@ Expected: a line showing the decision (`approve` or `reject`), the approval ID, 
                             │ POST /approval/decision (Bearer relayToken)
                             ▼
                        ┌──────────┐
-                       │ conduitd  │──► agent unblocks
+                       │ lancerd  │──► agent unblocks
                        └──────────┘
 ```
 

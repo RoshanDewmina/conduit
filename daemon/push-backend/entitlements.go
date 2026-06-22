@@ -71,7 +71,7 @@ func initEntitlementStore() {
 			return
 		}
 	}
-	activeEntitlementStore = newFileEntitlementStore(dataFilePath("ENTITLEMENTS_FILE", "conduit-entitlements.json"))
+	activeEntitlementStore = newFileEntitlementStore(dataFilePath("ENTITLEMENTS_FILE", "lancer-entitlements.json"))
 }
 
 func setEntitlementStore(store entitlementBackend) {
@@ -336,19 +336,19 @@ func (s *redisEntitlementStore) Put(entitlement subscriptionEntitlement) error {
 }
 
 func redisCustomerKey(customerID string) string {
-	return fmt.Sprintf("conduit:entitlement:customer:%s", customerID)
+	return fmt.Sprintf("lancer:entitlement:customer:%s", customerID)
 }
 
 func redisUserKey(userID string) string {
-	return fmt.Sprintf("conduit:entitlement:user:%s", userID)
+	return fmt.Sprintf("lancer:entitlement:user:%s", userID)
 }
 
 func redisAppTokenKey(token string) string {
-	return fmt.Sprintf("conduit:entitlement:app:%s", token)
+	return fmt.Sprintf("lancer:entitlement:app:%s", token)
 }
 
 func redisClientTokenKey(token string) string {
-	return fmt.Sprintf("conduit:entitlement:clienttoken:%s", token)
+	return fmt.Sprintf("lancer:entitlement:clienttoken:%s", token)
 }
 
 func cacheEntitlement(entitlement subscriptionEntitlement) {

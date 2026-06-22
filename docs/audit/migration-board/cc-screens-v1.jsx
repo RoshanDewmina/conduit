@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — V1 core / roadmap screens missing from the board
+   LANCER — V1 core / roadmap screens missing from the board
    These artboards cover shipped primitives and near-term control-plane
    surfaces that did not yet have phone-frame coverage.
    ============================================================ */
@@ -8,7 +8,7 @@ const RX = {};
 /* ---------- 1. Proof Card — completion summary ---------- */
 function ProofCardScreen({onBack}){
   const DATA={
-    agent:'claude', name:'conduit', status:'completed',
+    agent:'claude', name:'lancer', status:'completed',
     duration:'12m 41s',
     tests:{passed:42, failed:0, failedNames:[]},
     diff:{files:18, insertions:342, deletions:67, filesChanged:['SessionViewModel.swift','BlockRenderer.swift','ToolCardView.swift','ChatTranscriptView.swift','DSBlockCard.swift','PTYBridge.swift','AgentIsland.swift']},
@@ -116,8 +116,8 @@ function LoopDetailScreen({onBack}){
     plan:'1. Extract BlockRenderer protocol\n2. Migrate SessionViewModel to async streams\n3. Add deprecation shims\n4. Run full test suite',
     currentStep:'Step 2/4: SessionViewModel async migration',
     blockedReason:null,
-    agent:'claude', name:'conduit', model:'claude-sonnet-4.6',
-    host:'Dev VPS', repo:'conduit', branch:'feat/async-session', worktree:'~/repos/conduit',
+    agent:'claude', name:'lancer', model:'claude-sonnet-4.6',
+    host:'Dev VPS', repo:'lancer', branch:'feat/async-session', worktree:'~/repos/lancer',
     filesChanged:7, commandsRun:12, testsRun:156,
     approvalsAsked:3, approvalsApproved:2, approvalsDenied:1,
     spendUSD:4.94,
@@ -343,11 +343,11 @@ function PolicySimulatorScreen({onBack}){
 /* ---------- 4. Doctor / Health Check ---------- */
 function DoctorScreen({onBack}){
   const checks=[
-    {name:'Daemon version',passed:true,message:'conduitd v1.0.3 (7a9f2e1)'},
+    {name:'Daemon version',passed:true,message:'lancerd v1.0.3 (7a9f2e1)'},
     {name:'Agent hooks installed',passed:true,message:'Claude · Codex · opencode'},
     {name:'Agent auth configured',passed:true,message:'ANTHROPIC_API_KEY · OPENAI_API_KEY set'},
     {name:'Policy parseable',passed:true,message:'6 rules · 0 errors'},
-    {name:'Filesystem permissions',passed:true,message:'~/.conduit/ readable + writable'},
+    {name:'Filesystem permissions',passed:true,message:'~/.lancer/ readable + writable'},
     {name:'Local model endpoints',passed:false,message:'Ollama (:11434) OK · LM Studio (:1234) unreachable'},
     {name:'Host sleep status',passed:true,message:'awake · plugged in · lid open'},
   ];
@@ -512,7 +512,7 @@ function AllowAlwaysScopeSheet(){
           {scope==='this-command-in-repo' && <div className="cc-card" style={{marginTop:10,padding:'12px 14px'}}>
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               <Ic d={ICON.git} s={14}/>
-              <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink)'}}>~/repos/conduit</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink)'}}>~/repos/lancer</span>
               <span style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)',marginLeft:'auto'}}>detected from CWD</span>
             </div>
           </div>}
@@ -636,7 +636,7 @@ function QuotaGuardScreen({onBack}){
 /* ---------- 8. Secrets Management — list, add, revoke ---------- */
 function SecretsScreen({onBack}){
   const entries=[
-    {name:'STRIPE_SECRET_KEY',type:'apiKey',scope:'~/repos/conduit',used:'4× today',critical:true},
+    {name:'STRIPE_SECRET_KEY',type:'apiKey',scope:'~/repos/lancer',used:'4× today',critical:true},
     {name:'GITHUB_TOKEN',type:'token',scope:'all repos',used:'12× today',critical:false},
     {name:'DATABASE_URL',type:'password',scope:'~/work/auth',used:'unused this week',critical:false},
   ];
@@ -719,7 +719,7 @@ function HostHealthScreen({onBack}){
               </span>
               <div className="grow">
                 <div style={{fontFamily:'var(--mono)',fontSize:15,color:'var(--ink)',fontWeight:600}}>{h.hostname}</div>
-                <div className="s" style={{marginTop:2}}>conduitd {h.daemonVersion} · up {h.uptime}</div>
+                <div className="s" style={{marginTop:2}}>lancerd {h.daemonVersion} · up {h.uptime}</div>
               </div>
             </div>
           </div>
@@ -825,7 +825,7 @@ function E2ERelayPairingScreen({onBack}){
 
           <div className="cc-card" style={{marginTop:12,padding:'12px 14px',display:'flex',gap:10,alignItems:'flex-start'}}>
             <Ic d={ICON.lock} s={16}/>
-            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Keys derive at pairing. The relay forwards ciphertext it can't read. If the relay drops, Conduit falls back to SSH automatically.</span>
+            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Keys derive at pairing. The relay forwards ciphertext it can't read. If the relay drops, Lancer falls back to SSH automatically.</span>
           </div>
         </div>
         <div className="cc-bottompad"/>
@@ -843,11 +843,11 @@ function E2ERelayPairingScreen({onBack}){
 function WorktreeBoardScreen({onBack}){
   const columns=[
     {title:'Active',tone:'var(--brand)',items:[
-      {repo:'conduit',branch:'feat/async-session',agent:'claude',files:7,last:'2m ago'},
+      {repo:'lancer',branch:'feat/async-session',agent:'claude',files:7,last:'2m ago'},
       {repo:'auth',branch:'fix/oauth-timeout',agent:'codex',files:3,last:'14m ago'},
     ]},
     {title:'Review Ready',tone:'var(--r-low)',items:[
-      {repo:'conduit',branch:'feat/proof-card',agent:'claude',files:12,last:'1h ago',commit:'Add ProofCardView'},
+      {repo:'lancer',branch:'feat/proof-card',agent:'claude',files:12,last:'1h ago',commit:'Add ProofCardView'},
     ]},
     {title:'Idle',tone:'var(--ink-4)',items:[
       {repo:'docs',branch:'update-arch',agent:null,files:0,last:'2d ago'},
@@ -962,8 +962,8 @@ function NudgeScreen({onBack}){
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
-            <PixelAvatar seed="claudeconduit" size={34} color={VENDOR.claude.c}/>
-            <div className="grow" style={{minWidth:0}}><div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)'}}>Claude Code · conduit</div><div className="s">Dev VPS · mid-run · $3.18 / $5.00</div></div>
+            <PixelAvatar seed="claudelancer" size={34} color={VENDOR.claude.c}/>
+            <div className="grow" style={{minWidth:0}}><div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)'}}>Claude Code · lancer</div><div className="s">Dev VPS · mid-run · $3.18 / $5.00</div></div>
           </div>
 
           <div className="cc-sec">live output<span className="n">· tail</span><span className="rule"/></div>
@@ -1094,9 +1094,9 @@ function RunDetailScreen({onBack}){
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 15px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <PixelAvatar seed="claudeconduit" size={38} color={VENDOR.claude.c}/>
+              <PixelAvatar seed="claudelancer" size={38} color={VENDOR.claude.c}/>
               <div className="grow" style={{minWidth:0}}>
-                <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code <span style={{color:'var(--ink-4)',fontSize:11.5}}>conduit</span></div>
+                <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code <span style={{color:'var(--ink-4)',fontSize:11.5}}>lancer</span></div>
                 <div className="s" style={{marginTop:3}}>Dev VPS · claude-sonnet-4.6</div>
               </div>
               <div style={{textAlign:'right'}}>
@@ -1127,7 +1127,7 @@ function RunDetailScreen({onBack}){
           <div className="cc-cmd" style={{display:'block',padding:0}}>
             <div className="body" style={{whiteSpace:'pre-wrap',padding:'11px 13px',fontSize:11.5,lineHeight:1.75}}>
               <div style={{color:'var(--ink)'}}>$ swift build</div>
-              <div style={{color:'var(--ink-3)'}}>Compiling ConduitKit (38 files)</div>
+              <div style={{color:'var(--ink-3)'}}>Compiling LancerKit (38 files)</div>
               <div style={{color:'var(--ink-3)'}}>[142/318] Compiling SessionViewModel.swift</div>
               <div style={{color:'var(--ink-2)'}}>patch src/auth/session.swift</div>
               <div style={{color:'var(--r-med)'}}>● thinking<span className="cursor" style={{height:'.8em'}}/></div>

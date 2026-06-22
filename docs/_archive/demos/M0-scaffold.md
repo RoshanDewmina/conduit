@@ -15,7 +15,7 @@ empty Workspaces tab. M1 turns this into a real "first connect."
 Run from the package root:
 
 ```bash
-cd Packages/ConduitKit
+cd Packages/LancerKit
 swift package clean
 swift build                # full clean build of all 19 modules
 swift test                 # 20 tests, 6 suites pass
@@ -39,7 +39,7 @@ Verified locally on:
 
 Engines (build on macOS + iOS, no UIKit imports):
 
-- `ConduitCore`      — typed IDs, value types, error enum
+- `LancerCore`      — typed IDs, value types, error enum
 - `SecurityKit`      — Keychain wrapper, Ed25519 KeyStore, HostKeyStore, PairingCrypto
 - `SSHTransport`     — Citadel actor + SessionPool + ReconnectController
 - `TerminalEngine`   — AnsiSGRParser, BlockRenderer, TUI escalation detector
@@ -69,7 +69,7 @@ Special:
   needs an explicit first-use fingerprint confirmation UI.
 - `ContentUnavailableView` requires iOS 17 / macOS 14. Confirmed working
   on the iOS 26.4 simulator.
-- `conduitd` (remote daemon) is documented in ARCHITECTURE.md §6 but is
+- `lancerd` (remote daemon) is documented in ARCHITECTURE.md §6 but is
   not yet implemented; first appears in M5.
 
 ## Next: M1 — First connect

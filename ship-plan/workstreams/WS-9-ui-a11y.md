@@ -3,7 +3,7 @@
 > Depends on WS-0. Quality pass; low risk; no behavior changes. Verify everything in the gallery, light AND dark.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. **Read `CLAUDE.md` "Visual verification process"** — exact simulator launch + screenshot commands + the fixed-geometry invariant. Design tokens: `Sources/DesignSystem/Tokens.swift`; components: `Sources/DesignSystem/Components/`; gallery: `AppFeature/DebugGalleryView.swift`. Dynamic Type already shipped (pt fonts scale via `relativeTo:`; terminal/fixed-geometry capped at `accessibility3`).
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. **Read `CLAUDE.md` "Visual verification process"** — exact simulator launch + screenshot commands + the fixed-geometry invariant. Design tokens: `Sources/DesignSystem/Tokens.swift`; components: `Sources/DesignSystem/Components/`; gallery: `AppFeature/DebugGalleryView.swift`. Dynamic Type already shipped (pt fonts scale via `relativeTo:`; terminal/fixed-geometry capped at `accessibility3`).
 
 > ⚠️ **VERIFY FIRST — partially done already.** Recent commits `dafa6ba` ("…UI standardization") and `858b688` ("…approval-card header, PixelBox glow, a11y guards") overlap this list (PixelBox glow/#4, header placement, a11y). Audit current state before changing anything; only fix what's still broken, and verify the rest rather than redoing it. The "confirmed debt" below is from a draft audit that predates those commits.
 

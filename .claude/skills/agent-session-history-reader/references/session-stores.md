@@ -27,7 +27,7 @@ For `/Users/roshansilva/Documents/command-center`, the project directory is typi
 Useful commands:
 
 ```bash
-rg -n "sessionId|summary|conduit|opencode|codex|kimi|resume|handoff" ~/.claude/projects/-Users-roshansilva-Documents-command-center
+rg -n "sessionId|summary|lancer|opencode|codex|kimi|resume|handoff" ~/.claude/projects/-Users-roshansilva-Documents-command-center
 ls -lt ~/.claude/projects/-Users-roshansilva-Documents-command-center/*.jsonl | head
 ```
 
@@ -56,7 +56,7 @@ Useful commands:
 ```bash
 tail -n 20 ~/.codex/session_index.jsonl | jq -c '{id, thread_name, updated_at}'
 rg -n "\"cwd\":\"/Users/roshansilva/Documents/command-center\"|session_meta|turn_context|response_item" ~/.codex/sessions
-rg -n "session resume|Conduit|OpenCode|Kimi|handoff|parallel" ~/.codex/session_index.jsonl ~/.codex/memories/MEMORY.md ~/.codex/memories/rollout_summaries
+rg -n "session resume|Lancer|OpenCode|Kimi|handoff|parallel" ~/.codex/session_index.jsonl ~/.codex/memories/MEMORY.md ~/.codex/memories/rollout_summaries
 ```
 
 Gotchas:
@@ -105,7 +105,7 @@ Useful commands:
 ```bash
 jq -cr --arg cwd "$PWD" 'select(.workDir==$cwd) | {sessionId,workDir,sessionDir}' ~/.kimi-code/session_index.jsonl
 find ~/.kimi-code/sessions -name state.json -mtime -7 -print
-rg -n "\"title\"|\"sessionId\"|conduit|opencode|claude|codex" ~/.kimi-code/sessions ~/.kimi-code/session_index.jsonl
+rg -n "\"title\"|\"sessionId\"|lancer|opencode|claude|codex" ~/.kimi-code/sessions ~/.kimi-code/session_index.jsonl
 ```
 
 Gotchas:

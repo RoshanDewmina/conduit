@@ -1,4 +1,4 @@
-Conduit is mission control for the AI coding agents running on your own machine. A small bridge on your host enforces the policy you set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+Lancer is mission control for the AI coding agents running on your own machine. A small bridge on your host enforces the policy you set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 
 DECIDE FAST
 High-risk approvals surface with the command, blast radius, and risk band. Allow, deny, allow-always, or edit-then-run.
@@ -13,4 +13,4 @@ GO DEEP WHEN NEEDED
 A full block-mode terminal, diff review, SFTP browser, and dev-server preview live one tap down.
 
 BRING YOUR OWN EVERYTHING
-Your host. Your API keys. Your agents. Conduit is the control surface, not the cloud. Your source code never leaves your machine.
+Your host. Your API keys. Your agents. Lancer is the control surface, not the cloud. Your source code never leaves your machine.

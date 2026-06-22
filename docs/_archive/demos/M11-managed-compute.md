@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Fly.io account with API token (`fly tokens create`).
-- Conduit app installed on device.
+- Lancer app installed on device.
 
 ## Steps
 

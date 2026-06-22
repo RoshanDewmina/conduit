@@ -35,7 +35,7 @@ type orgsData struct {
 var orgsStore = struct {
 	path string
 }{
-	path: dataFilePath("ORGS_FILE", "conduit-orgs.json"),
+	path: dataFilePath("ORGS_FILE", "lancer-orgs.json"),
 }
 
 func initOrgsStore() {

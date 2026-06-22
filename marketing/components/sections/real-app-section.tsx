@@ -31,7 +31,7 @@ export default function RealAppSection() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={s.src}
-                  alt={`Conduit app — ${s.caption}`}
+                  alt={`Lancer app — ${s.caption}`}
                   className="block w-full h-auto"
                   loading="lazy"
                 />

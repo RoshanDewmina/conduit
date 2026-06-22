@@ -1,23 +1,23 @@
-# Security Architecture — Conduit
+# Security Architecture — Lancer
 
 **Last updated:** 2026-06-17
 
 **Audience:** Security researchers, system administrators, and technically
-sophisticated users evaluating Conduit's threat model.
+sophisticated users evaluating Lancer's threat model.
 
 ---
 
 ## 1. Overview
 
-Conduit is an iOS approval-cockpit for AI coding agents (Claude Code, Codex,
+Lancer is an iOS approval-cockpit for AI coding agents (Claude Code, Codex,
 opencode) that run on the user's own computer or server. The security model
 relies on three principles:
 
 1. **No cloud escrow.** SSH keys and pairing secrets live on your devices.
-   Conduit operates no infrastructure that can decrypt your agent traffic.
+   Lancer operates no infrastructure that can decrypt your agent traffic.
 2. **Defense in depth.** On-device Keychain + SSH transport encryption +
    optional end-to-end encryption through the push relay.
-3. **User sovereignty.** You choose which relay (Conduit's default or
+3. **User sovereignty.** You choose which relay (Lancer's default or
    self-hosted), which hosts to pair with, and when to approve.
 
 **Implementation note, 2026-06-17:** the self-host SSH path is the verified production path in the
@@ -34,7 +34,7 @@ relay pairing and physical-device APNs behavior still require live validation be
 ┌──────────────────┐                ┌─────────────────────┐
 │   iOS Device     │                │  Mac / Linux Host   │
 │                  │                │                     │
-│  1. Scan QR code │◄─── QR ────── │  2. conduitd pair   │
+│  1. Scan QR code │◄─── QR ────── │  2. lancerd pair   │
 │                  │    (contains  │     generates QR     │
 │  3. Parse QR     │     host +    │     containing:      │
 │     extract      │     key info) │     - host address   │
@@ -45,7 +45,7 @@ relay pairing and physical-device APNs behavior still require live validation be
 │     X25519 key   │                │                     │
 │     pair         │                │                     │
 │                  │                │                     │
-│  5. Compute      │◄─── SSH ───── │  6. conduitd         │
+│  5. Compute      │◄─── SSH ───── │  6. lancerd         │
 │     shared       │    (encrypted │     receives client  │
 │     secret via   │     transport)│     pubkey, computes │
 │     ECDH         │                │     shared secret    │
@@ -54,7 +54,7 @@ relay pairing and physical-device APNs behavior still require live validation be
 
 Steps:
 
-1. The user runs `conduitd pair` on their host. The daemon generates an
+1. The user runs `lancerd pair` on their host. The daemon generates an
    X25519 key pair and displays a QR code containing the host address,
    the X25519 public key, and a one-time nonce.
 2. The user scans the QR code with the iOS app (camera permission required).
@@ -68,13 +68,13 @@ Steps:
 
 ### 2.2 Security properties
 
-- **QR code is single-use.** Once scanned, `conduitd` invalidates the
+- **QR code is single-use.** Once scanned, `lancerd` invalidates the
   pairing nonce. An intercepted QR code cannot be replayed.
 - **The QR does not contain SSH credentials.** It only contains the host's
   X25519 public key and addressing info. A compromised QR code reveals no
   SSH secrets.
 - **The SSH connection is authenticated separately** using the user's own SSH
-  keys. Conduit never sends SSH private keys over the network.
+  keys. Lancer never sends SSH private keys over the network.
 - **MITM resistance:** The QR code is displayed on the host's screen and
   scanned in person (or via a trusted video call). A network attacker
   intercepting the later SSH connection cannot forge the X25519 key exchange
@@ -93,7 +93,7 @@ shared_secret = X25519(ios_private, host_public)
 session_key = HKDF-SHA256(
     ikm:  shared_secret,
     salt: pairing_nonce || epoch,
-    info: "conduit-v1-session-key",
+    info: "lancer-v1-session-key",
     len:  32
 )
 ```
@@ -112,13 +112,13 @@ session_key = HKDF-SHA256(
 When the phone is on the same network as the host (or reachable via the
 internet), all approval traffic travels over the **existing SSH connection**.
 SSH provides its own encryption (AES-256-GCM or ChaCha20-Poly1305 per
-negotiated cipher). The SSH tunnel is the sole transport — Conduit's relay
+negotiated cipher). The SSH tunnel is the sole transport — Lancer's relay
 is not involved.
 
 ### 4.2 Push relay path (end-to-end encrypted)
 
 When the phone is offline or on a different network, notifications can be
-delivered via Conduit's push relay. The payload is encrypted **before** it
+delivered via Lancer's push relay. The payload is encrypted **before** it
 leaves either endpoint:
 
 ```
@@ -127,7 +127,7 @@ Encryption (iOS → Host decision):
   2. ciphertext = ChaCha20-Poly1305_Encrypt(
        key:   session_key,
        nonce: nonce,
-       aad:   "conduit-relay-v1",
+       aad:   "lancer-relay-v1",
        plaintext: decision_bytes
      )
   3. Transmit: nonce || ciphertext || tag
@@ -137,7 +137,7 @@ Decryption (Host receives):
   2. plaintext = ChaCha20-Poly1305_Decrypt(
        key:   session_key,
        nonce: nonce,
-       aad:   "conduit-relay-v1",
+       aad:   "lancer-relay-v1",
        ciphertext: ciphertext
      )
 ```
@@ -155,7 +155,7 @@ The relay does **not** have access to:
 - SSH keys, hostnames, usernames, or passwords
 - Agent commands, file contents, source code, or terminal output
 - Session key material (X25519 keys never reach the relay)
-- Any identifying user information (Conduit has no account system)
+- Any identifying user information (Lancer has no account system)
 - IP addresses beyond standard HTTP access logs (retained 14 days)
 
 ---
@@ -205,7 +205,7 @@ iCloud.
 
 ## 8. Key rotation
 
-- **SSH keys:** Rotated independently by the user on their host. Conduit
+- **SSH keys:** Rotated independently by the user on their host. Lancer
   stores whatever private key the user imports.
 - **X25519 pairing keys:** A new QR pairing generates fresh X25519 keys on
   both sides. Old keys are discarded from the Keychain.
@@ -216,7 +216,7 @@ iCloud.
 
 ## 9. Self-host relay option
 
-Users who prefer not to use Conduit's default relay can self-host:
+Users who prefer not to use Lancer's default relay can self-host:
 
 1. Clone the push backend repository.
 2. Deploy to Fly.io (or any Docker-compatible host) using the provided
@@ -238,7 +238,7 @@ termination and HTTP logs are under your control.
 | Attacker MiTM SSH connection | SSH key authentication; X25519 key bindings verified out-of-band |
 | Relay is compromised | Relay sees only ciphertext — key material stays on device and host |
 | Phone is lost or stolen | Face ID / device passcode gate Keychain access; `whenUnlockedThisDeviceOnly` prevents iCloud sync |
-| Host is compromised | Conduit cannot prevent this — attack is outside the threat model; user is responsible for host security |
+| Host is compromised | Lancer cannot prevent this — attack is outside the threat model; user is responsible for host security |
 | Malicious push from relay | Payloads require valid ChaCha20-Poly1305 decryption with session key; relay cannot forge valid payloads |
 | Traffic analysis | Relay sees routing IDs and timing — metadata is not encrypted; self-host relay to reduce exposure |
 
@@ -246,13 +246,13 @@ termination and HTTP logs are under your control.
 
 ## 11. Assumptions and caveats
 
-- **You trust your SSH host.** Conduit protects the transport and relay
+- **You trust your SSH host.** Lancer protects the transport and relay
   channels, but the host running your agents has full access to your code and
   data.
 - **You are responsible for your SSH key security.** If an attacker obtains
   your SSH private key, they can connect to your host directly.
 - **Notifications are best-effort.** Push notifications from the relay are
-  delivered by Apple's APNs — Conduit cannot guarantee delivery timing.
+  delivered by Apple's APNs — Lancer cannot guarantee delivery timing.
 - **Export compliance.** The App declares `ITSAppUsesNonExemptEncryption:
   false` — the encryption used (SSH protocol, Apple CryptoKit, CommonCrypto)
   is exempt from U.S. export reporting requirements.
@@ -261,7 +261,7 @@ termination and HTTP logs are under your control.
 
 ## 12. Responsible disclosure
 
-If you discover a security vulnerability in Conduit, conduitd, or the push
+If you discover a security vulnerability in Lancer, lancerd, or the push
 relay, please report it privately:
 
 **[security@conduit.dev — placeholder]**

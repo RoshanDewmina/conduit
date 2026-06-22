@@ -1,4 +1,4 @@
-# Conduit UI/UX Designer Handoff - 2026-06-15
+# Lancer UI/UX Designer Handoff - 2026-06-15
 
 This folder is a self-contained handoff for designing every current board page and the proposed/future product surfaces represented on the board.
 

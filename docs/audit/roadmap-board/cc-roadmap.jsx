@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — ROADMAP BOARD (future / post-launch features)
+   LANCER — ROADMAP BOARD (future / post-launch features)
 
    A SEPARATE board from the migration board. Every artboard is a
    phone screen for a DEFERRED feature from
@@ -8,7 +8,7 @@
 
    Reuses the migration board's shared assets verbatim (loaded by
    index.html BEFORE this file):
-     • conduit.css tokens + the .cc-* component classes
+     • lancer.css tokens + the .cc-* component classes
      • cc-components.jsx atoms (StatusHeader, PromptHeader, RiskChip,
        VendorMark, PixelAvatar, Ic/ICON, CommandBlock, BlastChips,
        TabBar, ccHash, VENDOR, sample data)
@@ -16,7 +16,7 @@
      • cc-screens-3.jsx (XIC icon set, QuotaRow, KeyRow patterns)
      • design-canvas.jsx (DesignCanvas / DCSection / DCArtboard)
 
-   Binding rules: docs/audit/CONDUIT_UI_CONSISTENCY_RULES.md
+   Binding rules: docs/audit/LANCER_UI_CONSISTENCY_RULES.md
      - brand blue (#2f43ff) is CTA-only; risk uses its own ramp
      - data bars use the brand spectrum (#b5352a→#4f63c9)
      - .cc-foot for any bottom CTA (never a gradient)
@@ -141,11 +141,11 @@ function RelayStatusScreen(){
           <div className="cc-card">
             <div className="cc-row" style={{cursor:'pointer'}}>
               <span style={{width:30,height:30,borderRadius:2,background:'var(--surface-2)',border:'1px solid var(--line)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--ink-2)',flex:'none'}}><Ic d={RX.relay} s={16}/></span>
-              <div className="grow"><div className="t" style={{fontSize:14}}>Self-hosted relay</div><div className="s" style={{whiteSpace:'normal'}}>run the relay container yourself · nothing touches Conduit infra</div></div>
+              <div className="grow"><div className="t" style={{fontSize:14}}>Self-hosted relay</div><div className="s" style={{whiteSpace:'normal'}}>run the relay container yourself · nothing touches Lancer infra</div></div>
               <span className="cc-toggle"><span className="knob"/></span>
             </div>
           </div>
-          <NoteCard icon={ICON.lock}>Keys derive at pairing. If the relay ever drops, Conduit falls back to SSH automatically — you stay reachable.</NoteCard>
+          <NoteCard icon={ICON.lock}>Keys derive at pairing. If the relay ever drops, Lancer falls back to SSH automatically — you stay reachable.</NoteCard>
         </div>
         <div className="cc-bottompad"/>
       </div>
@@ -187,16 +187,16 @@ function AddAgentScreen(){
             <AdapterRow name="opencode" klass="A" surface="permission hook · local models" status="live"/>
             <AdapterRow name="gemini" klass="A" surface="BeforeTool hook · --emit json-decision" status="soon"/>
           </div>
-          <p className="cc-note" style={{margin:'8px 4px 0'}}>conduitd's <b style={{color:'var(--ink-2)'}}>agent-hook CLI is the SPI</b> for Class A — copy the hook + a hooks.json fragment.</p>
+          <p className="cc-note" style={{margin:'8px 4px 0'}}>lancerd's <b style={{color:'var(--ink-2)'}}>agent-hook CLI is the SPI</b> for Class A — copy the hook + a hooks.json fragment.</p>
 
-          <div className="cc-sec">class b · via conduit-mcp gateway<span className="rule"/></div>
+          <div className="cc-sec">class b · via lancer-mcp gateway<span className="rule"/></div>
           <div className="cc-card">
             <AdapterRow name="goose" klass="B" surface="closed approval · MCP gateway" status="add"/>
             <AdapterRow name="cline" klass="B" surface="closed approval · MCP gateway" status="soon"/>
             <AdapterRow name="roo" klass="B" surface="closed approval · MCP gateway" status="soon"/>
             <AdapterRow name="kilo" klass="B" surface="closed approval · MCP gateway" status="soon"/>
           </div>
-          <NoteCard icon={ICON.shield}>One <b style={{color:'var(--ink)'}}>conduit-mcp</b> gateway wraps dangerous tools as MCP and calls agent-hook internally — it unlocks goose, Cline, Roo &amp; Kilo together.</NoteCard>
+          <NoteCard icon={ICON.shield}>One <b style={{color:'var(--ink)'}}>lancer-mcp</b> gateway wraps dangerous tools as MCP and calls agent-hook internally — it unlocks goose, Cline, Roo &amp; Kilo together.</NoteCard>
         </div>
         <div className="cc-bottompad"/>
       </div>
@@ -255,7 +255,7 @@ function AccountRegistryScreen(){
   );
 }
 
-/* ---------- T0 · conduit user CLI ---------- */
+/* ---------- T0 · lancer user CLI ---------- */
 function CliLine({ cmd, out }){
   return <div style={{marginBottom:14}}>
     <div style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink)'}}><span style={{color:'var(--brand)'}}>$ </span>{cmd}</div>
@@ -265,23 +265,23 @@ function CliLine({ cmd, out }){
 function CliScreen(){
   return (
     <div className="cc">
-      <SubNav title="conduit cli" right={<span className="cc-chip"><Ic d={ICON.term} s={12}/>your terminal</span>}/>
+      <SubNav title="lancer cli" right={<span className="cc-chip"><Ic d={ICON.term} s={12}/>your terminal</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <p className="cc-lead" style={{margin:'0 0 12px'}}>The bridge is a program on its own. Check usage, control runs and read status from any terminal — no phone required.</p>
           <div className="cc-cmd" style={{display:'block',padding:0}}>
             <div className="body" style={{display:'block',whiteSpace:'normal',padding:'13px 13px'}}>
-              <CliLine cmd="conduit status" out={[['● bridge connected · relay E2E · 4 agents','h'],['  3 working · 1 waiting · $4.94 today','o']]}/>
-              <CliLine cmd="conduit usage" out={[['claude 5h   ▓▓▓▓▓▓░░░░ 62%  resets 2:40','o'],['claude wk   ▓▓▓▓░░░░░░ 41%','o'],['codex       $13.40 credit left','o']]}/>
-              <CliLine cmd="conduit runs" out={[['conduit     working   $3.18','o'],['auth-svc    waiting → approve in app','w']]}/>
-              <CliLine cmd="conduit pause auth-svc" out={[['paused auth-svc · resume with `conduit resume`','o']]}/>
+              <CliLine cmd="lancer status" out={[['● bridge connected · relay E2E · 4 agents','h'],['  3 working · 1 waiting · $4.94 today','o']]}/>
+              <CliLine cmd="lancer usage" out={[['claude 5h   ▓▓▓▓▓▓░░░░ 62%  resets 2:40','o'],['claude wk   ▓▓▓▓░░░░░░ 41%','o'],['codex       $13.40 credit left','o']]}/>
+              <CliLine cmd="lancer runs" out={[['lancer     working   $3.18','o'],['auth-svc    waiting → approve in app','w']]}/>
+              <CliLine cmd="lancer pause auth-svc" out={[['paused auth-svc · resume with `lancer resume`','o']]}/>
             </div>
           </div>
           <div className="cc-sec">commands<span className="rule"/></div>
           <div className="cc-card" style={{padding:'4px 0'}}>
             {[['status','bridge + relay + spend at a glance'],['usage','quota remaining across vendors'],['runs','list active runs + state'],['pause / resume <id>','two-way control from the shell'],['dispatch "task"','start a run from the terminal']].map(([c,d],i)=>(
               <div key={i} className="cc-row" style={{cursor:'default'}}>
-                <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink)',width:128,flex:'none'}}>conduit {c}</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink)',width:128,flex:'none'}}>lancer {c}</span>
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)',whiteSpace:'normal'}}>{d}</span>
               </div>
             ))}
@@ -507,8 +507,8 @@ function NudgeScreen(){
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
-            <PixelAvatar seed="claudeconduit" size={34} color={VENDOR.claude.c}/>
-            <div className="grow" style={{minWidth:0}}><div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)'}}>Claude Code · conduit</div><div className="s">Dev VPS · mid-run</div></div>
+            <PixelAvatar seed="claudelancer" size={34} color={VENDOR.claude.c}/>
+            <div className="grow" style={{minWidth:0}}><div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)'}}>Claude Code · lancer</div><div className="s">Dev VPS · mid-run</div></div>
             <span style={{marginLeft:'auto'}}><SoonChip/></span>
           </div>
 
@@ -604,7 +604,7 @@ function ObservabilityScreen(){
 
           <div className="cc-sec">long-running<span className="rule"/></div>
           <div className="cc-card" style={{padding:'2px 0'}}>
-            {[['conduit · swift build','running 18m','var(--brand)'],['nightly-suite','running 2h 14m','var(--r-med)']].map(([name,dur,c],i)=>(
+            {[['lancer · swift build','running 18m','var(--brand)'],['nightly-suite','running 2h 14m','var(--r-med)']].map(([name,dur,c],i)=>(
               <div key={i} className="cc-row" style={{cursor:'pointer'}}>
                 <span style={{width:8,height:8,borderRadius:'50%',background:c,flex:'none'}}/>
                 <div className="grow"><div style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink)'}}>{name}</div></div>
@@ -811,7 +811,7 @@ function ScheduleScreen(){
           <div className="cc-sec">agent<span className="rule"/></div>
           <div className="cc-card" style={{padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
             <VendorMark vendor="claude"/>
-            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:11.5,color:'var(--ink-3)'}}>~/repos/conduit</span>
+            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:11.5,color:'var(--ink-3)'}}>~/repos/lancer</span>
           </div>
           <div className="cc-sec">cadence<span className="rule"/></div>
           <div className="cc-seg">
@@ -889,8 +889,8 @@ function SelfHostRelayScreen(){
       <SubNav title="self-hosted relay" right={<span className="cc-chip"><Ic d={ICON.shield} s={12}/>enterprise</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run the relay container in your own infra. Nothing — not even ciphertext — touches Conduit servers. The OSS-trust connectivity tier.</p>
-          <CommandBlock cmd="docker run -p 8443:8443 conduit/relay:1.0" level="low"/>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run the relay container in your own infra. Nothing — not even ciphertext — touches Lancer servers. The OSS-trust connectivity tier.</p>
+          <CommandBlock cmd="docker run -p 8443:8443 lancer/relay:1.0" level="low"/>
           <button className="cc-btn cc-btn--quiet cc-btn--block" style={{marginTop:10}}><Ic d={ICON.copy} s={14}/>Copy command</button>
 
           <div className="cc-sec">endpoint<span className="rule"/></div>
@@ -928,7 +928,7 @@ function CloudAgentsScreen(){
       <SubNav title="cloud agents" right={<span className="cc-chip" style={{color:'var(--brand)',borderColor:'var(--brand)'}}><Ic d={ICON.bolt} s={12}/>Pro</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run a task when your own machine is off — on Conduit-managed compute. Secondary to the private bridge; gated behind Pro.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run a task when your own machine is off — on Lancer-managed compute. Secondary to the private bridge; gated behind Pro.</p>
           <div className="cc-sec">running · cloud<span className="rule"/></div>
           <div className="cc-card" style={{padding:'2px 0'}}>
             {[['cloud-1','claude-sonnet-4.6','working · 6m','var(--brand)','$0.42'],['cloud-2','gpt-5.1-codex','queued','var(--r-med)','—']].map(([name,model,state,c,spend],i)=>(
@@ -965,7 +965,7 @@ function CloudAgentsScreen(){
 /* ---------- T4 · Run-artifact browser ---------- */
 function ArtifactsScreen(){
   const FILES=[
-    ['build/Conduit.ipa','app bundle','18.4 MB',ICON.folder],
+    ['build/Lancer.ipa','app bundle','18.4 MB',ICON.folder],
     ['coverage.html','test coverage','412 KB',ICON.file],
     ['test-results.xml','junit report','88 KB',ICON.file],
     ['screenshots/','12 PNGs','6.1 MB',ICON.folder],
@@ -1050,7 +1050,7 @@ function RoadmapBoard(){
   return (
     <DesignCanvas>
       <DCSection id="t0" title="Tier 0 · Foundations"
-        subtitle="The live duplex relay, the adapter SPI, account registry, the conduit CLI and the support matrix — the pieces that unlock everything above.">
+        subtitle="The live duplex relay, the adapter SPI, account registry, the lancer CLI and the support matrix — the pieces that unlock everything above.">
         <DCArtboard id="relay" label="E2E relay · setup &amp; status" width={320} height={660}>
           <RFrame t="T0"><RelayStatusScreen/></RFrame>
         </DCArtboard>
@@ -1060,7 +1060,7 @@ function RoadmapBoard(){
         <DCArtboard id="accounts" label="Account registry · multi-account" width={320} height={660}>
           <RFrame t="T0"><AccountRegistryScreen/></RFrame>
         </DCArtboard>
-        <DCArtboard id="cli" label="conduit CLI · from your terminal" width={320} height={660}>
+        <DCArtboard id="cli" label="lancer CLI · from your terminal" width={320} height={660}>
           <RFrame t="T0"><CliScreen/></RFrame>
         </DCArtboard>
         <DCArtboard id="matrix" label="Vendor / model support matrix" width={320} height={660}>

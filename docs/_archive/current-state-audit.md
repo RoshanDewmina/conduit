@@ -4,7 +4,7 @@ Updated: 2026-06-02
 
 ## Executive Summary
 
-Conduit is an iOS 26 / Swift 6.2 app with a working SSH shell pipeline,
+Lancer is an iOS 26 / Swift 6.2 app with a working SSH shell pipeline,
 session survival via tmux, and automatic reconnection on network changes.
 M1 through M10 are complete on `master`. M11 (temporal-wall redesign) is
 still partial. M12 (Live Block I/O, from
@@ -36,7 +36,7 @@ interactive validation is not complete yet.
   block; executing blocks use a live keystroke receiver and Ctrl-C stop
   affordance
 - Debug Pro bypass in Debug builds for simulator coverage of gated surfaces
-- Watch app, conduitd JSON-RPC, push backend, billing scaffolding (see
+- Watch app, lancerd JSON-RPC, push backend, billing scaffolding (see
   `docs/remaining-work.md` for the full list)
 - Security audit log pipeline (connect/disconnect/auth failure/host-key/approval)
   with JSON export in Settings
@@ -81,13 +81,13 @@ interactive validation is not complete yet.
 
 ## Verified In This Pass (2026-05-28)
 
-- `swift test` on `Packages/ConduitKit`: **106 tests across 24 suites pass**
+- `swift test` on `Packages/LancerKit`: **106 tests across 24 suites pass**
   in ~3.1s.
-- XcodeBuildMCP `build_sim`, scheme `Conduit`, iPhone 17 Pro simulator:
+- XcodeBuildMCP `build_sim`, scheme `Lancer`, iPhone 17 Pro simulator:
   **BUILD SUCCEEDED**, no warnings.
-- XcodeBuildMCP `test_sim`, scheme `ConduitKitTests`, iPhone 17 Pro
+- XcodeBuildMCP `test_sim`, scheme `LancerKitTests`, iPhone 17 Pro
   simulator: **116 passed, 0 failed, 0 skipped**.
-- XcodeBuildMCP `build_run_sim`, scheme `Conduit`, iPhone 17 Pro simulator:
+- XcodeBuildMCP `build_run_sim`, scheme `Lancer`, iPhone 17 Pro simulator:
   app built, installed, and launched successfully.
 - Simulator smoke:
   - Workspaces seeded list renders without overlap.
@@ -100,7 +100,7 @@ interactive validation is not complete yet.
   - Temporary scripted SSH server was sufficient for negotiation/auth/TOFU
     and basic shell rendering, but not a conclusive real-shell TUI test.
 - Test suites: AnsiSGRParser, AutoReconnectEngine, Billing eligibility,
-  BlockRenderer, ConduitDProtocol, CredentialResolver, DaemonChannel
+  BlockRenderer, LancerDProtocol, CredentialResolver, DaemonChannel
   framing, HostKeyStore TOFU logic, KeyStore, PairingCrypto,
   Patch persistence, PortDetector parsing, PromptBuilder, PTYBridge,
   Redactor, RiskScorer, SFTPClient, SnippetRepository,
@@ -110,17 +110,17 @@ interactive validation is not complete yet.
   `IPHONEOS_DEPLOYMENT_TARGET: "26.0"`; `Package.swift` declares
   `.iOS(.v26)`. Swift tools version 6.2.
 - Liquid Glass primitive: `DesignSystem/Atoms.swift` ships
-  `conduitGlassChrome(cornerRadius:interactive:)`, gated on iOS 26 with a
+  `lancerGlassChrome(cornerRadius:interactive:)`, gated on iOS 26 with a
   `.ultraThinMaterial` fallback. Four call sites use it today:
   - `AppFeature/SessionShellView.swift:113,125`
   - `SessionFeature/SessionView.swift:141,325`
 - `BGContinuedProcessingTask` is **not referenced** anywhere in
-  `Packages/ConduitKit/Sources` (verified by repo-wide grep). Background
+  `Packages/LancerKit/Sources` (verified by repo-wide grep). Background
   keepalive is the `ScenePhaseObserver` + local-notification path only.
 
 ## Liquid Glass adoption status
 
-`conduitGlassChrome` is the project's single glass primitive. As of
+`lancerGlassChrome` is the project's single glass primitive. As of
 2026-05-28 it is fully adopted across primary and secondary chrome —
 every translucent surface flows through the same primitive. The
 SessionView status bar and block-card chrome use a custom dark-translucent
@@ -128,7 +128,7 @@ stack (LinearGradient backdrop + per-block translucent fill + hairline
 border) tuned to the Warp-style dark theme; the standard primitive is
 used everywhere else.
 
-**Using `conduitGlassChrome`:**
+**Using `lancerGlassChrome`:**
 - `AppFeature/SessionShellView.swift` — top + bottom ribbons + shell bar
 - `SessionFeature/SessionView.swift` — raw-mode keyboard rail + composer +
   accessory dock
@@ -149,7 +149,7 @@ used everywhere else.
 
 iOS 26 introduced `BGContinuedProcessingTask` for tasks that need to keep
 running past the standard ~30s background expiration. It would suit
-Conduit's "keep the SSH session alive while the user is briefly out of the
+Lancer's "keep the SSH session alive while the user is briefly out of the
 app" use case.
 
 Current behaviour:
@@ -179,13 +179,13 @@ would tighten the experience for users who don't run tmux. Tracked in
   the iOS constraint we already plan around: background terminal work is
   sharply limited by iOS/iPadOS, so durable server-side `tmux`/`screen`
   style survival still matters more than client-side BG juggling.
-- Warp's agent direction reinforces Conduit's AI-control-plane thesis:
+- Warp's agent direction reinforces Lancer's AI-control-plane thesis:
   terminal-native agents, attaching blocks as context, and launching
   cloud agents from app/web/phone surfaces. We copy the control and
   context ideas, not the desktop layout.
 - cmux has moved toward a Ghostty-based macOS terminal with vertical
   tabs, notifications, saved Claude Code/Codex sessions, and
-  remote-daemon work. Conduit's cmux lesson is still daemon/proxy/session
+  remote-daemon work. Lancer's cmux lesson is still daemon/proxy/session
   resilience.
 - Ghostty/libghostty remains research-only — official docs still say
   `libghostty` is not a stable standalone API. We stay on SwiftTerm.
@@ -203,7 +203,7 @@ would tighten the experience for users who don't run tmux. Tracked in
 ## Next Implementation Priority
 
 1. Finish M11 Phase 2 temporal-wall UX (thumbnails + pan/zoom).
-2. Migrate the 7 secondary-chrome surfaces to `conduitGlassChrome`.
+2. Migrate the 7 secondary-chrome surfaces to `lancerGlassChrome`.
 3. Wire `BGContinuedProcessingTask` for non-tmux sessions.
 4. Validate the full connect → blocks → raw → reconnect flow against a
    real host with Ed25519 and password auth.

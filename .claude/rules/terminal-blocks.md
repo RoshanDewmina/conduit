@@ -1,7 +1,7 @@
 ---
 paths:
-  - "Packages/ConduitKit/Sources/SessionFeature/**"
-  - "Packages/ConduitKit/Sources/TerminalEngine/**"
+  - "Packages/LancerKit/Sources/SessionFeature/**"
+  - "Packages/LancerKit/Sources/TerminalEngine/**"
 ---
 # Block terminal (Warp-style blocks + live agents over SSH)
 
@@ -29,18 +29,18 @@ escalation path still exists but is **dormant**. Block card UI lives in
   (`agent-contract.md` §5).
 
 **Run the live SSH session in the simulator** (needs macOS Remote Login on + the login password in
-Keychain `conduit-localhost-ssh`):
+Keychain `lancer-localhost-ssh`):
 
 ```bash
-xcodebuild -project Conduit.xcodeproj -scheme Conduit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/conduit-dd build
-xcrun simctl install booted /tmp/conduit-dd/Build/Products/Debug-iphonesimulator/Conduit.app
-xcrun simctl terminate booted dev.conduit.mobile 2>/dev/null; sleep 2
-PW="$(security find-generic-password -s conduit-localhost-ssh -w)"
+xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/lancer-dd build
+xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/Lancer.app
+xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
+PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
 # STANDALONE launch — env prefixed directly; chaining after build/install drops the vars.
-env SIMCTL_CHILD_CONDUIT_GALLERY=session \
-    SIMCTL_CHILD_CONDUIT_TEST_HOST=127.0.0.1 SIMCTL_CHILD_CONDUIT_TEST_USER="$USER" \
-    SIMCTL_CHILD_CONDUIT_TEST_PW="$PW" SIMCTL_CHILD_CONDUIT_TEST_AUTOCMD='claude' \
-    xcrun simctl launch booted dev.conduit.mobile
+env SIMCTL_CHILD_LANCER_GALLERY=session \
+    SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
+    SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
+    xcrun simctl launch booted dev.lancer.mobile
 sleep 11; xcrun simctl io booted screenshot /tmp/shot.png
 ```
 

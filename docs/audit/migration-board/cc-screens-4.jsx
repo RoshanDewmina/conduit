@@ -1,12 +1,12 @@
 /* ============================================================
-   CONDUIT — Live session, Chat, QR/Bridge pairing, Hosts
+   LANCER — Live session, Chat, QR/Bridge pairing, Hosts
    ============================================================ */
 
 /* ---------- 1. SessionView — Full-screen live block terminal ---------- */
 function SessionView(){
   const blocks=[
-    {prompt:'~/repos/conduit ›',cmd:'swift build',lines:['Build complete! (12.4s)'],status:'ok'},
-    {prompt:'~/repos/conduit ›',cmd:'claude',lines:['● Analyzing codebase structure…','● Identified 3 files to modify'],status:'running',live:true},
+    {prompt:'~/repos/lancer ›',cmd:'swift build',lines:['Build complete! (12.4s)'],status:'ok'},
+    {prompt:'~/repos/lancer ›',cmd:'claude',lines:['● Analyzing codebase structure…','● Identified 3 files to modify'],status:'running',live:true},
   ];
   return (
     <div className="cc">
@@ -39,7 +39,7 @@ function SessionView(){
           ))}
           <div className="cc-card" style={{padding:0,marginBottom:10,overflow:'hidden',borderColor:'var(--line)'}}>
             <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderBottom:'1px solid var(--line-2)',background:'var(--surface-2)'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)'}}>~/repos/conduit ›</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)'}}>~/repos/lancer ›</span>
               <span style={{marginLeft:'auto'}}><span className="cc-sd"><span className="d working"/>running</span></span>
             </div>
             <div style={{fontFamily:'var(--mono)',fontSize:12,padding:'10px 12px'}}>
@@ -192,7 +192,7 @@ function BridgePairingView(){
                     <span key={i} style={{fontFamily:'var(--mono)',fontSize:40,fontWeight:700,color:'var(--brand)',background:'var(--surface)',border:'1px solid var(--line)',borderRadius:'var(--r-md)',width:48,height:58,display:'flex',alignItems:'center',justifyContent:'center',letterSpacing:0}}>{d}</span>
                   ))}
                 </div>
-                <p style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink-2)',margin:'18px 0 6px'}}>bridge-8a3f · conduitd v1.0</p>
+                <p style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink-2)',margin:'18px 0 6px'}}>bridge-8a3f · lancerd v1.0</p>
                 <p style={{fontFamily:'var(--mono)',fontSize:11.5,color:'var(--ink-4)',lineHeight:1.5}}>Enter this code on your host, or scan the QR<br/>to pair this device with the bridge.</p>
               </div>
             )}
@@ -225,7 +225,7 @@ function SSHConnectOverlay(){
         {rings.map((r,i)=>(
           <div key={i} style={{position:'absolute',width:r.s,height:r.s,borderRadius:'50%',border:'1px solid rgba(47,67,255,'+r.d*0.2+')',animation:'orbPulse '+(1.8+i*0.3)+'s ease-in-out infinite',animationDelay:i*0.15+'s'}}/>
         ))}
-        <PixelAvatar seed="conduit-connect" size={48} color="var(--brand)"/>
+        <PixelAvatar seed="lancer-connect" size={48} color="var(--brand)"/>
       </div>
       <div style={{textAlign:'center'}}>
         <div style={{fontFamily:'var(--mono)',fontSize:17,fontWeight:600,color:'var(--ink)',marginBottom:4}}>{phases[phase]}<span className="cursor" style={{height:'.75em'}}/></div>
@@ -311,13 +311,13 @@ function HostEditorView({onSave, onTest}){
             : <div className="cc-card" style={{padding:'4px 0'}}>
                 <div className="cc-row" style={{cursor:'pointer'}}>
                   <Ic d={ICON.key} s={16}/>
-                  <div className="grow"><span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink)'}}>ed25519 · conduit-dev</span></div>
+                  <div className="grow"><span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink)'}}>ed25519 · lancer-dev</span></div>
                   <Ic d={ICON.chev} s={16}/>
                 </div>
               </div>}
           <div className="cc-card" style={{marginTop:16,padding:'12px 14px',display:'flex',gap:10,alignItems:'flex-start'}}>
             <Ic d={ICON.shield} s={16}/>
-            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Credentials never leave this device. Conduit uses the SSH agent on your host for key-based auth.</span>
+            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Credentials never leave this device. Lancer uses the SSH agent on your host for key-based auth.</span>
           </div>
         </div>
         <div className="cc-bottompad"/>
@@ -361,7 +361,7 @@ function HostKeyConfirmSheet(){
           </div>
           <div className="cc-card" style={{marginTop:14,padding:'12px 14px',display:'flex',gap:10,alignItems:'flex-start'}}>
             <Ic d={ICON.lock} s={16}/>
-            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Pinned after trust. Conduit warns you if the key ever changes — possible man-in-the-middle.</span>
+            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Pinned after trust. Lancer warns you if the key ever changes — possible man-in-the-middle.</span>
           </div>
         </div>
         <div className="sheetfoot">

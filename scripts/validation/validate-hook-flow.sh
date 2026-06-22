@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # validate-hook-flow.sh — automated hook flow validation (local, no iOS required)
-# Usage: CONDUITD_BINARY=./daemon/conduitd/conduitd ./scripts/validation/validate-hook-flow.sh
-# For full end-to-end validation, see docs/validation-playbook.md (requires Conduit iOS).
+# Usage: LANCERD_BINARY=./daemon/lancerd/lancerd ./scripts/validation/validate-hook-flow.sh
+# For full end-to-end validation, see docs/validation-playbook.md (requires Lancer iOS).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CONDUITD_BINARY="${CONDUITD_BINARY:-$REPO_ROOT/daemon/conduitd/conduitd}"
-HOOK_SCRIPT="${HOOK_SCRIPT:-$REPO_ROOT/docs/conduit-hook.sh}"
+LANCERD_BINARY="${LANCERD_BINARY:-$REPO_ROOT/daemon/lancerd/lancerd}"
+HOOK_SCRIPT="${HOOK_SCRIPT:-$REPO_ROOT/docs/lancer-hook.sh}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -16,75 +16,75 @@ fail() { echo "✗ $1"; FAIL=$((FAIL+1)); }
 skip() { echo "- $1 (SKIP: $2)"; SKIP=$((SKIP+1)); }
 
 check_go_build() {
-    echo "--- Test: conduitd builds from source ---"
+    echo "--- Test: lancerd builds from source ---"
     if command -v go &>/dev/null; then
-        if (cd "$REPO_ROOT/daemon/conduitd" && go build ./... 2>&1); then
-            pass "conduitd go build ./..."
+        if (cd "$REPO_ROOT/daemon/lancerd" && go build ./... 2>&1); then
+            pass "lancerd go build ./..."
         else
-            fail "conduitd go build failed"
+            fail "lancerd go build failed"
         fi
     else
-        skip "conduitd go build" "go not installed"
+        skip "lancerd go build" "go not installed"
     fi
 }
 
-check_conduitd_binary() {
+check_lancerd_binary() {
     echo ""
-    echo "--- Test: conduitd binary exists and runs ---"
-    if [[ ! -f "$CONDUITD_BINARY" ]]; then
-        skip "conduitd binary check" "binary not found at $CONDUITD_BINARY; build with: cd daemon/conduitd && go build -o conduitd ."
+    echo "--- Test: lancerd binary exists and runs ---"
+    if [[ ! -f "$LANCERD_BINARY" ]]; then
+        skip "lancerd binary check" "binary not found at $LANCERD_BINARY; build with: cd daemon/lancerd && go build -o lancerd ."
         return
     fi
-    if [[ ! -x "$CONDUITD_BINARY" ]]; then
-        fail "conduitd binary not executable"
+    if [[ ! -x "$LANCERD_BINARY" ]]; then
+        fail "lancerd binary not executable"
         return
     fi
-    pass "conduitd binary found and executable"
+    pass "lancerd binary found and executable"
 
-    # 'conduitd version' exits 0 — verifies the binary executes correctly.
-    # 'conduitd serve' (the daemon mode) blocks waiting for an SSH stdio connection
+    # 'lancerd version' exits 0 — verifies the binary executes correctly.
+    # 'lancerd serve' (the daemon mode) blocks waiting for an SSH stdio connection
     # and is not suitable for a quick smoke test.
     local ver
-    if ver=$("$CONDUITD_BINARY" version 2>&1); then
-        pass "conduitd version runs (reported: $ver)"
+    if ver=$("$LANCERD_BINARY" version 2>&1); then
+        pass "lancerd version runs (reported: $ver)"
     else
-        fail "conduitd version exited non-zero"
+        fail "lancerd version exited non-zero"
     fi
 }
 
 check_hook_script_syntax() {
     echo ""
-    echo "--- Test: conduit-hook.sh syntax ---"
+    echo "--- Test: lancer-hook.sh syntax ---"
     if [[ ! -f "$HOOK_SCRIPT" ]]; then
         fail "hook script not found at $HOOK_SCRIPT"
         return
     fi
     if bash -n "$HOOK_SCRIPT" 2>&1; then
-        pass "conduit-hook.sh syntax check"
+        pass "lancer-hook.sh syntax check"
     else
-        fail "conduit-hook.sh has syntax errors"
+        fail "lancer-hook.sh has syntax errors"
     fi
 }
 
 check_hook_auto_approve_fallback() {
     echo ""
-    echo "--- Test: hook auto-approve fallback (no conduitd socket) ---"
-    if [[ ! -f "$CONDUITD_BINARY" ]]; then
-        skip "hook auto-approve fallback" "conduitd binary not found; build first"
+    echo "--- Test: hook auto-approve fallback (no lancerd socket) ---"
+    if [[ ! -f "$LANCERD_BINARY" ]]; then
+        skip "hook auto-approve fallback" "lancerd binary not found; build first"
         return
     fi
 
-    # The auto-approve path lives inside 'conduitd agent-hook': when the Unix socket
-    # is absent (conduitd serve is not running), agent-hook prints a message and
+    # The auto-approve path lives inside 'lancerd agent-hook': when the Unix socket
+    # is absent (lancerd serve is not running), agent-hook prints a message and
     # exits 0 (auto-approve) so agents are never blocked when the phone is offline.
     # Invoke agent-hook directly against a guaranteed-nonexistent socket path.
-    local fake_home="/tmp/conduit-validate-home-$$"
-    mkdir -p "$fake_home/.conduit"
+    local fake_home="/tmp/lancer-validate-home-$$"
+    mkdir -p "$fake_home/.lancer"
     local exit_code=0
 
     # HOME override ensures socketPath() resolves to a path under $fake_home
-    # where no conduitd serve is listening.
-    HOME="$fake_home" "$CONDUITD_BINARY" agent-hook \
+    # where no lancerd serve is listening.
+    HOME="$fake_home" "$LANCERD_BINARY" agent-hook \
         --agent "claudeCode" \
         --kind "fileWrite" \
         --command "/tmp/test.txt" \
@@ -97,42 +97,42 @@ check_hook_auto_approve_fallback() {
     if [[ $exit_code -eq 0 ]]; then
         pass "hook auto-approve fallback: agent-hook exits 0 when no socket present"
     else
-        fail "hook auto-approve fallback: expected exit 0, got $exit_code (conduitd agent-hook should auto-approve when serve is not running)"
+        fail "hook auto-approve fallback: expected exit 0, got $exit_code (lancerd agent-hook should auto-approve when serve is not running)"
     fi
 }
 
 check_codex_hook_syntax() {
     echo ""
-    echo "--- Test: codex-conduit-hook.sh syntax ---"
-    local codex_hook="$REPO_ROOT/docs/codex-conduit-hook.sh"
+    echo "--- Test: codex-lancer-hook.sh syntax ---"
+    local codex_hook="$REPO_ROOT/docs/codex-lancer-hook.sh"
     if [[ ! -f "$codex_hook" ]]; then
-        skip "codex hook syntax" "codex-conduit-hook.sh not found"
+        skip "codex hook syntax" "codex-lancer-hook.sh not found"
         return
     fi
     if bash -n "$codex_hook" 2>&1; then
-        pass "codex-conduit-hook.sh syntax check"
+        pass "codex-lancer-hook.sh syntax check"
     else
-        fail "codex-conduit-hook.sh has syntax errors"
+        fail "codex-lancer-hook.sh has syntax errors"
     fi
 }
 
 check_go_tests() {
     echo ""
-    echo "--- Test: conduitd Go tests ---"
+    echo "--- Test: lancerd Go tests ---"
     if command -v go &>/dev/null; then
         local result
-        if result=$(cd "$REPO_ROOT/daemon/conduitd" && go test ./... 2>&1); then
-            pass "conduitd go test ./..."
+        if result=$(cd "$REPO_ROOT/daemon/lancerd" && go test ./... 2>&1); then
+            pass "lancerd go test ./..."
         else
             # No test files is OK
             if echo "$result" | grep -q "\[no test files\]"; then
-                pass "conduitd go test ./... (no test files — expected)"
+                pass "lancerd go test ./... (no test files — expected)"
             else
-                fail "conduitd go test failed: $result"
+                fail "lancerd go test failed: $result"
             fi
         fi
     else
-        skip "conduitd Go tests" "go not installed"
+        skip "lancerd Go tests" "go not installed"
     fi
 }
 
@@ -153,11 +153,11 @@ print_summary() {
 }
 
 main() {
-    echo "=== Conduit Hook Flow Validation (Automated) ==="
+    echo "=== Lancer Hook Flow Validation (Automated) ==="
     echo "Repo root: $REPO_ROOT"
     echo ""
     check_go_build
-    check_conduitd_binary
+    check_lancerd_binary
     check_hook_script_syntax
     check_hook_auto_approve_fallback
     check_codex_hook_syntax

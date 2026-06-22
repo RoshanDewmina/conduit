@@ -3,12 +3,12 @@ title: Agent dispatch compatibility audit
 type: test-run
 captured_at: 2026-06-21T23:58:02Z
 status: complete
-tags: [conduit, dispatch, vendor-cli-adapter, audit]
+tags: [lancer, dispatch, vendor-cli-adapter, audit]
 ---
 
-# Conduit agent-dispatch compatibility audit — 2026-06-21
+# Lancer agent-dispatch compatibility audit — 2026-06-21
 
-**Scope:** verify Conduit's `daemon/conduitd/dispatch.go` adapter layer works end-to-end for
+**Scope:** verify Lancer's `daemon/lancerd/dispatch.go` adapter layer works end-to-end for
 **every advertised coding agent** (Claude Code, Codex, OpenCode, Kimi). Claude Code = sanity only
 (already confirmed in prior sessions). Plus a shortlist of other terminal agents worth adding.
 
@@ -49,7 +49,7 @@ Every flag the adapter passes was confirmed present in the installed CLI's help 
 
 - **Claude** (`agentArgv` line 36): `claude --output-format stream-json --verbose --include-partial-messages -p <prompt> [--model M]` — all present. Continue adds `--continue`. ✅
 - **OpenCode** (line 59): `opencode run --format json [--model M] <prompt>`. `opencode run --help` confirms `--format {default,json}`, `-c/--continue`, `-s/--session`, `-m/--model`. Continue uses `run --continue --format json`. ✅
-- **Codex** (line 44): `codex exec --json [--model M] <prompt>`; `CONDUIT_CODEX_UNSAFE=1` adds `--dangerously-bypass-approvals-and-sandbox`. `codex exec --help` confirms `--json` ("Print events to stdout as JSONL"), `-m/--model`, the bypass flag. Continue: `codex exec resume --last --json` — `codex exec resume --help` confirms the `resume` subcommand + `--last`. ✅
+- **Codex** (line 44): `codex exec --json [--model M] <prompt>`; `LANCER_CODEX_UNSAFE=1` adds `--dangerously-bypass-approvals-and-sandbox`. `codex exec --help` confirms `--json` ("Print events to stdout as JSONL"), `-m/--model`, the bypass flag. Continue: `codex exec resume --last --json` — `codex exec resume --help` confirms the `resume` subcommand + `--last`. ✅
 - **Kimi** (line 53): `kimi --prompt <prompt> --output-format stream-json [--model M]`. `kimi --help` confirms `-p/--prompt`, `--output-format {text,stream-json}`, `-m/--model`, `-C/--continue`. Adapter correctly does **not** pass `--yolo`/`--auto`/`--plan` (skill non-negotiable). ✅
 
 No drift found. Notable since baseline (2026-06-18 matrix): Kimi bumped 0.15.0 → **0.18.0**, OpenCode 1.17.7 → 1.17.8, Claude 2.1.181 → 2.1.185 — adapter still matches all of them.
@@ -65,7 +65,7 @@ $ which claude codex opencode kimi
 /opt/homebrew/bin/codex
 /opt/homebrew/bin/opencode
 /Users/roshansilva/.kimi-code/bin/kimi
-$ cd daemon/conduitd && go build ./...        → BUILD_EXIT=0
+$ cd daemon/lancerd && go build ./...        → BUILD_EXIT=0
 ```
 Versions: claude 2.1.185 · codex-cli 0.135.0 · opencode 1.17.8 · kimi 0.18.0.
 
@@ -136,10 +136,10 @@ parser). Confirms the Claude path is healthy. Not re-tested further per instruct
 
 ### Daemon gate + targeted adapter tests (ALL PASS)
 ```
-$ cd daemon/conduitd && go vet ./...     → VET_EXIT=0
+$ cd daemon/lancerd && go vet ./...     → VET_EXIT=0
 $ go test ./...
-ok   conduit/conduitd        21.956s
-ok   conduit/conduitd/policy (cached)    → TEST_EXIT=0
+ok   lancer/lancerd        21.956s
+ok   lancer/lancerd/policy (cached)    → TEST_EXIT=0
 
 $ go test . -run 'TestContinueArgv|TestContinueRunNewRunIDAndGate|TestE2ERouterContinue|TestStreamJSON|TestAgentArgv' -v
 --- PASS: TestStreamJSONOutputEmitsTextDeltas
@@ -152,7 +152,7 @@ $ go test . -run 'TestContinueArgv|TestContinueRunNewRunIDAndGate|TestE2ERouterC
 --- PASS: TestContinueArgv
 --- PASS: TestContinueRunNewRunIDAndGate
 --- PASS: TestE2ERouterContinue
-PASS  ok  conduit/conduitd  0.011s
+PASS  ok  lancer/lancerd  0.011s
 ```
 `dispatch_test.go` pins argv for all four vendors (`claudeCode`/`codex`/`opencode`/`kimi`).
 
@@ -178,7 +178,7 @@ PASS  ok  conduit/conduitd  0.011s
 
 ## Other popular agent CLIs worth adding (shortlist)
 
-Quick survey of other terminal coding agents and how well they'd fit Conduit's
+Quick survey of other terminal coding agents and how well they'd fit Lancer's
 `agentArgv`/`continueArgv` + `streamJSONOutput` model. Installed-locally column checked on this box.
 
 | CLI | Installed here | Headless invocation shape | Resume | Adapter fit |
@@ -192,7 +192,7 @@ Quick survey of other terminal coding agents and how well they'd fit Conduit's
 **Recommendation:** **Gemini CLI** and **Goose** are the two cleanest near-term additions — both are
 installed here, both already speak `stream-json`, and both fit the explicit-argv + continue model
 with only a new `case` in `agentArgv`/`continueArgv` and a stream-schema branch in
-`streamJSONOutput`. Cursor Agent CLI is a strong third once present locally. Aider fits Conduit's
+`streamJSONOutput`. Cursor Agent CLI is a strong third once present locally. Aider fits Lancer's
 model least well (no structured stream, edits/commits directly — at odds with steer-and-approve).
 
 Sources for CLI shapes: local `--help` output (gemini 0.47.0, goose 1.37.0, aider 0.86.2) +

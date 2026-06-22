@@ -5,7 +5,7 @@ Created: 2026-05-24
 
 ## Goal
 
-Frequently-used commands and multi-step workflows are first-class citizens in Conduit.
+Frequently-used commands and multi-step workflows are first-class citizens in Lancer.
 Users can save, search, and insert snippets directly from the session composer,
 and execute parameterized multi-step workflows with inline prompt resolution.
 
@@ -29,5 +29,5 @@ and execute parameterized multi-step workflows with inline prompt resolution.
 | `Sources/SessionFeature/SnippetPaletteSheet.swift` | Searchable sheet to pick & insert a snippet into the composer |
 | `Sources/AgentKit/WorkflowEngine.swift` | Runs multi-line snippets with `{{param}}` substitution |
 | `Sources/SettingsFeature/SnippetEditorView.swift` | List + add/edit/delete UI for managing snippets |
-| `Tests/ConduitKitTests/SnippetRepositoryTests.swift` | Unit tests for repository operations |
-| `Tests/ConduitKitTests/WorkflowEngineTests.swift` | Unit tests for engine parsing and execution |
+| `Tests/LancerKitTests/SnippetRepositoryTests.swift` | Unit tests for repository operations |
+| `Tests/LancerKitTests/WorkflowEngineTests.swift` | Unit tests for engine parsing and execution |

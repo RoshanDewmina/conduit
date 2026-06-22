@@ -44,7 +44,7 @@ This inventory separates current captured surfaces from board concepts that need
 - Audit · tamper-evident chain (`auditchain`): Show tamper-evident audit records and verification status for decisions and bridge events.
 - Host health · daemon detail (`hosthealth`): Show detailed daemon and host health for one connected machine.
 - Billing · spend + quota remaining (`usage`): Show spend, quota, usage, and billing state across providers or the app account.
-- Conduit Pro · paywall (`paywall`): Explain why a paid capability is unavailable and let the user upgrade or compare plans.
+- Lancer Pro · paywall (`paywall`): Explain why a paid capability is unavailable and let the user upgrade or compare plans.
 - Quota · per-provider dashboard (`quotaguard`): Show per-provider quota and spend guardrails so users can prevent unexpected cost or blocked runs.
 - Library hub → dissolved (`rm-lib`): Document that Library should not be a primary app destination and its useful pieces should move into more relevant flows.
 - Session surface switcher → deleted (`rm-shell`): Document that a session surface switcher should not be a primary navigation model.

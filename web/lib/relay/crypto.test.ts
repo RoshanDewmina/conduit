@@ -11,6 +11,6 @@ test("AEAD ciphertext+tag match Go daemon (fixed nonce)", () => {
   const key = b64uDecode(vectors.sessionKeyB64);
   const pt = decryptFrame({ version: 1, nonce: vectors.frame.nonceB64, ciphertext: vectors.frame.ciphertextB64, tag: vectors.frame.tagB64 }, key);
   expect(textDecode(pt)).toBe(vectors.frame.plaintext);
-  const rt = encryptFrame(textEncode("hello-conduit"), key);
-  expect(textDecode(decryptFrame(rt, key))).toBe("hello-conduit");
+  const rt = encryptFrame(textEncode("hello-lancer"), key);
+  expect(textDecode(decryptFrame(rt, key))).toBe("hello-lancer");
 });

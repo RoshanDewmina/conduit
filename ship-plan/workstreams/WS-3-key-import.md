@@ -3,7 +3,7 @@
 > Depends on WS-0. Owns the untracked `KeyImportView.swift` + `OpenSSHKeyParser.swift`. Security-critical → WS-8 reviews it after.
 
 ## Context
-Conduit is an iOS SSH app; users must be able to bring their own keys. Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`.
+Lancer is an iOS SSH app; users must be able to bring their own keys. Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`.
 
 **Confirmed state:** the feature is **half-built and untracked** (substantial, not greenfield):
 - `SecurityKit/OpenSSHKeyParser.swift` — **706 lines** (parser, incomplete).

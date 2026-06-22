@@ -1,15 +1,15 @@
-# Deploying the Conduit blind relay
+# Deploying the Lancer blind relay
 
 The `push-backend` binary doubles as the **blind WebSocket relay** for keyless
-QR + relay pairing: it forwards opaque ciphertext between a `conduitd` daemon and
+QR + relay pairing: it forwards opaque ciphertext between a `lancerd` daemon and
 the phone on a shared 6-char pairing channel and never holds a key (see
 [`PAIRING_PROTOCOL.md`](./PAIRING_PROTOCOL.md) for the exact wire contract the iOS
 client must match).
 
-The relay endpoint is `wss://<host>/ws/relay`. Point conduitd at it with:
+The relay endpoint is `wss://<host>/ws/relay`. Point lancerd at it with:
 
 ```bash
-export CONDUIT_RELAY_URL="wss://<host>"      # base URL, NO /ws/relay path
+export LANCER_RELAY_URL="wss://<host>"      # base URL, NO /ws/relay path
 ```
 
 This document covers two ways to host it:
@@ -32,7 +32,7 @@ The relay endpoint (`/ws/relay`) is **not** behind `APPROVAL_RELAY_SECRET` — i
 carries only ciphertext, so it is intentionally open. `APPROVAL_RELAY_SECRET`
 guards the *control-plane* HTTP endpoints (`/register`, `/approval`,
 `/run-complete`) and is **mandatory in production** (the process refuses to start
-without it when `FLY_APP_NAME`/`K_SERVICE`/`CONDUIT_ENV=production` is set — see
+without it when `FLY_APP_NAME`/`K_SERVICE`/`LANCER_ENV=production` is set — see
 `relay_security.go`). Set it on any deployment that also serves those endpoints.
 
 Relevant env vars:
@@ -41,7 +41,7 @@ Relevant env vars:
 |-------------------------|-------------------------------------------------------------|
 | `PORT`                  | Listen port (default `8080`).                               |
 | `APPROVAL_RELAY_SECRET` | Shared secret for control-plane HTTP endpoints (prod: required). |
-| `CONDUIT_ENV`           | `production` to enable fail-closed startup checks.          |
+| `LANCER_ENV`           | `production` to enable fail-closed startup checks.          |
 
 ---
 
@@ -74,7 +74,7 @@ tailscale funnel status
 Your relay base URL is then:
 
 ```
-CONDUIT_RELAY_URL="wss://<host>.<tailnet>.ts.net"
+LANCER_RELAY_URL="wss://<host>.<tailnet>.ts.net"
 ```
 
 (The daemon appends `/ws/relay`; WSS upgrades ride the same 443 Funnel.)
@@ -97,7 +97,7 @@ near-stateless and carries only small control frames.
 ### 2a. Provision the VM
 
 ```bash
-gcloud compute instances create conduit-relay \
+gcloud compute instances create lancer-relay \
   --machine-type=e2-small --zone=us-central1-a \
   --image-family=debian-12 --image-project=debian-cloud \
   --tags=https-server
@@ -120,22 +120,22 @@ of the above unchanged.
 
 ### 2c. systemd unit
 
-`/etc/systemd/system/conduit-relay.service`:
+`/etc/systemd/system/lancer-relay.service`:
 
 ```ini
 [Unit]
-Description=Conduit blind relay
+Description=Lancer blind relay
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/push-backend
 Environment=PORT=8080
-Environment=CONDUIT_ENV=production
-EnvironmentFile=/etc/conduit-relay.env       # holds APPROVAL_RELAY_SECRET=...
+Environment=LANCER_ENV=production
+EnvironmentFile=/etc/lancer-relay.env       # holds APPROVAL_RELAY_SECRET=...
 Restart=always
 RestartSec=2
-User=conduit
+User=lancer
 DynamicUser=true
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -145,7 +145,7 @@ ProtectHome=true
 WantedBy=multi-user.target
 ```
 
-`/etc/conduit-relay.env` (mode `0600`):
+`/etc/lancer-relay.env` (mode `0600`):
 
 ```
 APPROVAL_RELAY_SECRET=<openssl rand -hex 32>
@@ -155,15 +155,15 @@ Then:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now conduit-relay
-sudo systemctl status conduit-relay
+sudo systemctl enable --now lancer-relay
+sudo systemctl status lancer-relay
 curl https://<your-domain>/health     # → 200
 ```
 
-Point conduitd at it:
+Point lancerd at it:
 
 ```bash
-CONDUIT_RELAY_URL="wss://<your-domain>"
+LANCER_RELAY_URL="wss://<your-domain>"
 ```
 
 ---
@@ -175,13 +175,13 @@ CONDUIT_RELAY_URL="wss://<your-domain>"
 curl -fsS https://<host>/health && echo OK
 
 # Pairing instructions (prints a code + the configured relay URL):
-CONDUIT_RELAY_URL="wss://<host>" conduitd pair
+LANCER_RELAY_URL="wss://<host>" lancerd pair
 
 # Run the daemon side against the relay:
-CONDUIT_RELAY_URL="wss://<host>" CONDUIT_PAIRING_CODE=<code> conduitd relay
+LANCER_RELAY_URL="wss://<host>" LANCER_PAIRING_CODE=<code> lancerd relay
 ```
 
 The full blind-forward + crypto round-trip is covered by
-`go test ./...` in both `daemon/push-backend` and `daemon/conduitd`
+`go test ./...` in both `daemon/push-backend` and `daemon/lancerd`
 (`TestRelayRoundTrip`, `TestRelayBuffersUntilPeerJoins`,
 `TestE2ECryptoRoundTrip`, `TestE2ELoopbackThroughBlindRelay`).

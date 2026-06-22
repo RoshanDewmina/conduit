@@ -26,7 +26,7 @@ var creditsStore = struct {
 	mu   sync.Mutex
 	path string
 }{
-	path: dataFilePath("CREDITS_FILE", "conduit-credits.json"),
+	path: dataFilePath("CREDITS_FILE", "lancer-credits.json"),
 }
 
 func initCreditsStore() {

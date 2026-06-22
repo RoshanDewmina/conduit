@@ -55,9 +55,9 @@ func envInt(key string) int {
 //     marked failed and torn down. Prevents a crashed/hung runner from stranding a
 //     run in pending/running forever (the runner can't PATCH if it died).
 //
-// Disabled with CONDUIT_DISABLE_REAPER=1. Tests drive reapRunsOnce directly.
+// Disabled with LANCER_DISABLE_REAPER=1. Tests drive reapRunsOnce directly.
 func startRunReaper() {
-	if os.Getenv("CONDUIT_DISABLE_REAPER") == "1" {
+	if os.Getenv("LANCER_DISABLE_REAPER") == "1" {
 		return
 	}
 	go func() {

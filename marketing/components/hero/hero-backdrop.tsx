@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-// "Running smoothly" palette — the famicom spectrum (lib/conduit-core.jsx),
+// "Running smoothly" palette — the famicom spectrum (lib/lancer-core.jsx),
 // luminance-evened so every hue reads, with the alarm-red pulled out and
 // reserved for the glitch so a calm warm moment never looks like an error.
 const CALM: [number, number, number][] = [

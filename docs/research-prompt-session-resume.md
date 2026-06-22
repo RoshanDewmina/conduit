@@ -1,4 +1,4 @@
-# Research prompt: session resume/continue for Conduit dispatch
+# Research prompt: session resume/continue for Lancer dispatch
 
 Paste this to a fresh research agent (no prior context from this conversation needed — it's self-contained).
 
@@ -6,19 +6,19 @@ Paste this to a fresh research agent (no prior context from this conversation ne
 
 ## Context
 
-Conduit is an iOS app that dispatches AI coding agents (`claude`, `codex`, `opencode`, `kimi`) on a
-remote/local host, either over SSH (`Packages/ConduitKit/Sources/.../FleetStore` → daemon JSON-RPC)
-or over a blind E2E-encrypted relay (`E2ERelayBridge.swift` ↔ `daemon/conduitd/e2e_router.go`). The
-daemon is a Go binary (`daemon/conduitd/`) that, on dispatch, builds an explicit argv per vendor
-(`agentArgv()` in `daemon/conduitd/dispatch.go`) and launches it as a one-shot subprocess via
+Lancer is an iOS app that dispatches AI coding agents (`claude`, `codex`, `opencode`, `kimi`) on a
+remote/local host, either over SSH (`Packages/LancerKit/Sources/.../FleetStore` → daemon JSON-RPC)
+or over a blind E2E-encrypted relay (`E2ERelayBridge.swift` ↔ `daemon/lancerd/e2e_router.go`). The
+daemon is a Go binary (`daemon/lancerd/`) that, on dispatch, builds an explicit argv per vendor
+(`agentArgv()` in `daemon/lancerd/dispatch.go`) and launches it as a one-shot subprocess via
 `exec.Command` (`realLauncher` in the same file). Each dispatch gets a fresh `runID`; output streams
 back to the phone over `agent.run.output` notifications (SSH) or `agentRunOutput` relay messages.
 
 Two related gaps, currently both unimplemented:
 
 1. **Resuming a session the user started themselves**, e.g. in Terminal/iTerm on the host, completely
-   outside Conduit — and continuing that exact conversation from the phone.
-2. **Following up on a run Conduit itself dispatched.** The phone UI already has a follow-up input bar
+   outside Lancer — and continuing that exact conversation from the phone.
+2. **Following up on a run Lancer itself dispatched.** The phone UI already has a follow-up input bar
    (`RunDetailView` → `E2ERelayBridge.sendRunContinue(runId:prompt:)` → sends an `agentRunContinue`
    relay message). But the daemon never implements it: `e2e_router.go`'s `handleMessage` switch has no
    `agentRunContinue` case (falls through to the unhandled-type log line and is silently dropped), and
@@ -33,7 +33,7 @@ future session-resume support` — never populated, never read.
 
 All four supported CLIs have **native, vendor-provided session continue/resume support**, and all four
 persist sessions to disk independently of any wrapping process — meaning a session survives after the
-original process exits, and can be resumed by ANYONE (a fresh Conduit dispatch included), regardless of
+original process exits, and can be resumed by ANYONE (a fresh Lancer dispatch included), regardless of
 who/what started it:
 
 | Vendor | Continue-most-recent | Resume-by-id | On-disk session storage (host-side, confirmed to exist) |
@@ -46,7 +46,7 @@ who/what started it:
 This means **items 1 and 2 above are the same underlying capability** — "continue/resume a vendor
 session in a given cwd" — not two separate features. A dispatch that passes `--continue` (or
 `--resume <id>`) instead of starting fresh will pick up ANY existing session for that cwd, whether it
-was started by Conduit, by the user in Terminal, or by anything else.
+was started by Lancer, by the user in Terminal, or by anything else.
 
 ## What to research and design (don't just confirm the table above — go deeper)
 
@@ -59,8 +59,8 @@ was started by Conduit, by the user in Terminal, or by anything else.
 
 2. **TTY/headless constraints.** `agentArgv()` has a documented landmine: `codex exec` hangs without a
    TTY unless `--dangerously-bypass-approvals-and-sandbox` is passed (gated behind
-   `CONDUIT_CODEX_UNSAFE=1`, see `docs/audit/CODEX_GATING.md` — the bypass disables codex's own sandbox,
-   so Conduit's policy gate must cover it). Check whether `codex resume` has the same headless-hang
+   `LANCER_CODEX_UNSAFE=1`, see `docs/audit/CODEX_GATING.md` — the bypass disables codex's own sandbox,
+   so Lancer's policy gate must cover it). Check whether `codex resume` has the same headless-hang
    problem and the same bypass requirement, or whether resume behaves differently from `exec`.
 
 3. **Session discovery/listing, not just "most recent."** `--continue` always grabs the single latest
@@ -87,7 +87,7 @@ was started by Conduit, by the user in Terminal, or by anything else.
    - Whether a continued run needs to re-run the policy/budget gate (`dispatch()`'s `evalFn`/budget
      check) — almost certainly yes, since a follow-up prompt is new attacker-influenceable input,
      same as the original dispatch.
-   - For item 1 specifically (resuming a session never dispatched by Conduit, so no existing `runID`):
+   - For item 1 specifically (resuming a session never dispatched by Lancer, so no existing `runID`):
      whether `agent.dispatch` should grow an optional `sessionID`/`resume: true` param so the FIRST
      phone-side message about a pre-existing terminal session is itself a "resume" dispatch that
      allocates a fresh `runID` bound to that pre-existing vendor session.
@@ -95,7 +95,7 @@ was started by Conduit, by the user in Terminal, or by anything else.
 5. **Phone-side UX**, lighter-weight, after the daemon design is solid: how `RunDetailView`'s existing
    follow-up bar should behave once `agent.run.continue` exists (today it calls
    `sendRunContinue` which is fire-and-forget into the void), and whether `NewChatTabView` (the agent
-   picker described in `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`) needs a "browse
+   picker described in `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`) needs a "browse
    existing sessions on this host" entry point for item 1, vs. just defaulting new dispatches to
    "continue most recent in this cwd" as a low-effort MVP toggle.
 

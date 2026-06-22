@@ -1,20 +1,20 @@
-# Conduit Security Posture (Self-Host)
+# Lancer Security Posture (Self-Host)
 
 > ⚠️ **SUPERSEDED (2026-06-17)** by [`docs/legal/SECURITY_ARCHITECTURE.md`](legal/SECURITY_ARCHITECTURE.md)
 > (fuller, newer threat model, 2026-06-15) and [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md) §2 (current
 > verified security posture: GO). This file is retained for its self-host posture notes only — for
 > current security state use those two documents.
 
-This document describes the end-to-end security model for Conduit and the `conduitd` bridge when used in self-host mode.
+This document describes the end-to-end security model for Lancer and the `lancerd` bridge when used in self-host mode.
 
 ## Threat Model (Practical Scope)
 
-Conduit optimizes for:
+Lancer optimizes for:
 - secure phone-to-host control of agent decisions
 - auditable approvals and denials
 - minimizing cloud exposure of code and tool payloads
 
-Conduit does not claim:
+Lancer does not claim:
 - remote host hardening for your infrastructure
 - malware protection on compromised developer machines
 - complete prevention of dangerous commands if you approve them
@@ -22,7 +22,7 @@ Conduit does not claim:
 ## Data Flow and Trust Boundaries
 
 1. iPhone connects to your host over SSH.
-2. `conduitd serve` runs on the host and bridges:
+2. `lancerd serve` runs on the host and bridges:
    - iOS app (SSH stdio, framed JSON-RPC)
    - agent hooks (local unix socket)
 3. Hook events become approval cards on-device.
@@ -30,7 +30,7 @@ Conduit does not claim:
 
 Primary trust boundaries:
 - network boundary: SSH transport
-- local host boundary: unix socket at `~/.conduit/conduitd.sock`
+- local host boundary: unix socket at `~/.lancer/lancerd.sock`
 - user decision boundary: explicit approve/deny action on iPhone
 
 ## Key Security Controls
@@ -41,7 +41,7 @@ Primary trust boundaries:
 
 ### Key handling
 - Credentials are stored in platform secure storage (Keychain on iOS side).
-- No API keys or agent credentials are embedded in `conduitd` source.
+- No API keys or agent credentials are embedded in `lancerd` source.
 
 ### Approval gating
 - Hooks block pre-tool execution until a decision is returned.
@@ -50,35 +50,35 @@ Primary trust boundaries:
 
 ### Auditability
 - Approval events carry timestamp, command summary, risk band, and tool metadata.
-- Codex hook can append local JSONL event telemetry (`~/.conduit/codex-hook-events.jsonl`).
+- Codex hook can append local JSONL event telemetry (`~/.lancer/codex-hook-events.jsonl`).
 
 ## On-Prem / Self-Host Architecture
 
-`conduitd` is designed for on-prem operation:
+`lancerd` is designed for on-prem operation:
 - runs on your own host/VM
 - no mandatory managed relay in the approval loop
 - hook-to-daemon transport is local unix socket
 
 Optional push notifications route through your configured push backend URL. This is operationally optional and can be disabled by not registering a push backend.
 
-## What Conduit Does NOT Send To Cloud
+## What Lancer Does NOT Send To Cloud
 
-In self-host mode, Conduit does not require sending your repository contents to a Conduit-managed cloud service for approvals.
+In self-host mode, Lancer does not require sending your repository contents to a Lancer-managed cloud service for approvals.
 
-Conduit does not automatically upload:
+Lancer does not automatically upload:
 - your git repository
 - full terminal transcript history
 - secret manager values
 - private keys from your local keychain
 
-Note: your chosen agent vendor (for example Claude or Codex) may still send prompts/tool context to their own service per that vendor's policy. Conduit does not override vendor behavior.
+Note: your chosen agent vendor (for example Claude or Codex) may still send prompts/tool context to their own service per that vendor's policy. Lancer does not override vendor behavior.
 
 ## Operator Checklist
 
 For hardened deployments:
-- run `conduitd` under a non-root user
+- run `lancerd` under a non-root user
 - restrict SSH access with keys and host firewall rules
-- protect `~/.conduit` permissions (`0700`)
+- protect `~/.lancer` permissions (`0700`)
 - rotate host credentials regularly
 - keep host OS and CLI agents patched
 

@@ -13,7 +13,7 @@ be corrected.
 
 ## 1. Module discipline
 
-1. **Engines never import UIKit or SwiftUI.** `ConduitCore`, `SSHTransport`,
+1. **Engines never import UIKit or SwiftUI.** `LancerCore`, `SSHTransport`,
    `TerminalEngine`, `SecurityKit`, `AgentKit`, `PersistenceKit`,
    `NotificationsKit`, `DiffKit`, `PreviewKit`, and `SyncKit` are SwiftPM
    libraries testable on a macOS CLI. UI belongs in `*Feature` modules.
@@ -48,7 +48,7 @@ be corrected.
 
 ## 4. UI surface rules
 
-- All glass / chrome surfaces use `View.conduitGlassChrome(...)` from
+- All glass / chrome surfaces use `View.lancerGlassChrome(...)` from
   `DesignSystem/Atoms.swift`, not raw `.background(.bar)` /
   `.background(.thinMaterial)` / `.glassEffect(...)`. The single helper is
   what we change when Apple revises Liquid Glass.

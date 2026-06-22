@@ -2,14 +2,14 @@
 
 > **Status of this document:** prepared, NOT executed. No deploy command was run.
 > No secret values are recorded anywhere below — placeholders only.
-> Scope: `daemon/push-backend` only. Does not touch `project.yml`, `daemon/conduitd`, or `Packages/`.
+> Scope: `daemon/push-backend` only. Does not touch `project.yml`, `daemon/lancerd`, or `Packages/`.
 
 ---
 
 ## 0. Gate result (read this first)
 
 ```
-cd daemon/push-backend && go test ./...   →  ok   conduit/push-backend   0.544s
+cd daemon/push-backend && go test ./...   →  ok   lancer/push-backend   0.544s
 cd daemon/push-backend && go build ./...  →  (no output — success)
 ```
 
@@ -30,19 +30,19 @@ curl -sSI https://conduit-push-y4wpy6zeva-ts.a.run.app/health          → HTTP/
 
 These are **two different backends**, confirmed by response headers and `OPTIONS` preflight:
 
-| | `35.201.3.231.sslip.io` (current `CONDUIT_PUSH_BACKEND_URL`) | `conduit-push-y4wpy6zeva-ts.a.run.app` |
+| | `35.201.3.231.sslip.io` (current `LANCER_PUSH_BACKEND_URL`) | `conduit-push-y4wpy6zeva-ts.a.run.app` |
 |---|---|---|
 | Fronted by | Caddy on a GCP Compute VM (`via: 1.1 Caddy`, Let's Encrypt cert CN=`35.201.3.231.sslip.io`) | Cloud Run direct URL (`server: Google Frontend`) |
 | `Access-Control-Allow-Headers` | `Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token` (**no `Authorization`**) | `Authorization, Content-Type, Stripe-Signature, X-Customer-Id, X-App-Account-Token` |
 | Build | **STALE** — predates commit `5bd81663` (`feat(account): standard accounts, JWT auth, QR device binding + management`), which added the `Authorization` CORS header in `main.go`'s `corsMiddleware` | **CURRENT** — matches `main.go` on this branch |
-| GCP project | Not the two projects this account can introspect (`roshan-agent-f1c2466d`, `conduit-runner-0603190634`) — likely a third project, or a VM provisioned by hand per `DEPLOY.md` §2 | `roshan-agent-f1c2466d` ("Hermes Google Access"), Cloud Run service `conduit-push`, region `australia-southeast1`, latest revision `conduit-push-00005-zwm` (Ready=True, 100% traffic) |
+| GCP project | Not the two projects this account can introspect (`roshan-agent-f1c2466d`, `conduit-runner-0603190634`) — likely a third project, or a VM provisioned by hand per `DEPLOY.md` §2 | `roshan-agent-f1c2466d` ("Hermes Google Access"), Cloud Run service `lancer-push`, region `australia-southeast1`, latest revision `lancer-push-00005-zwm` (Ready=True, 100% traffic) |
 
-**Read-only `gcloud` inspection of `roshan-agent-f1c2466d` / `conduit-push` (region `australia-southeast1`)
+**Read-only `gcloud` inspection of `roshan-agent-f1c2466d` / `lancer-push` (region `australia-southeast1`)
 found the running revision's env is incomplete:**
 
 ```
 APNS_KEY_PATH   = /secrets/apns.p8        (set)
-APNS_BUNDLE_ID  = dev.conduit.mobile      (set)
+APNS_BUNDLE_ID  = dev.lancer.mobile      (set)
 APPROVAL_RELAY_SECRET = <secret ref: APPROVAL_RELAY_SECRET:latest>   (set)
 APNS_KEY_ID     = NOT SET
 APNS_TEAM_ID    = NOT SET
@@ -54,7 +54,7 @@ would `log.Fatal` the request goroutine — `mustEnv("APNS_KEY_ID")` panics-via-
 read lazily, only at first push attempt (this matches the existing caveat already recorded in
 `docs/push-backend-deploy-env.md`).
 
-A third, unrelated Cloud Run service `conduit-push-smoke` also exists in project
+A third, unrelated Cloud Run service `lancer-push-smoke` also exists in project
 `conduit-runner-0603190634` (different URL, likely a smoke-test deployment — not in scope here).
 
 **Conclusion:** the *symptom* "relay unreachable" may be transient/already self-resolved, or the
@@ -100,8 +100,8 @@ Built from `grep -rn 'os.Getenv\|mustEnv(' --include='*.go' .` across every non-
 |---|---|---|---|---|
 | `PORT` | No | `8080` | `main.go:124` | Server listens elsewhere only if you set it; harmless. |
 | `CORS_ALLOW_ORIGIN` | No | `*` | `main.go:134` | Wide-open CORS if unset — fine for this relay's threat model, tighten for prod if desired. |
-| `APPROVAL_RELAY_SECRET` | **Required in production** | none (open) | `relay_security.go:67`, checked at startup by `warnIfRelayUnauthenticated()` | **Fails closed in prod.** If unset AND the process detects it's a production deployment (`FLY_APP_NAME`, `K_SERVICE`, `K_REVISION`, `K_CONFIGURATION` env present, or `CONDUIT_ENV`/`APP_ENV` = `prod`/`production`) → `log.Fatal()`, **process refuses to start.** Outside those signals (e.g. bare `go run .` locally) it just logs a loud warning and the control-plane endpoints (`/register`, `/approval`, `/run-complete`) run **unauthenticated**. Cloud Run sets `K_SERVICE`/`K_REVISION`/`K_CONFIGURATION` automatically, so this is enforced there. |
-| `CONDUIT_ENV` | No | none | `relay_security.go:191` (`relayProductionDeploymentFromEnv`) | Only matters as one of several signals for the prod-detection above; not otherwise consumed. |
+| `APPROVAL_RELAY_SECRET` | **Required in production** | none (open) | `relay_security.go:67`, checked at startup by `warnIfRelayUnauthenticated()` | **Fails closed in prod.** If unset AND the process detects it's a production deployment (`FLY_APP_NAME`, `K_SERVICE`, `K_REVISION`, `K_CONFIGURATION` env present, or `LANCER_ENV`/`APP_ENV` = `prod`/`production`) → `log.Fatal()`, **process refuses to start.** Outside those signals (e.g. bare `go run .` locally) it just logs a loud warning and the control-plane endpoints (`/register`, `/approval`, `/run-complete`) run **unauthenticated**. Cloud Run sets `K_SERVICE`/`K_REVISION`/`K_CONFIGURATION` automatically, so this is enforced there. |
+| `LANCER_ENV` | No | none | `relay_security.go:191` (`relayProductionDeploymentFromEnv`) | Only matters as one of several signals for the prod-detection above; not otherwise consumed. |
 
 ### 3b. Auth (new — commit `5bd81663`)
 
@@ -110,7 +110,7 @@ Built from `grep -rn 'os.Getenv\|mustEnv(' --include='*.go' .` across every non-
 | `SUPABASE_JWT_SECRET` | Required only for standard-account endpoints | none | `auth.go:28,32` | See §2 — standard-account auth 401s; rest of server unaffected. |
 | `SUPABASE_JWT_ISSUER` | Optional | none (skip issuer check) | `auth.go:52` | Issuer claim simply not verified. |
 
-(`CONDUIT_SUPABASE_URL` is **not** a push-backend server env var — it's an **iOS app** build
+(`LANCER_SUPABASE_URL` is **not** a push-backend server env var — it's an **iOS app** build
 setting in `project.yml`, read by `AccountConfiguration.fromBundle` on-device. Not consumed
 anywhere in this Go package. Do not confuse it with the two vars above.)
 
@@ -121,7 +121,7 @@ anywhere in this Go package. Do not confuse it with the two vars above.)
 | `APNS_KEY_ID` | Required for any push | none | `main.go:300,356`, `liveactivity.go:217` via `mustEnv` | `mustEnv` calls `log.Fatalf` → **crashes the whole process**, not just the request, the moment any code path tries to send a push (approval alert, run-complete alert, or Live Activity update). Health checks won't catch this until a real push fires. |
 | `APNS_TEAM_ID` | Required for any push | none | same call sites | Same — `log.Fatalf` on first push attempt. |
 | `APNS_KEY_PATH` | Required for any push | none | same call sites, then `loadP8Key()` | Same — `log.Fatalf` on first push attempt. If the path is set but wrong/missing file, `loadP8Key` returns an error which is wrapped and returned as a 500 to the relay caller (does NOT crash the process — only `mustEnv` does that). |
-| `APNS_BUNDLE_ID` | Required for any push | none | same call sites | Same `log.Fatalf` pattern. `.env.example` documents a default of `dev.conduit.mobile`, but there is no in-code default — it's still `mustEnv`. |
+| `APNS_BUNDLE_ID` | Required for any push | none | same call sites | Same `log.Fatalf` pattern. `.env.example` documents a default of `dev.lancer.mobile`, but there is no in-code default — it's still `mustEnv`. |
 
 **This is the sharpest footgun in the whole service:** because `mustEnv` calls `log.Fatalf` instead
 of returning an error, a missing APNs var doesn't just fail one request — **it kills the container**
@@ -167,7 +167,7 @@ the relay.
 | `QUOTA_DAILY_USAGE_USD` | `100` |
 | `RUN_REAPER_INTERVAL_SEC` | `120` (2 min) |
 | `RUN_MAX_DURATION_SEC` | `3600` (60 min) |
-| `CONDUIT_DISABLE_REAPER` | unset (reaper runs) — set to `1` to disable |
+| `LANCER_DISABLE_REAPER` | unset (reaper runs) — set to `1` to disable |
 | `SCHEDULE_TICKER_ENABLED` | `true` — set to `false` to disable |
 
 ### 3i. Hosted-agent cloud dispatch providers (not required for relay/APNs)
@@ -186,13 +186,13 @@ the relay.
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Two-stage build: `golang:1.25-alpine` → `CGO_ENABLED=0 GOOS=linux go build` → `alpine:3.19` runtime, non-root `conduit` user, `EXPOSE 8080`. Used by both Cloud Run `--source` deploys and `docker compose`. |
+| `Dockerfile` | Two-stage build: `golang:1.25-alpine` → `CGO_ENABLED=0 GOOS=linux go build` → `alpine:3.19` runtime, non-root `lancer` user, `EXPOSE 8080`. Used by both Cloud Run `--source` deploys and `docker compose`. |
 | `docker-compose.yml` | Local/self-host: builds from `Dockerfile`, maps `8080:8080`, reads `.env`, healthcheck against `/health`. |
-| `fly.toml` | `app = "conduit-push"`, `primary_region = "iad"`, builds via the same `Dockerfile`, `internal_port = 8080`, `auto_stop/start_machines`, `min_machines_running = 0`. **This is for deploying push-backend itself to Fly — distinct from `fly_provider.go`, which uses the Fly Machines API to launch per-run agent containers.** |
+| `fly.toml` | `app = "lancer-push"`, `primary_region = "iad"`, builds via the same `Dockerfile`, `internal_port = 8080`, `auto_stop/start_machines`, `min_machines_running = 0`. **This is for deploying push-backend itself to Fly — distinct from `fly_provider.go`, which uses the Fly Machines API to launch per-run agent containers.** |
 | `fly_provider.go`, `gcp_cloud_run.go`, `gcp_run_provider.go`, `lightsail_provider.go` | All **agent-run dispatch providers** (`dispatch.go`'s `providerFor`) — they launch a container per hosted agent *run*, not the push-backend service itself. Not part of how you redeploy push-backend. |
 | `DEPLOY.md` | Documents the **blind-relay-only** deploy story: Tailscale Funnel (testing) or a GCP Compute VM + systemd + Caddy/nginx/LB for TLS (production). This is almost certainly what's actually running at `35.201.3.231.sslip.io` today (see §1 — `via: 1.1 Caddy`). |
 | `SELF_HOST.md` | Generic Docker self-host guide (any host), env var table, TLS options (Caddy sidecar / Tailscale Funnel / nginx), `DATA_DIR` persistence note. |
-| `docs/push-backend-deploy-env.md` | **The canonical, owner-authored Cloud Run deploy doc** — documents the exact `gcloud run deploy conduit-push --source . --region australia-southeast1` flow plus `gcloud secrets create`/`gcloud run services update --set-secrets` for APNs. This matches what's actually deployed in `roshan-agent-f1c2466d` right now (service name, region, image path all match read-only `gcloud` inspection in §1). |
+| `docs/push-backend-deploy-env.md` | **The canonical, owner-authored Cloud Run deploy doc** — documents the exact `gcloud run deploy lancer-push --source . --region australia-southeast1` flow plus `gcloud secrets create`/`gcloud run services update --set-secrets` for APNs. This matches what's actually deployed in `roshan-agent-f1c2466d` right now (service name, region, image path all match read-only `gcloud` inspection in §1). |
 
 **Two distinct production deploy stories exist in this repo and neither one is what's live on
 the public host today, fully:**
@@ -221,7 +221,7 @@ two visible projects both have Compute Engine API disabled, and neither shows a 
 rule/static IP for `35.201.3.231`). The owner must either:
 - switch `gcloud config set project <the-right-project>` and re-run the discovery below, or
 - SSH directly to the known VM (if its instance name/zone is recorded somewhere outside this repo)
-  and confirm `systemctl status conduit-relay` / `caddy` there.
+  and confirm `systemctl status lancer-relay` / `caddy` there.
 
 **Once the right project/VM is identified, the redeploy is:**
 
@@ -240,19 +240,19 @@ CGO_ENABLED=0 GOOS=linux go build -o push-backend .
 gcloud compute scp ./push-backend <INSTANCE_NAME>:/tmp/push-backend --zone=<ZONE>
 
 # 3. On the VM (via `gcloud compute ssh <INSTANCE_NAME> --zone=<ZONE>`), install + restart:
-sudo systemctl stop conduit-relay
+sudo systemctl stop lancer-relay
 sudo mv /tmp/push-backend /usr/local/bin/push-backend
 sudo chmod +x /usr/local/bin/push-backend
-# Confirm /etc/conduit-relay.env already has APPROVAL_RELAY_SECRET (DO NOT print it):
-sudo test -s /etc/conduit-relay.env && echo "env file present"
+# Confirm /etc/lancer-relay.env already has APPROVAL_RELAY_SECRET (DO NOT print it):
+sudo test -s /etc/lancer-relay.env && echo "env file present"
 # Add the new auth vars (placeholders — owner fills in the real values, never echoed to a shell history file):
-sudo tee -a /etc/conduit-relay.env >/dev/null <<'EOF'
+sudo tee -a /etc/lancer-relay.env >/dev/null <<'EOF'
 SUPABASE_JWT_SECRET=$SUPABASE_JWT_SECRET
 SUPABASE_JWT_ISSUER=$SUPABASE_JWT_ISSUER
 EOF
-sudo chmod 600 /etc/conduit-relay.env
-sudo systemctl start conduit-relay
-sudo systemctl status conduit-relay --no-pager
+sudo chmod 600 /etc/lancer-relay.env
+sudo systemctl start lancer-relay
+sudo systemctl status lancer-relay --no-pager
 
 # 4. Confirm Caddy/nginx in front of it is untouched (TLS termination + the
 #    35.201.3.231.sslip.io routing should already be configured — this redeploy
@@ -274,11 +274,11 @@ out-of-band), the redeploy is the already-documented flow in `docs/push-backend-
 ```bash
 cd daemon/push-backend
 gcloud config set project roshan-agent-f1c2466d
-gcloud run deploy conduit-push --source . --region australia-southeast1 \
+gcloud run deploy lancer-push --source . --region australia-southeast1 \
   --allow-unauthenticated --min-instances 1 --port 8080
 
 # Add the missing APNs vars + new auth vars (placeholders only):
-gcloud run services update conduit-push --region australia-southeast1 \
+gcloud run services update lancer-push --region australia-southeast1 \
   --update-secrets APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest \
   --set-secrets SUPABASE_JWT_SECRET=SUPABASE_JWT_SECRET:latest \
   --set-env-vars SUPABASE_JWT_ISSUER="$SUPABASE_JWT_ISSUER"
@@ -295,7 +295,7 @@ of which deploy path is chosen.
 cd daemon/push-backend
 
 # One-time (if the Fly app doesn't exist yet):
-fly launch --no-deploy --copy-config --name conduit-push
+fly launch --no-deploy --copy-config --name lancer-push
 
 # Deploy:
 fly deploy
@@ -326,13 +326,13 @@ fly secrets set APNS_KEY_PATH="/secrets/apns.p8"
 **Required follow-up if Path B is chosen** (NOT done here, per instructions):
 1. Get the new Fly URL: `fly status` → `https://conduit-push.fly.dev` (or whatever hostname Fly
    assigns).
-2. Update `project.yml` line 26: `CONDUIT_PUSH_BACKEND_URL: "https://conduit-push.fly.dev"`.
+2. Update `project.yml` line 26: `LANCER_PUSH_BACKEND_URL: "https://conduit-push.fly.dev"`.
 3. Rebuild and resubmit the iOS app (the value is baked into the app binary as a build setting —
-   `ConduitApp.swift` reads it at runtime, but it's compiled in, not fetched dynamically).
+   `LancerApp.swift` reads it at runtime, but it's compiled in, not fetched dynamically).
 4. Every previously-paired device/session's relay registration is irrelevant (new backend, no
    shared state) — re-pairing is required.
 
-**Recommendation: Path A.** It keeps `CONDUIT_PUSH_BACKEND_URL` (and therefore `project.yml` and
+**Recommendation: Path A.** It keeps `LANCER_PUSH_BACKEND_URL` (and therefore `project.yml` and
 every already-shipped/TestFlight iOS build) unchanged, requires no app rebuild, and the live host
 is already proven reachable today — only the binary + a couple of new env vars need to move. Path B
 trades a clean Fly-native deploy for a forced URL change, an iOS rebuild/resubmission, and an
@@ -343,7 +343,7 @@ unsolved APNs-key-mounting gap that doesn't exist on the current target.
 ## 6. APNs .p8 + secret-setting commands (placeholders only)
 
 Confirmed against code: `APNS_KEY_ID=L8LVU9X82W`, `APNS_TEAM_ID=39HM2X8GS6`,
-`APNS_BUNDLE_ID=dev.conduit.mobile` match `docs/push-backend-deploy-env.md` and
+`APNS_BUNDLE_ID=dev.lancer.mobile` match `docs/push-backend-deploy-env.md` and
 `.env.example`'s documented shape (10-char key ID, 10-char team ID, bundle ID literal). The `.p8`
 source path `~/Downloads/Personal-Docs/AuthKey_L8LVU9X82W.p8` is referenced in
 `docs/push-backend-deploy-env.md` and `docs/LIVE_LOOP_RUNBOOK.md` Phase 5a — this runbook does not
@@ -358,14 +358,14 @@ printf '%s' "$APPROVAL_RELAY_SECRET" | gcloud secrets create APPROVAL_RELAY_SECR
 printf '%s' "$SUPABASE_JWT_SECRET" | gcloud secrets create SUPABASE_JWT_SECRET --data-file=- --project=<PROJECT>
 gcloud secrets create APNS_KEY --data-file "/absolute/path/AuthKey_L8LVU9X82W.p8" --project=<PROJECT>
 
-gcloud run services update conduit-push --region <REGION> --project=<PROJECT> \
+gcloud run services update lancer-push --region <REGION> --project=<PROJECT> \
   --set-secrets APPROVAL_RELAY_SECRET=APPROVAL_RELAY_SECRET:latest,APNS_KEY_ID=APNS_KEY_ID:latest,APNS_TEAM_ID=APNS_TEAM_ID:latest,SUPABASE_JWT_SECRET=SUPABASE_JWT_SECRET:latest \
   --update-secrets /secrets/apns.p8=APNS_KEY:latest \
-  --set-env-vars APNS_KEY_PATH=/secrets/apns.p8,APNS_BUNDLE_ID=dev.conduit.mobile,SUPABASE_JWT_ISSUER="$SUPABASE_JWT_ISSUER"
+  --set-env-vars APNS_KEY_PATH=/secrets/apns.p8,APNS_BUNDLE_ID=dev.lancer.mobile,SUPABASE_JWT_ISSUER="$SUPABASE_JWT_ISSUER"
 ```
 
 **VM + systemd (Path A, Caddy variant):** see §5 Path A step 3 — values go in
-`/etc/conduit-relay.env` (mode `0600`), never in shell history or a committed file.
+`/etc/lancer-relay.env` (mode `0600`), never in shell history or a committed file.
 
 **Fly (Path B):** see §5 Path B's `fly secrets set` block above.
 
@@ -384,12 +384,12 @@ acceptance:
       `Authorization` (proves the deployed binary is the CURRENT build, not the stale
       pre-`5bd81663` one currently live at `35.201.3.231.sslip.io`)
 - [ ] Re-run the read-only env check: `gcloud run services describe <service> --region <region>
-      --format=json` (or `systemctl show conduit-relay -p Environment` on the VM) and confirm
+      --format=json` (or `systemctl show lancer-relay -p Environment` on the VM) and confirm
       `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH`, `APNS_BUNDLE_ID`, `APPROVAL_RELAY_SECRET`,
       `SUPABASE_JWT_SECRET` are all present (names/refs only — do not print values)
 - [ ] **Relay approval round-trip** per `docs/LIVE_LOOP_RUNBOOK.md` Phase 5b: pair a session to the
       redeployed relay (Settings → Connection, or
-      `SIMCTL_CHILD_CONDUIT_RELAY_CODE=<6-digit code>` in DEBUG), disconnect SSH, trigger an `ask`
+      `SIMCTL_CHILD_LANCER_RELAY_CODE=<6-digit code>` in DEBUG), disconnect SSH, trigger an `ask`
       from the host side, and confirm the approval card still reaches the Inbox and Approve still
       unblocks the agent over the relay path (🛑 CHECKPOINT 5b in that doc). This is the
       acceptance bar for "the relay redeploy actually works," not just `/health`.

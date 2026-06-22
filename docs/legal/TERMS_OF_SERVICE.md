@@ -1,4 +1,4 @@
-# Terms of Service — Conduit
+# Terms of Service — Lancer
 
 **Last updated:** {{DATE}}
 
@@ -6,7 +6,7 @@
 
 ## 1. Acceptance
 
-By downloading, installing, or using Conduit (the "App"), you agree to be bound
+By downloading, installing, or using Lancer (the "App"), you agree to be bound
 by these Terms of Service (the "Terms"). If you do not agree, do not use the
 App.
 
@@ -21,7 +21,7 @@ App.
 
 ## 2. The App's purpose
 
-Conduit is an iOS approval-firewall and audit interface for AI coding agents
+Lancer is an iOS approval-firewall and audit interface for AI coding agents
 (Claude Code, Codex, opencode) that run on computers you own or control. The
 App:
 
@@ -37,7 +37,7 @@ device.** All code execution occurs on your remote host.
 
 ## 3. License
 
-Conduit grants you a personal, non-transferable, non-exclusive license to use
+Lancer grants you a personal, non-transferable, non-exclusive license to use
 the App on Apple-branded devices that you own or control, as permitted by the
 Apple Terms.
 
@@ -47,7 +47,7 @@ Apple Terms.
 
 ### 4.1 Authorized access only
 
-You may use Conduit only to connect to:
+You may use Lancer only to connect to:
 
 - Hosts that you own
 - Hosts that you are explicitly authorized by the owner to access
@@ -57,7 +57,7 @@ host credentials.
 
 ### 4.2 Your agents, your liability
 
-You control what AI coding agents do on your host. Conduit merely relays
+You control what AI coding agents do on your host. Lancer merely relays
 approval decisions. You are responsible for:
 
 - The actions your agents perform
@@ -67,7 +67,7 @@ approval decisions. You are responsible for:
 
 ### 4.3 Prohibited uses
 
-You must not use Conduit to:
+You must not use Lancer to:
 
 - Access any system without authorization
 - Distribute malware, ransomware, or other harmful code
@@ -79,12 +79,12 @@ You must not use Conduit to:
 
 ## 5. Accounts
 
-**Conduit does not create or manage user accounts.** Pairing is
+**Lancer does not create or manage user accounts.** Pairing is
 device-to-device — you scan a QR code from your host to link your phone.
-There is no login, no profile, and no Conduit-hosted user database.
+There is no login, no profile, and no Lancer-hosted user database.
 
-If you purchase Conduit Pro via in-app purchase, Apple manages the
-transaction and receipt. Conduit does not create a separate account for this
+If you purchase Lancer Pro via in-app purchase, Apple manages the
+transaction and receipt. Lancer does not create a separate account for this
 purpose.
 
 ---
@@ -93,7 +93,7 @@ purpose.
 
 ### 6.1 Current offering
 
-Conduit Pro is a one-time in-app purchase (non-consumable) that unlocks
+Lancer Pro is a one-time in-app purchase (non-consumable) that unlocks
 additional features (e.g., multi-host management, advanced surfaces). Price
 and feature set are displayed in the App. Apple processes all payments.
 
@@ -113,7 +113,7 @@ offered**. When and if it ships, the following will apply:
 
 - All purchases are final unless Apple's refund policy applies
 - Prices are as displayed in the App and may be updated for future purchases
-- Conduit Pro is a single-device purchase (Apple ID bound)
+- Lancer Pro is a single-device purchase (Apple ID bound)
 
 ---
 
@@ -128,7 +128,7 @@ The App interacts with the following third-party services that you configure:
 | Fly.io | Hosts the push relay | Fly.io Terms of Service |
 | Stripe (if applicable) | Payment processing for conduit.dev subscriptions | Stripe Services Agreement |
 
-Conduit is not responsible for the availability, security, or policies of
+Lancer is not responsible for the availability, security, or policies of
 these third-party services.
 
 ---
@@ -139,13 +139,13 @@ these third-party services.
 KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.**
 
-Conduit does not warrant that:
+Lancer does not warrant that:
 
 - The App will be uninterrupted, timely, secure, or error-free
 - The results obtained from the App will be accurate or reliable
 - Any errors in the App will be corrected
 
-**Security tool disclaimer.** Conduit is a tool to assist with agent
+**Security tool disclaimer.** Lancer is a tool to assist with agent
 governance. It does not guarantee that your agents will never perform
 unauthorized or harmful actions. You must independently verify agent behavior
 and maintain backups.

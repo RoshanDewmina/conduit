@@ -7,7 +7,7 @@ import ApprovalCardSection from "@/components/sections/approval-card-section";
 import PolicySection from "@/components/sections/policy-section";
 import ActivitySection from "@/components/sections/activity-section";
 import HowItWorksSection from "@/components/sections/how-it-works-section";
-import WhyConduitSection from "@/components/sections/why-conduit-section";
+import WhyLancerSection from "@/components/sections/why-lancer-section";
 import ProofBandSection from "@/components/sections/proof-band-section";
 import PricingSection from "@/components/sections/pricing-section";
 import TrustSection from "@/components/sections/trust-section";
@@ -28,7 +28,7 @@ export default function Home() {
           <PolicySection />
           <ActivitySection />
           <HowItWorksSection />
-          <WhyConduitSection />
+          <WhyLancerSection />
           <ProofBandSection />
           <PricingSection />
           <TrustSection />

@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — design system component gallery (all components)
+   LANCER — design system component gallery (all components)
    Each artboard shows ONE design system component category.
    ============================================================ */
 
@@ -156,7 +156,7 @@ function DSBlockCardGallery(){
               <div key={s.status} style={{marginBottom:10}}>
                 <div className="cc-card" style={{padding:0,overflow:'hidden'}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderBottom:'1px solid var(--line-2)',background:'var(--surface-2)'}}>
-                    <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)'}}>~/repos/conduit</span>
+                    <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)'}}>~/repos/lancer</span>
                     <span style={{marginLeft:'auto'}}>
                       {s.exit
                         ? <span style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--r-low)'}}>{s.exit}</span>
@@ -426,7 +426,7 @@ function DSScreenHeaderGallery(){
             <PromptHeader title="inbox" crumb={<b>fleet</b>}/>
             <div className="cc-sec">breadcrumb trail<span className="rule"/></div>
             <div style={{padding:'10px 0 4px',fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-3)',display:'flex',alignItems:'center',gap:2}}>
-              <b style={{color:'var(--ink-2)',fontWeight:500}}>~/conduit</b>
+              <b style={{color:'var(--ink-2)',fontWeight:500}}>~/lancer</b>
               <span style={{color:'var(--brand)',padding:'0 .3em'}}>›</span>
               <b style={{color:'var(--ink-2)',fontWeight:500}}>agent approvals</b>
               <span style={{color:'var(--brand)',padding:'0 .3em'}}>›</span>
@@ -444,7 +444,7 @@ function DSScreenHeaderGallery(){
 /* ---------- 13 · STATUS HEADERS ---------- */
 function DSStatusHeaderGallery(){
   const variants=[
-    {state:'ok',label:'bridge connected',detail:'conduitd v1.0',spend:'$4.94'},
+    {state:'ok',label:'bridge connected',detail:'lancerd v1.0',spend:'$4.94'},
     {state:'warn',label:'bridge degraded',detail:'reconnecting…',spend:'$4.94'},
     {state:'bad',label:'bridge disconnected',detail:'last seen 2h ago',spend:null},
     {state:'offline',label:'no bridge',detail:'tap to configure',spend:null},
@@ -491,7 +491,7 @@ function AgentIslandGallery(){
             <div className="cc-sec">compact<span className="rule"/></div>
             <div className="cc-card" style={{padding:'12px 14px'}}>
               <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <PixelAvatar seed="claudeconduit" size={36} color="#d97757"/>
+                <PixelAvatar seed="claudelancer" size={36} color="#d97757"/>
                 <div className="grow" style={{minWidth:0}}>
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
                     <span style={{fontFamily:'var(--mono)',fontSize:13.5,fontWeight:600,color:'var(--ink)'}}>Claude Code</span>
@@ -559,7 +559,7 @@ function DSHostRowGallery(){
 /* ---------- 16 · SESSION ROWS ---------- */
 function DSSessionRowGallery(){
   const sessions=[
-    {name:'conduit',agent:'Claude Code',status:'working',time:'now',unread:2},
+    {name:'lancer',agent:'Claude Code',status:'working',time:'now',unread:2},
     {name:'auth-svc',agent:'Codex',status:'waiting',time:'2m ago',unread:0},
     {name:'pi-runner',agent:'opencode',status:'offline',time:'3d ago',unread:0},
   ];

@@ -1,20 +1,20 @@
 ---
 paths:
-  - "Packages/ConduitKit/Sources/AppFeature/**"
-  - "Packages/ConduitKit/Sources/DesignSystem/**"
+  - "Packages/LancerKit/Sources/AppFeature/**"
+  - "Packages/LancerKit/Sources/DesignSystem/**"
 ---
 # iOS UI: gallery harness, screenshots, design system
 
-The only way to see Conduit UI is the iOS Simulator — there is no web renderer.
+The only way to see Lancer UI is the iOS Simulator — there is no web renderer.
 
 ## Debug gallery (mock UI, no SSH)
 
 `DebugGalleryView` renders screens without a live connection. `AppRoot.swift` reads
-`CONDUIT_GALLERY`; `simctl` strips the `SIMCTL_CHILD_` prefix:
+`LANCER_GALLERY`; `simctl` strips the `SIMCTL_CHILD_` prefix:
 
 ```bash
-xcodebuild -project Conduit.xcodeproj -scheme Conduit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-SIMCTL_CHILD_CONDUIT_GALLERY=review xcrun simctl launch booted dev.conduit.mobile
+xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+SIMCTL_CHILD_LANCER_GALLERY=review xcrun simctl launch booted dev.lancer.mobile
 ```
 
 Routes (`switch route` in `DebugGalleryView.swift`): `review` (default), `components`, `chat`,
@@ -34,8 +34,8 @@ Wait ~1–2 s after launch before `xcrun simctl io booted screenshot` (or
 ## Verify a component change
 
 1. Edit the component in `DesignSystem/Components/`.
-2. `cd Packages/ConduitKit && swift build` — zero errors.
-3. Relaunch the gallery (`SIMCTL_CHILD_CONDUIT_GALLERY=review …`).
+2. `cd Packages/LancerKit && swift build` — zero errors.
+3. Relaunch the gallery (`SIMCTL_CHILD_LANCER_GALLERY=review …`).
 4. Screenshot and check **both** appearances (`xcrun simctl ui booted appearance dark|light`).
 
 ## Design system

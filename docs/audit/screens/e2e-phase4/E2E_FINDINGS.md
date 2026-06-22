@@ -1,7 +1,7 @@
-# Conduit — Governed-Approvals Phase 4 E2E Findings
+# Lancer — Governed-Approvals Phase 4 E2E Findings
 
 - Date (UTC): 2026-06-12
-- Sim: iPhone 17 Pro `095F8B3A-FEA3-4031-A2A5-561755740730` (iOS 27.0), bundle `dev.conduit.mobile`
+- Sim: iPhone 17 Pro `095F8B3A-FEA3-4031-A2A5-561755740730` (iOS 27.0), bundle `dev.lancer.mobile`
 - Worktree: `/Users/roshansilva/Documents/command-center/.claude/worktrees/agent-ad5a294fb3ffeb4aa`
 - Toolchain: Go 1.26.4, xcodegen, Xcode-beta (only Xcode installed)
 
@@ -38,10 +38,10 @@ onboarding) could not be exercised at runtime and is marked accordingly.
 
 | Step | Result | Evidence |
 |---|---|---|
-| `swift build` (ConduitKit) | PASS | "Build complete! (86.97 secs.)" |
-| `swift test` (ConduitKit) | PASS | "337 tests in 57 suites passed" (incl. "M9 — exactly-once decision delivery gate") |
-| `xcodegen generate` | PASS | "Created project at .../Conduit.xcodeproj" |
-| **App target** `xcodebuild ... build` | **PASS** | `** BUILD SUCCEEDED **` (Conduit.app + Widget + Watch + LiveActivity appex) |
+| `swift build` (LancerKit) | PASS | "Build complete! (86.97 secs.)" |
+| `swift test` (LancerKit) | PASS | "337 tests in 57 suites passed" (incl. "M9 — exactly-once decision delivery gate") |
+| `xcodegen generate` | PASS | "Created project at .../Lancer.xcodeproj" |
+| **App target** `xcodebuild ... build` | **PASS** | `** BUILD SUCCEEDED **` (Lancer.app + Widget + Watch + LiveActivity appex) |
 | `go build` push-backend | PASS | 51 MB binary |
 
 ## Check results
@@ -63,8 +63,8 @@ Two independent blockers:
 2. **Autocmd never cleanly executes against this host's zsh.** First launch landed on a "Tmux
    Sessions" reattach sheet (`01-session-launch.png` was originally this) because the host had a
    detached tmux session. I killed the host tmux server (safe, reversible) to clear it. On relaunch
-   the session connects ("Done") but the block output shows Conduit's OSC-133 shell-integration
-   bootstrap **leaking as literal text** (`__conduit_preexec` function bodies, `printf '\033]133;C\007'`)
+   the session connects ("Done") but the block output shows Lancer's OSC-133 shell-integration
+   bootstrap **leaking as literal text** (`__lancer_preexec` function bodies, `printf '\033]133;C\007'`)
    and the shell wedged at a zsh PS2 continuation `elif-then function function quote>`. The autocmd
    text (`claude`, and even a trivial `echo HELLO-E2E` — see `01d`) is pasted INTO that unterminated
    multiline construct, so no command executes and no block finalizes; the session then flips to
@@ -74,7 +74,7 @@ Two independent blockers:
    CLAUDE.md / agent-contract §5), aggravated by a heavy login shell.
 
    **Honest attribution:** this reproduces a real fragility but on a host with a non-trivial `.zshrc`,
-   so I cannot cleanly separate "Conduit block-pipeline regression" from "this host's shell config."
+   so I cannot cleanly separate "Lancer block-pipeline regression" from "this host's shell config."
    The approval-card / block UI itself renders correctly (see Check 6: `gallery-blocks-*`,
    `gallery-inbox-typed-*`, `prod-inbox-*`), so the failure is in the live zsh-integration handshake,
    not the rendering or approval layer. `02-approval-card.png` / `03-after-approve.png` were NOT
@@ -88,7 +88,7 @@ so it appears above the fullScreenCover ... that was the B1 hard-hang"), bound t
 `vm.pendingHostKeyFingerprint != nil`. Reject → `vm.rejectHostKey()` → `.disconnected` with a
 dismissible overlay (lines 227-235: "New-host TOFU transitions to `.disconnected` ... show a
 dismissible overlay"); Back is pure navigation. `TOFUHostKeyValidator` fails unknown keys with
-`ConduitError.hostKeyUnknown` (no silent accept). The harness auto-trusts only when
+`LancerError.hostKeyUnknown` (no silent accept). The harness auto-trusts only when
 `autoTrustHostKey` is set (debug only); production default propagates `hostKeyUnknown` so the sheet
 shows (`LiveTerminalView.swift:110-123`). **Runtime repro BLOCKED:** localhost key is already trusted
 and forcing a fresh-host production prompt requires tapping through onboarding/host-add (no HID).
@@ -126,17 +126,17 @@ Body of `sessionId` must equal the registered sessionID — enforced by `relaySe
 (constant-time compare against the per-session record). Two-tier model holds (Tier-1 shared secret
 on control plane; Tier-2 per-session relayToken on decision/poll).
 
-**Three-way wiring (BEST-EFFORT):** verified via conduitd Go tests rather than a live daemon —
+**Three-way wiring (BEST-EFFORT):** verified via lancerd Go tests rather than a live daemon —
 `TestDecisionPollerResolves` (phone-posted decision resolves a pending approval with NO live SSH,
 through `applyDecision`), `TestDecisionPollerSendsBearerToken` (poller authenticates with the
 relayToken), `TestApplyDecisionApproveAlwaysPersistsPolicyAndAudit`. A full live
-phone→backend→conduitd loop was not stood up (would need a running conduitd + a phone decision POST,
+phone→backend→lancerd loop was not stood up (would need a running lancerd + a phone decision POST,
 and the phone side can't be driven without taps), but every link is independently proven.
 
 ### Check 5 — Cold-launch banner (M6) — PARTIAL (code-verified)
 
 M6 / MAJOR-6 is the cold-launch approval-action drain: a killed app's lock-screen Approve/Reject is
-buffered by `ConduitNotificationDelegate` into `ApprovalActionBuffer`, then `drainPendingApprovalActions`
+buffered by `LancerNotificationDelegate` into `ApprovalActionBuffer`, then `drainPendingApprovalActions`
 (`AppRoot.swift:341-360`) replays each through `ApprovalRelay.enqueue` (durable, first-decision-wins,
 idempotent — "replaying an already-resolved gate is a no-op"). Dedicated `HostedAgentM6Tests.swift`
 exists. **Runtime BLOCKED:** requires tapping a delivered push notification on the lock screen (no HID,

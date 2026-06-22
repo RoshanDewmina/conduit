@@ -1,10 +1,10 @@
-# Conduit — Views & Boards Catalog
+# Lancer — Views & Boards Catalog
 
 A map of every screen in the app + the design boards that live in this folder, each with
 a one-line description so you can get up to speed. The **design discussion** section at the
 bottom is where we'll work through the V1 simplification.
 
-Source of truth for screens: `Packages/ConduitKit/Sources/`. Design boards (PNG/JSX) live
+Source of truth for screens: `Packages/LancerKit/Sources/`. Design boards (PNG/JSX) live
 in this folder (`docs/audit/migration-board/`).
 
 ---
@@ -38,7 +38,7 @@ in this folder (`docs/audit/migration-board/`).
 ## Fleet depth / agent runs
 | View | File | What it does |
 |---|---|---|
-| Dispatch | `AppFeature/DispatchView.swift` | Fire a headless task: pick agent + model + prompt → conduitd runs `claude -p`/`codex exec`. |
+| Dispatch | `AppFeature/DispatchView.swift` | Fire a headless task: pick agent + model + prompt → lancerd runs `claude -p`/`codex exec`. |
 | Agent run detail | `AgentRunDetailView.swift`, `RunDetailView.swift` | A dispatched run's output/status; now includes git "Changes" + Ship-it + Proof Card. |
 | Loop detail | `LoopDetailView.swift` | A supervised loop: goal, plan, blocker, files, tests, approvals, spend, PR/checks. |
 | Worktree board | `WorktreeBoardView.swift` | 3-column branch/worktree board (active / review-ready / idle). |
@@ -78,7 +78,7 @@ in this folder (`docs/audit/migration-board/`).
 
 **Open items to decide together:**
 - [ ] Remove the persistent **active-sessions / status top bar** (user: it's clutter).
-- [ ] V1 must-have set — the screens that make Conduit *Conduit* (candidate: Onboarding/Pair
+- [ ] V1 must-have set — the screens that make Lancer *Lancer* (candidate: Onboarding/Pair
       → Inbox approvals → Fleet monitoring → Session → Activity → core Settings/Policy).
 - [ ] What to PAUSE for V1 (candidates: worktree board, org/exec/agent-browse depth, billing/
       paywall, quota guard, secrets, sync, port-forward) — keep code, hide from V1 nav.
@@ -88,7 +88,7 @@ in this folder (`docs/audit/migration-board/`).
 
 **Cross-cutting (every tab):**
 - **Persistent top status bar** ("· no active session" glyph grid + "bridge offline · policy · today $0.00") appears on ALL four tabs. When nothing's connected it's pure noise. → **Remove it** (user agrees). Option: fold a single honest connection dot into Fleet only.
-- Every tab repeats a **decorative breadcrumb** (`~/conduit › …`) + a **rainbow gradient strip**. Stylistic clutter repeated 4×; simplify to one quiet header.
+- Every tab repeats a **decorative breadcrumb** (`~/lancer › …`) + a **rainbow gradient strip**. Stylistic clutter repeated 4×; simplify to one quiet header.
 
 **Inbox** — strong. Approval cards are the product: clear command, risk chip (HIGH/MED), blast radius, Deny/Approve/Edit&run/Allow-always. Keep as the hero. Minor: 4 actions per card is a lot but each is useful.
 
@@ -99,8 +99,8 @@ in this folder (`docs/audit/migration-board/`).
 **Settings** — comprehensive but long (~scrolls 2×): Bridge & hosts, Policy, Notification filters, Security (Face ID, redact, SSH keys, audit, health, provider keys), Trust & Privacy, Account (Pro, Billing), iCloud sync, Theme. V1-core: bridge/relay, Policy, notifications, security basics. Pause/group: Billing/Pro, iCloud sync, Quota.
 
 **Bugs found during walkthrough:**
-- "i already use conduit" routes to **Add Host**, not the app — confusing entry.
-- **"conduit cloud" tab reappeared** in Add Host (the earlier gate was lost in a merge).
+- "i already use lancer" routes to **Add Host**, not the app — confusing entry.
+- **"lancer cloud" tab reappeared** in Add Host (the earlier gate was lost in a merge).
 
 **Proposed V1 must-have set (the spine):**
 Onboarding/Pair → **Inbox (approvals)** → **Fleet (hosts + running/blocked)** → **Session** → **Activity** → **core Settings/Policy**. Pause (keep code, hide from nav): worktree board, quota guard, agent org/exec/browse depth, billing/paywall, secrets, sync, port-forward.

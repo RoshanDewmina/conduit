@@ -36,7 +36,7 @@ type artifactsData struct {
 var artifactsStore = struct {
 	path string
 }{
-	path: dataFilePath("ARTIFACTS_FILE", "conduit-artifacts.json"),
+	path: dataFilePath("ARTIFACTS_FILE", "lancer-artifacts.json"),
 }
 
 func initArtifactsStore() {

@@ -1,20 +1,20 @@
 # Backend → Frontend Coverage Matrix
 
-Every backend capability (conduitd resident-daemon RPC, push-backend hosted-cloud HTTP route)
+Every backend capability (lancerd resident-daemon RPC, push-backend hosted-cloud HTTP route)
 is inventoried below with its iOS frontend surface. Generated for the design-handoff review.
 
 **Status legend:** ✅ built & reachable in shipping UI · 🔶 gallery-only / debug surface ·
 🟦 intentional (RPC retained, UI archived on product pivot) · ❌ no frontend surface.
 
 The product is a **passive approval loop** ("approve agent actions from your phone"), not a
-dispatch console. The SSH→resident-daemon path (`conduitd`) is the shipping core; the
-push-backend (hosted Conduit Cloud) is gated behind a paid entitlement and partially built.
+dispatch console. The SSH→resident-daemon path (`lancerd`) is the shipping core; the
+push-backend (hosted Lancer Cloud) is gated behind a paid entitlement and partially built.
 
 ---
 
-## A. conduitd resident-daemon RPC (`daemon/conduitd/server.go` dispatch switch)
+## A. lancerd resident-daemon RPC (`daemon/lancerd/server.go` dispatch switch)
 
-iOS bridge: `DaemonChannel` (`Packages/ConduitKit/Sources/SSHTransport/DaemonChannel.swift`),
+iOS bridge: `DaemonChannel` (`Packages/LancerKit/Sources/SSHTransport/DaemonChannel.swift`),
 surfaced through `BridgeSessionActions` + `ApprovalRelay`.
 
 | Capability | Backend (file:line) | Frontend surface (view + tap path) | Status |
@@ -27,8 +27,8 @@ surfaced through `BridgeSessionActions` + `ApprovalRelay`.
 | `agent.policy.reload` | server.go:412 | **Settings → Edit bridge policy.yaml** → "Reload policy on bridge" (`PolicyEditorBridgeScreen.reloadPolicy`) | ✅ |
 | `agent.policy.set` (write YAML) | server.go:423 | **Settings → policy editor** → save (`savePolicyYAML`, enabled only when SSH-connected) | ✅ |
 | `agent.status` (vendors/sessions/spend) | server.go:438 | **Fleet** tab summary card (vendors / sessions / $today) via `FleetStore.fetchAgentStatus`; **Library → Agents** count | ✅ |
-| `conduit.device.register` (APNs token) | server.go:448, server.go:174 | Auto-registered on connect (`AppRoot` → `registerDevice`); no explicit UI | ✅ |
-| `agent.dispatch` (start an agent run) | server.go:483 | RPC retained; the dispatch **composer UI was intentionally archived** (`archive/conduitkit-dead-views/DispatchComposerView.swift`) on the pivot to the passive approval loop. `dispatchAgent` still callable from `AppRoot`. | 🟦 intentional |
+| `lancer.device.register` (APNs token) | server.go:448, server.go:174 | Auto-registered on connect (`AppRoot` → `registerDevice`); no explicit UI | ✅ |
+| `agent.dispatch` (start an agent run) | server.go:483 | RPC retained; the dispatch **composer UI was intentionally archived** (`archive/lancerkit-dead-views/DispatchComposerView.swift`) on the pivot to the passive approval loop. `dispatchAgent` still callable from `AppRoot`. | 🟦 intentional |
 | `agent.cancel` (stop a run) | server.go:491 | **Library → Agents → run detail** → cancel (`AgentRunDetailView` / `AgentStore.cancelRun`) — cloud-entitlement gated | ✅ (gated) |
 | `agent.schedule.add` | server.go:498 | No add-schedule composer (archived with dispatch). `addSchedule` callable but no UI. | 🟦 intentional |
 | `agent.schedule.list` | server.go:506 | **Library → Agents** reads schedules (`AgentStore.listSchedules`) — cloud-gated | 🔶 cloud-gated |
@@ -42,7 +42,7 @@ daemon methods. `fetchPolicy` (structured) has no direct caller; not a gap, the 
 
 ## B. push-backend hosted-cloud HTTP routes (`daemon/push-backend/*.go`)
 
-These power **Conduit Cloud** (hosted agents, billing, usage). The whole surface is gated behind a
+These power **Lancer Cloud** (hosted agents, billing, usage). The whole surface is gated behind a
 paid entitlement (`PurchaseManager.cloudEntitlement`); free BYO-host users never hit it.
 
 ### Approval relay & device (core push loop)
@@ -50,7 +50,7 @@ paid entitlement (`PurchaseManager.cloudEntitlement`); free BYO-host users never
 | Route | Backend (file:line) | Frontend surface | Status |
 |---|---|---|---|
 | `POST /register` | main.go:88 | `DaemonChannel.registerDevice` / `ApprovalRelay.configureBackend` on connect | ✅ |
-| `POST /approval` (enqueue from daemon) | main.go:89 | Server-side ingest from conduitd; phone receives via APNs → **Inbox** | ✅ |
+| `POST /approval` (enqueue from daemon) | main.go:89 | Server-side ingest from lancerd; phone receives via APNs → **Inbox** | ✅ |
 | `POST /approval/decision` | main.go:91 | `ApprovalRelay.postDecisionToBackend` — phone's approve/deny when relayed via cloud | ✅ |
 | `GET /decisions` (poll) | main.go:92 | Daemon-side poll; phone publishes decisions (see above) | ✅ |
 | `POST /run-complete` | main.go:90 | Server ingest → drives "run complete" push notification | ✅ |
@@ -69,7 +69,7 @@ paid entitlement (`PurchaseManager.cloudEntitlement`); free BYO-host users never
 | `GET /billing/quota` | quotas.go:168 | **Billing → AI usage today** / quota display | ✅ |
 | `GET /billing/credits` | credits.go:182 | **Billing** credits balance (when present) | ✅ |
 
-### Hosted agents & runs (Conduit Cloud)
+### Hosted agents & runs (Lancer Cloud)
 
 | Route | Backend (file:line) | Frontend surface | Status |
 |---|---|---|---|
@@ -117,7 +117,7 @@ paid entitlement (`PurchaseManager.cloudEntitlement`); free BYO-host users never
 
 ## Summary
 
-- **Capabilities inventoried:** 49 (14 conduitd RPC + 35 push-backend routes)
+- **Capabilities inventoried:** 49 (14 lancerd RPC + 35 push-backend routes)
 - ✅ built & reachable: **27**
 - 🔶 cloud-gated (built, behind paid entitlement): **11**
 - 🟦 intentional (RPC retained, composer UI archived on pivot): **8**

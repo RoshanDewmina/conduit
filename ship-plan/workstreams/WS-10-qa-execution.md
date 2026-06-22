@@ -3,7 +3,7 @@
 > Run LAST, after the other workstreams merge. Gates the TestFlight beta. Needs a real device + a real remote SSH host (the riskiest paths can't be proven in the simulator). Owner-run or a connected subagent with real credentials.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`. Read `CLAUDE.md` (visual verification + live block-session harness) and `docs/conduit-test-run-2026-05-30.md` (prior run). Target: iPhone 17 Pro simulator **and** ≥1 real device + 1 real remote host. Screenshot every screen/state in light + dark (`xcrun simctl ui booted appearance dark|light`).
+Repo `/Users/roshansilva/Documents/command-center`. Read `CLAUDE.md` (visual verification + live block-session harness) and `docs/lancer-test-run-2026-05-30.md` (prior run). Target: iPhone 17 Pro simulator **and** ≥1 real device + 1 real remote host. Screenshot every screen/state in light + dark (`xcrun simctl ui booted appearance dark|light`).
 
 **Focus the energy on what's never been proven:** background→reconnect, Wi-Fi↔cellular handoff, scrollback after reconnect, real-host OSC-133 fidelity across shells, inline `codex` in-block, Live Activity on a real device. These are the launch-readiness risks.
 

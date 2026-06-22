@@ -6,12 +6,12 @@ const STEPS = [
   {
     num: "01",
     title: "Install the bridge",
-    body: "On your host: conduitd runs in the background and survives reboots. It enforces your policy and relays approval requests to your phone.",
+    body: "On your host: lancerd runs in the background and survives reboots. It enforces your policy and relays approval requests to your phone.",
   },
   {
     num: "02",
     title: "Point your agent's hook",
-    body: "One line per agent — Claude Code, Codex, or opencode — so Conduit sees what they're about to do before they do it.",
+    body: "One line per agent — Claude Code, Codex, or opencode — so Lancer sees what they're about to do before they do it.",
   },
   {
     num: "03",

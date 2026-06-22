@@ -14,8 +14,8 @@ import (
 // TestProcessProviderRealRunnerE2E builds the real agent-runner binary and drives
 // it through the processProvider against the actual control-plane log/status/control
 // endpoints — no cloud, no mocks. This is the regression guard for the ARGV contract:
-// the runner hard-requires CONDUIT_COMMAND_ARGV and exits without it, so a provider
-// that sends CONDUIT_COMMAND would silently never produce logs or flip status.
+// the runner hard-requires LANCER_COMMAND_ARGV and exits without it, so a provider
+// that sends LANCER_COMMAND would silently never produce logs or flip status.
 func TestProcessProviderRealRunnerE2E(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("posix-only e2e")
@@ -29,7 +29,7 @@ func TestProcessProviderRealRunnerE2E(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Skipf("could not build agent-runner (skipping e2e): %v\n%s", err, out)
 	}
-	t.Setenv("CONDUIT_RUNNER_PATH", binPath)
+	t.Setenv("LANCER_RUNNER_PATH", binPath)
 
 	// Real control-plane endpoints the runner calls back into.
 	mux := http.NewServeMux()
@@ -61,7 +61,7 @@ func TestProcessProviderRealRunnerE2E(t *testing.T) {
 			RunID:           runID,
 			RunnerToken:     token,
 			ControlPlaneURL: srv.URL,
-			Command:         "echo conduit-e2e-marker",
+			Command:         "echo lancer-e2e-marker",
 			AgentID:         "agent_e2e",
 		},
 	)
@@ -76,7 +76,7 @@ func TestProcessProviderRealRunnerE2E(t *testing.T) {
 	for time.Now().Before(deadline) {
 		lines, _ := runLogsSince(runID, 0)
 		for _, l := range lines {
-			if strings.Contains(l.Text, "conduit-e2e-marker") {
+			if strings.Contains(l.Text, "lancer-e2e-marker") {
 				sawMarker = true
 			}
 		}

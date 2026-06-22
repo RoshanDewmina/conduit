@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-19
 **Author:** Claude (Opus) session
-**For:** the next agent picking up frontend work on Conduit
-**Repo:** `/Users/roshansilva/Documents/command-center` · GitHub `RoshanDewmina/conduit`
+**For:** the next agent picking up frontend work on Lancer
+**Repo:** `/Users/roshansilva/Documents/command-center` · GitHub `RoshanDewmina/lancer`
 
 ---
 
@@ -16,7 +16,7 @@ Everything is app-target-build-green; the only unverified surface is on-device b
 issue ActivityKit push tokens or fire APNs).
 
 The next piece of frontend work the owner wants is a **Governance / vendor-trust panel** — an in-app surface
-that makes Conduit's now-complete "one policy engine governs every vendor (Claude/Codex/Kimi/opencode)" story
+that makes Lancer's now-complete "one policy engine governs every vendor (Claude/Codex/Kimi/opencode)" story
 **legible**. It has been scoped but **not designed**: the one open decision is its *primary job*
 (reassurance vs. control vs. audit). Section 5 below is the full brief to start it.
 
@@ -39,12 +39,12 @@ app-target-built.
 
 | Feature | What it does | Key files |
 |---|---|---|
-| **opencode approval gating** | conduitd-dispatched `opencode` runs now gate every tool call through the policy engine (via a `CONDUIT_GATE=1`-guarded PreToolUse hook). Closes the prior bypass where only Claude Code gated. The owner's *interactive* opencode sessions stay ungated (no env var). **Live-verified** against `~/.conduit/audit.log` (auto-allow + auto-deny, hash-chain intact). | `daemon/conduitd/dispatch.go`, `docs/opencode-conduit-hook.sh` |
-| **Push-driven Live Activity** | `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New ActivityKit APNs sender on the backend with the strict contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). | `Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift`, `daemon/push-backend/liveactivity.go` |
+| **opencode approval gating** | lancerd-dispatched `opencode` runs now gate every tool call through the policy engine (via a `LANCER_GATE=1`-guarded PreToolUse hook). Closes the prior bypass where only Claude Code gated. The owner's *interactive* opencode sessions stay ungated (no env var). **Live-verified** against `~/.lancer/audit.log` (auto-allow + auto-deny, hash-chain intact). | `daemon/lancerd/dispatch.go`, `docs/opencode-lancer-hook.sh` |
+| **Push-driven Live Activity** | `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New ActivityKit APNs sender on the backend with the strict contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). | `Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift`, `daemon/push-backend/liveactivity.go` |
 | **APNs payload privacy** | The alert body no longer carries the raw command (`body := ev.Command` removed). Redacted risk/tool summary only; full detail fetched in-app post-unlock. | `daemon/push-backend/main.go`, `liveactivity.go` (`redactSummary`) |
-| **Cold-decision gate** | `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a **killed-app** Live Activity forwards to conduitd (previously the singleton creds were empty cold → decision dropped → 120s auto-deny). | `Packages/ConduitKit/Sources/SessionFeature/ApprovalRelay.swift` |
-| **Watch WCSession polish** | `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gained `.accessoryRectangular` + VoiceOver labels. | `ConduitWatchWidget/InboxCountWidget.swift`, `Packages/ConduitKit/Sources/AppFeature/PhoneWatchConnector.swift` |
-| **Secure activity-token RPC** | `DaemonChannel.registerActivityToken` → conduitd RPC `conduit.device.register.activity` → push-backend. conduitd holds `APPROVAL_RELAY_SECRET`; the app never does. (The *subscriber* that calls this was the dangling end — see §1.3.) | `Packages/ConduitKit/Sources/SSHTransport/DaemonChannel.swift`, `daemon/conduitd/server.go:975` |
+| **Cold-decision gate** | `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a **killed-app** Live Activity forwards to lancerd (previously the singleton creds were empty cold → decision dropped → 120s auto-deny). | `Packages/LancerKit/Sources/SessionFeature/ApprovalRelay.swift` |
+| **Watch WCSession polish** | `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gained `.accessoryRectangular` + VoiceOver labels. | `LancerWatchWidget/InboxCountWidget.swift`, `Packages/LancerKit/Sources/AppFeature/PhoneWatchConnector.swift` |
+| **Secure activity-token RPC** | `DaemonChannel.registerActivityToken` → lancerd RPC `lancer.device.register.activity` → push-backend. lancerd holds `APPROVAL_RELAY_SECRET`; the app never does. (The *subscriber* that calls this was the dangling end — see §1.3.) | `Packages/LancerKit/Sources/SSHTransport/DaemonChannel.swift`, `daemon/lancerd/server.go:975` |
 
 ### 1.2 Lock-screen approval journey — **PR #5** (`feat/lockscreen-approval-journey`, OPEN)
 
@@ -64,10 +64,10 @@ command/diff. Pieces:
    `daemon/push-backend/liveactivity.go`)
 2. **Pure state-precedence resolver** `LiveActivityPresentation.resolve(_:budget:)` — keeps precedence
    logic out of the widget and unit-testable without a device.
-   (`Packages/ConduitKit/Sources/SessionFeature/LiveActivityPresentation.swift`)
+   (`Packages/LancerKit/Sources/SessionFeature/LiveActivityPresentation.swift`)
 3. **Four widget states** — needs-you (amber + Approve/Reject) > decision-landed (green ✓ / red ✗) >
    running (blue) > idle; **cost** is a secondary overlay that escalates amber→red near a budget. The widget
-   stays pure presentation (every state from the resolver). (`ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift`)
+   stays pure presentation (every state from the resolver). (`LancerLiveActivityWidget/LancerLiveActivityWidget.swift`)
 4. **Backend decision push** `pushLiveActivityDecision` fires after a decision resolves in
    `handlePostDecision` — closes the cold ✓ loop. (`daemon/push-backend/liveactivity.go`, `decisions.go`)
 5. **Reveal deep-link** — a notification / Live-Activity **body** tap opens the existing un-redacted
@@ -75,8 +75,8 @@ command/diff. Pieces:
    that mirrors the existing `ApprovalActionBuffer`. Gate = **respect app-lock** (no new biometric step for
    *viewing*; critical *approve* stays biometric-gated, unchanged). REVIEW intent is strictly separated from
    the DECIDE path — opening detail never resolves an approval.
-   (`Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift`, `Conduit/ConduitApp.swift`,
-   `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift`, `AppFeature/AppRoot.swift`)
+   (`Packages/LancerKit/Sources/NotificationsKit/Notifications.swift`, `Lancer/LancerApp.swift`,
+   `Packages/LancerKit/Sources/InboxFeature/InboxView.swift`, `AppFeature/AppRoot.swift`)
 6. **Patch diff render** — `.patch`-kind approvals show a real `DiffView` in the detail sheet, composed in
    `InboxFeature` (which already depends on DiffKit/DiffFeature) so `DesignSystem` gains no new dependency.
    (`InboxView.swift`)
@@ -89,14 +89,14 @@ Re-reviewed clean. (commits `a2d57115`, `51f910fc`)
 
 ### 1.3 Activity push-token subscriber — **PR #6** (`feat/activity-token-registration`, OPEN)
 
-The dangling end of the push work. The token was *produced* (`ConduitApp.configureLiveActivityTokens` posts
-`.conduitLiveActivityTokenReady`) and the secure RPC *existed* (§1.1), but **nothing subscribed** — so the
+The dangling end of the push work. The token was *produced* (`LancerApp.configureLiveActivityTokens` posts
+`.lancerLiveActivityTokenReady`) and the secure RPC *existed* (§1.1), but **nothing subscribed** — so the
 token never reached push-backend and the Live Activity could not receive a push on device. A
-`// merge owner must wire this` comment at `ConduitApp.swift:124` marked it.
+`// merge owner must wire this` comment at `LancerApp.swift:124` marked it.
 
 This PR adds:
-- A `.conduitLiveActivityTokenReady` subscriber in `AppRoot.configureE2ERelayBridge` mirroring the existing
-  `.conduitAPNSTokenReceived` one — forwards `{sessionID, activityToken, isPushToStart}` via
+- A `.lancerLiveActivityTokenReady` subscriber in `AppRoot.configureE2ERelayBridge` mirroring the existing
+  `.lancerAPNSTokenReceived` one — forwards `{sessionID, activityToken, isPushToStart}` via
   `channel.registerActivityToken`.
 - `startPushToStartMonitor(sessionID:)` (iOS 17.2+) in `AppRoot.configureCloudServices`, so push-backend can
   remotely **start** a Live Activity when an approval arrives and none is running (app fully closed).
@@ -136,14 +136,14 @@ either order is fine. Neither has merge conflicts with master as of this writing
 ## 3. Verification status
 
 **Green (machine-verified this session):**
-- XcodeBuildMCP **app-target** build (`build_sim`, scheme `Conduit`, sim `iPhone 17 Pro`) — SUCCEEDED, 0
+- XcodeBuildMCP **app-target** build (`build_sim`, scheme `Lancer`, sim `iPhone 17 Pro`) — SUCCEEDED, 0
   warnings, on both PR branch tips. This is the authoritative gate (plain `swift build` skips `#if os(iOS)`
   code and strict-concurrency breaks — a known footgun; always run the app-target build for iOS changes).
-- `cd Packages/ConduitKit && swift build` — clean.
+- `cd Packages/LancerKit && swift build` — clean.
 - `cd daemon/push-backend && go build ./... && go test ./...` — pass (incl. the pinned-`Date` encoding test,
   the payload-privacy assertion, and the new decision-push test).
-- `cd daemon/conduitd && go build ./...` — pass.
-- opencode gating was **live-verified** earlier against `~/.conduit/audit.log` (auto-allow + auto-deny, hash
+- `cd daemon/lancerd && go build ./...` — pass.
+- opencode gating was **live-verified** earlier against `~/.lancer/audit.log` (auto-allow + auto-deny, hash
   chain intact, no-gate-without-env confirmed).
 
 **Device-only — NOT verified (a simulator cannot do these). Hand to device QA:**
@@ -158,25 +158,25 @@ either order is fine. Neither has merge conflicts with master as of this writing
 
 There is a step-by-step device-verification prompt from earlier in the session (covers opencode gating, the
 app-closed update, APNs privacy, and the cold-decision tap). Reuse/extend it. Device QA needs: a physical
-iPhone (iOS 17.2+ for push-to-start), the resident `conduitd` running, push-backend reachable
-(`CONDUIT_PUSH_BACKEND_URL`), and APNs keys configured backend-side.
+iPhone (iOS 17.2+ for push-to-start), the resident `lancerd` running, push-backend reachable
+(`LANCER_PUSH_BACKEND_URL`), and APNs keys configured backend-side.
 
 ---
 
 ## 4. How to work in this repo (conventions the next agent must follow)
 
 - **Source of truth:** `ARCHITECTURE.md` §0.1/§4.1, `docs/KNOWN_ISSUES.md`, `docs/agent-contract.md`. The
-  old `CONDUIT_PROJECT_DOSSIER.md` is archived — don't cite it.
+  old `LANCER_PROJECT_DOSSIER.md` is archived — don't cite it.
 - **Build gate:** always run the XcodeBuildMCP **app-target** build for iOS changes (`mcp__XcodeBuildMCP__build_sim`,
-  scheme `Conduit`). SPM `swift build` is fast for ConduitKit-only loops but misses `#if os(iOS)` breaks.
-- **Go tests** run from `daemon/conduitd` and `daemon/push-backend` (not repo root).
+  scheme `Lancer`). SPM `swift build` is fast for LancerKit-only loops but misses `#if os(iOS)` breaks.
+- **Go tests** run from `daemon/lancerd` and `daemon/push-backend` (not repo root).
 - **Module boundaries** (`docs/agent-contract.md` §5): engines have no UI; features route through
   `AppFeature`. Don't add a dependency edge from a low-level module (e.g. `DesignSystem`) to a feature lib.
-- **Project skills** live in `.claude/skills/` — `conduit-context-onboarding` to get up to speed,
-  `conduit-verification-gate` before claiming done, `vendor-cli-adapter-audit` before touching
+- **Project skills** live in `.claude/skills/` — `lancer-context-onboarding` to get up to speed,
+  `lancer-verification-gate` before claiming done, `vendor-cli-adapter-audit` before touching
   `dispatch.go`. Invoke via the Skill tool.
-- **Known test-debt:** four `ConduitUITests/TapInjectionProofTests` are `XCTSkip`-quarantined (tracked as
-  `UI-IA-1` in `KNOWN_ISSUES.md`) because they assert the superseded tab-bar IA. The `ConduitKitTests`
+- **Known test-debt:** four `LancerUITests/TapInjectionProofTests` are `XCTSkip`-quarantined (tracked as
+  `UI-IA-1` in `KNOWN_ISSUES.md`) because they assert the superseded tab-bar IA. The `LancerKitTests`
   scheme is wired to the UI-test target, so `#if os(iOS)`-gated unit tests *compile* but don't *run* under it
   — a harness quirk, not a defect.
 
@@ -190,7 +190,7 @@ plan → subagent-driven-development flow (the same process that produced PRs #5
 
 ### 5.1 Why this surface exists (the problem)
 
-The opencode-gating work (§1.1) completed Conduit's governance moat: **one policy engine now governs every
+The opencode-gating work (§1.1) completed Lancer's governance moat: **one policy engine now governs every
 vendor it can launch — Claude Code, Codex, Kimi, and opencode.** That is the single strongest pre-launch
 differentiator (no competitor combines a real policy engine + tamper-evident audit + on-host execution).
 **But nothing in the app makes it legible.** A user cannot see that their agents are governed, that opencode
@@ -205,7 +205,7 @@ secondary affordances):
   vendors shown as governed by one engine, the active policy summarized in plain language, a live "last
   gated N seconds ago" pulse. Read-mostly. Lightest build, strongest pre-launch story, least overlap with
   existing screens. There's even a `ProofCardView` component
-  (`Packages/ConduitKit/Sources/DesignSystem/Components/ProofCardView.swift`) that could anchor the visual
+  (`Packages/LancerKit/Sources/DesignSystem/Components/ProofCardView.swift`) that could anchor the visual
   language.
 - **(B) Control surface** — view + edit the active policy from here (default effect, rules, the
   always-allow list), jump to the autonomy preset. More powerful, **but overlaps existing Settings screens**
@@ -222,19 +222,19 @@ all three at once — decompose.
 
 The panel is NOT greenfield. Inventory:
 
-- **Policy model + engine** (conduitd, Go): policy is **global, not per-vendor** — rules match on
+- **Policy model + engine** (lancerd, Go): policy is **global, not per-vendor** — rules match on
   `kind`/`risk`/`pattern` with strictest-wins (`deny > ask > allow`), default `ask`, fail-closed. Example
-  config: `docs/policy.example.yaml`. Engine: `daemon/conduitd/policy/` + `rules.go`. **Important framing:**
+  config: `docs/policy.example.yaml`. Engine: `daemon/lancerd/policy/` + `rules.go`. **Important framing:**
   opencode gating wasn't "add opencode to a list" — it brought opencode under the *same* uniform engine. So
   the panel's story is "one engine covers everything you run," NOT "configure each vendor separately."
-- **Read path already exists:** conduitd RPC **`agent.policy.get`** (`daemon/conduitd/server.go:560` →
+- **Read path already exists:** lancerd RPC **`agent.policy.get`** (`daemon/lancerd/server.go:560` →
   `getPolicyDocuments(cwd)`) returns the active policy documents. The panel can read the live policy over the
   relay without new backend work. There is also **`agent.status`** (`server.go:613`).
 - **Per-vendor activity is derivable:** `AuditEntry` carries an **`Agent`** field
-  (`daemon/conduitd/audit.go:18`). So "what has opencode done / been gated on" is computable from the audit
+  (`daemon/lancerd/audit.go:18`). So "what has opencode done / been gated on" is computable from the audit
   log — but note (per the drift spec) the audit schema does **not** yet persist `path`/`toolInput`/
   `networkDest`, so option-C aggregation is limited to action/kind/effect/agent for now.
-- **Autonomy model:** `Packages/ConduitKit/Sources/ConduitCore/AutonomySettings.swift` (`AutonomyPreset`),
+- **Autonomy model:** `Packages/LancerKit/Sources/LancerCore/AutonomySettings.swift` (`AutonomyPreset`),
   surfaced today via the autonomy-preset screen in `SettingsFeature/SettingsView.swift`.
 - **Per-vendor identity UI:** `AgentIdentityBadge` (used in
   `DesignSystem/Components/InboxApprovalCard.swift`) already renders a vendor's icon+label — reuse it for the
@@ -249,14 +249,14 @@ The panel is NOT greenfield. Inventory:
 
 ### 5.4 Where it lives in the IA
 
-The app is a **sidebar / New Chat shell** (`ConduitSidebarView` + `SidebarShellState`, destinations via
+The app is a **sidebar / New Chat shell** (`LancerSidebarView` + `SidebarShellState`, destinations via
 `SidebarDestination`; see `ARCHITECTURE.md` §4.1). A governance panel would most naturally be a **new
 sidebar destination** (peer to Inbox/Fleet/Settings) or a prominent card on the Inbox home dashboard. Do NOT
 reintroduce a tab bar. Decide placement during brainstorming; it interacts with PR #3's IA.
 
 ### 5.5 Suggested process for the next agent
 
-1. **Get context:** invoke the `conduit-context-onboarding` skill; read `ARCHITECTURE.md` §0.1/§4.1,
+1. **Get context:** invoke the `lancer-context-onboarding` skill; read `ARCHITECTURE.md` §0.1/§4.1,
    `docs/agent-contract.md`, and **diff PR #3** to see what governance IA already exists.
 2. **Invoke `superpowers:brainstorming`.** First question to the owner: confirm the **primary job**
    (A/B/C from §5.2). That single answer shapes everything.
@@ -276,7 +276,7 @@ reintroduce a tab bar. Decide placement during brainstorming; it interacts with 
 - **Policy is global, not per-vendor** — don't design a UI that implies per-vendor *configuration*; the
   vendors share one engine. Per-vendor *activity* (audit) is fine to show.
 - **PR #3 may already own some of this IA** — reconcile before drawing new structure.
-- **Audit summary has no RPC yet** (job C) — option C needs a new conduitd read path + relay plumbing;
+- **Audit summary has no RPC yet** (job C) — option C needs a new lancerd read path + relay plumbing;
   budget for it or defer C.
 
 ---
@@ -305,10 +305,10 @@ cat ARCHITECTURE.md         # read §0.1 + §4.1
 gh pr view 5 ; gh pr view 6 ; gh pr view 3
 
 # Build gate (authoritative for iOS)
-#   mcp__XcodeBuildMCP__build_sim  scheme=Conduit  sim="iPhone 17 Pro"
-cd Packages/ConduitKit && swift build           # fast inner loop
+#   mcp__XcodeBuildMCP__build_sim  scheme=Lancer  sim="iPhone 17 Pro"
+cd Packages/LancerKit && swift build           # fast inner loop
 cd daemon/push-backend && go build ./... && go test ./...
-cd daemon/conduitd     && go build ./... && go test ./...
+cd daemon/lancerd     && go build ./... && go test ./...
 
 # Governance panel — read the prior art first
 git diff master...feat/governed-approvals -- '*.swift' | less

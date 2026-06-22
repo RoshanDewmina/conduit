@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — board mount (loaded LAST, after all screens)
+   LANCER — board mount (loaded LAST, after all screens)
    ============================================================ */
 
 (function(){

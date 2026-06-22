@@ -26,35 +26,35 @@ The release is still a strict no-go because several production-only checks canno
 
 - Fixed the live SSH TOFU trust race in `SessionView`: tapping "Trust & Connect" no longer causes the sheet dismissal binding to reject the same host key.
 - Kept the production TOFU prompt intact; only the debug/e2e seeded flow prefills the local password for test automation.
-- Made Cloud Sync visibility follow the app's `CONDUIT_ICLOUD_ENABLED` Info.plist flag instead of a hard-coded false path.
+- Made Cloud Sync visibility follow the app's `LANCER_ICLOUD_ENABLED` Info.plist flag instead of a hard-coded false path.
 - Added production fail-fast detection in the Go relay backend when `APPROVAL_RELAY_SECRET` is missing.
 - Added `APPROVAL_RELAY_SECRET` to backend examples and deployment docs.
 
 ### Build, project, and metadata
 
-- Updated `project.yml` rather than hand-editing the generated project; regenerated `Conduit.xcodeproj`.
+- Updated `project.yml` rather than hand-editing the generated project; regenerated `Lancer.xcodeproj`.
 - Added App Intents framework wiring where needed and fixed iPad orientation metadata that caused archive warnings.
 - Synced fastlane metadata and App Store docs to avoid overclaiming closed-app/lock-screen approvals before physical APNs is verified.
 - Updated support URL metadata to `https://conduit.dev/support`.
 
 ### Tests and audit artifacts
 
-- Expanded `ConduitUITests/TapInjectionProofTests.swift` with deterministic reseeding, tap-injection proof, approve-decision proof, Face ID opt-in coverage, saved-host reconnect coverage, and a live localhost SSH TOFU test path.
+- Expanded `LancerUITests/TapInjectionProofTests.swift` with deterministic reseeding, tap-injection proof, approve-decision proof, Face ID opt-in coverage, saved-host reconnect coverage, and a live localhost SSH TOFU test path.
 - Added June 13 Device Hub screenshots under `docs/audit/screens/`.
 - Rewrote `FABLE_REPORT.md` (this file), `FABLE_FINDINGS.md` (archived → `docs/_archive/audit/FABLE_FINDINGS.md`), `FEATURE_COVERAGE.md` (archived → `docs/_archive/audit/FEATURE_COVERAGE.md`), and the screenshot manifest for this strict pass.
 
 ## Diff Summary
 
-In-scope work touched the iOS app, XcodeGen config, UI tests, push backend, metadata, and audit docs. The current in-scope code/docs diff is approximately 26 tracked files before the report rewrite, plus new audit screenshots. The unrelated dirty files under `docs/conduit-ui-prototype/**` are explicitly out of scope and were left untouched.
+In-scope work touched the iOS app, XcodeGen config, UI tests, push backend, metadata, and audit docs. The current in-scope code/docs diff is approximately 26 tracked files before the report rewrite, plus new audit screenshots. The unrelated dirty files under `docs/lancer-ui-prototype/**` are explicitly out of scope and were left untouched.
 
 Representative changed areas:
 
-- `Packages/ConduitKit/Sources/AppFeature/**`
-- `Packages/ConduitKit/Sources/OnboardingFeature/**`
-- `Packages/ConduitKit/Sources/InboxFeature/**`
-- `Packages/ConduitKit/Sources/SessionFeature/**`
-- `Packages/ConduitKit/Sources/SettingsFeature/**`
-- `ConduitUITests/TapInjectionProofTests.swift`
+- `Packages/LancerKit/Sources/AppFeature/**`
+- `Packages/LancerKit/Sources/OnboardingFeature/**`
+- `Packages/LancerKit/Sources/InboxFeature/**`
+- `Packages/LancerKit/Sources/SessionFeature/**`
+- `Packages/LancerKit/Sources/SettingsFeature/**`
+- `LancerUITests/TapInjectionProofTests.swift`
 - `daemon/push-backend/**`
 - `project.yml`
 - `docs/**`, `ship-plan/**`, `fastlane/metadata/**`
@@ -63,21 +63,21 @@ Representative changed areas:
 
 | Check | Result | Evidence |
 |---|---:|---|
-| Hook hygiene | Pass | No Conduit approval hook found in `~/.codex/` or global Claude settings; md5s recorded during the run. |
-| Tap injection proof | Pass | `testTapInjectionViaTabSwitch` returned `** TEST SUCCEEDED **` in `/tmp/conduit-fable-uitest-testTapInjectionViaTabSwitch-final.log`. |
-| Approval decision UI | Pass | `testApproveDecisionApplies` returned `** TEST SUCCEEDED **` in `/tmp/conduit-fable-uitest-testApproveDecisionApplies-final.log`. |
-| Active UI suite | Pass with beta cleanup caveat | 4 selected tests passed with 0 failures in `/tmp/conduit-fable-uitests-active-final.log`; Xcode 27 beta hung after suite completion during Device Hub shutdown and was killed. |
-| Live localhost SSH TOFU | Pass | `/tmp/conduit-fable-live-ssh-simenv3.log`; real SSH to `127.0.0.1:22`, Keychain-backed password, TOFU prompt, trust, and `Connected`. |
+| Hook hygiene | Pass | No Lancer approval hook found in `~/.codex/` or global Claude settings; md5s recorded during the run. |
+| Tap injection proof | Pass | `testTapInjectionViaTabSwitch` returned `** TEST SUCCEEDED **` in `/tmp/lancer-fable-uitest-testTapInjectionViaTabSwitch-final.log`. |
+| Approval decision UI | Pass | `testApproveDecisionApplies` returned `** TEST SUCCEEDED **` in `/tmp/lancer-fable-uitest-testApproveDecisionApplies-final.log`. |
+| Active UI suite | Pass with beta cleanup caveat | 4 selected tests passed with 0 failures in `/tmp/lancer-fable-uitests-active-final.log`; Xcode 27 beta hung after suite completion during Device Hub shutdown and was killed. |
+| Live localhost SSH TOFU | Pass | `/tmp/lancer-fable-live-ssh-simenv3.log`; real SSH to `127.0.0.1:22`, Keychain-backed password, TOFU prompt, trust, and `Connected`. |
 | Local relay fallback | Pass | Local `daemon/push-backend` handled register, decision, authorized poll, one-time drain, and 401s for missing/wrong tokens. |
-| `swift build` | Pass | `/tmp/conduit-fable-swift-build-final2.log`. |
-| `swift test` | Pass | `/tmp/conduit-fable-swift-test-final2.log`. |
+| `swift build` | Pass | `/tmp/lancer-fable-swift-build-final2.log`. |
+| `swift test` | Pass | `/tmp/lancer-fable-swift-test-final2.log`. |
 | XcodeBuildMCP `build_sim` | Pass, 0 warnings | Log under `~/Library/Developer/XcodeBuildMCP/workspaces/command-center-c3ef378ca557/logs/`. |
 | XcodeBuildMCP `test_sim` | Not cleanly returned | Wrapper timed out on the beta environment; raw XCUITest evidence above passed assertions. |
-| Archive | Pass, warning-free | `/tmp/conduit-fable-archive-final3.log`, archive `/tmp/conduit-fable-final3.xcarchive`. Development signing only. |
-| `go vet ./...` push backend | Pass | `/tmp/conduit-fable-pushbackend-govet-final2.log`. |
-| `go test ./...` push backend | Pass | `/tmp/conduit-fable-pushbackend-gotest-final2.log`. |
-| `go vet ./...` conduitd | Pass, read-only | `/tmp/conduit-fable-conduitd-govet-final2.log`. |
-| `go test ./...` conduitd | Pass, read-only | `/tmp/conduit-fable-conduitd-gotest-final2.log`. |
+| Archive | Pass, warning-free | `/tmp/lancer-fable-archive-final3.log`, archive `/tmp/lancer-fable-final3.xcarchive`. Development signing only. |
+| `go vet ./...` push backend | Pass | `/tmp/lancer-fable-pushbackend-govet-final2.log`. |
+| `go test ./...` push backend | Pass | `/tmp/lancer-fable-pushbackend-gotest-final2.log`. |
+| `go vet ./...` lancerd | Pass, read-only | `/tmp/lancer-fable-lancerd-govet-final2.log`. |
+| `go test ./...` lancerd | Pass, read-only | `/tmp/lancer-fable-lancerd-gotest-final2.log`. |
 
 No long-running `xcodebuild`, backend, Go, or UI-test runner processes were left running.
 
@@ -170,7 +170,7 @@ Engineering-local checks are in good shape, but submission is blocked until the 
 
 - Installed nothing.
 - Assumed macOS 27 / Xcode 27 beta Device Hub cleanup instability is environmental because individual tests and selected-suite assertions passed before teardown hangs.
-- Assumed localhost SSH on `127.0.0.1:22` and the Keychain item `conduit-localhost-ssh` are the intended live E2E path. The secret value was not printed.
+- Assumed localhost SSH on `127.0.0.1:22` and the Keychain item `lancer-localhost-ssh` are the intended live E2E path. The secret value was not printed.
 
 ## What I Would Commit
 

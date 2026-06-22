@@ -29,7 +29,7 @@ Prove that the iOS app can connect to a real SSH host with secure host-key handl
    chmod 600 ~/.ssh/authorized_keys
    ```
 
-3. Add the host in Conduit:
+3. Add the host in Lancer:
    - name: short display name
    - hostname: DNS name or IP
    - port: 22 unless the host differs

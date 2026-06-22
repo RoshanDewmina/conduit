@@ -2,10 +2,10 @@
 
 ## Capture Environment
 
-- App: `Conduit` (`dev.conduit.mobile`)
-- Project/scheme: `Conduit.xcodeproj` / `Conduit`
+- App: `Lancer` (`dev.lancer.mobile`)
+- Project/scheme: `Lancer.xcodeproj` / `Lancer`
 - Simulator: iPhone 17 Pro `095F8B3A-FEA3-4031-A2A5-561755740730`
-- Swift capture: dark appearance, real roots via `CONDUIT_TAB`, galleries via `CONDUIT_GALLERY`
+- Swift capture: dark appearance, real roots via `LANCER_TAB`, galleries via `LANCER_GALLERY`
 - Web capture: `http://localhost:4178/index.html`, one full-board screenshot and one image per `[data-dc-slot]` artboard
 
 ## Swift Screenshots (28)
@@ -85,7 +85,7 @@
 - [42-audit-tamper-evident-chain.jpg](../board-screenshots/42-audit-tamper-evident-chain.jpg)
 - [43-host-health-daemon-detail.jpg](../board-screenshots/43-host-health-daemon-detail.jpg)
 - [44-billing-spend-quota-remaining.jpg](../board-screenshots/44-billing-spend-quota-remaining.jpg)
-- [45-conduit-pro-paywall.jpg](../board-screenshots/45-conduit-pro-paywall.jpg)
+- [45-lancer-pro-paywall.jpg](../board-screenshots/45-lancer-pro-paywall.jpg)
 - [46-quota-per-provider-dashboard.jpg](../board-screenshots/46-quota-per-provider-dashboard.jpg)
 - [47-library-hub-dissolved.jpg](../board-screenshots/47-library-hub-dissolved.jpg)
 - [48-session-surface-switcher-deleted.jpg](../board-screenshots/48-session-surface-switcher-deleted.jpg)

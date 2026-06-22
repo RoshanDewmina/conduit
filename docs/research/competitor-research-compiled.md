@@ -1,4 +1,4 @@
-# Conduit Competitor & Market Research — Compiled
+# Lancer Competitor & Market Research — Compiled
 
 **Compiled:** 2026-06-17
 **Sources:** Claude Code sessions (June 14–15, 2026), OpenCode sessions, Kimi sessions
@@ -16,11 +16,11 @@
 | `5948a303` session (62 msgs) | Claude Code session | Jun 16 | OpenCode permissions config — NO competitor research |
 | `docs/PRODUCT_RESEARCH.md` | In-repo doc | Jun 15 | Competitive landscape, market thesis, disconfirming evidence, re-aimed strategy |
 | `docs/audit/LAUNCH_STRATEGY_RESEARCH.md` | In-repo doc | Jun 15 | Competitor launch teardowns, pricing analysis, 90-day launch plan |
-| `~/Downloads/conduit-competitor-research-feature-backlog-2026-06-14.md` | Session output | Jun 14 | Full competitor snapshot, community feedback themes, prioritized feature backlog |
-| `~/Downloads/conduit-competitor-research-implementation-report.md` | Session output | Jun 14 | 15 features built from research; source index |
-| `~/Downloads/CONDUIT_MIGRATION_HANDOFF.md` | Session output | Jun 14 | Competitor positioning references in migration context |
-| `~/Downloads/conduit-session-report-2026-06-14.md` | Session output | Jun 14 | Trust & Privacy comparison table (Omnara vs Anthropic vs Conduit) |
-| `~/Downloads/Conduit GitHub repo/Conduit Board.dc.html` | Design board | Jun 14–15 | Brief mention: "synthesis of owner decisions + subagent research (competitive landscape)" |
+| `~/Downloads/lancer-competitor-research-feature-backlog-2026-06-14.md` | Session output | Jun 14 | Full competitor snapshot, community feedback themes, prioritized feature backlog |
+| `~/Downloads/lancer-competitor-research-implementation-report.md` | Session output | Jun 14 | 15 features built from research; source index |
+| `~/Downloads/LANCER_MIGRATION_HANDOFF.md` | Session output | Jun 14 | Competitor positioning references in migration context |
+| `~/Downloads/lancer-session-report-2026-06-14.md` | Session output | Jun 14 | Trust & Privacy comparison table (Omnara vs Anthropic vs Lancer) |
+| `~/Downloads/Lancer GitHub repo/Lancer Board.dc.html` | Design board | Jun 14–15 | Brief mention: "synthesis of owner decisions + subagent research (competitive landscape)" |
 
 ---
 
@@ -50,7 +50,7 @@ This is meaningfully different from:
 - **Pricing:** FREE for existing Pro+/Team/Enterprise subscribers
 - **Strengths:** First-party integration; zero setup for Claude users; push + Dispatch + Channels
 - **Weaknesses:** "No per-event configuration" for push (Anthropic's own docs); "Claude decides when to notify" — no user control over notification granularity; no blocking-on-permission guarantee; routes traffic through Anthropic infrastructure (compliance problem)
-- **Conduit vs. them:** First-party gap is the opening — Conduit's Blocked-State + enforceable per-event notifications attack the one thing first-party does worst. Plus: code never leaves user's host.
+- **Lancer vs. them:** First-party gap is the opening — Lancer's Blocked-State + enforceable per-event notifications attack the one thing first-party does worst. Plus: code never leaves user's host.
 - **Source:** `code.claude.com/docs/en/remote-control` (HIGH confidence), `a777373e` L2080, `PRODUCT_RESEARCH.md` §3.2
 
 #### OpenAI Codex Mobile
@@ -60,7 +60,7 @@ This is meaningfully different from:
 - **Pricing:** Free (included in all ChatGPT plans)
 - **Strengths:** Massive user base; free tier; Remote SSH GA
 - **Weaknesses:** OpenAI account required; code routes through OpenAI infrastructure
-- **Conduit vs. them:** Same privacy/compliance gap as Anthropic Remote Control. Codex has same mobile approve story but no governance layer.
+- **Lancer vs. them:** Same privacy/compliance gap as Anthropic Remote Control. Codex has same mobile approve story but no governance layer.
 - **Source:** `developers.openai.com/codex/remote-connections`, TechCrunch May 14 2026 (HIGH confidence), `PRODUCT_RESEARCH.md` §3.1
 
 #### Cursor Cloud Agents
@@ -84,7 +84,7 @@ This is meaningfully different from:
 - **Stars/Scale:** YC S25; App Store (88.9 MB, 4+); Google Play
 - **Strengths:** YC brand + HN awareness (147 pts, 161 comments); voice dictation; Apple Watch; cloud handoff; open-source backend; worktrees; live previews; orchestration
 - **Weaknesses:** Privacy concern (plaintext goes through Omnara servers); pricing confusion signals lack of conviction; cloud sync infra costs; no self-host option
-- **Conduit lesson:** Validates the market but leaves privacy completely unaddressed. Conduit's blind relay is the structural moat.
+- **Lancer lesson:** Validates the market but leaves privacy completely unaddressed. Lancer's blind relay is the structural moat.
 - **Pricing correction note:** Earlier `PRODUCT_RESEARCH.md` §4.3 claimed Omnara "collapsed to free." Session `a777373e` L2088 corrects this: Omnara is now $20/mo unlimited, NOT collapsed to free. This is an important correction — the WTP collapse narrative in §4.3 needs updating.
 - **Sources:** `omnara.com/pricing`, App Store, Google Play, `github.com/omnara-ai/omnara`, HN 44878650 + 46991591, `LAUNCH_STRATEGY_RESEARCH.md` §2.1
 
@@ -132,12 +132,12 @@ This is meaningfully different from:
 
 **Combined OSS GitHub stars (Happy + cmux + CloudCLI): ~54k** — a formidable "free and trusted" signal.
 
-*Sources: `PRODUCT_RESEARCH.md` §3.1, `conduit-competitor-research-feature-backlog-2026-06-14.md` §Competitor Landscape*
+*Sources: `PRODUCT_RESEARCH.md` §3.1, `lancer-competitor-research-feature-backlog-2026-06-14.md` §Competitor Landscape*
 
 
 ### 2.4 Terminal / SSH Incumbents (Indirect)
 
-| Product | What | Pricing | Conduit vs. Them |
+| Product | What | Pricing | Lancer vs. Them |
 |---|---|---|---|
 | **Termius** | Mobile SSH client (incumbent) | $10/mo | Dumb terminal; no agent approvals; no governance |
 | **Blink Shell** | Professional iOS terminal, Mosh + SSH + VS Code | $19.99/yr (14-day trial) | #1 dev tool on App Store 5+ years; 6.8K GitHub stars; Mosh = "always-on" differentiator; no agent governance |
@@ -153,19 +153,19 @@ This is meaningfully different from:
 - **PH launches:** 6 launches total (494, 424, 208, 217 upvotes)
 - **Strengths:** "15× revenue growth after PH launch"; 2M agents/day; open-sourced terminal (AGPL May 2026); terminal-first → agent expansion natural progression
 - **Weaknesses:** Desktop-first (no mobile); credit-based pricing anxiety
-- **Conduit lesson:** Multiple PH launches compound attention. Plan launches for: iOS app → SSH relay → self-host → team features.
+- **Lancer lesson:** Multiple PH launches compound attention. Plan launches for: iOS app → SSH relay → self-host → team features.
 - **Source:** `LAUNCH_STRATEGY_RESEARCH.md` §2.3
 
 #### Portkey
 - **What:** Centralized credentials, budgets, observability, provider failover, guardrails, MCP logs, audit for coding agents
-- **Conduit lesson:** Portkey = gateway layer. Conduit should own host-side tool-call governance and phone-authorized approvals, not compete as an API gateway.
-- **Source:** `conduit-competitor-research-feature-backlog-2026-06-14.md`
+- **Lancer lesson:** Portkey = gateway layer. Lancer should own host-side tool-call governance and phone-authorized approvals, not compete as an API gateway.
+- **Source:** `lancer-competitor-research-feature-backlog-2026-06-14.md`
 
 #### Tailscale
 - **What:** Zero-trust mesh VPN on WireGuard. Closest GTM analogy.
 - **Pricing:** Personal (free, unlimited devices, 6 users) → Standard ($8/user/mo) → Premium ($14/user/mo) → Enterprise
 - **Scale:** $100M Series B, $1B+ valuation, ~5.2M monthly visitors
-- **Conduit lesson:** Open-core + free-forever personal tier = grassroots adoption. Privacy/security wedge = IT trust. The Tailscale playbook translates directly to Conduit.
+- **Lancer lesson:** Open-core + free-forever personal tier = grassroots adoption. Privacy/security wedge = IT trust. The Tailscale playbook translates directly to Lancer.
 - **Source:** `LAUNCH_STRATEGY_RESEARCH.md` §2.5
 
 #### Conan
@@ -176,9 +176,9 @@ This is meaningfully different from:
 
 #### Blume ("Blume Sidecar") — `blume.codes`
 - **What:** Web-based **desktop** oversight/governance app for AI coding agents. Tagline "Watch every coding agent, effortlessly / Tired of steering your coding agents?" Monitors agent status (working / awaiting approval); **tracks the hidden files, skills, hooks & rules that shape agent behavior** and flags config↔instruction **drift**; approve-before-apply. Runs **locally**; supports Cursor, Claude Code, Codex, omp, Pi.
-- **Overlap with Conduit:** governance/oversight + approve-before-apply + own-host + multi-vendor.
-- **Where it leads Conduit:** **agent-config drift detection** (intended config vs. actual agent behavior) — Conduit has no equivalent.
-- **Gap vs Conduit:** **desktop-first, not phone-native** (no mobile control / push surfaced); no audit chain / blast-radius / risk scoring; technical internals undisclosed.
+- **Overlap with Lancer:** governance/oversight + approve-before-apply + own-host + multi-vendor.
+- **Where it leads Lancer:** **agent-config drift detection** (intended config vs. actual agent behavior) — Lancer has no equivalent.
+- **Gap vs Lancer:** **desktop-first, not phone-native** (no mobile control / push surfaced); no audit chain / blast-radius / risk scoring; technical internals undisclosed.
 - **NOT** to be confused with `blume.page` (an unrelated AI website builder).
 - **Source:** blume.codes (verified 2026-06-19)
 
@@ -228,7 +228,7 @@ All HIGH confidence unless noted.
 11. **Privacy anxiety** — OpenCode community: concerns about telemetry, "local" claims, prompts/session data leaving the machine.
     - Source: `reddit.com/r/LocalLLaMA/comments/1rv690j/` (MEDIUM confidence)
 
-*Sources: `PRODUCT_RESEARCH.md` §2, `conduit-competitor-research-feature-backlog-2026-06-14.md` §Community Feedback*
+*Sources: `PRODUCT_RESEARCH.md` §2, `lancer-competitor-research-feature-backlog-2026-06-14.md` §Community Feedback*
 
 ---
 
@@ -240,13 +240,13 @@ The space went from "SSH + tmux + Termius" (2025) to **both Anthropic and OpenAI
 
 *Source: `a777373e` L2080 "Competitor analysis" subagent report, `PRODUCT_RESEARCH.md` §4.4*
 
-### 4.2 Conduit's Defensible Lane
+### 4.2 Lancer's Defensible Lane
 
 **"The governed, self-hosted, cross-vendor control plane for AI coding agents."**
 
 Positioning reframe (from session `a777373e` L8762, L8791):
 > NOT just a mobile Claude client — that market is crowded by Anthropic Remote Control, Omnara, Happy, CodeVibe.
-> Conduit = "mobile approval firewall + audit cockpit for AI coding agents"
+> Lancer = "mobile approval firewall + audit cockpit for AI coding agents"
 
 Three structural wedges:
 1. **Privacy/Security** — Code never leaves user's host. Blind E2E relay (X25519 + ChaCha20-Poly1305). No vendor sees your code. Anthropic Remote Control and Omnara both route traffic through their infrastructure.
@@ -262,13 +262,13 @@ Three structural wedges:
 | Launch reframe | "Mobile approval firewall + audit cockpit for AI coding agents" | Privacy-first, governed |
 
 ### 4.4 Trust & Privacy Comparison Table
-(from `conduit-session-report-2026-06-14.md` Task 3, wired into Settings > Trust & Privacy)
+(from `lancer-session-report-2026-06-14.md` Task 3, wired into Settings > Trust & Privacy)
 
 | | Code Leaves Host? | Model Goes to Cloud? | Relay Reads Messages? |
 |---|---|---|---|
 | **Omnara** | Yes | Yes | Yes |
 | **Anthropic Remote Control** | Yes | Yes | Yes |
-| **Conduit** | **No** (green) | **No** (green) | **No** (green) |
+| **Lancer** | **No** (green) | **No** (green) | **No** (green) |
 
 ### 4.5 "Better Free Mobile Client" = Lost Lane
 First-party Anthropic Remote Control (free for Pro+/Team/Enterprise) + 54k combined OSS GitHub stars + ~15 OSS projects = "better free Claude Code phone client" is not a viable strategy. Cross-vendor breadth alone is also not a moat (CloudCLI, Paseo, Companion, Happier already multi-vendor).
@@ -300,15 +300,15 @@ First-party Anthropic Remote Control (free for Pro+/Team/Enterprise) + 54k combi
 
 - **Consumer WTP is near zero** — Omnara's pricing arc ($9 → $20 → free) signals that consumer willingness-to-pay for agent mobile clients is very low OR the market is not mature enough for recurring consumer pricing. However, session `a777373e` L2088 corrects: Omnara is now $20/mo unlimited, NOT "collapsed to free." The pricing confusion itself is the signal — this market hasn't settled on a pricing anchor.
 - **Enterprise WTP exists:** Termius $10/mo and Blink $19.99/yr prove developers pay for transport-grade reliability on iOS.
-- **$20/mo is the anchor price for AI dev tools** (Cursor Pro, Warp Build are both $20/mo). Conduit as a companion (not IDE) should be lower.
+- **$20/mo is the anchor price for AI dev tools** (Cursor Pro, Warp Build are both $20/mo). Lancer as a companion (not IDE) should be lower.
 
-### 5.3 Recommended Conduit Pricing
+### 5.3 Recommended Lancer Pricing
 (from `LAUNCH_STRATEGY_RESEARCH.md` §3.2)
 
 | Tier | Price | Key Features |
 |---|---|---|
 | Personal (Self-Host) | Free forever | Run own relay, full encryption, all integrations, AGPL |
-| Personal (Cloud Relay) | Free forever | Conduit-hosted relay, 5 sessions/mo, push, community support |
+| Personal (Cloud Relay) | Free forever | Lancer-hosted relay, 5 sessions/mo, push, community support |
 | Pro (Cloud Relay) | $9/mo or $89/yr | Unlimited sessions, priority relay, team sharing (up to 5), email support |
 | Teams (Cloud Relay) | $25/user/mo | Unlimited members, SSO/SAML, audit logs, self-host relay option, SLA |
 | Enterprise | Custom | Dedicated relay, on-prem, SOC2/HIPAA, admin API, white-glove |
@@ -329,7 +329,7 @@ First-party Anthropic Remote Control (free for Pro+/Team/Enterprise) + 54k combi
 ## 6. Disconfirming Evidence & Thesis Risks
 
 ### CRITICAL: First-Party Anthropic Remote Control
-Anthropic ships multi-session + push + Dispatch + start-from-mobile, FREE for Pro+/Team/Enterprise. Any developer already paying for Claude Pro gets this for free. This is direct competition in Conduit's exact use case.
+Anthropic ships multi-session + push + Dispatch + start-from-mobile, FREE for Pro+/Team/Enterprise. Any developer already paying for Claude Pro gets this for free. This is direct competition in Lancer's exact use case.
 
 ### CRITICAL: OSS Field Is Crowded
 ~54k combined stars (Happy + cmux + CloudCLI), all MIT-licensed, all free. Actively maintained with community trust.
@@ -338,7 +338,7 @@ Anthropic ships multi-session + push + Dispatch + start-from-mobile, FREE for Pr
 Omnara's pricing arc ($9 → $20 → now $20/mo unlimited with confusion in between) shows the market hasn't stabilized. Consumer willingness-to-pay is not proven.
 
 ### HIGH: Distribution Is the Biggest Risk
-"Conduit will be the best-built and least-known app in a crowded field." Mitigation: open-source conduitd bridge (Happy/CloudCLI model of earning trust via OSS); beachhead underserved niche first; positioning that Anthropic Remote Control structurally cannot undercut ("your code never leaves your host").
+"Lancer will be the best-built and least-known app in a crowded field." Mitigation: open-source lancerd bridge (Happy/CloudCLI model of earning trust via OSS); beachhead underserved niche first; positioning that Anthropic Remote Control structurally cannot undercut ("your code never leaves your host").
 
 ### MEDIUM: Cross-Vendor Alone Is Not a Moat
 CloudCLI (11.6k★), Paseo, Companion, Happier already support multiple vendors. Cross-vendor is table-stakes once peers catch up.
@@ -354,7 +354,7 @@ Levels posts identified by URL, but specific engagement metrics (views, likes) n
 
 ### 7.1 Original Strategy (user's launch plan, reviewed in a777373e L8762)
 - Positioning: "Privacy-first iOS control plane for AI coding agents"
-- Wedge: agents keep running on user's machine, Conduit monitors/approves/denies/edits from phone
+- Wedge: agents keep running on user's machine, Lancer monitors/approves/denies/edits from phone
 - Pricing: free self-host tier, free limited cloud relay, $9-$12/mo Pro, later Teams/Enterprise
 - Distribution: Show HN + Product Hunt + Reddit + X/Twitter + Discord + TestFlight + App Store SEO
 - Message: privacy/security as core
@@ -374,10 +374,10 @@ Levels posts identified by URL, but specific engagement metrics (views, likes) n
 - Rivals can't copy: Apple-exclusive APIs
 
 **Stage 2 — Security / self-host / enterprise:**
-- E2E, on-premises bridge (conduitd), Secure Enclave / TOFU (already built)
+- E2E, on-premises bridge (lancerd), Secure Enclave / TOFU (already built)
 - Audit log (already built), team approval routing
 - Pricing: team seats / enterprise tier ($25/user/mo)
-- Open-source conduitd bridge
+- Open-source lancerd bridge
 
 **Stage 3 — Cross-vendor breadth:**
 - Claude + Codex first; later Cursor / Gemini
@@ -389,11 +389,11 @@ Levels posts identified by URL, but specific engagement metrics (views, likes) n
 
 ## 8. Research-Informed Implementation
 
-The `conduit-competitor-research-feature-backlog-2026-06-14.md` research spawned **15 features** built across Go (daemon) and Swift (iOS) in the `conduit-competitor-research-implementation-report.md`:
+The `lancer-competitor-research-feature-backlog-2026-06-14.md` research spawned **15 features** built across Go (daemon) and Swift (iOS) in the `lancer-competitor-research-implementation-report.md`:
 
 ### P0 (Built — Core Reliability & Trust)
 1. **Blocked State OS** — State machine + APNs proof + stale-decision handling + notification preferences
-2. **conduit doctor** — Setup health check (6 checks: daemon version, hooks, auth, policy, permissions, local models)
+2. **lancer doctor** — Setup health check (6 checks: daemon version, hooks, auth, policy, permissions, local models)
 3. **Privacy Badge** — Local/Cloud/E2E Relay variants with visual indicators
 4. **opencode status-reader path fix** — Config path corrected from `~/.local/share/opencode/` to `~/.config/opencode/`
 5. **Scoped Allow-Always Manager** — Scopes by repo, path, command pattern, tool, vendor, time window; one-tap revoke
@@ -408,7 +408,7 @@ The `conduit-competitor-research-feature-backlog-2026-06-14.md` research spawned
 12. **Secrets Broker** — Agent requests credential → daemon holds → phone authorizes scoped use
 13. **Worktree/Branch Board** — Active/Review Ready/Idle worktree columns
 14. **CI/PR Event Integration** — GitHub webhook receiver; PR/check events in LoopDetailView
-15. **Adapter SPI + conduit-mcp Gateway** — Documented SPI + MCP gateway for Goose/Cline/Roo/Kilo
+15. **Adapter SPI + lancer-mcp Gateway** — Documented SPI + MCP gateway for Goose/Cline/Roo/Kilo
 
 ### T0 Foundation Built Simultaneously
 16. **E2E Bidirectional Relay** — WebSocket relay server + daemon E2E client + iOS E2E relay client. Blind ciphertext relay, no Tailscale required.
@@ -498,7 +498,7 @@ The `conduit-competitor-research-feature-backlog-2026-06-14.md` research spawned
 - NO competitor/market research content
 
 ### Design Board (Jun 14-15)
-- `Conduit Board.dc.html`: mentions "synthesis of owner decisions + subagent research (competitive landscape)" and notes Happy Coder + Omnara ship real-time voice
+- `Lancer Board.dc.html`: mentions "synthesis of owner decisions + subagent research (competitive landscape)" and notes Happy Coder + Omnara ship real-time voice
 - All other `.dc.html` files: UI/feature design, no research content
 
 ---

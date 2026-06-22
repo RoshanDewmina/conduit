@@ -2,8 +2,8 @@
 
 ## Prerequisites
 - M1+M5 complete.
-- Remote: `conduitd` running, agent configured with patch hook.
-- iOS: Conduit app with M7 build.
+- Remote: `lancerd` running, agent configured with patch hook.
+- iOS: Lancer app with M7 build.
 
 ## Steps
 
@@ -20,7 +20,7 @@ Tap a binary file → "Binary file" placeholder shown.
 
 ### 3. Patch from agent
 Run Claude Code on the remote: `claude "add a comment to main.go"`.
-Claude proposes a patch → `agent.patch.proposed` event fires via conduitd.
+Claude proposes a patch → `agent.patch.proposed` event fires via lancerd.
 iOS: DiffFeature sheet opens (if RecentPatch is wired) showing the unified diff.
 
 ## Pass criteria

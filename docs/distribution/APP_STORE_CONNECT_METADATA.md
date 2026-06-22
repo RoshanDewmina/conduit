@@ -10,10 +10,10 @@ recount before submitting. Claims are scoped to what's implemented today (see
 
 ## App name
 
-**Conduit**
+**Lancer**
 
-(30-char limit. "Conduit" is 7 chars — leaves room if App Store Connect requires a
-longer unique name; e.g. "Conduit — Agent Control" as a fallback if "Conduit" alone
+(30-char limit. "Lancer" is 7 chars — leaves room if App Store Connect requires a
+longer unique name; e.g. "Lancer — Agent Control" as a fallback if "Lancer" alone
 is taken by another listing. VERIFY name availability in App Store Connect before
 locking this in.)
 
@@ -29,7 +29,7 @@ locking this in.)
 
 ## Promotional text (170-char limit, editable without a new build)
 
-**Conduit puts your AI coding agents on a leash. Approve or reject risky actions
+**Lancer puts your AI coding agents on a leash. Approve or reject risky actions
 from your phone, dispatch runs, and open a real terminal — all from your own
 hosts.**
 
@@ -40,11 +40,11 @@ hosts.**
 ## Description
 
 ```
-Conduit is a mobile control plane for the AI coding agents you already run —
+Lancer is a mobile control plane for the AI coding agents you already run —
 Claude Code, Codex, OpenCode, and Kimi — on your own Mac or Linux machines.
 
-You stay in control. Conduit doesn't run agents in the cloud or hold your code:
-it pairs with a small daemon (conduitd) on your own host, and lets you govern
+You stay in control. Lancer doesn't run agents in the cloud or hold your code:
+it pairs with a small daemon (lancerd) on your own host, and lets you govern
 what your agents are allowed to do from your phone.
 
 WHAT YOU CAN DO
@@ -59,7 +59,7 @@ WHAT YOU CAN DO
 • Self-host the relay yourself, or use the hosted option — your choice.
 
 HOW IT WORKS
-Install the conduitd daemon on the host you want to govern (one command), pair
+Install the lancerd daemon on the host you want to govern (one command), pair
 your phone by scanning a QR code, and you're set. Approvals route through an
 end-to-end encrypted relay; the relay forwards opaque ciphertext and never holds
 a key that lets it read your commands or decisions.
@@ -69,7 +69,7 @@ Developers and small teams running autonomous or semi-autonomous coding agents
 who want a human-approval gate and visibility into what those agents are doing
 — without giving up control of where their code and credentials live.
 
-Conduit Pro unlocks the full feature set: the agent approval inbox, SFTP file
+Lancer Pro unlocks the full feature set: the agent approval inbox, SFTP file
 browser, port-forwarding preview, iCloud sync across your devices, and
 unlimited SSH hosts.
 ```
@@ -88,7 +88,7 @@ ssh,agent,ai,automation,terminal,devops,approval,claude,codex,remote,server,cli,
 ```
 
 (Adjust if any of these read as trademark-adjacent in ASC review — "claude" and
-"codex" name third-party products Conduit interoperates with; VERIFY this is
+"codex" name third-party products Lancer interoperates with; VERIFY this is
 acceptable under App Store guidelines before submission, or soften to "ai coding
 agent" generic phrasing.)
 
@@ -99,7 +99,7 @@ agent" generic phrasing.)
 **VERIFY / placeholder** — `https://conduit.dev/support` (no live support page
 confirmed in this repo). Owner must provide a real, reachable URL before
 submission. A GitHub Issues URL (e.g.
-`https://github.com/RoshanDewmina/conduit/issues`) is a reasonable interim value
+`https://github.com/RoshanDewmina/lancer/issues`) is a reasonable interim value
 if no dedicated support site exists yet.
 
 ---
@@ -142,13 +142,13 @@ questionnaire.
 ## What's New (first build / version 1.0.0)
 
 ```
-Welcome to Conduit 1.0.
+Welcome to Lancer 1.0.
 
 • Approve or reject risky AI agent actions from your phone, in real time
 • Dispatch new agent runs and follow up on existing ones
 • Open a real SSH terminal to any reachable host, inline in a chat session
 • Pair your own self-hosted daemon via QR code
-• iCloud sync for your hosts and keys (Conduit Pro)
+• iCloud sync for your hosts and keys (Lancer Pro)
 ```
 
 (Keep "What's New" aligned to what's actually in the build being submitted — strip
@@ -156,24 +156,24 @@ any bullet not present in that specific build.)
 
 ---
 
-## In-App Purchase listing (for `dev.conduit.mobile.pro`)
+## In-App Purchase listing (for `dev.lancer.mobile.pro`)
 
-- **Reference name:** Conduit Pro
+- **Reference name:** Lancer Pro
 - **Type:** Non-consumable, one-time purchase (NOT a subscription — confirmed by
-  `Conduit/Conduit.storekit` in this repo).
+  `Lancer/Lancer.storekit` in this repo).
 - **Price:** $14.99 (per the local StoreKit testing configuration; VERIFY this is
   the intended live ASC price tier — the `.storekit` file is a local test config,
   not the source of truth for the real App Store price).
-- **Display name:** Conduit Pro
-- **Description (from local StoreKit config):** "Full access to all Conduit
+- **Display name:** Lancer Pro
+- **Description (from local StoreKit config):** "Full access to all Lancer
   features: AI agent approval inbox, SFTP file browser, port-forwarding preview,
   CloudKit sync, and unlimited SSH hosts."
 - **VERIFY:** this IAP record does not exist yet in App Store Connect — creating it
   is a human-gated step (see `HUMAN_GATED_STEPS.md`).
 
-Note: the app also has a separate Stripe-billed "Conduit Cloud" subscription
+Note: the app also has a separate Stripe-billed "Lancer Cloud" subscription
 (hosted agents / managed AI) that is **not** an Apple IAP — it's billed externally
-via Stripe. Do not conflate the two in the ASC listing; only `dev.conduit.mobile.pro`
+via Stripe. Do not conflate the two in the ASC listing; only `dev.lancer.mobile.pro`
 needs an IAP record. VERIFY whether external-payment language in the listing needs
 Apple's External Purchase Link entitlement / disclosure depending on current App
 Store guidelines at submission time.

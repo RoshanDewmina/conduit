@@ -24,7 +24,7 @@ export default function FinalCtaSection() {
           </p>
           <div className="relative flex justify-center">
             <Button href="/download" variant="light">
-              Get Conduit
+              Get Lancer
             </Button>
           </div>
         </div>

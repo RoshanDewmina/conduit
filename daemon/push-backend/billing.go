@@ -127,8 +127,8 @@ func handleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		values.Set("subscription_data[metadata][app_account_token]", req.AppAccountToken)
 	}
 	if accountUser != nil {
-		values.Set("metadata[conduit_user_id]", accountUser.ID)
-		values.Set("subscription_data[metadata][conduit_user_id]", accountUser.ID)
+		values.Set("metadata[lancer_user_id]", accountUser.ID)
+		values.Set("subscription_data[metadata][lancer_user_id]", accountUser.ID)
 	}
 
 	body, status, err := stripePostForm("/v1/checkout/sessions", values)
@@ -281,7 +281,7 @@ func handleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 		var session stripeSession
 		if err := json.Unmarshal(event.Data.Object, &session); err == nil {
 			entitlement := subscriptionEntitlement{
-				UserID:          session.Metadata["conduit_user_id"],
+				UserID:          session.Metadata["lancer_user_id"],
 				CustomerID:      string(session.Customer),
 				SubscriptionID:  string(session.Subscription),
 				Status:          "checkout_completed",
@@ -303,7 +303,7 @@ func handleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 
 func handleBillingReturn(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.URL.Query().Get("session_id")
-	deepLink := "conduit://billing/complete"
+	deepLink := "lancer://billing/complete"
 	if sessionID != "" {
 		deepLink += "?checkoutSessionId=" + url.QueryEscape(sessionID)
 	}
@@ -422,7 +422,7 @@ func entitlementFromSubscription(sub stripeSubscription) subscriptionEntitlement
 		orgName = sub.Metadata["orgName"]
 	}
 	return subscriptionEntitlement{
-		UserID:           sub.Metadata["conduit_user_id"],
+		UserID:           sub.Metadata["lancer_user_id"],
 		CustomerID:       string(sub.Customer),
 		OrgID:            orgID,
 		OrgName:          orgName,

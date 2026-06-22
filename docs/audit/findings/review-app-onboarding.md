@@ -10,7 +10,7 @@ Method: static read of the worktree; no builds run; every candidate ran through 
 ## App navigation map (for the E2E coordinator)
 
 ### Root selection — `AppRoot.body` → `mainBody` → `readyRoot` → `rootContainer`
-- `#if DEBUG` `CONDUIT_GALLERY` → `DebugGalleryView` (gallery harness; not a normal launch).
+- `#if DEBUG` `LANCER_GALLERY` → `DebugGalleryView` (gallery harness; not a normal launch).
 - App-lock gate: if `appLockEnabled && !isUnlocked` → `LaunchLockView` (biometric).
 - `environment == .failure` → `ContentUnavailableView("Failed to start")` (dead-end by design — DB open failed).
 - First launch (`onboardingSeen == false`) → `OnboardingView` (7 screens).
@@ -29,7 +29,7 @@ Method: static read of the worktree; no builds run; every candidate ran through 
 2. **Re-entry:** `PersistentStatusBar` (top of compact/regular root) tap → `isShowingLiveSession = true` (only visible while `hudStore.agents` is non-empty, i.e. a live session exists).
 3. **Notification "run complete"** → `selectFleetSlot` + `isShowingLiveSession = true`.
 4. **Provisioning:** Onboarding screen 7 "create a workspace" → `ProvisioningWizard` sheet → `onComplete` → `openSession`.
-5. **Hosted (cloud) agents:** `AddHostView` "conduit cloud" → `onUseHosted` → `showingHostedAgents` sheet → `AgentsView` → (its own NavigationStack) → `AgentDetailView` → Exec / Files / `AgentWorkspaceView` / `AgentOrgView` / `AgentRunDetailView`.
+5. **Hosted (cloud) agents:** `AddHostView` "lancer cloud" → `onUseHosted` → `showingHostedAgents` sheet → `AgentsView` → (its own NavigationStack) → `AgentDetailView` → Exec / Files / `AgentWorkspaceView` / `AgentOrgView` / `AgentRunDetailView`.
 
 ### Orphaned in the new IA (defined but never instantiated in any live path)
 `HostsView`, `WorkspacesView`, `SessionsHomeView`, `WorkflowsView`, `HistoryView`, `DispatchComposerView`, and the `editingHost` sheet. The recents/saved-host **reconnect** capability lived in `SessionsHomeView`/`HostsView` and has no replacement — see MAJOR-4.
@@ -45,7 +45,7 @@ self.isShowingLiveSession = true   // AppRoot.swift ~926  (fullScreenCover → S
 ...
 await vm.connect()                 // AppRoot.swift ~944  (host-key check happens HERE)
 ```
-For any genuinely new host, `TOFUHostKeyValidator` throws `ConduitError.hostKeyUnknown`, so `connect()` sets `pendingHostKeyFingerprint` and transitions to `.disconnected` (SessionViewModel.swift:298–305). Two independent defects then trap the user:
+For any genuinely new host, `TOFUHostKeyValidator` throws `LancerError.hostKeyUnknown`, so `connect()` sets `pendingHostKeyFingerprint` and transitions to `.disconnected` (SessionViewModel.swift:298–305). Two independent defects then trap the user:
 
 1. **The TOFU sheet can't present.** `HostKeyConfirmSheet` is attached via `.sheet` on `readyRoot` (AppRoot.swift:455–468), but `readyRoot` is the same presenter that is already presenting the `SessionView` `fullScreenCover` (raised from its `compactRoot`/`regularRoot` descendant). A view controller can present only one modal at a time, and SwiftUI cannot present a `.sheet` over a `.fullScreenCover` from the same presenter — the host-key prompt is deferred/dropped, so it never becomes visible.
 2. **The connect overlay sticks.** `SessionView`'s `SSHConnectOverlay` is shown for `.connecting` and its `.onChange(of: vm.status)` has **no case for `.disconnected`** (SessionView.swift:196–211, `default: break`). So after the host-key failure the overlay stays on a full-screen `Color.black.opacity(0.9)` "Connecting…" frame forever, covering the `ChatHeaderView` back button; its tap handler is inert for the `.connecting` phase. `fullScreenCover` has no interactive swipe-dismiss. The user is hard-stuck and must force-quit.
@@ -137,4 +137,4 @@ Ed25519 empty-state says "Generate an Ed25519 key in **Settings > SSH Keys**", b
 - `InboxView` stores its VM as a plain `var` (not captured `@State`), so live-VM swaps (`inboxVM = liveVM`) are observed correctly via `@Observable`.
 - View models are `@MainActor @Observable`; cross-actor closures (`LiveInboxViewModel.onDecision`, watch sync) hop via `await MainActor.run`; lifecycle/session closures capture `[weak vm]`/`[weak self]`/`[weak agentStore]` — no obvious retain cycles or off-main UI mutations found.
 - `CreateAgentSheet`, `EditScheduleSheet`, `AgentDetailView`, `AgentWorkspaceView`, `HostEditorView` have proper cancel paths, error surfacing, and `.task`-based loads; no recreate-each-render state loss (all use `@State`/`@Bindable` correctly).
-- Onboarding: no skip path lands in a broken state — every exit (`get started`, `i already use conduit`, `not now`, `skip`, screen-7 CTAs) routes to `onContinue`/`onSetupWorkspace` and lands on Fleet with the add-host sheet; the Notifications step asks before claiming (honest).
+- Onboarding: no skip path lands in a broken state — every exit (`get started`, `i already use lancer`, `not now`, `skip`, screen-7 CTAs) routes to `onContinue`/`onSetupWorkspace` and lands on Fleet with the add-host sheet; the Notifications step asks before claiming (honest).

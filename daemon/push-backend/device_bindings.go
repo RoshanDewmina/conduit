@@ -40,7 +40,7 @@ type deviceBindingStore struct {
 	data deviceBindingSnapshot
 }
 
-var activeDeviceBindingStore = newDeviceBindingStore(dataFilePath("DEVICE_BINDINGS_FILE", "conduit-device-bindings.json"))
+var activeDeviceBindingStore = newDeviceBindingStore(dataFilePath("DEVICE_BINDINGS_FILE", "lancer-device-bindings.json"))
 
 func newDeviceBindingStore(path string) *deviceBindingStore {
 	s := &deviceBindingStore{path: path, data: deviceBindingSnapshot{Devices: map[string]deviceBinding{}}}

@@ -1,14 +1,14 @@
-# Conduit — Ship Plan (refined) & Subagent Operating Guide
+# Lancer — Ship Plan (refined) & Subagent Operating Guide
 
 **Date:** 2026-05-31 · **Branch:** `feat/warp-style-agent-blocks` · **Target:** paid v1 → TestFlight beta → App Store
 
-This folder is the **operating manual** for shipping Conduit. Each file in `workstreams/` is a **self-contained prompt** you paste into a fresh agent. When an agent reports back, paste its response to the orchestrator (me); I judge it against `VERIFICATION.md` and return PASS / PASS-WITH-NITS / FAIL + a fix list.
+This folder is the **operating manual** for shipping Lancer. Each file in `workstreams/` is a **self-contained prompt** you paste into a fresh agent. When an agent reports back, paste its response to the orchestrator (me); I judge it against `VERIFICATION.md` and return PASS / PASS-WITH-NITS / FAIL + a fix list.
 
 ---
 
 ## 0. What this refinement did to the source plan
 
-The source (`~/Downloads/conduit-ship-plan.md`) is three stacked passes written over several days. They **disagree** in places. I reconciled them against the live repo into one coherent ship-critical plan:
+The source (`~/Downloads/lancer-ship-plan.md`) is three stacked passes written over several days. They **disagree** in places. I reconciled them against the live repo into one coherent ship-critical plan:
 
 | Conflict in source | Resolution (locked by owner 2026-05-31) |
 |---|---|
@@ -68,8 +68,8 @@ Owner-only steps (Apple Dev portal, Stripe dashboard, Sentry project, DNS) are l
 
 ## 3. Global Definition of Done (every workstream)
 
-- [ ] `cd Packages/ConduitKit && swift build` green — zero errors, **no new warnings**.
-- [ ] `cd Packages/ConduitKit && swift test` green; new behavior has tests; count not reduced.
+- [ ] `cd Packages/LancerKit && swift build` green — zero errors, **no new warnings**.
+- [ ] `cd Packages/LancerKit && swift test` green; new behavior has tests; count not reduced.
 - [ ] Scope respected — only files in the brief touched; **never `git add -A`**, stage source only.
 - [ ] Invariants intact: TOFU prompt in prod paths · single unified PTY · `.submitted`-only TUI escalation · Keychain-only secrets.
 - [ ] UI changes: gallery/live screenshot in **light AND dark** (see `CLAUDE.md` → Visual verification).

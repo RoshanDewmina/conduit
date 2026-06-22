@@ -3,13 +3,13 @@
 ## Prerequisites
 - M1–M3 complete.
 - Remote: `tmux`, `claude` (Claude Code CLI) installed and configured.
-- `conduitd` binary deployed to `~/.conduit/bin/conduitd` on the remote host.
-  Build: `swift build -c release` inside `daemon/conduitd/` then `scp`.
+- `lancerd` binary deployed to `~/.lancer/bin/lancerd` on the remote host.
+  Build: `swift build -c release` inside `daemon/lancerd/` then `scp`.
 - Claude Code configured with approval hook:
   ```bash
   # ~/.claude/hooks/pre-tool.sh
   #!/bin/bash
-  ~/.conduit/bin/conduitd agent-hook approval \
+  ~/.lancer/bin/lancerd agent-hook approval \
     --agent claude-code \
     --kind command \
     --command "$CLAUDE_TOOL_COMMAND" \
@@ -30,7 +30,7 @@ In a remote tmux pane:
 tmux new -s agent-test
 claude "delete all .tmp files under ~/projects"
 ```
-Claude Code evaluates the command; the pre-tool hook calls `conduitd agent-hook approval`.
+Claude Code evaluates the command; the pre-tool hook calls `lancerd agent-hook approval`.
 
 **Expected within 1 s:**
 - iOS Inbox tab badge increments to **1**.
@@ -61,7 +61,7 @@ Lock device. Trigger a new approval.
 Tapping **Approve** routes through `NotificationsKit` category handler → `ApprovalRepository`.
 
 ## Pass criteria
-- [ ] `ConduitDProtocolTests` + `DaemonChannelTests` pass.
+- [ ] `LancerDProtocolTests` + `DaemonChannelTests` pass.
 - [ ] Approval appears in Inbox within 1 s of agent hook call.
 - [ ] Allow once → agent unblocks.
 - [ ] Reject → agent aborts.

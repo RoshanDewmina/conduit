@@ -3,16 +3,16 @@
 These steps require the owner's Apple Developer account, signing identity, a
 physical device, or a judgment call an agent shouldn't make unsupervised. An
 agent can draft text, prepare commands, and verify *up to* the gate, but cannot
-cross it. This list is the punch list for shipping Conduit 1.0 to TestFlight/App
+cross it. This list is the punch list for shipping Lancer 1.0 to TestFlight/App
 Store.
 
 Known account values (already in this repo, not secret):
-- Bundle ID: `dev.conduit.mobile`
+- Bundle ID: `dev.lancer.mobile`
 - Apple Developer Team ID: `39HM2X8GS6` (`project.yml` `DEVELOPMENT_TEAM`)
 - APNs Key ID: `L8LVU9X82W`
 - APNs Team ID: `39HM2X8GS6`
 - Relay/push backend URL currently baked into the build: `https://35.201.3.231.sslip.io`
-  (`project.yml` line 26, `CONDUIT_PUSH_BACKEND_URL`)
+  (`project.yml` line 26, `LANCER_PUSH_BACKEND_URL`)
 
 ---
 
@@ -20,7 +20,7 @@ Known account values (already in this repo, not secret):
 
 **What's needed:** an Apple Developer Program membership (paid, $99/yr) and access
 to App Store Connect under the team that owns `39HM2X8GS6`. Create a new app with
-bundle ID `dev.conduit.mobile`, primary language, and the metadata drafted in
+bundle ID `dev.lancer.mobile`, primary language, and the metadata drafted in
 `APP_STORE_CONNECT_METADATA.md` (name, subtitle, description, keywords, category,
 support/privacy-policy URLs).
 
@@ -36,18 +36,18 @@ reviewed metadata, supply real Privacy Policy / Support URLs.
 
 ---
 
-## 2. Create the in-app purchase `dev.conduit.mobile.pro`
+## 2. Create the in-app purchase `dev.lancer.mobile.pro`
 
 **What's needed:** App Store Connect → the app record (must exist first, see #1)
 → In-App Purchases → New → Non-Consumable.
 
-**Known values to enter (from `Conduit/Conduit.storekit`, a local test config —
+**Known values to enter (from `Lancer/Lancer.storekit`, a local test config —
 confirm these are also the intended *live* values, don't just copy blindly):**
-- Product ID: `dev.conduit.mobile.pro`
-- Reference name: Conduit Pro
+- Product ID: `dev.lancer.mobile.pro`
+- Reference name: Lancer Pro
 - Type: Non-Consumable (one-time purchase, not a subscription)
-- Display name: Conduit Pro
-- Description: "Full access to all Conduit features: AI agent approval inbox,
+- Display name: Lancer Pro
+- Description: "Full access to all Lancer features: AI agent approval inbox,
   SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH
   hosts."
 - Price: drafted as $14.99 in the local StoreKit config — **VERIFY** this is the
@@ -89,25 +89,25 @@ configured in `project.yml` via `CODE_SIGN_STYLE: Automatic` /
 right Apple ID/team locally, or a CI signing certificate + provisioning profile).
 
 **Before archiving, confirm `project.yml` build settings point at the live
-backend** — `CONDUIT_PUSH_BACKEND_URL` (line 26) must be the production relay URL,
+backend** — `LANCER_PUSH_BACKEND_URL` (line 26) must be the production relay URL,
 not a placeholder or a localhost/dev value. The repo currently has this set to
 `https://35.201.3.231.sslip.io`; confirm that's still the intended production
 relay at archive time, since the runbook describes this as a Cloud Run / self-host
 deployment that could move.
 
 Also confirm before archiving:
-- `CONDUIT_SUPABASE_URL` / `CONDUIT_SUPABASE_PUBLISHABLE_KEY` are injected via
+- `LANCER_SUPABASE_URL` / `LANCER_SUPABASE_PUBLISHABLE_KEY` are injected via
   local/CI build settings if standard account sign-in should work in the shipped
   build (the repo intentionally ships these empty).
-- `CONDUIT_ICLOUD_ENABLED` and the entitlements file match (iCloud/CloudKit
+- `LANCER_ICLOUD_ENABLED` and the entitlements file match (iCloud/CloudKit
   requires the paid Developer Program capability to be enabled first — see the
-  comment block in `project.yml` above the `Conduit` target's entitlements).
-- Sentry DSN (`Conduit/ConduitApp.swift`) — currently empty/disabled. Decide
+  comment block in `project.yml` above the `Lancer` target's entitlements).
+- Sentry DSN (`Lancer/LancerApp.swift`) — currently empty/disabled. Decide
   before archiving whether to leave crash reporting off for 1.0 or wire a real
   DSN (changes the privacy label — see `PRIVACY_ANSWERS.md` item 6).
 
 **Owner action:** in Xcode (or via `xcodebuild archive` / Xcode Cloud), select the
-`Conduit` scheme's `archive` action (already configured for `Release` in
+`Lancer` scheme's `archive` action (already configured for `Release` in
 `project.yml`), produce the `.xcarchive`, validate, and upload to App Store
 Connect — or hand to Transporter.
 
@@ -117,7 +117,7 @@ Connect — or hand to Transporter.
 
 **What's needed:** the App Store listing requires screenshots for at least one
 required device size class (typically 6.7" / 6.9" iPhone, plus iPad if the app
-supports it — Conduit's `UISupportedInterfaceOrientations~ipad` in `project.yml`
+supports it — Lancer's `UISupportedInterfaceOrientations~ipad` in `project.yml`
 suggests iPad support is intentional, so iPad screenshots are likely required
 too).
 
@@ -157,7 +157,7 @@ entitlement and `aps-environment` set, and the host-side daemon running.
 `docs/LIVE_LOOP_RUNBOOK.md` Phase 5c ("APNs while app is closed — physical device
 only"). Per the runbook: simulators cannot receive production APNs, so this proof
 cannot be faked or approximated. The exact procedure, in order:
-1. Launch Conduit once on the device, accept notifications (registers APNs token).
+1. Launch Lancer once on the device, accept notifications (registers APNs token).
 2. Background or fully close the app.
 3. From the host, trigger an `ask`-classified action.
 4. Confirm a lock-screen/Dynamic Island notification arrives with Approve/Reject

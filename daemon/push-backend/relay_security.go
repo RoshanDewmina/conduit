@@ -24,7 +24,7 @@ const (
 	maxApprovalIDLen      = 256
 	maxDeviceTokenLen     = 4096
 	maxEditedToolInputLen = 32 << 10
-	// maxRelayTokenLen bounds the per-session capability token. conduitd mints a
+	// maxRelayTokenLen bounds the per-session capability token. lancerd mints a
 	// 32-byte base64url token (43 chars); the cap is generous headroom.
 	maxRelayTokenLen = 512
 )
@@ -33,13 +33,13 @@ const (
 // Two-tier authentication model for the approval relay
 //
 // Tier 1 — CONTROL PLANE (deployment-wide shared secret, APPROVAL_RELAY_SECRET):
-//   guards /register, /approval, /run-complete. These are conduitd→backend (and
+//   guards /register, /approval, /run-complete. These are lancerd→backend (and
 //   app→backend for APNs registration) control messages. The shared secret lets
-//   conduitd bootstrap a session's relayToken BEFORE any per-session capability
+//   lancerd bootstrap a session's relayToken BEFORE any per-session capability
 //   exists. Enforced by relayAuthorized().
 //
 // Tier 2 — PER-SESSION CAPABILITY (relayToken): guards POST /approval/decision
-//   (from the app) and GET /decisions (from conduitd). conduitd mints a random
+//   (from the app) and GET /decisions (from lancerd). lancerd mints a random
 //   per-session relayToken, registers it via Tier 1, and delivers it to the app
 //   over the authenticated DaemonChannel. Callers present it as
 //   `Authorization: Bearer <relayToken>`; the backend constant-time-compares it
@@ -60,7 +60,7 @@ const (
 // shared secret cannot distinguish one legitimate client from another, so it is
 // NOT sufficient on the decision/poll endpoints; those use the per-session
 // relayToken. The shared secret remains the right guard for /register,
-// /approval and /run-complete because conduitd must register a session's
+// /approval and /run-complete because lancerd must register a session's
 // relayToken before any per-session capability exists (bootstrap), and because
 // these are control messages, not capability-scoped relay traffic.
 func relaySharedSecret() string {
@@ -97,7 +97,7 @@ func bearerToken(r *http.Request) string {
 
 // relaySessionAuthorized enforces the per-session capability (Tier 2) on the
 // decision-relay endpoints. It constant-time-compares `provided` against the
-// relayToken conduitd registered for sessionID. FAIL-CLOSED: an empty
+// relayToken lancerd registered for sessionID. FAIL-CLOSED: an empty
 // sessionId/token, an unknown session, a session with no registered relayToken,
 // or a mismatch all return false (the caller must respond 401 with no side
 // effects). On success it refreshes the session's last-seen stamp so an
@@ -146,7 +146,7 @@ func relaySecretStartupCheck(secret string, isProd bool) (fatal, warn string) {
 	}
 	if isProd {
 		return "SECURITY: APPROVAL_RELAY_SECRET is unset in a production deployment " +
-			"(Fly.io, Cloud Run, or CONDUIT_ENV=production). The control-plane endpoints /register, /approval and " +
+			"(Fly.io, Cloud Run, or LANCER_ENV=production). The control-plane endpoints /register, /approval and " +
 			"/run-complete would be UNAUTHENTICATED — anyone could overwrite a session's " +
 			"relayToken/APNs token. Refusing to start. Set APPROVAL_RELAY_SECRET to a strong random value.", ""
 	}
@@ -184,7 +184,7 @@ func relayProductionDeploymentFromEnv(getenv func(string) string) bool {
 			return true
 		}
 	}
-	switch strings.ToLower(strings.TrimSpace(getenv("CONDUIT_ENV"))) {
+	switch strings.ToLower(strings.TrimSpace(getenv("LANCER_ENV"))) {
 	case "prod", "production":
 		return true
 	}

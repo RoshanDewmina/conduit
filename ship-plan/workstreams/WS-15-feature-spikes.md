@@ -1,9 +1,9 @@
 # WS-15 — Competitive feature spikes  (post-launch)
 
-> Each item is a **flagged prototype**, not a finished feature. Verify each in the gallery. Build the highest-ROI ones first; stop when value-per-effort drops. These are the §6 BUILD items where Conduit can pull ahead of shipped mobile competitors.
+> Each item is a **flagged prototype**, not a finished feature. Verify each in the gallery. Build the highest-ROI ones first; stop when value-per-effort drops. These are the §6 BUILD items where Lancer can pull ahead of shipped mobile competitors.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`. Each prototype goes behind a feature flag and is verified in the gallery before any rollout.
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`. Each prototype goes behind a feature flag and is verified in the gallery before any rollout.
 
 ## Tasks (prioritized — impact↑/effort↓ first)
 1. **Shortcut / extra-key bar above the keyboard** — Esc/Tab/Ctrl/arrows + Approve/Reject + paste-image + snippet chips. The `.tmuxPrefix`/`ShortcutKey` enum exists but several cases have no handler — wire the bar to real key emission over the unified PTY (no second PTY). *(high/med)*

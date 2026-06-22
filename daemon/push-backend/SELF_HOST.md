@@ -1,4 +1,4 @@
-# Self-hosting the Conduit push-backend relay
+# Self-hosting the Lancer push-backend relay
 
 The `push-backend` binary serves two roles:
 - **Blind WebSocket relay** (`/ws/relay`) — forwards opaque ciphertext for QR + relay pairing.
@@ -13,10 +13,10 @@ You can self-host just the relay (no APNs keys needed) or the full backend.
 ### One-line run
 
 ```bash
-docker run -d --name conduit-relay \
+docker run -d --name lancer-relay \
   -p 8080:8080 \
   -e APPROVAL_RELAY_SECRET="$(openssl rand -hex 32)" \
-  conduit-relay
+  lancer-relay
 ```
 
 ### With docker compose
@@ -44,16 +44,16 @@ curl http://localhost:8080/health    # → 200
 |---|---|---|---|
 | `PORT` | no | `8080` | HTTP listen port |
 | `APPROVAL_RELAY_SECRET` | recommended | — | Shared secret for control-plane endpoints. Set to `openssl rand -hex 32` |
-| `CONDUIT_ENV` | no | — | Set to `production` to enable fail-closed startup checks |
+| `LANCER_ENV` | no | — | Set to `production` to enable fail-closed startup checks |
 | `CORS_ALLOW_ORIGIN` | no | `*` | CORS origin header value |
 | `APNS_KEY_ID` | for push | — | Apple APNs key ID (10 chars) |
 | `APNS_TEAM_ID` | for push | — | Apple team ID (10 chars) |
 | `APNS_KEY_PATH` | for push | — | Path to the `.p8` key file |
-| `APNS_BUNDLE_ID` | for push | `dev.conduit.mobile` | iOS bundle ID for push topic |
+| `APNS_BUNDLE_ID` | for push | `dev.lancer.mobile` | iOS bundle ID for push topic |
 
 **Relay-only:** the `APNS_*` vars and all Stripe/GCP/OpenRouter vars are unused — the relay endpoint (`/ws/relay`) needs nothing but `PORT`. The container starts and runs without them.
 
-**Approval relay:** set `APPROVAL_RELAY_SECRET` to a strong random value. Without it the control-plane endpoints (`/register`, `/approval`, `/run-complete`) are unauthenticated; the process logs a loud warning at startup and refuses to start if `CONDUIT_ENV=production` is set.
+**Approval relay:** set `APPROVAL_RELAY_SECRET` to a strong random value. Without it the control-plane endpoints (`/register`, `/approval`, `/run-complete`) are unauthenticated; the process logs a loud warning at startup and refuses to start if `LANCER_ENV=production` is set.
 
 ---
 
@@ -62,7 +62,7 @@ curl http://localhost:8080/health    # → 200
 The iOS client resolves the relay URL in this priority order (see `RelaySettings.swift`):
 
 1. **In-app override** — Settings → Relay Server text field.
-2. **`CONDUIT_RELAY_URL` env var** — via Xcode scheme or launch arguments (debug builds).
+2. **`LANCER_RELAY_URL` env var** — via Xcode scheme or launch arguments (debug builds).
 3. **Compiled default** — currently `wss://hermes-box.tail8c17ee.ts.net:8443` (the hosted relay).
 
 Enter `wss://<your-host>:<port>` in the Settings → Relay Server field. The app appends `/ws/relay` automatically — do not include the path.
@@ -86,7 +86,7 @@ services:
     volumes:
       - caddy_data:/data
       - ./Caddyfile:/etc/caddy/Caddyfile
-  conduit-relay:
+  lancer-relay:
     build: .
     ports:
       - "8080"
@@ -96,7 +96,7 @@ services:
 
 ```
 your-domain.com {
-    reverse_proxy conduit-relay:8080
+    reverse_proxy lancer-relay:8080
 }
 ```
 
@@ -120,7 +120,7 @@ The in-memory session registry and decision store are **ephemeral** — restarti
 
 ```yaml
 volumes:
-  - conduit-data:/data
+  - lancer-data:/data
 environment:
   - DATA_DIR=/data
 ```

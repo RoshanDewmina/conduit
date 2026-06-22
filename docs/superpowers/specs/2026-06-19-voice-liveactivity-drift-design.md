@@ -15,9 +15,9 @@ details flagged below.
 ## 0. Why these three
 
 From the corrected competitive picture:
-- **#2 Voice** — market table-stakes. Happy & Omnara ship *two-way voice*; Claude Code ships push-to-talk `/voice`. Conduit has **legacy push-to-talk dictation only** (`DictationEngine`/`SFSpeechRecognizer`) — no governed two-way cockpit. The work is to *upgrade*, not start from zero.
+- **#2 Voice** — market table-stakes. Happy & Omnara ship *two-way voice*; Claude Code ships push-to-talk `/voice`. Lancer has **legacy push-to-talk dictation only** (`DictationEngine`/`SFSpeechRecognizer`) — no governed two-way cockpit. The work is to *upgrade*, not start from zero.
 - **#4 Watch / Live Activity / Dynamic Island** — **~80% built already** (full Live Activity + Dynamic Island with interactive Approve/Reject AppIntents; Watch app with 6 views + WCSession sync). The gap is that it doesn't work **while the app is closed / phone is away** — exactly when it matters.
-- **#1 Drift detection** — *offense*. Blume (blume.codes) is staking out agent-config oversight; `conduitd` already sits in the hook path and sees policy + every tool call, so Conduit can do drift detection **better** and on the phone.
+- **#1 Drift detection** — *offense*. Blume (blume.codes) is staking out agent-config oversight; `lancerd` already sits in the hook path and sees policy + every tool call, so Lancer can do drift detection **better** and on the phone.
 
 **Non-goal:** connection-resilience / Mosh / cloud-migration — a *non-gap* given the resident-daemon + relay model (the phone never holds the session). Do not build for it.
 
@@ -31,7 +31,7 @@ demoted from a phase to a **verification spike** (its watchOS-27 feasibility is 
 |---|---|---|---|
 | **1** | #4 **Track A** — Live Activity push-update reliability | Smallest, rides the in-flight Phase-5c APNs/relay work, highest daily payoff (makes what's built actually work away from the app). Includes the cold-decision acceptance gate (§2.2) and APNs payload-privacy policy (§2.6). | S–M |
 | **2** | #4 **Track C** — Watch polish/wiring | Small; tighten the 6 existing Watch views (live updates + decision round-trip) over the current WCSession path before adding independence | S |
-| **3** | #1 **Drift MVP** — deterministic config inventory + policy coverage | The governance differentiator; deterministic (no false-positive risk); `conduitd` already sees config + policy. Ships ahead of voice. | M |
+| **3** | #1 **Drift MVP** — deterministic config inventory + policy coverage | The governance differentiator; deterministic (no false-positive risk); `lancerd` already sees config + policy. Ships ahead of voice. | M |
 | **4** | #2 **Voice cockpit** | Market parity; migrates the existing `DictationEngine` into a governed `VoiceKit` (§3); new `VoiceFeature` UI | M–L |
 | **5** | #1 **Behavioral drift** + #4 **Track B spike** | Behavioral drift is gated on an audit-schema expansion (§4) and stays **advisory** until false-positives are measured; Track B watch-away is a feasibility spike (§2.4) before any commitment | L |
 
@@ -57,7 +57,7 @@ via **WCSession**, which requires the phone to be reachable, so there is no true
 - When an approval/status/cost change occurs, `push-backend` sends an **ActivityKit push** (APNs `content-state` payload) to that token instead of relying on the app to be alive.
 - **`Activity.pushToStartToken` / `pushToStartTokenUpdates`** — register a push-to-start token so an incoming approval can **start** a Live Activity remotely even when none is running (app fully closed). Backend sends a push-to-start payload.
 - **`ActivityAuthorizationInfo.frequentPushesEnabled`** — observe + request frequent-update capability for rapidly-changing runs (streaming/cost). Degrade gracefully when off.
-- Keep the existing local `update(...)` path as a foreground fast-path; push is the away path. The two must converge on the same `ContentState` (single source of truth in `ConduitLiveActivityManager`).
+- Keep the existing local `update(...)` path as a foreground fast-path; push is the away path. The two must converge on the same `ContentState` (single source of truth in `LancerLiveActivityManager`).
 
 **Backend — strict ActivityKit push contract (do not hand-wave this).** ActivityKit push is unforgiving;
 "send the content-state" is insufficient and updates fail **silently** if the contract is off. `push-backend`'s
@@ -66,7 +66,7 @@ ActivityKit sender MUST:
 - Set `apns-push-type: liveactivity` and an appropriate `apns-priority` (10 for user-facing approval
   changes — but priority-10 liveactivity pushes are **budgeted/throttled** by iOS; see §6.2).
 - Send a payload with **`aps.timestamp`** (unix seconds), **`aps.event`** (`update` or `end`), and
-  **`aps.content-state`** that decodes **exactly** into `ConduitSessionAttributes.ContentState`.
+  **`aps.content-state`** that decodes **exactly** into `LancerSessionAttributes.ContentState`.
 - Encode `ContentState.lastUpdate` (a Swift `Date`, `LiveActivityManager.swift:39`) **the way ActivityKit's
   default `JSONDecoder` expects** — i.e. matching the default `Date` strategy ActivityKit uses to decode the
   content-state. A mismatched date encoding silently drops the whole update. Pin and unit-test this encoding.
@@ -81,9 +81,9 @@ Approve/Reject `AppIntent` sets `openAppWhenRun = true` (`ApprovalActionIntent.s
 `ApprovalRelay.shared`, whose `backendURL`/`sessionID`/`relayToken` are **runtime-populated instance vars**
 (`ApprovalRelay.swift:73-77`, default empty) sourced from the live `DaemonChannel` handshake. The file
 itself documents the cold-launch drain gap (`ApprovalRelay.swift:56-59`): if the app is killed, the queued
-decision is never drained and conduitd's 120 s timeout auto-denies. That is a real correctness hole for the
+decision is never drained and lancerd's 120 s timeout auto-denies. That is a real correctness hole for the
 away path this phase exists to fix. Track A must therefore prove and satisfy:
-> **App fully killed → tap Live Activity Approve → the decision reaches `conduitd` over the relay → audit
+> **App fully killed → tap Live Activity Approve → the decision reaches `lancerd` over the relay → audit
 > log shows `approve`** — without depending on a pre-warmed singleton.
 
 To get there, `ApprovalRelay` must **hydrate its relay credentials (`backendURL`/`sessionID`/`relayToken`)
@@ -93,14 +93,14 @@ the missing piece is durable relay-credential hydration so the forward succeeds 
 
 **Components touched:** `SessionFeature/LiveActivityManager.swift` (request with token, stream tokens),
 `SessionFeature/ApprovalRelay.swift` (durable credential hydration for cold forward),
-`ConduitLiveActivityWidget` (unchanged rendering; it already renders `ContentState`),
-`Conduit/ConduitApp.swift` (token registration alongside the existing APNs device-token path),
+`LancerLiveActivityWidget` (unchanged rendering; it already renders `ContentState`),
+`Lancer/LancerApp.swift` (token registration alongside the existing APNs device-token path),
 `daemon/push-backend` (ActivityKit APNs sender with the strict contract above + token store).
 
 **Error handling:** push disabled / token absent → fall back to the current local-update behavior (no regression). Stale-date already set (30 min); keep it as the safety net.
 
 ### 2.3 Track C — Watch polish/wiring (Phase 2)
-Make the existing Watch views (`ConduitWatch/`: `InboxListView`, `ApprovalDetailView`, `SessionStatusView`,
+Make the existing Watch views (`LancerWatch/`: `InboxListView`, `ApprovalDetailView`, `SessionStatusView`,
 `ActivityFeedView`, `SnippetRunnerView`) fully live over the current WCSession bridge
 (`PhoneWatchConnector` ↔ `WatchConnector`/`WatchStore`):
 - Verify the decision round-trip (watch Approve/Reject → `onDecision` → `ApprovalRelay.forwardDecisionOnly` → relay) actually resolves the gate and reflects back on the watch.
@@ -169,7 +169,7 @@ inside `VoiceKit` (§3.2).
 ### 3.1 Three layers (market parity + governance-unique)
 1. **Push-to-talk dictation** (Claude `/voice` parity) — already mostly present via `DictationEngine`; hold-to-talk mic in the New Chat composer; on-device transcription drops text into the prompt/follow-up. Feeds existing `performDispatch` / `continueRun`.
 2. **Two-way conversational voice** (Omnara/Happy parity) — a `VoiceSession`: speak → dispatch/continue → the run's streamed output is read back via TTS → speak the next turn. Hands-free loop over the existing run/transcript stream.
-3. **Voice approve/reject** (Conduit-unique, **constrained**) — when a governance gate fires, voice may **read the request aloud**, accept a spoken **reject**, or **open the approval UI**. Voice **must never resolve a `critical`-risk gate** — see §3.4. Off by default; an ambiguous/low-confidence transcription never resolves any gate (fails to manual).
+3. **Voice approve/reject** (Lancer-unique, **constrained**) — when a governance gate fires, voice may **read the request aloud**, accept a spoken **reject**, or **open the approval UI**. Voice **must never resolve a `critical`-risk gate** — see §3.4. Off by default; an ambiguous/low-confidence transcription never resolves any gate (fails to manual).
 
 ### 3.2 APIs (verified 2026-06-19) + platform fallback
 - **STT (on-device, primary):** `SpeechAnalyzer` + `SpeechTranscriber` (modern stack, strong for live/long-form). Manage models via `AssetInventory` / `AssetInstallationRequest`.
@@ -184,7 +184,7 @@ inside `VoiceKit` (§3.2).
 
 ### 3.4 Safety / error handling — voice-approve is constrained, critical is hard-blocked
 - Mic + speech permission prompts; degrade to text silently if denied.
-- **`critical`-risk gates: voice approve is DISALLOWED entirely.** No spoken phrase — and no re-confirmation — can resolve a `critical` gate. For critical, voice may only read the card aloud, accept a spoken **reject**, or **open the approval UI**; the actual approval requires **visual review + biometric/passcode** in-app. This is the trust posture Conduit owns; it is non-negotiable and enforced in the gate path, not just the UI.
+- **`critical`-risk gates: voice approve is DISALLOWED entirely.** No spoken phrase — and no re-confirmation — can resolve a `critical` gate. For critical, voice may only read the card aloud, accept a spoken **reject**, or **open the approval UI**; the actual approval requires **visual review + biometric/passcode** in-app. This is the trust posture Lancer owns; it is non-negotiable and enforced in the gate path, not just the UI.
 - **Non-critical gates:** voice-approve is a Settings opt-in (Security section), default off; low STT confidence → no decision, surface in Inbox.
 - All decisions still flow through the normal gate/audit path (voice is an input method, not a bypass).
 
@@ -197,7 +197,7 @@ inside `VoiceKit` (§3.2).
 
 ## 4. #1 — Drift detection (deterministic MVP ships; behavioral is advisory + gated)
 
-Daemon-side, leveraging `conduitd`'s existing position: it already sees each agent's config surface and
+Daemon-side, leveraging `lancerd`'s existing position: it already sees each agent's config surface and
 records tool calls in the audit log. **Split deliberately by confidence:** the deterministic detectors
 (config inventory + policy coverage) ship as the **Phase-3 Drift MVP** — they have no false-positive risk
 and are the governance moat. The behavioral / natural-language-contradiction detector is **deferred to
@@ -206,25 +206,25 @@ drift on the current data.
 
 ### 4.1 Drift MVP — deterministic (Phase 3)
 1. **Config inventory + consistency (Blume parity).** Parse each agent's config surface — `CLAUDE.md`, `AGENTS.md`, cursor rules, hook `settings.json`, installed skills, MCP config — into a normalized model. Snapshot it (hash + stored prior). Flag (a) **deterministic** internal contradictions and (b) unexpected changes since the last snapshot. Natural-language "this instruction contradicts that one" detection is **advisory only** and lives in Phase 5 — the MVP flags structural/diffable facts, not NL semantics.
-2. **Policy-coverage (Conduit-unique).** Cross-check that config against `policy.yaml` + `policy-always.yaml`: warn when a dangerous tool category would auto-run **ungated**, when an allow-always rule is broader than intended, or when a hook that should gate is missing/disabled. Fully deterministic. This is the governance-aware layer Blume structurally can't do.
+2. **Policy-coverage (Lancer-unique).** Cross-check that config against `policy.yaml` + `policy-always.yaml`: warn when a dangerous tool category would auto-run **ungated**, when an allow-always rule is broader than intended, or when a hook that should gate is missing/disabled. Fully deterministic. This is the governance-aware layer Blume structurally can't do.
 
 ### 4.2 Behavioral drift (Phase 5, advisory) — blocked on audit-schema expansion
 **Blocker (verified):** behavioral drift wants to compare *actual tool calls* (paths, tool input, network
 destinations) against *declared scope*. The current audit schema **does not persist those fields** —
-`AuditEntry` (`daemon/conduitd/audit.go:15`) records only `timestamp/action/agent/kind/command/effect/rule/
+`AuditEntry` (`daemon/lancerd/audit.go:15`) records only `timestamp/action/agent/kind/command/effect/rule/
 approvalId/hash/prevHash`. There is no `path`, no structured `toolInput`, no `networkDest`. So behavioral
 drift requires an **audit-schema expansion first** (add the fields, preserve the hash-chain compatibility,
 migrate the reader). Until that lands and false-positives are measured against real audit data, behavioral
 contradiction detection ships **advisory only** (surfaces a soft signal, never a hard gate, never auto-acts).
 
 ### 4.3 Components
-- **`drift` package in `conduitd`** — config parsers, the deterministic detectors (MVP), the snapshot store (`~/.conduit/drift/`), and later the behavioral detector. Pure Go, unit-tested with config fixtures.
+- **`drift` package in `lancerd`** — config parsers, the deterministic detectors (MVP), the snapshot store (`~/.lancer/drift/`), and later the behavioral detector. Pure Go, unit-tested with config fixtures.
 - **Audit-schema expansion** (Phase 5 prerequisite) — new `path`/`toolInput`/`networkDest` fields on `AuditEntry` + payload, hash-chain-compatible, with reader migration. Lands before behavioral drift.
 - **RPC + push** — `agent.drift.scan` (on demand / scheduled) and an unsolicited `agent.drift.alert` over the relay (same transport as `agent.approval.pending`).
 - **Phone surface** — a "drift" finding card (severity-tagged, like approvals) in an alerts/inbox surface; tap → detail (what drifted, the diff, suggested fix). Reuses the existing relay→inbox plumbing.
 
 ### 4.4 Testing (#1)
-- Go unit tests per deterministic detector with config fixtures (conduitd test pattern). A known config-vs-policy gap fixture must flag; a clean config must not (zero false positives — deterministic).
+- Go unit tests per deterministic detector with config fixtures (lancerd test pattern). A known config-vs-policy gap fixture must flag; a clean config must not (zero false positives — deterministic).
 - Behavioral detector (Phase 5): tested against audit-log fixtures **after** the schema expansion; a measured false-positive rate is an acceptance gate before it leaves advisory mode.
 
 ---
@@ -232,9 +232,9 @@ contradiction detection ships **advisory only** (surfaces a soft signal, never a
 ## 5. Cross-cutting / shared
 
 - **Transport:** all three surface to the phone over the **E2E relay** (+ APNs for #4 and the away-paths). None introduce an SSH dependency.
-- **Module discipline:** `VoiceKit` is an engine (no UI); `VoiceFeature` is UI-only and routes through `AppFeature`. The `drift` package stays inside `conduitd`. No feature-to-feature deps.
+- **Module discipline:** `VoiceKit` is an engine (no UI); `VoiceFeature` is UI-only and routes through `AppFeature`. The `drift` package stays inside `lancerd`. No feature-to-feature deps.
 - **Security:** voice is on-device; **voice-approve is DISALLOWED for `critical` gates entirely** (visual + biometric required) and opt-in/default-off for non-critical; pushed payloads are **redacted** (no command text/snippets/secrets on the lock screen — §2.6); drift findings are read-only signals (never auto-modify config); cold + watch-away decisions hydrate relay credentials from durable storage and flow through the same gate/audit chokepoint.
-- **Verification gate (per `conduit-verification-gate`):** ConduitKit changes → `swift build` + app-target XcodeBuildMCP build; conduitd changes → `go test ./...` from `daemon/conduitd`; device-only paths (Live Activity push, watch-away, mic) → real-device test, not simulator.
+- **Verification gate (per `lancer-verification-gate`):** LancerKit changes → `swift build` + app-target XcodeBuildMCP build; lancerd changes → `go test ./...` from `daemon/lancerd`; device-only paths (Live Activity push, watch-away, mic) → real-device test, not simulator.
 
 ## 6. Open questions / risks (resolve at plan time)
 1. **watchOS 27 independent connectivity** (Track B **spike**, §2.4) — independent watch APNs token, watch-bundle topic, background URLSession, watch-scoped relay auth, dedupe, reachability without the phone. **Spike exit = a real test with the phone powered off.** Track B does not become a committed phase until this passes.

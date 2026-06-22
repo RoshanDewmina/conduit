@@ -4,9 +4,9 @@
 
 **Goal:** The Next.js web dashboard shows the live block/run transcript of an agent session (like the iOS block terminal) and lets the user send a text reply back to the running agent — all over the existing blind relay.
 
-**Architecture:** The daemon **already streams** terminal output to the relay as JSON-RPC notifications mapped to `agentRunOutput`/`agentRunStatus` (`e2e_router.go:171-174`), and the iOS app already consumes them. The web relay client silently **drops** these because `decodeInbound` is a 3-type allowlist (`codec.ts:14`). So the **read** side is mostly "stop dropping + render": extend the web types/codec/store and add a transcript component. The **reply** side is the real gap — there is no agent stdin path (`realLauncher` opens no stdin pipe; `agentRunContinue` is sent by iOS but unhandled by the daemon). This plan delivers reply via `tmux send-keys` into the Conduit-managed tmux session (the container created by the Session-Continuity Shim plan), which is the clean, already-available write path.
+**Architecture:** The daemon **already streams** terminal output to the relay as JSON-RPC notifications mapped to `agentRunOutput`/`agentRunStatus` (`e2e_router.go:171-174`), and the iOS app already consumes them. The web relay client silently **drops** these because `decodeInbound` is a 3-type allowlist (`codec.ts:14`). So the **read** side is mostly "stop dropping + render": extend the web types/codec/store and add a transcript component. The **reply** side is the real gap — there is no agent stdin path (`realLauncher` opens no stdin pipe; `agentRunContinue` is sent by iOS but unhandled by the daemon). This plan delivers reply via `tmux send-keys` into the Lancer-managed tmux session (the container created by the Session-Continuity Shim plan), which is the clean, already-available write path.
 
-**Tech Stack:** Next.js 16 / TypeScript (`web/`), zustand store, `@noble` relay crypto (existing), Go daemon (`daemon/conduitd/`), tmux.
+**Tech Stack:** Next.js 16 / TypeScript (`web/`), zustand store, `@noble` relay crypto (existing), Go daemon (`daemon/lancerd/`), tmux.
 
 ## Global Constraints
 
@@ -26,16 +26,16 @@
 | `web/lib/relay/types.ts` | Mod (`:37-63`) | Add `InboundAgentRunOutput`/`InboundAgentRunStatus` to `InboundAppMessage`; add `AgentReply` outbound. |
 | `web/lib/relay/codec.ts` | Mod (`:14-18`) | Accept `agentRunOutput`/`agentRunStatus` in `decodeInbound`; add `encodeAgentReply`. |
 | `web/lib/relay/client.ts` | Mod (`:81-86`) | Add `sendRunContinue(runId, text)` mirroring `sendApprovalResponse`. |
-| `web/lib/store/useConduitStore.ts` | Mod (`:18-68`) | Add `runs: Record<string, RunState>` slice; `ingest` accumulates chunks by `seq`, tracks status. |
+| `web/lib/store/useLancerStore.ts` | Mod (`:18-68`) | Add `runs: Record<string, RunState>` slice; `ingest` accumulates chunks by `seq`, tracks status. |
 | `web/lib/store/runState.ts` | New | `RunState` type + pure chunk-merge/dedup (mirrors iOS `RunOutputStore.Run`). |
 | `web/components/BlockTranscript.tsx` | New | Renders ordered run chunks with block/stream styling. |
 | `web/components/ReplyBar.tsx` | New | Text input + send → `sendRunContinue`. |
 | `web/app/agent/[id]/page.tsx` | Mod (`:86-93`) | Replace the "coming to web" placeholder with `BlockTranscript` + `ReplyBar`. |
 | `web/lib/store/runState.test.ts` | New | Chunk merge/dedup tests. |
 | `web/lib/relay/codec.test.ts` | Mod | `decodeInbound` accepts the two new types; `encodeAgentReply` round-trip. |
-| `daemon/conduitd/e2e_router.go` | Mod (`:85-144`) | Add `case "agentRunContinue":` → `applyRunReply(runId, text)`. |
-| `daemon/conduitd/run_reply.go` | New | `applyRunReply`: resolve run → tmux session → `tmux send-keys -t <name> <text> Enter`. |
-| `daemon/conduitd/run_reply_test.go` | New | Faked tmux; asserts send-keys invocation. |
+| `daemon/lancerd/e2e_router.go` | Mod (`:85-144`) | Add `case "agentRunContinue":` → `applyRunReply(runId, text)`. |
+| `daemon/lancerd/run_reply.go` | New | `applyRunReply`: resolve run → tmux session → `tmux send-keys -t <name> <text> Enter`. |
+| `daemon/lancerd/run_reply_test.go` | New | Faked tmux; asserts send-keys invocation. |
 
 ---
 
@@ -104,7 +104,7 @@ git commit -m "feat(web): relay codec accepts agentRunOutput/Status + agentReply
 
 **Files:**
 - Create: `web/lib/store/runState.ts`, `web/lib/store/runState.test.ts`
-- Modify: `web/lib/store/useConduitStore.ts:18-68`
+- Modify: `web/lib/store/useLancerStore.ts:18-68`
 
 **Interfaces:**
 - Produces:
@@ -146,7 +146,7 @@ export function mergeChunk(run: RunState | undefined, chunk: RunOutputChunk): Ru
   return { ...base, chunks: [...base.chunks, chunk].sort((a, b) => a.seq - b.seq) };
 }
 ```
-In `useConduitStore.ts`, add `runs: {}` to state and extend `ingest` (`:45-68`):
+In `useLancerStore.ts`, add `runs: {}` to state and extend `ingest` (`:45-68`):
 ```ts
 case "agentRunOutput": {
   const p = msg.payload;
@@ -168,7 +168,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add web/lib/store/runState.ts web/lib/store/runState.test.ts web/lib/store/useConduitStore.ts
+git add web/lib/store/runState.ts web/lib/store/runState.test.ts web/lib/store/useLancerStore.ts
 git commit -m "feat(web): run-output store slice (chunk dedup by seq)"
 ```
 
@@ -181,8 +181,8 @@ git commit -m "feat(web): run-output store slice (chunk dedup by seq)"
 - Modify: `web/app/agent/[id]/page.tsx:86-93`, `web/lib/relay/client.ts:81-86`
 
 **Interfaces:**
-- Consumes: `useConduitStore().runs`, `RelayClient.sendRunContinue(runId, text)`.
-- Produces: `<BlockTranscript runId={…} />` (renders chunks, `$`-prefixed command lines, stdout/stderr styling using Conduit tokens `bg-card`/`text-foreground`/`font-mono`); `<ReplyBar runId={…} disabled={status!=="running"} />`.
+- Consumes: `useLancerStore().runs`, `RelayClient.sendRunContinue(runId, text)`.
+- Produces: `<BlockTranscript runId={…} />` (renders chunks, `$`-prefixed command lines, stdout/stderr styling using Lancer tokens `bg-card`/`text-foreground`/`font-mono`); `<ReplyBar runId={…} disabled={status!=="running"} />`.
 
 - [ ] **Step 1: Add `sendRunContinue` to the relay client**
 
@@ -196,7 +196,7 @@ sendRunContinue(runId: string, text: string) {
 
 - [ ] **Step 2: Implement `BlockTranscript.tsx`**
 
-Render `runs[runId].chunks` in order; style command vs output; show a status chip (`running`/`exited <code>`). Use existing shadcn `Card` + Conduit tokens. Empty state: "Waiting for output…".
+Render `runs[runId].chunks` in order; style command vs output; show a status chip (`running`/`exited <code>`). Use existing shadcn `Card` + Lancer tokens. Empty state: "Waiting for output…".
 
 - [ ] **Step 3: Implement `ReplyBar.tsx`**
 
@@ -223,8 +223,8 @@ git commit -m "feat(web): live block transcript + reply bar on agent detail"
 ## Task 4: daemon `agentRunContinue` handler → tmux send-keys
 
 **Files:**
-- Create: `daemon/conduitd/run_reply.go`, `daemon/conduitd/run_reply_test.go`
-- Modify: `daemon/conduitd/e2e_router.go:85-144`
+- Create: `daemon/lancerd/run_reply.go`, `daemon/lancerd/run_reply_test.go`
+- Modify: `daemon/lancerd/e2e_router.go:85-144`
 
 **Interfaces:**
 - Consumes: the `sessionRegistry` from the Session-Continuity Shim plan (Task 1 there) to resolve a runId/sessionId → tmux name; `writeFakeTmux` test helper (same package).
@@ -240,12 +240,12 @@ git commit -m "feat(web): live block transcript + reply bar on agent detail"
 func TestApplyRunReplySendsKeys(t *testing.T) {
 	dir := writeFakeTmux(t)
 	s := newServer(t.TempDir())
-	s.sessions.register(ShimSession{ID: "r1", TmuxName: "conduit-r1", Status: "running"})
+	s.sessions.register(ShimSession{ID: "r1", TmuxName: "lancer-r1", Status: "running"})
 	if err := s.applyRunReply("r1", "hello agent"); err != nil {
 		t.Fatalf("applyRunReply: %v", err)
 	}
 	log, _ := os.ReadFile(filepath.Join(dir, "calls.log"))
-	if !strings.Contains(string(log), "send-keys") || !strings.Contains(string(log), "conduit-r1") {
+	if !strings.Contains(string(log), "send-keys") || !strings.Contains(string(log), "lancer-r1") {
 		t.Fatalf("send-keys not invoked: %q", log)
 	}
 }
@@ -253,7 +253,7 @@ func TestApplyRunReplySendsKeys(t *testing.T) {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd daemon/conduitd && go test -run TestApplyRunReply ./...`
+Run: `cd daemon/lancerd && go test -run TestApplyRunReply ./...`
 Expected: FAIL — `undefined: applyRunReply`.
 
 - [ ] **Step 3: Implement `applyRunReply` + the handler case**
@@ -295,14 +295,14 @@ In `e2e_router.go:131` (next to `agentRunControl`), add:
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd daemon/conduitd && go test -run TestApplyRunReply ./...`
+Run: `cd daemon/lancerd && go test -run TestApplyRunReply ./...`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add daemon/conduitd/run_reply.go daemon/conduitd/run_reply_test.go daemon/conduitd/e2e_router.go
-git commit -m "feat(conduitd): handle agentRunContinue via tmux send-keys (web/iOS reply)"
+git add daemon/lancerd/run_reply.go daemon/lancerd/run_reply_test.go daemon/lancerd/e2e_router.go
+git commit -m "feat(lancerd): handle agentRunContinue via tmux send-keys (web/iOS reply)"
 ```
 
 ---
@@ -316,12 +316,12 @@ Expected: all tests pass, zero build errors.
 
 - [ ] **Step 2: Daemon gate green**
 
-Run: `cd daemon/conduitd && go test ./...`
+Run: `cd daemon/lancerd && go test ./...`
 Expected: PASS.
 
 - [ ] **Step 3: Live interop (manual, documented in PR)**
 
-1. Start `conduitd daemon` paired to a relay; launch an agent in a tmux-managed session (via the shim).
+1. Start `lancerd daemon` paired to a relay; launch an agent in a tmux-managed session (via the shim).
 2. Open the web dashboard (paired as `role=phone`), navigate to the agent detail page.
 3. Confirm the live block transcript streams as the agent runs.
 4. Type a reply in the ReplyBar → confirm it lands in the agent's tmux session (visible in the transcript and on the host's `tmux attach`).

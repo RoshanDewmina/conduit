@@ -3,7 +3,7 @@
 > Foundation. Everyone else branches off the clean tree you produce. Not a 17-point item — a precondition.
 
 ## Context
-Conduit iOS app repo at `/Users/roshansilva/Documents/command-center`, branch `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Tests: `cd Packages/ConduitKit && swift test` (Swift Testing, `@Test`). Read `CLAUDE.md` first. A `.gitignore` already exists (~602 bytes) — **extend** it, don't clobber it.
+Lancer iOS app repo at `/Users/roshansilva/Documents/command-center`, branch `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Tests: `cd Packages/LancerKit && swift test` (Swift Testing, `@Test`). Read `CLAUDE.md` first. A `.gitignore` already exists (~602 bytes) — **extend** it, don't clobber it.
 
 Current mess:
 - **Tracked edits (uncommitted):** `KeysFeature/KeysView.swift` (+20), `OnboardingFeature/OnboardingView.swift` (+410), `SecurityKit/KeyStore.swift` (+27), `SettingsFeature/SettingsView.swift` (+2).

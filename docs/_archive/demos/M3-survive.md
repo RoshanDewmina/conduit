@@ -33,7 +33,7 @@ Disable Airplane Mode / Link Conditioner.
 
 ### 4. Background survival
 Press the Home button (background the app) for ≥ 30 s.
-Re-open Conduit.
+Re-open Lancer.
 
 **Expected:**
 - `ScenePhaseObserver.onBecomeActive` fires → reconnect if needed.

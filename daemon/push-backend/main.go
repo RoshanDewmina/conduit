@@ -1,13 +1,13 @@
-// push-backend: minimal APNs delivery server for Conduit approval alerts.
+// push-backend: minimal APNs delivery server for Lancer approval alerts.
 //
 // Deploy to Fly.io or AWS Lambda (as a Lambda function URL) — it receives
-// a JSON-RPC conduitd event forwarded by the conduitd daemon and pushes
+// a JSON-RPC lancerd event forwarded by the lancerd daemon and pushes
 // a local notification to the registered iOS device.
 //
 // Build: CGO_ENABLED=0 GOOS=linux go build -o push-backend .
 //
 //	Run:   APNS_KEY_ID=... APNS_TEAM_ID=... APNS_KEY_PATH=AuthKey_XXX.p8 \
-//	       APNS_BUNDLE_ID=dev.conduit.mobile ./push-backend
+//	       APNS_BUNDLE_ID=dev.lancer.mobile ./push-backend
 package main
 
 import (
@@ -30,15 +30,15 @@ import (
 // two control-plane registration sources (both hit POST /register, authenticated
 // by APPROVAL_RELAY_SECRET):
 //   - apnsToken:  APNs device token, registered by the iOS app, used to push.
-//   - relayToken: the per-session capability secret minted by conduitd. The app
-//     and conduitd present it as `Authorization: Bearer <relayToken>` on the
+//   - relayToken: the per-session capability secret minted by lancerd. The app
+//     and lancerd present it as `Authorization: Bearer <relayToken>` on the
 //     decision-relay endpoints (POST /approval/decision, GET /decisions) and the
 //     backend constant-time-compares it here. TREAT AS SECRET — never logged.
 //   - seen:       last-touch unix time (registration or a successful relay auth),
 //     used for TTL eviction so the map stays bounded.
 //
 // The two fields are upserted independently so the app's APNs registration and
-// conduitd's relay-token registration can arrive in any order.
+// lancerd's relay-token registration can arrive in any order.
 type sessionRecord struct {
 	apnsToken  string
 	relayToken string
@@ -146,9 +146,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// handleRegister is the conduitd→backend / app→backend control-plane endpoint.
+// handleRegister is the lancerd→backend / app→backend control-plane endpoint.
 // It is guarded by APPROVAL_RELAY_SECRET (the deployment-wide control-plane
-// secret) so conduitd can bootstrap a session's relayToken before any
+// secret) so lancerd can bootstrap a session's relayToken before any
 // per-session capability exists. It upserts whichever of {deviceToken,
 // relayToken} the caller supplied for the session.
 func handleRegister(w http.ResponseWriter, r *http.Request) {

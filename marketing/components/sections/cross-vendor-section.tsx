@@ -18,7 +18,7 @@ export default function CrossVendorSection() {
           </h2>
           <p className="font-mono text-sm text-dim leading-relaxed">
             Claude Code, Codex, and opencode each have their own permission
-            system. Conduit is the single policy, approval, and audit layer
+            system. Lancer is the single policy, approval, and audit layer
             across all three — so you set the rules once, not three times.
           </p>
         </div>
@@ -50,7 +50,7 @@ export default function CrossVendorSection() {
 
         <div className="max-w-[420px] mx-auto border border-accent bg-raised px-6 py-5 text-center">
           <div className="font-display text-lg font-bold text-fg">
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </div>
           <div className="font-mono text-[11px] tracking-[0.08em] text-accent mt-1">
             one policy · one inbox · one audit log

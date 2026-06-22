@@ -2,13 +2,13 @@
 
 **Date:** 2026-06-16
 **Author:** Architecture Research
-**Scope:** Validate or challenge proposed A+B+C architecture for Conduit session continuity (adoption + resilience)
+**Scope:** Validate or challenge proposed A+B+C architecture for Lancer session continuity (adoption + resilience)
 
 ---
 
 ## Executive Summary
 
-**A+B+C is the right v1 architecture, but A (shim wrapper) must be the sole hard dependency and B/C are read-only theatre without A. No competitor (Happy Coder, Omnara, Moshi) has solved bare-process adoption — they all require the agent to launch *through* their wrapper from byte zero. The tmux adoption path (C) works in practice (cmux, swarmux, tmux-mcp-agent all prove it) but carries fundamental security gaps (no tool-call interception, race conditions on concurrent input injection, control-character injection vectors) that make it acceptable only with a prominent "unguarded" indicator. The single biggest risk: the shim is fragile across shell environments (aliases, functions, `env` bypass, non-interactive shells) and requires a multi-layered strategy (PATH shim + shell function + managed env var) to be truly frictionless. The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) is now mature enough to consider as an *alternative* to the PTY-spawn path for launched-through-conduit agents — it gives programmatic control without parsing terminal output, but sacrifices terminal compatibility. Recommended build order: (1) Shim + daemon-spawned PTY path, (2) transcript-based read-only mirror, (3) tmux adoption as optional opt-in with unguarded banner, (4) resilience via conduitd-launchd supervision + tmux for session persistence, deferring roaming to a future native protocol layer.**
+**A+B+C is the right v1 architecture, but A (shim wrapper) must be the sole hard dependency and B/C are read-only theatre without A. No competitor (Happy Coder, Omnara, Moshi) has solved bare-process adoption — they all require the agent to launch *through* their wrapper from byte zero. The tmux adoption path (C) works in practice (cmux, swarmux, tmux-mcp-agent all prove it) but carries fundamental security gaps (no tool-call interception, race conditions on concurrent input injection, control-character injection vectors) that make it acceptable only with a prominent "unguarded" indicator. The single biggest risk: the shim is fragile across shell environments (aliases, functions, `env` bypass, non-interactive shells) and requires a multi-layered strategy (PATH shim + shell function + managed env var) to be truly frictionless. The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) is now mature enough to consider as an *alternative* to the PTY-spawn path for launched-through-lancer agents — it gives programmatic control without parsing terminal output, but sacrifices terminal compatibility. Recommended build order: (1) Shim + daemon-spawned PTY path, (2) transcript-based read-only mirror, (3) tmux adoption as optional opt-in with unguarded banner, (4) resilience via lancerd-launchd supervision + tmux for session persistence, deferring roaming to a future native protocol layer.**
 
 ---
 
@@ -181,11 +181,11 @@ All three major agents persist session transcripts to disk:
 - **No external wake mechanism.** Issue #60943 confirms "there is no way for an external process to trigger a new turn in a running Claude Code interactive session without typing into the terminal via `tmux send-keys` or similar pty injection." https://github.com/anthropics/claude-code/issues/60943
 - SessionStart fires POST to daemon via hook. **Happy Coder and cmux both exploit this.**
 
-**Hooks architecture for conduitd integration:**
+**Hooks architecture for lancerd integration:**
 ```
-SessionStart → POST http://127.0.0.1:<conduitd-port>/hook
+SessionStart → POST http://127.0.0.1:<lancerd-port>/hook
 ```
-This is how Happy discovers session IDs dynamically. Conduitd should register itself as a Claude Code HTTP hook (`.claude/settings.json` or `hooks/hooks.json`).
+This is how Happy discovers session IDs dynamically. Lancerd should register itself as a Claude Code HTTP hook (`.claude/settings.json` or `hooks/hooks.json`).
 
 ### 3.2 Codex CLI
 
@@ -241,26 +241,26 @@ This is how Happy discovers session IDs dynamically. Conduitd should register it
 
 1. **PATH-level shim binary** (`~/bin/claude` → actual `claude` at `/somewhere/bin/claude`): covers non-interactive shells, `env` bypass, IDE invocations.
 2. **Shell function** (installed in `.zshrc`/`.bashrc`): takes priority over aliases, can do richer logic.
-3. **Managed env var** (`CONDUIT_CLAUDE_WRAPPER_SHIM`): inherited by all descendants, immune to PATH clobber. Used as master token that the function/binary resolves.
+3. **Managed env var** (`LANCER_CLAUDE_WRAPPER_SHIM`): inherited by all descendants, immune to PATH clobber. Used as master token that the function/binary resolves.
 
 **Source:** cmux approach validated at https://github.com/manaflow-ai/cmux/pull/5721
 
-### Recommended conduitd Shim Implementation
+### Recommended lancerd Shim Implementation
 
 ```
-~/.local/bin/claude  →  conduit-shim (executable)
-~/.config/conduit/shell-integration.zsh  →  shell function + alias setup
-~/.config/conduit/shell-integration.bash
-~/.config/conduit/shell-integration.fish
+~/.local/bin/claude  →  lancer-shim (executable)
+~/.config/lancer/shell-integration.zsh  →  shell function + alias setup
+~/.config/lancer/shell-integration.bash
+~/.config/lancer/shell-integration.fish
 
 # On install:
 # 1. Rename real claude to claude.real
-# 2. Place conduit-shim as claude in PATH
+# 2. Place lancer-shim as claude in PATH
 # 3. Source shell integration (handled by the shim itself ala rbenv/pyenv)
-# 4. Set CONDUIT_CLAUDE_WRAPPER_SHIM in terminal env (Ghostty/Warp/terminal profiles)
+# 4. Set LANCER_CLAUDE_WRAPPER_SHIM in terminal env (Ghostty/Warp/terminal profiles)
 ```
 
-The shim executable should `exec` the real binary with `--settings` flags appended for hook wiring, and communicate the spawning PID to conduitd.
+The shim executable should `exec` the real binary with `--settings` flags appended for hook wiring, and communicate the spawning PID to lancerd.
 
 ---
 
@@ -281,13 +281,13 @@ The shim executable should `exec` the real binary with `--settings` flags append
 
 **Key insight from Unix process lifecycle analysis:** `nohup` only tells the process to ignore SIGHUP, but it remains in the same session and process group. When the shell exits, it sends SIGHUP to the *entire process group*. `setsid` creates a new session, fully detaching from the original terminal. https://blog.margrop.net/en/post/setsid-daemon-process-survival/
 
-**For conduitd-spawned agents:** conduitd already manages the child process. The resilience question is what happens when conduitd restarts:
-1. **Option 1: Re-parent to launchd.** Use `launchd` plist with `KeepAlive` and `RunAtLoad`. On restart, conduitd finds existing agent processes via PID file, re-attaches via tmux sockets.
-2. **Option 2: Run inside tmux.** Spawn the agent inside a named tmux session (`conduit-<session-id>`). Reattach by looking up tmux sessions on conduitd restart.
-3. **Option 3: SDK mode.** The agent runs "inside" conduitd's process as a client of the Agent SDK — no PTY persistence needed.
+**For lancerd-spawned agents:** lancerd already manages the child process. The resilience question is what happens when lancerd restarts:
+1. **Option 1: Re-parent to launchd.** Use `launchd` plist with `KeepAlive` and `RunAtLoad`. On restart, lancerd finds existing agent processes via PID file, re-attaches via tmux sockets.
+2. **Option 2: Run inside tmux.** Spawn the agent inside a named tmux session (`lancer-<session-id>`). Reattach by looking up tmux sessions on lancerd restart.
+3. **Option 3: SDK mode.** The agent runs "inside" lancerd's process as a client of the Agent SDK — no PTY persistence needed.
 
-**recommended for v1:** Use tmux as the session container for conduitd-spawned agents. This gives:
-- Session survives conduitd restart
+**recommended for v1:** Use tmux as the session container for lancerd-spawned agents. This gives:
+- Session survives lancerd restart
 - Can attach/detach without losing terminal state
 - Works identically for the adoption path (C) — if user is already in tmux, we're already compatible
 
@@ -307,11 +307,11 @@ The shim executable should `exec` the real binary with `--settings` flags append
 
 **Recommendation:** **Don't build transport resilience yourself.** You already have Tailscale tunnel (WireGuard) in the architecture. WireGuard handles roaming at the network layer — the phone's Tailscale IP doesn't change as you switch networks. If the phone reconnects to Tailscale, the tunnel re-establishes and the SSH or relay connection survives. This makes a custom QUIC/roaming layer premature for v1.
 
-**However**, the *transport* resilience is separate from *session* resilience. Even with a perfect tunnel, if the SSH session inside times out or the conduitd-streaming WebSocket breaks, you need state sync:
+**However**, the *transport* resilience is separate from *session* resilience. Even with a perfect tunnel, if the SSH session inside times out or the lancerd-streaming WebSocket breaks, you need state sync:
 - For read-only: the stream can resume from last-known cursor position
-- For input: conduitd must buffer keystrokes until reconnect
+- For input: lancerd must buffer keystrokes until reconnect
 
-**Recommendation for v1:** TCP/Tailscale tunnel + conduitd internal buffering for transport drop. Defer Mosh/Eternal Terminal integration to v2. The tmux-based session persistence already solves the harder problem (process survival).
+**Recommendation for v1:** TCP/Tailscale tunnel + lancerd internal buffering for transport drop. Defer Mosh/Eternal Terminal integration to v2. The tmux-based session persistence already solves the harder problem (process survival).
 
 ---
 
@@ -331,15 +331,15 @@ The shim executable should `exec` the real binary with `--settings` flags append
 
 ### 6.2 The Approval Firewall Gap for Adopted Sessions
 
-This is the critical architectural point: **tmux-adopted sessions bypass conduitd's approval firewall entirely.**
+This is the critical architectural point: **tmux-adopted sessions bypass lancerd's approval firewall entirely.**
 
-- Daemon-spawned sessions: conduitd owns the PTY → can parse OSC-133 markers, intercept tool calls, route approvals.
-- tmux-adopted sessions: conduitd writes to `send-keys` and reads via `capture-pipe` → has NO visibility into tool calls, NO ability to block commands.
+- Daemon-spawned sessions: lancerd owns the PTY → can parse OSC-133 markers, intercept tool calls, route approvals.
+- tmux-adopted sessions: lancerd writes to `send-keys` and reads via `capture-pipe` → has NO visibility into tool calls, NO ability to block commands.
 
-**Impact:** An adopted bare session could execute `rm -rf /` and conduitd couldn't stop it. The approval firewall is a no-op.
+**Impact:** An adopted bare session could execute `rm -rf /` and lancerd couldn't stop it. The approval firewall is a no-op.
 
 **Mitigation strategies:**
-1. **Prominent "unguarded" indicator** — red banner: *"This session was started outside Conduit. Approvals, audit, and risk scoring are not available."*
+1. **Prominent "unguarded" indicator** — red banner: *"This session was started outside Lancer. Approvals, audit, and risk scoring are not available."*
 2. **Never auto-approve anything in adopted sessions.** Even simple operations should prompt on phone.
 3. **Audit log the adoption event** — "Session <id> adoption via tmux at <timestamp>. Unguarded mode."
 4. **Consider a restricted mode** — adopted sessions can only send text and read output, no sudo, no destructive commands. (Limited enforceability through tmux.)
@@ -347,12 +347,12 @@ This is the critical architectural point: **tmux-adopted sessions bypass conduit
 ### 6.3 Shim Security
 
 The shim approach is **more secure** than adoption, because:
-- Session starts under conduitd's PTY from byte zero
+- Session starts under lancerd's PTY from byte zero
 - All tool calls go through the approval firewall
 - The audit log is complete
 - No injection race conditions
 
-**Risk:** If the shim is bypassed (user runs `\claude` or `env claude`), the user gets a bare session invisible to Conduit. **This is a UX problem, not a security vulnerability** — the user chose to bypass. Surface the "you're running outside Conduit" check in the shim when possible, but accept the limitation.
+**Risk:** If the shim is bypassed (user runs `\claude` or `env claude`), the user gets a bare session invisible to Lancer. **This is a UX problem, not a security vulnerability** — the user chose to bypass. Surface the "you're running outside Lancer" check in the shim when possible, but accept the limitation.
 
 ---
 
@@ -372,22 +372,22 @@ The shim approach is **more secure** than adoption, because:
 
 ### Single Biggest Risk
 
-**The shim will fail silently for some users** due to shell environment complexity. Non-interactive shells, `env` bypass, `$SHELL -lic` path rebuilding, and user-installed alias managers will cause support issues. **Mitigation:** Implement the three-layer strategy (shim binary + shell function + managed env var) as cmux has done, and add a `conduit doctor` command to diagnose wrapper coverage.
+**The shim will fail silently for some users** due to shell environment complexity. Non-interactive shells, `env` bypass, `$SHELL -lic` path rebuilding, and user-installed alias managers will cause support issues. **Mitigation:** Implement the three-layer strategy (shim binary + shell function + managed env var) as cmux has done, and add a `lancer doctor` command to diagnose wrapper coverage.
 
 ### Additional Recommendations Beyond A+B+C
 
-1. **Integrate Claude Agent SDK as a first-class launch mode.** For sessions started *through* Conduit, offer both "terminal" (PTY with OSC-133 parsing) and "SDK" (programmatic, no terminal UI, full approval control). The SDK gives you structured tool calls, permission callbacks, and session persistence for free. Happy Coder already migrated to this model.
+1. **Integrate Claude Agent SDK as a first-class launch mode.** For sessions started *through* Lancer, offer both "terminal" (PTY with OSC-133 parsing) and "SDK" (programmatic, no terminal UI, full approval control). The SDK gives you structured tool calls, permission callbacks, and session persistence for free. Happy Coder already migrated to this model.
 
-2. **Don't build transport resilience (Mosh/QUIC) yet.** Tailscale/WireGuard already handles roaming at the network layer. Focus on process persistence (tmux) and application-level buffering (conduitd caches stream until client reconnects).
+2. **Don't build transport resilience (Mosh/QUIC) yet.** Tailscale/WireGuard already handles roaming at the network layer. Focus on process persistence (tmux) and application-level buffering (lancerd caches stream until client reconnects).
 
 3. **The "take over" affordance should use `claude --resume` (new process), not tmux injection.** When a user taps "Take Over" on a read-only transcript session:
    - Stop the old bare session (or leave it running)
-   - Launch a new session under conduitd with `claude --resume <session-id>`
+   - Launch a new session under lancerd with `claude --resume <session-id>`
    - This gives full approval firewall, audit, and terminal streaming
    - Works across all three agents (all support `--resume`)
 
-4. **Session discovery needs a reconnection protocol for conduitd.** When the phone reconnects after being offline:
-   - conduitd enumerates tmux sessions, finds running agents
+4. **Session discovery needs a reconnection protocol for lancerd.** When the phone reconnects after being offline:
+   - lancerd enumerates tmux sessions, finds running agents
    - Reads transcript files for session summaries
    - Pushes "These sessions are still running — continue from phone?" to the app
 
@@ -396,10 +396,10 @@ The shim approach is **more secure** than adoption, because:
 ```
 Phase 1 (v1 MVP):
   └── A: Shim wrapper for claude (PATH binary + shell function + env var)
-  └── conduitd PTY spawn path (OSC-133 parsing, approval firewall, streaming)
+  └── lancerd PTY spawn path (OSC-133 parsing, approval firewall, streaming)
   └── B: Transcript watcher (poll ~/.claude/projects/, surface recent sessions)
   └── "Take Over" via --resume (stop old, start new with full control)
-  └── Resilience: tmux container + launchd KeepAlive for conduitd
+  └── Resilience: tmux container + launchd KeepAlive for lancerd
 
 Phase 2 (v1.x):
   └── C: tmux adoption (pipe-pane + send-keys, "unguarded" indicator)

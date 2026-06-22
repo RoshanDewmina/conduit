@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /* ============================================================
-   CONDUIT marketing — dark technical theme
+   LANCER marketing — dark technical theme
    Tokens ported from the app's BLOCKS design system
-   (lib/conduit-core.jsx `D` palette + famicom spectrum).
+   (lib/lancer-core.jsx `D` palette + famicom spectrum).
    Site matches the app: near-black surfaces, sharp corners,
    Chakra Petch (display) + Fira Code (mono), blue accent,
    famicom-spectrum + state-color semantics.

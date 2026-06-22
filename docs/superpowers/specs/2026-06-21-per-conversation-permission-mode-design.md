@@ -5,7 +5,7 @@ Status: approved (design); implementation foundation landed, live per-action pat
 
 ## Problem
 
-When Conduit governs a run, dangerous actions pause for phone approval. That's correct
+When Lancer governs a run, dangerous actions pause for phone approval. That's correct
 for "steer from afar", but wrong when the owner is *driving* the machine themselves and
 just wants the agent to run uninterrupted — they get blocked waiting on a phone reply
 (exactly what happened to this session's own driving loop). There's no fast, deliberate
@@ -39,7 +39,7 @@ launch gate and the per-action policy evaluation both consult the run's mode.
 
 ## Architecture
 
-1. **`AutonomyPreset.bypass`** (`ConduitCore/AutonomySettings.swift`): new most-permissive case.
+1. **`AutonomyPreset.bypass`** (`LancerCore/AutonomySettings.swift`): new most-permissive case.
    `isAutoApproved` returns `true` for all kinds/risks. Label "Full bypass", an unambiguous
    description ("Nothing pauses — the agent runs every action without asking").
 
@@ -55,7 +55,7 @@ launch gate and the per-action policy evaluation both consult the run's mode.
    - Per-action: store the run's mode on `dispatchRun`. The PreToolUse-hook path that
      evaluates an action for a given runId consults the run's mode: `bypass` ⇒ allow;
      otherwise the existing `AutonomyPreset`/policy evaluation. (This is the piece that
-     needs the live hook→conduitd→run mapping; see "Open / device-verified".)
+     needs the live hook→lancerd→run mapping; see "Open / device-verified".)
 
 4. **Conversation UI** (`NewChatTabView` + active-run header): a permission-mode button (the
    Claude Code pattern) showing the current mode; tapping opens a small picker (Default /
@@ -86,12 +86,12 @@ launch gate and the per-action policy evaluation both consult the run's mode.
   (incl. codex/kimi); a non-bypass run still escalates per the hardened rules; bypass still
   audits. (Extends `dispatch_launchgate_test.go`.)
 - Client: `AutonomyPreset.bypass.isAutoApproved` returns true for all kinds/risks (add to
-  `ConduitAppearanceTests`-style unit coverage if a preset test exists).
+  `LancerAppearanceTests`-style unit coverage if a preset test exists).
 - App-target build green; mode button + bypass banner eyeballed in the gallery.
 
 ## Open / device-verified (not blind-shipped)
 
-- The **per-action bypass over the live relay** (hook → conduitd → run-mode lookup → allow)
+- The **per-action bypass over the live relay** (hook → lancerd → run-mode lookup → allow)
   needs a reachable daemon + paired host to prove, and re-touches the gating a security review
   just hardened. Build-verify the foundation; confirm live behavior on device before claiming
   the loop closed.

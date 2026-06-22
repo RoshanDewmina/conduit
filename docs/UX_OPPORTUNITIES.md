@@ -1,4 +1,4 @@
-# UX_OPPORTUNITIES.md — Conduit UX Opportunities
+# UX_OPPORTUNITIES.md — Lancer UX Opportunities
 
 > Mapped to existing codebase locations. Sequenced by the staged roadmap in ROADMAP.md.
 > "Already built" items are noted — do not rebuild them.
@@ -11,7 +11,7 @@
 - Happy (github.com/slopus/happy, 21.6k★) — "vibe-coded… long chats take minutes to render" (GitHub issues)
 - Omnara (omnara.com) — Android reportedly doesn't raise real system notifications
 
-Conduit already has the scaffolding. Stage 2 work is deepening, not greenfield.
+Lancer already has the scaffolding. Stage 2 work is deepening, not greenfield.
 
 **Why rivals structurally can't copy this:** Live Activities, Dynamic Island, and Apple Watch Inbox are Apple-exclusive APIs. Web-based, Electron, and Android-first rivals cannot match native quality regardless of engineering investment.
 
@@ -27,8 +27,8 @@ Conduit already has the scaffolding. Stage 2 work is deepening, not greenfield.
 
 **Codebase map:**
 - `SessionFeature/LiveActivityManager.swift` — existing scaffold
-- `ConduitLiveActivityWidget/` — existing widget extension
-- `ConduitCore/Approval.swift` — approval model (extend with structured fields from 2.1a)
+- `LancerLiveActivityWidget/` — existing widget extension
+- `LancerCore/Approval.swift` — approval model (extend with structured fields from 2.1a)
 
 **Stage:** 2
 
@@ -42,7 +42,7 @@ Conduit already has the scaffolding. Stage 2 work is deepening, not greenfield.
 - **Minimal view:** Unread approval count badge when another app is in foreground
 
 **Codebase map:**
-- `ConduitLiveActivityWidget/` — existing extension; add expanded view
+- `LancerLiveActivityWidget/` — existing extension; add expanded view
 - `DesignSystem/Components/PixelBox.swift` — reuse existing animation
 - Blocked on 2.1a (structured tool_use) for tool name + context in expanded view
 
@@ -59,7 +59,7 @@ Conduit already has the scaffolding. Stage 2 work is deepening, not greenfield.
 - **Quick-approve flow:** Raise wrist → see pending count → tap → Allow / Deny in ≤3 taps
 
 **Codebase map:**
-- `ConduitWatch/` — multi-tab watchOS app already exists with Inbox tab
+- `LancerWatch/` — multi-tab watchOS app already exists with Inbox tab
 - `InboxFeature/InboxViewModel.swift` — LiveInboxViewModel; extend for Watch data relay
 - WatchConnectivity bridge needed for live approval count
 
@@ -86,7 +86,7 @@ Conduit already has the scaffolding. Stage 2 work is deepening, not greenfield.
 
 ## 2. Approval Hero Surface (Beats Happy's Raw-JSON Yes/No)
 
-The current approval card in `InboxView.swift:181-183` shows a truncated 500-char string because `conduit-hook.sh` flattens `tool_input`. After 2.1a (structured wire protocol), the card can become a genuine decision surface.
+The current approval card in `InboxView.swift:181-183` shows a truncated 500-char string because `lancer-hook.sh` flattens `tool_input`. After 2.1a (structured wire protocol), the card can become a genuine decision surface.
 
 ### 2.1 Four Actions Per Approval
 
@@ -113,7 +113,7 @@ The current approval card in `InboxView.swift:181-183` shows a truncated 500-cha
 
 **Codebase map:**
 - `InboxFeature/InboxView.swift:181-183` — card render site
-- `ConduitCore/Approval.swift` — extend with `toolName`, `toolUseID`, structured `input` (after 2.1a)
+- `LancerCore/Approval.swift` — extend with `toolName`, `toolUseID`, structured `input` (after 2.1a)
 - `DiffKit/DiffView.swift` — ready to use; just needs real data from 2.1a
 - `SSHTransport/DaemonChannel.swift` — approval decision relay (fix `.approvedAlways` collapse at line 52 in 2.1b)
 
@@ -136,7 +136,7 @@ The current approval card in `InboxView.swift:181-183` shows a truncated 500-cha
 **Codebase map:**
 - `AppFeature/SessionsHomeView.swift` — session row render site
 - `AgentKit/GitMetadataProbe.swift` — new file needed; probes git branch, PR status, cwd via SSH
-- `ConduitCore/SessionSummary` — extend with git metadata fields
+- `LancerCore/SessionSummary` — extend with git metadata fields
 
 **Stage:** 4 (fleet prerequisite; can partially land in Stage 2 for single-session case)
 

@@ -87,7 +87,7 @@ so iPhone behaviour is unaffected.
 
 ---
 
-## Packages/ConduitKit/Package.swift
+## Packages/LancerKit/Package.swift
 
 Ensure `SessionFeature` lists `DesignSystem` as a dependency if any
 `DesignSystem` components (e.g. `KeyboardAccessoryRail`) are used inside new
@@ -97,7 +97,7 @@ views added in M9:
 .target(
     name: "SessionFeature",
     dependencies: [
-        "ConduitCore",
+        "LancerCore",
         "SSHTransport",
         "TerminalEngine",
         "DesignSystem",   // ← add if not already present

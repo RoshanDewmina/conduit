@@ -1,13 +1,13 @@
 package main
 
-// ActivityKit APNs sender for Conduit Live Activities.
+// ActivityKit APNs sender for Lancer Live Activities.
 //
 // Strict contract — updates fail SILENTLY at the iOS side if any of these are wrong:
 //   - apns-topic MUST be "<bundleID>.push-type.liveactivity" (NOT the bare bundle id).
 //   - apns-push-type: liveactivity
 //   - apns-priority: 10 for user-visible changes (budgeted by iOS); 5 for background updates.
 //   - Payload: aps.timestamp (unix secs), aps.event ("update"|"end"), aps.content-state.
-//   - aps.content-state MUST decode exactly into ConduitSessionAttributes.ContentState.
+//   - aps.content-state MUST decode exactly into LancerSessionAttributes.ContentState.
 //   - Date fields: ActivityKit decodes dates using the default JSONDecoder strategy, which
 //     expects Unix time as a JSON number (secondsSince1970 fractional float). This matches
 //     Swift's JSONEncoder default for Date (which emits a double). We pin this with a test.
@@ -69,7 +69,7 @@ func evictExpiredActivityTokens(now int64) {
 	}
 }
 
-// liveActivityContentState is the Go mirror of ConduitSessionAttributes.ContentState.
+// liveActivityContentState is the Go mirror of LancerSessionAttributes.ContentState.
 //
 // DATE ENCODING CONTRACT (pinned by TestLiveActivityDateEncoding):
 // Swift's JSONEncoder encodes Date as a JSON number: Unix seconds as a float64

@@ -220,8 +220,8 @@ func TestEvictExpiredActivityTokens(t *testing.T) {
 // TestApnsTopicFormat verifies the topic string pattern used for Live Activity pushes.
 // The bare bundle ID silently fails; only "<bundleID>.push-type.liveactivity" is accepted.
 func TestApnsTopicFormat(t *testing.T) {
-	bundleID := "dev.conduit.mobile"
-	want := "dev.conduit.mobile.push-type.liveactivity"
+	bundleID := "dev.lancer.mobile"
+	want := "dev.lancer.mobile.push-type.liveactivity"
 	got := bundleID + ".push-type.liveactivity"
 	if got != want {
 		t.Errorf("apns-topic = %q, want %q", got, want)

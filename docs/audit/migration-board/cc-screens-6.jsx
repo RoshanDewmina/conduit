@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — Agent/Cloud, Git, Files/Browser screens
+   LANCER — Agent/Cloud, Git, Files/Browser screens
    ============================================================ */
 
 /* ---------- shared local atoms (mirror cc-screens-3 patterns, not exported from there) ---------- */
@@ -33,7 +33,7 @@ function QuotaRow({label, sub, pct, tone}){
 /* ---------- 1 · AgentsView — hosted agent management list ---------- */
 function AgentsView({onCreate, onSelect}){
   const agents=[
-    {id:'g1',vendor:'claude',name:'conduit',model:'claude-sonnet-4.6',spend:'$3.18',last:'2m ago',status:'working'},
+    {id:'g1',vendor:'claude',name:'lancer',model:'claude-sonnet-4.6',spend:'$3.18',last:'2m ago',status:'working'},
     {id:'g2',vendor:'codex',name:'auth-svc',model:'gpt-5.1-codex',spend:'$0.74',last:'12m ago',status:'waiting'},
     {id:'g3',vendor:'claude',name:'staging-bot',model:'claude-sonnet-4.6',spend:'$1.02',last:'47m ago',status:'idle'},
     {id:'g4',vendor:'opencode',name:'pi-runner',model:'—',spend:'—',last:'2d ago',status:'offline'},
@@ -43,7 +43,7 @@ function AgentsView({onCreate, onSelect}){
       <SubNav title="cloud agents" right={<span className="cc-chip"><Ic d={ICON.bolt} s={12}/>Pro</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Hosted agents run on Conduit's infra — always online, always connected.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Hosted agents run on Lancer's infra — always online, always connected.</p>
           <button className="cc-btn cc-btn--primary cc-btn--block" style={{marginBottom:14}} onClick={onCreate}><Ic d={ICON.plus} s={15}/>Create agent</button>
           <div className="cc-sec">agents <span className="n">· {agents.length}</span><span className="rule"/></div>
           <div className="cc-card">
@@ -74,7 +74,7 @@ function AgentsView({onCreate, onSelect}){
 
 /* ---------- 2 · AgentDetailView — single agent detail + run history ---------- */
 function AgentDetailView({agent, onBack, onRun, onPause, onDelete}){
-  const a=agent||{vendor:'claude',name:'conduit',model:'claude-sonnet-4.6',status:'working',spend:'$3.18',totalSpend:'$142.50'};
+  const a=agent||{vendor:'claude',name:'lancer',model:'claude-sonnet-4.6',status:'working',spend:'$3.18',totalSpend:'$142.50'};
   const runs=[
     {goal:'fix login timeout',status:'done',dur:'4.2m',cost:'$0.84'},
     {goal:'refactor auth middleware',status:'working',dur:'2.1m',cost:'$0.42'},
@@ -151,10 +151,10 @@ function AgentRunDetailView({onBack}){
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 15px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <PixelAvatar seed="claudeconduit" size={38} color={VENDOR.claude.c}/>
+              <PixelAvatar seed="claudelancer" size={38} color={VENDOR.claude.c}/>
               <div className="grow">
                 <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code</div>
-                <div className="s" style={{marginTop:3}}>conduit · claude-sonnet-4.6</div>
+                <div className="s" style={{marginTop:3}}>lancer · claude-sonnet-4.6</div>
               </div>
               <div style={{textAlign:'right'}}>
                 <div style={{fontFamily:'var(--mono)',fontSize:15,color:'var(--ink)'}}>$0.84</div>
@@ -196,7 +196,7 @@ function AgentFilesView({onBack, onFile}){
   ];
   return (
     <div className="cc">
-      <SubNav title="workspace files" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.folder} s={12}/>~/repos/conduit</span>}/>
+      <SubNav title="workspace files" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.folder} s={12}/>~/repos/lancer</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <p className="cc-lead" style={{margin:'0 0 12px'}}>Browse the agent's workspace directory — read-only view of files on the host.</p>
@@ -228,14 +228,14 @@ function AgentFilesView({onBack, onFile}){
 function AgentWorkspaceView({onBack}){
   return (
     <div className="cc">
-      <SubNav title="workspace" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.git} s={12}/>conduit</span>}/>
+      <SubNav title="workspace" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.git} s={12}/>lancer</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 16px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
               <span style={{width:36,height:36,borderRadius:8,background:'var(--surface-2)',border:'1px solid var(--line)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--ink-2)'}}><Ic d={ICON.git} s={18}/></span>
               <div className="grow">
-                <div style={{fontFamily:'var(--mono)',fontSize:14,fontWeight:600,color:'var(--ink)'}}>conduit</div>
+                <div style={{fontFamily:'var(--mono)',fontSize:14,fontWeight:600,color:'var(--ink)'}}>lancer</div>
                 <div className="s" style={{marginTop:3}}>main · 2.4k commits</div>
               </div>
               <span className="cc-sd"><span className="d done"/>clean</span>
@@ -339,12 +339,12 @@ function AgentExecView({onBack}){
 
           <div className="cc-sec">working directory<span className="rule"/></div>
           <div className="cc-card" style={{padding:'11px 14px'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-2)'}}>~/repos/conduit</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-2)'}}>~/repos/lancer</span>
           </div>
 
           <div className="cc-sec">environment<span className="rule"/></div>
           <div className="cc-card" style={{padding:'4px 0'}}>
-            {[['CONDUIT_HOST','dev-vps'],['ANTHROPIC_API_KEY','sk-…M2'],['PATH','/usr/bin:/usr/local/bin']].map(([k,v],i)=>(
+            {[['LANCER_HOST','dev-vps'],['ANTHROPIC_API_KEY','sk-…M2'],['PATH','/usr/bin:/usr/local/bin']].map(([k,v],i)=>(
               <div key={i} className="cc-row" style={{cursor:'default',padding:'10px 16px'}}>
                 <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--ink-4)',width:170,flex:'none'}}>{k}</span>
                 <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-2)'}}>{v}</span>
@@ -382,7 +382,7 @@ function CreateAgentSheet({onClose, onCreate}){
         <div className="grip"/>
         <div className="sheetscroll">
           <h2 className="cc-h2" style={{marginBottom:6}}>Create cloud agent</h2>
-          <div className="cc-note" style={{marginBottom:16}}>A hosted agent runs on Conduit's infrastructure — always online.</div>
+          <div className="cc-note" style={{marginBottom:16}}>A hosted agent runs on Lancer's infrastructure — always online.</div>
 
           <div className="cc-sec">agent name<span className="rule"/></div>
           <CCInput value={name} onChange={setName} placeholder="my-agent" mono/>
@@ -410,7 +410,7 @@ function CreateAgentSheet({onClose, onCreate}){
 
           <div className="cc-sec">host &amp; policy<span className="rule"/></div>
           <div className="cc-card" style={{padding:'11px 14px',display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-2)'}}>Conduit Cloud · default policy</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:12.5,color:'var(--ink-2)'}}>Lancer Cloud · default policy</span>
             <span style={{marginLeft:'auto'}}><Ic d={ICON.chev} s={15} className="chev"/></span>
           </div>
         </div>
@@ -454,7 +454,7 @@ function AgentBillingSheet({onClose}){
 
           <div className="cc-sec">spend by agent<span className="rule"/></div>
           <div className="cc-card" style={{padding:'4px 15px 10px'}}>
-            <QuotaRow label="conduit" sub="$3.18 · 22%" pct={22} tone={VENDOR.claude.c}/>
+            <QuotaRow label="lancer" sub="$3.18 · 22%" pct={22} tone={VENDOR.claude.c}/>
             <QuotaRow label="auth-svc" sub="$0.74 · 5%" pct={5} tone={VENDOR.codex.c}/>
             <QuotaRow label="staging-bot" sub="$1.02 · 7%" pct={7} tone={VENDOR.claude.c}/>
           </div>
@@ -540,7 +540,7 @@ function WorktreeBoardView({onBack}){
   ];
   return (
     <div className="cc">
-      <SubNav title="worktrees" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.git} s={12}/>conduit</span>}/>
+      <SubNav title="worktrees" onBack={onBack} right={<span className="cc-chip"><Ic d={ICON.git} s={12}/>lancer</span>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <p className="cc-lead" style={{margin:'0 0 12px'}}>Drag to move worktrees between stages. Each card shows branch, goal, and changed files.</p>
@@ -698,7 +698,7 @@ function FilesView({onBack, onFile}){
             <span style={{color:'var(--brand)'}}>/</span>
             <span style={{color:'var(--ink)'}}>repos</span>
             <span style={{color:'var(--brand)'}}>/</span>
-            <span style={{color:'var(--ink-4)'}}>conduit</span>
+            <span style={{color:'var(--ink-4)'}}>lancer</span>
           </div>
 
           <div className="cc-card">
@@ -739,7 +739,7 @@ function FilePreviewView({onBack}){
             <div className="grow" style={{minWidth:0}}>
               <div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)',fontWeight:600}}>SessionViewModel.swift</div>
               <div style={{display:'flex',alignItems:'center',gap:8,marginTop:2}}>
-                <span style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)'}}>~/repos/conduit/Sources</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)'}}>~/repos/lancer/Sources</span>
                 <span className="cc-chip" style={{fontSize:9,padding:'1px 6px',background:'var(--brand-soft)',color:'var(--brand)',borderColor:'var(--brand)'}}>Swift</span>
                 <span style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)'}}>16 lines · 482 B</span>
               </div>
@@ -775,12 +775,12 @@ function PreviewSurface({onBack}){
 
           <div style={{border:'1px solid var(--line)',borderRadius:'var(--r-lg)',overflow:'hidden',background:'#fff',aspectRatio:'390/720',display:'flex',flexDirection:'column',position:'relative'}}>
             <div style={{textAlign:'center',padding:'60px 20px 0'}}>
-              <div style={{fontFamily:'var(--sans)',fontSize:18,fontWeight:600,color:'#111'}}>Conduit Agents</div>
+              <div style={{fontFamily:'var(--sans)',fontSize:18,fontWeight:600,color:'#111'}}>Lancer Agents</div>
               <div style={{fontFamily:'var(--sans)',fontSize:13,color:'#666',marginTop:6}}>Manage your cloud-hosted coding agents</div>
             </div>
             <div style={{margin:'24px 16px 0',border:'1px solid #e2e2e2',borderRadius:8}}>
               {[
-                {name:'conduit',status:'online',model:'sonnet 4.6'},
+                {name:'lancer',status:'online',model:'sonnet 4.6'},
                 {name:'auth-svc',status:'online',model:'codex'},
               ].map((a,i)=>(
                 <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',borderBottom:i===0?'1px solid #e2e2e2':'none',fontFamily:'var(--sans)',color:'#222'}}>
@@ -912,10 +912,10 @@ function LoopDetailView({onBack}){
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 16px',marginBottom:12}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <PixelAvatar seed="claudeconduit" size={34} color={VENDOR.claude.c}/>
+              <PixelAvatar seed="claudelancer" size={34} color={VENDOR.claude.c}/>
               <div className="grow">
                 <div style={{fontFamily:'var(--mono)',fontSize:14,fontWeight:500,color:'var(--ink)'}}>Claude Code</div>
-                <div className="s">conduit · fix login timeout</div>
+                <div className="s">lancer · fix login timeout</div>
               </div>
               <div style={{textAlign:'right'}}>
                 <div style={{fontFamily:'var(--mono)',fontSize:15,color:'var(--ink)'}}>$0.84</div>
@@ -962,7 +962,7 @@ function LoopDetailView({onBack}){
 function RunDetailView({onBack}){
   const out=[
     ['$ swift build','c'],
-    ['Compiling ConduitKit (38 files)','o'],
+    ['Compiling LancerKit (38 files)','o'],
     ['[142/318] Compiling SessionViewModel.swift','o'],
     ['patch src/auth/session.swift','o'],
   ];
@@ -973,7 +973,7 @@ function RunDetailView({onBack}){
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 15px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <PixelAvatar seed="claudeconduit" size={38} color={VENDOR.claude.c}/>
+              <PixelAvatar seed="claudelancer" size={38} color={VENDOR.claude.c}/>
               <div className="grow" style={{minWidth:0}}>
                 <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code</div>
                 <div className="s" style={{marginTop:3}}>Dev VPS · claude-sonnet-4.6</div>

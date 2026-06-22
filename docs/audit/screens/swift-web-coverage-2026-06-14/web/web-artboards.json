@@ -507,7 +507,7 @@
       "slot": "usage"
     },
     {
-      "label": "Conduit Pro · paywall",
+      "label": "Lancer Pro · paywall",
       "rect": {
         "height": 660,
         "width": 320,
@@ -577,5 +577,5 @@
       "slot": "ramp"
     }
   ],
-  "title": "Conduit — Migration Board (target UI)"
+  "title": "Lancer — Migration Board (target UI)"
 }

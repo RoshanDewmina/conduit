@@ -6,7 +6,7 @@
 Commit `858b688` is titled "…approval-card header…". Check whether this bug is already fixed before redoing it; if partially fixed, finish/verify rather than rewrite.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md` "Visual verification". Component: `DesignSystem/Components/ChatComponents.swift` → `DSApprovalCard`.
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md` "Visual verification". Component: `DesignSystem/Components/ChatComponents.swift` → `DSApprovalCard`.
 
 **Confirmed bug (audit + device screenshot):** in `DSApprovalCard` (~L204–212) the action sentence is an `HStack(spacing:4)` of `agentName` (semibold) + "wants to {action} on" + `hostLabel`, but `hostLabel` overrides to `dsMonoPt(12)` + `t.text3`, so it visually **detaches from the sentence and wraps awkwardly** (no `fixedSize`/`lineLimit`) — the "floating path label" on device.
 

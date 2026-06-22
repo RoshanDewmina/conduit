@@ -10,8 +10,8 @@
 
 Three tasks executed on a new branch `opencode/phase-next` (forked from
 `codex/uiux-audit`). All Go code builds and tests pass (`go build ./...` and
-`go test ./...` in both `daemon/conduitd` and `daemon/push-backend`). The
-iOS ConduitKit package also builds (`swift build`).
+`go test ./...` in both `daemon/lancerd` and `daemon/push-backend`). The
+iOS LancerKit package also builds (`swift build`).
 
 ---
 
@@ -21,9 +21,9 @@ iOS ConduitKit package also builds (`swift build`).
 into `opencode/phase-next`.
 
 ### What was merged:
-- `daemon/conduitd/git.go` — 496 lines: host-side git RPCs (status, diff,
+- `daemon/lancerd/git.go` — 496 lines: host-side git RPCs (status, diff,
   changedFiles, ship/commit+push+PR, worktree list, CI proxy)
-- `daemon/conduitd/git_test.go` — 295 lines: test coverage
+- `daemon/lancerd/git_test.go` — 295 lines: test coverage
 - `SSHTransport/DaemonChannel.swift` — 100+ lines added: `gitStatus()`,
   `gitDiff()`, `gitChangedFiles()`, `gitShip()`, `listWorktrees()`,
   `recentCIEvents()`, `fetchPolicyYAML()`, `savePolicyYAML()`,
@@ -38,19 +38,19 @@ into `opencode/phase-next`.
 - `AppFeature/WorktreeStore.swift` — updated: now calls `listWorktrees(workdir:)`
 - `AppFeature/FleetView.swift` — `gitStore(for:)` + `ciEventLoader(for:)`
   wires GitStore + CI events into LoopDetailView
-- `daemon/conduitd/server.go` — 128 lines added: `agent.git.status`,
+- `daemon/lancerd/server.go` — 128 lines added: `agent.git.status`,
   `agent.git.diff`, `agent.git.changedFiles`, `agent.git.ship`,
   `agent.worktree.list`, `agent.ci.recent`, `agent.policy.get/set/reload`
   RPC handlers
 
 ### Merge details:
-- Single auto-merge in `daemon/conduitd/server.go` (clean, no conflicts)
+- Single auto-merge in `daemon/lancerd/server.go` (clean, no conflicts)
 - No other conflicts
 
 ### Verification:
 - `go build ./...` ✅
-- `go test ./...` ✅ (conduitd: 17.3s, policy: cached)
-- `swift build` ✅ (ConduitKit)
+- `go test ./...` ✅ (lancerd: 17.3s, policy: cached)
+- `swift build` ✅ (LancerKit)
 
 ---
 
@@ -93,12 +93,12 @@ Already verified: `agent.ci.recent` RPC registered, proxies push-backend.
 
 ## TASK 3 — Host-prints-QR onboarding (terminal QR + real installer) ✅
 
-### 3.1 Terminal QR in `conduitd pair`
+### 3.1 Terminal QR in `lancerd pair`
 
 **Dependency added:** `github.com/skip2/go-qrcode` (pure Go QR library)
 
 **Files changed:**
-- `daemon/conduitd/relay_install_helper.go`:
+- `daemon/lancerd/relay_install_helper.go`:
   - `printRelayInstructions()` now generates an ephemeral X25519 keypair
   - Creates `qrPairingPayload` JSON matching iOS `QRPairingPayload` format
     (`{"v":1,"relay":"<url>","code":"<code>","pk":"<daemonPubKey>"}`)
@@ -110,11 +110,11 @@ Already verified: `agent.ci.recent` RPC registered, proxies push-backend.
 ### 3.2 Real `curl | sh`-style installer
 
 **Files changed:**
-- `daemon/conduitd/install.sh`:
+- `daemon/lancerd/install.sh`:
   - Added `--download-base <url>` flag for prebuilt binary URL
   - Added download path: detects OS/arch, fetches from
-    `$DOWNLOAD_BASE/conduitd_${os}_${arch}` using curl or wget
-  - After install, runs `conduitd pair` to print pairing QR
+    `$DOWNLOAD_BASE/lancerd_${os}_${arch}` using curl or wget
+  - After install, runs `lancerd pair` to print pairing QR
   - Added help text for `curl -fsSL https://conduit.dev/install.sh | sh` UX
   - Retains `--from-source` and `--hooks` flags
 
@@ -128,7 +128,7 @@ This is documented as the intended UX path in the script's header and in
 ## Commit log on `opencode/phase-next`
 
 ```
-<current_hash>  (HEAD -> opencode/phase-next) — TASK 3: terminal QR in conduitd pair + curl|sh installer
+<current_hash>  (HEAD -> opencode/phase-next) — TASK 3: terminal QR in lancerd pair + curl|sh installer
 <merge_hash>   Merge commit '604e3812' — TASK 1: git v1 feature set + TASK 2: facade fixes
 62652d21       docs(audit): feature verification, dead-features backlog, git + onboarding research
 8aaf1605       fix(pairing): keyless QR relay works end-to-end + security hardening
@@ -144,12 +144,12 @@ This is documented as the intended UX path in the script's header and in
    rules written by `agent.policy.set` land in the daemon's in-memory store.
    PolicyEditor could be enhanced to fetch from `agent.policy.get` for a
    unified view. Low priority — the enforcement path is correct.
-2. **iOS app-target build** — `swift build` inside ConduitKit (SPM) was
+2. **iOS app-target build** — `swift build` inside LancerKit (SPM) was
    verified, but the full Xcode app target build (which catches
    strict-concurrency breaks) was not run. Any `.swift` changes should be
    reviewed by the human reviewer.
 3. **`curl conduit.dev/install.sh` live domain** — the installer code is
-   ready but requires: (a) a release pipeline that builds & signs conduitd
+   ready but requires: (a) a release pipeline that builds & signs lancerd
    binaries for linux/macOS × amd64/arm64, (b) a domain serving install.sh
    and binaries over HTTPS. Documented in `install.sh` header and
    `ONBOARDING_CONNECT_RESEARCH.md`.

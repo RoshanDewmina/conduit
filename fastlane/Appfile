@@ -1,4 +1,4 @@
-app_identifier "dev.conduit.mobile"
+app_identifier "dev.lancer.mobile"
 apple_id ENV["APPLE_ID"] || "sidewhinder2k3@gmail.com"
 team_id ENV["APP_STORE_CONNECT_TEAM_ID"]
 itc_team_id ENV["APP_STORE_CONNECT_TEAM_ID"]

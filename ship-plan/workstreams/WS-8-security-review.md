@@ -3,10 +3,10 @@
 > Run **after WS-3 lands** (it audits the finished key code). Audit + surgical fixes only; no broad refactors. Not a 17-point item — a release gate for an app that handles private keys.
 
 ## Context
-Conduit handles **private keys, passphrases, passwords, and host trust**. Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`. The security foundation is reportedly strong (Keychain-only secrets, real TOFU, biometric gating, 0 `try!`) — your job is to confirm that and find the gaps, especially in the new WS-3 key-import code.
+Lancer handles **private keys, passphrases, passwords, and host trust**. Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md`, `docs/agent-contract.md`. The security foundation is reportedly strong (Keychain-only secrets, real TOFU, biometric gating, 0 `try!`) — your job is to confirm that and find the gaps, especially in the new WS-3 key-import code.
 
 ## Review checklist
-1. **Secret-leak scan.** `grep -rniE "print\(|os_log|NSLog|debugPrint|dump\(" Packages/ConduitKit/Sources/SecurityKit Packages/ConduitKit/Sources/KeysFeature` and the connect path; inspect every hit near key/passphrase/password vars. Confirm `KeyStore`, `OpenSSHKeyParser`, `KeyImportView`, `CredentialResolver` never leak secrets to logs, error strings, UserDefaults, files, or analytics/Sentry.
+1. **Secret-leak scan.** `grep -rniE "print\(|os_log|NSLog|debugPrint|dump\(" Packages/LancerKit/Sources/SecurityKit Packages/LancerKit/Sources/KeysFeature` and the connect path; inspect every hit near key/passphrase/password vars. Confirm `KeyStore`, `OpenSSHKeyParser`, `KeyImportView`, `CredentialResolver` never leak secrets to logs, error strings, UserDefaults, files, or analytics/Sentry.
 2. **Keychain / Secure Enclave.** Correct accessibility class (`whenUnlockedThisDeviceOnly`, non-synced unless intended); `BiometricGate` actually gates sensitive ops; nothing syncs to iCloud unintentionally.
 3. **TOFU / host-key.** Prod paths keep the trust-on-first-use prompt; debug auto-trust is `#if DEBUG`/env-guarded and cannot reach Release. Host key re-verified on reconnect (cross-check WS-1).
 4. **Transport.** No silent downgrade to weak ciphers/MACs/kex if configurable; known-hosts persistence integrity-protected.

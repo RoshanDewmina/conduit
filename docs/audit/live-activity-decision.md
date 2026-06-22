@@ -21,13 +21,13 @@ The killer scenario is: user locks phone, agent starts working 20 min later, pho
 
 ## Lock Screen Approve/Deny: viable and aligned with governance
 
-Buttons run via `LiveActivityIntent` (iOS 17+) and wake the app process — exactly what Conduit needs, because the actual approval still flows through the relay inbox to the daemon's firewall. **Critical finding from docs:** Apple does **not** require biometric unlock for Live Activity buttons. The Lock Screen is accessible while the phone is locked. Conduit must implement `UserAuthenticationRequired` (or equivalent) on the Approve intent. This is trivially correct: the on-device Face-ID/passcode gate confirms the user's personhood before the intent sends the approval over the relay. Documentation says the intent runs in the app's process — so the governance chain (audit log, blast-radius checks, relay verification) is intact. The Live Activity is just a remote trigger; no bypass.
+Buttons run via `LiveActivityIntent` (iOS 17+) and wake the app process — exactly what Lancer needs, because the actual approval still flows through the relay inbox to the daemon's firewall. **Critical finding from docs:** Apple does **not** require biometric unlock for Live Activity buttons. The Lock Screen is accessible while the phone is locked. Lancer must implement `UserAuthenticationRequired` (or equivalent) on the Approve intent. This is trivially correct: the on-device Face-ID/passcode gate confirms the user's personhood before the intent sends the approval over the relay. Documentation says the intent runs in the app's process — so the governance chain (audit log, blast-radius checks, relay verification) is intact. The Live Activity is just a remote trigger; no bypass.
 
 ## Security: relay holds APNs key — acceptable risk
 
 Incremental over today's relay threat model:
 - The relay already holds the pairing secret and is the E2E relay for all approval traffic.
-- An APNs key can be scoped by Apple to `push-type: liveactivity` only (no background notifications, no alert pushes) and to Conduit's bundle ID.
+- An APNs key can be scoped by Apple to `push-type: liveactivity` only (no background notifications, no alert pushes) and to Lancer's bundle ID.
 - Worst case if key leaks: attacker can spoof the Live Activity UI (show "approval needed" with a fake command). They **cannot** approve without the user unlocking and the intent validating through the relay inbox, which requires the relay's own auth.
 - Key lives in the relay's secret store (`.env`, 0600) — never on a self-host box.
 
@@ -43,7 +43,7 @@ Recommendation: one APNs key per environment (staging / prod), rotated quarterly
 | **Warp / Cline / Roo** | N/A (desktop only) | N/A |
 | **opencode** | No (3rd-party apps only, none have live activities) | No |
 
-Moshi is the benchmark. Everything else is noise. Conduit's chance: ship Live Activities with inline Approve/Deny (Moshi also has this), plus quota rings (Moshi has). Parity is table stakes; the differentiation is **governance depth** (blast-radius enforcement, audit chain), not glanceable surfaces. But you cannot compete without parity.
+Moshi is the benchmark. Everything else is noise. Lancer's chance: ship Live Activities with inline Approve/Deny (Moshi also has this), plus quota rings (Moshi has). Parity is table stakes; the differentiation is **governance depth** (blast-radius enforcement, audit chain), not glanceable surfaces. But you cannot compete without parity.
 
 ## Live Activities: v1.x, not v1-blocker
 
@@ -57,7 +57,7 @@ Moshi is the benchmark. Everything else is noise. Conduit's chance: ship Live Ac
 - Inline Approve/Deny buttons on Lock Screen + Dynamic Island.
 - Live Activity cards showing agent loop state: tool name, elapsed time, pending approval flag.
 
-Rationale: Live Activities are the flagship glanceable surface and a competitive necessity (Moshi gap), but they depend on the relay APNs sender which is a new component with real security requirements. The quota rings + push notifications in v1 give a "Conduit is a modern app" baseline; the Live Activity follow-up in 1.x closes the Moshi gap decisively without delaying v1's core (governance + relay).
+Rationale: Live Activities are the flagship glanceable surface and a competitive necessity (Moshi gap), but they depend on the relay APNs sender which is a new component with real security requirements. The quota rings + push notifications in v1 give a "Lancer is a modern app" baseline; the Live Activity follow-up in 1.x closes the Moshi gap decisively without delaying v1's core (governance + relay).
 
 ## Recommended sequencing
 

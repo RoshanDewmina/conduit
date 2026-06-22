@@ -21,9 +21,9 @@ func envMap(pairs []string) map[string]string {
 // OpenRouter's Anthropic skin: ANTHROPIC_BASE_URL (no /v1), ANTHROPIC_AUTH_TOKEN=key,
 // and ANTHROPIC_API_KEY explicitly empty.
 func TestAgentChildEnv_OpenRouterWiring(t *testing.T) {
-	t.Setenv("CONDUIT_MODEL", "anthropic/claude-3.5-sonnet")
-	t.Setenv("CONDUIT_OPENROUTER_KEY", "sk-or-test123")
-	t.Setenv("CONDUIT_OPENROUTER_BASE_URL", "")
+	t.Setenv("LANCER_MODEL", "anthropic/claude-3.5-sonnet")
+	t.Setenv("LANCER_OPENROUTER_KEY", "sk-or-test123")
+	t.Setenv("LANCER_OPENROUTER_BASE_URL", "")
 
 	m := envMap(agentChildEnv())
 
@@ -49,8 +49,8 @@ func TestAgentChildEnv_OpenRouterWiring(t *testing.T) {
 
 // A custom base URL override is honored.
 func TestAgentChildEnv_BaseURLOverride(t *testing.T) {
-	t.Setenv("CONDUIT_OPENROUTER_KEY", "sk-or-x")
-	t.Setenv("CONDUIT_OPENROUTER_BASE_URL", "https://proxy.internal/api")
+	t.Setenv("LANCER_OPENROUTER_KEY", "sk-or-x")
+	t.Setenv("LANCER_OPENROUTER_BASE_URL", "https://proxy.internal/api")
 	m := envMap(agentChildEnv())
 	if m["ANTHROPIC_BASE_URL"] != "https://proxy.internal/api" {
 		t.Errorf("ANTHROPIC_BASE_URL = %q, want the override", m["ANTHROPIC_BASE_URL"])
@@ -59,8 +59,8 @@ func TestAgentChildEnv_BaseURLOverride(t *testing.T) {
 
 // With no OpenRouter key, no Anthropic auth vars are emitted (nothing to route).
 func TestAgentChildEnv_NoKey(t *testing.T) {
-	os.Unsetenv("CONDUIT_OPENROUTER_KEY")
-	t.Setenv("CONDUIT_MODEL", "")
+	os.Unsetenv("LANCER_OPENROUTER_KEY")
+	t.Setenv("LANCER_MODEL", "")
 	m := envMap(agentChildEnv())
 	for _, k := range []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "OPENROUTER_API_KEY"} {
 		if _, ok := m[k]; ok {

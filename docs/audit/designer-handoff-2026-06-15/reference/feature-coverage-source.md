@@ -1,7 +1,7 @@
-# Conduit Feature Coverage Matrix - Governed Approvals v1
+# Lancer Feature Coverage Matrix - Governed Approvals v1
 
 **Date:** 2026-06-13
-**Scope:** iOS app targets, ConduitKit source, push relay backend, readiness docs, and audit screenshots.
+**Scope:** iOS app targets, LancerKit source, push relay backend, readiness docs, and audit screenshots.
 **Method:** Source review, Device Hub screenshots, XCUITest interaction proof, live localhost SSH E2E, local relay backend verification, Swift/Go tests, and archive check.
 
 Legend:
@@ -46,7 +46,7 @@ Legend:
 | TOFU host-key prompt | Host-key sheet | Covered locally | Live SSH test verifies Unknown Host Key -> Trust & Connect -> Connected. |
 | SSH agent forwarding | Defensive error path | Flagged | Not a primary shipping path; avoid claims until implemented. |
 | Host edit after creation | Host editor | Flagged | Creation path exists; edit entry point should be confirmed or surfaced deliberately. |
-| Fleet bridge status | Fleet / Activity | Code covered | UI exists; live conduitd bridge status was not part of the local loopback E2E. |
+| Fleet bridge status | Fleet / Activity | Code covered | UI exists; live lancerd bridge status was not part of the local loopback E2E. |
 
 ## Session Tools
 
@@ -107,14 +107,14 @@ Legend:
 | `POST /register` | APNs registration | Covered locally | Requires `APPROVAL_RELAY_SECRET`; auth failure verified. |
 | `POST /approval` | APNs approval push | Code covered / owner-only | Route exists; real APNs delivery requires production `.p8` and device. |
 | `POST /approval/decision` | Relay decision ingress | Covered locally | Authorized decision accepted; wrong token rejected. |
-| `GET /decisions` | conduitd decision polling | Covered locally | Authorized poll drains once; wrong token rejected. |
+| `GET /decisions` | lancerd decision polling | Covered locally | Authorized poll drains once; wrong token rejected. |
 | Billing routes | Backend | Owner-only | Requires Stripe/App Store account verification. |
 | Agent/run/artifact/schedule/org routes | Backend | Owner-only / flagged | Route surface exists; production Cloud behavior not part of governed-approvals local E2E. |
 | Production secret fail-fast | Backend startup | Covered | New tests cover production env detection. |
 
-## conduitd Read-Only Coverage
+## lancerd Read-Only Coverage
 
-`daemon/conduitd` is out of direct modification scope unless it blocks governed approvals. It was not edited. Read-only verification passed:
+`daemon/lancerd` is out of direct modification scope unless it blocks governed approvals. It was not edited. Read-only verification passed:
 
 - `go vet ./...`
 - `go test ./...`

@@ -19,26 +19,26 @@ This is the functional follow-up to the sidebar-first prototype pass. No additio
 
 The app has useful live-run plumbing, but it does not yet have durable chat.
 
-- `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`
+- `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`
   - `ChatTurn` is local to the view and stores only `prompt` + `runId`.
   - `activeRun`, `chatTitle`, `turns`, `followUpText`, and errors are all `@State`.
   - First dispatch registers a run and replaces `turns` with one in-memory turn.
   - Follow-up calls `active.channel.continueRun(runId:prompt:)`, gets a new `runId`, appends a new in-memory turn, and creates a new `RunControlStore`.
-- `Packages/ConduitKit/Sources/AppFeature/RunOutputStore.swift`
+- `Packages/LancerKit/Sources/AppFeature/RunOutputStore.swift`
   - stores streamed chunks, tool blocks, status, and exit code in memory by `runId`.
   - dedupes chunks by sequence number.
   - does not persist output, tool cards, or terminal status.
-- `Packages/ConduitKit/Sources/PersistenceKit/AppDatabase.swift`
+- `Packages/LancerKit/Sources/PersistenceKit/AppDatabase.swift`
   - has migrations through `v9`.
   - persists hosts, approvals, patches, snippets, searchable terminal blocks, session snapshots, audit events, loops, and sync tombstones.
   - has no chat conversation, chat turn, or chat FTS tables.
-- `Packages/ConduitKit/Sources/PersistenceKit/SessionSnapshotRepository.swift`
+- `Packages/LancerKit/Sources/PersistenceKit/SessionSnapshotRepository.swift`
   - stores one resumability snapshot per host.
   - this is host/session resume metadata, not conversation history.
-- `Packages/ConduitKit/Sources/PersistenceKit/BlockRepository.swift`
+- `Packages/LancerKit/Sources/PersistenceKit/BlockRepository.swift`
   - already demonstrates the local FTS pattern through `blocks_fts`.
   - search covers terminal blocks, not chat messages or agent replies.
-- `daemon/conduitd/dispatch.go`, `server.go`, and `e2e_router.go`
+- `daemon/lancerd/dispatch.go`, `server.go`, and `e2e_router.go`
   - already support `continueRun` as a fresh process with a new `runId`.
   - continue reuses the original run's cwd/model, re-passes policy and budget gates, and returns structured started/blocked/error results.
   - this makes active-session continuation possible, but the iOS app cannot reconstruct thread state after restart.
@@ -69,13 +69,13 @@ The current market and framework baseline confirms this is a must-have V1 layer,
 
 ## Architecture Decision
 
-Add a durable local chat model in `ConduitCore` and `PersistenceKit`. Keep daemon protocol changes out of V1.
+Add a durable local chat model in `LancerCore` and `PersistenceKit`. Keep daemon protocol changes out of V1.
 
 The daemon already knows how to continue a run. The missing owner is iOS-local persistence and rehydration. `RunOutputStore` should remain the live streaming cache; a new repository should own durable conversation metadata, turns, searchable text, and artifact summaries.
 
 ### Model
 
-Add ConduitCore models:
+Add LancerCore models:
 
 - `ChatConversation`
   - `id: String`
@@ -167,24 +167,24 @@ Minimum V1 can persist final text on terminal status. Better V1 persists streami
 
 ## Implementation Tasks
 
-- [ ] **Task 1: Add ConduitCore chat models**
-  - Files: `Packages/ConduitKit/Sources/ConduitCore/ChatConversation.swift`
+- [ ] **Task 1: Add LancerCore chat models**
+  - Files: `Packages/LancerKit/Sources/LancerCore/ChatConversation.swift`
   - Include status enums, memberwise initializers, `Codable`, `Sendable`, `Identifiable`, and sample debug data if useful.
   - Keep the model UI-free.
 
 - [ ] **Task 2: Add v10 chat tables and wipe support**
-  - File: `Packages/ConduitKit/Sources/PersistenceKit/AppDatabase.swift`
+  - File: `Packages/LancerKit/Sources/PersistenceKit/AppDatabase.swift`
   - Add `chat_conversations`, `chat_turns`, `chat_artifacts`, and `chat_fts`.
   - Add cascade foreign keys where GRDB supports them.
   - Add the new tables to `wipeAll()`.
 
 - [ ] **Task 3: Add `ChatConversationRepository`**
-  - File: `Packages/ConduitKit/Sources/PersistenceKit/ChatConversationRepository.swift`
+  - File: `Packages/LancerKit/Sources/PersistenceKit/ChatConversationRepository.swift`
   - Follow the direct SQL/GRDB row decoding style used by `LoopRepository` and `SessionSnapshotRepository`.
   - Keep all writes transactional and FTS updates in sync.
 
 - [ ] **Task 4: Add repository tests**
-  - File: `Packages/ConduitKit/Tests/ConduitKitTests/ChatConversationRepositoryTests.swift`
+  - File: `Packages/LancerKit/Tests/LancerKitTests/ChatConversationRepositoryTests.swift`
   - Required tests:
     - create + fetch conversation;
     - append ordered turns;
@@ -196,13 +196,13 @@ Minimum V1 can persist final text on terminal status. Better V1 persists streami
     - redaction setting is respected for saved assistant output.
 
 - [ ] **Task 5: Wire repository into app environment**
-  - File: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
   - Add `chatRepo` to `AppEnvironment`.
   - Instantiate it beside the other repositories.
   - Do not change root navigation yet.
 
 - [ ] **Task 6: Persist first dispatch and follow-up turns**
-  - File: `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`
   - Prefer extracting a small platform-agnostic chat state helper if logic grows.
   - On successful initial dispatch:
     - create a conversation using selected agent, host/cwd, model, budget, and title;
@@ -214,13 +214,13 @@ Minimum V1 can persist final text on terminal status. Better V1 persists streami
     - keep live `RunControlStore` behavior unchanged.
 
 - [ ] **Task 7: Persist run output/status/artifacts**
-  - Files: `Packages/ConduitKit/Sources/AppFeature/ApprovalIngest.swift`, `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+  - Files: `Packages/LancerKit/Sources/AppFeature/ApprovalIngest.swift`, `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
   - Add a sink/coordinator that maps run events to repository updates.
   - SSH and E2E relay paths must both feed the same sink.
   - Preserve current `RunOutputStore` behavior.
 
 - [ ] **Task 8: Add thread list/search state without redesigning shell**
-  - File: `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`
   - Add a minimal recent/search panel within the existing New Chat tab, behind a button or compact sidebar-like overlay.
   - Load recent conversations on appear.
   - Search calls the repository.
@@ -241,9 +241,9 @@ Minimum V1 can persist final text on terminal status. Better V1 persists streami
   - Inbox remains the source of truth for decisions.
 
 - [ ] **Task 11: Verification**
-  - Run `swift test --package-path Packages/ConduitKit`.
+  - Run `swift test --package-path Packages/LancerKit`.
   - Run the iOS app-target simulator build with XcodeBuildMCP, because SwiftPM can skip `#if os(iOS)` UI code.
-  - Run existing daemon continue tests if daemon behavior is touched: `go test ./daemon/conduitd/...`.
+  - Run existing daemon continue tests if daemon behavior is touched: `go test ./daemon/lancerd/...`.
 
 ## Acceptance Criteria
 

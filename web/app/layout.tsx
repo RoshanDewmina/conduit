@@ -16,7 +16,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Conduit",
+  title: "Lancer",
   description: "SSH/agent management dashboard",
 };
 
@@ -34,7 +34,7 @@ export default function RootLayout({
         <header className="border-b border-border">
           <nav className="flex items-center gap-6 px-6 h-12 max-w-5xl mx-auto w-full">
             <Link href="/" className="font-display text-sm font-semibold tracking-wider text-foreground uppercase">
-              Conduit
+              Lancer
             </Link>
             <div className="flex items-center gap-4 ml-auto">
               <Link

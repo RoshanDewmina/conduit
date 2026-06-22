@@ -1,11 +1,11 @@
-# App Store Metadata — Conduit
+# App Store Metadata — Lancer
 
 > Current positioning: **governed approvals** (mission control for AI coding agents).
 > Owner-step checklist for getting on the store: `ship-gate-owner-steps.md`.
 
 ## Listing fields
 
-- **Name:** Conduit — Agent Approvals
+- **Name:** Lancer — Agent Approvals
 - **Subtitle (30):** Approve AI agents from anywhere
 - **Category:** Primary *Developer Tools* · Secondary *Productivity*
 - **Privacy / Support / Marketing URLs:** `https://conduit.dev/privacy` · `https://conduit.dev/support` · `https://conduit.dev`
@@ -14,7 +14,7 @@
 > Your AI coding agents ask permission on your phone. Decide in one tap while you're away from the terminal. Safe actions auto-handle by your policy; everything's logged.
 
 **Description:**
-> Conduit is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+> Lancer is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds while the app is active or resumed from the alert. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 >
 > **Decide fast** — high-risk approvals surface with command, blast radius, and risk band. Allow, deny, allow-always, or edit-then-run.
 > **Stay calm** — autonomy presets (Always ask / Auto-approve reads / Critical only) and per-repo policy mean most actions never reach you.
@@ -36,7 +36,7 @@ Canonical set: `docs/screenshots/governed-approvals/`.
 Made for kids: No · Unrestricted web: No · Gambling/Contests: No · Violence/Sexual content: None.
 
 ## App Review notes
-Conduit governs AI coding agents on the developer's own remote host. It drives a *remote* shell over SSH — it does **not** download or execute code locally (pre-empts Guideline 2.5.2). The Inbox is pre-seeded in DEBUG builds so reviewers see approval cards without a live host. The Billing screen offers a $14.99 StoreKit non-consumable (`dev.conduit.mobile.pro`); use a sandbox account.
+Lancer governs AI coding agents on the developer's own remote host. It drives a *remote* shell over SSH — it does **not** download or execute code locally (pre-empts Guideline 2.5.2). The Inbox is pre-seeded in DEBUG builds so reviewers see approval cards without a live host. The Billing screen offers a $14.99 StoreKit non-consumable (`dev.lancer.mobile.pro`); use a sandbox account.
 
 ## Privacy nutrition label
 No tracking. Declare: APNs device token (push registration for approval alerts) and subscription data if Stripe billing is enabled. State plainly: **source code never leaves the device.** Verify against actual data flows before submission.
@@ -50,4 +50,4 @@ No tracking. Declare: APNs device token (push registration for approval alerts) 
 | `aps-environment` | `production` |
 | `DEVELOPMENT_TEAM` | `39HM2X8GS6` (paid; shared by all four targets) |
 | `com.apple.developer.icloud-services` | `[CloudKit]` |
-| `com.apple.developer.icloud-container-identifiers` | `iCloud.dev.conduit.mobile` |
+| `com.apple.developer.icloud-container-identifiers` | `iCloud.dev.lancer.mobile` |

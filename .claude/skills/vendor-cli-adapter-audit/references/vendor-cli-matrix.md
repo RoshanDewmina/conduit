@@ -36,17 +36,17 @@ kimi --help
 kimi --prompt "hi" --help 2>/dev/null || true
 ```
 
-## Current Conduit Code Entry Points
+## Current Lancer Code Entry Points
 
-- Launch argv: `daemon/conduitd/dispatch.go` `agentArgv`
-- Continue argv: `daemon/conduitd/dispatch.go` `continueArgv`
+- Launch argv: `daemon/lancerd/dispatch.go` `agentArgv`
+- Continue argv: `daemon/lancerd/dispatch.go` `continueArgv`
 - Policy/budget gates: `dispatcher.dispatch` and `dispatcher.continueRun`
-- RPC surface: `daemon/conduitd/server.go`
-- Relay surface: `daemon/conduitd/e2e_router.go`
-- Codex hook draft: `docs/codex-conduit-hook.sh`, `docs/codex-hooks.json`
+- RPC surface: `daemon/lancerd/server.go`
+- Relay surface: `daemon/lancerd/e2e_router.go`
+- Codex hook draft: `docs/codex-lancer-hook.sh`, `docs/codex-hooks.json`
 - Codex risk note: `docs/audit/CODEX_GATING.md`
-- OpenCode hook draft: `docs/opencode-conduit-hook.sh`, `docs/opencode-hooks.json`
-- Installer/doctor coverage: `daemon/conduitd/install.go`, `daemon/conduitd/hook_install.go`, related tests
+- OpenCode hook draft: `docs/opencode-lancer-hook.sh`, `docs/opencode-hooks.json`
+- Installer/doctor coverage: `daemon/lancerd/install.go`, `daemon/lancerd/hook_install.go`, related tests
 
 ## Adapter Principles
 
@@ -83,7 +83,7 @@ Risk:
 
 - Headless approval can hang without a TTY.
 - `--dangerously-bypass-approvals-and-sandbox` disables Codex's own sandbox.
-- `CONDUIT_CODEX_UNSAFE=1` is an explicit opt-in, not a default.
+- `LANCER_CODEX_UNSAFE=1` is an explicit opt-in, not a default.
 - Hook files in `docs/` are not proof that the installed Codex runtime will call and trust the hook. Verify `/hooks` trust/setup, config path, and actual hook invocation before claiming parity.
 - Some docs may reference `~/.codex/...` while owner-step notes reference `~/.config/codex/...`; verify the real installed path.
 
@@ -115,7 +115,7 @@ Risk:
 - Docs have stated `--prompt` cannot combine with `--yolo`, `--auto`, or `--plan`.
 - Non-interactive behavior may auto-approve; verify on the installed version before shipping broad file-system access.
 - The local installed version may lag current docs.
-- Kimi may not be included in Conduit status collection or hook installation. Inspect current code before claiming first-class parity.
+- Kimi may not be included in Lancer status collection or hook installation. Inspect current code before claiming first-class parity.
 
 ## Smoke Checks
 
@@ -135,11 +135,11 @@ For continue/resume, create a first harmless session in the same temp directory,
 ## Repo Tests And Static Checks
 
 ```bash
-cd /Users/roshansilva/Documents/command-center/daemon/conduitd
+cd /Users/roshansilva/Documents/command-center/daemon/lancerd
 go test . -run 'TestContinueArgv|TestContinueRunNewRunIDAndGate|TestE2ERouterContinue'
 go test . -run 'TestAgentHookBuildsStructuredEventPerVendor|TestWireClaudeHook|TestStreamJSON'
-bash -n ../../docs/codex-conduit-hook.sh
-bash -n ../../docs/opencode-conduit-hook.sh
+bash -n ../../docs/codex-lancer-hook.sh
+bash -n ../../docs/opencode-lancer-hook.sh
 python3 -m json.tool ../../docs/codex-hooks.json >/dev/null
 python3 -m json.tool ../../docs/opencode-hooks.json >/dev/null
 codex exec resume --help | rg -- '--sandbox|--ask-for-approval|dangerously'

@@ -1,6 +1,6 @@
-# Conduit — Page Inventory & Simplification Notes
+# Lancer — Page Inventory & Simplification Notes
 
-> Design-handoff brief for a UI/UX refresh pass. Conduit is a sidebar/drawer shell
+> Design-handoff brief for a UI/UX refresh pass. Lancer is a sidebar/drawer shell
 > (no tab bar): a slide-over drawer on iPhone, `NavigationSplitView` on iPad, with
 > `SidebarDestination` as the single routing enum. This document inventories each
 > page, what it does, and one concrete simplification opportunity per page.
@@ -9,7 +9,7 @@
 
 ---
 
-## 1. Sidebar / Drawer (`ConduitSidebarView.swift`)
+## 1. Sidebar / Drawer (`LancerSidebarView.swift`)
 
 **Purpose:** Navigation layer — the only way to move between destinations, and the ambient status surface (pending-approval badge, fleet slot count).
 
@@ -95,7 +95,7 @@
 
 **Key elements:** `OnboardingRedesignView` drives a step counter (0–2) with a shared header (back chevron + step dots + skip), a scrollable block per step, and a sticky footer CTA. Step 1 live-drives the relay client + QR; step 2 presents `OnboardingCautionLevel` tiers. A `ProvisioningWizard` sheet handles SSH host add-and-connect as an alternate path.
 
-**Simplify:** The "already use Conduit" path lands on Fleet but is only a faint header text link shared across steps — a reinstalling user must walk all three steps unless they notice it. Promote "I've already set up Conduit" to a dedicated first-screen button.
+**Simplify:** The "already use Lancer" path lands on Fleet but is only a faint header text link shared across steps — a reinstalling user must walk all three steps unless they notice it. Promote "I've already set up Lancer" to a dedicated first-screen button.
 
 ---
 

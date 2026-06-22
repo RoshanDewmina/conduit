@@ -1,4 +1,4 @@
-# Conduit — Block-Mode Redesign: Research & Plan
+# Lancer — Block-Mode Redesign: Research & Plan
 
 Date: 2026-05-28 (rev 5 — implementation started)
 Status: **Implementation in progress. Core code paths landed; full real-host/TUI validation still pending.**
@@ -24,7 +24,7 @@ Owner: Codex
 > **Rev 4 changes.** Added Ghostty (`/Users/roshansilva/Downloads/ghostty-main`)
 > as a third reference. Ghostty is MIT overall, but its bash + zsh
 > shell-integration scripts are **GPLv3** (derived from Kitty) — we cannot
-> bundle them in Conduit's proprietary target. Useful as architectural
+> bundle them in Lancer's proprietary target. Useful as architectural
 > reference and for the fish script (no GPL header). Also added §6.6
 > "What this delivers — and what it doesn't" — an honest scope statement
 > answering "will the terminal just work after these phases?"
@@ -55,24 +55,24 @@ This doc is exhaustive on purpose because the user asked for a thorough investig
 
 ## 0. How this doc is structured
 
-1. **What we have today** — Conduit's full feature inventory and the broken paths, with code citations.
+1. **What we have today** — Lancer's full feature inventory and the broken paths, with code citations.
 2. **What Warp does** — architecture + the specific path that fixes our bug.
 3. **What cmux does** — architecture + the patterns we should steal (and the ones we shouldn't).
 4. **Side-by-side comparison matrix** — feature-by-feature, all three apps + Termius for SSH-client baseline.
 5. **Recommended redesign** — the model + concrete changes by file.
-6. **Reuse matrix** — for each Conduit feature, whether to copy from cmux/Warp or keep building. Don't reinvent the wheel.
+6. **Reuse matrix** — for each Lancer feature, whether to copy from cmux/Warp or keep building. Don't reinvent the wheel.
 7. **Implementation plan** — phased, each phase shippable on its own.
 8. **Open decisions** — questions for the user before coding starts.
 9. **Appendix** — code citations across all three codebases.
 
 ---
 
-## 1. Conduit today
+## 1. Lancer today
 
 ### 1.1 Feature inventory (verified from source)
 
 **Engines** — pure SwiftPM, no UIKit:
-- `ConduitCore` — IDs, errors, base types
+- `LancerCore` — IDs, errors, base types
 - `SecurityKit` — Keychain, Ed25519 KeyStore, biometric gate, TOFU `HostKeyStore`, pairing crypto
 - `SSHTransport` — Citadel actor (`SSHSession`), `SSHShell`, `SessionPool`, `AutoReconnectEngine`, `TmuxClient`, `LocalPortForward`, `PortForwardTunnel`, `SFTPClient`
 - `TerminalEngine` — `AnsiSGRParser`, `BlockRenderer` (per-block SwiftTerm), `PTYBridge` (OSC 133/7), `RawTerminalView` (SwiftTerm UIView)
@@ -85,7 +85,7 @@ This doc is exhaustive on purpose because the user asked for a thorough investig
 - `AppFeature` — `AppRoot`, `SessionShellView` with 5-surface picker (Terminal/Preview/Files/Diff/Inbox), `AdaptiveRoot`, biometric `BiometricGate`
 - `OnboardingFeature` — host wizard, `ProvisioningWizard`, Lightsail/Orbstack/Fly provisioners
 - `WorkspacesFeature` — host list with live status dots
-- `InboxFeature` — approval cards, `LiveInboxViewModel`, conduitd `DaemonChannel`, `ApprovalIngest`
+- `InboxFeature` — approval cards, `LiveInboxViewModel`, lancerd `DaemonChannel`, `ApprovalIngest`
 - `PreviewFeature` — `SmartPreviewView` + WKWebView + `SSHProxyURLSchemeHandler` + auto `PortDetector`
 - `FilesFeature` — `SFTPFilesView`, text preview
 - `DiffFeature` — `DiffView` + `UnifiedDiffParser`
@@ -94,7 +94,7 @@ This doc is exhaustive on purpose because the user asked for a thorough investig
 
 **Watch app** — multi-tab (Inbox/Activity/Session/Snippets), widget, app group.
 
-**Backend** — `daemon/conduitd` (Go, JSON-RPC over SSH), `daemon/push-backend` (Stripe + APNs).
+**Backend** — `daemon/lancerd` (Go, JSON-RPC over SSH), `daemon/push-backend` (Stripe + APNs).
 
 ### 1.2 The terminal architecture as it stands
 
@@ -288,11 +288,11 @@ cmux source citations:
 
 ## 4. Side-by-side feature matrix
 
-Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (macOS native), **Termius** (mobile baseline). A `~` means partial.
+Columns: **Lancer** (what we have today), **Warp** (desktop ref.), **cmux** (macOS native), **Termius** (mobile baseline). A `~` means partial.
 
 ### 4.1 Terminal model
 
-| Feature | Conduit | Warp | cmux | Termius |
+| Feature | Lancer | Warp | cmux | Termius |
 |---|---|---|---|---|
 | Block-segmented PTY output | ✅ | ✅ | ❌ | ❌ |
 | Block segmentation signal | OSC 133 markers (we have them but only use C/D) | OSC 133 A/B/C/D fully used | n/a (continuous) | n/a |
@@ -311,7 +311,7 @@ Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (ma
 
 ### 4.2 SSH / connection
 
-| Feature | Conduit | Warp | cmux | Termius |
+| Feature | Lancer | Warp | cmux | Termius |
 |---|---|---|---|---|
 | SSH password auth | ✅ | ~ (delegate to OS) | ~ | ✅ |
 | Ed25519 keys + Keychain | ✅ + biometric | ~ | ~ | ✅ |
@@ -326,11 +326,11 @@ Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (ma
 
 ### 4.3 AI / agent
 
-| Feature | Conduit | Warp | cmux | Termius |
+| Feature | Lancer | Warp | cmux | Termius |
 |---|---|---|---|---|
 | NL → command synthesis | ✅ (`#` prefix) | ✅ | n/a | ✅ |
 | Explain command/output | ✅ streaming | ✅ | n/a | ✅ |
-| AI Agent inbox + approvals | ✅ (conduitd) | ✅ Agent Mode | ✅ (notifications) | ❌ |
+| AI Agent inbox + approvals | ✅ (lancerd) | ✅ Agent Mode | ✅ (notifications) | ❌ |
 | Multi-agent (Claude+OpenAI) | ✅ | ✅ | ✅ (Claude, Codex, Grok, OpenCode…) | ✅ |
 | Risk-scored commands | ✅ | ✅ | ❌ | ❌ |
 | Agent attention signal | Push + inbox card | In-block + agent mode | Bell + socket `cmux notify` | n/a |
@@ -338,7 +338,7 @@ Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (ma
 
 ### 4.4 UX / surfaces
 
-| Feature | Conduit | Warp | cmux | Termius |
+| Feature | Lancer | Warp | cmux | Termius |
 |---|---|---|---|---|
 | Multi-surface (term/preview/files/diff/inbox) | ✅ | ~ | ~ (browser pane) | ~ (split tabs) |
 | Dev-server preview (in-app browser) | ✅ WKWebView | ❌ | ✅ browser panel | ❌ |
@@ -355,7 +355,7 @@ Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (ma
 
 ### 4.5 Plug-and-play targets (the user's goal)
 
-| Promise | Conduit today | After redesign | Warp | cmux |
+| Promise | Lancer today | After redesign | Warp | cmux |
 |---|---|---|---|---|
 | Open a host → terminal works | ✅ | ✅ | ✅ | ✅ |
 | Resume tmux session on connect | ✅ if `host.tmuxSessionName` set | ✅ + auto-detect existing sessions | ❌ | manual |
@@ -372,7 +372,7 @@ Columns: **Conduit** (what we have today), **Warp** (desktop ref.), **cmux** (ma
 **Drop the "block mode vs raw mode" toggle.** There is one mode: a session with one persistent PTY, displayed as a vertical stack of blocks, with input that always flows to the PTY.
 
 ```
-                                 Conduit (post-redesign)
+                                 Lancer (post-redesign)
         ┌─────────────────────────────────────────────────────────┐
         │  status bar (host, status dot, CWD)                     │
         ├─────────────────────────────────────────────────────────┤
@@ -443,13 +443,13 @@ These are the files that need to change. I'm **not** writing the code in this do
 
 0a. **New file `TerminalSafeTextField.swift`** in `DesignSystem` — a `UIViewRepresentable` wrapping `UITextField` with `smartDashesType = .no`, `smartQuotesType = .no`, `smartInsertDeleteType = .no`, `autocorrectionType = .no`, `autocapitalizationType = .none`, `spellCheckingType = .no`. Replace the SwiftUI `TextField` in `SessionView.swift:283–294`. Also use this for the host editor's hostname/command fields and the snippet editor body.
 
-0b. **New folder `Packages/ConduitKit/Sources/TerminalEngine/Resources/`** — extract the inline shell-integration script (`SessionViewModel.swift:231–246`) into three bundled files: `conduit-init.bash`, `conduit-init.zsh`, `conduit-init.fish`. Loaded via `Bundle.module.url(forResource:withExtension:)`. Easier to update, easier to inspect, easier to test against fixtures.
+0b. **New folder `Packages/LancerKit/Sources/TerminalEngine/Resources/`** — extract the inline shell-integration script (`SessionViewModel.swift:231–246`) into three bundled files: `lancer-init.bash`, `lancer-init.zsh`, `lancer-init.fish`. Loaded via `Bundle.module.url(forResource:withExtension:)`. Easier to update, easier to inspect, easier to test against fixtures.
 
 0c. **`PurchaseManager.swift` + `BillingEligibility.swift`** — add a debug bypass:
 ```swift
 #if DEBUG
 public var debugProBypass: Bool {
-  UserDefaults.standard.bool(forKey: "conduitDebugProBypass")
+  UserDefaults.standard.bool(forKey: "lancerDebugProBypass")
 }
 #endif
 ```
@@ -481,7 +481,7 @@ public var debugProBypass: Bool {
    - Add `BlockState` enum: `.promptEditing | .submitted | .executing | .done(exit)`. Replace today's `exitStatus`-based "is it finished?" check with this.
    - `clearChunks(id:)` stays (used on alt-screen overlay swap).
 
-4. **`Block.swift`** (`ConduitCore`) — model change:
+4. **`Block.swift`** (`LancerCore`) — model change:
    - Add `state: BlockState`. Migrate `exitStatus` to be a derived value of `state`.
    - `command` becomes mutable while in `.promptEditing` so the input field can update it before submit; freezes once `.submitted`.
 
@@ -526,7 +526,7 @@ This loop is achievable as a follow-up phase *after* the block-model redesign la
 
 ## 6. Reuse matrix — what to vendor from cmux and Warp
 
-> Two parallel deep-dives mapped each Conduit feature against its closest
+> Two parallel deep-dives mapped each Lancer feature against its closest
 > counterpart in Warp and cmux, with file:line citations and a portability
 > rating. This section is the synthesis: **what we can copy outright, what
 > we adapt, what we keep building ourselves.** The rule is "don't reinvent
@@ -555,7 +555,7 @@ The table merges both reference reports. **C-cmux** column shows cmux's rating; 
 | Login-shell wrap | — | ADAPT | Keep our `loginShellWrap` but confirm `$SHELL` detection drives it (Warp's ShellType enum pattern). Test against bash/zsh/fish bundled scripts (Phase 0 work). |
 | **Agent registry** | **DIRECT** | — | **Copy `CmuxVaultAgentRegistration` struct + sub-enums verbatim** (`VaultAgentRegistry.swift`). Schema: `id, name, iconAssetName, detect, sessionIdSource, resumeCommand, cwd, sessionDirectory`. This is the foundation for "auto-detect Claude Code running in tmux on connect". |
 | **Agent session resume** | PATTERN | — | Adopt cmux's `AgentResumeCommandBuilder.resumeShellCommand(kind:sessionId:launchCommand:workingDirectory:)` shape (`RestorableAgentSession.swift:35–75`). Store session IDs in our `PersistenceKit` instead of hook files. |
-| **Per-agent hook JSON schema** | ADAPT | — | Copy the `AgentHookDef` schema from `CMUXCLI+AgentHookDefinitions.swift:1–150`. Drop shell-format variants we don't need; keep nested/flat/JSON formats. Use to drive Conduit's "what hooks does this agent need installed remotely" UI. |
+| **Per-agent hook JSON schema** | ADAPT | — | Copy the `AgentHookDef` schema from `CMUXCLI+AgentHookDefinitions.swift:1–150`. Drop shell-format variants we don't need; keep nested/flat/JSON formats. Use to drive Lancer's "what hooks does this agent need installed remotely" UI. |
 | **Notification protocol** | ADAPT | — | Use cmux's JSON shape `{title, subtitle, body, workspace, surface}` for daemon→phone notifications. Wire into our existing `Notifications.shared` path. |
 | **PTY session keying** | DIRECT | — | Copy cmux's two-tier `wsPTYSessionKey` scheme (`ws_pty.go:124–143`): persistent (sessionID only) + anonymous (sessionID + counter). Use sessionID-only-derived keys for resume across machines. |
 | **Idle TTL with pin** | DIRECT | — | Copy cmux's 24h default + a "pinned" override that bypasses reap (`ws_pty.go:1154–1186`). Wire to a per-session `pinned: Bool` flag. |
@@ -569,7 +569,7 @@ The table merges both reference reports. **C-cmux** column shows cmux's rating; 
 | Risk scorer | — | KEEP | Warp doesn't expose it. Our `RiskScorer.swift` stands. |
 | Port detector | — | KEEP | Warp doesn't expose it. Our `PortDetector.swift` stands. |
 | tmux client (SSH wire) | KEEP | KEEP | Warp's tmux integration uses tmux control mode internally — not exposed. Our `TmuxClient` stands. |
-| WebSocket PTY protocol | PATTERN | — | We use JSON-RPC over SSH (`conduitd`). cmux uses WS framing with `attachment_id` for tab-switching across reconnects. Worth considering for v2; not for the current redesign. |
+| WebSocket PTY protocol | PATTERN | — | We use JSON-RPC over SSH (`lancerd`). cmux uses WS framing with `attachment_id` for tab-switching across reconnects. Worth considering for v2; not for the current redesign. |
 | Smart input traits (iOS-specific) | N/A | N/A | Phase 0 — our problem to solve. Neither codebase needs it. |
 | SFTP browser | — | — | Neither has it. Ours stands. |
 | WKWebView dev-server preview | — | — | Neither has it. Ours stands. |
@@ -579,7 +579,7 @@ The table merges both reference reports. **C-cmux** column shows cmux's rating; 
 
 **Five things to do, ranked by leverage:**
 
-1. **Vendor cmux's agent infrastructure** (highest leverage). Copy `CmuxVaultAgentRegistration`, `AgentResumeCommandBuilder`, `AgentHookDef` schemas as `Packages/ConduitKit/Sources/AgentKit/AgentRegistry.swift` and friends. Strip macOS-specific bits. This **is** the foundation for the user's "continue from another machine" goal — auto-detect Claude Code running on a remote host, resume from phone, resume back on laptop.
+1. **Vendor cmux's agent infrastructure** (highest leverage). Copy `CmuxVaultAgentRegistration`, `AgentResumeCommandBuilder`, `AgentHookDef` schemas as `Packages/LancerKit/Sources/AgentKit/AgentRegistry.swift` and friends. Strip macOS-specific bits. This **is** the foundation for the user's "continue from another machine" goal — auto-detect Claude Code running on a remote host, resume from phone, resume back on laptop.
 
 2. **Vendor cmux's PTY/session primitives**. Session keying (two-tier), idle TTL (24h + pin), input queue (256 frames / 16KB / 1MB), keyboard chord mapping, queue-drain pattern. These become the building blocks for the architectural Phase 1–4 work. Approx 200 lines of Swift we don't have to design.
 
@@ -591,7 +591,7 @@ The table merges both reference reports. **C-cmux** column shows cmux's rating; 
 
 ### 6.4 New file structure after vendoring
 
-Phase 0 + vendoring would add these files to `Packages/ConduitKit/`:
+Phase 0 + vendoring would add these files to `Packages/LancerKit/`:
 
 ```
 Sources/AgentKit/
@@ -609,9 +609,9 @@ Sources/DesignSystem/
     TerminalSafeTextField.swift   ← Phase 0 fix (no external source)
     TerminalTheme+Palette.swift   ← from Warp control_sequence_parameters.rs constants
 Sources/TerminalEngine/Resources/
-    conduit-init.bash             ← Phase 0 work
-    conduit-init.zsh              ← Phase 0 work
-    conduit-init.fish             ← Phase 0 work
+    lancer-init.bash             ← Phase 0 work
+    lancer-init.zsh              ← Phase 0 work
+    lancer-init.fish             ← Phase 0 work
 ```
 
 Roughly **8 new files**, most under 200 lines, all anchored to a specific upstream source for future updates. Existing files (`PTYBridge`, `BlockRenderer`, `SessionViewModel`, etc.) only get updated to use the new types — they don't get rewritten.
@@ -658,7 +658,7 @@ Ghostty (`/Users/roshansilva/Downloads/ghostty-main`, cloned 2026-05-28) is the 
 
 | File | License | Action |
 |---|---|---|
-| `src/shell-integration/bash/ghostty.bash` (269 lines) | **GPLv3** | ❌ **Cannot bundle** in Conduit's proprietary target. Use as **architectural reference only** — see what hooks they install, mirror the *structure* in our own MIT-clean rewrite. |
+| `src/shell-integration/bash/ghostty.bash` (269 lines) | **GPLv3** | ❌ **Cannot bundle** in Lancer's proprietary target. Use as **architectural reference only** — see what hooks they install, mirror the *structure* in our own MIT-clean rewrite. |
 | `src/shell-integration/bash/bash-preexec.sh` (vendored) | GPLv3 (via Kitty) | Same — reference only. |
 | `src/shell-integration/zsh/ghostty-integration` (395 lines) | **GPLv3** | Same — reference only. |
 | `src/shell-integration/fish/vendor_conf.d/ghostty-shell-integration.fish` (178 lines) | MIT (no Kitty derivation) | ✅ **Can bundle with attribution.** Copy with `// Adapted from Ghostty (MIT)` comment. |
@@ -676,7 +676,7 @@ We can copy Ghostty's fish script with MIT attribution.
 
 **Other Ghostty assets worth referencing (not copying):**
 - `src/terminal/` — Zig terminal emulator. Useful for cross-checking our SGR/OSC parsing against a high-quality implementation, but architectural-reference only (different language, different scope).
-- `src/config/` — config schema. Useful for thinking about how Conduit settings should be structured for power users.
+- `src/config/` — config schema. Useful for thinking about how Lancer settings should be structured for power users.
 - `src/font/` — font subsystem. Out of scope.
 
 **Bottom line on Ghostty:** confirms the OSC 133 + cursor-positioning architecture is the right answer (Ghostty's shell integration emits the same markers Warp does). Our own scripts will be smaller (we don't need Ghostty's full feature set — just block boundaries and CWD), MIT-clean, and architecturally aligned with both Warp and Ghostty.
@@ -695,7 +695,7 @@ Bugs surfaced by the parallel real-device pass. Ship in one PR before any of Pha
 
 - **0.1 Terminal-safe input field.** New `TerminalSafeTextField` (`UIViewRepresentable` wrapping `UITextField` with `smartDashesType=.no`, `smartQuotesType=.no`, `smartInsertDeleteType=.no`, `autocorrectionType=.no`, `autocapitalizationType=.none`, `spellCheckingType=.no`). Replace the composer's `TextField` and any other text input that takes shell syntax (host editor command fields, snippet body, port-forward host).
 - **0.2 Tests for shell-syntax preservation.** Round-trip tests asserting that typing `--`, `'`, `"`, `\`, `$VAR`, `cmd | grep foo`, and multi-line paste does *not* mutate. These tests live in `SessionViewModelTests` (new file) and `TerminalSafeTextFieldTests` and protect the fix from regression.
-- **0.3 Bundled shell-integration scripts.** Move the inline script in `SessionViewModel.swift:231–246` into `Packages/ConduitKit/Sources/TerminalEngine/Resources/conduit-init.{bash,zsh,fish}`. Load via `Bundle.module`. License posture: write bash/zsh from scratch against the OSC 133 + OSC 7 specs (no Ghostty/Kitty derivation, since those are GPLv3); use Ghostty's bash/zsh as **architectural reference only**. The fish script can be adapted from Ghostty's MIT-licensed `vendor_conf.d/ghostty-shell-integration.fish` with attribution. All scripts emit the same markers we already parse: 133;A/B/C/D and 7;file://host/path. Test fixtures load these files via `Bundle.module`. See §6.7 for the full license analysis.
+- **0.3 Bundled shell-integration scripts.** Move the inline script in `SessionViewModel.swift:231–246` into `Packages/LancerKit/Sources/TerminalEngine/Resources/lancer-init.{bash,zsh,fish}`. Load via `Bundle.module`. License posture: write bash/zsh from scratch against the OSC 133 + OSC 7 specs (no Ghostty/Kitty derivation, since those are GPLv3); use Ghostty's bash/zsh as **architectural reference only**. The fish script can be adapted from Ghostty's MIT-licensed `vendor_conf.d/ghostty-shell-integration.fish` with attribution. All scripts emit the same markers we already parse: 133;A/B/C/D and 7;file://host/path. Test fixtures load these files via `Bundle.module`. See §6.7 for the full license analysis.
 - **0.4 Debug paywall bypass.** `PurchaseManager.debugProBypass` flag honoured only in `#if DEBUG` builds; a Settings toggle "Unlock all features (debug)" controls it. Production builds ignore the flag entirely. Unblocks simulator testing of Preview/Files/Diff/Inbox.
 - **0.5 Duplicate keyboard rail audit.** Verify only one accessory bar is visible at a time. Kill the dup. (Likely candidate: `SwiftTerm`'s built-in `inputAccessoryView` colliding with our `KeyboardAccessoryRail` in `safeAreaInset`.)
 - **0.6 Toolbar/status-bar overlap audit.** Snapshot tests for `SessionView` at iPhone 17 Pro and iPad Air dimensions; fix any safe-area or zIndex issues.
@@ -715,7 +715,7 @@ User-visible after Phase 0: `claude --version` works. `git commit -m "fix: --foo
 - No user-visible change yet
 
 ### Phase 3 — Block state machine in the VM (2 sessions)
-- Add `BlockState` enum to `ConduitCore/Block.swift`
+- Add `BlockState` enum to `LancerCore/Block.swift`
 - Move block lifecycle from `run(command:)` to the OSC 133 A/B/C/D callbacks in `openUnifiedShell()`
 - `submit()` becomes: send `promptDraft + "\n"`; do not call `blocks.begin`
 - Phase 1 VM tests go green
@@ -746,7 +746,7 @@ User-visible after Phase 0: `claude --version` works. `git commit -m "fix: --foo
 ### Phase 7 — Polish + telemetry + fallbacks (1 session)
 - Block state transitions log to `os.signpost` so we can spot bugs in TestFlight
 - Visual polish on the active block (subtle "live" indicator, animated caret)
-- Migrate the 7 secondary-chrome `.background(.bar)` sites to `conduitGlassChrome` (the work paused from earlier)
+- Migrate the 7 secondary-chrome `.background(.bar)` sites to `lancerGlassChrome` (the work paused from earlier)
 - **OSC 133 missing-marker fallback** (per Q2 in §7): if no OSC 133 marker is received within ~5s of connect, degrade to a blockless live PTY view. Re-engage block segmentation if a marker arrives later.
 - **Belt-and-suspenders interactive-CLI hint** (NOT primary mechanism): if cursor-positioning sequences arrive while we're still in `.promptEditing` (i.e. before any 133;C), assume an interactive program slipped through and flip to executing state on the active block. This catches edge cases where shell integration is broken AND the user runs `claude` directly. The hint uses *byte patterns* (`\e[H`, `\e[2J`, `\e[?25l`) not binary names — works for any TUI.
 - Doc updates: `ARCHITECTURE.md`, `docs/_archive/current-state-audit.md`, README milestone row
@@ -808,7 +808,7 @@ This protects fish (we now ship a fish integration script), edge-case shells, an
 
 ## 9. Appendix — code citations
 
-**Conduit (this repo):**
+**Lancer (this repo):**
 - `SessionViewModel.swift:440–447` — the broken `run(command:)`
 - `SessionViewModel.swift:250–375` — `openUnifiedShell` with OSC 133/7 callbacks
 - `SessionViewModel.swift:314–326` — alt-screen entry flips `isRaw`

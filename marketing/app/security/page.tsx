@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Security Architecture — Conduit",
+  title: "Security Architecture — Lancer",
   description:
-    "Conduit security architecture, threat model, and cryptographic design for SSH-based agent approval.",
+    "Lancer security architecture, threat model, and cryptographic design for SSH-based agent approval.",
 };
 
 export default function SecurityPage() {
@@ -16,7 +16,7 @@ export default function SecurityPage() {
             href="/"
             className="font-display text-sm font-semibold tracking-tight text-fg"
           >
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </Link>
         </nav>
         <div className="spectrum-line h-px w-full mt-4" />
@@ -29,13 +29,13 @@ export default function SecurityPage() {
         <p className="font-mono text-sm text-faint mb-10">
           Last updated: <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">{`{{DATE}}`}</code>. Bundle ID:{" "}
           <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">
-            dev.conduit.mobile
+            dev.lancer.mobile
           </code>
         </p>
 
         <p className="font-mono text-sm text-dim leading-relaxed mb-10 italic border-l border-line pl-4">
           Audience: Security researchers, system administrators, and technically
-          sophisticated users evaluating Conduit&rsquo;s threat model.
+          sophisticated users evaluating Lancer&rsquo;s threat model.
         </p>
 
         <div className="space-y-10">
@@ -44,14 +44,14 @@ export default function SecurityPage() {
               1. overview<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit is an iOS approval-cockpit for AI coding agents (Claude
+              Lancer is an iOS approval-cockpit for AI coding agents (Claude
               Code, Codex, opencode) that run on the user&rsquo;s own computer
               or server. The security model relies on three principles:
             </p>
             <ol className="font-mono text-sm text-dim space-y-2 mt-3 list-decimal pl-5">
               <li>
                 <strong className="text-fg">No cloud escrow.</strong> SSH keys
-                and pairing secrets live on your devices. Conduit operates no
+                and pairing secrets live on your devices. Lancer operates no
                 infrastructure that can decrypt your agent traffic.
               </li>
               <li>
@@ -61,7 +61,7 @@ export default function SecurityPage() {
               </li>
               <li>
                 <strong className="text-fg">User sovereignty.</strong> You
-                choose which relay (Conduit&rsquo;s default or self-hosted),
+                choose which relay (Lancer&rsquo;s default or self-hosted),
                 which hosts to pair with, and when to approve.
               </li>
             </ol>
@@ -79,7 +79,7 @@ export default function SecurityPage() {
 {`┌──────────────────┐                ┌─────────────────────┐
 │   iOS Device     │                │  Mac / Linux Host   │
 │                  │                │                     │
-│  1. Scan QR code │◄─── QR ────── │  2. conduitd pair   │
+│  1. Scan QR code │◄─── QR ────── │  2. lancerd pair   │
 │                  │    (contains  │     generates QR     │
 │  3. Parse QR     │     host +    │     containing:      │
 │     extract      │     key info) │     - host address   │
@@ -90,7 +90,7 @@ export default function SecurityPage() {
 │     X25519 key   │                │                     │
 │     pair         │                │                     │
 │                  │                │                     │
-│  5. Compute      │◄─── SSH ───── │  6. conduitd         │
+│  5. Compute      │◄─── SSH ───── │  6. lancerd         │
 │     shared       │    (encrypted │     receives client  │
 │     secret via   │     transport)│     pubkey, computes │
 │     ECDH         │                │     shared secret    │
@@ -101,7 +101,7 @@ export default function SecurityPage() {
             </p>
             <ol className="font-mono text-sm text-dim space-y-1 mt-2 list-decimal pl-5">
               <li>
-                The user runs <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">conduitd pair</code>{" "}
+                The user runs <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">lancerd pair</code>{" "}
                 on their host. The daemon generates an X25519 key pair and
                 displays a QR code containing the host address, the X25519
                 public key, and a one-time nonce.
@@ -140,7 +140,7 @@ export default function SecurityPage() {
             <ul className="font-mono text-sm text-dim space-y-2 list-none pl-4 border-l border-line">
               <li>
                 <strong className="text-fg">QR code is single-use.</strong> Once
-                scanned, <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">conduitd</code>{" "}
+                scanned, <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">lancerd</code>{" "}
                 invalidates the pairing nonce. An intercepted QR code cannot be
                 replayed.
               </li>
@@ -152,7 +152,7 @@ export default function SecurityPage() {
               </li>
               <li>
                 <strong className="text-fg">The SSH connection is authenticated
-                separately</strong> using the user&rsquo;s own SSH keys. Conduit
+                separately</strong> using the user&rsquo;s own SSH keys. Lancer
                 never sends SSH private keys over the network.
               </li>
               <li>
@@ -180,7 +180,7 @@ export default function SecurityPage() {
 session_key = HKDF-SHA256(
     ikm:  shared_secret,
     salt: pairing_nonce || epoch,
-    info: "conduit-v1-session-key",
+    info: "lancer-v1-session-key",
     len:  32
 )`}
             </pre>
@@ -210,7 +210,7 @@ session_key = HKDF-SHA256(
               <strong className="text-fg">existing SSH connection</strong>. SSH
               provides its own encryption (AES-256-GCM or ChaCha20-Poly1305 per
               negotiated cipher). The SSH tunnel is the sole transport
-              &mdash; Conduit&rsquo;s relay is not involved.
+              &mdash; Lancer&rsquo;s relay is not involved.
             </p>
 
             <h3 className="font-display text-base font-semibold text-fg mt-6 mb-3">
@@ -218,7 +218,7 @@ session_key = HKDF-SHA256(
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
               When the phone is offline or on a different network,
-              notifications can be delivered via Conduit&rsquo;s push relay.
+              notifications can be delivered via Lancer&rsquo;s push relay.
               The payload is encrypted <strong className="text-fg">before</strong>{" "}
               it leaves either endpoint:
             </p>
@@ -228,7 +228,7 @@ session_key = HKDF-SHA256(
   2. ciphertext = ChaCha20-Poly1305_Encrypt(
        key:   session_key,
        nonce: nonce,
-       aad:   "conduit-relay-v1",
+       aad:   "lancer-relay-v1",
        plaintext: decision_bytes
      )
   3. Transmit: nonce || ciphertext || tag
@@ -238,7 +238,7 @@ Decryption (Host receives):
   2. plaintext = ChaCha20-Poly1305_Decrypt(
        key:   session_key,
        nonce: nonce,
-       aad:   "conduit-relay-v1",
+       aad:   "lancer-relay-v1",
        ciphertext: ciphertext
      )`}
             </pre>
@@ -262,7 +262,7 @@ Decryption (Host receives):
               <li>SSH keys, hostnames, usernames, or passwords</li>
               <li>Agent commands, file contents, source code, or terminal output</li>
               <li>Session key material (X25519 keys never reach the relay)</li>
-              <li>Any identifying user information (Conduit has no account system)</li>
+              <li>Any identifying user information (Lancer has no account system)</li>
               <li>IP addresses beyond standard HTTP access logs (retained 14 days)</li>
             </ul>
           </section>
@@ -397,7 +397,7 @@ Decryption (Host receives):
             <ul className="font-mono text-sm text-dim space-y-2 list-none pl-4 border-l border-line">
               <li>
                 <strong className="text-fg">SSH keys:</strong> Rotated
-                independently by the user on their host. Conduit stores
+                independently by the user on their host. Lancer stores
                 whatever private key the user imports.
               </li>
               <li>
@@ -418,7 +418,7 @@ Decryption (Host receives):
               9. self-host relay option<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Users who prefer not to use Conduit&rsquo;s default relay can
+              Users who prefer not to use Lancer&rsquo;s default relay can
               self-host:
             </p>
             <ol className="font-mono text-sm text-dim space-y-1 mt-2 list-decimal pl-5">
@@ -471,7 +471,7 @@ Decryption (Host receives):
                   </tr>
                   <tr className="border-b border-line/50">
                     <td className="py-2 pr-3 text-dim">Host is compromised</td>
-                    <td className="py-2 text-dim">Conduit cannot prevent this &mdash; attack is outside the threat model; user is responsible for host security</td>
+                    <td className="py-2 text-dim">Lancer cannot prevent this &mdash; attack is outside the threat model; user is responsible for host security</td>
                   </tr>
                   <tr className="border-b border-line/50">
                     <td className="py-2 pr-3 text-dim">Malicious push from relay</td>
@@ -493,7 +493,7 @@ Decryption (Host receives):
             <ul className="font-mono text-sm text-dim space-y-2 list-none pl-4 border-l border-line">
               <li>
                 <strong className="text-fg">You trust your SSH host.</strong>{" "}
-                Conduit protects the transport and relay channels, but the host
+                Lancer protects the transport and relay channels, but the host
                 running your agents has full access to your code and data.
               </li>
               <li>
@@ -504,7 +504,7 @@ Decryption (Host receives):
               <li>
                 <strong className="text-fg">Notifications are
                 best-effort.</strong> Push notifications from the relay are
-                delivered by Apple&rsquo;s APNs &mdash; Conduit cannot
+                delivered by Apple&rsquo;s APNs &mdash; Lancer cannot
                 guarantee delivery timing.
               </li>
               <li>
@@ -524,7 +524,7 @@ Decryption (Host receives):
               12. responsible disclosure<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              If you discover a security vulnerability in Conduit, conduitd, or
+              If you discover a security vulnerability in Lancer, lancerd, or
               the push relay, please report it privately:
             </p>
             <p className="font-mono text-sm text-dim leading-relaxed mt-2">

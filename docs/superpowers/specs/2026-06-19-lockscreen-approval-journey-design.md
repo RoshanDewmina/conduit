@@ -16,10 +16,10 @@ cold-decision feedback surface. Each is its own spec → plan → build.
 ## 0. Why this first
 
 The push work shipped the *plumbing* (Live Activity updates while the app is closed; command text redacted
-off the lock screen; a killed-app Approve reaches conduitd). But two halves have no frontend yet: the Live
+off the lock screen; a killed-app Approve reaches lancerd). But two halves have no frontend yet: the Live
 Activity distinguishes state only implicitly, and the redacted push has no in-app "reveal the full truth"
 counterpart. #2 + #3 close both and are small because the substrate already exists:
-- `ConduitLiveActivityWidget` already has lock-screen + Dynamic Island (expanded/compact/minimal) scaffolding.
+- `LancerLiveActivityWidget` already has lock-screen + Dynamic Island (expanded/compact/minimal) scaffolding.
 - `InboxApprovalDetail` already renders the full un-redacted command, args, host, cwd, blast-radius, and
   already biometric-gates critical approve/allow-always (`InboxView.swift:206-262`).
 - Notification taps already deep-link into the Inbox with `approvalId` in `userInfo`
@@ -60,9 +60,9 @@ Three of the four states map onto existing `ContentState` fields (`pendingApprov
 - **Decision-landed** is the cold-path payoff: a killed-app Approve pushes `lastDecision` → the lock screen
   flips to green ✓ without the app waking. Auto-clears.
 - **Cost** is an overlay, not a primary state — visible in the trailing region when there's room; it only
-  *escalates* (amber/red) near the budget threshold conduitd already tracks. No budget data invented.
+  *escalates* (amber/red) near the budget threshold lancerd already tracks. No budget data invented.
 
-**Implementation surface:** mostly new tint/label/precedence logic in `ConduitLiveActivityWidget`, plus the
+**Implementation surface:** mostly new tint/label/precedence logic in `LancerLiveActivityWidget`, plus the
 `lastDecision` field flowing through. The widget stays **pure presentation** — every state is computed from
 `ContentState`; no business logic in the widget.
 
@@ -97,7 +97,7 @@ the detail sheet so "reveal" surfaces the real change. Non-patch approvals are u
 **Module boundaries (existing graph respected):**
 - `ContentState.lastDecision` added in `SessionFeature/LiveActivityManager.swift`; mirrored in
   `daemon/push-backend/liveactivity.go` (Go `ContentState` struct + the pinned encoder).
-- `ConduitLiveActivityWidget` stays pure presentation (states computed from `ContentState`).
+- `LancerLiveActivityWidget` stays pure presentation (states computed from `ContentState`).
 - Deep-link: `NotificationsKit` posts `approvalId` → `AppFeature`/AppRoot routes to Inbox →
   `InboxFeature` presents the sheet. The one new edge is **`InboxFeature` → `DiffKit`** for 3.3 — established
   lib (`DiffFeature` already consumes `DiffKit`); verify the dependency edge is declared in `Package.swift`.
@@ -116,7 +116,7 @@ stale-date) clears it to running / `end()`.
   detail sheet opens). Simulator can't prove these (same constraint as the fc26ea8d device items;
   see `docs/LIVE_LOOP_RUNBOOK.md`).
 
-**Verification gate (per `conduit-verification-gate`):** ConduitKit/widget changes → `swift build` +
+**Verification gate (per `lancer-verification-gate`):** LancerKit/widget changes → `swift build` +
 XcodeBuildMCP app-target build (catches `#if os(iOS)` strict-concurrency that SPM skips — the same footgun
 that hid the `start()` caller break in the V1 merge); push-backend changes → `go test ./...` from
 `daemon/push-backend`; device-only paths → real-device test.

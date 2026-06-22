@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ControlPlaneClient handles all communication with the Conduit control plane.
+// ControlPlaneClient handles all communication with the Lancer control plane.
 type ControlPlaneClient struct {
 	BaseURL     string
 	RunID       string

@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — platform surface concepts
+   LANCER — platform surface concepts
    Live Activity, Dynamic Island, and Apple Watch review boards.
    ============================================================ */
 
@@ -110,7 +110,7 @@ function PSIslandCommandFirst(){
             <PSGlyph color="var(--r-med)" size={28}/>
             <div style={{minWidth:0}}>
               <div style={{fontFamily:'var(--mono)',fontSize:12,fontWeight:700,color:'var(--ink)'}}>Claude Code</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)',marginTop:2}}>Dev VPS · ~/conduit</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)',marginTop:2}}>Dev VPS · ~/lancer</div>
             </div>
           </div>
           <RiskChip level="medium"/>
@@ -189,7 +189,7 @@ function PSLockDense(){
             <PSGlyph color="var(--r-med)" size={32}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontFamily:'var(--mono)',fontSize:14,fontWeight:700}}>Patch approval</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)',marginTop:2}}>Claude Code · ~/conduit</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)',marginTop:2}}>Claude Code · ~/lancer</div>
             </div>
             <RiskChip level="medium"/>
           </div>
@@ -312,7 +312,7 @@ function PSWatchQueue(){
 
 function PlatformSurfacesSection(){
   return (
-    <DCSection id="platform-surfaces" title="Live Activity, Dynamic Island & Watch" subtitle="Polished Conduit variants. Square internal controls, balanced actions, and fewer immature pill shapes.">
+    <DCSection id="platform-surfaces" title="Live Activity, Dynamic Island & Watch" subtitle="Polished Lancer variants. Square internal controls, balanced actions, and fewer immature pill shapes.">
       <DCArtboard id="island-compact-pending" label="Island compact · pending count" width={396} height={230}>
         <PSIslandCompactPending/>
       </DCArtboard>

@@ -35,7 +35,7 @@ type usageData struct {
 var usageStore = struct {
 	path string
 }{
-	path: dataFilePath("USAGE_FILE", "conduit-usage.json"),
+	path: dataFilePath("USAGE_FILE", "lancer-usage.json"),
 }
 
 func registerUsageRoutes(mux *http.ServeMux) {

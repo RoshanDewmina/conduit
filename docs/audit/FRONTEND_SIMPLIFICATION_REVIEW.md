@@ -1,8 +1,8 @@
 # Frontend Simplification — Report + Independent Review
 
 **Date:** 2026-06-13
-**Subject:** Conduit iOS, governed-approvals v1 simplification
-**Contents:** Part 1 is Codex's original *Frontend Simplification Report* (verbatim). Part 2 is an independent review by Claude (Opus 4.8) that verified each claim against the shipping code in `Packages/ConduitKit/Sources/` and the design handoff (`PAGES.md` + screenshots), then gives an opinionated ADD / REMOVE / KEEP recommendation.
+**Subject:** Lancer iOS, governed-approvals v1 simplification
+**Contents:** Part 1 is Codex's original *Frontend Simplification Report* (verbatim). Part 2 is an independent review by Claude (Opus 4.8) that verified each claim against the shipping code in `Packages/LancerKit/Sources/` and the design handoff (`PAGES.md` + screenshots), then gives an opinionated ADD / REMOVE / KEEP recommendation.
 
 ---
 ---
@@ -12,7 +12,7 @@
 ## Frontend Simplification Report - Governed Approvals v1
 
 **Date:** 2026-06-13
-**Context:** Conduit shifted from a broader SSH cockpit / agent-management app toward a governed-approvals product. This report captures which frontend surfaces still feel like pre-pivot weight, which capabilities should remain, and what the next simplification pass should try to achieve.
+**Context:** Lancer shifted from a broader SSH cockpit / agent-management app toward a governed-approvals product. This report captures which frontend surfaces still feel like pre-pivot weight, which capabilities should remain, and what the next simplification pass should try to achieve.
 
 ### What I Was Trying To Do
 
@@ -20,7 +20,7 @@ I was trying to judge the app against the current product thesis, not the old on
 
 The current thesis is: **a coding agent asks permission, the user approves from the phone, and the remote host resumes safely.** Anything that helps a first-time user understand and trust that loop should stay close to the surface. Anything that mainly supports generic SSH management, hosted-agent operations, snippets, workflows, file browsing, scheduling, or billing should either move behind Advanced, be hidden until production-ready, or be deferred.
 
-The goal was not to make Conduit less capable. It was to make the first-use experience simpler, so the real capability is easier to understand.
+The goal was not to make Lancer less capable. It was to make the first-use experience simpler, so the real capability is easier to understand.
 
 ### Core Product Spine To Keep
 
@@ -115,14 +115,14 @@ For v1, teach one loop extremely well:
 
 # Part 2 — Independent Review (Claude / Opus 4.8)
 
-**Method:** Each claim below was checked against the shipping source in `Packages/ConduitKit/Sources/` and the handoff (`PAGES.md`, `screenshots/`). File:line references are included so findings are actionable.
+**Method:** Each claim below was checked against the shipping source in `Packages/LancerKit/Sources/` and the handoff (`PAGES.md`, `screenshots/`). File:line references are included so findings are actionable.
 
 **Bottom line:** I agree with the report's spirit and ~80% of its specifics. Digging changed three things materially — the in-session "second app" is already **dead code** (delete, don't reorganize), the three-step approval explainer **already ships** (so the demo + checklist matter more), and the Library should be **dissolved, not renamed**.
 
 ## What the report gets right (verified)
 
 - **Mock SSH-key host counts are a real shipping bug.** `AppFeature/LibrarySupportViews.swift:21` → `// Mock host-count associations (TODO: wire real per-key host tracking)`, with `mockHostCounts` rendered into the live key rows (`:77`, `:112`, `:126`). Fake data in a security app destroys trust. Remove — ship-blocker.
-- **Snippet "run" is unwired on the phone.** Only `AppFeature/PhoneWatchConnector.swift` / `ConduitCore/WatchApprovalTransfer.swift` implement `runSnippet`; there is no run wiring in the phone snippet views. Hiding the run affordance is correct.
+- **Snippet "run" is unwired on the phone.** Only `AppFeature/PhoneWatchConnector.swift` / `LancerCore/WatchApprovalTransfer.swift` implement `runSnippet`; there is no run wiring in the phone snippet views. Hiding the run affordance is correct.
 - **Cloud/billing should stay quiet** — already gated behind `SettingsView.showPaidSurfaces`. Mostly done.
 - **The core loop is genuinely good.** `01-inbox-populated` cards (risk chip → `$ command` → EDIT&RUN / DENY / ALLOW ALWAYS / APPROVE + the "Allow always applies to this exact tool, input, and path. Revoke rules in Settings." line) are clean and focused. Do not touch.
 
@@ -130,7 +130,7 @@ For v1, teach one loop extremely well:
 
 1. **"SessionShellView creates a second app inside the session" — that view is dead code.** `grep` finds `SessionShellView` referenced *nowhere* except its own definition (`AppFeature/SessionShellView.swift:42`). The shipping session is `SessionView`, presented via `AppRoot.isShowingLiveSession` (`AppRoot.swift:681`, `:744`). `SessionView` has **no** preview/files/diff/inbox switcher — only the block terminal plus sheets (snippet palette, port-forward, tmux, explain, raw history). The 5-way `SessionSurface` switcher (terminal/preview/files/diff/inbox) lives only in the dead `SessionShellView`, and it even Pro-gates *Diff* and *Inbox* (`SessionShellView.swift:168`, `:181`) — which would be wrong if it shipped. **Right move: delete `SessionShellView` + `SessionSurface`, don't "keep the session focused."**
 
-2. **"Add a three-step approval explainer" — already shipped.** `00-onboarding-populated` reads **"agents ask. you approve. work resumes."** with "Coding agents pause for risky actions. Conduit sends the approval to your phone, then safely resumes the run." That recommendation is done. What's missing is the *checklist* and the *demo*, not the explainer.
+2. **"Add a three-step approval explainer" — already shipped.** `00-onboarding-populated` reads **"agents ask. you approve. work resumes."** with "Coding agents pause for risky actions. Lancer sends the approval to your phone, then safely resumes the run." That recommendation is done. What's missing is the *checklist* and the *demo*, not the explainer.
 
 3. **"Workflows reads like an automation product" — it's not surfaced.** `LibraryView.swift` shows exactly three cards: Snippets / SSH Keys / Agents. `AgentKit/WorkflowEngine.swift` exists but has no user-facing screen. Nothing to hide; don't spend effort here.
 
@@ -155,7 +155,7 @@ Why **dissolve** Library rather than rename: snippets are already reachable in-s
 | **Demo approval ("try it")** | For governed-approvals, the *real* first approval can take hours (set up host → run agent → hit a gate). A safe local sample card makes the product tangible on day one. The `Approval` model + `DebugSeeder.makeDebugApprovals()` (`AppFeature/DebugSeeder.swift:180`) already exist — promote that into a real, dismissible "sample" card. **Single most important addition.** | Medium |
 | **First-run checklist** | "1 connect a host · 2 trust the host key · 3 wait for your first approval" as a 3-step strip on the Inbox empty state. Onboarding *explains* the loop; the checklist *gets the user into it.* | Small–Medium |
 | **Move SSH-key generation into Add-Host/connect** | Keys are part of connecting, not a toolkit extra; reachable where they're needed | Small |
-| **Trust/security panel** | One screen: host-key TOFU, Keychain storage, "what leaves the device" (nothing but your key → provider over TLS). `SettingsView.aboutConduitSection` already has the raw copy — promote it into a real trust surface | Small |
+| **Trust/security panel** | One screen: host-key TOFU, Keychain storage, "what leaves the device" (nothing but your key → provider over TLS). `SettingsView.aboutLancerSection` already has the raw copy — promote it into a real trust surface | Small |
 
 ## KEEP exactly as-is
 
@@ -182,7 +182,7 @@ The report treats the **demo approval** as a minor "capability to add." Flip it 
 - `AppFeature/SessionShellView.swift:14–37` — dead `SessionSurface` 5-way switcher; `:168,:181` — Diff/Inbox Pro-gate
 - `AppFeature/AppRoot.swift:681,:744` — shipping session is `SessionView` via `isShowingLiveSession`
 - `AppFeature/LibraryView.swift` — three cards only (Snippets/SSH Keys/Agents); no Workflows
-- `SettingsFeature/SettingsView.swift:216–232` — Settings section order; `:251` — Library folder icon; `:412–429` — `aboutConduitSection` trust copy; `:392` — `showPaidSurfaces` gating
+- `SettingsFeature/SettingsView.swift:216–232` — Settings section order; `:251` — Library folder icon; `:412–429` — `aboutLancerSection` trust copy; `:392` — `showPaidSurfaces` gating
 - `AppFeature/DebugSeeder.swift:180` — `makeDebugApprovals()` (reusable for a real demo card)
 - `AgentKit/WorkflowEngine.swift` — workflow engine exists, no UI surface
 - `PAGES.md` p00 (onboarding explainer ships), p30 (diff free; partial-hunk Pro)

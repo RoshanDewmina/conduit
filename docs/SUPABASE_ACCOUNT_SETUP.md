@@ -1,8 +1,8 @@
 # Standard accounts and daemon device binding
 
-Conduit V1 supports two deliberate modes:
+Lancer V1 supports two deliberate modes:
 
-- **Conduit account:** Supabase email/password auth with confirmed email, recovery links that return to `conduit://auth/callback`, authenticated billing identity, and registered daemons.
+- **Lancer account:** Supabase email/password auth with confirmed email, recovery links that return to `lancer://auth/callback`, authenticated billing identity, and registered daemons.
 - **Self-hosted offline:** the existing account-free E2E relay pairing. It does not contact Supabase and intentionally has no recovery, device list, or hosted billing.
 
 ## Configuration
@@ -10,11 +10,11 @@ Conduit V1 supports two deliberate modes:
 Set the iOS build settings, separately for each configuration, rather than committing values:
 
 ```text
-CONDUIT_SUPABASE_URL=https://<project-ref>.supabase.co
-CONDUIT_SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key>
+LANCER_SUPABASE_URL=https://<project-ref>.supabase.co
+LANCER_SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key>
 ```
 
-The app reads these as `CONDUIT_SUPABASE_URL` and `CONDUIT_SUPABASE_PUBLISHABLE_KEY` from `Info.plist`. They are client configuration, not service-role credentials. Empty values keep account sign-in unavailable while offline pairing remains available.
+The app reads these as `LANCER_SUPABASE_URL` and `LANCER_SUPABASE_PUBLISHABLE_KEY` from `Info.plist`. They are client configuration, not service-role credentials. Empty values keep account sign-in unavailable while offline pairing remains available.
 
 On `push-backend`, configure only server-side values:
 
@@ -29,7 +29,7 @@ Apply [`supabase/migrations/202606200001_account_devices.sql`](../supabase/migra
 
 ## Daemon bind contract
 
-1. `conduitd pair` creates a short-lived QR challenge containing a random one-time secret and daemon public-key fingerprint.
+1. `lancerd pair` creates a short-lived QR challenge containing a random one-time secret and daemon public-key fingerprint.
 2. A signed-in phone approves the challenge through `POST /v1/devices/bind` with its Supabase JWT.
 3. The daemon calls `POST /v1/devices/redeem` using only the challenge ID and secret; it receives an opaque device credential once.
 4. The backend stores hashes, never the account password or raw device credential. The owner can revoke through `POST /v1/devices/{id}/revoke`.

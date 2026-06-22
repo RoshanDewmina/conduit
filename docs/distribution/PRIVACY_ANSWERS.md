@@ -18,13 +18,13 @@ No secret values are included anywhere in this document.
 
 - **What:** the device's APNs push token, registered so the backend can send
   approval/run-complete notifications.
-- **Code:** `Conduit/ConduitApp.swift` (`didRegisterForRemoteNotificationsWithDeviceToken`)
+- **Code:** `Lancer/LancerApp.swift` (`didRegisterForRemoteNotificationsWithDeviceToken`)
   → `NotificationsKit/Notifications.swift` `registerDeviceToken(_:sessionID:backendURL:)`.
 - **Collected:** Yes.
 - **Linked to identity:** Linked to a `sessionId` (a device/session identifier, not
   a real-world name/email) on the backend, to route notifications to the right
   device. Not linked to a user account unless the user also signs in with a
-  Conduit account (see #4) — **VERIFY** whether the backend ever joins the push
+  Lancer account (see #4) — **VERIFY** whether the backend ever joins the push
   token to the Supabase account row; the device-binding flow in
   `docs/SUPABASE_ACCOUNT_SETUP.md` describes daemon binding via hashed device
   credentials, not push-token-to-account linkage explicitly.
@@ -38,7 +38,7 @@ No secret values are included anywhere in this document.
   6-character pairing code, and the derived session identifier used to address
   this device/daemon pair on the relay.
 - **Code:** `daemon/push-backend/PAIRING_PROTOCOL.md` (wire contract);
-  `Packages/ConduitKit/Sources/SSHTransport/E2ERelayClient.swift`.
+  `Packages/LancerKit/Sources/SSHTransport/E2ERelayClient.swift`.
 - **Collected:** Yes (transiently, by the relay, to route encrypted frames between
   the paired phone and daemon).
 - **Linked to identity:** No — these are device-generated keys/codes, not tied to
@@ -56,28 +56,28 @@ No secret values are included anywhere in this document.
 
 - **What:** SSH private keys, host fingerprints/known-hosts entries, and
   connection passwords/passphrases for hosts the user adds.
-- **Code:** `Packages/ConduitKit/Sources/SecurityKit/Keychain.swift`,
+- **Code:** `Packages/LancerKit/Sources/SecurityKit/Keychain.swift`,
   `KeyStore.swift`, `HostKeyStore.swift`; surfaced in `KeysFeature/KeysView.swift`,
   `KeyImportView.swift`, `WorkspacesFeature/AddHostView.swift`.
 - **Collected:** Stored **only on-device**, in the iOS Keychain (not transmitted to
-  Conduit's own servers; only ever used to open the user's own SSH connection to
+  Lancer's own servers; only ever used to open the user's own SSH connection to
   their own host).
-- **Linked to identity:** N/A — never leaves the device under Conduit's control.
+- **Linked to identity:** N/A — never leaves the device under Lancer's control.
 - **Used for tracking:** No.
 - **Purpose:** App functionality only. For the App Privacy questionnaire this is
   typically answered as **"data not collected"** by the developer (it never
-  reaches Conduit's servers), but **VERIFY** this framing is correct under Apple's
+  reaches Lancer's servers), but **VERIFY** this framing is correct under Apple's
   current definitions — Keychain-only, on-device, app-functionality data
   sometimes still needs to be disclosed depending on how strictly Apple's
   reviewers interpret "collection." Treat this as the single most important item
   to confirm before submitting, since SSH key handling is the most sensitive data
   type in the app.
 
-### 4. Conduit account: email (optional standard sign-in)
+### 4. Lancer account: email (optional standard sign-in)
 
 - **What:** email address + password (Supabase Auth), used for the optional
-  "Conduit account" mode (as opposed to the account-free self-hosted pairing mode).
-- **Code:** `Packages/ConduitKit/Sources/AccountKit/AccountClient.swift`;
+  "Lancer account" mode (as opposed to the account-free self-hosted pairing mode).
+- **Code:** `Packages/LancerKit/Sources/AccountKit/AccountClient.swift`;
   `docs/SUPABASE_ACCOUNT_SETUP.md`.
 - **Collected:** Yes, but **only if the user opts into standard sign-in** — the
   self-host/offline pairing path explicitly does not contact Supabase
@@ -100,9 +100,9 @@ No secret values are included anywhere in this document.
 - **What:** `appAccountToken`, `clientToken`, and an optional Stripe customer ID
   (`stripeCustomerIDKey`), used to tie an Apple IAP transaction or a Stripe
   subscription to this installation.
-- **Code:** `Packages/ConduitKit/Sources/SettingsFeature/PurchaseManager.swift`.
-- **Collected:** Yes, for users who purchase Conduit Pro (Apple IAP) or subscribe
-  to the separate Stripe-billed "Conduit Cloud" tier.
+- **Code:** `Packages/LancerKit/Sources/SettingsFeature/PurchaseManager.swift`.
+- **Collected:** Yes, for users who purchase Lancer Pro (Apple IAP) or subscribe
+  to the separate Stripe-billed "Lancer Cloud" tier.
 - **Linked to identity:** Apple IAP receipts/tokens are handled by StoreKit per
   Apple's own privacy rules (Apple is the data controller for the transaction
   itself). The Stripe customer ID is linked to whatever identity Stripe Checkout
@@ -116,7 +116,7 @@ No secret values are included anywhere in this document.
 ### 6. Crash/diagnostic data (Sentry) — currently disabled
 
 - **What:** Sentry crash/error reporting SDK is integrated but the DSN is an empty
-  string in `Conduit/ConduitApp.swift` (`private let sentryDSN = ""`), and
+  string in `Lancer/LancerApp.swift` (`private let sentryDSN = ""`), and
   `SentrySDK.start` is gated behind `guard !sentryDSN.isEmpty else { return }` — so
   **no crash data is currently sent anywhere** in the build as committed.
 - **Collected:** No, in the current build. **VERIFY before submission** that the
@@ -156,10 +156,10 @@ No secret values are included anywhere in this document.
 
 ## In-app purchase note
 
-Product `dev.conduit.mobile.pro` is a **non-consumable** one-time purchase (not a
-subscription), per `Conduit/Conduit.storekit`. The "Purchases" data category
+Product `dev.lancer.mobile.pro` is a **non-consumable** one-time purchase (not a
+subscription), per `Lancer/Lancer.storekit`. The "Purchases" data category
 applies; no recurring billing data beyond the original transaction needs to be
-disclosed for this specific product. The separate Stripe "Conduit Cloud"
+disclosed for this specific product. The separate Stripe "Lancer Cloud"
 subscription is billed outside Apple's IAP system — **VERIFY** whether Apple's
 current External Purchase / "reader app" disclosure rules require any additional
 privacy-label or listing language for that path at submission time.

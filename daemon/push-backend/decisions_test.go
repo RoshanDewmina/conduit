@@ -76,7 +76,7 @@ func TestDecisionRelayPostThenPoll(t *testing.T) {
 }
 
 // The core B2 contract: per-session relayToken auth on POST /approval/decision
-// (app) and GET /decisions (conduitd). Correct token → success; missing/wrong/
+// (app) and GET /decisions (lancerd). Correct token → success; missing/wrong/
 // unknown → 401 with no side effects (fail-safe).
 func TestDecisionRelayPerSessionTokenAuth(t *testing.T) {
 	resetDecisionsForTest()

@@ -1,4 +1,4 @@
-module conduit/push-backend
+module lancer/push-backend
 
 go 1.25.8
 

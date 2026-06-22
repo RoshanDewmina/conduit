@@ -6,17 +6,17 @@
 
 **Architecture:** A follow-up re-launches the vendor CLI with its continue flag (`claude --continue`, `opencode run --continue`) in the run's original cwd as a **fresh process with a new `runId`**, re-passing the policy + budget gates. iOS models a conversation as an ordered list of turn `runId`s and routes the follow-up through the run's own transport. No server, no tmux, no `seq`-counter refactor. Codex is deferred behind a smoke check (its `continueArgv` returns "unsupported" so it cannot hang).
 
-**Tech Stack:** Go (daemon `conduitd`, `go test`), Swift 6.2 / SwiftUI (ConduitKit SPM package + Xcode app target via XcodeBuildMCP).
+**Tech Stack:** Go (daemon `lancerd`, `go test`), Swift 6.2 / SwiftUI (LancerKit SPM package + Xcode app target via XcodeBuildMCP).
 
 ## Global Constraints
 
-- Explicit argv only — never `sh -c "<interpolated>"` (`agentArgv` security property in `daemon/conduitd/dispatch.go`).
+- Explicit argv only — never `sh -c "<interpolated>"` (`agentArgv` security property in `daemon/lancerd/dispatch.go`).
 - Every process launch (including continues) MUST re-pass the policy gate AND budget gate. Never special-case a continue to skip them.
 - Works over BOTH transports: SSH (`agent.run.continue` RPC in `server.go`) and E2E relay (`agentRunContinue` case in `e2e_router.go`), both funnelling into ONE `dispatcher.continueRun`.
 - **New `runId` per turn.** Do NOT change `launchFunc`, do NOT thread a shared `seq` counter, do NOT touch `tmuxLauncher`.
 - Codex continue is NOT shipped in this MVP — `continueArgv` returns `(nil, false)` for codex; the caller returns a structured "continue not supported" error.
 - iOS: Swift 6.2 strict concurrency, zero new warnings. Verify with the **app target** (`mcp__XcodeBuildMCP__build_sim`), not only `swift build` (SPM compiles macOS and skips `#if os(iOS)` UI code).
-- Daemon verify: `go test ./daemon/conduitd/...`.
+- Daemon verify: `go test ./daemon/lancerd/...`.
 - Owner execution model (CLAUDE.md): Claude plans + verifies; opencode `deepseek-v4-flash` agents may execute. Daemon (Go) and iOS (Swift) tasks touch disjoint files and can run in parallel; within iOS, `AppRoot.swift` is touched by Task 8 only.
 
 > **Already done (not tasks):** The 3 security blockers (BiometricGate early-returns, AppRoot `if false` app-lock, relay key in UserDefaults) are FIXED and the app-target build is green. The inline-chat UI (`NewChatTabView` inline state, `ActiveChatRun` for both transports, `RunControls.swift`) already exists.
@@ -25,7 +25,7 @@
 
 ## File Structure
 
-**Daemon (Go, `daemon/conduitd/`)**
+**Daemon (Go, `daemon/lancerd/`)**
 - `dispatch.go` — add `CWD`/`Model` to `dispatchRun`; add `continueArgv`; add `dispatcher.continueRun`.
 - `dispatch_test.go` — unit tests for the above.
 - `server.go` — add `runContinue` helper + `agent.run.continue` RPC case.
@@ -33,8 +33,8 @@
 - `e2e_router.go` — add `agentRunContinue` case + `runContinueResult` reply.
 - `e2e_router_test.go` — relay-path test (create if absent).
 
-**iOS (Swift, `Packages/ConduitKit/Sources/`)**
-- `ConduitCore/ConduitDProtocol.swift` — `RunContinueParams`.
+**iOS (Swift, `Packages/LancerKit/Sources/`)**
+- `LancerCore/LancerDProtocol.swift` — `RunContinueParams`.
 - `SSHTransport/DaemonChannel.swift` — `continueRun(runId:prompt:)`.
 - `SessionFeature/E2ERelayBridge.swift` — make `sendRunContinue` non-fire-and-forget.
 - `AppFeature/AppRoot.swift` — route follow-up by transport; surface errors.
@@ -45,15 +45,15 @@
 ## Task 1: Store `CWD` + `Model` on a dispatched run
 
 **Files:**
-- Modify: `daemon/conduitd/dispatch.go` (`dispatchRun` struct ~266-274; `dispatch()` run-store ~642)
-- Test: `daemon/conduitd/dispatch_test.go`
+- Modify: `daemon/lancerd/dispatch.go` (`dispatchRun` struct ~266-274; `dispatch()` run-store ~642)
+- Test: `daemon/lancerd/dispatch_test.go`
 
 **Interfaces:**
 - Produces: `dispatchRun` now has fields `CWD string` and `Model string`, populated by `dispatch()`.
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `daemon/conduitd/dispatch_test.go`:
+Add to `daemon/lancerd/dispatch_test.go`:
 ```go
 func TestDispatchStoresCWDAndModel(t *testing.T) {
 	d := newDispatcher()
@@ -74,7 +74,7 @@ func TestDispatchStoresCWDAndModel(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./daemon/conduitd/ -run TestDispatchStoresCWDAndModel`
+Run: `go test ./daemon/lancerd/ -run TestDispatchStoresCWDAndModel`
 Expected: FAIL — `run.CWD`/`run.Model` undefined (compile error).
 
 - [ ] **Step 3: Add the fields and populate them**
@@ -100,14 +100,14 @@ In `dispatch()`, the run-store line (currently `d.runs[id] = &dispatchRun{ID: id
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./daemon/conduitd/ -run TestDispatchStoresCWDAndModel`
+Run: `go test ./daemon/lancerd/ -run TestDispatchStoresCWDAndModel`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/dispatch.go daemon/conduitd/dispatch_test.go
-git commit -m "feat(conduitd): store cwd+model on dispatched run for continue"
+git add daemon/lancerd/dispatch.go daemon/lancerd/dispatch_test.go
+git commit -m "feat(lancerd): store cwd+model on dispatched run for continue"
 ```
 
 ---
@@ -115,8 +115,8 @@ git commit -m "feat(conduitd): store cwd+model on dispatched run for continue"
 ## Task 2: `continueArgv` — per-vendor continue-most-recent argv
 
 **Files:**
-- Modify: `daemon/conduitd/dispatch.go` (add `continueArgv` near `agentArgv` ~33-65)
-- Test: `daemon/conduitd/dispatch_test.go`
+- Modify: `daemon/lancerd/dispatch.go` (add `continueArgv` near `agentArgv` ~33-65)
+- Test: `daemon/lancerd/dispatch_test.go`
 
 **Interfaces:**
 - Produces: `func continueArgv(agent, prompt, model string) ([]string, bool)` — `false` means continue unsupported for that agent (codex/unknown).
@@ -145,7 +145,7 @@ func TestContinueArgv(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./daemon/conduitd/ -run TestContinueArgv`
+Run: `go test ./daemon/lancerd/ -run TestContinueArgv`
 Expected: FAIL — `continueArgv` undefined.
 
 - [ ] **Step 3: Implement `continueArgv`**
@@ -179,14 +179,14 @@ NOTE: the claude `--model` branch reuses `argv[:len(argv)-2]` to drop the traili
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./daemon/conduitd/ -run TestContinueArgv`
+Run: `go test ./daemon/lancerd/ -run TestContinueArgv`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/dispatch.go daemon/conduitd/dispatch_test.go
-git commit -m "feat(conduitd): continueArgv for claude+opencode (codex deferred)"
+git add daemon/lancerd/dispatch.go daemon/lancerd/dispatch_test.go
+git commit -m "feat(lancerd): continueArgv for claude+opencode (codex deferred)"
 ```
 
 ---
@@ -194,8 +194,8 @@ git commit -m "feat(conduitd): continueArgv for claude+opencode (codex deferred)
 ## Task 3: `dispatcher.continueRun` — gated re-launch with a new runId
 
 **Files:**
-- Modify: `daemon/conduitd/dispatch.go` (add method after `resume()` ~698)
-- Test: `daemon/conduitd/dispatch_test.go`
+- Modify: `daemon/lancerd/dispatch.go` (add method after `resume()` ~698)
+- Test: `daemon/lancerd/dispatch_test.go`
 
 **Interfaces:**
 - Consumes: `continueArgv` (Task 2); `dispatchRun.CWD/Model` (Task 1); `policyEvalFunc`, `dispatchResult`, `newUUID()`.
@@ -265,7 +265,7 @@ func TestContinueRunCodexUnsupported(t *testing.T) {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./daemon/conduitd/ -run TestContinueRun`
+Run: `go test ./daemon/lancerd/ -run TestContinueRun`
 Expected: FAIL — `continueRun` undefined.
 
 - [ ] **Step 3: Implement `continueRun`**
@@ -334,14 +334,14 @@ func (d *dispatcher) continueRun(runID, prompt string, evalFn policyEvalFunc, au
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `go test ./daemon/conduitd/ -run TestContinueRun`
+Run: `go test ./daemon/lancerd/ -run TestContinueRun`
 Expected: PASS (all four)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/dispatch.go daemon/conduitd/dispatch_test.go
-git commit -m "feat(conduitd): dispatcher.continueRun re-launches with new runId + gates"
+git add daemon/lancerd/dispatch.go daemon/lancerd/dispatch_test.go
+git commit -m "feat(lancerd): dispatcher.continueRun re-launches with new runId + gates"
 ```
 
 ---
@@ -349,8 +349,8 @@ git commit -m "feat(conduitd): dispatcher.continueRun re-launches with new runId
 ## Task 4: `agent.run.continue` RPC (SSH path)
 
 **Files:**
-- Modify: `daemon/conduitd/server.go` (add `runContinue` helper near `runDispatch` ~352; add RPC case near `agent.dispatch` ~664)
-- Test: `daemon/conduitd/server_test.go`
+- Modify: `daemon/lancerd/server.go` (add `runContinue` helper near `runDispatch` ~352; add RPC case near `agent.dispatch` ~664)
+- Test: `daemon/lancerd/server_test.go`
 
 **Interfaces:**
 - Consumes: `dispatcher.continueRun` (Task 3); `s.policyEffect`, `s.auditEntry`.
@@ -379,7 +379,7 @@ func TestAgentRunContinueRPC(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./daemon/conduitd/ -run TestAgentRunContinueRPC`
+Run: `go test ./daemon/lancerd/ -run TestAgentRunContinueRPC`
 Expected: FAIL — `s.runContinue` undefined.
 
 - [ ] **Step 3: Implement helper + RPC case**
@@ -407,14 +407,14 @@ In `handleMessage`, add a case alongside `agent.dispatch`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./daemon/conduitd/ -run TestAgentRunContinueRPC`
+Run: `go test ./daemon/lancerd/ -run TestAgentRunContinueRPC`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/server.go daemon/conduitd/server_test.go
-git commit -m "feat(conduitd): agent.run.continue RPC (SSH path)"
+git add daemon/lancerd/server.go daemon/lancerd/server_test.go
+git commit -m "feat(lancerd): agent.run.continue RPC (SSH path)"
 ```
 
 ---
@@ -422,8 +422,8 @@ git commit -m "feat(conduitd): agent.run.continue RPC (SSH path)"
 ## Task 5: `agentRunContinue` relay case (E2E path)
 
 **Files:**
-- Modify: `daemon/conduitd/e2e_router.go` (`handleMessage` switch ~85-144; the `default` at ~142)
-- Test: `daemon/conduitd/e2e_router_test.go` (create if absent)
+- Modify: `daemon/lancerd/e2e_router.go` (`handleMessage` switch ~85-144; the `default` at ~142)
+- Test: `daemon/lancerd/e2e_router_test.go` (create if absent)
 
 **Interfaces:**
 - Consumes: `server.runContinue` (Task 4); `relayClient` interface (`sendMessage`).
@@ -462,7 +462,7 @@ func TestRelayAgentRunContinue(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./daemon/conduitd/ -run TestRelayAgentRunContinue`
+Run: `go test ./daemon/lancerd/ -run TestRelayAgentRunContinue`
 Expected: FAIL — `agentRunContinue` falls through to `default`; no `runContinueResult` sent.
 
 - [ ] **Step 3: Implement the case**
@@ -486,14 +486,14 @@ In `e2e_router.go` `handleMessage`, before `default:`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./daemon/conduitd/ -run TestRelayAgentRunContinue && go test ./daemon/conduitd/...`
+Run: `go test ./daemon/lancerd/ -run TestRelayAgentRunContinue && go test ./daemon/lancerd/...`
 Expected: PASS (new test + full daemon suite green)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/e2e_router.go daemon/conduitd/e2e_router_test.go
-git commit -m "feat(conduitd): handle agentRunContinue over E2E relay"
+git add daemon/lancerd/e2e_router.go daemon/lancerd/e2e_router_test.go
+git commit -m "feat(lancerd): handle agentRunContinue over E2E relay"
 ```
 
 ---
@@ -501,7 +501,7 @@ git commit -m "feat(conduitd): handle agentRunContinue over E2E relay"
 ## Task 6: iOS `DaemonChannel.continueRun` (SSH client)
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SSHTransport/DaemonChannel.swift` (add after `dispatchAgent` at `:452-457`)
+- Modify: `Packages/LancerKit/Sources/SSHTransport/DaemonChannel.swift` (add after `dispatchAgent` at `:452-457`)
 
 **Interfaces:**
 - Consumes: existing `sendRPC(method:params:) async throws -> Data` (`:73`) and `Self.decodeResult(_:as:)` (used at `:457`).
@@ -520,13 +520,13 @@ public func continueRun(runId: String, prompt: String) async throws -> DispatchR
 
 - [ ] **Step 2: Build the SPM package**
 
-Run: `cd Packages/ConduitKit && swift build`
+Run: `cd Packages/LancerKit && swift build`
 Expected: Build complete (DaemonChannel is not `#if os(iOS)`-gated — SPM verifies it).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SSHTransport/DaemonChannel.swift
+git add Packages/LancerKit/Sources/SSHTransport/DaemonChannel.swift
 git commit -m "feat(ios): DaemonChannel.continueRun RPC client"
 ```
 
@@ -535,7 +535,7 @@ git commit -m "feat(ios): DaemonChannel.continueRun RPC client"
 ## Task 7: Make relay `sendRunContinue` return its result (not fire-and-forget)
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/E2ERelayBridge.swift` (`sendRunContinue` ~105-112; the `handleRelayMessage` switch where `"dispatchResult"` is handled at `:153-161`)
+- Modify: `Packages/LancerKit/Sources/SessionFeature/E2ERelayBridge.swift` (`sendRunContinue` ~105-112; the `handleRelayMessage` switch where `"dispatchResult"` is handled at `:153-161`)
 
 **Interfaces:**
 - Consumes: relay reply `"runContinueResult"` (Task 5); the existing `E2ERelayMessage.RelayInnerEnvelope<DispatchResult>` decode + continuation pattern used for `dispatchResult` (`:153-161`).
@@ -578,13 +578,13 @@ case "runContinueResult":
 
 - [ ] **Step 3: Build the SPM package**
 
-Run: `cd Packages/ConduitKit && swift build`
+Run: `cd Packages/LancerKit && swift build`
 Expected: Build complete.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/E2ERelayBridge.swift
+git add Packages/LancerKit/Sources/SessionFeature/E2ERelayBridge.swift
 git commit -m "feat(ios): sendRunContinue awaits runContinueResult (returns new runId)"
 ```
 
@@ -593,10 +593,10 @@ git commit -m "feat(ios): sendRunContinue awaits runContinueResult (returns new 
 ## Task 8: Route follow-up by transport + surface errors (AppRoot)
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` (`onSendFollowUp` closures ~871-872 and ~990-991; `ActiveChatRun` struct ~1580)
+- Modify: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` (`onSendFollowUp` closures ~871-872 and ~990-991; `ActiveChatRun` struct ~1580)
 
 **Interfaces:**
-- Consumes: `DaemonChannel.continueRun` (Task 6), `E2ERelayBridge.sendRunContinue` + `conduitE2ERunContinueResult` (Task 7).
+- Consumes: `DaemonChannel.continueRun` (Task 6), `E2ERelayBridge.sendRunContinue` + `lancerE2ERunContinueResult` (Task 7).
 - Produces: a follow-up routes to the **run's own transport**; failures and `denied`/`needsApproval`/`budgetExceeded` outcomes are shown in the thread (not swallowed by `try?`).
 
 - [ ] **Step 1: Tag each run with its transport**
@@ -633,13 +633,13 @@ Both transports now return `DispatchResult`, so `handleContinueResult` is the si
 
 - [ ] **Step 3: Build the app target**
 
-Run (XcodeBuildMCP): `build_sim` with the session defaults already set (Conduit / iPhone 17 Pro / Debug).
+Run (XcodeBuildMCP): `build_sim` with the session defaults already set (Lancer / iPhone 17 Pro / Debug).
 Expected: `SUCCEEDED`, zero errors. (AppRoot is `#if os(iOS)` — SPM will NOT catch breaks here; the app build is mandatory.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/AppRoot.swift
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift
 git commit -m "feat(ios): route follow-up by run transport; surface continue errors"
 ```
 
@@ -648,10 +648,10 @@ git commit -m "feat(ios): route follow-up by run transport; surface continue err
 ## Task 9: Render a conversation as ordered turns (NewChatTabView)
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift` (`activeRun` state ~43; body ~95-110; follow-up send ~246-256)
+- Modify: `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift` (`activeRun` state ~43; body ~95-110; follow-up send ~246-256)
 
 **Interfaces:**
-- Consumes: the new runId from Task 8 (`handleContinueResult`) and the relay `conduitE2ERunContinueResult` notification (Task 7).
+- Consumes: the new runId from Task 8 (`handleContinueResult`) and the relay `lancerE2ERunContinueResult` notification (Task 7).
 - Produces: the inline thread renders each turn's `RunOutputStore` text in order; sending a follow-up appends a new turn keyed by the continued `runId`.
 
 - [ ] **Step 1: Model turns**
@@ -686,7 +686,7 @@ Expected: `SUCCEEDED`, zero errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift
+git add Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift
 git commit -m "feat(ios): inline thread renders ordered turns; appends continued runId"
 ```
 
@@ -694,7 +694,7 @@ git commit -m "feat(ios): inline thread renders ordered turns; appends continued
 
 ## Final verification (end-to-end, on a real host)
 
-- [ ] `go test ./daemon/conduitd/...` — all green.
+- [ ] `go test ./daemon/lancerd/...` — all green.
 - [ ] App-target build green (`build_sim`).
 - [ ] **Live SSH:** dispatch `claude` to a host, let a turn finish, type a follow-up in the inline bar, confirm a SECOND runId streams its response appended below the first in the same conversation. (Use the live-SSH `session` harness in CLAUDE.md.)
 - [ ] **Live relay:** repeat over the E2E relay path (pair, dispatch, follow up).

@@ -1,13 +1,13 @@
-# CLAUDE.md — Conduit iOS codebase guide
+# CLAUDE.md — Lancer iOS codebase guide
 
 @AGENTS.md
 
-The shared, cross-agent contract — what Conduit is, the source-of-truth docs, the working rules,
+The shared, cross-agent contract — what Lancer is, the source-of-truth docs, the working rules,
 and the verification gate — is imported above from `AGENTS.md`. This file adds only the
 Claude-specific execution model and tooling. For product truth read `ARCHITECTURE.md` **§0.1**
 (current-state snapshot: implemented / partial / planned / deprecated) and **§4.1** (navigation):
 the app home is a **sidebar / Command Home shell** with durable chat threads, **not** a tab bar
-(`enum Tab` in `AppRoot.swift` is vestigial). `docs/CONDUIT_PROJECT_DOSSIER.md` is archived — don't cite it.
+(`enum Tab` in `AppRoot.swift` is vestigial). `docs/LANCER_PROJECT_DOSSIER.md` is archived — don't cite it.
 
 ## Path-scoped rules & skills
 
@@ -18,8 +18,8 @@ Area-specific detail lives in `.claude/rules/` and loads only when you open a ma
 - `go-daemon.md` — Go build/test + `dispatch.go` adapter rules (daemon/**)
 
 Project **skills** are in `.claude/skills/` (invoke with the `Skill` tool): start a non-trivial
-task with `conduit-context-onboarding`; gate "done" with `conduit-verification-gate`; touching
-`daemon/conduitd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `conduit-parallel-handoff`.
+task with `lancer-context-onboarding`; gate "done" with `lancer-verification-gate`; touching
+`daemon/lancerd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `lancer-parallel-handoff`.
 
 ## Execution model — Claude plans & verifies, opencode/deepseek executes
 

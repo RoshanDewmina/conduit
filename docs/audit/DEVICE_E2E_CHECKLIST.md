@@ -3,12 +3,12 @@
 > Turnkey checklist for the on-device session that closes the gaps the headless
 > simulator cannot verify. Every item here is **blocked in the sim** because it
 > needs (a) a live agent/daemon connection, (b) real taps, or (c) a widget host.
-> Run on a physical iPhone with a real paired host (`conduitd` running).
+> Run on a physical iPhone with a real paired host (`lancerd` running).
 >
 > Status legend: ☐ not run · ✅ pass · ❌ fail (note what you saw)
 
 ## Pre-flight
-- ☐ `conduitd` resident running on the host (`launchctl kickstart -k gui/$(id -u)/dev.conduit.conduitd` on this Mac, or the host's installer).
+- ☐ `lancerd` resident running on the host (`launchctl kickstart -k gui/$(id -u)/dev.lancer.lancerd` on this Mac, or the host's installer).
 - ☐ Phone and host reachable over the relay (or same LAN for SSH).
 - ☐ Fresh install (delete app first) so you see real first-run, not seeded state.
 
@@ -17,7 +17,7 @@
 - ☐ A2 "Get started" → step 2 shows a **real** 6-digit pairing code (not `482 917`/`584 227` mock) and "Waiting for the host to pair…".
 - ☐ A3 Run the install/pair on the host → card flips to "Paired ✓" automatically (`pairingState == .paired`).
 - ☐ A4 Step 3 policy: pick a tier (Cautious/Balanced/Bypass) → "Connect and finish".
-- ☐ A5 **Policy push:** on first connect, confirm the chosen tier's starter `~/.conduit/policy.yaml` is written on the host (`cat ~/.conduit/policy.yaml` → matches the tier in `OnboardingPolicy.policyYAML`). This is the unverified-in-sim path.
+- ☐ A5 **Policy push:** on first connect, confirm the chosen tier's starter `~/.lancer/policy.yaml` is written on the host (`cat ~/.lancer/policy.yaml` → matches the tier in `OnboardingPolicy.policyYAML`). This is the unverified-in-sim path.
 - ☐ A6 Land on Fleet (or Inbox if something needs attention).
 
 ## B. Populated Fleet (sim shows only hosts/QuotaGuard — these need live agents)

@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useConduitStore } from "@/lib/store/useConduitStore";
+import { useLancerStore } from "@/lib/store/useLancerStore";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { AgentCard } from "@/components/AgentCard";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function FleetPage() {
-  const connection = useConduitStore((s) => s.connection);
-  const agents = useConduitStore((s) => s.agents);
-  const loops = useConduitStore((s) => s.loops);
-  const pending = useConduitStore((s) => s.pending);
+  const connection = useLancerStore((s) => s.connection);
+  const agents = useLancerStore((s) => s.agents);
+  const loops = useLancerStore((s) => s.loops);
+  const pending = useLancerStore((s) => s.pending);
 
   const entries = Object.values(agents);
 

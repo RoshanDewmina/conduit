@@ -1087,12 +1087,12 @@ These descriptions are functional only. They intentionally avoid direction about
   - Plan
 - Implementation note: Dedicated billing gallery route captured.
 
-### 45. Conduit Pro · paywall
+### 45. Lancer Pro · paywall
 
 - Slot: `paywall`
 - Category: Billing
 - Swift status: matches
-- Board screenshot: [45-conduit-pro-paywall.jpg](board-screenshots/45-conduit-pro-paywall.jpg)
+- Board screenshot: [45-lancer-pro-paywall.jpg](board-screenshots/45-lancer-pro-paywall.jpg)
 - Swift screenshot: [gallery-paywall.jpg](swift-screenshots/gallery-paywall.jpg)
 - Purpose: Explain why a paid capability is unavailable and let the user upgrade or compare plans.
 - Primary user actions:

@@ -6,31 +6,31 @@
 
 **Architecture:** Add one transient field (`lastDecision`) to the Live Activity `ContentState` (Swift + Go mirror) so a killed-app decision can be confirmed via push. Extract a pure, testable state-precedence resolver that the widget consumes. Wire notification/Live-Activity taps to open the existing un-redacted `InboxApprovalDetail` sheet (warm + cold), and render a real diff for `.patch` approvals. Reuses existing substrate — small by design.
 
-**Tech Stack:** Swift 6 / SwiftUI, ActivityKit, WidgetKit, Swift Testing (`import Testing`), Go (push-backend), SPM (ConduitKit, 21 targets).
+**Tech Stack:** Swift 6 / SwiftUI, ActivityKit, WidgetKit, Swift Testing (`import Testing`), Go (push-backend), SPM (LancerKit, 21 targets).
 
 ## Global Constraints
 
 - **V1 transport = the E2E relay + APNs.** No SSH dependency in any of this work.
-- **The widget is pure presentation** — every state is computed from `ContentState`; no business logic in `ConduitLiveActivityWidget`.
+- **The widget is pure presentation** — every state is computed from `ContentState`; no business logic in `LancerLiveActivityWidget`.
 - **Redaction is a push-payload concern only.** In-app surfaces (`InboxApprovalDetail`) show the real command. Never add command text / file contents / secrets to any APNs payload or `ContentState`.
 - **Reveal gate = respect app-lock.** No new biometric step for *viewing* a revealed approval. Critical *approve/allow-always* stays biometric-gated (already implemented — do not remove).
 - **Date encoding is pinned.** `ContentState` dates encode as Unix fractional-seconds `float64` (Swift `JSONEncoder` default ↔ ActivityKit default decoder). A mismatch silently drops the whole update. New fields must not break this.
-- **Verification:** ConduitKit/widget changes → `cd Packages/ConduitKit && swift build` **and** the XcodeBuildMCP app-target build (`build_sim`, scheme `Conduit`, sim `iPhone 17 Pro`) — plain `swift build` skips `#if os(iOS)` code and hides strict-concurrency breaks. push-backend changes → `cd daemon/push-backend && go test ./...`.
+- **Verification:** LancerKit/widget changes → `cd Packages/LancerKit && swift build` **and** the XcodeBuildMCP app-target build (`build_sim`, scheme `Lancer`, sim `iPhone 17 Pro`) — plain `swift build` skips `#if os(iOS)` code and hides strict-concurrency breaks. push-backend changes → `cd daemon/push-backend && go test ./...`.
 - **Device-only items** (cold-path ✓ on lock screen; cold deep-link) cannot be simulator-verified — implement + unit-test, then flag for owner device QA. Do not claim them verified.
 - Commit after each task. Co-author trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## File Structure
 
-- `Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift` — `ContentState` (+`lastDecision`), `start(...)`.
-- `Packages/ConduitKit/Sources/SessionFeature/LiveActivityPresentation.swift` *(new)* — pure state-precedence resolver (testable; no UI, no ActivityKit).
-- `Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityContentStateTests.swift` — extend for `lastDecision` + presentation precedence.
+- `Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift` — `ContentState` (+`lastDecision`), `start(...)`.
+- `Packages/LancerKit/Sources/SessionFeature/LiveActivityPresentation.swift` *(new)* — pure state-precedence resolver (testable; no UI, no ActivityKit).
+- `Packages/LancerKit/Tests/LancerKitTests/LiveActivityContentStateTests.swift` — extend for `lastDecision` + presentation precedence.
 - `daemon/push-backend/liveactivity.go` — Go `ContentState` mirror (+`LastDecision`), `pushLiveActivityDecision(...)`.
 - `daemon/push-backend/liveactivity_test.go` — extend for the new field + decision push.
-- `ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift` — consume the resolver; render four-state treatments.
-- `Packages/ConduitKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift` — add optional patch-diff section.
-- `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift` — pass patch to detail; honor an "open this approval" deep-link.
-- `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift` — add an "open detail" buffer/notification distinct from the action buffer.
-- `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` — drain the open-detail buffer; route to Inbox. **Hot file / owner may be live-editing — see Task 6 collision note.**
+- `LancerLiveActivityWidget/LancerLiveActivityWidget.swift` — consume the resolver; render four-state treatments.
+- `Packages/LancerKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift` — add optional patch-diff section.
+- `Packages/LancerKit/Sources/InboxFeature/InboxView.swift` — pass patch to detail; honor an "open this approval" deep-link.
+- `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift` — add an "open detail" buffer/notification distinct from the action buffer.
+- `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` — drain the open-detail buffer; route to Inbox. **Hot file / owner may be live-editing — see Task 6 collision note.**
 
 ## Task Dependency Graph (for parallel dispatch)
 
@@ -51,9 +51,9 @@ T5 (warm deep-link) ──► T6 (cold deep-link + AppRoot)
 ### Task 1: Add `lastDecision` transient to ContentState (Swift + Go mirror)
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift:32-58` (ContentState struct + init)
+- Modify: `Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift:32-58` (ContentState struct + init)
 - Modify: `daemon/push-backend/liveactivity.go:78-88` (Go mirror struct)
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityContentStateTests.swift`
+- Test: `Packages/LancerKit/Tests/LancerKitTests/LiveActivityContentStateTests.swift`
 - Test: `daemon/push-backend/liveactivity_test.go`
 
 **Interfaces:**
@@ -65,22 +65,22 @@ T5 (warm deep-link) ──► T6 (cold deep-link + AppRoot)
 ```swift
 @Test func lastDecisionRoundTripsAndDefaultsNil() throws {
     // Default is nil and omitted-friendly.
-    let running = ConduitSessionAttributes.ContentState(status: "connected", isStreaming: true)
+    let running = LancerSessionAttributes.ContentState(status: "connected", isStreaming: true)
     #expect(running.lastDecision == nil)
 
     // Set + round-trip through JSON (the wire format ActivityKit uses).
-    let landed = ConduitSessionAttributes.ContentState(
+    let landed = LancerSessionAttributes.ContentState(
         status: "connected", pendingApprovals: 0, lastDecision: "approved"
     )
     let data = try JSONEncoder().encode(landed)
-    let back = try JSONDecoder().decode(ConduitSessionAttributes.ContentState.self, from: data)
+    let back = try JSONDecoder().decode(LancerSessionAttributes.ContentState.self, from: data)
     #expect(back.lastDecision == "approved")
 }
 ```
 
 - [ ] **Step 2: Run it, verify it fails to compile** — `lastDecision` does not exist yet.
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | grep -i "lastDecision\|error" | head`
+Run: `cd Packages/LancerKit && swift build 2>&1 | grep -i "lastDecision\|error" | head`
 Expected: a compile error referencing `lastDecision`.
 
 - [ ] **Step 3: Add the field + init param** in `LiveActivityManager.swift`. In the `ContentState` struct (after `public var lastUpdate: Date`) add:
@@ -118,7 +118,7 @@ In the memberwise `init(...)`, add the parameter **before** `lastUpdate` (keep `
 
 - [ ] **Step 4: Run the Swift test target** (app-target — these tests are `#if os(iOS)`):
 
-Run: `cd Packages/ConduitKit && swift build`
+Run: `cd Packages/LancerKit && swift build`
 Expected: `Build complete!` (the test compiles; runtime is exercised in the app-target test in later verification).
 
 - [ ] **Step 5: Add the Go mirror field** in `liveactivity.go`, inside `liveActivityContentState` (after the `Cost` field, before `LastUpdate`):
@@ -161,8 +161,8 @@ Expected: `PASS`, including `TestContentStateLastDecisionOmittedWhenNil` and the
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift \
-  Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityContentStateTests.swift \
+git add Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift \
+  Packages/LancerKit/Tests/LancerKitTests/LiveActivityContentStateTests.swift \
   daemon/push-backend/liveactivity.go daemon/push-backend/liveactivity_test.go
 git commit -m "feat(liveactivity): add lastDecision transient to ContentState (Swift + Go mirror)
 
@@ -174,11 +174,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 2: Pure state-precedence resolver (`LiveActivityPresentation`)
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/SessionFeature/LiveActivityPresentation.swift`
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityPresentationTests.swift` *(new)*
+- Create: `Packages/LancerKit/Sources/SessionFeature/LiveActivityPresentation.swift`
+- Test: `Packages/LancerKit/Tests/LancerKitTests/LiveActivityPresentationTests.swift` *(new)*
 
 **Interfaces:**
-- Consumes: `ConduitSessionAttributes.ContentState` (incl. `lastDecision` from Task 1).
+- Consumes: `LancerSessionAttributes.ContentState` (incl. `lastDecision` from Task 1).
 - Produces:
   - `enum LiveActivityPrimaryState: Equatable { case needsYou(count: Int), decisionLanded(approved: Bool), running, idle }`
   - `struct LiveActivityPresentation: Equatable { let primary: LiveActivityPrimaryState; let cost: Double?; let costLevel: CostLevel }`
@@ -194,7 +194,7 @@ import Testing
 
 @available(iOS 16.2, *)
 struct LiveActivityPresentationTests {
-    typealias CS = ConduitSessionAttributes.ContentState
+    typealias CS = LancerSessionAttributes.ContentState
 
     @Test func needsYouBeatsEverything() {
         let s = CS(status: "connected", pendingApprovals: 2, isStreaming: true,
@@ -231,7 +231,7 @@ struct LiveActivityPresentationTests {
 }
 ```
 
-- [ ] **Step 2: Run, verify it fails** — `cd Packages/ConduitKit && swift build 2>&1 | grep -i "LiveActivityPresentation\|error" | head` → fails (type missing).
+- [ ] **Step 2: Run, verify it fails** — `cd Packages/LancerKit && swift build 2>&1 | grep -i "LiveActivityPresentation\|error" | head` → fails (type missing).
 
 - [ ] **Step 3: Implement the resolver** — `LiveActivityPresentation.swift`:
 
@@ -259,7 +259,7 @@ public struct LiveActivityPresentation: Equatable {
     public let costLevel: CostLevel
 
     public static func resolve(
-        _ state: ConduitSessionAttributes.ContentState,
+        _ state: LancerSessionAttributes.ContentState,
         budget: Double?
     ) -> LiveActivityPresentation {
         let primary: LiveActivityPrimaryState
@@ -292,18 +292,18 @@ public struct LiveActivityPresentation: Equatable {
 #endif
 ```
 
-- [ ] **Step 4: Run the build** — `cd Packages/ConduitKit && swift build` → `Build complete!`
+- [ ] **Step 4: Run the build** — `cd Packages/LancerKit && swift build` → `Build complete!`
 
 - [ ] **Step 5: Run the tests via the app target** (these are `#if os(iOS)`):
 
-Run: `mcp__XcodeBuildMCP__test_sim` with scheme `ConduitKitTests`, sim `iPhone 17 Pro`, `only: ["ConduitKitTests/LiveActivityPresentationTests"]`.
+Run: `mcp__XcodeBuildMCP__test_sim` with scheme `LancerKitTests`, sim `iPhone 17 Pro`, `only: ["LancerKitTests/LiveActivityPresentationTests"]`.
 Expected: all 5 tests pass. (If the scheme routes to the UI-test target as it did during the V1 merge, note that limitation and rely on the resolver being exercised by `swift build` + the precedence being plain value logic.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/LiveActivityPresentation.swift \
-  Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityPresentationTests.swift
+git add Packages/LancerKit/Sources/SessionFeature/LiveActivityPresentation.swift \
+  Packages/LancerKit/Tests/LancerKitTests/LiveActivityPresentationTests.swift
 git commit -m "feat(liveactivity): pure state-precedence resolver for the widget
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -399,7 +399,7 @@ where `decisionVerb` is `"approved"` or `"rejected"` derived from the decision i
 - [ ] **Step 5: Run the Go tests + build**
 
 Run: `cd daemon/push-backend && go build ./... && go test ./... 2>&1 | tail -10`
-Expected: `ok  conduit/push-backend`.
+Expected: `ok  lancer/push-backend`.
 
 - [ ] **Step 6: Commit**
 
@@ -415,15 +415,15 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 4: Widget renders the four states
 
 **Files:**
-- Modify: `ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift`
+- Modify: `LancerLiveActivityWidget/LancerLiveActivityWidget.swift`
 
 **Interfaces:**
 - Consumes: `LiveActivityPresentation.resolve(context.state, budget:)` (Task 2). For now pass `budget: nil` (cost escalation degrades to `.normal`; see Risk note — budget source is a plan-time open question resolved as "pass nil until ContentState carries a budget").
 
-- [ ] **Step 1: Add a decision-landed color + extend `statusColor`** — in `ConduitLiveActivityWidget.swift`, replace the body of `statusColor(for:)` so decision-landed shows green and precedence matches the resolver:
+- [ ] **Step 1: Add a decision-landed color + extend `statusColor`** — in `LancerLiveActivityWidget.swift`, replace the body of `statusColor(for:)` so decision-landed shows green and precedence matches the resolver:
 
 ```swift
-    private func statusColor(for state: ConduitSessionAttributes.ContentState) -> Color {
+    private func statusColor(for state: LancerSessionAttributes.ContentState) -> Color {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
         case .needsYou:
@@ -448,7 +448,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - [ ] **Step 2: Extend `statusLabel`** so decision-landed reads as a confirmation:
 
 ```swift
-    private func statusLabel(for state: ConduitSessionAttributes.ContentState) -> String {
+    private func statusLabel(for state: LancerSessionAttributes.ContentState) -> String {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
         case .needsYou(let count): return count == 1 ? "1 pending" : "\(count) pending"
@@ -469,7 +469,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - [ ] **Step 3: Extend `shortStatus`** (compact trailing / minimal) for the ✓:
 
 ```swift
-    private func shortStatus(for state: ConduitSessionAttributes.ContentState) -> String {
+    private func shortStatus(for state: LancerSessionAttributes.ContentState) -> String {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
         case .needsYou(let count): return "\(count)"
@@ -483,7 +483,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - [ ] **Step 4: Cost escalation tint** — where cost is rendered (lock screen ~line 114-119, expanded trailing ~line 42-45), tint by `costLevel`. Add a helper and apply it to the cost `Text`'s `.foregroundStyle`:
 
 ```swift
-    private func costColor(for state: ConduitSessionAttributes.ContentState) -> Color {
+    private func costColor(for state: LancerSessionAttributes.ContentState) -> Color {
         switch LiveActivityPresentation.resolve(state, budget: nil).costLevel {
         case .over:    return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red
         case .warning: return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber
@@ -496,13 +496,13 @@ Replace the cost `Text(...).foregroundStyle(.secondary)` occurrences in the lock
 
 - [ ] **Step 5: Verify the app-target build** (the widget only truly compiles here):
 
-Run: `mcp__XcodeBuildMCP__build_sim` (scheme `ConduitWatchWidget` is NOT this — use scheme `ConduitLiveActivityWidget` or the app `Conduit` which embeds it). Prefer scheme `Conduit`.
+Run: `mcp__XcodeBuildMCP__build_sim` (scheme `LancerWatchWidget` is NOT this — use scheme `LancerLiveActivityWidget` or the app `Lancer` which embeds it). Prefer scheme `Lancer`.
 Expected: `SUCCEEDED`, 0 errors.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift
+git add LancerLiveActivityWidget/LancerLiveActivityWidget.swift
 git commit -m "feat(liveactivity): widget renders needs-you/running/decision-landed/cost states
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -513,20 +513,20 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 5: Warm deep-link — tap opens the detail sheet
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift` (add `.conduitOpenApproval` notification name + an `OpenApprovalBuffer`)
-- Modify: `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift` (observe the open-approval signal → set `detailApproval`)
+- Modify: `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift` (add `.lancerOpenApproval` notification name + an `OpenApprovalBuffer`)
+- Modify: `Packages/LancerKit/Sources/InboxFeature/InboxView.swift` (observe the open-approval signal → set `detailApproval`)
 
 **Interfaces:**
-- Produces: `Notification.Name.conduitOpenApproval` (userInfo `["approvalId": String]`); `OpenApprovalBuffer.shared` with `record(approvalID:)` / `drain() -> [String]` (mirrors `ApprovalActionBuffer`, but for *review* intent not *decide*).
+- Produces: `Notification.Name.lancerOpenApproval` (userInfo `["approvalId": String]`); `OpenApprovalBuffer.shared` with `record(approvalID:)` / `drain() -> [String]` (mirrors `ApprovalActionBuffer`, but for *review* intent not *decide*).
 - Consumes (InboxView): an `approvalId` → look up the matching `Approval` in the view model's list → set `detailApproval`.
 
-- [ ] **Step 1: Add the notification name + buffer** in `Notifications.swift`. After `conduitApprovalAction` (line 10) add:
+- [ ] **Step 1: Add the notification name + buffer** in `Notifications.swift`. After `lancerApprovalAction` (line 10) add:
 
 ```swift
     /// Posted when the user taps a notification/Live-Activity BODY (not an action
     /// button) to REVIEW an approval. userInfo: ["approvalId": String]. Distinct
-    /// from conduitApprovalAction, which decides. Opens the detail sheet.
-    static let conduitOpenApproval = Notification.Name("dev.conduit.openApproval")
+    /// from lancerApprovalAction, which decides. Opens the detail sheet.
+    static let lancerOpenApproval = Notification.Name("dev.lancer.openApproval")
 ```
 
 After `ApprovalActionBuffer` (line 78) add a sibling buffer:
@@ -551,14 +551,14 @@ public final class OpenApprovalBuffer: @unchecked Sendable {
 }
 ```
 
-- [ ] **Step 2: Route the body tap in the delegate** — find `ConduitNotificationDelegate`'s `userNotificationCenter(_:didReceive:)` in `Notifications.swift`. When `response.actionIdentifier == UNNotificationDefaultActionIdentifier` (body tap, not Approve/Reject), post `.conduitOpenApproval` with the `approvalId` from `userInfo` AND record it on `OpenApprovalBuffer.shared` (for the cold case). Add, in that method:
+- [ ] **Step 2: Route the body tap in the delegate** — find `LancerNotificationDelegate`'s `userNotificationCenter(_:didReceive:)` in `Notifications.swift`. When `response.actionIdentifier == UNNotificationDefaultActionIdentifier` (body tap, not Approve/Reject), post `.lancerOpenApproval` with the `approvalId` from `userInfo` AND record it on `OpenApprovalBuffer.shared` (for the cold case). Add, in that method:
 
 ```swift
         if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
            let approvalId = response.notification.request.content.userInfo["approvalId"] as? String {
             OpenApprovalBuffer.shared.record(approvalID: approvalId)
             NotificationCenter.default.post(
-                name: .conduitOpenApproval, object: nil,
+                name: .lancerOpenApproval, object: nil,
                 userInfo: ["approvalId": approvalId]
             )
         }
@@ -566,10 +566,10 @@ public final class OpenApprovalBuffer: @unchecked Sendable {
 
 (Leave the existing Approve/Reject action-identifier handling untouched.)
 
-- [ ] **Step 3: Observe in InboxView** — in `InboxView.swift`, add an `.onReceive` for `.conduitOpenApproval` that finds the approval and sets `detailApproval`. Near the other view-state, add:
+- [ ] **Step 3: Observe in InboxView** — in `InboxView.swift`, add an `.onReceive` for `.lancerOpenApproval` that finds the approval and sets `detailApproval`. Near the other view-state, add:
 
 ```swift
-        .onReceive(NotificationCenter.default.publisher(for: .conduitOpenApproval)) { note in
+        .onReceive(NotificationCenter.default.publisher(for: .lancerOpenApproval)) { note in
             guard let idString = note.userInfo?["approvalId"] as? String,
                   let uuid = UUID(uuidString: idString) else { return }
             if let match = vm.approvals.first(where: { $0.id.rawValue == uuid }) {
@@ -580,7 +580,7 @@ public final class OpenApprovalBuffer: @unchecked Sendable {
 
 (Confirm `vm.approvals` is the published list and `Approval.id.rawValue` is the `UUID` — adjust the key path if the VM exposes a different accessor.)
 
-- [ ] **Step 4: Write a routing unit test** — `Packages/ConduitKit/Tests/ConduitKitTests/OpenApprovalBufferTests.swift`:
+- [ ] **Step 4: Write a routing unit test** — `Packages/LancerKit/Tests/LancerKitTests/OpenApprovalBufferTests.swift`:
 
 ```swift
 import Testing
@@ -600,15 +600,15 @@ struct OpenApprovalBufferTests {
 
 - [ ] **Step 5: Build + run**
 
-Run: `cd Packages/ConduitKit && swift build` → `Build complete!`
-Run: `mcp__XcodeBuildMCP__test_sim` scheme `ConduitKitTests`, `only: ["ConduitKitTests/OpenApprovalBufferTests"]` → PASS (or note the scheme-routing limitation).
+Run: `cd Packages/LancerKit && swift build` → `Build complete!`
+Run: `mcp__XcodeBuildMCP__test_sim` scheme `LancerKitTests`, `only: ["LancerKitTests/OpenApprovalBufferTests"]` → PASS (or note the scheme-routing limitation).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift \
-  Packages/ConduitKit/Sources/InboxFeature/InboxView.swift \
-  Packages/ConduitKit/Tests/ConduitKitTests/OpenApprovalBufferTests.swift
+git add Packages/LancerKit/Sources/NotificationsKit/Notifications.swift \
+  Packages/LancerKit/Sources/InboxFeature/InboxView.swift \
+  Packages/LancerKit/Tests/LancerKitTests/OpenApprovalBufferTests.swift
 git commit -m "feat(inbox): warm deep-link — notification/Live-Activity body tap opens detail
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -619,12 +619,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 6: Cold deep-link — drain the open-approval buffer in AppRoot
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+- Modify: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
 
 **⚠️ Collision note:** `AppRoot.swift` is a hot file the owner may be live-editing. Before editing, run `git status --short` — if `AppRoot.swift` shows uncommitted changes, STOP and report; do not overwrite. Make the change minimal and additive.
 
 **Interfaces:**
-- Consumes: `OpenApprovalBuffer.shared.drain()` (Task 5), `.conduitOpenApproval` (Task 5). Routes to the Inbox sidebar destination and re-posts `.conduitOpenApproval` so the (now-mounted) `InboxView` observer fires.
+- Consumes: `OpenApprovalBuffer.shared.drain()` (Task 5), `.lancerOpenApproval` (Task 5). Routes to the Inbox sidebar destination and re-posts `.lancerOpenApproval` so the (now-mounted) `InboxView` observer fires.
 
 - [ ] **Step 1: Drain on launch** — find where `AppRoot` drains `ApprovalActionBuffer` (search `ApprovalActionBuffer.shared.drain` in AppRoot.swift). Immediately after that drain, add a drain of the open-approval buffer that navigates to Inbox and re-emits the open signal:
 
@@ -635,7 +635,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
                 // never auto-decides (that's ApprovalActionBuffer's separate job).
                 navigateToInbox()
                 NotificationCenter.default.post(
-                    name: .conduitOpenApproval, object: nil,
+                    name: .lancerOpenApproval, object: nil,
                     userInfo: ["approvalId": approvalID]
                 )
             }
@@ -643,11 +643,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 2: Implement/confirm `navigateToInbox()`** — if AppRoot already has a way to select the Inbox sidebar destination (search `SidebarDestination` / `selectedTab = .inbox`), call it. If not, set the sidebar selection to the Inbox destination directly (match the existing destination-selection pattern). Keep it to one line that selects Inbox.
 
-- [ ] **Step 3: Also handle the warm case at AppRoot level** — ensure there's a live `.conduitOpenApproval` subscriber that calls `navigateToInbox()` (so a body tap while the app is on a different surface switches to Inbox before the sheet opens). Add near the existing notification subscribers in `configureE2ERelayBridge` or the root `.task`:
+- [ ] **Step 3: Also handle the warm case at AppRoot level** — ensure there's a live `.lancerOpenApproval` subscriber that calls `navigateToInbox()` (so a body tap while the app is on a different surface switches to Inbox before the sheet opens). Add near the existing notification subscribers in `configureE2ERelayBridge` or the root `.task`:
 
 ```swift
         Task { @MainActor in
-            for await _ in NotificationCenter.default.notifications(named: .conduitOpenApproval) {
+            for await _ in NotificationCenter.default.notifications(named: .lancerOpenApproval) {
                 navigateToInbox()
             }
         }
@@ -655,13 +655,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 4: Verify app-target build**
 
-Run: `mcp__XcodeBuildMCP__build_sim` scheme `Conduit`, sim `iPhone 17 Pro`.
+Run: `mcp__XcodeBuildMCP__build_sim` scheme `Lancer`, sim `iPhone 17 Pro`.
 Expected: `SUCCEEDED`, 0 errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/AppRoot.swift
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift
 git commit -m "feat(inbox): cold deep-link — drain open-approval buffer, route to Inbox
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -672,8 +672,8 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ### Task 7: Diff render for `.patch` approvals in the detail sheet
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift` (add an optional patch param + diff section)
-- Modify: `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift:206-262` (pass `approval.patch` into the detail)
+- Modify: `Packages/LancerKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift` (add an optional patch param + diff section)
+- Modify: `Packages/LancerKit/Sources/InboxFeature/InboxView.swift:206-262` (pass `approval.patch` into the detail)
 
 **Interfaces:**
 - Produces (InboxApprovalDetail): a new init param `patch: String? = nil` (added LAST in the init, defaulted, so existing call sites compile). When non-nil and parseable, render a `DiffView`.
@@ -705,7 +705,7 @@ Add `import DiffKit` and `import DiffFeature` at the top of the file.
             }
 ```
 
-- [ ] **Step 5: Write a parse test** — `Packages/ConduitKit/Tests/ConduitKitTests/PatchDiffRenderTests.swift`:
+- [ ] **Step 5: Write a parse test** — `Packages/LancerKit/Tests/LancerKitTests/PatchDiffRenderTests.swift`:
 
 ```swift
 import Testing
@@ -730,16 +730,16 @@ struct PatchDiffRenderTests {
 
 - [ ] **Step 6: Build + test**
 
-Run: `cd Packages/ConduitKit && swift build` → `Build complete!`
-Run: `mcp__XcodeBuildMCP__build_sim` scheme `Conduit` → `SUCCEEDED`.
-Run: `mcp__XcodeBuildMCP__test_sim` `only: ["ConduitKitTests/PatchDiffRenderTests"]` → PASS (or note scheme routing).
+Run: `cd Packages/LancerKit && swift build` → `Build complete!`
+Run: `mcp__XcodeBuildMCP__build_sim` scheme `Lancer` → `SUCCEEDED`.
+Run: `mcp__XcodeBuildMCP__test_sim` `only: ["LancerKitTests/PatchDiffRenderTests"]` → PASS (or note scheme routing).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift \
-  Packages/ConduitKit/Sources/InboxFeature/InboxView.swift \
-  Packages/ConduitKit/Tests/ConduitKitTests/PatchDiffRenderTests.swift
+git add Packages/LancerKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift \
+  Packages/LancerKit/Sources/InboxFeature/InboxView.swift \
+  Packages/LancerKit/Tests/LancerKitTests/PatchDiffRenderTests.swift
 git commit -m "feat(inbox): render real diff for patch approvals in the detail sheet
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -749,14 +749,14 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## Final Verification (after all tasks)
 
-- [ ] `cd Packages/ConduitKit && swift build` → clean.
-- [ ] `mcp__XcodeBuildMCP__build_sim` scheme `Conduit` → SUCCEEDED, 0 warnings.
+- [ ] `cd Packages/LancerKit && swift build` → clean.
+- [ ] `mcp__XcodeBuildMCP__build_sim` scheme `Lancer` → SUCCEEDED, 0 warnings.
 - [ ] `cd daemon/push-backend && go build ./... && go test ./...` → pass.
-- [ ] `cd daemon/conduitd && go build ./...` → pass (no regressions; conduitd unchanged but build to be safe).
+- [ ] `cd daemon/lancerd && go build ./...` → pass (no regressions; lancerd unchanged but build to be safe).
 - [ ] Flag for owner device QA (cannot be simulator-verified): (1) cold-path ✓ — killed-app Approve → green ✓ on lock screen; (2) cold deep-link — killed-app body tap → app launches to Inbox detail sheet; (3) warm Live-Activity body tap → detail opens. Extend the device prompt in the prior session.
 
 ## Self-Review (completed by author)
 
 - **Spec coverage:** §1 `lastDecision` → T1. §2 four states + precedence + cost overlay → T2 (resolver) + T4 (render). §3.1 deep-link warm/cold → T5/T6. §3.2 reveal = existing sheet, app-lock gate (no new code) → satisfied by reusing `InboxApprovalDetail` (no task needed; explicitly *not* adding a gate). §3.3 patch diff → T7. §4 boundaries/testing → tasks carry tests; verification gate in Global Constraints. §5 open questions: (1) lastDecision clear = explicit push then update/end — handled in T3's ~4s/stale-date comment; (2) InboxFeature→DiffKit edge — confirmed already declared (Package.swift:168-169); (3) cost budget source — resolved as `budget: nil` for now (T4 Step 4 note), wiring in place; (4) cold tap-body vs button — T5 uses `UNNotificationDefaultActionIdentifier` for review, leaves action buffer for decide.
 - **Placeholder scan:** none — every code step shows real code; the one branch (T7 Step 1) is a documented decision, not a TODO.
-- **Type consistency:** `ContentState.lastDecision: String?` (T1) consumed as `state.lastDecision` (T2 resolver, T4 widget). `LiveActivityPresentation.resolve(_:budget:)` defined T2, called T4. `OpenApprovalBuffer`/`.conduitOpenApproval` defined T5, consumed T6. `UnifiedDiffParser.parse`/`DiffView` used T7 — match existing InboxView usage.
+- **Type consistency:** `ContentState.lastDecision: String?` (T1) consumed as `state.lastDecision` (T2 resolver, T4 widget). `LiveActivityPresentation.resolve(_:budget:)` defined T2, called T4. `OpenApprovalBuffer`/`.lancerOpenApproval` defined T5, consumed T6. `UnifiedDiffParser.parse`/`DiffView` used T7 — match existing InboxView usage.

@@ -1,6 +1,6 @@
 # push-backend
 
-Minimal Go service for Conduit: APNs delivery, Stripe billing, hosted agents control plane.
+Minimal Go service for Lancer: APNs delivery, Stripe billing, hosted agents control plane.
 
 ## Build & test
 

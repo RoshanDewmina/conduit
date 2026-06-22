@@ -1,4 +1,4 @@
-# Conduit V1 Implementation Handoff Index
+# Lancer V1 Implementation Handoff Index
 
 > **For agentic workers:** Start here, then open the specific plan for your assigned lane. Do not implement from this index alone.
 
@@ -63,8 +63,8 @@ Safe to run in parallel:
 
 Avoid parallel edits:
 
-- Two agents editing `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`.
-- Two agents editing `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`.
+- Two agents editing `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`.
+- Two agents editing `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`.
 - Sidebar shell and Fleet routing in the same files before the shell is merged.
 - Release checklist updates before the verification commands have actually run.
 

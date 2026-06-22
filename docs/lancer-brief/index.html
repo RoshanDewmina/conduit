@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lancer — Mobile Command Center for Agent Loops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f;
+    --surface: #0d1117;
+    --surface2: #131920;
+    --border: #1e2d3d;
+    --border2: #2a3f55;
+    --text: #e8edf4;
+    --muted: #7a8a9a;
+    --accent: #3b82f6;
+    --accent2: #60a5fa;
+    --green: #4ade80;
+    --green-dim: #1a3a1a;
+    --yellow: #fbbf24;
+    --yellow-dim: #2e1f00;
+    --red: #f87171;
+    --red-dim: #2e0a0a;
+    --purple: #a78bfa;
+    --purple-dim: #1e1040;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.6; }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 96px 0; }
+  section + section { border-top: 1px solid var(--border); }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,11,15,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 0;
+  }
+  nav .inner { max-width: 1100px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { font-size: 15px; font-weight: 700; letter-spacing: 0.05em; color: var(--text); text-decoration: none; }
+  .nav-logo span { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; list-style: none; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; transition: color 0.15s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-badge { font-size: 11px; font-family: var(--mono); background: var(--green-dim); color: var(--green); padding: 3px 8px; border-radius: 4px; border: 1px solid #2a4a2a; }
+
+  /* ── HERO ── */
+  #hero { padding: 120px 0 96px; text-align: center; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 16px; }
+  h1 { font-size: clamp(36px, 6vw, 72px); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 20px; }
+  h1 .dim { color: var(--muted); }
+  .hero-sub { font-size: 18px; color: var(--muted); max-width: 580px; margin: 0 auto 40px; line-height: 1.7; }
+  .hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.15s; border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-outline { background: transparent; color: var(--text); border-color: var(--border2); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .hero-meta { margin-top: 56px; display: flex; gap: 48px; justify-content: center; flex-wrap: wrap; }
+  .hero-stat { text-align: center; }
+  .hero-stat .num { font-size: 28px; font-weight: 800; color: var(--text); display: block; }
+  .hero-stat .lbl { font-size: 12px; color: var(--muted); }
+
+  /* ── SECTION HEADERS ── */
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
+  h2 { font-size: clamp(24px, 4vw, 40px); font-weight: 800; letter-spacing: -0.025em; margin-bottom: 16px; }
+  .section-desc { font-size: 16px; color: var(--muted); max-width: 540px; line-height: 1.7; }
+
+  /* ── PROBLEM ── */
+  .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 48px; }
+  .problem-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .problem-card .who { font-size: 11px; font-family: var(--mono); color: var(--accent2); margin-bottom: 10px; }
+  .problem-card blockquote { font-size: 13px; line-height: 1.7; color: var(--text); font-style: italic; border-left: 2px solid var(--border2); padding-left: 12px; }
+  .problem-card .attribution { margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .pain-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 40px; }
+  .pain-item { background: var(--red-dim); border: 1px solid #3a1a1a; border-radius: 8px; padding: 14px; }
+  .pain-item .pain-title { font-size: 12px; font-weight: 600; color: var(--red); margin-bottom: 6px; }
+  .pain-item p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── SOLUTION / PHONE MOCKUPS ── */
+  .solution-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; margin-top: 48px; }
+  .solution-points { display: flex; flex-direction: column; gap: 24px; }
+  .sol-item { display: flex; gap: 14px; }
+  .sol-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .sol-item h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .sol-item p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  /* ── PHONE MOCKUP ── */
+  .phone { width: 220px; background: #0a0e14; border-radius: 36px; border: 2px solid #2a3a4a; padding: 10px; box-shadow: 0 40px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04); position: relative; }
+  .phone-notch { width: 60px; height: 20px; background: #0a0e14; border-radius: 0 0 14px 14px; margin: 0 auto 8px; border: 2px solid #1a2530; border-top: none; }
+  .phone-screen { background: var(--bg); border-radius: 26px; overflow: hidden; min-height: 380px; }
+  .phone-status { display: flex; justify-content: space-between; padding: 6px 12px; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+  .phones-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .phone-label { text-align: center; font-size: 11px; color: var(--muted); margin-top: 10px; font-family: var(--mono); }
+
+  /* INBOX SCREEN */
+  .inbox-header { padding: 10px 12px 6px; border-bottom: 1px solid var(--border); }
+  .inbox-header h4 { font-size: 13px; font-weight: 700; }
+  .inbox-header p { font-size: 10px; color: var(--muted); }
+  .inbox-item { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+  .inbox-item:hover { background: var(--surface2); }
+  .inbox-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .dot-red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .dot-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .dot-green { background: var(--green); }
+  .dot-blue { background: var(--accent); }
+  .dot-dim { background: var(--border2); }
+  .inbox-body { flex: 1; min-width: 0; }
+  .inbox-agent { font-size: 10px; font-weight: 600; color: var(--accent2); margin-bottom: 2px; }
+  .inbox-msg { font-size: 11px; line-height: 1.5; color: var(--text); }
+  .inbox-time { font-size: 9px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .inbox-badge { font-size: 9px; background: var(--red); color: #fff; border-radius: 8px; padding: 1px 5px; margin-left: auto; }
+  .inbox-tag { font-size: 9px; padding: 1px 5px; border-radius: 4px; }
+  .tag-decision { background: #1a1a3a; color: var(--purple); border: 1px solid #2a2a5a; }
+  .tag-proof { background: var(--green-dim); color: var(--green); border: 1px solid #2a4a2a; }
+  .tag-alert { background: var(--yellow-dim); color: var(--yellow); border: 1px solid #3a2a00; }
+
+  /* PROOF CARD SCREEN */
+  .proof-card { margin: 8px; background: var(--surface2); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .proof-header { padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .proof-header .agent { font-size: 9px; color: var(--accent2); font-family: var(--mono); margin-bottom: 3px; }
+  .proof-header h4 { font-size: 12px; font-weight: 700; }
+  .proof-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); }
+  .proof-row .k { font-size: 10px; color: var(--muted); }
+  .proof-row .v { font-size: 10px; font-weight: 600; }
+  .proof-row .v.green { color: var(--green); }
+  .proof-row .v.red { color: var(--red); }
+  .proof-row .v.yellow { color: var(--yellow); }
+  .proof-files { padding: 8px 12px; }
+  .proof-file { font-size: 10px; font-family: var(--mono); color: var(--accent2); padding: 2px 0; }
+  .proof-risk { margin: 8px 12px; background: var(--yellow-dim); border: 1px solid #3a2a00; border-radius: 6px; padding: 7px 10px; font-size: 10px; color: var(--yellow); }
+  .proof-actions { display: flex; gap: 6px; padding: 8px 12px; }
+  .pa-btn { flex: 1; padding: 7px; border-radius: 7px; font-size: 11px; font-weight: 600; text-align: center; border: none; cursor: pointer; }
+  .pa-approve { background: var(--green-dim); color: var(--green); border: 1px solid #2a4a2a; }
+  .pa-deny { background: var(--red-dim); color: var(--red); border: 1px solid #3a1a1a; }
+
+  /* LOOP PROGRESS SCREEN */
+  .loop-header { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .loop-header p { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .loop-item { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .loop-name { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+  .loop-progress-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-bottom: 6px; }
+  .loop-fill { height: 100%; border-radius: 2px; }
+  .fill-green { background: var(--green); }
+  .fill-yellow { background: var(--yellow); }
+  .fill-red { background: var(--red); }
+  .loop-meta { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+  .loop-steps { padding: 6px 12px; }
+  .loop-step { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 10px; }
+  .step-icon { font-size: 11px; width: 14px; text-align: center; }
+  .step-label { color: var(--muted); }
+  .step-label.done { color: var(--text); }
+  .step-label.active { color: var(--yellow); font-weight: 600; }
+
+  /* ── MCP TOOLS ── */
+  .tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 48px; }
+  .tool-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .tool-card:nth-child(4), .tool-card:nth-child(5) { grid-column: span 1; }
+  .tools-bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .tool-name { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent2); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .tool-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-family: var(--sans); font-weight: 600; }
+  .tag-new { background: var(--purple-dim); color: var(--purple); border: 1px solid #3a2a7a; }
+  .tag-core { background: #0d2040; color: var(--accent2); border: 1px solid var(--border2); }
+  .tool-desc { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 12px; }
+  .tool-code { font-family: var(--mono); font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: #a5d6a7; line-height: 1.8; overflow-x: auto; }
+  .tc-fn { color: var(--accent2); }
+  .tc-key { color: #e8b86e; }
+  .tc-str { color: #a5d6a7; }
+  .tc-num { color: var(--purple); }
+  .tc-cm { color: #555; }
+
+  /* ── COMPETITIVE ── */
+  .comp-table { width: 100%; border-collapse: collapse; margin-top: 40px; font-size: 13px; }
+  .comp-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  .comp-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .comp-table tr.lancer-row td { background: rgba(59,130,246,0.05); }
+  .comp-table tr.lancer-row td:first-child { border-left: 2px solid var(--accent); }
+  .check { color: var(--green); font-size: 14px; }
+  .cross { color: var(--red); font-size: 14px; }
+  .partial { color: var(--yellow); font-size: 14px; }
+  .product-name { font-weight: 700; }
+  .product-name.yours { color: var(--accent2); }
+
+  /* ── BUILD PLAN ── */
+  .plan-layout { display: grid; grid-template-columns: 260px 1fr; gap: 48px; margin-top: 48px; align-items: start; }
+  .plan-phases { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 80px; }
+  .phase-pill { padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .phase-pill.active { background: rgba(59,130,246,0.1); border-color: var(--accent); color: var(--accent2); }
+  .phase-pill .phase-num { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .plan-tasks { display: flex; flex-direction: column; gap: 10px; }
+  .task-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start; }
+  .task-num { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 28px; flex-shrink: 0; padding-top: 2px; }
+  .task-body h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .task-body p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .task-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: auto; flex-shrink: 0; }
+  .status-ready { background: var(--green-dim); color: var(--green); border: 1px solid #2a4a2a; }
+  .status-next { background: #0d2040; color: var(--accent2); border: 1px solid var(--border2); }
+  .status-planned { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ── THESIS ── */
+  #thesis { text-align: center; }
+  .thesis-quote { font-size: clamp(18px, 3vw, 28px); font-weight: 700; max-width: 760px; margin: 32px auto 0; line-height: 1.5; color: var(--text); }
+  .thesis-quote em { color: var(--accent2); font-style: normal; }
+  .thesis-attr { margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .analogy-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
+  .analogy-chip { padding: 10px 20px; border-radius: 8px; border: 1px solid var(--border2); font-size: 13px; color: var(--muted); }
+  .analogy-chip span { color: var(--text); font-weight: 700; }
+  .analogy-chip.yours { border-color: var(--accent); background: rgba(59,130,246,0.06); }
+  .analogy-chip.yours span { color: var(--accent2); }
+
+  /* ── FOOTER ── */
+  footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; font-size: 12px; color: var(--muted); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .problem-grid, .pain-strip, .tools-grid { grid-template-columns: 1fr; }
+    .solution-layout, .plan-layout, .tools-bottom-row { grid-template-columns: 1fr; }
+    .comp-table { font-size: 11px; }
+    .phones-row { gap: 12px; }
+    .phone { width: 180px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <a class="nav-logo" href="#"><span>⬡</span> Lancer</a>
+    <ul class="nav-links">
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#solution">Solution</a></li>
+      <li><a href="#tools">MCP Tools</a></li>
+      <li><a href="#competitive">Competitive</a></li>
+      <li><a href="#plan">Build Plan</a></li>
+    </ul>
+    <span class="nav-badge">In Development</span>
+  </div>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section id="hero">
+  <div class="container">
+    <div class="eyebrow">Mobile Command Center for Autonomous Agent Loops</div>
+    <h1>Your agents run.<br><span class="dim">You stay in control.</span></h1>
+    <p class="hero-sub">Lancer is the iOS app that turns long-running AI agent loops into structured proof cards, risk-tiered approvals, and one-tap decisions — across every agent you run.</p>
+    <div class="hero-cta">
+      <a href="#plan" class="btn btn-primary">↓ See the Build Plan</a>
+      <a href="#tools" class="btn btn-outline">View MCP Tools</a>
+    </div>
+    <div class="hero-meta">
+      <div class="hero-stat">
+        <span class="num">93%</span>
+        <span class="lbl">of Claude Code prompts approved without reading</span>
+      </div>
+      <div class="hero-stat">
+        <span class="num">70+</span>
+        <span class="lbl">agent notifications/day at Notion before triage</span>
+      </div>
+      <div class="hero-stat">
+        <span class="num">5</span>
+        <span class="lbl">MCP tools — drop-in for any Claude Code agent</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ PROBLEM ══ -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label">The Problem</div>
+    <h2>Developers are stitching this together<br>with SSH, Telegram, and tmux glue</h2>
+    <p class="section-desc">Every serious agent developer we researched is already doing mobile agent management — they're just doing it badly.</p>
+
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="who">@levelsio · levels.io</div>
+        <blockquote>"My laptop screen looks pretty much like this all day now and same on my iPhone… Claude Code open to fix or build new things. The real bottleneck is becoming myself and my creativity, not how fast I can ship."</blockquote>
+        <div class="attribution">iPhone + Termius + VPS + Claude Code — 2026-05-22</div>
+      </div>
+      <div class="problem-card">
+        <div class="who">@simonw · Simon Willison</div>
+        <blockquote>"I'd estimate that the majority of code I ship to GitHub these days was written for me by coding agents driven via that iPhone app. I need tools that allow agents to clearly demonstrate their work — minimizing opportunities for them to cheat."</blockquote>
+        <div class="attribution">Showboat and Rodney — 2026-02-10</div>
+      </div>
+      <div class="problem-card">
+        <div class="who">@steipete · Peter Steinberger</div>
+        <blockquote>"We all wanted to check on our AI agents and see how far they'd gotten… imagine being at lunch and checking if your agent finished that refactoring task, then immediately giving it the next assignment."</blockquote>
+        <div class="attribution">VibeTunnel launch — 2025-06-16</div>
+      </div>
+    </div>
+
+    <div class="pain-strip">
+      <div class="pain-item">
+        <div class="pain-title">Approval Fatigue</div>
+        <p>Anthropic built auto mode because 93% of approvals get accepted without reading. Total bypass is dangerous. There's nothing in between.</p>
+      </div>
+      <div class="pain-item">
+        <div class="pain-title">Notification Spam</div>
+        <p>Notion: 70 agent notifications/day. Developers mute everything, then miss the one alert that mattered.</p>
+      </div>
+      <div class="pain-item">
+        <div class="pain-title">No Proof</div>
+        <p>"Task complete" in a chat bubble. No diff, no test results, no what-changed-and-why. Agents can lie and you wouldn't know.</p>
+      </div>
+      <div class="pain-item">
+        <div class="pain-title">No Cross-Agent View</div>
+        <p>Running 3 agents across 2 machines and a VPS. Each lives in a separate terminal. You have no single view of what they're all doing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SOLUTION ══ -->
+<section id="solution">
+  <div class="container">
+    <div class="section-label">The Solution</div>
+    <h2>Not "SSH on a phone, but prettier."<br>A mobile engineering manager.</h2>
+    <p class="section-desc">Agents run autonomously. Lancer receives only meaningful escalations. Every completion includes verifiable proof.</p>
+
+    <div class="solution-layout">
+      <div class="solution-points">
+        <div class="sol-item">
+          <div class="sol-icon">🔁</div>
+          <div>
+            <h3>Loop visibility, not notification lists</h3>
+            <p>Agents report structured progress — step 4/8, blocked on test failure, waiting for decision. The fleet dashboard shows loop status, not just "active/idle."</p>
+          </div>
+        </div>
+        <div class="sol-item">
+          <div class="sol-icon">🃏</div>
+          <div>
+            <h3>Proof-of-work cards</h3>
+            <p>Every task completion produces a structured card: goal, files changed, diff summary, tests run, risks, screenshots, "what I could not verify." Agents can't just say "done."</p>
+          </div>
+        </div>
+        <div class="sol-item">
+          <div class="sol-icon">🛡️</div>
+          <div>
+            <h3>Risk-tiered policy, not yes/no prompts</h3>
+            <p>Approve classes of actions: allow tests, ask for package installs, block prod DB writes. Policy persists across sessions. No more per-command tapping.</p>
+          </div>
+        </div>
+        <div class="sol-item">
+          <div class="sol-icon">📡</div>
+          <div>
+            <h3>MCP-native — zero agent friction</h3>
+            <p>Claude Code users already use MCP. Agents add one line to their config. No CLI wrapping, no SDK, no brittle shell integrations that break on every update.</p>
+          </div>
+        </div>
+        <div class="sol-item">
+          <div class="sol-icon">🔔</div>
+          <div>
+            <h3>Intelligent escalation filtering</h3>
+            <p>The app asks "should I wake you?" before every APNs call. Most steps never reach your phone. Only blocked loops, failed tests, risky actions, and completed proofs do.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHONE MOCKUPS -->
+      <div>
+        <div class="phones-row">
+
+          <!-- INBOX PHONE -->
+          <div>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-status"><span>9:41</span><span>●●● ▲</span></div>
+                <div class="inbox-header">
+                  <h4>Agent Inbox</h4>
+                  <p>3 need attention</p>
+                </div>
+                <div class="inbox-item">
+                  <div class="inbox-dot dot-red"></div>
+                  <div class="inbox-body">
+                    <div class="inbox-agent">DeployBot · command-center</div>
+                    <div class="inbox-msg">Health check failed twice — roll back or retry?</div>
+                    <div class="inbox-time">now <span class="inbox-tag tag-decision">decision</span></div>
+                  </div>
+                </div>
+                <div class="inbox-item">
+                  <div class="inbox-dot dot-green"></div>
+                  <div class="inbox-body">
+                    <div class="inbox-agent">ClaudeCode · feat/mcp</div>
+                    <div class="inbox-msg">Fix login test — 4 files, tests passed</div>
+                    <div class="inbox-time">2m <span class="inbox-tag tag-proof">proof ready</span></div>
+                  </div>
+                </div>
+                <div class="inbox-item">
+                  <div class="inbox-dot dot-yellow"></div>
+                  <div class="inbox-body">
+                    <div class="inbox-agent">ResearchBot · TSLA</div>
+                    <div class="inbox-msg">Loop blocked — rate limited on news API</div>
+                    <div class="inbox-time">7m <span class="inbox-tag tag-alert">blocked</span></div>
+                  </div>
+                </div>
+                <div class="inbox-item">
+                  <div class="inbox-dot dot-dim"></div>
+                  <div class="inbox-body">
+                    <div class="inbox-agent">CodexAgent · refactor</div>
+                    <div class="inbox-msg">Step 6/8 — running integration tests</div>
+                    <div class="inbox-time">12m</div>
+                  </div>
+                </div>
+                <div class="inbox-item">
+                  <div class="inbox-dot dot-blue"></div>
+                  <div class="inbox-body">
+                    <div class="inbox-agent">DeployBot · staging</div>
+                    <div class="inbox-msg">Staging deploy complete — ready for review</div>
+                    <div class="inbox-time">34m <span class="inbox-tag tag-proof">proof ready</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="phone-label">Agent Inbox</div>
+          </div>
+
+          <!-- PROOF CARD PHONE -->
+          <div>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-status"><span>9:41</span><span>●●● ▲</span></div>
+                <div class="proof-card">
+                  <div class="proof-header">
+                    <div class="agent">ClaudeCode · feat/mcp · cautious mode</div>
+                    <h4>Fix failing login test</h4>
+                  </div>
+                  <div class="proof-row"><span class="k">Tests</span><span class="v green">✓ passed</span></div>
+                  <div class="proof-row"><span class="k">Files changed</span><span class="v">2 files</span></div>
+                  <div class="proof-row"><span class="k">Commands run</span><span class="v">npm test, lint</span></div>
+                  <div class="proof-row"><span class="k">Diff summary</span><span class="v" style="font-size:9px;max-width:100px;text-align:right">Token refresh race condition</span></div>
+                  <div class="proof-files">
+                    <div class="proof-file">+ src/auth/session.ts</div>
+                    <div class="proof-file">+ tests/auth.test.ts</div>
+                  </div>
+                  <div class="proof-risk">⚠ Did not test Safari OAuth</div>
+                  <div class="proof-actions">
+                    <button class="pa-btn pa-approve">✓ Approve PR</button>
+                    <button class="pa-btn pa-deny">✕ Deny</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="phone-label">Proof Card</div>
+          </div>
+
+        </div>
+
+        <!-- LOOP PROGRESS PHONE (centered below) -->
+        <div style="display:flex;justify-content:center;margin-top:24px;">
+          <div>
+            <div class="phone">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                <div class="phone-status"><span>9:41</span><span>●●● ▲</span></div>
+                <div class="loop-header">
+                  <h4 style="font-size:13px;font-weight:700;">Fleet Status</h4>
+                  <p>4 loops active</p>
+                </div>
+                <div class="loop-item">
+                  <div class="loop-name">Deploy Loop · command-center</div>
+                  <div class="loop-progress-bar"><div class="loop-fill fill-red" style="width:62%"></div></div>
+                  <div class="loop-meta"><span>step 5/8</span><span style="color:var(--red)">● blocked</span></div>
+                </div>
+                <div class="loop-item">
+                  <div class="loop-name">Bug Fix · auth module</div>
+                  <div class="loop-progress-bar"><div class="loop-fill fill-green" style="width:100%"></div></div>
+                  <div class="loop-meta"><span>8/8 complete</span><span style="color:var(--green)">✓ done</span></div>
+                </div>
+                <div class="loop-item">
+                  <div class="loop-name">Research · TSLA analysis</div>
+                  <div class="loop-progress-bar"><div class="loop-fill fill-yellow" style="width:33%"></div></div>
+                  <div class="loop-meta"><span>step 2/6</span><span style="color:var(--yellow)">⏸ rate limited</span></div>
+                </div>
+                <div class="loop-steps">
+                  <div class="loop-step"><span class="step-icon">✓</span><span class="step-label done">Build</span></div>
+                  <div class="loop-step"><span class="step-icon">✓</span><span class="step-label done">Unit tests</span></div>
+                  <div class="loop-step"><span class="step-icon">✓</span><span class="step-label done">Lint</span></div>
+                  <div class="loop-step"><span class="step-icon">✓</span><span class="step-label done">Staging deploy</span></div>
+                  <div class="loop-step"><span class="step-icon">●</span><span class="step-label active">Health check → blocked</span></div>
+                  <div class="loop-step"><span class="step-icon">○</span><span class="step-label">Rollback / promote</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="phone-label">Loop Progress</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ MCP TOOLS ══ -->
+<section id="tools">
+  <div class="container">
+    <div class="section-label">MCP Integration</div>
+    <h2>Five tools. One line of config.</h2>
+    <p class="section-desc">Agents add <code style="font-family:var(--mono);color:var(--accent2);font-size:14px;">--mcp-server https://lancer.cloud/mcp</code> and immediately get mobile-native loop control. No SDK. No CLI wrapping.</p>
+
+    <div class="tools-grid">
+      <div class="tool-card">
+        <div class="tool-name"><span class="tc-fn">lancer_notify</span> <span class="tool-tag tag-core">core</span></div>
+        <p class="tool-desc">Fire-and-forget push to the user's device. Stored in event log. Filtered by priority and quiet hours before APNs fires.</p>
+        <div class="tool-code">
+<span class="tc-fn">lancer_notify</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"message"</span>: <span class="tc-str">"Build passed in 42s"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"level"</span>: <span class="tc-str">"info"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"agent_name"</span>: <span class="tc-str">"DeployBot"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"provenance"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tc-key">"repo"</span>: <span class="tc-str">"command-center"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tc-key">"branch"</span>: <span class="tc-str">"feat/mcp"</span><br>
+&nbsp;&nbsp;}<br>
+})</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name"><span class="tc-fn">lancer_checkpoint</span> <span class="tool-tag tag-core">core</span></div>
+        <p class="tool-desc">Request a human decision. Returns a <code style="font-family:var(--mono);color:var(--purple)">checkpoint_id</code> immediately — no 60s timeout. Fires APNs with Approve/Deny/Edit buttons.</p>
+        <div class="tool-code">
+<span class="tc-cm">// Returns immediately</span><br>
+<span class="tc-fn">lancer_checkpoint</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"message"</span>: <span class="tc-str">"Health check failed. Roll back?"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"context"</span>: <span class="tc-str">"2 of 3 pods unhealthy"</span><br>
+})<br>
+<span class="tc-cm">// → { "checkpoint_id": "cp_a3f2..." }</span></div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name"><span class="tc-fn">lancer_checkpoint_status</span></div>
+        <p class="tool-desc">Poll until the user acts. Returns <code style="font-family:var(--mono);color:var(--purple)">pending → approved | denied | edited</code>. Agent loops naturally on this.</p>
+        <div class="tool-code">
+<span class="tc-cm">// Agent polls until decided</span><br>
+<span class="tc-fn">lancer_checkpoint_status</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"checkpoint_id"</span>: <span class="tc-str">"cp_a3f2..."</span><br>
+})<br>
+<span class="tc-cm">// → { "status": "approved" }</span></div>
+      </div>
+    </div>
+
+    <div class="tools-bottom-row">
+      <div class="tool-card">
+        <div class="tool-name"><span class="tc-fn">lancer_loop_start</span> / <span class="tc-fn">lancer_step_complete</span> <span class="tool-tag tag-new">new</span></div>
+        <p class="tool-desc">Track structured progress. <code style="font-family:var(--mono);color:var(--accent2)">loop_start</code> returns a <code style="font-family:var(--mono);color:var(--purple)">loop_id</code> and shows a progress bar in the app. <code style="font-family:var(--mono);color:var(--accent2)">step_complete</code> notifies only on failure or block — not every step.</p>
+        <div class="tool-code">
+<span class="tc-fn">lancer_loop_start</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"name"</span>: <span class="tc-str">"Deploy Loop"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"total_steps"</span>: <span class="tc-num">8</span><br>
+}) <span class="tc-cm">// → { "loop_id": "loop_9b2..." }</span><br><br>
+<span class="tc-fn">lancer_step_complete</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"loop_id"</span>: <span class="tc-str">"loop_9b2..."</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"step"</span>: <span class="tc-num">3</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"status"</span>: <span class="tc-str">"ok"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"summary"</span>: <span class="tc-str">"Unit tests passed (142/142)"</span><br>
+})</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name"><span class="tc-fn">lancer_proof</span> <span class="tool-tag tag-new">new</span></div>
+        <p class="tool-desc">Submit structured proof-of-work. Creates a rich card in the mobile inbox. Forced schema — agents can't send vague prose. No more "task complete" with no evidence.</p>
+        <div class="tool-code">
+<span class="tc-fn">lancer_proof</span>({<br>
+&nbsp;&nbsp;<span class="tc-key">"goal"</span>: <span class="tc-str">"Fix failing login test"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"changed_files"</span>: [<span class="tc-str">"src/auth/session.ts"</span>],<br>
+&nbsp;&nbsp;<span class="tc-key">"test_status"</span>: <span class="tc-str">"passed"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"diff_summary"</span>: <span class="tc-str">"Fixed token refresh race"</span>,<br>
+&nbsp;&nbsp;<span class="tc-key">"risks"</span>: [<span class="tc-str">"Safari OAuth not tested"</span>],<br>
+&nbsp;&nbsp;<span class="tc-key">"recommended_next_action"</span>: <span class="tc-str">"approve_pr"</span><br>
+})</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ COMPETITIVE ══ -->
+<section id="competitive">
+  <div class="container">
+    <div class="section-label">Competitive Positioning</div>
+    <h2>The cross-agent, vendor-neutral gap</h2>
+    <p class="section-desc">First-party tools own single-vendor control. Lancer owns the multi-agent, policy-first, proof-first layer.</p>
+
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Cross-agent</th>
+          <th>Proof cards</th>
+          <th>Risk policy</th>
+          <th>Loop progress</th>
+          <th>iOS-native</th>
+          <th>Watch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="lancer-row">
+          <td><span class="product-name yours">Lancer</span><br><span style="font-size:11px;color:var(--muted)">You</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">Claude Remote Control</span><br><span style="font-size:11px;color:var(--muted)">Anthropic</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">Codex Mobile</span><br><span style="font-size:11px;color:var(--muted)">OpenAI</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">Omnara</span><br><span style="font-size:11px;color:var(--muted)">YC S25</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">cmux</span><br><span style="font-size:11px;color:var(--muted)">manaflow-ai</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">VibeTunnel</span><br><span style="font-size:11px;color:var(--muted)">Steinberger</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td><span class="product-name">Telegram + Agent Reachout</span><br><span style="font-size:11px;color:var(--muted)">DIY</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px;font-size:12px;color:var(--muted)"><span class="check">✓</span> = built &nbsp; <span class="partial">~</span> = partial &nbsp; <span class="cross">✗</span> = missing</p>
+  </div>
+</section>
+
+<!-- ══ BUILD PLAN ══ -->
+<section id="plan">
+  <div class="container">
+    <div class="section-label">Build Plan</div>
+    <h2>10 tasks. All TDD. All committed.</h2>
+    <p class="section-desc">Plan 1 implements the Cloud MCP Server. Each task builds on the last and produces working, testable software. Full detail at <code style="font-family:var(--mono);font-size:13px;color:var(--accent2)">docs/superpowers/plans/2026-06-07-cloud-mcp-server.md</code></p>
+
+    <div class="plan-layout">
+      <div class="plan-phases">
+        <div class="phase-pill active">
+          <div class="phase-num">Plan 1</div>
+          Cloud MCP Server
+        </div>
+        <div class="phase-pill">
+          <div class="phase-num">Plan 2 — next</div>
+          iOS Inbox + Rich Cards
+        </div>
+        <div class="phase-pill">
+          <div class="phase-num">Plan 3 — future</div>
+          Apple Watch App
+        </div>
+        <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.7;">
+          <strong style="color:var(--text);display:block;margin-bottom:6px;">Tech stack</strong>
+          Go 1.25 · net/http · JSON file store · APNs JWT · MCP JSON-RPC 2.0 · SwiftUI (Plan 2)
+        </div>
+      </div>
+
+      <div class="plan-tasks">
+        <div class="task-row">
+          <span class="task-num">01</span>
+          <div class="task-body">
+            <h4>API Key Store</h4>
+            <p>Generate/lookup/revoke <code style="font-family:var(--mono)">ck_*</code> keys that map agents to device sessions. Bearer auth on all MCP requests.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">02</span>
+          <div class="task-body">
+            <h4>Event &amp; Checkpoint Store</h4>
+            <p>Append-only event log. Mutable checkpoint store (pending → approved/denied/edited). JSON file pattern matching existing push-backend.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">03</span>
+          <div class="task-body">
+            <h4>MCP HTTP Handler</h4>
+            <p><code style="font-family:var(--mono)">POST /mcp</code> with JSON-RPC 2.0 dispatch. Handles initialize, tools/list, tools/call. Returns 401 for bad/missing keys.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">04</span>
+          <div class="task-body">
+            <h4>lancer_notify + lancer_checkpoint + _status</h4>
+            <p>Core tools. Notify stores event and fires APNs goroutine. Checkpoint stores pending record, fires APNs with action category, returns checkpoint_id immediately.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">05</span>
+          <div class="task-body">
+            <h4>iOS Decision Endpoint</h4>
+            <p><code style="font-family:var(--mono)">POST /mcp-decide</code> — iOS app calls this when user taps Approve/Deny/Edit. Updates checkpoint so polling agent sees decision.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">06</span>
+          <div class="task-body">
+            <h4>End-to-End Smoke Test</h4>
+            <p>Full curl walkthrough: register device → create key → initialize MCP → notify → checkpoint → decide → poll approved. Verified locally before deploy.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">07</span>
+          <div class="task-body">
+            <h4>Claude Code Integration Test</h4>
+            <p>Wire a real Claude Code agent via <code style="font-family:var(--mono)">--mcp-config</code>. Agent calls lancer_notify, polls lancer_checkpoint_status, receives approved status.</p>
+          </div>
+          <span class="task-status status-ready">ready</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">08</span>
+          <div class="task-body">
+            <h4>lancer_loop_start + lancer_step_complete</h4>
+            <p>Structured loop progress. Loop store with step history. Only fires APNs on failed/blocked steps — not every step. Powers fleet dashboard progress bars.</p>
+          </div>
+          <span class="task-status status-next">next up</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">09</span>
+          <div class="task-body">
+            <h4>lancer_proof</h4>
+            <p>Structured proof-of-work cards. Forced schema: goal, changed_files, test_status, diff_summary, risks, unverified. Agents cannot send vague prose summaries.</p>
+          </div>
+          <span class="task-status status-next">next up</span>
+        </div>
+        <div class="task-row">
+          <span class="task-num">10</span>
+          <div class="task-body">
+            <h4>Agent Provenance Metadata</h4>
+            <p>Every event and checkpoint carries agent identity: agent_type, host, repo, branch, session_id, permission_mode. The inbox is a trust surface, not a notification bucket.</p>
+          </div>
+          <span class="task-status status-next">next up</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ THESIS ══ -->
+<section id="thesis">
+  <div class="container">
+    <div class="section-label">Product Thesis</div>
+    <h2>What we're actually building</h2>
+    <div class="thesis-quote">
+      "Managing agents is really a management problem — can you specify goals? Provide context? Divide up tasks? Give feedback? <em>UIs need to support management.</em>"
+    </div>
+    <div class="thesis-attr">— Simon Willison, simonwillison.net, 2026-01-04</div>
+    <div class="analogy-row">
+      <div class="analogy-chip"><span>Linear</span> for agent task state</div>
+      <div class="analogy-chip">+</div>
+      <div class="analogy-chip"><span>GitHub Actions</span> for loop visibility</div>
+      <div class="analogy-chip">+</div>
+      <div class="analogy-chip"><span>PagerDuty</span> for intelligent escalation</div>
+      <div class="analogy-chip">→</div>
+      <div class="analogy-chip yours"><span>Lancer</span> in your pocket</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Lancer · Internal product brief · <span id="date"></span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+
+  // Smooth active state for phase pills (demo only)
+  document.querySelectorAll('.phase-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.phase-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

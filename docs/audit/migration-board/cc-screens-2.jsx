@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — Onboarding, Dispatch, Policy, Settings
+   LANCER — Onboarding, Dispatch, Policy, Settings
    ============================================================ */
 
 /* ---------- shared sub-screen nav (custom, no platform back) ---------- */
@@ -23,24 +23,24 @@ function OnboardingFlow({onDone, initialStep=0}){
     <div key="0" style={{display:'flex',flexDirection:'column',height:'100%'}}>
       <div className="cc-pad" style={{paddingTop:70}}>
         <Spectrum/>
-        <div style={{fontFamily:'var(--mono)',fontSize:11,letterSpacing:'.3em',color:'var(--ink-3)',margin:'18px 0 30px'}}>CONDUIT</div>
+        <div style={{fontFamily:'var(--mono)',fontSize:11,letterSpacing:'.3em',color:'var(--ink-3)',margin:'18px 0 30px'}}>LANCER</div>
         <h1 style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:42,lineHeight:1.04,letterSpacing:'-.02em',margin:0}}>
           <div style={{color:'var(--ink)'}}>agents ask.</div>
           <div style={{color:'var(--brand)'}}>you approve.</div>
           <div style={{color:'var(--ink)',opacity:.62}}>work resumes.</div>
         </h1>
         <p style={{fontSize:15.5,color:'var(--ink-2)',lineHeight:1.6,marginTop:24,maxWidth:'30ch'}}>
-          Your coding agents run on your own machines. Conduit taps you only when one needs a decision — and resumes the moment you choose.
+          Your coding agents run on your own machines. Lancer taps you only when one needs a decision — and resumes the moment you choose.
         </p>
       </div>
       <div style={{flex:1}}/>
       <div className="cc-pad" style={{paddingBottom:46}}>
         <button className="cc-btn cc-btn--primary cc-btn--block" style={{height:52}} onClick={next}>Get started</button>
-        <button className="cc-btn cc-btn--block" style={{background:'none',color:'var(--ink-3)',marginTop:8,height:46}} onClick={onDone}>I already use Conduit</button>
+        <button className="cc-btn cc-btn--block" style={{background:'none',color:'var(--ink-3)',marginTop:8,height:46}} onClick={onDone}>I already use Lancer</button>
       </div>
     </div>,
     /* 1 — install bridge */
-    <OnbStep key="1" n={1} title="Install the bridge" lead="Run this once on the machine where your agents work. It installs conduitd — the helper that enforces your policy and survives disconnects.">
+    <OnbStep key="1" n={1} title="Install the bridge" lead="Run this once on the machine where your agents work. It installs lancerd — the helper that enforces your policy and survives disconnects.">
       <CommandBlock cmd="curl -fsSL conduit.dev/install | sh" level="low"/>
       <button className="cc-btn cc-btn--quiet cc-btn--block" style={{marginTop:10}}><Ic d={ICON.copy} s={14}/>Copy command</button>
       <div style={{display:'flex',alignItems:'center',gap:14,margin:'22px 0 0'}}>
@@ -51,10 +51,10 @@ function OnboardingFlow({onDone, initialStep=0}){
       </div>
     </OnbStep>,
     /* 2 — connect host */
-    <OnbStep key="2" n={2} title="Connect your host" lead="Paste the SSH command for that machine. Your code never leaves it — Conduit only carries decisions.">
+    <OnbStep key="2" n={2} title="Connect your host" lead="Paste the SSH command for that machine. Your code never leaves it — Lancer only carries decisions.">
       <div className="cc-seg" style={{marginBottom:14}}>
         <button className="on">bring your own</button>
-        <button>conduit cloud →</button>
+        <button>lancer cloud →</button>
       </div>
       <CCInput value={host} onChange={setHost} placeholder="ssh user@host -p 22" mono prefix="$"/>
       <button className="cc-row" style={{padding:'12px 0',marginTop:6,cursor:'pointer'}}>
@@ -205,7 +205,7 @@ function SettingsScreen({onPolicy, onLibrary, onReplay}){
   const [redact,setRedact]=React.useState(true);
   return (
     <div className="cc-scroll">
-      <StatusHeader state="ok" label="bridge connected" detail="conduitd v1.0"/>
+      <StatusHeader state="ok" label="bridge connected" detail="lancerd v1.0"/>
       <PromptHeader title="settings" crumb={<b>device &amp; policy</b>}/>
       <div className="cc-pad">
         <div className="cc-sec">bridge &amp; hosts<span className="rule"/></div>
@@ -235,11 +235,11 @@ function SettingsScreen({onPolicy, onLibrary, onReplay}){
 
         <div className="cc-sec">account<span className="rule"/></div>
         <div className="cc-card">
-          <SettingsRow icon={ICON.bolt} title="Conduit Pro" detail="lifetime · unlocked"/>
+          <SettingsRow icon={ICON.bolt} title="Lancer Pro" detail="lifetime · unlocked"/>
           <SettingsRow icon={ICON.card} title="Billing & usage" detail="$4.94 today · across vendors"/>
         </div>
 
-        <p className="cc-note" onClick={onReplay} style={{textAlign:'center',margin:'22px 0 0',cursor:'pointer'}}>Conduit 1.0 · conduitd v1.0 · your code stays on your host</p>
+        <p className="cc-note" onClick={onReplay} style={{textAlign:'center',margin:'22px 0 0',cursor:'pointer'}}>Lancer 1.0 · lancerd v1.0 · your code stays on your host</p>
       </div>
       <div className="cc-bottompad"/>
     </div>

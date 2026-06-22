@@ -130,7 +130,7 @@ func ensureOpenRouterSubKey(ent subscriptionEntitlement) (hash string, key strin
 	}
 
 	limit, limitReset := openRouterLimitForEntitlement(ent)
-	name := fmt.Sprintf("conduit-%s", ent.CustomerID)
+	name := fmt.Sprintf("lancer-%s", ent.CustomerID)
 	created, err := client.createSubKey(name, limit, limitReset)
 	if err != nil {
 		return "", "", err
@@ -150,7 +150,7 @@ func ensureOpenRouterSubKey(ent subscriptionEntitlement) (hash string, key strin
 
 // openRouterKeysStore persists customerID -> provisioned sub-key. The sub-key is
 // rate/spend-capped per customer; it is injected into the cloud runner env at
-// dispatch as CONDUIT_OPENROUTER_KEY. Stored alongside the other control-plane
+// dispatch as LANCER_OPENROUTER_KEY. Stored alongside the other control-plane
 // JSON files. NOTE (security follow-up): this is plaintext-at-rest, consistent
 // with the existing MVP store posture (entitlement client tokens, runner tokens);
 // migrate all of these to a secrets manager / encrypted-at-rest before GA.
@@ -158,7 +158,7 @@ var openRouterKeysStore = struct {
 	mu   sync.Mutex
 	path string
 }{
-	path: dataFilePath("OPENROUTER_KEYS_FILE", "conduit-openrouter-keys.json"),
+	path: dataFilePath("OPENROUTER_KEYS_FILE", "lancer-openrouter-keys.json"),
 }
 
 type openRouterKeysData struct {

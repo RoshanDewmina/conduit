@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useConduitStore } from "@/lib/store/useConduitStore";
+import { useLancerStore } from "@/lib/store/useLancerStore";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { StatusChip } from "@/components/StatusChip";
 import { ApprovalCard } from "@/components/ApprovalCard";
@@ -11,10 +11,10 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function AgentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const agents = useConduitStore((s) => s.agents);
-  const loops = useConduitStore((s) => s.loops);
-  const pending = useConduitStore((s) => s.pending);
-  const connection = useConduitStore((s) => s.connection);
+  const agents = useLancerStore((s) => s.agents);
+  const loops = useLancerStore((s) => s.loops);
+  const pending = useLancerStore((s) => s.pending);
+  const connection = useLancerStore((s) => s.connection);
 
   const agent = agents[id];
   const agentLoop = loops[id];

@@ -1,9 +1,9 @@
-# Conduit — tester quick start (self-host)
+# Lancer — tester quick start (self-host)
 
 This is the fast path for a tester running their own host(s) and their own copy of
-Conduit. Three steps: **install the daemon → pair the app → use the controls.**
+Lancer. Three steps: **install the daemon → pair the app → use the controls.**
 
-> Conduit governs AI coding-agent loops (Claude Code, Codex, OpenCode, Kimi, …) that
+> Lancer governs AI coding-agent loops (Claude Code, Codex, OpenCode, Kimi, …) that
 > run on a Mac or Linux machine you control. The phone app is the control plane —
 > it approves/rejects risky actions, lets you start a run, and (separately) opens a
 > real SSH terminal into a host. It does not run agents itself.
@@ -13,15 +13,15 @@ Conduit. Three steps: **install the daemon → pair the app → use the controls
 ## Prerequisites
 
 - **A Mac or Linux host** you want to govern — the box where your agent CLI(s)
-  already run (Claude Code, Codex, OpenCode, or Kimi). This is where `conduitd`
+  already run (Claude Code, Codex, OpenCode, or Kimi). This is where `lancerd`
   installs and runs as a background daemon.
-- **The Conduit iOS app** installed on your phone (TestFlight build or dev build).
+- **The Lancer iOS app** installed on your phone (TestFlight build or dev build).
 - **For the interactive SSH terminal feature specifically:** the host you want to
   open a terminal on must be SSH-reachable (a normal `ssh user@host` from your
   network must already work). This is a separate feature from the approval loop —
   see "What 'control' looks like" below.
 - **For push notifications / approvals to reach your phone:** the relay backend
-  Conduit talks to must be live and reachable. If you're pointed at a self-hosted
+  Lancer talks to must be live and reachable. If you're pointed at a self-hosted
   relay, confirm `GET <your-relay-url>/health` returns `200` before you start. If
   the relay is down, pairing may still complete but approvals will not reach your
   phone — see "If approvals don't show up" below.
@@ -30,27 +30,27 @@ Conduit. Three steps: **install the daemon → pair the app → use the controls
 
 ## Step 1 — Install the daemon on your host
 
-Run on the Mac/Linux box you want Conduit to govern:
+Run on the Mac/Linux box you want Lancer to govern:
 
 ```bash
 curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh
 ```
 
-This downloads a prebuilt `conduitd` binary for your OS/architecture, verifies its
-checksum, and installs it to `~/.conduit/bin/conduitd`. It will also print next
+This downloads a prebuilt `lancerd` binary for your OS/architecture, verifies its
+checksum, and installs it to `~/.lancer/bin/lancerd`. It will also print next
 steps and (unless skipped) immediately walk you into pairing.
 
 Optional flags:
 - `--hooks claude` (or `codex`, `both`) — also installs the PreToolUse hook for that
-  agent CLI, so its risky actions actually route through Conduit's policy engine.
-  Without a hook installed, `conduitd` runs but nothing calls into it yet.
+  agent CLI, so its risky actions actually route through Lancer's policy engine.
+  Without a hook installed, `lancerd` runs but nothing calls into it yet.
 - `--from-source` — build from Go source instead of downloading a binary (needs `go`
   installed).
 
 After install, set the daemon up to run continuously in the background:
 
 ```bash
-conduitd install   # registers a launchd (macOS) or systemd (Linux) service
+lancerd install   # registers a launchd (macOS) or systemd (Linux) service
 ```
 
 ---
@@ -60,17 +60,17 @@ conduitd install   # registers a launchd (macOS) or systemd (Linux) service
 On the host:
 
 ```bash
-conduitd pair
+lancerd pair
 ```
 
 This prints a QR code (and the relay URL it encodes) in your terminal.
 
-On your phone, open Conduit and scan that QR code (Settings → Connection, or the
+On your phone, open Lancer and scan that QR code (Settings → Connection, or the
 onboarding pairing screen if this is a fresh install). The app and the daemon now
 share an encrypted channel through the relay — the relay itself never sees your
 commands or approvals in plaintext.
 
-If the QR doesn't fit your terminal or you're pairing a second device, `conduitd
+If the QR doesn't fit your terminal or you're pairing a second device, `lancerd
 pair` can be re-run any time to print fresh instructions.
 
 For a deeper look at what's happening on the wire (relay framing, encryption), see
@@ -94,7 +94,7 @@ actually paused and waiting — your decision unblocks it (or it auto-denies aft
 timeout if you don't respond).
 
 ### 2. Dispatch a run from your phone
-From the New Chat surface in the app, pick a host/agent and send a prompt. Conduit
+From the New Chat surface in the app, pick a host/agent and send a prompt. Lancer
 starts the agent CLI on your host and streams its output back to your phone in
 real time, including any tool-call cards it generates along the way. You can send
 a follow-up prompt afterward to continue the same conversation.
@@ -126,8 +126,8 @@ watch a live TUI (e.g. `vim`, `htop`) rendered inline.
 ## Uninstalling
 
 ```bash
-conduitd uninstall   # stops and removes the background service, if supported by your install
-rm -rf ~/.conduit     # removes the binary, socket, queue, policy, and audit log
+lancerd uninstall   # stops and removes the background service, if supported by your install
+rm -rf ~/.lancer     # removes the binary, socket, queue, policy, and audit log
 ```
 
 Then remove the paired connection from the app (Settings → Connection → remove

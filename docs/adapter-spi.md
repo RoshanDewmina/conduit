@@ -1,18 +1,18 @@
-# Conduit Adapter SPI
+# Lancer Adapter SPI
 
-Conduit supports two integration patterns for AI coding agents. Class A is preferred; Class B is for agents that lack a pre-tool hook API.
+Lancer supports two integration patterns for AI coding agents. Class A is preferred; Class B is for agents that lack a pre-tool hook API.
 
 ---
 
 ## Class A — External Pre-Tool Hook (recommended)
 
-The agent has a permission or tool-approval callback. Conduit intercepts it via a hook script that shells out to `conduitd agent-hook`.
+The agent has a permission or tool-approval callback. Lancer intercepts it via a hook script that shells out to `lancerd agent-hook`.
 
 ### Contract
 
 1. Agent fires a pre-tool event (`PreToolUse`, `BeforeTool`, etc.)
-2. Hook script runs `conduitd agent-hook --agent <agentID> --kind <kind> --command <command>`
-3. `conduitd` evaluates policy, escalates to the phone if needed
+2. Hook script runs `lancerd agent-hook --agent <agentID> --kind <kind> --command <command>`
+3. `lancerd` evaluates policy, escalates to the phone if needed
 4. Hook returns exit 0 (approved) or exit 1 (denied)
 5. Agent proceeds or blocks
 
@@ -26,7 +26,7 @@ The agent has a permission or tool-approval callback. Conduit intercepts it via 
 ### Adding a Class A adapter
 
 1. **Define the agent in `agent_registry.go`** — add a case to `normalizeAgentSource()` mapping the agent's name/canonical ID to the internal agent key (e.g. `"goose"`, `"cline"`).
-2. **Write a hook script** — a shell script that the agent calls before each tool execution. The script invokes `conduitd agent-hook` with the correct flags.
+2. **Write a hook script** — a shell script that the agent calls before each tool execution. The script invokes `lancerd agent-hook` with the correct flags.
 3. **Register agent events** — map the agent's pre-tool event payload to the canonical `--kind` values:
    - `command` — shell commands, `bash` tool
    - `patch` — file edits, `apply_patch`, `edit_file`, `multi_edit`
@@ -39,7 +39,7 @@ The agent has a permission or tool-approval callback. Conduit intercepts it via 
 
 ### Canonical `--kind` values
 
-These are the canonical kind strings recognized by the policy engine. Hook scripts should normalize agent-specific tool names to one of these before calling `conduitd agent-hook`:
+These are the canonical kind strings recognized by the policy engine. Hook scripts should normalize agent-specific tool names to one of these before calling `lancerd agent-hook`:
 
 | Canonical kind | Typical agent tools |
 |----------------|---------------------|
@@ -64,15 +64,15 @@ These are the canonical kind strings recognized by the policy engine. Hook scrip
 
 ## Class B — MCP Gateway (for agents without hook access)
 
-The agent connects to Conduit as an MCP (Model Context Protocol) server. `conduit-mcp` wraps dangerous tools and calls `agent-hook` internally for policy evaluation.
+The agent connects to Lancer as an MCP (Model Context Protocol) server. `lancer-mcp` wraps dangerous tools and calls `agent-hook` internally for policy evaluation.
 
 ### Contract
 
-1. Agent connects to `conduit-mcp` as an MCP server via stdio
-2. `conduit-mcp` exposes wrapped tools (`bash`, `write_file`, `edit_file`, etc.)
-3. When the agent calls a wrapped tool, `conduit-mcp` calls `conduitd agent-hook`
-4. `conduitd` evaluates policy, escalates to the phone if needed
-5. `conduit-mcp` returns the result or a denial error
+1. Agent connects to `lancer-mcp` as an MCP server via stdio
+2. `lancer-mcp` exposes wrapped tools (`bash`, `write_file`, `edit_file`, etc.)
+3. When the agent calls a wrapped tool, `lancer-mcp` calls `lancerd agent-hook`
+4. `lancerd` evaluates policy, escalates to the phone if needed
+5. `lancer-mcp` returns the result or a denial error
 
 ### When to use Class B
 
@@ -83,7 +83,7 @@ Use Class B when the agent:
 
 ### Adding a Class B adapter
 
-1. **Define tool mappings** in `daemon/conduit-mcp/config.json`:
+1. **Define tool mappings** in `daemon/lancer-mcp/config.json`:
    ```json
    {
      "name": "bash",
@@ -93,9 +93,9 @@ Use Class B when the agent:
      "risk": 2
    }
    ```
-2. **Map tool names** — the `name` field is what the agent sees as the MCP tool. `kind` is what gets passed to `conduitd agent-hook --kind`.
+2. **Map tool names** — the `name` field is what the agent sees as the MCP tool. `kind` is what gets passed to `lancerd agent-hook --kind`.
 3. **Set risk levels** — use 0 for read-only tools, 1 for minor mutations, 2 for commands/major edits, 3 for critical operations.
-4. **Configure the agent** — point the agent's MCP server config at the `conduit-mcp` binary (see `daemon/conduit-mcp/README.md` for agent-specific examples).
+4. **Configure the agent** — point the agent's MCP server config at the `lancer-mcp` binary (see `daemon/lancer-mcp/README.md` for agent-specific examples).
 
 ---
 
@@ -105,16 +105,16 @@ Use Class B when the agent:
 |---|---|---|
 | Agent support | Claude Code, Codex, OpenCode, Cursor | Goose, Cline, Roo Code, Kilo |
 | Requires hook API | Yes | No |
-| Implementation | Shell script per agent | Single `conduit-mcp` binary |
+| Implementation | Shell script per agent | Single `lancer-mcp` binary |
 | Tool interception | Agent-native | MCP protocol proxy |
 | Latency | Low (direct exit code) | Moderate (stdio round-trip) |
 
 ---
 
-## Reference: `conduitd agent-hook` flags
+## Reference: `lancerd agent-hook` flags
 
 ```
-conduitd agent-hook \
+lancerd agent-hook \
   --agent <agentID> \
   --kind <canonicalKind> \
   --command <commandOrPath> \

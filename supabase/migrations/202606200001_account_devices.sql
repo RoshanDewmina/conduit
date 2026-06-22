@@ -1,4 +1,4 @@
--- Conduit standard-account identity and daemon binding.
+-- Lancer standard-account identity and daemon binding.
 -- Run through the Supabase migration runner; this file contains no API keys,
 -- service-role values, or SMTP credentials.
 

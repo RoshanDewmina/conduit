@@ -1,4 +1,4 @@
-# Apple-ecosystem surfaces for Conduit — research & recommendation
+# Apple-ecosystem surfaces for Lancer — research & recommendation
 
 _Date: 2026-06-16 · Author: Claude (planning/verify role) · Source: Apple Developer docs via apple-docs MCP (ActivityKit, WidgetKit, SwiftUI Gauge), current as of fetch._
 
@@ -10,9 +10,9 @@ This doc is the docs-first research the owner asked for before any opencode disp
 
 ---
 
-## 1. The four surfaces, mapped to Conduit
+## 1. The four surfaces, mapped to Lancer
 
-| Surface | Framework | Min OS | What Conduit puts there |
+| Surface | Framework | Min OS | What Lancer puts there |
 |---|---|---|---|
 | **Live Activity** (Lock Screen + Dynamic Island + Home Screen; Watch Smart Stack; Mac menu bar; CarPlay) | ActivityKit + WidgetKit UI | iOS 16.1 (start-via-push iOS 17.2+) | Live agent-loop status: "claude · running · 3 tools" → flips to "⚠ approval needed" with **Approve/Deny buttons inline** |
 | **Home/Lock-screen Widget** & **Watch complication** | WidgetKit (timeline) | iOS 14 / watchOS 9 | Fleet glance: # agents working / # waiting; quota ring; tap → app |
@@ -32,7 +32,7 @@ Live Activities do **not** update on a timeline. They update two ways:
 1. **From the app process** — only while the app has foreground/background runtime. Not viable for "agent needed you 40 min after you locked the phone."
 2. **From a server via APNs** — the real mechanism. The app obtains a `pushToken` (and `pushToStartTokenUpdates` for push-to-_start_ on iOS 17.2+) and ships it to **a server that holds APNs credentials and sends the JSON payload** to `https://api.push.apple.com`.
 
-Conduit's agent lives on the **host**, behind the **resident daemon `conduitd`** and reached over **SSH or the E2E relay**. A host daemon cannot itself talk APNs with the app's push cert — and you would not want every self-hosted box holding the App Store team's APNs key. So driving Live Activities / widget refresh requires **one of**:
+Lancer's agent lives on the **host**, behind the **resident daemon `lancerd`** and reached over **SSH or the E2E relay**. A host daemon cannot itself talk APNs with the app's push cert — and you would not want every self-hosted box holding the App Store team's APNs key. So driving Live Activities / widget refresh requires **one of**:
 
 - **(A) Relay-as-push-sender (recommended).** The existing hosted relay (Tailscale-funnel pairing layer) is the natural, _already-trusted_ home for the APNs token + sender. Daemon → relay (already wired for approvals) → APNs → Live Activity. Adds an APNs sender to a component we already run. Keeps self-host boxes out of the push business.
 - **(B) Pure self-host, no remote push.** Live Activity updates only while the app runs; lock-screen freshness via standard local notifications (`UNNotificationRequest`) that deep-link into the app. Weaker glance, but zero hosted dependency — the right default for the privacy-purist self-host tier.
@@ -47,7 +47,7 @@ Conduit's agent lives on the **host**, behind the **resident daemon `conduitd`**
 Buttons/toggles in a Live Activity run via **App Intents** (`init(_:intent:)` / `Toggle(isOn:intent:)`), iOS 17+. Key facts:
 
 - An intent conforming to **`LiveActivityIntent`** runs **in the app's process** (the app wakes) — exactly what we need, because approving means the app must transmit the decision to the daemon over the relay, not just mutate a local toggle.
-- **On a locked device, buttons are inert until the person authenticates/unlocks.** For a generic app that's friction. **For Conduit it's a governance gift:** a destructive-command approval that _cannot_ be actioned without unlocking the device is a free Face-ID/passcode gate on the approval, aligned 1:1 with the blast-radius/Face-ID risk model. We should lean into it, not fight it.
+- **On a locked device, buttons are inert until the person authenticates/unlocks.** For a generic app that's friction. **For Lancer it's a governance gift:** a destructive-command approval that _cannot_ be actioned without unlocking the device is a free Face-ID/passcode gate on the approval, aligned 1:1 with the blast-radius/Face-ID risk model. We should lean into it, not fight it.
 - `Toggle` updates **optimistically**; wrap async-updating views in `invalidatableContent(_:)` so a pending relay round-trip reads as "updating," not "done."
 
 So the Lock-screen approval flow is: Live Activity shows the pending command + diff chips → user taps **Approve** → device requires unlock → `LiveActivityIntent` fires in-app → app sends the decision over the existing relay inbox → daemon releases the firewall. The approval firewall + audit chain stay authoritative; the Live Activity is just a remote trigger. No governance is bypassed.

@@ -55,12 +55,12 @@ Avoid unsafe guesses. If no related thread is found, open Fleet detail and offer
 ## Implementation Tasks
 
 - [ ] **Task 1: Add thread association to dispatch flow**
-  - Files: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`, `NewChatTabView.swift`, repository.
+  - Files: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`, `NewChatTabView.swift`, repository.
   - When New Chat dispatch creates a conversation, associate the selected fleet slot/host/agent context with that conversation.
   - Preserve behavior for relay-only slots.
 
 - [ ] **Task 2: Add Fleet row view model**
-  - File: `Packages/ConduitKit/Sources/AppFeature/FleetThreadMapper.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/FleetThreadMapper.swift`
   - Pure Swift helper that maps:
     - fleet slot;
     - chat conversations;
@@ -70,7 +70,7 @@ Avoid unsafe guesses. If no related thread is found, open Fleet detail and offer
   - Unit test this helper outside SwiftUI.
 
 - [ ] **Task 3: Update sidebar Fleet section**
-  - File: `Packages/ConduitKit/Sources/AppFeature/ConduitSidebarView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/LancerSidebarView.swift`
   - Show compact fleet rows:
     - host name;
     - agent/vendor;
@@ -80,14 +80,14 @@ Avoid unsafe guesses. If no related thread is found, open Fleet detail and offer
   - Selecting row calls the shell destination `.thread(id)` when mapped, otherwise `.fleet`.
 
 - [ ] **Task 4: Update `FleetView` for secondary role**
-  - File: `Packages/ConduitKit/Sources/AppFeature/FleetView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/FleetView.swift`
   - Keep operational controls.
   - Add "Open thread" action for rows with a mapped conversation.
   - Add "Start chat" action for rows without a mapped conversation.
   - Do not make Fleet a duplicate chat list.
 
 - [ ] **Task 5: Connect stop/pause/resume to thread context**
-  - File: `Packages/ConduitKit/Sources/AppFeature/FleetView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/FleetView.swift`
   - When a fleet control affects a run, update related conversation/turn status if a mapping exists.
   - Keep daemon channel as source of operational truth.
 

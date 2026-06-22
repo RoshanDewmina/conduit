@@ -65,7 +65,7 @@ export default function PolicySection() {
       </Reveal>
 
       <Reveal delay={0.1}>
-        <Panel header="~/dev/atlas/.conduit/policy.yaml">
+        <Panel header="~/dev/atlas/.lancer/policy.yaml">
           <div>
             {RULES.map((r, i) => (
               <div

@@ -23,7 +23,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### MEDIUM-1 — PEM text not zeroed from ViewModel memory after successful import [FIXED]
 
-**File:** `Packages/ConduitKit/Sources/KeysFeature/KeyImportView.swift:65`  
+**File:** `Packages/LancerKit/Sources/KeysFeature/KeyImportView.swift:65`  
 **Impact:** On successful import the `passphrase` field was cleared (line 66) but `pemText` — which holds the full OpenSSH private key PEM including the raw 32-byte seed — remained resident in the `@Observable` ViewModel until the user tapped Done or Cancel. Between import success and dismissal, the PEM was accessible in memory and would appear in any heap snapshot / crash dump. In practice the window is short (user taps Done immediately), but the principle of "zero as soon as not needed" was violated.  
 **Fix applied:** `pemText = ""` added immediately after the successful Keychain write, co-located with `passphrase = ""` and before transitioning to `.done` phase.  
 **Regression test:** none needed — this is a UI-state reset, not a logic branch; the existing `importEd25519FromPEM` round-trip tests exercise the full path.
@@ -32,16 +32,16 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### MEDIUM-2 — Redactor lacks an explicit Anthropic key pattern [FIXED]
 
-**File:** `Packages/ConduitKit/Sources/AgentKit/Redactor.swift:20`  
+**File:** `Packages/LancerKit/Sources/AgentKit/Redactor.swift:20`  
 **Impact:** `Redactor.shared.redact()` is applied to terminal context sent to AI providers via `PromptBuilder`. The generic `sk-[A-Za-z0-9\-]{20,}` pattern does match `sk-ant-api03-…` Anthropic keys, but the match is unnamed ("OpenAI key" label). When a `RedactionReport` is logged or surfaced in analytics the mislabelling could cause missed alerting for Anthropic credential exposure. Additionally if Anthropic ever issues tokens not starting with `sk-` (similar to their `sk-ant-api03` → future format changes), coverage would silently drop.  
 **Fix applied:** Added `("Anthropic key", #"sk-ant-[A-Za-z0-9\-_]{20,}"#)` pattern before the generic `sk-` entry so the more-specific pattern takes priority and is correctly named in `RedactionReport.matchedPatterns`.  
-**Regression tests added:** `RedactorTests.anthropicKey()` and `RedactorTests.anthropicKeyFallback()` — 2 new tests in `Tests/ConduitKitTests/RedactorTests.swift`.
+**Regression tests added:** `RedactorTests.anthropicKey()` and `RedactorTests.anthropicKeyFallback()` — 2 new tests in `Tests/LancerKitTests/RedactorTests.swift`.
 
 ---
 
 ### LOW-1 — No .privacySensitive() on KeyImportView or KeysView
 
-**File:** `Packages/ConduitKit/Sources/KeysFeature/KeyImportView.swift`, `KeysView.swift`  
+**File:** `Packages/LancerKit/Sources/KeysFeature/KeyImportView.swift`, `KeysView.swift`  
 **Impact:** iOS may snapshot app views for the app switcher. The `TextEditor` showing raw PEM text or the key list showing fingerprints could appear in the task switcher thumbnail. `.privacySensitive()` / `.redacted(reason: .privacy)` on these views would redact them in screenshots and app-switcher snapshots.  
 **Recommendation:** Add `.privacySensitive()` to `KeyImportView.body` and `KeysView.body`. Not fixed now — no Swift `.privacySensitive()` API exists in the current SwiftUI version that directly matches the iOS UIKit app-snapshot redaction; the correct approach is to add a `NotificationCenter` observer for `UIApplication.willResignActiveNotification` / `.didBecomeActiveNotification` and toggle a blur overlay on those screens. Flagging for a dedicated UX-privacy pass.
 
@@ -49,7 +49,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### LOW-2 — BiometricGate silently degrades on biometryLockout
 
-**File:** `Packages/ConduitKit/Sources/SecurityKit/BiometricGate.swift:32`  
+**File:** `Packages/LancerKit/Sources/SecurityKit/BiometricGate.swift:32`  
 **Impact:** When `LAError.biometryLockout` occurs (too many failed biometric attempts), the gate calls `cont.resume()` (success) instead of throwing. This means a locked-out user is not blocked from accessing their SSH private key. The intent appears to be graceful degradation, but iOS normally falls back to device passcode at lockout rather than granting access unconditionally. Post-lockout, the Keychain item is still protected by the `whenUnlockedThisDeviceOnly` accessibility class (device must be unlocked), so this is a defence-in-depth weakening rather than a full bypass.  
 **Recommendation:** On `.biometryLockout`, prompt the user with device-passcode authentication via `.deviceOwnerAuthentication` policy rather than silently succeeding. Not fixed here — change requires UX/product decision (passcode fallback sheet vs. hard block).
 
@@ -57,7 +57,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### LOW-3 — autoTrustHostKey flag is runtime-settable (not compile-time DEBUG-only)
 
-**File:** `Packages/ConduitKit/Sources/SessionFeature/LiveTerminalView.swift:61`  
+**File:** `Packages/LancerKit/Sources/SessionFeature/LiveTerminalView.swift:61`  
 **Impact:** `LiveTerminalModel.passwordSession(autoTrustHostKey:)` and `LiveTerminalModel.init(autoTrustHostKey:)` are `public` APIs with a default of `false`. No compile-time guard prevents Release builds from calling `autoTrustHostKey: true`. Currently no production code path sets it `true` — only the `#if DEBUG`-gated `DebugTerminalHarness`. But the footgun exists.  
 **Recommendation:** Add an `#if DEBUG` assertion or precondition inside the `where autoTrustHostKey` catch branch, or restrict the parameter to `#if DEBUG`-only via a conditional extension. Not fixed here — requires API-surface decision; current production exposure is zero.
 
@@ -65,7 +65,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### LOW-4 — TOFU host-key not re-verified in DebugSessionHarness reconnect path
 
-**File:** `Packages/ConduitKit/Sources/AppFeature/DebugSessionHarness.swift:49`  
+**File:** `Packages/LancerKit/Sources/AppFeature/DebugSessionHarness.swift:49`  
 **Impact:** The debug harness calls `vm.trustHostKey()` unconditionally on first connect. On reconnect the `HostKeyStore` is in-memory (fresh each launch), so reconnects will hit `.unknown` again and re-auto-trust. This is intentional for the debug harness and is gated by `#if DEBUG`. Production `SessionViewModel` uses a persistent `HostKeyStore` and re-validates correctly.  
 **Verdict:** No fix required; confirmed by file-level `#if DEBUG && os(iOS)` guard.
 
@@ -73,7 +73,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### LOW-5 — Redactor does not cover SSH private key PEM blobs or bearer tokens
 
-**File:** `Packages/ConduitKit/Sources/AgentKit/Redactor.swift`  
+**File:** `Packages/LancerKit/Sources/AgentKit/Redactor.swift`  
 **Impact:** If a user pastes a PEM private key into a terminal session and that session context is sent to an AI provider via `PromptBuilder`, the long base64 lines would not be redacted. PEM blobs start with `-----BEGIN OPENSSH PRIVATE KEY-----`. Similarly, Bearer tokens (`Bearer [A-Za-z0-9\-_.~+/]+=*`) or JWT strings (`eyJ...`) are not covered.  
 **Recommendation:** Add patterns for PEM markers and Bearer/JWT tokens. Out of scope for WS-8 surgical fix; flag for a dedicated Redactor pass. Risk is mitigated by the fact that the user would have to manually paste a key into the terminal and then trigger an AI context capture.
 
@@ -81,15 +81,15 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 
 ### LOW-6 — PrivacyInfo.xcprivacy missing SystemBootTime reason cross-check for Sentry DSN
 
-**File:** `Conduit/PrivacyInfo.xcprivacy:30`  
-**Impact:** The manifest declares `NSPrivacyAccessedAPICategorySystemBootTime` with reason code `35F9.1` ("declared for crash reporter"). This is correct if and only if Sentry is the sole consumer of boot time. The Sentry DSN is currently an empty string (`sentryDSN = ""`), meaning Sentry never starts. If a future developer fills in the DSN without reviewing the privacy manifest, the declaration remains valid. No immediate action needed — comment in `ConduitApp.swift` already notes this correctly.  
+**File:** `Lancer/PrivacyInfo.xcprivacy:30`  
+**Impact:** The manifest declares `NSPrivacyAccessedAPICategorySystemBootTime` with reason code `35F9.1` ("declared for crash reporter"). This is correct if and only if Sentry is the sole consumer of boot time. The Sentry DSN is currently an empty string (`sentryDSN = ""`), meaning Sentry never starts. If a future developer fills in the DSN without reviewing the privacy manifest, the declaration remains valid. No immediate action needed — comment in `LancerApp.swift` already notes this correctly.  
 **Verdict:** Informational; no fix needed.
 
 ---
 
 ### LOW-7 — Wellz26/swift-nio-ssh fork — no CVE audit trail
 
-**File:** `Packages/ConduitKit/Package.swift:57`  
+**File:** `Packages/LancerKit/Package.swift:57`  
 **Impact:** The pinned range is `"0.3.4" ..< "0.4.0"` against the community fork `https://github.com/Wellz26/swift-nio-ssh.git`. This fork is used by Citadel for Mac Catalyst NIO product dependency fix and SSH certificate auth. The fork is not the upstream `apple/swift-nio-ssh`, so Apple security advisories against `apple/swift-nio-ssh` may not be tracked. No known CVEs were found at time of review for the 0.3.4 range.  
 **Recommendation:** Pin to a specific commit SHA (not a range) in production. Add a calendar reminder to audit when upstream `apple/swift-nio-ssh` ≥0.4 lands in Citadel and migrate back. Document the switch-back condition in `ARCHITECTURE.md §19` (already noted in a comment in `Package.swift`).  
 **Verdict:** Risk is low at this version range; no code-level fix applied.

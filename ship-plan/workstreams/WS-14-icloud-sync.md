@@ -3,7 +3,7 @@
 > Do NOT un-hide the Sync UI until this lands (WS-9 hides it for v1). Needs a paid Apple account + a configured CloudKit container; compiled out on the simulator. Larger effort — scope carefully.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Module: `SyncKit` (`SyncEngine.swift`, `CloudSync.swift`). Read `ARCHITECTURE.md`.
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Module: `SyncKit` (`SyncEngine.swift`, `CloudSync.swift`). Read `ARCHITECTURE.md`.
 
 **Confirmed state:** `SyncEngine.performSync()` only **pushes** Hosts (name/hostname/port/username — *no key material*) and Snippets to the CloudKit private DB; account-gated; compiled out on sim. Gaps: `CloudSync.fetchChanges()` exists but is **never called** (no pull/merge/restore); no conflict handling (`conflictCount` declared, never incremented) despite a "last-write-wins" comment; **no key linkage** (a restored host has no SSH-key reference, so it can't connect); no settings/key sync, no backup/restore, no migration, no progress UI.
 

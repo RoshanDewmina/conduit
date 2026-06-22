@@ -1,4 +1,4 @@
-# Conduit — Current-State Audit & Prioritized Launch Plan (2026-06-18)
+# Lancer — Current-State Audit & Prioritized Launch Plan (2026-06-18)
 
 > Code-grounded readiness audit. Synthesizes the two canonical trackers and adds findings from the
 > 2026-06-18 source-of-truth pass. **Canonical trackers (detail lives there):**
@@ -6,9 +6,9 @@
 > architecture/state → `ARCHITECTURE.md` §0.1/§4.1.
 
 ## Verification run this session
-- ConduitKit **app-target** sim build (XcodeBuildMCP): ✅ SUCCEEDED, 0 warnings/0 errors — the authoritative iOS build (plain `swift build` skips `#if os(iOS)` AppFeature code).
-- `daemon/conduitd` `go test ./...`: ✅ pass (incl. new `approval_runid_test.go`).
-- ConduitKit `swift test`: running (385 tests/61 suites green per last checklist run).
+- LancerKit **app-target** sim build (XcodeBuildMCP): ✅ SUCCEEDED, 0 warnings/0 errors — the authoritative iOS build (plain `swift build` skips `#if os(iOS)` AppFeature code).
+- `daemon/lancerd` `go test ./...`: ✅ pass (incl. new `approval_runid_test.go`).
+- LancerKit `swift test`: running (385 tests/61 suites green per last checklist run).
 - Deleted 3 verified-dead files (`ControlView.swift`, `AdaptiveRoot.swift`, `LibrarySupportViews.swift`); build stayed green.
 
 ## Dimension scorecard
@@ -46,13 +46,13 @@
 ### P0 — blocks a credible launch
 - **Commit/reconcile the uncommitted WIP** (B1) — everything else builds on it.
 - **Prove the live loop on a physical device, app closed** (C2/D3): backgrounded app → approval → APNs → lock-screen Approve → agent unblocks. Depends on **D1** (APNs secrets on running backend).
-- **App Store Connect setup** (D2): record, entitlements (Push/CloudKit/App Groups), IAP `dev.conduit.mobile.pro` $14.99, privacy label, screenshots.
+- **App Store Connect setup** (D2): record, entitlements (Push/CloudKit/App Groups), IAP `dev.lancer.mobile.pro` $14.99, privacy label, screenshots.
 - **Decide the SSH-vs-cloud strategic fork** (ARCHITECTURE §16) — gates finding #1 (orphaned UI), pricing model, and positioning.
 
 ### P1 — finish before TestFlight
 - Real **remote-host E2E** (C1) — sim/localhost only so far.
 - **Resolve findings #2–#3 (V1-optional):** wire `ChatArtifactCard` when run artifacts flow into the transcript; wire `FleetThreadMapper`. Finding #1 (hosted-cloud UI) is **V2 — retained, not touched in V1.**
-- **Release-signed app-target Release build + archive** (B3); **rebuild conduitd from Go** (B4).
+- **Release-signed app-target Release build + archive** (B3); **rebuild lancerd from Go** (B4).
 - **Empty/error/loading + a11y sweep** (B8); **feature-wiring audit** (B7).
 - **Security review closure + semgrep triage** (C6); reconcile push-backend security WIP (B6).
 - **Vanity domain + DNS** off `sslip.io` (D4).

@@ -42,11 +42,11 @@ that **nothing ever executes**. This plan closes that gap.
 
 ## 1. Product & architecture context
 
-**Conduit** is an iOS SSH/agent-management app. "Hosted agents" let a user define an agent
+**Lancer** is an iOS SSH/agent-management app. "Hosted agents" let a user define an agent
 (a model + a command like `claude`) and run it either:
 
 - **`ssh-host` runtime (on-device):** the app SSHes to the user's own machine and runs the command
-  there, streaming logs/approvals via `conduitd`/`DaemonChannel`. **This already works.** All the
+  there, streaming logs/approvals via `lancerd`/`DaemonChannel`. **This already works.** All the
   interactive features (exec console, SFTP files, git workspace) target this runtime.
 - **cloud runtimes (`gcp_cloud_run` / `lightsail` / `fly`):** the **control plane** (the Go
   `push-backend`) provisions a container/VM that runs the agent command, and that container streams
@@ -62,10 +62,10 @@ iOS app                control plane (push-backend)            cloud provider   
   │                        │  mintRunToken(runID) ──► rt_xxx        │                          │
   │                        │  dispatchRun(agent, run):             │                          │
   │                        │    execute Cloud Run Job / launch VM ──▶ start container          │
-  │                        │      env: CONDUIT_RUN_ID,             │   with env ──────────────▶ main()
-  │                        │           CONDUIT_RUNNER_TOKEN,       │                          │  exec command
-  │                        │           CONDUIT_CONTROL_PLANE_URL,  │                          │  POST /runs/{id}/logs  (rt auth)
-  │  GET /runs/{id}/logs   │           CONDUIT_COMMAND             │                          │  ◀── batches of stdout/stderr
+  │                        │      env: LANCER_RUN_ID,             │   with env ──────────────▶ main()
+  │                        │           LANCER_RUNNER_TOKEN,       │                          │  exec command
+  │                        │           LANCER_CONTROL_PLANE_URL,  │                          │  POST /runs/{id}/logs  (rt auth)
+  │  GET /runs/{id}/logs   │           LANCER_COMMAND             │                          │  ◀── batches of stdout/stderr
   │  ?since=N  (poll)      │                                       │                          │  PATCH /runs/{id} status/exit
   ◀───── lines ───────────┤ ◀─────────────────────────────────────┼──────────────────────────┤  POST artifacts (+GCS bytes)
   │                        │                                       │                          │  GET /runs/{id}/control (poll cancel)
@@ -125,8 +125,8 @@ before you touch a single cloud SDK.
 
 > **Verification discipline (applies to every milestone):**
 > 1. `cd daemon/push-backend && go build ./... && go vet ./... && go test ./...`
-> 2. `cd Packages/ConduitKit && swift build`
-> 3. **iOS app target build** via XcodeBuildMCP `build_sim` (Conduit / iPhone 17 Pro) — this is the
+> 2. `cd Packages/LancerKit && swift build`
+> 3. **iOS app target build** via XcodeBuildMCP `build_sim` (Lancer / iPhone 17 Pro) — this is the
 >    ONLY gate that type-checks `#if os(iOS)` code under strict concurrency. `swift build` compiles
 >    for macOS and **strips all iOS-only code** (memory `project_ws10_qa`). Do not skip it.
 > 4. Update `CLAUDE.md` / `docs/` if you change an externally-visible contract.
@@ -146,13 +146,13 @@ package main
 
 // RunnerEnv is the env contract handed to every runner, regardless of provider.
 type RunnerEnv struct {
-    RunID           string // CONDUIT_RUN_ID
-    RunnerToken     string // CONDUIT_RUNNER_TOKEN  (rt_… from mintRunToken)
-    ControlPlaneURL string // CONDUIT_CONTROL_PLANE_URL (controlPlaneBaseURL())
-    Command         string // CONDUIT_COMMAND (the agent command to exec)
-    Model           string // CONDUIT_MODEL (optional; from agent config)
-    OpenRouterKey   string // CONDUIT_OPENROUTER_KEY (optional; provisioned sub-key, see note)
-    AgentID         string // CONDUIT_AGENT_ID
+    RunID           string // LANCER_RUN_ID
+    RunnerToken     string // LANCER_RUNNER_TOKEN  (rt_… from mintRunToken)
+    ControlPlaneURL string // LANCER_CONTROL_PLANE_URL (controlPlaneBaseURL())
+    Command         string // LANCER_COMMAND (the agent command to exec)
+    Model           string // LANCER_MODEL (optional; from agent config)
+    OpenRouterKey   string // LANCER_OPENROUTER_KEY (optional; provisioned sub-key, see note)
+    AgentID         string // LANCER_AGENT_ID
 }
 
 // RuntimeProvider launches a single run's container/VM. Implementations must be
@@ -271,7 +271,7 @@ runner only needs stdlib + maybe the GCS client for artifact upload).
 
 ```
 daemon/agent-runner/
-  go.mod              // module conduit/agent-runner; go 1.22
+  go.mod              // module lancer/agent-runner; go 1.22
   main.go             // entrypoint: read env, exec command, stream callbacks
   client.go           // control-plane HTTP client (logs/patch/control/artifacts)
   client_test.go
@@ -280,12 +280,12 @@ daemon/agent-runner/
 ```
 
 **`main.go` responsibilities (exec via argv — never `sh -c` with interpolated user input):**
-1. Read env: `CONDUIT_RUN_ID`, `CONDUIT_RUNNER_TOKEN`, `CONDUIT_CONTROL_PLANE_URL`,
-   `CONDUIT_COMMAND`, `CONDUIT_MODEL`, `CONDUIT_OPENROUTER_KEY`, `CONDUIT_AGENT_ID`. Fail fast (non-zero
+1. Read env: `LANCER_RUN_ID`, `LANCER_RUNNER_TOKEN`, `LANCER_CONTROL_PLANE_URL`,
+   `LANCER_COMMAND`, `LANCER_MODEL`, `LANCER_OPENROUTER_KEY`, `LANCER_AGENT_ID`. Fail fast (non-zero
    exit + a best-effort `PATCH status=failed`) if any required one is missing.
-2. `exec.CommandContext(ctx, argv[0], argv[1:]...)` where argv is parsed from `CONDUIT_COMMAND`
+2. `exec.CommandContext(ctx, argv[0], argv[1:]...)` where argv is parsed from `LANCER_COMMAND`
    (use a shell-words split, e.g. a vendored `shellwords`, OR require the command be passed as a JSON
-   array env `CONDUIT_COMMAND_ARGV` to avoid any shell at all — **prefer the JSON array** for
+   array env `LANCER_COMMAND_ARGV` to avoid any shell at all — **prefer the JSON array** for
    injection-safety). Wire `OPENROUTER_API_KEY`/`ANTHROPIC_*` into the child env as the agent expects.
 3. Stream stdout+stderr: wrap each pipe in a scanner; batch lines (e.g. flush every 250ms or 50 lines)
    to `POST {CONTROL_PLANE_URL}/runs/{RUN_ID}/logs` with `Authorization: Bearer {RUNNER_TOKEN}` and body
@@ -317,9 +317,9 @@ ENTRYPOINT ["/usr/local/bin/agent-runner"]
 **Local test (no cloud):** run the control plane locally (`go run .` with a temp `DATA_DIR`),
 manually insert a run + mint a token (or add a debug endpoint), then:
 ```bash
-CONDUIT_RUN_ID=run_x CONDUIT_RUNNER_TOKEN=rt_x \
-CONDUIT_CONTROL_PLANE_URL=http://localhost:8080 \
-CONDUIT_COMMAND_ARGV='["bash","-lc","echo hello && sleep 1 && echo bye"]' \
+LANCER_RUN_ID=run_x LANCER_RUNNER_TOKEN=rt_x \
+LANCER_CONTROL_PLANE_URL=http://localhost:8080 \
+LANCER_COMMAND_ARGV='["bash","-lc","echo hello && sleep 1 && echo bye"]' \
 go run ./daemon/agent-runner
 ```
 Then `GET /runs/run_x/logs` should show `hello`/`bye` and the run should be `succeeded`.
@@ -344,11 +344,11 @@ executions) and `golang.org/x/oauth2/google` for ADC. Use Application Default Cr
   clearly-labelled dev fallback only behind a debug flag).
 - Implement `submitCloudRunJobIfConfigured(spec)` → actually **create-or-update the Job** via
   `run.Projects.Locations.Jobs.Create/Patch` with the container image = runner image and the static
-  env (`CONDUIT_AGENT_ID`, `CONDUIT_CONTROL_PLANE_URL`, `CONDUIT_MODEL`). Idempotent on job name.
+  env (`LANCER_AGENT_ID`, `LANCER_CONTROL_PLANE_URL`, `LANCER_MODEL`). Idempotent on job name.
 - New `gcpCloudRunProvider{}` implementing `RuntimeProvider`:
   - `Launch(agent, run, env)` → `run.Projects.Locations.Jobs.Run` with a **per-execution
-    `overrides.containerOverrides[].env`** injecting `CONDUIT_RUN_ID`, `CONDUIT_RUNNER_TOKEN`,
-    `CONDUIT_COMMAND_ARGV`. Return the execution name as the handle.
+    `overrides.containerOverrides[].env`** injecting `LANCER_RUN_ID`, `LANCER_RUNNER_TOKEN`,
+    `LANCER_COMMAND_ARGV`. Return the execution name as the handle.
   - `Cancel(handle)` → `run.Projects.Locations.Jobs.Executions.Cancel`.
 - Region/project from `gcpRegion()` / `gcpProject()` (already present, gcp_cloud_run.go:44-53). Map the
   app's `CloudRegion.slug` (e.g. `us-east`) → GCP region (`us-east1`) with a small table; default
@@ -390,8 +390,8 @@ Replace `provisionLightsailAgent` (runtime.go:42) and add a `lightsailProvider{}
 - **`go.mod`:** `github.com/aws/aws-sdk-go-v2/config` + `…/service/lightsail`.
 - Model: **one Lightsail instance per run** (simplest, clean teardown) launched with a **user-data
   script** that `docker run`s the runner image with the env injected (or installs the runner binary
-  and runs it). Tag the instance `conduit-run-id={runID}`.
-- `Launch` → `CreateInstances` with `userData` = a templated bootstrap that exports the `CONDUIT_*`
+  and runs it). Tag the instance `lancer-run-id={runID}`.
+- `Launch` → `CreateInstances` with `userData` = a templated bootstrap that exports the `LANCER_*`
   env and starts the runner; return the instance name as handle.
 - `Cancel` → `DeleteInstance(handle)`. Also have the runner self-terminate (signal the control plane,
   exit) so instances don't leak; add a backstop sweep (a periodic goroutine that deletes instances for
@@ -410,7 +410,7 @@ Add `case "fly"` to `provisionRuntimeIfNeeded` (runtime.go:37) and a `flyProvide
 - Use the **Fly Machines REST API** (`https://api.machines.dev/v1/apps/{app}/machines`) with
   `FLY_API_TOKEN`; no SDK needed (plain `net/http`). `fly.toml` already exists in the repo — reuse the
   app name / org.
-- `Launch` → `POST …/machines` with `config.image` = runner image, `config.env` = the `CONDUIT_*` map,
+- `Launch` → `POST …/machines` with `config.image` = runner image, `config.env` = the `LANCER_*` map,
   `config.auto_destroy=true`, `restart.policy="no"`. Return machine id as handle.
 - `Cancel` → `POST …/machines/{id}/stop` then `DELETE …/machines/{id}`.
 
@@ -428,7 +428,7 @@ The iOS side is mostly done; this milestone is **verify + small additions**:
 2. **Cloud cancel** already posts (`cancelRun` AgentStore.swift:507) — verify against a real run in CE3.
 3. **Artifact download (CE4)** — add the cloud download/share affordance.
 4. Run the **app-target build** (`build_sim`) and a sim pass on the Agents surface
-   (`SIMCTL_CHILD_*` / `-conduitDebugCloudEntitlement YES`) to confirm no regressions.
+   (`SIMCTL_CHILD_*` / `-lancerDebugCloudEntitlement YES`) to confirm no regressions.
 
 ---
 
@@ -471,9 +471,9 @@ The iOS side is mostly done; this milestone is **verify + small additions**:
 - `agent-runner/client_test.go`: batching, cancel-poll, terminal PATCH against an `httptest.Server`.
 
 **iOS:**
-- `cd Packages/ConduitKit && swift build` (fast inner loop) — but it compiles for macOS and strips
+- `cd Packages/LancerKit && swift build` (fast inner loop) — but it compiles for macOS and strips
   `#if os(iOS)`. **Always finish with the app-target build:**
-- XcodeBuildMCP `build_sim` (Conduit / iPhone 17 Pro) — strict-concurrency gate for AppFeature/AgentStore.
+- XcodeBuildMCP `build_sim` (Lancer / iPhone 17 Pro) — strict-concurrency gate for AppFeature/AgentStore.
 - `swift test` for the mapping/DTO suites (extend `HostedAgentM6Tests` etc. if you add DTO fields).
 
 **Local end-to-end (no cloud) — the big confidence test:**
@@ -481,11 +481,11 @@ The iOS side is mostly done; this milestone is **verify + small additions**:
 2. Seed an entitlement (see `entitlements_test.go` / existing seed path) so the app token resolves.
 3. Build the runner: `docker build -t agent-runner:dev daemon/agent-runner` (or run as a plain process).
 4. Point dispatch at a **local "process" provider** (a debug provider that just `exec`s the runner
-   binary locally with the env, instead of a cloud call) — gated behind `CONDUIT_LOCAL_RUNNER=1`. This
+   binary locally with the env, instead of a cloud call) — gated behind `LANCER_LOCAL_RUNNER=1`. This
    exercises the *entire* real pipeline (dispatch → runner → logs/status/artifacts) with zero cloud.
 5. Drive from the app (sim) or `curl POST /runs` and watch `GET /runs/{id}/logs` stream.
 
-> Strongly recommend building the **`CONDUIT_LOCAL_RUNNER=1` process provider** as part of CE1/CE2 —
+> Strongly recommend building the **`LANCER_LOCAL_RUNNER=1` process provider** as part of CE1/CE2 —
 > it is the highest-leverage test harness and makes CE3/5/6 a thin, low-risk swap.
 
 ---
@@ -495,7 +495,7 @@ The iOS side is mostly done; this milestone is **verify + small additions**:
 - **Runner token:** random, per-run, scoped to one run; never returned to the app; never the user
   `clientToken`. Every runner-authenticated handler must check `resolveRunFromRunnerToken(r) == pathID`.
   Consider expiring tokens when the run reaches terminal status (delete from `runTokensStore`).
-- **Command execution in the runner:** prefer `CONDUIT_COMMAND_ARGV` (JSON array) and `exec.Command`
+- **Command execution in the runner:** prefer `LANCER_COMMAND_ARGV` (JSON array) and `exec.Command`
   with explicit argv — **no `sh -c` string interpolation** of user/agent-controlled content.
 - **OpenRouter / model key:** the control plane already provisions a hashed sub-key per agent
   (`ensureOpenRouterSubKey`, agents.go:123). Decide the injection path: either (a) the runner fetches a
@@ -516,7 +516,7 @@ The iOS side is mostly done; this milestone is **verify + small additions**:
 These steps require accounts/creds the implementing agent won't have. Document them; the owner runs them.
 
 1. **Build & push the runner image** to Artifact Registry:
-   `gcloud builds submit daemon/agent-runner --tag $REGION-docker.pkg.dev/$GCP_PROJECT/conduit/agent-runner:vX`
+   `gcloud builds submit daemon/agent-runner --tag $REGION-docker.pkg.dev/$GCP_PROJECT/lancer/agent-runner:vX`
    (and an equivalent for any AWS/Fly registry if not reusing the same image).
 2. **Backend env** (Cloud Run / Fly / wherever push-backend deploys):
    `CONTROL_PLANE_PUBLIC_URL=https://api.conduit.dev`, `GCP_PROJECT`, `GCP_REGION`,
@@ -552,7 +552,7 @@ These steps require accounts/creds the implementing agent won't have. Document t
 
 ## 9. Suggested sequencing for the implementing agent
 
-1. **CE1** dispatch spine + fake provider + **`CONDUIT_LOCAL_RUNNER` process provider** (highest leverage).
+1. **CE1** dispatch spine + fake provider + **`LANCER_LOCAL_RUNNER` process provider** (highest leverage).
 2. **CE2** agent-runner binary + Dockerfile (test against the local control plane).
 3. **CE4** GCS bytes + runner-auth artifact branch + app download (independent of which cloud).
 4. **CE3** GCP Cloud Run (first real provider) — full owner-run smoke.

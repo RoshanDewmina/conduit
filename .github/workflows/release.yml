@@ -8,7 +8,7 @@ on:
 
 jobs:
   release-build:
-    name: Build conduitd release assets
+    name: Build lancerd release assets
     runs-on: ubuntu-latest
     # The source repo is private, so release assets are published to a PUBLIC
     # Cloud Storage bucket (not GitHub Releases, whose assets 404 unauthenticated
@@ -24,7 +24,7 @@ jobs:
       id-token: write   # for GCP Workload Identity Federation
     defaults:
       run:
-        working-directory: daemon/conduitd
+        working-directory: daemon/lancerd
     steps:
       - uses: actions/checkout@v4
 
@@ -35,20 +35,20 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Cross-compile conduitd
+      - name: Cross-compile lancerd
         run: |
           set -euo pipefail
           mkdir -p dist
-          GOOS=darwin GOARCH=arm64 go build -o dist/conduitd_darwin_arm64 .
-          GOOS=darwin GOARCH=amd64 go build -o dist/conduitd_darwin_amd64 .
-          GOOS=linux  GOARCH=arm64 go build -o dist/conduitd_linux_arm64 .
-          GOOS=linux  GOARCH=amd64 go build -o dist/conduitd_linux_amd64 .
+          GOOS=darwin GOARCH=arm64 go build -o dist/lancerd_darwin_arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o dist/lancerd_darwin_amd64 .
+          GOOS=linux  GOARCH=arm64 go build -o dist/lancerd_linux_arm64 .
+          GOOS=linux  GOARCH=amd64 go build -o dist/lancerd_linux_amd64 .
 
       - name: Generate SHA256SUMS
         run: |
           set -euo pipefail
           cd dist
-          shasum -a 256 conduitd_* > SHA256SUMS
+          shasum -a 256 lancerd_* > SHA256SUMS
           cat SHA256SUMS
 
       - name: Copy install.sh into dist
@@ -63,7 +63,7 @@ jobs:
       - name: Publish release assets to GCS
         uses: google-github-actions/upload-cloud-storage@v2
         with:
-          path: daemon/conduitd/dist
+          path: daemon/lancerd/dist
           destination: ${{ vars.GCS_DIST_BUCKET }}
           parent: false
           # Short TTL so install.sh / SHA256SUMS updates propagate within a minute

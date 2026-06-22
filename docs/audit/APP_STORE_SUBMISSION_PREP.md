@@ -1,4 +1,4 @@
-# App Store Submission Prep — Conduit
+# App Store Submission Prep — Lancer
 
 > **File:** `docs/audit/APP_STORE_SUBMISSION_PREP.md`
 > **Branch:** `oc/appstore-prep`
@@ -13,8 +13,8 @@ Paste the following verbatim into **App Store Connect → App → Review Informa
 
 ---
 
-**What Conduit does:**
-Conduit relays commands and outputs between the user's own iOS device and their own remote machine (a daemon they install on their own host). The daemon connects over SSH to a personal devbox, cloud VM, or local machine. The iOS app displays terminal output, approval requests from AI coding agents (Claude Code, Codex, opencode), and lets the user approve or deny actions.
+**What Lancer does:**
+Lancer relays commands and outputs between the user's own iOS device and their own remote machine (a daemon they install on their own host). The daemon connects over SSH to a personal devbox, cloud VM, or local machine. The iOS app displays terminal output, approval requests from AI coding agents (Claude Code, Codex, opencode), and lets the user approve or deny actions.
 
 **Why it is not "remote code execution":**
 - All code execution happens on the user's own machine. The app does NOT download, interpret, or execute code on the device.
@@ -22,16 +22,16 @@ Conduit relays commands and outputs between the user's own iOS device and their 
 - The "approval relay" sends only structured metadata (command text, file paths, risk classification) from the user's own daemon to the user's own phone, encrypted end-to-end. No binary code crosses the wire. The relay server (open-source, self-hostable) forwards only ciphertext it cannot decrypt.
 
 **Architecture summary:**
-User's phone ↔ (TLS WebSocket) ↔ open-source blind relay ↔ (WebSocket) ↔ conduitd daemon (Go, on user's host) ↔ (SSH to user's own machine). The relay never has access to plaintext data, SSH keys, or source code. End-to-end encryption uses X25519 ECDH + ChaCha20-Poly1305.
+User's phone ↔ (TLS WebSocket) ↔ open-source blind relay ↔ (WebSocket) ↔ lancerd daemon (Go, on user's host) ↔ (SSH to user's own machine). The relay never has access to plaintext data, SSH keys, or source code. End-to-end encryption uses X25519 ECDH + ChaCha20-Poly1305.
 
 **Test account / demo:**
-No login required. On first launch the app shows an onboarding screen. To see the approval UI without a live host, build the DEBUG scheme with `CONDUIT_GALLERY=review` — this pre-seeds the inbox with sample approval cards. The production app requires the user to install `conduitd` on their own machine (open-source, `go install github.com/conduit-dev/conduitd@latest`) and pair via QR code.
+No login required. On first launch the app shows an onboarding screen. To see the approval UI without a live host, build the DEBUG scheme with `LANCER_GALLERY=review` — this pre-seeds the inbox with sample approval cards. The production app requires the user to install `lancerd` on their own machine (open-source, `go install github.com/lancer-dev/lancerd@latest`) and pair via QR code.
 
 **Precedent:**
-Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Conduit adds AI-agent approval on top of the same SSH terminal pattern. The agent interaction is text-in/text-out over SSH, identical to a terminal session. No executable code is downloaded to the device.
+Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Lancer adds AI-agent approval on top of the same SSH terminal pattern. The agent interaction is text-in/text-out over SSH, identical to a terminal session. No executable code is downloaded to the device.
 
 **In-app purchases:**
-`dev.conduit.mobile.pro` — Non-consumable $14.99 (lifetime Pro). Enables CloudKit sync, relay prioritization, and unlimited approval history. Use a sandbox account to test.
+`dev.lancer.mobile.pro` — Non-consumable $14.99 (lifetime Pro). Enables CloudKit sync, relay prioritization, and unlimited approval history. Use a sandbox account to test.
 
 ---
 
@@ -45,14 +45,14 @@ Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Conduit add
 
 > **2.5.2** Apps should be self-contained in their bundles, and should not read or write data outside the designated container area, nor should they download, install, or execute code, including other iOS, watchOS, macOS, or tvOS apps.
 
-### 2.2 Conduit-specific risk assessment
+### 2.2 Lancer-specific risk assessment
 
 | Risk surface | Status | Rationale |
 |---|---|---|
 | **SSH terminal** | ✅ Mitigated | SSH is an established, approved category (Blink Shell, Termius, Prompt 2). The app transmits keystrokes typed by the user and renders text output — it does not download or execute code. |
 | **AI-agent approval relay** | ✅ Mitigated | The approval payload is structured JSON (command text, file paths, risk band). The app displays it and sends back a yes/no decision. No interpreted code, no bytecode, no binary payload. The user's daemon evaluates the decision and runs the command on the user's own host — not on iOS. |
-| **Blind relay E2EE** | ✅ Neutral/positive | The relay server (run by the user or on Conduit's infrastructure) forwards only ciphertext. It never decrypts, inspects, or transforms payloads. This is a transport-layer detail, not an execution mechanism. |
-| **Future: cloud-hosted agents** | ⚠️ **Do NOT submit this** | If Conduit ever runs agents on Conduit's own cloud servers, that triggers 2.5.2. The initial submission must be pure device-to-device relay only. Cloud agent execution is a separate product and a separate review. |
+| **Blind relay E2EE** | ✅ Neutral/positive | The relay server (run by the user or on Lancer's infrastructure) forwards only ciphertext. It never decrypts, inspects, or transforms payloads. This is a transport-layer detail, not an execution mechanism. |
+| **Future: cloud-hosted agents** | ⚠️ **Do NOT submit this** | If Lancer ever runs agents on Lancer's own cloud servers, that triggers 2.5.2. The initial submission must be pure device-to-device relay only. Cloud agent execution is a separate product and a separate review. |
 | **WebSocket relay on push-backend** | ✅ Mitigated | The push-backend relays push notifications and approval metadata. It does not inject or modify payload content. It is a transparent pipe. |
 
 ### 2.3 Concrete mitigations
@@ -81,7 +81,7 @@ Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Conduit add
 
 ## 3. PrivacyInfo.xcprivacy — Draft Content
 
-This is the XML to replace or augment the existing `Conduit/PrivacyInfo.xcprivacy`. **Do not add this to the project during the audit — it is a reference draft only.**
+This is the XML to replace or augment the existing `Lancer/PrivacyInfo.xcprivacy`. **Do not add this to the project during the audit — it is a reference draft only.**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -121,7 +121,7 @@ This is the XML to replace or augment the existing `Conduit/PrivacyInfo.xcprivac
 
         <!-- System boot time (NOT included. Sentry is linked as an
              optional binary dependency but the DSN is left empty, so
-             the crash reporter never starts — see ConduitApp.swift.
+             the crash reporter never starts — see LancerApp.swift.
              If a production DSN is added later, add:
              REASON 35F9.1 "Declared for crash reporter" -->
     </array>
@@ -164,12 +164,12 @@ This is the XML to replace or augment the existing `Conduit/PrivacyInfo.xcprivac
 |---|---|---|
 | `UserDefaults` | `CA92.1` | `@AppStorage` for user-facing preferences: onboarding completion flag, app-lock toggle, terminal font size, color scheme. No KVO observation of third-party defaults domains. |
 | `FileTimestamp` | `C617.1` | SFTP file browser displays `file.modificationDate` in file listings so the user knows timestamps before transferring. |
-| `SystemBootTime` | N/A (omitted) | The crash reporter SDK (Sentry) is linked but never initialized — `sentryDSN = ""` in `ConduitApp.swift`. If a production DSN is configured in the future, add `35F9.1` (crash reporter). Verify against actual code before submission. |
+| `SystemBootTime` | N/A (omitted) | The crash reporter SDK (Sentry) is linked but never initialized — `sentryDSN = ""` in `LancerApp.swift`. If a production DSN is configured in the future, add `35F9.1` (crash reporter). Verify against actual code before submission. |
 | `DiskSpace` | N/A (omitted) | Not currently used. If a "free space" indicator is added to settings, add `DDA9.1` (display file capacity). |
 
 ### 3.2 What the current manifest declares (for reference)
 
-The existing `Conduit/PrivacyInfo.xcprivacy` already declares `UserDefaults` (CA92.1), `FileTimestamp` (C617.1), and `DeviceID` (APNs, non-tracking, app functionality). The draft above is identical in substance. The `SystemBootTime` declaration was removed per the WS-8 audit (Sentry is disabled). **Verify one more time that no code path reads `ProcessInfo.processInfo.systemUptime` or `hostinfo(…).uptime` before submission.**
+The existing `Lancer/PrivacyInfo.xcprivacy` already declares `UserDefaults` (CA92.1), `FileTimestamp` (C617.1), and `DeviceID` (APNs, non-tracking, app functionality). The draft above is identical in substance. The `SystemBootTime` declaration was removed per the WS-8 audit (Sentry is disabled). **Verify one more time that no code path reads `ProcessInfo.processInfo.systemUptime` or `hostinfo(…).uptime` before submission.**
 
 ---
 
@@ -182,7 +182,7 @@ The existing `Conduit/PrivacyInfo.xcprivacy` already declares `UserDefaults` (CA
 | **Primary category** | Developer Tools | Must be accurate; impacts search ranking and featured placement |
 | **Secondary category** | Productivity | Optional but recommended |
 | **Subtitle** (30 chars) | Approve AI agents from anywhere | Existing in `docs/app-store-metadata.md` |
-| **Name** | Conduit — Agent Approvals | May need to drop subtitle suffix if Apple flags the 30-char limit on the name field itself |
+| **Name** | Lancer — Agent Approvals | May need to drop subtitle suffix if Apple flags the 30-char limit on the name field itself |
 
 ### 4.2 Age Rating (4+)
 
@@ -236,11 +236,11 @@ As declared in the PrivacyInfo.xcprivacy draft (§3 above) — the App Store Con
 | **Contact Info** | No | — | — | — |
 | **User Content** | No | — | — | Terminal output is ephemeral and never leaves the device to our servers |
 | **Search History** | No | — | — | — |
-| **Purchase History** (within app) | No* | — | — | *StoreKit IAP is processed by Apple — no purchase data is collected by Conduit servers |
+| **Purchase History** (within app) | No* | — | — | *StoreKit IAP is processed by Apple — no purchase data is collected by Lancer servers |
 | **Location** | No | — | — | — |
 | **Usage Data** | No | — | — | — |
 | **Diagnostics** | No | — | — | — |
-| **Other Data** (SSH keys, host pairings) | No | — | — | Stored only in the device Keychain, never transmitted to Conduit servers |
+| **Other Data** (SSH keys, host pairings) | No | — | — | Stored only in the device Keychain, never transmitted to Lancer servers |
 
 ### 4.5 Screenshot Set
 
@@ -275,7 +275,7 @@ claude code,codex,opencode,ai agent,approvals,ssh,devops,audit,policy,governance
 
 Use the text from `docs/app-store-metadata.md` (§Promotional text, §Description). Ensure:
 
-- **No claim** that the app runs agents on Conduit's servers.
+- **No claim** that the app runs agents on Lancer's servers.
 - **No claim** of "lockscreen approval" unless physical-device APNs flow is verified (see `PUBLISH_READINESS_CHECKLIST.md` §C2).
 - **Privacy-first language**: "Your code never leaves your host", "You own the bridge", "The relay sees only ciphertext".
 
@@ -296,8 +296,8 @@ Use the text from `docs/app-store-metadata.md` (§Promotional text, §Descriptio
 
 Apple reviews the first TestFlight external build. Use the same App Review notes from §1. Additionally:
 
-- Note that the app requires the user's own daemon (`conduitd`) running on their own host — testers must install it separately.
-- Provide a `DEBUG`-scheme test scenario: launch with `CONDUIT_GALLERY=review` to see seeded approval cards without a live daemon.
+- Note that the app requires the user's own daemon (`lancerd`) running on their own host — testers must install it separately.
+- Provide a `DEBUG`-scheme test scenario: launch with `LANCER_GALLERY=review` to see seeded approval cards without a live daemon.
 
 ### 5.3 Common rejection scenarios and responses
 
@@ -305,11 +305,11 @@ Apple reviews the first TestFlight external build. Use the same App Review notes
 |---|---|---|
 | **Guideline 2.1 — App Completeness** (missing features, placeholder UI) | Medium | Ensure no `TODO` or placeholder screens survive in the Release build. QA every navigation path. Verify the Billing screen handles the non-consumable IAP correctly. |
 | **Guideline 2.5.2 — Remote code / non-self-contained** | Medium-High | See §2 above. Cite SSH terminal precedent. Offer architecture diagram and screen recording. Pay special attention to the SFTP browser (can it download + execute a binary? NO — iOS cannot execute downloaded files outside the container, and SFTP only writes to the app sandbox). |
-| **Guideline 3.1.1 — IAP confusion** | Low | The non-consumable $14.99 ("Conduit Pro — Lifetime") unlocks CloudKit sync and relay prioritization. Ensure it's clearly described. Verify that the free tier provides genuine utility (self-host relay is free forever). |
-| **Guideline 4.0 — Design / copycat** | Low | Conduit's UI is original. Avoid visual similarity to Blink Shell or Termius. |
+| **Guideline 3.1.1 — IAP confusion** | Low | The non-consumable $14.99 ("Lancer Pro — Lifetime") unlocks CloudKit sync and relay prioritization. Ensure it's clearly described. Verify that the free tier provides genuine utility (self-host relay is free forever). |
+| **Guideline 4.0 — Design / copycat** | Low | Lancer's UI is original. Avoid visual similarity to Blink Shell or Termius. |
 | **Guideline 5.1.1 — Privacy / data collection** | Low | Our privacy manifest declares no tracking, and the only data collected is the APNs device token for push notifications. Ensure the privacy nutrition label answers in App Store Connect match the manifest. |
 | **Guideline 5.1.2 — Location / contacts** | Not applicable | The app does not request location or contacts access. |
-| **Guideline 5.6 — Developer conduct / spam** | Low | Ensure the app name does not include misleading keywords. The name "Conduit — Agent Approvals" is descriptive. |
+| **Guideline 5.6 — Developer conduct / spam** | Low | Ensure the app name does not include misleading keywords. The name "Lancer — Agent Approvals" is descriptive. |
 
 ### 5.4 Rejection-cycle contingency budget
 
@@ -326,7 +326,7 @@ Source: [SwapTest preflight check guide](https://swaptest.net/blog/ios-preflight
 
 If stuck in rejection purgatory:
 
-1. **Respond to the rejection message** with a clear, point-by-point rebuttal citing the guideline text and explaining why Conduit complies. Include an architecture diagram (as a file attachment).
+1. **Respond to the rejection message** with a clear, point-by-point rebuttal citing the guideline text and explaining why Lancer complies. Include an architecture diagram (as a file attachment).
 
 2. **Request a phone call** via the App Store Connect Contact form — paid developer accounts can request a review call.
 
@@ -342,13 +342,13 @@ If stuck in rejection purgatory:
 
 Before uploading:
 
-- [ ] `swift build && swift test` passes in `Packages/ConduitKit`
+- [ ] `swift build && swift test` passes in `Packages/LancerKit`
 - [ ] Xcode Release archive succeeds (iOS app target — not just SPM)
 - [ ] No DEBUG-only features leak into Release build (gallery harness, auto-trust host key)
 - [ ] All `NSPrivacy*` declarations match actual API usage
 - [ ] `ITSAppUsesNonExemptEncryption = false` and the rationale is documented
 - [ ] App Review notes drafted (§1 above) and pasted into App Store Connect
-- [ ] IAP product `dev.conduit.mobile.pro` exists in App Store Connect (Non-Consumable, $14.99)
+- [ ] IAP product `dev.lancer.mobile.pro` exists in App Store Connect (Non-Consumable, $14.99)
 - [ ] APNs push notifications are functional on physical device (not just simulator)
 - [ ] Privacy nutrition label in App Store Connect matches `PrivacyInfo.xcprivacy`
 - [ ] Screenshots captured (5 iPhone + 1 iPad, light appearance, correct resolution)

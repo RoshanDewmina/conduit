@@ -1,5 +1,5 @@
-const LS_KEY = "conduit.webauthn.credId";
-const RP_NAME = "Conduit";
+const LS_KEY = "lancer.webauthn.credId";
+const RP_NAME = "Lancer";
 
 function bufToB64u(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -39,7 +39,7 @@ export async function ensureCredential(): Promise<string> {
     publicKey: {
       challenge,
       rp: { name: RP_NAME, id: window.location.hostname },
-      user: { id: userId, name: "conduit-operator", displayName: "Conduit Operator" },
+      user: { id: userId, name: "lancer-operator", displayName: "Lancer Operator" },
       pubKeyCredParams: [
         { type: "public-key", alg: -7 },
         { type: "public-key", alg: -257 },

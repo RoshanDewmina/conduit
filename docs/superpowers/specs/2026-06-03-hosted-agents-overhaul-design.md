@@ -6,7 +6,7 @@
 
 ## 1. Problem
 
-The hosted-agent experience (Conduit Cloud) is high-friction, hard to find, and
+The hosted-agent experience (Lancer Cloud) is high-friction, hard to find, and
 leaks plumbing as UX:
 
 - **Create flow** (`CreateAgentSheet`) is a raw SwiftUI `Form` — visually
@@ -47,7 +47,7 @@ An agent is the composition of **where it runs** (compute) and **its brain**
 (model). The redesign presents each as one curated choice and hides the rest.
 
 - **Compute / runtime ("a VM of their choice"):**
-  - **Conduit Cloud** (managed sandbox, zero-setup, metered) — default.
+  - **Lancer Cloud** (managed sandbox, zero-setup, metered) — default.
     Power-user disclosure: region / size. Backend chooses Fly vs GCP internally;
     `HostedRuntimeKind.fly`/`.gcpCloudRun` become an internal detail, not a
     user-facing toggle.
@@ -70,7 +70,7 @@ sensible default model:
 ### 3.3 Billing model (Claude-style hybrid)
 Market standard in 2026 (Claude included) is two layers, both of which we already
 have primitives for:
-- **Subscription plan = allowance + rate limits.** Conduit Cloud (Stripe
+- **Subscription plan = allowance + rate limits.** Lancer Cloud (Stripe
   `hasCloudEntitlement`). Quota via `HostedQuotaSnapshot`
   (agents/runs/concurrency/daily-USD).
 - **Prepaid credits for overage.** `CreditBalance` (prepaidUSD / overageUSD /
@@ -101,7 +101,7 @@ control plane must expose SFTP/exec into the container; the same UI is reused.
 1. **Create flow redesign** — replace `CreateAgentSheet`'s `Form` with a
    design-system sheet (`DSDetailHeader` + cards), structured as:
    - Agent type cards (Claude Code / Codex / Custom).
-   - Runtime: segmented **Conduit Cloud** / **My SSH host**; Cloud → optional
+   - Runtime: segmented **Lancer Cloud** / **My SSH host**; Cloud → optional
      region/size disclosure; host → `Host` picker bound to `hostRepo`.
    - Model: smart default chip + "Change model" → curated `ModelPicker`
      (OpenRouter-backed list; Phase-1 list can be static-curated).
@@ -222,7 +222,7 @@ The app assumes these from push-backend (some exist):
 - **OpenRouter model list:** Phase 1 uses a static curated catalog; a live
   `/models` fetch can come later.
 - **Plan tiers:** exact plan names/prices/limits (Pro/Max-equivalent) are a
-  product decision; spec assumes "Conduit Cloud subscription + prepaid credits."
+  product decision; spec assumes "Lancer Cloud subscription + prepaid credits."
 - **Cloud SFTP:** reusing `FilesFeature` for cloud sandboxes assumes the backend
   exposes SFTP/exec; otherwise file nav is SSH-host-only until then.
 ```
