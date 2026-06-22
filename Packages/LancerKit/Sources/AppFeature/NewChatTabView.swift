@@ -262,11 +262,12 @@ public struct NewChatTabView: View {
 
     // MARK: - Composer landing (calm idle surface) + drawer
 
-    /// The idle New Chat surface: a calm title and a single entry point that opens
-    /// the composer as a bottom drawer. The fields live inside the drawer so the
-    /// landing stays quiet and there's no full-page form to scroll.
+    /// The idle New Chat surface: a calm greeting with an always-visible composer
+    /// pinned to the bottom (ChatGPT/Claude style) — type immediately, no drawer
+    /// tap. The "…" affordance still opens the drawer for advanced options
+    /// (project picker, budget).
     private var composerLanding: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 0) {
             HStack {
                 DSCircleButton(
                     "line.3.horizontal",
@@ -291,28 +292,84 @@ public struct NewChatTabView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
             }
-            Button {
-                Haptics.selection()
-                showComposer = true
-            } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .bold))
-                    Text("New chat")
-                        .font(.dsSansPt(16, weight: .semibold))
-                }
-                .foregroundStyle(t.accentFg)
-                .padding(.horizontal, 22)
-                .frame(height: 52)
-                .background(t.accent, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Start a new chat")
             Spacer()
-            Spacer()
+            inlineComposer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 20)
+    }
+
+    /// Always-visible bottom composer: "/" autocomplete, a growing prompt field
+    /// with inline send, and a row of agent/host chips + an Options affordance.
+    private var inlineComposer: some View {
+        VStack(spacing: 8) {
+            CommandAutocompleteBar(
+                query: prompt,
+                lancerCommands: Self.lancerCommands,
+                agentCommands: agentCommands,
+                onPick: handleComposerPick
+            )
+            .padding(.horizontal, 14)
+
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField("Message, or type / for commands…", text: $prompt, axis: .vertical)
+                    .font(.dsSansPt(16))
+                    .foregroundStyle(t.text)
+                    .tint(t.accent)
+                    .lineLimit(1...6)
+                    .focused($composeFocused)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .strokeBorder(t.border.opacity(0.72), lineWidth: 1)
+                    )
+                Button {
+                    composeFocused = false
+                    Task { await sendCurrentPrompt() }
+                } label: {
+                    DSIconView(.send, size: 17, color: canSend ? t.accentFg : t.text4)
+                        .frame(width: 44, height: 44)
+                        .background(canSend ? t.accent : t.surface2, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("Send chat")
+            }
+            .padding(.horizontal, 14)
+
+            HStack(spacing: 8) {
+                Button { showAgentPicker = true } label: {
+                    HStack(spacing: 5) {
+                        DSStatusDot(tone: selectedAgent?.isOffline == true ? .off : .accent, size: 7)
+                        Text(agentLabel)
+                            .font(.dsSansPt(12.5, weight: .semibold))
+                            .foregroundStyle(t.text2)
+                        Text("· \(machineLabel)")
+                            .font(.dsSansPt(11.5))
+                            .foregroundStyle(t.text4)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(t.surface, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                Button { showComposer = true } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(t.text3)
+                        .frame(width: 32, height: 32)
+                        .background(t.surface, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Options — model, budget, project")
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 10)
+        .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
     /// The composer fields, presented inside the bottom drawer. Same controls and

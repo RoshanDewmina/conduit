@@ -692,7 +692,12 @@ struct DebugGalleryView: View {
             fleetStore: FleetStore(),
             onDispatch: { _, _, _, _, _ in .blocked("gallery") },
             onNewTask: {},
-            onOpenWorkspace: { _ in }
+            onOpenWorkspace: { _ in },
+            loadCommands: { _, _ in [
+                AgentCommand(name: "/review", description: "Review the current changes", source: "project", kind: "command"),
+                AgentCommand(name: "/deep-research", description: "Fan-out web research", source: "user", kind: "skill"),
+                AgentCommand(name: "/clear", description: "Clear conversation history", source: "builtin", kind: "builtin"),
+            ] }
         )
     }
 
