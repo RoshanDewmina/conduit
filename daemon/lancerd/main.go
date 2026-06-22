@@ -38,6 +38,12 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "uninstall":
+		if err := runUninstall(); err != nil {
+			fmt.Fprintln(os.Stderr, "lancerd uninstall:", err)
+			os.Exit(1)
+		}
+
 	case "agent-hook":
 		if err := runAgentHook(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "lancerd agent-hook:", err)
@@ -129,6 +135,7 @@ Usage:
   lancerd daemon          Run resident bridge (Unix socket, persistent queue)
   lancerd serve           Attach to resident; relay JSON-RPC over stdio
   lancerd install         Install binary + launchd/systemd unit for daemon
+  lancerd uninstall       Remove the service unit, shim wrappers + installed binary
   lancerd relay           Connect to push-backend relay for E2E messaging
   lancerd pair            Generate a pairing code for relay setup instructions
   lancerd relay-attach    Save an existing pairing code for the resident daemon

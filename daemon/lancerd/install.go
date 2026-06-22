@@ -162,7 +162,7 @@ func installClaudeHook(home string) error {
 }
 
 func installLaunchd(binary, home string) error {
-	plistPath := filepath.Join(home, "Library", "LaunchAgents", "dev.lancer.lancerd.plist")
+	plistPath := launchdPlistPath(home)
 	if err := os.MkdirAll(filepath.Dir(plistPath), 0755); err != nil {
 		return err
 	}
