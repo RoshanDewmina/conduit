@@ -278,6 +278,9 @@ public struct DarkTranscriptHeader: View {
     private let onBack: () -> Void
     private let onWorkspace: () -> Void
     private let onNew: (() -> Void)?
+    /// When non-nil, a Share button exports this transcript as text. Computed
+    /// lazily by the caller so it reflects the turns at tap time.
+    private let shareText: (() -> String)?
     @Environment(\.lancerTokens) private var t
 
     public init(
@@ -286,7 +289,8 @@ public struct DarkTranscriptHeader: View {
         isLive: Bool,
         onBack: @escaping () -> Void,
         onWorkspace: @escaping () -> Void,
-        onNew: (() -> Void)? = nil
+        onNew: (() -> Void)? = nil,
+        shareText: (() -> String)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -294,6 +298,7 @@ public struct DarkTranscriptHeader: View {
         self.onBack = onBack
         self.onWorkspace = onWorkspace
         self.onNew = onNew
+        self.shareText = shareText
     }
 
     public var body: some View {
@@ -319,6 +324,16 @@ public struct DarkTranscriptHeader: View {
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
                 .background(t.okSoft, in: Capsule())
+            }
+            if let shareText {
+                ShareLink(item: shareText()) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(t.text2)
+                        .frame(width: 38, height: 38)
+                        .background(t.surface2, in: Circle())
+                }
+                .accessibilityLabel("Share transcript")
             }
             DSCircleButton("square.grid.2x2", diameter: 38, accessibilityLabel: "Open workspace", action: onWorkspace)
             if let onNew {

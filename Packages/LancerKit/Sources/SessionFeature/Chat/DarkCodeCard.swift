@@ -80,9 +80,11 @@ public struct DarkCodeCard: View {
 
     @ViewBuilder
     private var codeBody: some View {
-        let text = Text(code)
+        let highlighted = SyntaxHighlighter.highlight(
+            code, keyword: t.termAccent, string: t.termOk, comment: t.termText3, base: t.termText2
+        )
+        let text = Text(highlighted)
             .font(.dsMonoPt(12.5))
-            .foregroundStyle(t.termText2)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)

@@ -535,7 +535,8 @@ public struct NewChatTabView: View {
             isLive: isStreaming,
             onBack: { Haptics.selection(); resetForNewChat() },
             onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
-            onNew: { Haptics.selection(); resetForNewChat() }
+            onNew: { Haptics.selection(); resetForNewChat() },
+            shareText: { transcriptText() }
         )
     }
 
@@ -619,6 +620,30 @@ public struct NewChatTabView: View {
     private var bottomBar: some View {
         if activeRun != nil, let controlStore {
             VStack(spacing: 10) {
+                if runIsTerminal, !turns.isEmpty {
+                    HStack {
+                        Button {
+                            Haptics.selection()
+                            Task { await regenerateLast() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Regenerate")
+                                    .font(.dsSansPt(13, weight: .semibold))
+                            }
+                            .foregroundStyle(t.text2)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(t.surface, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Regenerate the last response")
+                        Spacer()
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                }
                 RunFollowUpBar(
                     text: $followUpText,
                     isErrorState: isErrorState,
@@ -832,6 +857,24 @@ public struct NewChatTabView: View {
         } catch {
             dispatchErrorMessage = "Follow-up failed: \(error.localizedDescription)"
         }
+    }
+
+    /// Regenerate the last response: re-run the most recent prompt as a fresh turn
+    /// (continues under a new runId, re-passing policy + budget). Same plumbing as a
+    /// follow-up, with the previous prompt text.
+    private func regenerateLast() async {
+        guard let last = turns.last else { return }
+        await sendFollowUp(last.prompt)
+    }
+
+    /// Plain-text export of the live conversation, shared via the header.
+    private func transcriptText() -> String {
+        var out = "# \(chatTitle)\n\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "relay")\n\n"
+        for turn in turns {
+            let reply = runOutputStore.run(turn.runId)?.text ?? ""
+            out += "## You\n\(turn.prompt)\n\n## \(agentLabel)\n\(reply)\n\n"
+        }
+        return out
     }
 
     private func resetForNewChat() {

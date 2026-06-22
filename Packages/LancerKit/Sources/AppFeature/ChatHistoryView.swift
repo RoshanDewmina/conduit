@@ -67,7 +67,8 @@ public struct ChatHistoryView: View {
                 isLive: false,
                 onBack: { Haptics.selection(); onBack() },
                 onWorkspace: { Haptics.selection(); onNewChat() },
-                onNew: { Haptics.selection(); onNewChat() }
+                onNew: { Haptics.selection(); onNewChat() },
+                shareText: { transcriptText() }
             )
             ConversationScrollView(bottomID: "history-bottom", scrollKey: turns.count + liveTurns.count + (runOutputStore?.run(activeRun?.runId ?? "")?.chunks.count ?? 0)) {
                 if loaded && turns.isEmpty && liveTurns.isEmpty {
@@ -179,6 +180,21 @@ public struct ChatHistoryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    /// Plain-text export of the conversation (persisted turns + this session's live
+    /// turns), shared via the header's ShareLink.
+    private func transcriptText() -> String {
+        var out = "# \(title)\n\(agentLabel) · \(hostName)\n\n"
+        for turn in turns {
+            let reply = turn.assistantText.isEmpty ? (turn.errorMessage ?? "") : turn.assistantText
+            out += "## You\n\(turn.prompt)\n\n## \(agentLabel)\n\(reply)\n\n"
+        }
+        for turn in liveTurns {
+            let reply = runOutputStore?.run(turn.runID)?.text ?? ""
+            out += "## You\n\(turn.prompt)\n\n## \(agentLabel)\n\(reply)\n\n"
+        }
+        return out
     }
 
     private func load() async {
