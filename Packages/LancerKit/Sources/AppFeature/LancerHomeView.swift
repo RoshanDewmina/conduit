@@ -208,13 +208,17 @@ public struct LancerHomeView: View {
 
     // MARK: Derived model
 
-    /// Machines built from recent threads, grouped host → project (cwd) → session,
-    /// enriched with any live connection state from the fleet store.
+    /// Machines built from every paired fleet host, grouped host → project (cwd)
+    /// → session, enriched with recent threads and live connection state. Seeding
+    /// from `fleetStore.slots` (not just `recentThreads`) means a freshly paired
+    /// machine shows here immediately, before it has any chat history — matching
+    /// what the Machines page lists.
     private var machines: [HomeMachine] {
         let byHost = Dictionary(grouping: recentThreads, by: \.hostName)
-        return byHost
-            .map { host, threads -> HomeMachine in
-                let byProject = Dictionary(grouping: threads, by: \.cwd)
+        let allHosts = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
+        return allHosts
+            .map { host -> HomeMachine in
+                let byProject = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)
                 let projects = byProject
                     .map { path, sessions in
                         HomeProject(path: path, sessions: sessions.sorted { $0.lastActivityAt > $1.lastActivityAt })
