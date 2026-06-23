@@ -49,9 +49,31 @@ Five stacked bugs blocked push; the loop only worked once every layer was fixed:
 **Also required operationally:** the local `lancerd` must have `APPROVAL_RELAY_SECRET` in its launchd env (injected into `~/Library/LaunchAgents/dev.lancer.lancerd.plist`) to authenticate to the backend; and the backend session registry is **in-memory**, so a redeploy drops all sessions until each app foregrounds again.
 
 ## Phase 5 — Continue / resume + terminal
-- [ ] 5.1 Send a **follow-up** turn on the active run → new turn appends, gates re-run.
-- [ ] 5.2 Resume a past conversation from **History** → state restores.
-- [ ] 5.3 Open the **remote terminal** → PTY connects, blocks render, input works.
+- [x] 5.1 Follow-up turn — proven live in Phase 2/3 (continue-launched, new runId, gates re-run).
+- [~] 5.2 Resume from History — code path verified: `ChatHistoryView` loads+replays a persisted
+  conversation, reachable via sidebar `.thread(id:)`, with a resume follow-up bar. Live tap-through pending.
+- [n/a] 5.3 Remote terminal — SSH-only by design; not available over the relay (the SSH-features
+  upsell sheet explains this). Applies only once an SSH machine is added.
+
+## Phase 7/8 — code+sim audit 2026-06-23 (fixes committed `ace5083`)
+Audited Settings/Trust/Emergency-Stop + empty/error/Dynamic-Type in the sim. **3 P1 fixed:**
+- **Emergency Stop was unreachable** — the `onEmergencyStop` closure was wired but no control was ever
+  rendered. Added a labeled destructive control in Settings → Policy & Governance. (And the prior fix
+  `a7be5bd` made it actually halt **relay** runs, not just SSH slots.)
+- **Account card** overflowed at large Dynamic Type ("Lancer" wrapped mid-word) → lineLimit + minimumScaleFactor.
+- **Autonomy preset bar** collapsed to 3–4-char fragments at large Dynamic Type → segments shrink to one line.
+
+Verified-OK: Trust Center **does** link to both relay pairing AND `DeviceManagementView` (device
+revocation) — the audit's "missing revocation" was a false positive (it didn't tap in). Empty states
+(secrets/policy) render proper icon+title+subtitle; error card reads as connection-error correctly.
+
+**Deferred / flagged (cosmetic):** `conduit.dev`→`lancer.dev` in user-facing copy (privacy email in
+Trust Center + onboarding/subscribe strings) — owner decision, infra deliberately preserved. Missing
+"Billing" tile / "Data" section header = spec drift, not bugs (Billing reachable via the account card).
+
+### STILL DEVICE-GATED (needs your phone — batch in one pass)
+- 5.2 live resume tap-through · 6.1–6.3 fleet/host-health + cross-provider session observability + drift
+  card · 8.1–8.2 resilience (network switch mid-approval, daemon restart mid-session) · 8.4 VoiceOver pass.
 
 ## Phase 6 — Fleet, sessions, drift
 - [ ] 6.1 Fleet/Home shows the paired machine + host health.
