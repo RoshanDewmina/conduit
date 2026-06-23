@@ -70,6 +70,29 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Register this device's APNs token with the relay-paired daemon so that
+    /// approvals can be delivered by push when the app is CLOSED. The SSH path
+    /// registers via the lancer.device.register(.apns) RPCs; the relay path had no
+    /// equivalent, so the daemon never learned the token and push never fired on a
+    /// relay-only device. The daemon handles this in e2e_router.go `deviceRegister`.
+    @discardableResult
+    public func registerDevice(apnsToken: String, sessionID: String, pushBackendURL: String) async -> Bool {
+        guard isActive else { return false }
+        struct DeviceRegisterParams: Codable {
+            let sessionId: String
+            let apnsToken: String
+            let pushBackendURL: String
+        }
+        do {
+            try await relayClient.send(type: "deviceRegister", payload: DeviceRegisterParams(
+                sessionId: sessionID, apnsToken: apnsToken, pushBackendURL: pushBackendURL
+            ))
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Dispatch an agent run through the E2E relay.
     /// Returns the dispatch result, or nil if the relay is not active.
     public func sendDispatch(agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?) async throws -> DispatchResult {

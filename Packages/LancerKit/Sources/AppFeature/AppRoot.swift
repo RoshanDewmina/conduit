@@ -1567,6 +1567,18 @@ public struct AppRoot: View {
                     if let installed = try? await bridge.relayInstalledAgents(), !installed.isEmpty {
                         installedAgentVendors = installed
                     }
+                    // Register this device's APNs token over the relay so approvals
+                    // can be pushed when the app is closed (the relay path's
+                    // equivalent of the SSH channel.registerAPNSToken). Without this
+                    // the daemon never learns the token and push never fires.
+                    let backendURL = Self.pushBackendURL()
+                    if !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex {
+                        await bridge.registerDevice(
+                            apnsToken: token,
+                            sessionID: DeviceIdentity.sessionID(),
+                            pushBackendURL: backendURL
+                        )
+                    }
                 }
             }
         }
@@ -1581,14 +1593,26 @@ public struct AppRoot: View {
 
         Task { @MainActor in
             for await notification in NotificationCenter.default.notifications(named: .lancerAPNSTokenReceived) {
-                guard let token = notification.userInfo?["token"] as? String,
-                      let channel = self.daemonChannel
-                else { continue }
-                try? await channel.registerAPNSToken(
-                    hexToken: token,
-                    sessionID: DeviceIdentity.sessionID(),
-                    pushBackendURL: Self.pushBackendURL()
-                )
+                guard let token = notification.userInfo?["token"] as? String else { continue }
+                let backendURL = Self.pushBackendURL()
+                // SSH path: register over the daemon channel.
+                if let channel = self.daemonChannel {
+                    try? await channel.registerAPNSToken(
+                        hexToken: token,
+                        sessionID: DeviceIdentity.sessionID(),
+                        pushBackendURL: backendURL
+                    )
+                }
+                // Relay path: the token may arrive after the bridge is already active
+                // (the isActive handler covers the reverse order). Register over the
+                // relay so closed-app push works on relay-only devices.
+                if let bridge = self.e2eBridge, relayBridgeIsActive, !backendURL.isEmpty {
+                    await bridge.registerDevice(
+                        apnsToken: token,
+                        sessionID: DeviceIdentity.sessionID(),
+                        pushBackendURL: backendURL
+                    )
+                }
             }
         }
 

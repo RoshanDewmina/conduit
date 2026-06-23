@@ -211,6 +211,42 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("runContinueResult", data)
 
+	case "deviceRegister":
+		// The phone registers its APNs device token over the relay so that
+		// app-CLOSED approvals can be delivered by push. The SSH path does this
+		// via the lancer.device.register(.apns) RPCs; the relay path had no
+		// equivalent, so s.device stayed nil and postApprovalPush never fired —
+		// the reason push never reached a relay-only device. This mirrors the
+		// server.go lancer.device.register + .apns handlers.
+		var p struct {
+			SessionID      string `json:"sessionId"`
+			APNSToken      string `json:"apnsToken"`
+			PushBackendURL string `json:"pushBackendURL"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil || p.SessionID == "" {
+			log.Printf("e2e: unmarshal deviceRegister failed: %v", err)
+			return
+		}
+		srv := r.server
+		srv.deviceMu.Lock()
+		if srv.device == nil || srv.device.SessionID != p.SessionID || srv.relayToken == "" {
+			if tok, err := generateRelayToken(); err == nil {
+				srv.relayToken = tok
+			}
+		}
+		srv.device = &registeredDevice{PushBackendURL: p.PushBackendURL, SessionID: p.SessionID}
+		relayToken := srv.relayToken
+		srv.deviceMu.Unlock()
+		if p.PushBackendURL != "" {
+			// Decision-relay Bearer (closed-app Approve/Reject returns via the
+			// backend) + the APNs token the backend pushes to.
+			go srv.postRelayRegistration(p.PushBackendURL, p.SessionID, relayToken)
+			srv.poller.ensureRunning(p.PushBackendURL, p.SessionID, relayToken)
+			if p.APNSToken != "" {
+				go srv.postDeviceTokenRegistration(p.PushBackendURL, p.SessionID, p.APNSToken)
+			}
+		}
+
 	case "agentAgentsInstalled":
 		payloadOut := map[string]interface{}{"agents": installedAgents(exec.LookPath)}
 		data, _ := json.Marshal(map[string]interface{}{"type": "agentsInstalledResult", "payload": payloadOut})
