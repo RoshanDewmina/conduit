@@ -2129,6 +2129,7 @@ private struct SettingsWithLibraryView: View {
             e2eRelayClient: e2eRelayClient,
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
+            onEmergencyStop: onEmergencyStop,
             accountSession: accountSession,
             onAccountSignedOut: onAccountSignedOut,
             // Settings is a top-level sidebar destination. The compact shell

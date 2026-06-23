@@ -501,6 +501,7 @@ public struct SettingsView: View {
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
         onShowLimits: (() -> Void)? = nil,
+        onEmergencyStop: (() -> Void)? = nil,
         accountSession: AccountSessionController? = nil,
         onAccountSignedOut: (() -> Void)? = nil,
         onBack: (() -> Void)? = nil
@@ -518,6 +519,7 @@ public struct SettingsView: View {
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
         self.onShowLimits = onShowLimits
+        self.onEmergencyStop = onEmergencyStop
         self.accountSession = accountSession
         self.onAccountSignedOut = onAccountSignedOut
         self.onBack = onBack

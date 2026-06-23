@@ -2073,7 +2073,8 @@ private struct ShellSettingsGalleryScreen: View {
     var body: some View {
         SettingsView(
             viewModel: viewModel,
-            onResetApp: {}
+            onResetApp: {},
+            onEmergencyStop: {}
         )
     }
 }
