@@ -51,7 +51,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 ## C. Tests that REMAIN (not yet covered)
 
 - [ ] **C1 — Live E2E on a real *remote* host.** Only localhost-sim subset done. Needs a real SSH host. ⏸ owner-gated.
-- [ ] **C2 — Physical-device APNs, app *closed*.** The whole point: background app → trigger approval → push → lock-screen Approve → agent unblocks. **Untested.** Needs physical iPhone + APNs `.p8` key. ⏸ owner-gated.
+- [x] **C2 — Physical-device APNs, app *closed*. ✅ PASSED 2026-06-23.** Background app → gated action → APNs lock-screen push → tapped Approve on lock screen (app never foregrounded) → decision round-tripped → agent ran. Proof: audit `escalate→approve`, file created, run completed. Required fixing a 5-bug chain (bundle id, relay device-registration, /approval auth, sandbox APNs fallback, foreground re-registration) — see `docs/test-runs/2026-06-22-full-device-test.md` Phase 4.
 - [ ] **C3 — Expand the app-target UI suite.** Add: onboarding completeness, StoreKit IAP purchase, approve-from-lockscreen tests.
 - [ ] **C4 — Reconnect / session-loss hardening as tests.** Background, network switch, daemon restart.
 - [ ] **C5 — StoreKit IAP purchase verified in TestFlight** (sandbox account). ⏸ owner-gated.
