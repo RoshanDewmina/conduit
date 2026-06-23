@@ -166,7 +166,7 @@ public actor OpenRouterClient: AIClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("https://conduit.dev", forHTTPHeaderField: "HTTP-Referer")
+        req.setValue("https://lancersoftware.dev", forHTTPHeaderField: "HTTP-Referer")
         req.setValue("Lancer", forHTTPHeaderField: "X-Title")
 
         var chatMessages: [[String: String]] = []

@@ -2041,7 +2041,7 @@ private struct ShellFleetGalleryScreen: View {
 
     private static let hosts = [
         Host(name: "MacBook Air", hostname: "roshans-macbook.local", username: "roshan", tags: ["primary"]),
-        Host(name: "Staging", hostname: "staging.conduit.dev", username: "deploy", tags: ["release"]),
+        Host(name: "Staging", hostname: "staging.lancersoftware.dev", username: "deploy", tags: ["release"]),
         Host(name: "Dev VPS", hostname: "dev.example.com", username: "ubuntu", tags: ["work"]),
         Host(name: "Build runner", hostname: "runner.local", port: 2222, username: "ci", tags: ["ci"])
     ]

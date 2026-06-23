@@ -259,8 +259,8 @@ public struct AgentsView: View {
                 subtitle: "Hosted agents need an active Lancer Cloud subscription. Manage billing in Settings."
             )
             if pm.externalStripeEligible {
-                Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
-                    Text("Subscribe at conduit.dev")
+                Link(destination: URL(string: "https://lancersoftware.dev/subscribe")!) {
+                    Text("Subscribe at lancersoftware.dev")
                         .font(.dsSansPt(14, weight: .semibold))
                         .foregroundStyle(t.accent)
                 }

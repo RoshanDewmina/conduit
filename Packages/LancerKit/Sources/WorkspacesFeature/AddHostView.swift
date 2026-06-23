@@ -310,7 +310,7 @@ public struct AddHostView: View {
             }
 
             if cloudUpgradeEligible {
-                Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
+                Link(destination: URL(string: "https://lancersoftware.dev/subscribe")!) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.up.right.square")
                             .font(.system(size: 14, weight: .semibold))

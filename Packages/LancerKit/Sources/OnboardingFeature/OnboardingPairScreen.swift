@@ -44,7 +44,7 @@ public struct OnboardingPairScreen: View {
                 DSQuoteBlock(
                     title: "INSTALL",
                     tags: [],
-                    message: "curl -fsSL conduit.dev/install | sh",
+                    message: "curl -fsSL lancersoftware.dev/install | sh",
                     tone: .ok
                 )
                 .padding(.horizontal, 18)

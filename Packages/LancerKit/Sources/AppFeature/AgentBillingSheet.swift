@@ -6,7 +6,7 @@ import SettingsFeature
 
 /// Subscription / credit management sheet for hosted agents. Surfaces the credit
 /// balance breakdown, today's spend vs the daily limit, and a link into the
-/// Stripe customer portal (with a conduit.dev fallback when unavailable).
+/// Stripe customer portal (with a lancersoftware.dev fallback when unavailable).
 public struct AgentBillingSheet: View {
     @Bindable var store: AgentStore
     @Environment(\.dismiss) private var dismiss
@@ -120,11 +120,11 @@ public struct AgentBillingSheet: View {
 
             if portalUnavailable {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Billing portal unavailable — manage at conduit.dev")
+                    Text("Billing portal unavailable — manage at lancersoftware.dev")
                         .font(.dsMonoPt(11))
                         .foregroundStyle(t.text3)
-                    Link(destination: URL(string: "https://conduit.dev/subscribe")!) {
-                        Text("Open conduit.dev/subscribe")
+                    Link(destination: URL(string: "https://lancersoftware.dev/subscribe")!) {
+                        Text("Open lancersoftware.dev/subscribe")
                             .font(.dsSansPt(13, weight: .semibold))
                             .foregroundStyle(t.accent)
                     }

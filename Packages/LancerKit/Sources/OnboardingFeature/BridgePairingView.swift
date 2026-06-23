@@ -72,7 +72,7 @@ public struct BridgePairingView: View {
                         DSQuoteBlock(
                             title: "INSTALL",
                             tags: [],
-                            message: "curl -fsSL conduit.dev/install | sh && lancerd pair",
+                            message: "curl -fsSL lancersoftware.dev/install | sh && lancerd pair",
                             tone: .ok
                         )
 

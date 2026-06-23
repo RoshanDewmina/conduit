@@ -231,7 +231,7 @@ public struct TrustPrivacyView: View {
                         )
                     }
 
-                    Text("Lancer does not sell data or run ads. Questions: privacy@conduit.dev")
+                    Text("Lancer does not sell data or run ads. Questions: privacy@lancersoftware.dev")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
                         .fixedSize(horizontal: false, vertical: true)
