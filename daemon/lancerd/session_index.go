@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -49,6 +50,15 @@ func buildSessionIndex(home string) ([]SessionInfo, error) {
 			return []SessionInfo{}, nil
 		}
 		return nil, err
+	}
+
+	// Sort by mtime descending and cap before the expensive inspect loop.
+	// The final sort+cap below still handles the combined list correctly.
+	sort.Slice(bare, func(i, j int) bool {
+		return bare[i].LastModified.After(bare[j].LastModified)
+	})
+	if len(bare) > maxSessionsReturned {
+		bare = bare[:maxSessionsReturned]
 	}
 
 	enrich := fetchClaudeAgents()
@@ -126,11 +136,27 @@ type claudeAgentEnrichment struct {
 	state string
 }
 
+var (
+	agentCacheMu      sync.Mutex
+	agentCacheResult  map[string]claudeAgentEnrichment
+	agentCacheTime    time.Time
+	agentCacheTTL     = 10 * time.Second
+)
+
 // fetchClaudeAgents runs `claude agents --json --all` with a short timeout and
 // parses whatever it returns defensively — its schema is not contractual, so
 // any shape that isn't a sessionId+state pair is simply skipped. A failure,
 // timeout, or empty result yields an empty map (transcript-only enrichment).
+// Results are cached for agentCacheTTL to avoid a 5s shell-out on every list call.
 func fetchClaudeAgents() map[string]claudeAgentEnrichment {
+	agentCacheMu.Lock()
+	if agentCacheResult != nil && time.Since(agentCacheTime) < agentCacheTTL {
+		cached := agentCacheResult
+		agentCacheMu.Unlock()
+		return cached
+	}
+	agentCacheMu.Unlock()
+
 	out := map[string]claudeAgentEnrichment{}
 	bin, err := exec.LookPath("claude")
 	if err != nil {
@@ -162,6 +188,12 @@ func fetchClaudeAgents() map[string]claudeAgentEnrichment {
 		}
 		out[sessionID] = claudeAgentEnrichment{state: mapClaudeAgentState(rawState)}
 	}
+
+	agentCacheMu.Lock()
+	agentCacheResult = out
+	agentCacheTime = time.Now()
+	agentCacheMu.Unlock()
+
 	return out
 }
 
