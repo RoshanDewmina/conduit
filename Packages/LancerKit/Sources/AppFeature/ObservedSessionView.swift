@@ -61,7 +61,12 @@ public struct ObservedSessionView: View {
     private var content: some View {
         if !unlocked {
             lockedState
-        } else if loaded && messages.isEmpty {
+        } else if !loaded {
+            // Fetch in flight. Without this the unlocked-but-not-loaded state fell
+            // through to an empty scroll view — a confusing permanent blank if the
+            // transcript reply was slow or never arrived.
+            loadingState
+        } else if messages.isEmpty {
             emptyState
         } else {
             ConversationScrollView(bottomID: "observed-bottom", scrollKey: messages.count) {
@@ -70,6 +75,17 @@ public struct ObservedSessionView: View {
                 }
             }
         }
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+            Text("Loading transcript…")
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     private var watchingBadge: some View {

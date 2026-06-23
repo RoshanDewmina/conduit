@@ -236,6 +236,17 @@ public final class E2ERelayBridge: ObservableObject {
             type: "agentSessionsTranscript",
             payload: TranscriptParams(sessionId: sessionId, sinceLine: sinceLine)
         )
+        // Bound the wait: if the `sessionsTranscriptResult` reply never arrives the
+        // observed-session view would otherwise spin forever (no terminal state).
+        sessionsTranscriptContinuation?.resume(throwing: E2EError.superseded)
+        sessionsTranscriptContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.sessionsTranscriptContinuation?.resume(throwing: E2EError.timedOut)
+            self.sessionsTranscriptContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.sessionsTranscriptContinuation = c
         }
