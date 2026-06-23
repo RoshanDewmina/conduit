@@ -227,6 +227,15 @@ public struct NewChatTabView: View {
         inboxViewModel?.approvals.first(where: \.isPending)
     }
 
+    /// The most-recently-decided blocked approval (rejected or expired). Read only
+    /// while `isAwaitingApproval` is set, so it reflects the run the user just
+    /// denied — used to render a clear "Denied" state instead of a typing dot.
+    private var deniedApproval: Approval? {
+        inboxViewModel?.approvals
+            .filter { $0.decision == .rejected || $0.decision == .expired }
+            .max { ($0.decidedAt ?? .distantPast) < ($1.decidedAt ?? .distantPast) }
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             if activeRun != nil {
@@ -636,6 +645,11 @@ public struct NewChatTabView: View {
         } else if isLast, isAwaitingApproval, let approval = pendingApproval {
             inlineApprovalCard(for: approval)
                 .transition(.opacity)
+        } else if isLast, isAwaitingApproval, let denied = deniedApproval {
+            // The user denied this action — show it plainly instead of a typing dot
+            // that reads as "still working". The agent was stopped server-side.
+            deniedCard(for: denied)
+                .transition(.opacity)
         } else {
             // No output yet — the agent is working. Calm typing indicator instead
             // of the old pixel-grid box; it morphs into the reply when text lands.
@@ -643,6 +657,36 @@ public struct NewChatTabView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             .transition(.opacity)
         }
+    }
+
+    @ViewBuilder
+    private func deniedCard(for approval: Approval) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: "hand.raised.slash.fill")
+                .font(.dsSansPt(15, weight: .semibold))
+                .foregroundStyle(t.danger)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(approval.decision == .expired ? "Timed out — blocked" : "You denied this")
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text("The agent was stopped before it ran \(approval.toolName ?? "this action"). Nothing was changed.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let cmd = approval.command, !cmd.isEmpty {
+                    Text(cmd)
+                        .font(.dsMonoPt(11.5))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.danger.opacity(0.4), lineWidth: 1))
     }
 
     @ViewBuilder
@@ -659,7 +703,8 @@ public struct NewChatTabView: View {
             isCritical: approval.risk >= .critical,
             onDeny: {
                 Haptics.warning()
-                isAwaitingApproval = false
+                // Keep isAwaitingApproval set so the transcript swaps to the denied
+                // card (driven by the approval's resolved decision), not a typing dot.
                 onDecideApproval(approval.id, .rejected)
             },
             onApprove: {
@@ -960,6 +1005,8 @@ public struct NewChatTabView: View {
         isSending = true
         defer { isSending = false }
         followUpText = ""
+        // Fresh turn — clear any prior awaiting/denied state from the last approval.
+        isAwaitingApproval = false
         do {
             let result = try await active.channel.continueRun(runId: active.runId, prompt: trimmed)
             switch result.status {
