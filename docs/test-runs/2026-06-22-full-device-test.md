@@ -31,12 +31,22 @@ app `LANCER_PUSH_BACKEND_URL` points at conduit-push · device build SUCCEEDED +
 - [ ] 3.5 **Edit & run** edits the command before approving.
 - [ ] 3.6 **Allow always** on a critical action requires **Face ID** (BiometricGate) first.
 
-## Phase 4 — Live push, app CLOSED (THE #1 gate — C2, never yet passed)
-- [ ] 4.1 Fully background/close the app.
-- [ ] 4.2 Trigger an `ask` from the host.
-- [ ] 4.3 **Lock-screen / Dynamic Island notification fires** with Approve/Reject actions (I verify APNs send in backend logs).
-- [ ] 4.4 Tap **Approve** on the lock screen → agent unblocks **without foregrounding the app**.
-- [ ] 4.5 Capture a screen recording as proof. ⏸ This closes readiness checklist **C2**.
+## Phase 4 — Live push, app CLOSED (THE #1 gate — C2) ✅ PASSED 2026-06-23
+- [x] 4.1 App fully closed.
+- [x] 4.2 Gated `fileWrite` triggered from the host (`/tmp/p4-shipit.txt`).
+- [x] 4.3 **Lock-screen notification fired** with Approve/Reject (backend `POST 204 /approval`; APNs delivered).
+- [x] 4.4 Tapped **Approve on the lock screen** (app never foregrounded) → decision round-tripped → run unblocked.
+- [x] 4.5 Proof: audit `escalate 12:34:15 → approve 12:35:27`, file `/tmp/p4-shipit.txt` = "victory", run COMPLETED. **C2 closed.**
+
+### What it took (the C2 fix chain — all committed)
+Five stacked bugs blocked push; the loop only worked once every layer was fixed:
+1. **Bundle-ID mismatch** — backend `APNS_BUNDLE_ID=dev.conduit.mobile` (pre-rebrand); APNs rejects a push whose topic ≠ the app's bundle id. → `dev.lancer.mobile` (Cloud Run env).
+2. **Relay never registered the push token** (the architectural gap) — the phone's `lancer.device.register(.apns)` RPC was only handled on the SSH path; the E2E relay router had no case, so on a relay-only (QR/code) session `s.device` stayed nil and `postApprovalPush` never fired. Added a `deviceRegister` relay message end-to-end (commit `e8edf5eb`).
+3. **`/approval` POST had no auth header** → backend 401 (Tier-1 `APPROVAL_RELAY_SECRET`). `postApprovalPush`/`postSecretRequestPush` used bare `http.Post`; added the Bearer (commit `1bc84845`).
+4. **Production-only APNs host** → 400 `BadDeviceToken` on dev/device builds (Xcode automatic signing forces `aps-environment=development` → sandbox token). Backend now tries production then **falls back to sandbox** on 400 (commit `ffa13fbc`).
+5. **Registration only on cold-launch/activation edge** — a warm foreground or a backend redeploy (in-memory registry reset) left the device unregistered. Re-register on every `scenePhase .active` (commit `28ce9fe`).
+
+**Also required operationally:** the local `lancerd` must have `APPROVAL_RELAY_SECRET` in its launchd env (injected into `~/Library/LaunchAgents/dev.lancer.lancerd.plist`) to authenticate to the backend; and the backend session registry is **in-memory**, so a redeploy drops all sessions until each app foregrounds again.
 
 ## Phase 5 — Continue / resume + terminal
 - [ ] 5.1 Send a **follow-up** turn on the active run → new turn appends, gates re-run.
