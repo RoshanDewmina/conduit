@@ -23,7 +23,7 @@ public struct DSOfflineState: View {
                     .frame(width: 32, height: 32)
                     .scaleEffect(dotScale)
                 Image(systemName: "bolt.slash")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.dsSansPt(14, weight: .semibold))
                     .foregroundStyle(t.warn)
             }
             .onAppear {
@@ -49,7 +49,7 @@ public struct DSOfflineState: View {
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.dsSansPt(12, weight: .medium))
                         .foregroundStyle(t.text4)
                 }
                 .buttonStyle(.plain)

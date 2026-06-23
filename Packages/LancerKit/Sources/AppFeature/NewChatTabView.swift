@@ -572,7 +572,7 @@ public struct NewChatTabView: View {
         // earlier turns render their final text statically.
         let isLast = activeRun?.runId == turn.runId
         if isLast && isErrorState {
-            DSTypedErrorCard(error: .other("Run failed"), onPrimary: nil, onSecondary: nil)
+            DSTypedErrorCard(error: .runFailed(""), onPrimary: nil, onSecondary: nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if let run, !run.text.isEmpty || !run.blocks.isEmpty {
             VStack(alignment: .leading, spacing: 6) {

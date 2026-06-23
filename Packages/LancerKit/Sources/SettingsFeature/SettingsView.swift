@@ -335,7 +335,7 @@ public struct TrustPrivacyView: View {
     private func trustNavRow(icon: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.dsSansPt(14))
                 .foregroundStyle(t.text2)
                 .frame(width: 20, alignment: .center)
                 .padding(.top, 1)
@@ -350,7 +350,7 @@ public struct TrustPrivacyView: View {
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.dsSansPt(12, weight: .semibold))
                 .foregroundStyle(t.text4)
                 .padding(.top, 2)
         }
@@ -362,7 +362,7 @@ public struct TrustPrivacyView: View {
     private func privacyRow(icon: String, title: String, detail: String, isGreen: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.dsSansPt(14))
                 .foregroundStyle(isGreen ? t.risk(0) : t.text2)
                 .frame(width: 20, alignment: .center)
                 .padding(.top, 1)
@@ -589,7 +589,7 @@ public struct SettingsView: View {
                     .padding(.horizontal, 9).padding(.vertical, 4)
                     .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.dsSansPt(11, weight: .semibold))
                     .foregroundStyle(t.text4)
                 }
                 .padding(16)
@@ -711,7 +711,7 @@ public struct SettingsView: View {
     private func settingsGridCard(_ title: String, icon: String, tint: Color, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.dsSansPt(15, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: 30, height: 30)
                 .background(t.surface2, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -814,13 +814,13 @@ public struct SettingsView: View {
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 14))
+                            .font(.dsSansPt(14))
                             .frame(width: 20)
                         Text("Reset app")
                             .font(.dsSansPt(15))
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.dsSansPt(11, weight: .semibold))
                             .foregroundStyle(t.text4)
                     }
                     .padding(.horizontal, 16)
@@ -862,7 +862,7 @@ public struct SettingsView: View {
     private func settingsNavRow(_ label: String, icon: String, detail: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.dsSansPt(15, weight: .medium))
                 .foregroundStyle(t.text2)
                 .frame(width: 28, height: 28)
                 .background(t.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -876,7 +876,7 @@ public struct SettingsView: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsSansPt(11, weight: .semibold))
                 .foregroundStyle(t.text4)
         }
         .padding(.horizontal, 16)
@@ -1140,7 +1140,7 @@ private struct AccentSettingsView: View {
                                     Spacer(minLength: 0)
                                     if selected {
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 13, weight: .bold))
+                                            .font(.dsSansPt(13, weight: .bold))
                                             .foregroundStyle(theme.accent(scheme))
                                     }
                                 }

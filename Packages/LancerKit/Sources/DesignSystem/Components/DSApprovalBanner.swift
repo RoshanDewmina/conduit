@@ -23,7 +23,7 @@ public struct DSApprovalBanner: View {
     public var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "bell.badge")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.dsSansPt(13, weight: .semibold))
                 .foregroundStyle(t.warn)
             Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
                 .font(.dsMonoPt(12, weight: .semibold))

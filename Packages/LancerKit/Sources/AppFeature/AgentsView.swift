@@ -186,7 +186,7 @@ public struct AgentsView: View {
             // Orange dot grid — Claude's brand mark
             ZStack {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(red: 0.82, green: 0.44, blue: 0.18))
+                    .fill(t.accent)
                     .frame(width: 20, height: 20)
                 Text("C")
                     .font(.dsMonoPt(10, weight: .bold))

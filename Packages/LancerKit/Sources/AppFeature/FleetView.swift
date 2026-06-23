@@ -497,9 +497,9 @@ public struct FleetView: View {
             HStack(spacing: 11) {
                 Text(">_")
                     .font(.dsMonoPt(12, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.75, green: 0.81, blue: 0.62))
+                    .foregroundStyle(t.termOk)
                     .frame(width: 28, height: 28)
-                    .background(Color(red: 0.11, green: 0.10, blue: 0.09), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text("Open terminal")
                     .font(.dsSansPt(13.5, weight: .semibold))
                     .foregroundStyle(t.text)

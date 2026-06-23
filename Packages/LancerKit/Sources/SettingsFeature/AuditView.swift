@@ -266,7 +266,7 @@ public struct AuditView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 14))
+                .font(.dsSansPt(14))
                 .foregroundStyle(t.danger)
             Text(message)
                 .font(.dsMonoPt(12))
@@ -287,7 +287,7 @@ public struct AuditView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.shield")
-                .font(.system(size: 32))
+                .font(.dsDisplayPt(32))
                 .foregroundStyle(t.text4)
             Text("No audit events yet")
                 .font(.dsSansPt(14, weight: .semibold))

@@ -136,7 +136,7 @@ public struct RunDetailView: View {
                     )
                 } else if currentRun?.status == "failed" {
                     DSTypedErrorCard(
-                        error: .other("Run failed"),
+                        error: .runFailed(""),
                         onPrimary: nil,
                         onSecondary: nil
                     )

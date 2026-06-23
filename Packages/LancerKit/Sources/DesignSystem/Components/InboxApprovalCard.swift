@@ -85,7 +85,7 @@ public struct InboxApprovalCard: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.dsSansPt(11, weight: .semibold))
                                 .rotationEffect(.degrees(showsCommand ? 90 : 0))
                             Text(showsCommand ? "Hide command" : "Show command")
                                 .font(.dsSansPt(14, weight: .medium))
@@ -113,26 +113,8 @@ public struct InboxApprovalCard: View {
             }
 
             HStack(spacing: 10) {
-                Button(role: .destructive, action: onDeny) {
-                    Text("Deny")
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .foregroundStyle(t.danger)
-                        .background(t.surface2, in: Capsule())
-                        .overlay(Capsule().strokeBorder(t.danger.opacity(0.35), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onApprove) {
-                    Text("Approve")
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .foregroundStyle(t.accentFg)
-                        .background(t.accent, in: Capsule())
-                }
-                .buttonStyle(.plain)
+                DSButton("Deny", variant: .destructive, size: .lg, fullWidth: true, action: onDeny)
+                DSButton("Approve", variant: .accent, size: .lg, fullWidth: true, action: onApprove)
             }
 
             Button(action: onOpenDetails) {

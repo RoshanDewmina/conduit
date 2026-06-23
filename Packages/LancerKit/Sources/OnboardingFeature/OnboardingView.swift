@@ -18,7 +18,7 @@ public struct OnboardingView: View {
 
     /// In-flow phases. `pair`/`scan`/`paired` all sit under indicator step 1.
     public enum Phase: Equatable {
-        case welcome, pair, scan, paired, caution, firstRun
+        case welcome, installBridge, pair, scan, paired, caution, firstRun
     }
 
     public let onContinue: () -> Void
@@ -71,6 +71,7 @@ public struct OnboardingView: View {
                 .id(phase)
         } footer: {
             OnboardingFooter { footerCTA }
+                .id(phase)
         }
         .onChange(of: phase) { _, new in
             if new == .pair { startPairingIfNeeded() }
@@ -98,6 +99,8 @@ public struct OnboardingView: View {
         switch phase {
         case .welcome:
             OnboardingWelcomeScreen()
+        case .installBridge:
+            OnboardingInstallBridgeScreen()
         case .pair:
             OnboardingPairScreen(
                 client: client,
@@ -141,6 +144,10 @@ public struct OnboardingView: View {
         switch phase {
         case .welcome:
             DSButton("get started", variant: .primary, size: .lg, fullWidth: true) {
+                withAnimation { phase = .installBridge }
+            }
+        case .installBridge:
+            DSButton("I've installed it", variant: .primary, size: .lg, fullWidth: true) {
                 withAnimation { phase = .pair }
             }
         case .pair:
@@ -180,7 +187,7 @@ public struct OnboardingView: View {
 
     private var dotIndex: Int {
         switch phase {
-        case .welcome:                 return 0
+        case .welcome, .installBridge: return 0
         case .pair, .scan, .paired:    return 1
         case .caution:                 return 2
         case .firstRun:                return 3
@@ -189,18 +196,20 @@ public struct OnboardingView: View {
 
     private var leadingControl: OnboardingLeadingControl {
         switch phase {
-        case .welcome:       return .none
-        case .scan:          return .close
-        case .pair, .paired, .caution, .firstRun: return .back
+        case .welcome:                              return .none
+        case .scan:                                 return .close
+        case .installBridge, .pair, .paired, .caution, .firstRun: return .back
         }
     }
 
     private func handleLeading() {
         switch phase {
+        case .installBridge:
+            withAnimation { phase = .welcome }
         case .pair:
             client.disconnect()
             didStartPairing = false
-            withAnimation { phase = .welcome }
+            withAnimation { phase = .installBridge }
         case .scan:
             withAnimation { phase = .pair }
         case .paired:
@@ -276,6 +285,54 @@ public struct OnboardingView: View {
     private func finish() {
         persistPreset()
         onContinue()
+    }
+}
+
+// MARK: - Install Bridge Screen
+
+private struct OnboardingInstallBridgeScreen: View {
+    @Environment(\.lancerTokens) private var t
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 32)
+
+                Text("Install Lancer on your computer")
+                    .font(.dsMonoPt(24, weight: .bold))
+                    .foregroundStyle(t.text)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+                    .padding(.horizontal, 18)
+
+                Text("Before you can pair, run the Lancer bridge daemon on the machine you want to control. It connects out through our relay — no port-forwarding needed.")
+                    .font(.dsSansPt(14.5))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+
+                DSQuoteBlock(
+                    title: "INSTALL",
+                    tags: [],
+                    message: "curl -fsSL conduit.dev/install | sh",
+                    tone: .ok
+                )
+                .padding(.horizontal, 18)
+                .padding(.top, 22)
+
+                Text("Once it prints \"waiting to pair\", tap continue.")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text3)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            }
+            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        }
     }
 }
 #endif

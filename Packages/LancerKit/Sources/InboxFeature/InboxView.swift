@@ -178,7 +178,7 @@ public struct InboxView: View {
                     onOpenHistory()
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.dsSansPt(16, weight: .semibold))
                         .foregroundStyle(t.text3)
                         .frame(width: 44, height: 44)
                         .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
@@ -211,7 +211,7 @@ public struct InboxView: View {
                     .foregroundStyle(t.accentFg.opacity(0.92))
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSansPt(15, weight: .semibold))
                     .foregroundStyle(t.accentFg.opacity(0.9))
             }
         }
@@ -257,6 +257,7 @@ public struct InboxView: View {
             isCritical: isCritical,
             primaryLabel: approval.kind == .askQuestion ? "Answer" : "Approve",
             secondaryLabel: approval.kind == .patch ? "Review diff" : "Deny",
+            secondaryVariant: approval.kind == .patch ? .secondary : .destructive,
             onPrimary: {
                 if isCritical {
                     Task {
@@ -600,7 +601,7 @@ public struct InboxView: View {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(t.okSoft)
                         Image(systemName: "checkmark")
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.dsSansPt(26, weight: .bold))
                             .foregroundStyle(t.ok)
                     }
                     .frame(width: 60, height: 60)
@@ -832,6 +833,7 @@ private struct InboxBoardCard: View {
     let isCritical: Bool
     let primaryLabel: String
     let secondaryLabel: String
+    var secondaryVariant: DSButtonVariant = .destructive
     let onPrimary: () -> Void
     let onSecondary: () -> Void
     let onOpenDetails: () -> Void
@@ -903,26 +905,12 @@ private struct InboxBoardCard: View {
             }
 
             HStack(spacing: 9) {
-                Button(action: { Haptics.selection(); onPrimary() }) {
-                    Text(primaryLabel)
-                        .font(.dsSansPt(13.5, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .foregroundStyle(t.surface)
-                        .background(t.text, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                DSButton(secondaryLabel, variant: secondaryVariant, size: .lg, fullWidth: true) {
+                    Haptics.selection(); onSecondary()
                 }
-                .buttonStyle(.plain)
-
-                Button(action: { Haptics.selection(); onSecondary() }) {
-                    Text(secondaryLabel)
-                        .font(.dsSansPt(13.5, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .foregroundStyle(t.text3)
-                        .background(t.surface2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                DSButton(primaryLabel, variant: .accent, size: .lg, fullWidth: true) {
+                    Haptics.selection(); onPrimary()
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 15)

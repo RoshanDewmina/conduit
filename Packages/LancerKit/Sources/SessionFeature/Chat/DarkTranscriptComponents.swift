@@ -206,7 +206,7 @@ public struct DarkTerminalBlockCard: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            Circle().fill(Color(red: 0.86, green: 0.45, blue: 0.30)).frame(width: 9, height: 9)
+            Circle().fill(t.termPrompt).frame(width: 9, height: 9)
             Circle().fill(t.termText3.opacity(0.55)).frame(width: 9, height: 9)
             Circle().fill(t.termText3.opacity(0.35)).frame(width: 9, height: 9)
             Text("zsh — \(host)")

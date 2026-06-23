@@ -7,17 +7,19 @@ public enum DSConnectError: Equatable {
     case hostUnreachable
     case hostKeyMismatch
     case dnsFailed
+    case runFailed(String)
     case other(String)
 }
 
 extension DSConnectError {
     var title: String {
         switch self {
-        case .authRejected:     return "authentication failed"
-        case .hostUnreachable:  return "host unreachable"
-        case .hostKeyMismatch:  return "host key mismatch"
-        case .dnsFailed:        return "can't resolve host"
-        case .other(let m):     return m
+        case .authRejected:          return "authentication failed"
+        case .hostUnreachable:       return "host unreachable"
+        case .hostKeyMismatch:       return "host key mismatch"
+        case .dnsFailed:             return "can't resolve host"
+        case .runFailed(let detail): return detail.isEmpty ? "run failed" : detail
+        case .other(let m):          return m
         }
     }
 
@@ -31,6 +33,8 @@ extension DSConnectError {
             return "The server's fingerprint has changed — possible MITM. Verify the host key before reconnecting."
         case .dnsFailed:
             return "The hostname couldn't be resolved. Check the address or try connecting by IP."
+        case .runFailed:
+            return "The agent run ended with an error. Check the run output for details, then retry or start a new run."
         case .other:
             return "An unexpected error occurred. Check the address and credentials, then retry."
         }
@@ -42,6 +46,7 @@ extension DSConnectError {
         case .hostUnreachable:  return "NETWORK"
         case .hostKeyMismatch:  return "HOST KEY"
         case .dnsFailed:        return "DNS"
+        case .runFailed:        return "RUN"
         case .other:            return "ERROR"
         }
     }
@@ -52,6 +57,7 @@ extension DSConnectError {
         case .hostUnreachable:  return .warn
         case .hostKeyMismatch:  return .danger
         case .dnsFailed:        return .warn
+        case .runFailed:        return .danger
         case .other:            return .danger
         }
     }
@@ -62,6 +68,7 @@ extension DSConnectError {
         case .hostUnreachable:  return "retry"
         case .hostKeyMismatch:  return "review fingerprint"
         case .dnsFailed:        return "edit address"
+        case .runFailed:        return "retry"
         case .other:            return "retry"
         }
     }
@@ -72,6 +79,7 @@ extension DSConnectError {
         case .hostUnreachable:  return "run diagnostics"
         case .hostKeyMismatch:  return "cancel connection"
         case .dnsFailed:        return "connect by ip"
+        case .runFailed:        return "view output"
         case .other:            return "dismiss"
         }
     }
