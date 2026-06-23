@@ -1372,8 +1372,18 @@ public struct AppRoot: View {
             },
             onEmergencyStop: {
                 Task {
+                    // SSH sessions: disconnect each connected fleet slot.
                     for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
                         await slot.sessionViewModel.disconnect()
+                    }
+                    // Relay-dispatched runs: SSH disconnect doesn't touch these, so a
+                    // relay user's Emergency Stop was a no-op. Send a stop for every
+                    // active (non-terminal) run over the relay → daemon applyRunControl
+                    // kills the agent process group.
+                    if let bridge = e2eBridge, relayBridgeIsActive {
+                        for run in runOutputStore.runs.values where !run.isTerminal {
+                            _ = await bridge.sendRunControl(runId: run.runId, action: "stop")
+                        }
                     }
                 }
             },
