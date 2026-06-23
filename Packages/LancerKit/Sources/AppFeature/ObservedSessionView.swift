@@ -52,7 +52,12 @@ public struct ObservedSessionView: View {
                 watchingBadge.padding(.top, 8).padding(.trailing, 64)
             }
             content
+            Spacer(minLength: 0)
         }
+        // Fill the screen top-anchored. Without this the header + loading/empty
+        // content sized to their intrinsic height and the container centered the
+        // whole stack — leaving a large blank top and the header floating mid-screen.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(t.bg.ignoresSafeArea())
         .task(id: sessionId) { await loadAndUnlock() }
     }
