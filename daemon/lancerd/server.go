@@ -1388,12 +1388,27 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 		return
 	}
 	url := strings.TrimRight(dev.PushBackendURL, "/") + "/approval"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// /approval is a Tier-1 control-plane endpoint (APPROVAL_RELAY_SECRET). Without
+	// this header the backend 401s and the push is never sent — the last broken link
+	// in app-closed approval delivery. Mirror postDeviceTokenRegistration.
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "push-backend POST failed: %v\n", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "push-backend /approval rejected: HTTP %d\n", resp.StatusCode)
+	}
 }
 
 func (s *server) postSecretRequestPush(dev *registeredDevice, req SecretRequestParams) {
@@ -1412,7 +1427,17 @@ func (s *server) postSecretRequestPush(dev *registeredDevice, req SecretRequestP
 		return
 	}
 	url := strings.TrimRight(dev.PushBackendURL, "/") + "/secret-request"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	// Tier-1 endpoint — same Bearer auth as /approval and /register.
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "push-backend secret-request POST failed: %v\n", err)
 		return
