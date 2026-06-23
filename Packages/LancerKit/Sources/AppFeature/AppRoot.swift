@@ -296,25 +296,31 @@ public struct AppRoot: View {
         #endif
     }
 
-    private var mainBody: some View {
-        Group {
-            if appLockEnabled && !isUnlocked {
-                LaunchLockView(onUnlock: { await attemptUnlock() })
+    // The content tree, split out of mainBody so the Swift type-checker handles the
+    // view hierarchy and the long .task/.onChange/.onReceive modifier chain as two
+    // separate (faster) units instead of one expression that exceeded the limit.
+    @ViewBuilder
+    private var mainContent: some View {
+        if appLockEnabled && !isUnlocked {
+            LaunchLockView(onUnlock: { await attemptUnlock() })
+                .preferredColorScheme(preferredScheme)
+        } else {
+            switch environment {
+            case .failure(let msg):
+                ContentUnavailableView(
+                    "Failed to start",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(msg)
+                )
+            case .ready(let env):
+                readyRoot(env: env)
                     .preferredColorScheme(preferredScheme)
-            } else {
-                switch environment {
-                case .failure(let msg):
-                    ContentUnavailableView(
-                        "Failed to start",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(msg)
-                    )
-                case .ready(let env):
-                    readyRoot(env: env)
-                        .preferredColorScheme(preferredScheme)
-                }
             }
         }
+    }
+
+    private var mainBody: some View {
+        mainContent
         .task {
             if appLockEnabled {
                 await attemptUnlock()
