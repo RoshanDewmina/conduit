@@ -282,6 +282,7 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			return
 		}
 		result, err := loadSessionTranscript("", p.SessionID, p.SinceLine)
+		log.Printf("e2e: transcript sessionId=%q since=%d → %d msgs, err=%v", p.SessionID, p.SinceLine, len(result.Messages), err)
 		payloadOut := map[string]interface{}{
 			"messages":      result.Messages,
 			"nextLine":      result.NextLine,

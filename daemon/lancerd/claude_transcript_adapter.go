@@ -19,6 +19,10 @@ type SessionMessage struct {
 const (
 	maxMessageTextBytes = 16 * 1024
 	maxTranscriptBytes  = 2 * 1024 * 1024
+	// Initial observed-transcript load returns at most this many of the most
+	// recent transcript lines, so a huge session doesn't produce a payload too
+	// large to seal/relay/render. Older lines remain reachable via pagination.
+	maxObservedTailLines = 200
 )
 
 type claudeContentBlock struct {

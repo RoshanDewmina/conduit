@@ -30,6 +30,7 @@ public struct LancerHomeView: View {
     @Environment(\.lancerTokens) private var t
     @State private var collapsed: Set<String> = []
     @State private var observedSessions: [ObservedSession] = []
+    @State private var sessionsLoading = true
 
     public init(
         fleetStore: FleetStore,
@@ -77,7 +78,9 @@ public struct LancerHomeView: View {
         }
         .accessibilityIdentifier("commandHome")
         .task {
+            sessionsLoading = true
             observedSessions = await loadSessions()
+            sessionsLoading = false
         }
     }
 
@@ -186,6 +189,7 @@ public struct LancerHomeView: View {
                     MachineTreeCard(
                         machine: machine,
                         isExpanded: !collapsed.contains(machine.id),
+                        sessionsLoading: sessionsLoading,
                         onToggle: { toggle(machine.id) },
                         onOpenMachine: { Haptics.selection(); onOpenMachines() },
                         onOpenSession: { id in Haptics.selection(); onOpenThread(id) },
@@ -317,6 +321,7 @@ private struct HomeProject: Identifiable {
 private struct MachineTreeCard: View {
     let machine: HomeMachine
     let isExpanded: Bool
+    var sessionsLoading: Bool = false
     let onToggle: () -> Void
     let onOpenMachine: () -> Void
     let onOpenSession: (String) -> Void
@@ -334,6 +339,8 @@ private struct MachineTreeCard: View {
                     }
                     if !machine.observedSessions.isEmpty {
                         observedSessionsBlock
+                    } else if isLiveMachine && sessionsLoading {
+                        sessionsLoadingRow
                     }
                 }
                 .padding(.leading, 24)
@@ -394,6 +401,23 @@ private struct MachineTreeCard: View {
             Rectangle().fill(t.border).frame(width: 1.5)
         }
         .padding(.top, 4)
+    }
+
+    private var isLiveMachine: Bool {
+        machine.liveState == .connected || machine.liveState == .relayPaired
+    }
+
+    // Scanning + titling the host's sessions can take many seconds; show a row
+    // instead of a blank gap so the section doesn't look empty/broken while loading.
+    private var sessionsLoadingRow: some View {
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(0.8)
+            Text("Loading sessions on this Mac…")
+                .font(.dsMonoPt(11))
+                .foregroundStyle(t.text4)
+        }
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // Visually distinct from the dispatched-thread tree above (dashed rule, dimmer

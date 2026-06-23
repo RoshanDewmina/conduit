@@ -151,20 +151,12 @@ public struct ObservedSessionView: View {
         return out
     }
 
-    // TODO: this gates the fetch behind BiometricGate (reused from SecurityKit,
-    // same pattern as KeysView/InboxView), but doesn't yet re-prompt on app
-    // foreground the way the chat composer's app-lock does — fine for Phase 1
-    // (watch-only, no write capability), revisit if observed transcripts ever
-    // carry write-adjacent actions.
+    // Observed transcripts are read-only viewing of sessions already running on the
+    // user's own paired machine — no write capability — so a per-open Face ID prompt
+    // is friction without a matching threat (app-launch app-lock already gates entry
+    // to the app when the user enables it). Load directly.
     private func loadAndUnlock() async {
-        do {
-            try await BiometricGate.shared.unlock(reason: "Authenticate to view this session's transcript")
-            unlocked = true
-        } catch {
-            unlocked = false
-            loaded = true
-            return
-        }
+        unlocked = true
         let result = await loadTranscript(0)
         messages = result.messages
         loaded = true

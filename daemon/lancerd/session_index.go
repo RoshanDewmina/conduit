@@ -275,6 +275,15 @@ func loadSessionTranscript(home, sessionID string, sinceLine int) (SessionTransc
 			sinceLine = 0
 			resetRequired = true
 		}
+	} else {
+		// Initial load (sinceLine==0): only return the TAIL of a long transcript.
+		// A multi-thousand-message session (e.g. 2000+ lines) serialized whole is
+		// too large to seal+relay+render and would just spin — and the viewer wants
+		// recent activity, not the start. Start near the end; subsequent polls
+		// continue from nextLine. Caps payload to ~maxObservedTailLines messages.
+		if n := countTranscriptLines(path); n > maxObservedTailLines {
+			sinceLine = n - maxObservedTailLines
+		}
 	}
 	msgs, nextLine, err := parseClaudeTranscript(path, sinceLine)
 	if err != nil {
