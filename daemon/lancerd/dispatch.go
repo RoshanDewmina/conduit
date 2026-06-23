@@ -162,6 +162,12 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	cmd := exec.Command(bin, argv[1:]...) // explicit argv, no shell
 	cmd.Dir = expandHome(cwd)
 	cmd.Env = env
+	// Run the agent in its own process group so we can reap its whole subtree.
+	// Agents like Claude Code spawn MCP server subprocesses that inherit our
+	// stdout/stderr pipes; without a group to kill, those grandchildren outlive
+	// the agent, hold the pipe write-ends open (so the pipes never EOF — see the
+	// reaper below), and leak as orphans reparented to launchd.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -195,21 +201,35 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	go streamOutput(emit, runID, "stderr", stderr, &seq, &streams, false)
 
 	go func() {
-		// Drain both pipes before reaping so no chunk is dropped (cmd.Wait closes
-		// the pipes after exit, ending the readers), then report final status.
-		streams.Wait()
+		// Report completion the instant the AGENT process exits — never gate it on
+		// the stdout/stderr pipes hitting EOF. Claude Code spawns MCP server
+		// subprocesses that detach (setsid) into their own session, so they escape
+		// the agent's process group AND keep the pipe write-ends open after the
+		// agent exits. Waiting on those pipes (streams.Wait) would hang the run in
+		// "running" forever — the exact bug that broke every fresh dispatch.
 		code := exitCode(cmd.Wait())
 		if code == 0 {
 			emitRunStatus(emit, runID, "exited", &code)
 		} else {
 			emitRunStatus(emit, runID, "failed", &code)
 		}
+		// Best-effort cleanup AFTER status is sent: kill the agent's group (reaps
+		// any MCP children that didn't detach) and close our pipe ends so the
+		// reader goroutines unblock instead of leaking.
+		if proc := cmd.Process; proc != nil {
+			_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
+		}
+		_ = stdout.Close()
+		_ = stderr.Close()
+		streams.Wait()
 	}()
 
 	proc := cmd.Process
 	return &procHandle{
 		kill: func() {
 			if proc != nil {
+				// Kill the whole group so MCP grandchildren don't orphan.
+				_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
 				_ = proc.Kill()
 			}
 		},
