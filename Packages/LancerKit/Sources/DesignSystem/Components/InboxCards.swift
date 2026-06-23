@@ -326,6 +326,11 @@ public struct DSAutonomyPresetBar: View {
                             .font(.dsDisplayPt(10, weight: .semibold))
                             .tracking(10 * 0.08)
                             .foregroundStyle(isActive ? t.accentFg : t.text2)
+                            // Equal-width segments can't grow, so at large Dynamic Type
+                            // the label must shrink to one line rather than stack into
+                            // unreadable 3–4-char fragments.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                             .background(isActive ? t.accent : Color.clear)

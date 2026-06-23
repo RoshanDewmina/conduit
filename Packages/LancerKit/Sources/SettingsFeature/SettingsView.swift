@@ -576,11 +576,15 @@ public struct SettingsView: View {
                     Text(accountSession?.email ?? (accountSession?.isOfflineSelfHosted == true ? "Self-hosted offline" : "Lancer"))
                         .font(.dsDisplayPt(17, weight: .bold))
                         .foregroundStyle(t.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     Text(accountSession?.isOfflineSelfHosted == true ? "Local pairing only · no hosted billing" : (purchases.isPro ? "Lancer Pro · manage" : "Free plan · upgrade"))
                         .font(.dsMonoPt(12))
                         // This is actionable account state, not disabled text.  Keep it
                         // legible in Dark mode as well as on the lighter surfaces.
                         .foregroundStyle(t.text3)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
                 }
                 Spacer(minLength: 0)
                 Text(purchases.isPro ? "PRO" : "FREE")
@@ -664,6 +668,38 @@ public struct SettingsView: View {
                         settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "approval & run history")
                     }.buttonStyle(.plain)
                 }
+            }
+
+            // Emergency stop — the operator's panic button. Halts every running
+            // agent (SSH sessions + relay-dispatched runs). The closure was wired but
+            // never surfaced; without a control it was unreachable from the phone.
+            if let onEmergencyStop {
+                Button(role: .destructive) {
+                    Haptics.warning()
+                    onEmergencyStop()
+                } label: {
+                    HStack(spacing: 11) {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.dsSansPt(17, weight: .semibold))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Emergency stop")
+                                .font(.dsSansPt(15, weight: .semibold))
+                            Text("Halt every running agent — SSH and relay.")
+                                .font(.dsSansPt(12))
+                                .foregroundStyle(t.danger.opacity(0.85))
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(t.danger)
+                    .padding(.horizontal, 15).padding(.vertical, 13)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(t.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(t.danger.opacity(0.4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Emergency stop — halt all agents")
             }
         }
         .padding(.horizontal, 16)
