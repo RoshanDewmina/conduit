@@ -361,6 +361,14 @@ public struct AppRoot: View {
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
+            // Re-register the APNs token on every foreground. Registration otherwise
+            // only fired on a cold launch or relay-activation edge, so a warm
+            // foreground — or any time the backend's in-memory session registry was
+            // reset (e.g. a redeploy) — left the device unregistered and push silently
+            // dropped. Cheap idempotent POST; covers both transports.
+            if newPhase == .active {
+                Task { @MainActor in await registerPushTokenForActiveTransport() }
+            }
         }
         .onChange(of: appLockEnabled) { _, enabled in
             if !enabled {
@@ -1541,6 +1549,22 @@ public struct AppRoot: View {
     /// connection state onto the selected fleet slot so `E2ERelayStatusBadge`
     /// reflects live state. Idempotent — only the first call builds the bridge.
     @MainActor
+    /// Register this device's APNs token with whichever transport is live, so
+    /// approvals can be pushed when the app is closed. Idempotent — safe to call on
+    /// every foreground. Relay path uses the bridge's `deviceRegister` message; SSH
+    /// path uses the daemon channel RPC. No-op until an APNs token exists.
+    private func registerPushTokenForActiveTransport() async {
+        let backendURL = Self.pushBackendURL()
+        guard !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex else { return }
+        let sessionID = DeviceIdentity.sessionID()
+        if let bridge = e2eBridge, relayBridgeIsActive {
+            await bridge.registerDevice(apnsToken: token, sessionID: sessionID, pushBackendURL: backendURL)
+        }
+        if let channel = daemonChannel {
+            try? await channel.registerAPNSToken(hexToken: token, sessionID: sessionID, pushBackendURL: backendURL)
+        }
+    }
+
     private func configureE2ERelayBridge(env: AppEnvironment) {
         guard e2eBridge == nil else { return }
 #if DEBUG
