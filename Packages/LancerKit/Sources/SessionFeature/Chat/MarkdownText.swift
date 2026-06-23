@@ -30,9 +30,13 @@ public struct MarkdownText: View {
         VStack(alignment: .leading, spacing: 9) {
             ForEach(Array(MarkdownBlock.parse(raw).enumerated()), id: \.offset) { _, block in
                 view(for: block)
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Streamed tokens land continuously; ease layout growth and fade each new
+        // block in so the reply composes smoothly instead of snapping line-by-line.
+        .animation(.easeOut(duration: 0.2), value: raw)
     }
 
     @ViewBuilder
