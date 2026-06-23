@@ -17,9 +17,11 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -394,31 +396,55 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	}
 
 	buf, _ := json.Marshal(payload)
-	host := "api.push.apple.com"
-	url := fmt.Sprintf("https://%s/3/device/%s", host, deviceToken)
-
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(buf))
-	req.Header.Set("authorization", "bearer "+token)
-	req.Header.Set("apns-topic", bundleID)
-	req.Header.Set("apns-push-type", "alert")
-	req.Header.Set("apns-priority", "10")
-	req.Header.Set("content-type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
+	if err := sendAPNsAlert(deviceToken, bundleID, token, buf, "10"); err != nil {
 		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("APNs returned %d", resp.StatusCode)
 	}
 
 	// Also update the Live Activity (best-effort; errors don't fail the alert push).
 	_ = pushLiveActivityApproval(ev.SessionID, ev.ID, risk, body, nil)
 
 	return nil
+}
+
+// sendAPNsAlert POSTs an alert payload to APNs, trying the production host first
+// and falling back to the sandbox host on a 400 BadDeviceToken. Development-signed
+// builds (Xcode automatic signing forces aps-environment=development) get sandbox
+// tokens that production rejects with 400; TestFlight/App Store builds get
+// production tokens. Trying both makes push work for either without per-build
+// configuration. The reason is logged so token-environment issues are diagnosable.
+func sendAPNsAlert(deviceToken, bundleID, jwt string, payload []byte, priority string) error {
+	hosts := []string{"api.push.apple.com", "api.sandbox.push.apple.com"}
+	var lastStatus int
+	var lastReason string
+	for _, host := range hosts {
+		url := fmt.Sprintf("https://%s/3/device/%s", host, deviceToken)
+		req, _ := http.NewRequest("POST", url, bytes.NewReader(payload))
+		req.Header.Set("authorization", "bearer "+jwt)
+		req.Header.Set("apns-topic", bundleID)
+		req.Header.Set("apns-push-type", "alert")
+		req.Header.Set("apns-priority", priority)
+		req.Header.Set("content-type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		lastStatus = resp.StatusCode
+		lastReason = strings.TrimSpace(string(body))
+		// Only a 400 (e.g. BadDeviceToken — wrong environment) is worth retrying on
+		// the other host; other statuses are terminal.
+		if resp.StatusCode != http.StatusBadRequest {
+			break
+		}
+		log.Printf("APNs %s rejected token (HTTP %d: %s) — trying next host", host, resp.StatusCode, lastReason)
+	}
+	return fmt.Errorf("APNs returned %d: %s", lastStatus, lastReason)
 }
 
 // registerActivityTokenRequest is the body for POST /register-activity-token.
