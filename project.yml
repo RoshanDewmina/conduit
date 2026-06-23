@@ -218,6 +218,7 @@ targets:
     info:
       path: LancerLiveActivityWidget/Info.plist
       properties:
+        CFBundleDisplayName: Lancer Live Activity
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
@@ -250,6 +251,7 @@ targets:
     info:
       path: LancerWidget/Info.plist
       properties:
+        CFBundleDisplayName: Lancer Widget
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
