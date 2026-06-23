@@ -15,9 +15,12 @@ enum ModelCatalog {
         switch vendor {
         case "claudeCode":
             return [
-                Model(id: "claude-opus-4", label: "Claude Opus 4"),
-                Model(id: "claude-sonnet-4", label: "Claude Sonnet 4"),
-                Model(id: "claude-haiku-4", label: "Claude Haiku 4"),
+                Model(id: "claude-opus-4-8", label: "Claude Opus 4.8"),
+                Model(id: "claude-opus-4-7", label: "Claude Opus 4.7"),
+                Model(id: "claude-opus-4-6", label: "Claude Opus 4.6"),
+                Model(id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6"),
+                Model(id: "claude-haiku-4-5", label: "Claude Haiku 4.5"),
+                Model(id: "claude-fable-5", label: "Claude Fable 5"),
             ]
         case "codex":
             return [

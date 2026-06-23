@@ -553,6 +553,8 @@ private struct MachineTreeCard: View {
             Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(t.ok)
         case .failed:
             DSStatusDot(tone: .danger, size: 8)
+        case .archived:
+            DSStatusDot(tone: .off, size: 8)
         }
     }
 

@@ -575,8 +575,8 @@ public struct AppRoot: View {
             }
         }
         .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
-            LancerDrawer(detents: [.height(310)]) {
-                RelayWorkspaceUnavailableView()
+            LancerDrawer(detents: [.large]) {
+                RelayWorkspaceUnavailableView(onConnectSSH: { drawerRoute = .addMachine })
             }
         }
         .sheet(isPresented: $showingRelayFileBrowser) {
@@ -1393,6 +1393,7 @@ public struct AppRoot: View {
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
                 onOpenSidebar: openDrawer,
+                onConnectSSH: { drawerRoute = .addMachine },
                 loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) },
                 loadFiles: { cwd in await loadWorkspaceFiles(cwd: cwd) }
             )

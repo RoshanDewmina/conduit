@@ -21,8 +21,13 @@ struct AgentDetailView: View {
     @State private var deletingSchedule: AgentSchedule?
     @State private var showAPIKey = false
     @State private var isDefaultAgent = true
+    @State private var selectedModelID: String?
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
+
+    private var effectiveModelID: String {
+        selectedModelID ?? (agent.model.isEmpty ? "claude-opus-4-8" : agent.model)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -151,9 +156,15 @@ struct AgentDetailView: View {
                 .font(.dsMonoPt(11))
                 .foregroundStyle(t.text3)
             VStack(spacing: 4) {
-                modelOption("claude-opus-4-8", subtitle: "Recommended", isSelected: true)
-                modelOption("claude-sonnet-4-6", subtitle: nil, isSelected: false)
-                modelOption("claude-haiku-3-5", subtitle: nil, isSelected: false)
+                ForEach(ModelCatalog.models(for: "claudeCode"), id: \.id) { model in
+                    modelOption(
+                        model.id,
+                        subtitle: model.id == "claude-opus-4-8" ? "Recommended" : nil,
+                        isSelected: model.id == effectiveModelID
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectedModelID = model.id }
+                }
             }
         }
     }

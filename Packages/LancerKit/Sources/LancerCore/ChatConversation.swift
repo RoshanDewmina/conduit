@@ -19,6 +19,7 @@ public struct ChatConversation: Codable, Sendable, Identifiable {
         case active
         case completed
         case failed
+        case archived
     }
 
     public init(

@@ -15,6 +15,7 @@ public struct LancerSidebarView: View {
     @State private var renamingThread: ChatConversation?
     @State private var renameText: String = ""
     @State private var deletingThread: ChatConversation?
+    @State private var isArchiveShown = false
 
     public init(
         state: SidebarShellState,
@@ -53,6 +54,10 @@ public struct LancerSidebarView: View {
 
                     recentThreadsList
                         .padding(.horizontal, 12)
+
+                    archivedEntry
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
                         .padding(.bottom, 24)
                 }
             }
@@ -90,6 +95,9 @@ public struct LancerSidebarView: View {
             Button("Cancel", role: .cancel) { deletingThread = nil }
         } message: {
             Text("This removes the conversation and its history from this device.")
+        }
+        .sheet(isPresented: $isArchiveShown) {
+            ChatArchiveView(state: state)
         }
     }
 
@@ -252,6 +260,9 @@ public struct LancerSidebarView: View {
                             renameText = thread.title
                             renamingThread = thread
                         } label: { Label("Rename", systemImage: "pencil") }
+                        Button {
+                            Task { await state.archiveConversation(thread.id) }
+                        } label: { Label("Archive", systemImage: "archivebox") }
                         Button(role: .destructive) {
                             deletingThread = thread
                         } label: { Label("Delete", systemImage: "trash") }
@@ -259,6 +270,32 @@ public struct LancerSidebarView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Archived entry (opens the manage/archive sheet)
+
+    private var archivedEntry: some View {
+        Button { isArchiveShown = true } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "archivebox")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(t.text3)
+                    .frame(width: 22)
+                Text("Archived")
+                    .font(.dsSansPt(13.5, weight: .medium))
+                    .foregroundStyle(t.text3)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 38)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Archived chats")
+        .accessibilityHint("Opens the list of archived conversations")
     }
 
     // MARK: - Footer
@@ -376,6 +413,7 @@ private struct ThreadRow: View {
         case .active:    return .orange
         case .completed: return .ok
         case .failed:    return .danger
+        case .archived:  return .off
         }
     }
 
@@ -384,6 +422,7 @@ private struct ThreadRow: View {
         case .active:    return "running"
         case .completed: return "done"
         case .failed:    return "failed"
+        case .archived:  return "archived"
         }
     }
 

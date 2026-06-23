@@ -49,6 +49,9 @@ public struct NewChatTabView: View {
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
     var onOpenSidebar: () -> Void = {}
+    /// Invoked when the user taps "Connect this machine over SSH" from the
+    /// SSH-features upsell sheet. Defaults to a no-op so existing call sites compile.
+    var onConnectSSH: () -> Void = {}
     /// Fetches the agent's live slash-commands for a workspace (daemon-backed).
     /// Defaults to none so previews/tests don't need a live channel.
     var loadCommands: (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
@@ -80,6 +83,7 @@ public struct NewChatTabView: View {
     @State private var followUpText: String = ""
     @State private var confirmStop = false
     @State private var showBudgetSheet = false
+    @State private var showSSHFeatures = false
     @State private var dispatchErrorMessage: String?
     /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
     /// so a second tap can't fire a duplicate run (the "superseded" cause).
@@ -106,6 +110,7 @@ public struct NewChatTabView: View {
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         onOpenSidebar: @escaping () -> Void = {},
+        onConnectSSH: @escaping () -> Void = {},
         loadCommands: @escaping (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] },
         loadFiles: @escaping (_ cwd: String) async -> [String] = { _ in [] }
     ) {
@@ -117,6 +122,7 @@ public struct NewChatTabView: View {
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
+        self.onConnectSSH = onConnectSSH
         self.loadCommands = loadCommands
         self.loadFiles = loadFiles
     }
@@ -267,6 +273,12 @@ public struct NewChatTabView: View {
             detents: [.height(300)]
         ) {
             BudgetSheet { usd in Task { await controlStore?.setBudget(usd) } }
+        }
+        .bottomDrawer(
+            isPresented: $showSSHFeatures,
+            detents: [.large]
+        ) {
+            RelayWorkspaceUnavailableView(onConnectSSH: { showSSHFeatures = false; onConnectSSH() })
         }
         .bottomDrawer(
             isPresented: $showComposer,
@@ -561,7 +573,8 @@ public struct NewChatTabView: View {
             onBack: { Haptics.selection(); resetForNewChat() },
             onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
             onNew: { Haptics.selection(); resetForNewChat() },
-            shareText: { transcriptText() }
+            shareText: { transcriptText() },
+            onSSHFeatures: { Haptics.selection(); showSSHFeatures = true }
         )
     }
 

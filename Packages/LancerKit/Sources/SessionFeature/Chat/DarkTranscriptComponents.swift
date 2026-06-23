@@ -296,6 +296,9 @@ public struct DarkTranscriptHeader: View {
     /// When non-nil, a Share button exports this transcript as text. Computed
     /// lazily by the caller so it reflects the turns at tap time.
     private let shareText: (() -> String)?
+    /// When non-nil, shows a dedicated "Terminal & files" affordance that explains
+    /// those SSH-only features and offers to connect this machine directly.
+    private let onSSHFeatures: (() -> Void)?
     @Environment(\.lancerTokens) private var t
 
     public init(
@@ -305,7 +308,8 @@ public struct DarkTranscriptHeader: View {
         onBack: @escaping () -> Void,
         onWorkspace: @escaping () -> Void,
         onNew: (() -> Void)? = nil,
-        shareText: (() -> String)? = nil
+        shareText: (() -> String)? = nil,
+        onSSHFeatures: (() -> Void)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -314,6 +318,7 @@ public struct DarkTranscriptHeader: View {
         self.onWorkspace = onWorkspace
         self.onNew = onNew
         self.shareText = shareText
+        self.onSSHFeatures = onSSHFeatures
     }
 
     public var body: some View {
@@ -341,6 +346,16 @@ public struct DarkTranscriptHeader: View {
                 .fixedSize()   // never let the badge compress its label to two lines
                 .padding(.horizontal, 9).padding(.vertical, 5)
                 .background(t.okSoft, in: Capsule())
+            }
+            if let onSSHFeatures {
+                Button(action: onSSHFeatures) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(t.text2)
+                        .frame(width: 38, height: 38)
+                        .background(t.surface2, in: Circle())
+                }
+                .accessibilityLabel("Terminal & files")
             }
             // Secondary actions (Share, Open workspace) live in an overflow menu so
             // they don't crowd the title into a "My mach…" truncation. Only the

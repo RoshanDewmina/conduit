@@ -33,6 +33,7 @@ public final class SidebarShellState {
     public var isDrawerOpen = false
     public var searchQuery = ""
     public var recentThreads: [ChatConversation] = []
+    public var archivedThreads: [ChatConversation] = []
     public var searchResults: [ChatConversationSearchResult] = []
     /// Pinned conversation ids, persisted in UserDefaults (ponytail: no schema
     /// change — a small id set the sidebar sorts to the top is all pinning needs).
@@ -67,9 +68,20 @@ public final class SidebarShellState {
     public func loadRecent() async {
         guard let repo = chatRepo else { return }
         do {
-            recentThreads = try await repo.recent()
+            recentThreads = try await repo.recent().filter { $0.status != .archived }
         } catch {
             recentThreads = []
+        }
+    }
+
+    /// Loads archived conversations for the manage/archive view. Kept separate from
+    /// `recentThreads` so the main sidebar list never has to filter on every render.
+    public func loadArchived() async {
+        guard let repo = chatRepo else { return }
+        do {
+            archivedThreads = try await repo.recent(limit: 200).filter { $0.status == .archived }
+        } catch {
+            archivedThreads = []
         }
     }
 
@@ -88,6 +100,7 @@ public final class SidebarShellState {
         guard let repo = chatRepo else { return }
         try? await repo.deleteConversation(id)
         await loadRecent()
+        archivedThreads.removeAll { $0.id == id }
         if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             await performSearch()
         }
@@ -103,6 +116,25 @@ public final class SidebarShellState {
         if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             await performSearch()
         }
+    }
+
+    /// Archive a conversation: it drops out of the main recent list immediately and
+    /// surfaces in `archivedThreads` instead.
+    public func archiveConversation(_ id: String) async {
+        guard let repo = chatRepo else { return }
+        try? await repo.updateConversationStatus(id, status: .archived)
+        await loadRecent()
+        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await performSearch()
+        }
+    }
+
+    /// Restore an archived conversation back to active so it reappears in the recent list.
+    public func unarchiveConversation(_ id: String) async {
+        guard let repo = chatRepo else { return }
+        try? await repo.updateConversationStatus(id, status: .active)
+        await loadArchived()
+        await loadRecent()
     }
 
     public func isPinned(_ id: String) -> Bool { pinnedIDs.contains(id) }
