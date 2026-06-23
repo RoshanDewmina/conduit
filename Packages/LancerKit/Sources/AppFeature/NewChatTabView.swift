@@ -6,6 +6,8 @@ import SessionFeature
 import AgentKit
 import PersistenceKit
 import SSHTransport
+import LancerCore
+import InboxFeature
 
 // MARK: - DispatchAgent
 
@@ -57,6 +59,10 @@ public struct NewChatTabView: View {
     var loadCommands: (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] }
     /// Fetches workspace file/dir names for @-mention autocomplete. Defaults to none.
     var loadFiles: (_ cwd: String) async -> [String] = { _ in [] }
+    /// The inbox VM whose pending approvals block active runs. nil → no inline card.
+    var inboxViewModel: InboxViewModel? = nil
+    /// Routes an approve/deny decision through the same path as the Inbox.
+    var onDecideApproval: (ApprovalID, Approval.Decision) -> Void = { _, _ in }
 
     @State private var prompt: String = ""
     @State private var selectedAgentID: String = ""
@@ -85,6 +91,9 @@ public struct NewChatTabView: View {
     @State private var showBudgetSheet = false
     @State private var showSSHFeatures = false
     @State private var dispatchErrorMessage: String?
+    /// Set when a follow-up returns "needsApproval" — drives the inline approval card
+    /// in assistantTurn. Cleared on decision, reset, or new run.
+    @State private var isAwaitingApproval = false
     /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
     /// so a second tap can't fire a duplicate run (the "superseded" cause).
     @State private var isSending = false
@@ -112,7 +121,9 @@ public struct NewChatTabView: View {
         onOpenSidebar: @escaping () -> Void = {},
         onConnectSSH: @escaping () -> Void = {},
         loadCommands: @escaping (_ cwd: String, _ vendor: String) async -> [AgentCommand] = { _, _ in [] },
-        loadFiles: @escaping (_ cwd: String) async -> [String] = { _ in [] }
+        loadFiles: @escaping (_ cwd: String) async -> [String] = { _ in [] },
+        inboxViewModel: InboxViewModel? = nil,
+        onDecideApproval: @escaping (ApprovalID, Approval.Decision) -> Void = { _, _ in }
     ) {
         self.agents = agents
         self.runOutputStore = runOutputStore
@@ -125,6 +136,8 @@ public struct NewChatTabView: View {
         self.onConnectSSH = onConnectSSH
         self.loadCommands = loadCommands
         self.loadFiles = loadFiles
+        self.inboxViewModel = inboxViewModel
+        self.onDecideApproval = onDecideApproval
     }
 
     // MARK: - Slash commands
@@ -205,6 +218,13 @@ public struct NewChatTabView: View {
 
     private var isErrorState: Bool {
         currentRun?.status == "failed" || (controlStore?.lastError != nil && controlStore?.status != .running)
+    }
+
+    /// The first pending approval from the inbox — used to render the inline card
+    /// when a run is paused waiting for a decision. Approval carries no runId so we
+    /// surface the most-recent pending one whenever isAwaitingApproval is set.
+    private var pendingApproval: Approval? {
+        inboxViewModel?.approvals.first(where: \.isPending)
     }
 
     public var body: some View {
@@ -613,12 +633,63 @@ public struct NewChatTabView: View {
                 persistedArtifacts(for: turn.runId)
             }
             .transition(.opacity)
+        } else if isLast, isAwaitingApproval, let approval = pendingApproval {
+            inlineApprovalCard(for: approval)
+                .transition(.opacity)
         } else {
             // No output yet — the agent is working. Calm typing indicator instead
             // of the old pixel-grid box; it morphs into the reply when text lands.
             DarkTypingIndicator()
                 .frame(maxWidth: .infinity, alignment: .leading)
             .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private func inlineApprovalCard(for approval: Approval) -> some View {
+        let summary = ApprovalSummary.derive(from: approval)
+        InboxApprovalCard(
+            agentKey: agentKeyForSource(approval.agent),
+            agentName: agentNameForSource(approval.agent),
+            timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
+            question: approval.kind == .askQuestion ? approval.question : summary.headline,
+            toolName: approval.toolName,
+            args: approval.command ?? approval.toolInput,
+            risk: approval.risk.rawValue,
+            isCritical: approval.risk >= .critical,
+            onDeny: {
+                Haptics.warning()
+                isAwaitingApproval = false
+                onDecideApproval(approval.id, .rejected)
+            },
+            onApprove: {
+                Haptics.success()
+                isAwaitingApproval = false
+                onDecideApproval(approval.id, .approved)
+            }
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func agentKeyForSource(_ source: Approval.AgentSource) -> AgentKey {
+        switch source {
+        case .claudeCode: return .claudeCode
+        case .codex:      return .codex
+        case .cursor:     return .cursor
+        case .opencode:   return .opencode
+        case .devin:      return .devin
+        case .unknown:    return .unknown
+        }
+    }
+
+    private func agentNameForSource(_ source: Approval.AgentSource) -> String {
+        switch source {
+        case .claudeCode: "Claude Code"
+        case .codex:      "Codex"
+        case .cursor:     "Cursor"
+        case .opencode:   "OpenCode"
+        case .devin:      "Devin"
+        case .unknown:    "Agent"
         }
     }
 
@@ -918,7 +989,7 @@ public struct NewChatTabView: View {
             case "denied":
                 dispatchErrorMessage = "Blocked by policy\(result.rule.map { " (\($0))" } ?? "")."
             case "needsApproval":
-                dispatchErrorMessage = "Awaiting your approval — check the Inbox."
+                isAwaitingApproval = true
             case "budgetExceeded":
                 dispatchErrorMessage = result.message ?? "Daily budget cap reached."
             default:
@@ -957,6 +1028,7 @@ public struct NewChatTabView: View {
         prompt = ""
         followUpText = ""
         dispatchErrorMessage = nil
+        isAwaitingApproval = false
         conversationID = nil
         artifactsByRun = [:]
         selectedArtifact = nil

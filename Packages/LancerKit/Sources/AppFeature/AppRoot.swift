@@ -1395,7 +1395,15 @@ public struct AppRoot: View {
                 onOpenSidebar: openDrawer,
                 onConnectSSH: { drawerRoute = .addMachine },
                 loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) },
-                loadFiles: { cwd in await loadWorkspaceFiles(cwd: cwd) }
+                loadFiles: { cwd in await loadWorkspaceFiles(cwd: cwd) },
+                inboxViewModel: activeInboxViewModel,
+                onDecideApproval: { approvalID, decision in
+                    if let slot = fleetStore.slot(forApprovalID: approvalID) {
+                        slot.inboxVM.decide(approvalID, decision: decision)
+                    } else {
+                        activeInboxViewModel.decide(approvalID, decision: decision)
+                    }
+                }
             )
         case .thread(let id):
             ChatHistoryView(
