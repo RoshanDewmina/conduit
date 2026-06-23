@@ -16,7 +16,7 @@ let swiftSettings: [SwiftSetting] = [
 let package = Package(
     name: "LancerKit",
     platforms: [
-        .iOS(.v27),
+        .iOS(.v26),
         .macOS(.v15),
         .watchOS(.v26),
     ],
