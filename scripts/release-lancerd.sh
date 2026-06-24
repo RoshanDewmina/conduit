@@ -18,7 +18,12 @@ TARGETS=(
   "linux amd64"
   "linux arm64"
   "darwin arm64"
+  "darwin amd64"
 )
+
+# Public GCS distribution bucket install.sh downloads from. Keep the bucket in
+# sync with DEFAULT_RELEASE_BASE in daemon/lancerd/install.sh.
+DIST_BUCKET="${LANCER_DIST_BUCKET:-gs://conduit-dist-f1c2466d}"
 
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
@@ -55,9 +60,23 @@ for target in "${TARGETS[@]}"; do
   cp "$ROOT_DIR/docs/codex-lancer-hook.sh" "$STAGE_DIR/codex-lancer-hook.sh"
   cp "$ROOT_DIR/docs/codex-hooks.json" "$STAGE_DIR/codex-hooks.json"
 
+  # Flat binary install.sh fetches directly: ${BASE}/lancerd_${GOOS}_${GOARCH}.
+  # (install.sh consumes flat, unversioned, underscored names + SHA256SUMS — the
+  # tarballs above are for manual/from-source installs only.)
+  cp "$STAGE_DIR/lancerd" "$DIST_DIR/lancerd_${GOOS}_${GOARCH}"
+
   tar -C "$DIST_DIR" -czf "$DIST_DIR/${OUT_BASENAME}.tar.gz" "$OUT_BASENAME"
   rm -rf "$STAGE_DIR"
   echo "Built $DIST_DIR/${OUT_BASENAME}.tar.gz"
 done
 
+# SHA256SUMS over the flat binaries, with the exact names install.sh greps for
+# (lancerd_${OS}_${ARCH}). Without this the installer refuses to install.
+( cd "$DIST_DIR" && shasum -a 256 lancerd_* > SHA256SUMS )
+cp "$DAEMON_DIR/install.sh" "$DIST_DIR/install.sh"
+echo "Wrote $DIST_DIR/SHA256SUMS + install.sh"
+
 echo "Release artifacts are in $DIST_DIR"
+echo
+echo "To publish (owner step — requires gcloud auth on the dist bucket):"
+echo "  gsutil -m cp \"$DIST_DIR\"/lancerd_* \"$DIST_DIR/SHA256SUMS\" \"$DIST_DIR/install.sh\" $DIST_BUCKET/"

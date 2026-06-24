@@ -26,24 +26,26 @@
 
 ---
 
-## 0. P0 tester-readiness blockers — VERIFIED DOWN (2026-06-20)
+## 0. P0 tester-readiness blockers — RECONCILED (2026-06-24)
 
-> Found while assessing "can self-hosted testers use this yet?". Both block the V1 relay loop;
-> neither is an app-code bug. Tracked here; owned by the daemon/infra lane.
+> Found while assessing "can self-hosted testers use this yet?". Re-verified 2026-06-24; status below
+> supersedes the 2026-06-20 "VERIFIED DOWN" snapshot. Neither was ever an app-code bug.
 
-- **`TESTER-1` — The V1 relay is unreachable.** `curl https://35.201.3.231.sslip.io/health`
-  (the URL baked into `project.yml:26` `LANCER_PUSH_BACKEND_URL`) returns nothing. V1's transport is
-  the E2E relay (phone ↔ `push-backend` ↔ daemon), so the entire control loop is dead until it is
-  redeployed. **Note the drift:** §A of `PUBLISH_READINESS_CHECKLIST.md` claims a 2026-06-19 Cloud Run
-  rebuild (`lancer-push`, australia-southeast1), but the app ships the `sslip.io` URL — reconcile which
-  instance is canonical and point `project.yml` at the live one.
-- **`TESTER-2` — The `lancerd` install one-liner 404s.** The only published GitHub release is stale
-  `v0.1.0` (2026-05-24, pre-policy/pre-relay-fix). Its asset names use hyphens
-  (`lancerd-darwin-arm64`) but `daemon/lancerd/install.sh` fetches underscores
-  (`lancerd_darwin_arm64`); there is also no `SHA256SUMS`, no `install.sh` asset, and no darwin-amd64
-  binary. `curl … | sh` cannot succeed. Fix: cut a fresh release from current source for
-  darwin/linux × amd64/arm64 with `SHA256SUMS`, reconcile the naming, and add a release CI job
-  (only `ci.yml` exists today).
+- **`TESTER-1` — Relay reachability: RESOLVED (relay is live).** The canonical instance is
+  `https://conduit-push-y4wpy6zeva-ts.a.run.app` (the URL the app actually ships in
+  `project.yml:26`); `GET /health` returns **200** (verified 2026-06-24), and `install.sh` paired
+  against `wss://conduit-push-y4wpy6zeva-ts.a.run.app`. The old `35.201.3.231.sslip.io` and the
+  `lancer-push` (australia-southeast1) name in `PUBLISH_READINESS_CHECKLIST.md` §A are **stale doc
+  drift** — `conduit-push` is canonical (preserved per the rebrand infra-migration decision). Fix §A.
+- **`TESTER-2` — installer 404s: FIXED in source (publish is owner-gated).** Root cause was
+  rebrand drift in the GCS dist path, not the old GitHub-release naming: `install.sh` fetches flat
+  `lancerd_${os}_${arch}` + `SHA256SUMS`, but `scripts/release-lancerd.sh` only emitted versioned
+  hyphenated tarballs and never wrote `SHA256SUMS`, and the bucket still held stale `conduitd_*` sums
+  with **no binaries** (all 404). `release-lancerd.sh` now also emits the flat `lancerd_${os}_${arch}`
+  binaries (incl. darwin-amd64) + a matching `SHA256SUMS` + `install.sh`, and prints the `gsutil`
+  upload command. The full `curl|sh` loop was proven end-to-end offline (download → checksum → install
+  → pair) on 2026-06-24. **Owner step remaining:** run `scripts/release-lancerd.sh <ver>` then the
+  printed `gsutil cp … gs://conduit-dist-f1c2466d/` to publish; a release CI job is still nice-to-have.
 
 ## 0.1 Account / device management — COMPLETED (2026-06-20)
 
