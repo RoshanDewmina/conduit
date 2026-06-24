@@ -14,7 +14,6 @@ import SessionFeature
 import InboxFeature
 import OnboardingFeature
 import SettingsFeature
-import KeysFeature
 import DesignSystem
 
 import DiffFeature
@@ -260,10 +259,13 @@ public struct AppRoot: View {
         // UI-audit hook: launch directly into the sidebar shell. The legacy tab
         // router was removed; destinations are now the sole root navigation model.
         if let destination = ProcessInfo.processInfo.environment["LANCER_DESTINATION"] {
+            // Launch seam lands directly in the shell — skip onboarding so the
+            // destination is actually reached.
+            UserDefaults.standard.set(true, forKey: "onboardingSeen")
             let state = SidebarShellState()
             switch destination {
             case "inbox": state.navigate(to: .needsAttention)
-            case "governance": state.navigate(to: .settings)
+            case "governance": state.navigate(to: .governance)
             case "machines": state.navigate(to: .machines)
             case "sessions": state.navigate(to: .home)
             case "settings": state.navigate(to: .settings)
@@ -283,17 +285,7 @@ public struct AppRoot: View {
 
     @ViewBuilder
     public var body: some View {
-        #if DEBUG
-        if let gallery = ProcessInfo.processInfo.environment["LANCER_GALLERY"] {
-            DebugGalleryView(route: gallery)
-                .lancerTokens(appearance: appearance)
-                .preferredColorScheme(preferredScheme)
-        } else {
-            mainBody.environment(\.lancerTokens, tokens)
-        }
-        #else
         mainBody.environment(\.lancerTokens, tokens)
-        #endif
     }
 
     // The content tree, split out of mainBody so the Swift type-checker handles the
@@ -1352,6 +1344,94 @@ public struct AppRoot: View {
         .id(workspacesRevision)
     }
 
+    /// Stop every running agent: disconnect SSH sessions and send a relay stop for
+    /// each non-terminal run. Shared by Settings and the Governance home.
+    private func performEmergencyStop() {
+        Task {
+            for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
+                await slot.sessionViewModel.disconnect()
+            }
+            if let bridge = e2eBridge, relayBridgeIsActive {
+                for run in runOutputStore.runs.values where !run.isTerminal {
+                    _ = await bridge.sendRunControl(runId: run.runId, action: "stop")
+                }
+            }
+        }
+    }
+
+    /// Best-effort YAML for a normalized cross-provider policy. ponytail: the daemon
+    /// validates the real schema (fail-closed), so this stays a thin serializer — upgrade
+    /// to per-provider compilation when the matrix moves past MVP.
+    private func normalizedPolicyYAML(_ p: NormalizedPolicy) -> String {
+        var lines = ["# Normalized cross-provider policy", "rules:"]
+        for r in p.rules {
+            lines.append("  - id: \(r.id)")
+            lines.append("    description: \"\(r.description)\"")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func governanceDestination(env: AppEnvironment) -> some View {
+        let driftCount = env.hostHealthStore.driftByHost.values.reduce(0) { $0 + $1.findings.count }
+        let stats = GovernanceStats(
+            hostCount: fleetStore.slots.count,
+            policyActive: true,
+            auditCount: 0,
+            auditChainVerified: false,
+            pendingApprovals: sidebarState.pendingApprovalCount,
+            topApprovalSummary: nil,
+            presetNames: [],
+            providerCount: dispatchAgents().count,
+            providerCoverage: "",
+            driftFindings: driftCount,
+            driftAutoFixable: 0,
+            roleLabel: "owner",
+            onCallLabel: "you"
+        )
+        let driftReport = env.hostHealthStore.driftByHost.values.first
+            ?? DriftReport(root: "", scanned: 0, findings: [])
+        return GovernanceHomeView(
+            stats: stats,
+            onEmergencyStop: { performEmergencyStop() },
+            onOpenSidebar: openDrawer,
+            destination: { route in
+                switch route {
+                case .approvals:
+                    return AnyView(inboxDestination(env: env))
+                case .presets:
+                    return AnyView(PolicyPresetsView(
+                        hosts: ["All hosts"],
+                        onApply: { preset, _ in
+                            let actions = bridgeSessionActions()
+                            Task { try? await actions.savePolicyYAML(preset.ruleYAML) }
+                        }
+                    ))
+                case .matrix:
+                    return AnyView(PolicyMatrixView(
+                        policy: .defaultPolicy,
+                        onApply: { policy in
+                            let actions = bridgeSessionActions()
+                            Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
+                        }
+                    ))
+                case .audit:
+                    return AnyView(AuditVerifyExportView(repository: env.auditRepo))
+                case .drift:
+                    return AnyView(DriftRemediationView(report: driftReport, channel: daemonChannel))
+                case .team:
+                    return AnyView(TeamRolesView())
+                case .privacy:
+                    return AnyView(TrustView(
+                        relayEncrypted: relayBridgeIsActive,
+                        relayHost: relayHostName,
+                        onOpenDevices: { sidebarState.navigate(to: .settings) },
+                        onOpenRelay: { sidebarState.navigate(to: .settings) }
+                    ))
+                }
+            }
+        )
+    }
+
     private func settingsDestination(env: AppEnvironment) -> some View {
         SettingsWithLibraryView(
             viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
@@ -1376,23 +1456,7 @@ public struct AppRoot: View {
                     }
                 }
             },
-            onEmergencyStop: {
-                Task {
-                    // SSH sessions: disconnect each connected fleet slot.
-                    for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
-                        await slot.sessionViewModel.disconnect()
-                    }
-                    // Relay-dispatched runs: SSH disconnect doesn't touch these, so a
-                    // relay user's Emergency Stop was a no-op. Send a stop for every
-                    // active (non-terminal) run over the relay → daemon applyRunControl
-                    // kills the agent process group.
-                    if let bridge = e2eBridge, relayBridgeIsActive {
-                        for run in runOutputStore.runs.values where !run.isTerminal {
-                            _ = await bridge.sendRunControl(runId: run.runId, action: "stop")
-                        }
-                    }
-                }
-            },
+            onEmergencyStop: { performEmergencyStop() },
             onAccountSignedOut: {
                 onboardingSeen = false
             },
@@ -1445,6 +1509,8 @@ public struct AppRoot: View {
             inboxDestination(env: env)
         case .machines:
             fleetDestination(env: env)
+        case .governance:
+            governanceDestination(env: env)
         case .settings:
             settingsDestination(env: env)
         case .observedSession(let sessionId, let title, let hostName):

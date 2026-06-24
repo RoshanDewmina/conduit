@@ -357,6 +357,22 @@ public actor DaemonChannel {
         }
     }
 
+    /// Applies the daemon's safe, idempotent in-place fix for one auto-fixable
+    /// drift finding (only `.applyFix` findings) and returns a re-scanned
+    /// report so callers can refresh. The daemon is fail-closed: a stale or
+    /// non-remediable request errors without writing.
+    public func driftRemediate(root: String, finding: DriftFinding) async throws -> DriftReport {
+        let params: [String: Any] = [
+            "root": root,
+            "file": finding.file,
+            "line": finding.line,
+            "kind": finding.kind,
+            "ref": finding.ref,
+        ]
+        let data = try await sendRPC(method: "agent.drift.remediate", params: params)
+        return try Self.decodeResult(data, as: DriftReport.self)
+    }
+
     // MARK: - Observed sessions (watch-only)
 
     /// Lists Claude Code (and other vendor) sessions the daemon knows about for

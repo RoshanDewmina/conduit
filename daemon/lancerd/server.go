@@ -682,6 +682,19 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, report)
 
+	case "agent.drift.remediate":
+		var req DriftRemediateRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		report, err := remediateDrift(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, report)
+
 	case "agent.agents.installed":
 		s.writeResult(msg.ID, map[string]interface{}{"agents": installedAgents(exec.LookPath)})
 

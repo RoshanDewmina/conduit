@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,14 +10,22 @@ import (
 	"strings"
 )
 
+// Drift remediation kinds. Mirrors LancerCore.DriftRemediation.
+const (
+	driftRemediateApplyFix     = "apply-fix"     // daemon can safely & idempotently repair in place
+	driftRemediateCreatePolicy = "create-policy" // resolve by authoring a policy (client-side)
+	driftRemediateManual       = "manual"        // no safe automatic action
+)
+
 // DriftFinding is one reference in an agent instruction file that no longer
 // resolves to a file on disk — "drift between the doc and the repo state".
 type DriftFinding struct {
-	File    string `json:"file"` // path relative to the scan root
-	Line    int    `json:"line"`
-	Kind    string `json:"kind"` // "dead-import" | "dead-link"
-	Ref     string `json:"ref"`  // the referenced path as written
-	Message string `json:"message"`
+	File        string `json:"file"` // path relative to the scan root
+	Line        int    `json:"line"`
+	Kind        string `json:"kind"` // "dead-import" | "dead-link"
+	Ref         string `json:"ref"`  // the referenced path as written
+	Message     string `json:"message"`
+	Remediation string `json:"remediation"` // "apply-fix" | "create-policy" | "manual"
 }
 
 // DriftReport is the result of one scan over a repo's instruction topology.
@@ -124,7 +133,8 @@ func scanInstructionFile(path, root string) []DriftFinding {
 			if target, ok := resolveDriftRef(ref, dir, root); ok && !fileExists(target) {
 				findings = append(findings, DriftFinding{
 					File: rel, Line: lineNo, Kind: "dead-import", Ref: ref,
-					Message: "imported file does not exist",
+					Message:     "imported file does not exist",
+					Remediation: driftRemediateApplyFix,
 				})
 			}
 		}
@@ -133,7 +143,8 @@ func scanInstructionFile(path, root string) []DriftFinding {
 			if target, ok := resolveDriftRef(m[1], dir, root); ok && !fileExists(target) {
 				findings = append(findings, DriftFinding{
 					File: rel, Line: lineNo, Kind: "dead-link", Ref: m[1],
-					Message: "linked file does not exist",
+					Message:     "linked file does not exist",
+					Remediation: driftRemediateApplyFix,
 				})
 			}
 		}
@@ -163,4 +174,96 @@ func resolveDriftRef(ref, fileDir, root string) (string, bool) {
 		return "", false
 	}
 	return p, true
+}
+
+// DriftRemediateRequest names one finding to repair within a scan root.
+type DriftRemediateRequest struct {
+	Root string `json:"root"`
+	File string `json:"file"` // path relative to root, as reported by the scan
+	Line int    `json:"line"`
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+}
+
+// remediateDrift applies the only safe, in-place fix for a dead reference:
+// it comments out the offending line in the instruction file so the broken
+// `@import` / markdown link no longer misleads an agent, leaving a marker the
+// human can act on. It is fail-closed (every precondition must hold or it
+// errors without writing) and idempotent (an already-commented line is a no-op
+// success). It returns a fresh scan of the root so callers see updated state.
+//
+// Confined to instruction files inside root; never executes a shell.
+func remediateDrift(req DriftRemediateRequest) (DriftReport, error) {
+	root := strings.TrimSpace(req.Root)
+	if root == "" {
+		root, _ = os.Getwd()
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return DriftReport{}, fmt.Errorf("resolve root: %w", err)
+	}
+
+	// Resolve the target file strictly inside root — reject traversal.
+	relClean := filepath.Clean(filepath.FromSlash(req.File))
+	if relClean == "." || filepath.IsAbs(relClean) ||
+		relClean == ".." || strings.HasPrefix(relClean, ".."+string(filepath.Separator)) {
+		return DriftReport{}, fmt.Errorf("drift: invalid file path %q", req.File)
+	}
+	target := filepath.Join(absRoot, relClean)
+	relCheck, err := filepath.Rel(absRoot, target)
+	if err != nil || relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
+		return DriftReport{}, fmt.Errorf("drift: file escapes root")
+	}
+	if !isInstructionFile(target) {
+		return DriftReport{}, fmt.Errorf("drift: %q is not a remediable instruction file", req.File)
+	}
+	if req.Line < 1 {
+		return DriftReport{}, fmt.Errorf("drift: invalid line %d", req.Line)
+	}
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		return DriftReport{}, fmt.Errorf("read %s: %w", req.File, err)
+	}
+	// Preserve trailing-newline shape.
+	hadTrailingNewline := strings.HasSuffix(string(data), "\n")
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if req.Line > len(lines) {
+		return DriftReport{}, fmt.Errorf("drift: line %d out of range (%d lines)", req.Line, len(lines))
+	}
+
+	idx := req.Line - 1
+	orig := lines[idx]
+	const marker = "<!-- lancer: removed dead reference"
+
+	// Idempotent: if we already neutralised this line, succeed without writing.
+	if strings.Contains(orig, marker) {
+		return scanDrift(absRoot)
+	}
+	// Fail-closed: the line must still contain the ref we were asked to fix,
+	// so a stale request can't blank out an unrelated (edited) line.
+	if req.Ref == "" || !strings.Contains(orig, req.Ref) {
+		return DriftReport{}, fmt.Errorf("drift: line %d no longer contains ref %q (re-scan needed)", req.Line, req.Ref)
+	}
+
+	// Defang the original so the comment can't itself re-trigger the scanner:
+	// strip the `@` import sigil and flatten markdown-link brackets, both of
+	// which the scan regexes key on.
+	defanged := strings.NewReplacer("@", "", "[", "(", "]", ")").Replace(strings.TrimSpace(orig))
+	lines[idx] = fmt.Sprintf("%s %q (was: %s) -->", marker, req.Ref, defanged)
+
+	out := strings.Join(lines, "\n")
+	if hadTrailingNewline {
+		out += "\n"
+	}
+	info, statErr := os.Stat(target)
+	mode := fs.FileMode(0o644)
+	if statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := os.WriteFile(target, []byte(out), mode); err != nil {
+		return DriftReport{}, fmt.Errorf("write %s: %w", req.File, err)
+	}
+
+	return scanDrift(absRoot)
 }

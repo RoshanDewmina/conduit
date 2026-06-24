@@ -207,6 +207,13 @@ public struct LancerSidebarView: View {
                 action: { onNavigate(.machines) }
             )
             .coachmarkAnchor("terminal")
+            SidebarNavRow(
+                icon: "checkmark.shield",
+                title: "Governance",
+                badge: nil,
+                selected: state.selectedDestination == .governance,
+                action: { onNavigate(.governance) }
+            )
         }
     }
 

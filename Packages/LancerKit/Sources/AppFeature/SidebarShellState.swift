@@ -10,6 +10,8 @@ public enum SidebarDestination: Hashable, Sendable {
     case needsAttention
     /// Machine Detail (Fleet) — a primary sidebar root, also reachable from a Home machine tap.
     case machines
+    /// Governance home — the policy/audit/drift/team/privacy dashboard (the wedge surface).
+    case governance
     case settings
     /// A read-only transcript viewer for a session discovered on the host but not
     /// dispatched by Lancer (watch-only, Phase 1). `title`/`hostName` travel with
