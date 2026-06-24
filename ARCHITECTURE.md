@@ -28,6 +28,17 @@ the reason for rejection.
 > snapshot, **this snapshot wins** until they are rewritten. The former
 > `docs/LANCER_PROJECT_DOSSIER.md` is **archived** (`docs/_archive/`); this is its successor.
 
+> **Strategic direction (2026-06-24, narrowed).** The broad "mobile control plane for coding agents"
+> category is commoditized (OpenAI Codex Remote, GitHub Agent HQ, Claude Code auto mode) and **Omnara**
+> (YC S25, open-source: iOS + Apple Watch, multi-provider push approvals, worktrees) already ships
+> mobile cross-provider approvals — so that is **no longer Lancer's differentiator**. Lancer's
+> defensible wedge is the **policy + audit + emergency-stop governance layer** for agents on your own
+> machines across providers (durable per-host policy, blast-radius/reason on approvals, hash-chained
+> audit, fleet drift, team-owned stop). **Lead the product with policy/audit; demote chat/terminal
+> depth.** This is a *conditional* continue, gated on `docs/validation-cycle-v1.md`; if that returns a
+> weak signal, salvage to open-source/SDK. Rationale + verification: the verdict memo (plan file
+> `read-this-claude-code-encapsulated-blossom.md`).
+
 **What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
@@ -923,6 +934,8 @@ These are decisions we will revisit; recording them prevents re-litigation.
 | Q5 | Local LLM (Apple Intelligence / WhisperKit) for offline NL→cmd? | Out of scope at launch | When Apple Intelligence on-device proves capable |
 | Q6 | Run lancerd as a systemd unit or per-ssh-session? | Per-ssh-session via `exec` channel | If users ask for proactive event push |
 | Q7 | License model for engine modules? | Likely MIT/Apache for engines | Before App Store submission |
+| Q8 | Product positioning: broad mobile manager vs. narrow governance layer? | **Narrow to policy + audit + emergency-stop governance** across own-machine, multi-provider agents (see §0.1 strategic note). Mobile approvals alone are commodity (Omnara/native). | After `docs/validation-cycle-v1.md` — continue vs. open-source salvage |
+| Q9 | Self-host/SSH vs. hosted-cloud execution as the V1 story? | **Self-host/relay supervision is V1; hosted-cloud execution stays V2** (retained, unwired). The narrowed governance wedge lives above any one backend. | If validation shows demand for hosted execution |
 
 ---
 

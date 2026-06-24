@@ -26,6 +26,15 @@
 | **Deployment** | 🟡 | push-backend live on `sslip.io`; confirm APNs/Stripe secrets on running instance (D1); move to vanity domain (D4). |
 | **Docs / ops** | 🟢 (post this pass) | Source of truth consolidated to `ARCHITECTURE.md`; dossier archived; root `AGENTS.md` added; skills installed. |
 
+## Strategic direction (2026-06-24, narrowed — supersedes the broad framing)
+The "mobile control plane for coding agents" category is commoditized (Codex Remote, GitHub Agent HQ,
+Claude Code auto mode), and **Omnara** already ships mobile cross-provider approvals. **Narrow Lancer to
+the governance wedge:** policy + hash-chained audit + emergency-stop + fleet drift for own-machine,
+multi-provider agents — plus the blind-E2E privacy edge Omnara lacks. Lead the UI with policy/audit;
+demote chat/terminal. This is a *conditional* continue gated on `docs/validation-cycle-v1.md`; weak
+signal → open-source/SDK salvage. Full rationale + claim verification: verdict memo (plan file
+`read-this-claude-code-encapsulated-blossom.md`); positioning detail → `ARCHITECTURE.md` §0.1 + §16 Q8/Q9.
+
 ## V1 scope decisions (owner, 2026-06-18)
 - **Hosted-cloud execution deferred to V2; code RETAINED, not deleted** — V1 leads with SSH/self-host. The orphaned hosted-cloud UI stays in tree, unwired.
 - **`continue`/follow-up is IN V1 scope** — already implemented in `dispatch.go`.

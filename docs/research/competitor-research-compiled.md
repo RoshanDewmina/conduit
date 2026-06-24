@@ -86,6 +86,7 @@ This is meaningfully different from:
 - **Weaknesses:** Privacy concern (plaintext goes through Omnara servers); pricing confusion signals lack of conviction; cloud sync infra costs; no self-host option
 - **Lancer lesson:** Validates the market but leaves privacy completely unaddressed. Lancer's blind relay is the structural moat.
 - **Pricing correction note:** Earlier `PRODUCT_RESEARCH.md` §4.3 claimed Omnara "collapsed to free." Session `a777373e` L2088 corrects this: Omnara is now $20/mo unlimited, NOT collapsed to free. This is an important correction — the WTP collapse narrative in §4.3 needs updating.
+- **2026-06-24 reclassification — Omnara is Lancer's #1 DIRECT competitor, not adjacent.** It already ships Lancer's old "mobile cross-provider approvals" differentiator (Claude Code + Codex, iOS + Apple Watch, push approve/reject/redirect, worktrees) → that is **no longer a wedge**. Lancer's remaining edge is exactly the two things Omnara does *not* do: **(1) blind E2E relay** (plaintext never leaves the host; Omnara routes plaintext through its servers, no self-host) and **(2) durable governance** (per-host policy, hash-chained audit, fleet drift, team-owned emergency stop). Compete on **governance + privacy**, not phone approvals. See verdict memo + `docs/validation-cycle-v1.md`.
 - **Sources:** `omnara.com/pricing`, App Store, Google Play, `github.com/omnara-ai/omnara`, HN 44878650 + 46991591, `LAUNCH_STRATEGY_RESEARCH.md` §2.1
 
 #### Happy (slopus/happy)
