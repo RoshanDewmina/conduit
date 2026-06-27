@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,14 +19,14 @@ type secretsStore struct {
 }
 
 type secretEntry struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Type      string     `json:"type"`
-	Scope     string     `json:"scope"`
-	Value     string     `json:"-"`
-	AddedAt   time.Time  `json:"addedAt"`
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Type       string     `json:"type"`
+	Scope      string     `json:"scope"`
+	Value      string     `json:"-"`
+	AddedAt    time.Time  `json:"addedAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	UseCount  int        `json:"useCount"`
+	UseCount   int        `json:"useCount"`
 }
 
 type secretAuth struct {
@@ -40,8 +38,8 @@ type secretAuth struct {
 }
 
 type pendingSecretRequest struct {
-	Request   SecretRequestParams `json:"request"`
-	ReceivedAt time.Time          `json:"receivedAt"`
+	Request    SecretRequestParams `json:"request"`
+	ReceivedAt time.Time           `json:"receivedAt"`
 }
 
 // SecretRequestParams mirrors the Swift SecretRequest wire format.
@@ -57,19 +55,19 @@ type SecretRequestParams struct {
 
 // secretStoreEntry is the JSON-serializable form persisted to disk (includes the Value field).
 type secretStoreEntry struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Type      string     `json:"type"`
-	Scope     string     `json:"scope"`
-	Value     string     `json:"value"`
-	AddedAt   time.Time  `json:"addedAt"`
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Type       string     `json:"type"`
+	Scope      string     `json:"scope"`
+	Value      string     `json:"value"`
+	AddedAt    time.Time  `json:"addedAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	UseCount  int        `json:"useCount"`
+	UseCount   int        `json:"useCount"`
 }
 
 type secretsFile struct {
-	Secrets        []secretStoreEntry  `json:"secrets"`
-	Authorizations []secretAuth        `json:"authorizations"`
+	Secrets        []secretStoreEntry `json:"secrets"`
+	Authorizations []secretAuth       `json:"authorizations"`
 }
 
 func newSecretsStore(home string) *secretsStore {
@@ -151,40 +149,6 @@ func (s *secretsStore) store(name, secretType, scope, value string) string {
 	}
 	s.persistLocked()
 	return id
-}
-
-// requestAccess checks if a request is authorized and returns the secret value.
-// Returns ("", error) if not authorized. The secret value never leaves the daemon.
-func (s *secretsStore) requestAccess(requestID, scope string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Find the authorization matching this request or a broader scope.
-	auth, ok := s.authorizations[requestID]
-	if !ok {
-		return "", fmt.Errorf("no authorization for request %s", requestID)
-	}
-	if auth.ExpiresAt != nil && auth.ExpiresAt.Before(time.Now()) {
-		delete(s.authorizations, requestID)
-		return "", fmt.Errorf("authorization expired")
-	}
-
-	// Find a secret matching the authorized scope.
-	for _, secret := range s.secrets {
-		if scopeMatches(auth.Scope, secret.Scope) {
-			now := time.Now().UTC()
-			secret.LastUsedAt = &now
-			secret.UseCount++
-			s.persistLocked()
-			value := secret.Value
-			if auth.OneTime {
-				delete(s.authorizations, requestID)
-				s.persistLocked()
-			}
-			return value, nil
-		}
-	}
-	return "", fmt.Errorf("no secret matching scope %q", auth.Scope)
 }
 
 // authorize stores an authorization for a secret request. A concrete scope is
@@ -306,13 +270,4 @@ func scopeMatches(authorized, secretScope string) bool {
 		}
 	}
 	return true
-}
-
-// generateSecretValue creates a random 32-byte secret, base64url-encoded.
-func generateSecretValue() (string, error) {
-	var b [32]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }

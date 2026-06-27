@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -27,35 +26,6 @@ func buildGCSURI(storageRef string) string {
 	}
 	ref := strings.TrimPrefix(storageRef, "/")
 	return fmt.Sprintf("gs://%s/%s", bucket, ref)
-}
-
-// UploadArtifact uploads content to GCS and returns the gs:// URI.
-func UploadArtifact(ctx context.Context, runID, name string, content io.Reader, contentType string) (string, error) {
-	bucket := gcsBucket()
-	if bucket == "" {
-		return "", fmt.Errorf("GCS_ARTIFACTS_BUCKET not configured")
-	}
-
-	client, err := storage.NewClient(ctx, option.WithScopes("https://www.googleapis.com/auth/devstorage.read_write"))
-	if err != nil {
-		return "", fmt.Errorf("create GCS client: %w", err)
-	}
-	defer client.Close()
-
-	objectName := fmt.Sprintf("runs/%s/%s", runID, name)
-	wc := client.Bucket(bucket).Object(objectName).NewWriter(ctx)
-	if contentType != "" {
-		wc.ContentType = contentType
-	}
-	if _, err := io.Copy(wc, content); err != nil {
-		_ = wc.Close()
-		return "", fmt.Errorf("write to GCS: %w", err)
-	}
-	if err := wc.Close(); err != nil {
-		return "", fmt.Errorf("close GCS writer: %w", err)
-	}
-
-	return fmt.Sprintf("gs://%s/%s", bucket, objectName), nil
 }
 
 // SignedDownloadURL generates a short-lived V4 signed URL for downloading an artifact.

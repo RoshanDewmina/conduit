@@ -7,13 +7,13 @@
       "internalID" : "6740914657",
       "localizations" : [
         {
-          "description" : "Full access to all Conduit features: AI agent approval inbox, SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH hosts.",
-          "displayName" : "Conduit Pro",
+          "description" : "Full access to Lancer Pro features: AI agent approval inbox, SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH hosts.",
+          "displayName" : "Lancer Pro",
           "locale" : "en_US"
         }
       ],
-      "productID" : "dev.conduit.mobile.pro",
-      "referenceName" : "Conduit Pro",
+      "productID" : "dev.lancer.mobile.pro",
+      "referenceName" : "Lancer Pro",
       "type" : "NonConsumable"
     }
   ],

@@ -25,10 +25,6 @@ func AlwaysPolicyPath(home string) string {
 	return filepath.Join(LancerDir(home), AlwaysPolicyFile)
 }
 
-func RepoPolicyPath(cwd string) string {
-	return filepath.Join(cwd, ".lancer", GlobalPolicyFile)
-}
-
 // LoadFile reads one YAML policy document.
 func LoadFile(path string) (Document, error) {
 	data, err := os.ReadFile(path)

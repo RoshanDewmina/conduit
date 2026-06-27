@@ -16,21 +16,6 @@ import UIKit
 import ActivityKit
 #endif
 
-/// Push backend HTTPS URL, injected from build config via Info.plist.
-/// Set LANCER_PUSH_BACKEND_URL in project.yml (or Xcode build settings) to your
-/// Cloud Run service URL — e.g. "https://lancer-push-HASH-ts.a.run.app".
-/// Empty string disables push registration silently (safe for local/simulator runs).
-/// ATS blocks any plain http:// URL in Release builds so no fallback is provided.
-private var pushBackendURL: String {
-    #if DEBUG
-    if let envURL = ProcessInfo.processInfo.environment["LANCER_PUSH_BACKEND_URL"],
-       !envURL.isEmpty {
-        return envURL
-    }
-    #endif
-    return Bundle.main.infoDictionary?["LANCER_PUSH_BACKEND_URL"] as? String ?? ""
-}
-
 // RELEASE GATE: Paste your Sentry DSN here before App Store submission.
 // Create a project at https://sentry.io (or your self-hosted instance) to get a DSN.
 // Leave empty to disable crash reporting entirely (SDK never starts).

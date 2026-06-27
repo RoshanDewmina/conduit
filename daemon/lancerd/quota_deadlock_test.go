@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Regression: getQuotaGuard() held d.mu and then called checkProviderQuotas(),
-// which re-locked the non-reentrant d.mu → permanent deadlock. Because the
+// Regression: getQuotaGuard() held d.mu and then re-locked the non-reentrant
+// d.mu while computing quota alerts, causing a permanent deadlock. Because the
 // resident daemon services the phone attach on a single goroutine, the phone's
 // connect-time agent.quota.status call wedged that loop, so every later frame —
 // including agent.approval.response — was never read and the agent always
@@ -26,6 +26,6 @@ func TestGetQuotaGuard_DoesNotDeadlock(t *testing.T) {
 			t.Fatal("expected at least one provider in quota result")
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("getQuotaGuard deadlocked (re-locked non-reentrant d.mu via checkProviderQuotas)")
+		t.Fatal("getQuotaGuard deadlocked while computing quota alerts")
 	}
 }

@@ -405,20 +405,6 @@ func resolveEntitlementFromBearer(r *http.Request) (subscriptionEntitlement, err
 	return ent, nil
 }
 
-// resolveEntitlement resolves via customerId/appAccountToken — only for the
-// billing status endpoints where the client is establishing or checking its own
-// subscription, not performing operations on owned resources.
-func resolveEntitlement(r *httpRequestEntitlement) (subscriptionEntitlement, error) {
-	ent, ok := lookupEntitlement(r.CustomerID, r.AppAccountToken)
-	if !ok {
-		return subscriptionEntitlement{}, fmt.Errorf("entitlement not found")
-	}
-	if !ent.Active {
-		return ent, fmt.Errorf("subscription inactive")
-	}
-	return ent, nil
-}
-
 type httpRequestEntitlement struct {
 	CustomerID      string
 	AppAccountToken string
