@@ -10,6 +10,7 @@ import DesignSystem
 public struct PolicyMatrixView: View {
     let policy: NormalizedPolicy
     let onApply: (NormalizedPolicy) -> Void
+    let embedded: Bool
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -18,9 +19,11 @@ public struct PolicyMatrixView: View {
 
     public init(
         policy: NormalizedPolicy = .defaultPolicy,
+        embedded: Bool = false,
         onApply: @escaping (NormalizedPolicy) -> Void
     ) {
         self.policy = policy
+        self.embedded = embedded
         self.onApply = onApply
     }
 
@@ -29,8 +32,10 @@ public struct PolicyMatrixView: View {
             t.bg.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    DSDetailHeader("policy matrix", onBack: { dismiss() })
-                        .padding(.horizontal, 18)
+                    if !embedded {
+                        DSDetailHeader("policy matrix", onBack: { dismiss() })
+                            .padding(.horizontal, 18)
+                    }
                     headerSection
                     matrix
                     legend
@@ -38,7 +43,7 @@ public struct PolicyMatrixView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(!embedded)
     }
 
     // MARK: - Header

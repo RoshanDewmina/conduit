@@ -7,6 +7,9 @@ import DesignSystem
 public struct PolicyPresetsView: View {
     private let hosts: [String]
     private let onApply: (PolicyPreset, String) -> Void
+    /// When embedded in a merged Governance surface, the wrapper supplies the nav
+    /// bar/title, so this view drops its own DSDetailHeader.
+    private let embedded: Bool
 
     @State private var presets: [PolicyPreset] = []
     @State private var showingEditor = false
@@ -19,8 +22,9 @@ public struct PolicyPresetsView: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
-    public init(hosts: [String] = [], onApply: @escaping (PolicyPreset, String) -> Void = { _, _ in }) {
+    public init(hosts: [String] = [], embedded: Bool = false, onApply: @escaping (PolicyPreset, String) -> Void = { _, _ in }) {
         self.hosts = hosts
+        self.embedded = embedded
         self.onApply = onApply
     }
 
@@ -29,7 +33,9 @@ public struct PolicyPresetsView: View {
             t.bg.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    DSDetailHeader("policy presets", onBack: { dismiss() })
+                    if !embedded {
+                        DSDetailHeader("policy presets", onBack: { dismiss() })
+                    }
                     presetsSection
                     addSection
                     importExportSection
@@ -44,7 +50,7 @@ public struct PolicyPresetsView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(!embedded)
         .onAppear { reload() }
         .sheet(isPresented: $showingEditor, onDismiss: reload) {
             if let preset = editingPreset {

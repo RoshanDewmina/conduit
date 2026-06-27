@@ -14,14 +14,18 @@ public struct TeamRolesView: View {
     @State private var newRole: TeamRole = .approver
     @State private var onCallID: String? = nil
 
-    public init() {}
+    private let embedded: Bool
+
+    public init(embedded: Bool = false) { self.embedded = embedded }
 
     public var body: some View {
         ZStack(alignment: .top) {
             t.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                DSDetailHeader("team & roles", onBack: { dismiss() })
+                if !embedded {
+                    DSDetailHeader("team & roles", onBack: { dismiss() })
+                }
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -42,7 +46,7 @@ public struct TeamRolesView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(!embedded)
         .onAppear { reload() }
         .sheet(isPresented: $showAddSheet) {
             addSheet

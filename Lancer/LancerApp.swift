@@ -65,22 +65,8 @@ struct LancerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            rootView
-        }
-    }
-
-    @ViewBuilder
-    private var rootView: some View {
-        #if DEBUG
-        if ProcessInfo.processInfo.environment["LANCER_TERMINAL_TEST"] == "1" {
-            // New SwiftTerm-based terminal harness (live SSH). See DebugTerminalHarness.
-            DebugTerminalHarness()
-        } else {
             appRoot
         }
-        #else
-        appRoot
-        #endif
     }
 
     private var appRoot: some View {

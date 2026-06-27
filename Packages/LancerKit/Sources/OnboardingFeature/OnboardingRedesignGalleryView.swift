@@ -606,20 +606,6 @@ private struct OnboardingPolicyCards: View {
     }
 }
 
-// MARK: - Gallery wrapper (DebugGalleryView route `onboarding-redesign`)
-
-/// Visual-reference + XCUITest entry point. Renders the productized view with
-/// no-op callbacks so the flow can be walked without leaving the gallery.
-public struct OnboardingRedesignGalleryView: View {
-    let startStep: Int
-    @Environment(\.lancerTokens) private var t
-    public init(startStep: Int = 0) { self.startStep = startStep }
-    public var body: some View {
-        OnboardingRedesignView(onContinue: {}, onSetupWorkspace: {}, startStep: startStep)
-            .background(t.bg)
-    }
-}
-
 // MARK: - Step model
 
 private struct OnboardingRedesignStep: Identifiable {
@@ -673,8 +659,8 @@ private struct OnboardingRedesignStep: Identifiable {
     ]
 }
 
-#Preview("Onboarding redesign gallery") {
-    OnboardingRedesignGalleryView()
+#Preview("Onboarding redesign") {
+    OnboardingRedesignView(onContinue: {}, onSetupWorkspace: {})
         .environment(\.lancerTokens, .light)
 }
 #endif

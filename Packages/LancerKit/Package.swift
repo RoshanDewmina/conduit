@@ -43,7 +43,6 @@ let package = Package(
         .library(name: "InboxFeature",      targets: ["InboxFeature"]),
         .library(name: "SettingsFeature",   targets: ["SettingsFeature"]),
         .library(name: "OnboardingFeature", targets: ["OnboardingFeature"]),
-        .library(name: "KeysFeature",       targets: ["KeysFeature"]),
         .library(name: "DiffFeature",       targets: ["DiffFeature"]),
         .library(name: "FilesFeature",      targets: ["FilesFeature"]),
         .library(name: "WorktreesFeature",  targets: ["WorktreesFeature"]),
@@ -200,11 +199,6 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "KeysFeature",
-            dependencies: ["DesignSystem", "SecurityKit"],
-            swiftSettings: swiftSettings
-        ),
-        .target(
             name: "SettingsFeature",
             dependencies: [
                 "LancerCore",
@@ -214,7 +208,6 @@ let package = Package(
                 "AgentKit",
                 "SecurityKit",
                 "SyncKit",
-                "KeysFeature",
                 "NotificationsKit",
                 "SSHTransport",
             ],
@@ -238,7 +231,6 @@ let package = Package(
                 "PreviewKit",
                 "SSHTransport",
                 "FilesFeature",
-                "KeysFeature",
                 "SyncKit",
             ],
             swiftSettings: swiftSettings,

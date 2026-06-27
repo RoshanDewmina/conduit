@@ -4,11 +4,10 @@ import DesignSystem
 import LancerCore
 import SSHTransport
 
-/// Actionable counterpart to `DriftFindingsView`: renders each setup-drift
-/// finding with a remediation row driven by the finding's `remediation` type.
-/// "Apply fix" calls the daemon's `agent.drift.remediate` (safe, idempotent,
-/// fail-closed) over the channel and refreshes from the returned report;
-/// "Create policy" / "Ignore" are resolved client-side.
+/// Setup-drift findings with a remediation row driven by each finding's
+/// `remediation` type. "Apply fix" calls the daemon's `agent.drift.remediate`
+/// (safe, idempotent, fail-closed) over the channel and refreshes from the
+/// returned report; "Create policy" / "Ignore" are resolved client-side.
 struct DriftRemediationView: View {
     let initialReport: DriftReport
     let channel: DaemonChannel?

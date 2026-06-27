@@ -566,7 +566,7 @@ public struct FleetView: View {
         }
         .sheet(isPresented: $showingDriftFindings) {
             if let report = focusDrift {
-                DriftFindingsView(report: report)
+                DriftRemediationView(report: report, channel: focusSlot?.channel)
             }
         }
     }

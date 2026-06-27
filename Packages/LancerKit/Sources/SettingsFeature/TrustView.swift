@@ -7,6 +7,7 @@ public struct TrustView: View {
     public let relayHost: String?
     public let onOpenDevices: () -> Void
     public let onOpenRelay: () -> Void
+    public let embedded: Bool
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -14,11 +15,13 @@ public struct TrustView: View {
     public init(
         relayEncrypted: Bool,
         relayHost: String?,
+        embedded: Bool = false,
         onOpenDevices: @escaping () -> Void,
         onOpenRelay: @escaping () -> Void
     ) {
         self.relayEncrypted = relayEncrypted
         self.relayHost = relayHost
+        self.embedded = embedded
         self.onOpenDevices = onOpenDevices
         self.onOpenRelay = onOpenRelay
     }
@@ -37,14 +40,16 @@ public struct TrustView: View {
                 .padding(.bottom, 36)
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(!embedded)
     }
 
     // MARK: - Hero
 
     private var heroSection: some View {
         VStack(spacing: 10) {
-            DSDetailHeader("privacy & trust", onBack: { dismiss() })
+            if !embedded {
+                DSDetailHeader("privacy & trust", onBack: { dismiss() })
+            }
 
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 48))

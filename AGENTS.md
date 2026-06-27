@@ -39,7 +39,8 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 Claude Code: `.claude/skills/` (see `.claude/skills/README.md`). Codex: `~/.codex/skills/` (`$name`).
 Both ported from the same set: `lancer-context-onboarding`, `lancer-verification-gate`,
 `lancer-parallel-handoff`, `vendor-cli-adapter-audit`, `agent-session-history-reader`,
-`lancer-ia-board-workflow`.
+`lancer-ia-board-workflow`. Claude-only (not yet ported to Codex): `lancer-design-handoff`,
+`lancer-dead-view-sweep`, `lancer-onboarding-smoke`.
 
 ## Local workflow conventions
 

@@ -1372,56 +1372,37 @@ public struct AppRoot: View {
     }
 
     private func governanceDestination(env: AppEnvironment) -> some View {
-        let driftCount = env.hostHealthStore.driftByHost.values.reduce(0) { $0 + $1.findings.count }
         let stats = GovernanceStats(
             hostCount: fleetStore.slots.count,
             policyActive: true,
             auditCount: 0,
             auditChainVerified: false,
-            pendingApprovals: sidebarState.pendingApprovalCount,
-            topApprovalSummary: nil,
             presetNames: [],
             providerCount: dispatchAgents().count,
-            providerCoverage: "",
-            driftFindings: driftCount,
-            driftAutoFixable: 0,
-            roleLabel: "owner",
-            onCallLabel: "you"
+            roleLabel: "owner"
         )
-        let driftReport = env.hostHealthStore.driftByHost.values.first
-            ?? DriftReport(root: "", scanned: 0, findings: [])
         return GovernanceHomeView(
             stats: stats,
             onEmergencyStop: { performEmergencyStop() },
             onOpenSidebar: openDrawer,
             destination: { route in
                 switch route {
-                case .approvals:
-                    return AnyView(inboxDestination(env: env))
-                case .presets:
-                    return AnyView(PolicyPresetsView(
+                case .policy:
+                    return AnyView(PolicyHomeView(
                         hosts: ["All hosts"],
-                        onApply: { preset, _ in
+                        onApplyPreset: { preset, _ in
                             let actions = bridgeSessionActions()
                             Task { try? await actions.savePolicyYAML(preset.ruleYAML) }
-                        }
-                    ))
-                case .matrix:
-                    return AnyView(PolicyMatrixView(
-                        policy: .defaultPolicy,
-                        onApply: { policy in
+                        },
+                        onApplyNormalized: { policy in
                             let actions = bridgeSessionActions()
                             Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
                         }
                     ))
                 case .audit:
                     return AnyView(AuditVerifyExportView(repository: env.auditRepo))
-                case .drift:
-                    return AnyView(DriftRemediationView(report: driftReport, channel: daemonChannel))
-                case .team:
-                    return AnyView(TeamRolesView())
-                case .privacy:
-                    return AnyView(TrustView(
+                case .trust:
+                    return AnyView(TrustTeamView(
                         relayEncrypted: relayBridgeIsActive,
                         relayHost: relayHostName,
                         onOpenDevices: { sidebarState.navigate(to: .settings) },

@@ -5,14 +5,13 @@ import DesignSystem
 /// Top-level destinations inside the Governance home. AppRoot maps each to a real
 /// detail view via the `destination` closure — keeping `GovernanceHomeView` decoupled
 /// from the (separately-built) feature views so they can evolve independently.
+/// Three merged Governance surfaces (down from seven cards). Live approvals fold
+/// into Home/Inbox and setup-drift lives under Machines, so Governance holds the
+/// durable governance backbone: rules, the record, and trust.
 public enum GovernanceRoute: Hashable, Sendable {
-    case approvals   // #2 blast-radius + reason
-    case presets     // #1 policy presets
-    case matrix      // #5 cross-provider normalization
-    case audit       // #3 verifiable audit export
-    case drift       // #4 drift → remediation
-    case team        // #6 team & roles (local)
-    case privacy     // #7 E2E privacy proof
+    case policy   // policy presets + cross-provider matrix
+    case audit    // verifiable audit trail (the record)
+    case trust    // privacy/E2E proof + team & roles
 }
 
 /// Stats shown on the dashboard cards. Cheap value type so the gallery can render
@@ -22,29 +21,18 @@ public struct GovernanceStats: Sendable {
     public var policyActive: Bool
     public var auditCount: Int
     public var auditChainVerified: Bool
-    public var pendingApprovals: Int
-    public var topApprovalSummary: String?   // e.g. "rm -rf build/ · prod-api · HIGH"
     public var presetNames: [String]
     public var providerCount: Int
-    public var providerCoverage: String      // e.g. "Claude ✓ · Codex ✓ · OpenCode ⚠"
-    public var driftFindings: Int
-    public var driftAutoFixable: Int
     public var roleLabel: String             // e.g. "owner"
-    public var onCallLabel: String           // e.g. "you"
 
     public init(
         hostCount: Int = 0, policyActive: Bool = false, auditCount: Int = 0,
-        auditChainVerified: Bool = false, pendingApprovals: Int = 0, topApprovalSummary: String? = nil,
-        presetNames: [String] = [], providerCount: Int = 0, providerCoverage: String = "",
-        driftFindings: Int = 0, driftAutoFixable: Int = 0, roleLabel: String = "owner",
-        onCallLabel: String = "you"
+        auditChainVerified: Bool = false, presetNames: [String] = [],
+        providerCount: Int = 0, roleLabel: String = "owner"
     ) {
         self.hostCount = hostCount; self.policyActive = policyActive; self.auditCount = auditCount
-        self.auditChainVerified = auditChainVerified; self.pendingApprovals = pendingApprovals
-        self.topApprovalSummary = topApprovalSummary; self.presetNames = presetNames
-        self.providerCount = providerCount; self.providerCoverage = providerCoverage
-        self.driftFindings = driftFindings; self.driftAutoFixable = driftAutoFixable
-        self.roleLabel = roleLabel; self.onCallLabel = onCallLabel
+        self.auditChainVerified = auditChainVerified; self.presetNames = presetNames
+        self.providerCount = providerCount; self.roleLabel = roleLabel
     }
 }
 
@@ -76,30 +64,16 @@ public struct GovernanceHomeView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     headerCard
-                    section("PENDING APPROVALS", trailing: stats.pendingApprovals > 0 ? "\(stats.pendingApprovals)" : nil) {
-                        card(.approvals, icon: "checklist", title: "Review with blast radius",
-                             subtitle: stats.topApprovalSummary ?? "No actions waiting",
-                             tone: stats.pendingApprovals > 0 ? .orange : .ok)
-                    }
-                    section("POLICY") {
-                        card(.presets, icon: "slider.horizontal.3", title: "Policy presets",
-                             subtitle: stats.presetNames.isEmpty ? "Define rules once, apply to hosts" : stats.presetNames.joined(separator: " · "))
-                        card(.matrix, icon: "square.grid.3x3", title: "Cross-provider policy",
-                             subtitle: stats.providerCoverage.isEmpty ? "Map one rule set to every agent" : stats.providerCoverage)
-                    }
-                    section("EVIDENCE") {
+                    section("GOVERNANCE") {
+                        card(.policy, icon: "slider.horizontal.3", title: "Policy",
+                             subtitle: stats.presetNames.isEmpty
+                                ? "Define rules once · map across every provider"
+                                : "\(stats.presetNames.joined(separator: " · ")) · \(stats.providerCount) providers")
                         card(.audit, icon: "checkmark.seal", title: "Audit trail",
-                             subtitle: "\(stats.auditCount) events · \(stats.auditChainVerified ? "chain verified ✓" : "tap to verify chain")",
+                             subtitle: "\(stats.auditCount) events · \(stats.auditChainVerified ? "chain verified ✓" : "tap to verify")",
                              tone: stats.auditChainVerified ? .ok : .orange)
-                        card(.drift, icon: "exclamationmark.triangle", title: "Setup drift",
-                             subtitle: stats.driftFindings == 0 ? "No drift detected" : "\(stats.driftFindings) findings · \(stats.driftAutoFixable) auto-fixable",
-                             tone: stats.driftFindings == 0 ? .ok : .orange)
-                    }
-                    section("OWNERSHIP") {
-                        card(.team, icon: "person.2", title: "Team & roles",
-                             subtitle: "you: \(stats.roleLabel) · on-call: \(stats.onCallLabel)")
-                        card(.privacy, icon: "lock.shield", title: "Privacy",
-                             subtitle: "Code never leaves your machine · blind E2E relay", tone: .ok)
+                        card(.trust, icon: "lock.shield", title: "Trust & team",
+                             subtitle: "Blind E2E relay · you: \(stats.roleLabel)", tone: .ok)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -221,10 +195,7 @@ public struct GovernancePlaceholder: View {
     GovernanceHomeView(
         stats: GovernanceStats(
             hostCount: 3, policyActive: true, auditCount: 412, auditChainVerified: true,
-            pendingApprovals: 2, topApprovalSummary: "rm -rf build/ · prod-api · HIGH ⚠",
-            presetNames: ["prod-strict", "dev-relaxed"], providerCount: 3,
-            providerCoverage: "Claude ✓ · Codex ✓ · OpenCode ⚠ partial",
-            driftFindings: 3, driftAutoFixable: 2, roleLabel: "owner", onCallLabel: "you"
+            presetNames: ["prod-strict", "dev-relaxed"], providerCount: 3, roleLabel: "owner"
         ),
         onEmergencyStop: {},
         destination: { AnyView(GovernancePlaceholder(title: "\($0)")) }

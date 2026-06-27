@@ -29,7 +29,8 @@ escalation path still exists but is **dormant**. Block card UI lives in
   (`agent-contract.md` §5).
 
 **Run the live SSH session in the simulator** (needs macOS Remote Login on + the login password in
-Keychain `lancer-localhost-ssh`):
+Keychain `lancer-localhost-ssh`). The old `LANCER_GALLERY=session` route is gone; the live session
+is now reached by seeding a localhost host (`LANCER_DAEMON_E2E=1`) and driving the real connect flow:
 
 ```bash
 xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /tmp/lancer-dd build
@@ -37,14 +38,16 @@ xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
 # STANDALONE launch — env prefixed directly; chaining after build/install drops the vars.
-env SIMCTL_CHILD_LANCER_GALLERY=session \
+env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 SIMCTL_CHILD_LANCER_DESTINATION=sessions \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
-    SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
+    SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted dev.lancer.mobile
 sleep 11; xcrun simctl io booted screenshot /tmp/shot.png
 ```
 
-If a launch lands on the normal "Sessions" home, the `SIMCTL_CHILD_*` env didn't propagate —
+`LANCER_DAEMON_E2E=1` seeds a "This Mac (e2e)" localhost host (`DebugSeeder.seedDaemonE2EHostIfRequested`)
+and prefills the SSH password from `LANCER_TEST_PW`; tap it to connect over SSH to 127.0.0.1:22.
+If a launch lands on the normal home with no seeded host, the `SIMCTL_CHILD_*` env didn't propagate —
 re-run as a standalone command. The harness auto-trusts the first host key (debug only) —
 **production paths must keep the TOFU prompt**. Powerline glyphs rendering as `[?]` tofu in some
 TUI status bars is a known cosmetic limitation (bundled mono font lacks the glyphs).
