@@ -6,7 +6,7 @@
 There are **+410 uncommitted lines** of `OnboardingFeature/OnboardingView.swift` changes (triaged in WS-0). These may already advance this workstream substantially — read the current state (and WS-0's decision log) before planning.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md` "Visual verification". Conduit is BYO-host / BYO-key / no-account.
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md` "Visual verification". Lancer is BYO-host / BYO-key / no-account.
 
 **Confirmed state:** onboarding is a single static `OnboardingView` screen + an optional `ProvisioningWizard` (5 steps), gated by `@AppStorage("onboardingSeen")`. No interactive walkthrough, no resume, **no replay**.
 

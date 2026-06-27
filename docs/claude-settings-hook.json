@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/conduit-hook.sh"
+            "command": "bash ~/.claude/hooks/lancer-hook.sh"
           }
         ]
       }

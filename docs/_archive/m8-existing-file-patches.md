@@ -95,10 +95,10 @@ NavigationLink("Snippets") {
 
 ---
 
-## Packages/ConduitKit/Package.swift
+## Packages/LancerKit/Package.swift
 
 `SessionFeature` already lists `PersistenceKit` and `AgentKit` as dependencies — no change needed.
 
 `SettingsFeature` already lists `PersistenceKit` as a dependency — no change needed.
 
-The test target `ConduitKitTests` already includes `PersistenceKit` and `AgentKit` — no change needed.
+The test target `LancerKitTests` already includes `PersistenceKit` and `AgentKit` — no change needed.

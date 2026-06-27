@@ -1,8 +1,8 @@
 # Governed Approvals v1 — Pre-submission Audit: Go push-backend (relay + hosted engine)
 
-**Scope:** `daemon/push-backend/*.go` (APNs approval push relay, governed-approvals **decision relay**, hosted-agents cloud engine). Cross-component context read in `daemon/conduitd/{decision_poll,server,approval}.go` and `Packages/ConduitKit/Sources/SessionFeature/ApprovalRelay.swift`.
+**Scope:** `daemon/push-backend/*.go` (APNs approval push relay, governed-approvals **decision relay**, hosted-agents cloud engine). Cross-component context read in `daemon/lancerd/{decision_poll,server,approval}.go` and `Packages/LancerKit/Sources/SessionFeature/ApprovalRelay.swift`.
 **Branch:** `feat/governed-approvals` (worktree `governed-approvals-audit`).
-**Owner:** Go reviewer-and-fixer — I both reviewed AND implemented fixes in the Go backend. `conduitd`/Swift items are FLAGGED (I do not own Swift; `conduitd` items noted where a Go change there is the right home).
+**Owner:** Go reviewer-and-fixer — I both reviewed AND implemented fixes in the Go backend. `lancerd`/Swift items are FLAGGED (I do not own Swift; `lancerd` items noted where a Go change there is the right home).
 **Go:** go1.26.4. **Method:** adversarial pass (disprove each candidate as reachable/already-guarded before acting), then low-risk fixes + table-driven tests, run to green under `go vet` / `go test` / `go test -race`.
 
 Paths are repo-relative to the worktree root.
@@ -15,16 +15,16 @@ Paths are repo-relative to the worktree root.
 
 ---
 
-## HIGHEST-PRIORITY VERIFICATION — the decision relay (phone POSTs a decision, conduitd polls it)
+## HIGHEST-PRIORITY VERIFICATION — the decision relay (phone POSTs a decision, lancerd polls it)
 
 Contract (confirmed end-to-end):
 - Phone → `POST /approval/decision {approvalId, decision, sessionId, editedToolInput?}` (`ApprovalRelay.swift:112-123`, no auth header sent).
-- conduitd → `GET /decisions?sessionId=...`, server **drains** the bucket, conduitd calls `approvalStore.resolve(id, decision, edited)` per record (`decision_poll.go:71-82`).
+- lancerd → `GET /decisions?sessionId=...`, server **drains** the bucket, lancerd calls `approvalStore.resolve(id, decision, edited)` per record (`decision_poll.go:71-82`).
 
 Result of the 6 mandated checks:
-1. **EXACTLY ONCE** — drain-on-poll gives *at-most-once*; **double-apply on a phone re-POST was possible** (the old handler appended duplicates) → **FIXED** (dedupe by `approvalId`). `conduitd.approvalStore.resolve` is independently idempotent (delete-under-lock, `approval.go:74-89`), so double-apply is now blocked at both layers. A *lost* decision (conduitd polls, then crashes before applying) **fails safe**: conduitd's 120 s wait elapses → auto-deny (`server.go:565`, `approval.go:91-98`).
+1. **EXACTLY ONCE** — drain-on-poll gives *at-most-once*; **double-apply on a phone re-POST was possible** (the old handler appended duplicates) → **FIXED** (dedupe by `approvalId`). `lancerd.approvalStore.resolve` is independently idempotent (delete-under-lock, `approval.go:74-89`), so double-apply is now blocked at both layers. A *lost* decision (lancerd polls, then crashes before applying) **fails safe**: lancerd's 120 s wait elapses → auto-deny (`server.go:565`, `approval.go:91-98`).
 2. **NO SPOOF / NO REPLAY** — **AUTH IS ABSENT** on the decision POST and the poll (and on `/register`, `/approval`, `/run-complete`). This is the **BLOCKER** below. Stale-id replay is a no-op (resolve returns `false` for an unknown/已-resolved id), but a *live* forged `approve`/`approveAlways` for a known `sessionId` is applied verbatim.
-3. **FAIL SAFE** — unknown session on POST now still 204s into a bucket (by design, conduitd may register later) but is bounded/auth-gated; unknown decision verbs are now **rejected** (were silently relayed); malformed/oversized bodies → 400; secrets (APNs key, device/JWT tokens) are never logged. **FIXED/verified.**
+3. **FAIL SAFE** — unknown session on POST now still 204s into a bucket (by design, lancerd may register later) but is bounded/auth-gated; unknown decision verbs are now **rejected** (were silently relayed); malformed/oversized bodies → 400; secrets (APNs key, device/JWT tokens) are never logged. **FIXED/verified.**
 4. **CONCURRENCY** — all shared-map access is under `decisions.Mutex` / `registry.RWMutex`; added a contention test; `-race` clean. Unbounded map growth + no TTL/eviction **FIXED**. No goroutine leaks (janitor is a single long-lived ticker, like the existing reaper/schedule tickers).
 5. **INPUT VALIDATION** — body-size caps + required-field + length checks added to every relay handler. **FIXED.**
 6. **Hosted engine** — Stripe webhook signature verification is **SOUND**; all privileged endpoints are authenticated; credit math is safe. One real TOCTOU on the run-concurrency quota **FIXED**; an agent-quota TOCTOU **FLAGGED**; webhook body cap **FIXED**. Details below.
@@ -37,8 +37,8 @@ Result of the 6 mandated checks:
 `daemon/push-backend/decisions.go:75` (`handlePostDecision`), `:131` (`handlePollDecisions`); also `main.go:125` (`handleRegister`), `:188` (`handleApproval`), `:218` (`handleRunComplete`).
 
 **Issue.** The relay trusts a caller-supplied `sessionId` as both the routing key *and* the implicit capability. There is no credential binding "who may post/poll decisions for this session". Concretely, against the single shared deployment (`conduit-push.fly.dev`):
-- Anyone who learns a `sessionId` can `POST /approval/decision {sessionId, approvalId, decision:"approveAlways"}`. conduitd's poller applies it (`decision_poll.go:80-82`) and the agent's gated command executes — a full bypass of the human-in-the-loop approval.
-- Anyone can `GET /decisions?sessionId=...` and **drain** another session's decisions (DoS: the real conduitd never sees the user's "approve" → the approval times out; plus disclosure of `approvalId`/`decision`/`editedToolInput`).
+- Anyone who learns a `sessionId` can `POST /approval/decision {sessionId, approvalId, decision:"approveAlways"}`. lancerd's poller applies it (`decision_poll.go:80-82`) and the agent's gated command executes — a full bypass of the human-in-the-loop approval.
+- Anyone can `GET /decisions?sessionId=...` and **drain** another session's decisions (DoS: the real lancerd never sees the user's "approve" → the approval times out; plus disclosure of `approvalId`/`decision`/`editedToolInput`).
 - `POST /register` lets anyone overwrite the APNs device token for a session (redirect/suppress push).
 
 `sessionId` is **not** a usable secret even though it may be high-entropy: it is sent in APNs payloads, used as a `GET` query parameter (proxy/access logs), echoed in `/approval`, and logged at register. It is a routing id, not a bearer credential.
@@ -46,9 +46,9 @@ Result of the 6 mandated checks:
 **Reachability.** Direct, unauthenticated, internet-reachable HTTP. This is the "security-blind fallback that postdates the security review" — confirmed.
 
 **Fix status: FLAGGED (full fix) + PARTIAL MITIGATION IMPLEMENTED (safe, merge-ready).**
-- The complete fix is a **per-session capability token** and *requires a coordinated change across components I do not own*: the iOS app (Swift) and `conduitd` must establish a per-session secret over their already-authenticated SSH channel and present it (e.g. `Authorization: Bearer <sessionToken>`) on register/post/poll; the backend binds `sessionId → token` at first register (reject mismatches, fail-closed) and constant-time-compares on every mutate/drain. I did **not** ship a fake "optional" per-request check, because optional auth on a security boundary is bypassable (an attacker simply omits it) — that would be "weakening security to make it work."
+- The complete fix is a **per-session capability token** and *requires a coordinated change across components I do not own*: the iOS app (Swift) and `lancerd` must establish a per-session secret over their already-authenticated SSH channel and present it (e.g. `Authorization: Bearer <sessionToken>`) on register/post/poll; the backend binds `sessionId → token` at first register (reject mismatches, fail-closed) and constant-time-compares on every mutate/drain. I did **not** ship a fake "optional" per-request check, because optional auth on a security boundary is bypassable (an attacker simply omits it) — that would be "weakening security to make it work."
 - What I shipped server-side **now**, all behind no behavioural change to existing clients:
-  - An **optional shared-secret guard** (`relay_security.go:46` `relayAuthorized`, env `APPROVAL_RELAY_SECRET`, constant-time compare via `crypto/subtle`). When set, all five relay endpoints require the bearer secret; when unset, behaviour is unchanged and `main()` logs one loud startup `SECURITY WARNING` (`relay_security.go:warnIfRelayUnauthenticated`, wired in `main.go`). This stops anonymous internet callers once ops + clients are wired. **It is explicitly NOT the full fix** — a single shared secret cannot distinguish one legitimate client from another, so it does not prevent a cross-session spoof by a party already holding the secret. The per-session token above is still required. Enabling it needs conduitd (`server.go:postApprovalPush`, `decision_poll.go`) and the app (`ApprovalRelay.swift`) to send the header — a coordinated rollout.
+  - An **optional shared-secret guard** (`relay_security.go:46` `relayAuthorized`, env `APPROVAL_RELAY_SECRET`, constant-time compare via `crypto/subtle`). When set, all five relay endpoints require the bearer secret; when unset, behaviour is unchanged and `main()` logs one loud startup `SECURITY WARNING` (`relay_security.go:warnIfRelayUnauthenticated`, wired in `main.go`). This stops anonymous internet callers once ops + clients are wired. **It is explicitly NOT the full fix** — a single shared secret cannot distinguish one legitimate client from another, so it does not prevent a cross-session spoof by a party already holding the secret. The per-session token above is still required. Enabling it needs lancerd (`server.go:postApprovalPush`, `decision_poll.go`) and the app (`ApprovalRelay.swift`) to send the header — a coordinated rollout.
   - **Input hardening** that closes the spoof's force-multipliers regardless of auth: body caps, field-length caps, decision allow-list, dedupe, TTL/eviction, size caps (MAJOR/MINOR items below).
 
 **Recommendation for ship gate:** treat per-session-token auth as a release blocker for the decision relay, or disable the poll/POST fallback in production until it lands (the SSH `agent.approval.response` path in `server.go:350-363` is authenticated by the SSH channel and is unaffected).
@@ -82,22 +82,22 @@ Result of the 6 mandated checks:
 ### [MAJOR][correctness] Phone re-POST created duplicate decision records (no dedupe by id)
 `daemon/push-backend/decisions.go:104-124` (dedupe + caps in `handlePostDecision`).
 
-**Issue.** The old handler unconditionally `append`ed, so a phone retry (the relay is best-effort, app may resend) produced two records for one `approvalId`; a single poll returned both and called `resolve` twice. conduitd's `resolve` is idempotent so the *second* call is a no-op today — but that's a fragile cross-component dependency and the prompt requires relay-level dedupe.
+**Issue.** The old handler unconditionally `append`ed, so a phone retry (the relay is best-effort, app may resend) produced two records for one `approvalId`; a single poll returned both and called `resolve` twice. lancerd's `resolve` is idempotent so the *second* call is a no-op today — but that's a fragile cross-component dependency and the prompt requires relay-level dedupe.
 
 **Reachability.** App resends decisions on the no-live-channel path (`ApprovalRelay.swift:73`); plausible on flaky mobile networks.
 
 **Fix status: FIXED.** Idempotent-by-`approvalId`: a re-POST replaces the prior record (keeping the latest verb) rather than appending. Locked test `TestDecisionRelayDedupeByApprovalID`.
 
-### [MAJOR][conduitd / FLAGGED] Poll-applied decisions skip the audit record and the `approveAlways` policy write
-`daemon/conduitd/decision_poll.go:80-82` (calls `p.resolve(...)` and **ignores** the `(event, ok)` result).
+### [MAJOR][lancerd / FLAGGED] Poll-applied decisions skip the audit record and the `approveAlways` policy write
+`daemon/lancerd/decision_poll.go:80-82` (calls `p.resolve(...)` and **ignores** the `(event, ok)` result).
 
 **Issue.** The authenticated paths record a human decision in the audit log and persist `approveAlways` to policy (`server.go:356-362` for RPC, `:567-571` for the SSH wait). The **poll fallback does neither** — it only unblocks the agent. So a decision delivered via the relay is missing from the audit trail, and `approveAlways` chosen on the phone (while no SSH channel is attached) is applied once but **not** saved as an always-rule.
 
-**Reachability.** Any decision made on the phone while conduitd has no live SSH channel (the exact scenario the relay exists for).
+**Reachability.** Any decision made on the phone while lancerd has no live SSH channel (the exact scenario the relay exists for).
 
 **Severity nuance.** Fails *safe* for policy (a dropped always-rule means more prompting later, never less), but the **audit gap is a real governance defect** for a product whose value is the approval trail.
 
-**Fix status: FLAGGED (not fixed — it's a `conduitd` change and crosses the poller/server boundary).** Recommended: give the poller a callback into the server so a poll-resolved event runs `recordHumanDecision` and, for `approveAlways`, `policy.appendAllowAlways` — mirroring `handleMessage`'s `agent.approval.response` case. Low-risk, ~15 lines, but it changes `conduitd` wiring and warrants its own review; I did not silently rewrite it.
+**Fix status: FLAGGED (not fixed — it's a `lancerd` change and crosses the poller/server boundary).** Recommended: give the poller a callback into the server so a poll-resolved event runs `recordHumanDecision` and, for `approveAlways`, `policy.appendAllowAlways` — mirroring `handleMessage`'s `agent.approval.response` case. Low-risk, ~15 lines, but it changes `lancerd` wiring and warrants its own review; I did not silently rewrite it.
 
 ---
 
@@ -105,7 +105,7 @@ Result of the 6 mandated checks:
 
 ### [MINOR][correctness/fail-safe] Decision verb was not validated — garbage relayed downstream
 `daemon/push-backend/decisions.go:49` (`validDecision`), enforced in `handlePostDecision`.
-**Issue.** Any string was accepted as `decision`. conduitd coerces non-`approve*` to `deny` (`server.go:581-585`), so a typo/garbage verb silently becomes a deny — and arbitrary values flow through. **Fix status: FIXED** — allow-list `{approve, approveAlways, deny}`, else 400. Test `TestDecisionRelayValidatesDecisionVerb`.
+**Issue.** Any string was accepted as `decision`. lancerd coerces non-`approve*` to `deny` (`server.go:581-585`), so a typo/garbage verb silently becomes a deny — and arbitrary values flow through. **Fix status: FIXED** — allow-list `{approve, approveAlways, deny}`, else 400. Test `TestDecisionRelayValidatesDecisionVerb`.
 
 ### [MINOR][correctness] Quota TOCTOU on concurrent runs — check-then-append outside the lock
 `daemon/push-backend/agents.go:297` (in-lock recheck), `quotas.go:108` (`countActiveRunsForCustomerLocked`).
@@ -126,7 +126,7 @@ Result of the 6 mandated checks:
 - **Stripe webhook signature verification** — `billing.go:400` `verifyStripeSignature`: parses `t`/`v1`, enforces a 5-min timestamp tolerance, recomputes `HMAC-SHA256(secret, "t.payload")`, compares with `hmac.Equal` (constant-time), and **fails closed when `STRIPE_WEBHOOK_SECRET` is unset**. `handleBillingWebhook` verifies *before* parsing/acting. Correct.
 - **Auth on privileged hosted-engine endpoints** — every `/agents`, `/runs`, `/usage`, `/billing/{credits,quota}`, `/orgs`, `/schedules` handler derives identity server-side from the bearer client-token (`entitlements.go:334` `resolveEntitlementFromBearer`, customerId is never taken from client input) and enforces ownership via `resourceVisibleToEntitlement` (`orgs.go:175`). Runner callbacks (`/runs/{id}/logs|control`, `PATCH /runs/{id}`) use per-run scoped tokens (`run_logs.go:94`), validated against the path id. No missing-auth or IDOR found.
 - **Credit math** — `credits.go:107` `deductCredits`: load→mutate→save under `creditsStore.mu`; prepaid floored at 0, overage tracked separately, `cost<0` rejected at the usage handler (`usage.go:66`), `cost==0` short-circuits. No under/overflow path (float64; rounding is not a security issue).
-- **conduitd idempotency** — `approval.go:74-89` `resolve` deletes under lock and returns `false` on a second call; combined with relay dedupe, decisions apply at most once.
+- **lancerd idempotency** — `approval.go:74-89` `resolve` deletes under lock and returns `false` on a second call; combined with relay dedupe, decisions apply at most once.
 
 ---
 
@@ -157,9 +157,9 @@ $ go vet ./...            # (cwd: daemon/push-backend)
 <clean>
 
 $ go test ./...
-ok      conduit/push-backend    1.030s
+ok      lancer/push-backend    1.030s
 
 $ go test -race ./...
-ok      conduit/push-backend    2.074s
+ok      lancer/push-backend    2.074s
 ```
 57 top-level tests pass (85 including subtests); vet clean; race clean. Baseline was green before the changes.

@@ -17,7 +17,7 @@ export default function HeroSection() {
         </h1>
 
         <p className="font-mono text-sm md:text-base text-dim max-w-[640px] mx-auto leading-relaxed mb-8">
-          Conduit puts everything risky your AI coding agents try — across Claude Code,
+          Lancer puts everything risky your AI coding agents try — across Claude Code,
           Codex, and opencode — into one inbox on your phone. Approve, deny, or edit in
           a tap. Set a policy and most actions never reach you. Your code never leaves
           your machine.

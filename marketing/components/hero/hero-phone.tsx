@@ -221,7 +221,7 @@ export default function HeroPhone() {
               fontFamily: "'Fira Code', monospace",
             }}
           >
-            <span style={{ color: '#34373e' }}>~/conduit</span>
+            <span style={{ color: '#34373e' }}>~/lancer</span>
             <span style={{ color: '#2f43ff' }}>›</span>
             <span>agent approvals</span>
           </div>

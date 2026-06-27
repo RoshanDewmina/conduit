@@ -1,16 +1,16 @@
-# Conduit keyless QR + blind-relay pairing — wire contract
+# Lancer keyless QR + blind-relay pairing — wire contract
 
 This is the **authoritative wire contract** the iOS client must match to pair with a
-`conduitd` daemon through the blind relay. Both ends dial **out** to the relay; the
+`lancerd` daemon through the blind relay. Both ends dial **out** to the relay; the
 relay forwards opaque ciphertext between two peers sharing a pairing channel and
 **never** holds a key, so it can never read plaintext (proven by
 `daemon/push-backend/websocket_relay_test.go` and
-`daemon/conduitd/e2e_loopback_test.go`).
+`daemon/lancerd/e2e_loopback_test.go`).
 
 Go reference implementation:
 - relay forwarding — `daemon/push-backend/websocket_relay.go`
-- daemon client — `daemon/conduitd/e2e_client.go`
-- crypto — `daemon/conduitd/e2e_crypto.go`
+- daemon client — `daemon/lancerd/e2e_client.go`
+- crypto — `daemon/lancerd/e2e_crypto.go`
 
 > **Crypto note:** the channel AEAD is **ChaCha20-Poly1305** (256-bit key, 96-bit
 > nonce), not AES-GCM. The original design brief said "AES-GCM"; the shipped Go
@@ -21,12 +21,12 @@ Go reference implementation:
 
 ## 1. Relay URL format
 
-The relay endpoint is configured on the daemon via the `CONDUIT_RELAY_URL` env var
+The relay endpoint is configured on the daemon via the `LANCER_RELAY_URL` env var
 (default `wss://relay.conduit.dev`). It is a **base** URL with **no path** — the
 client appends `/ws/relay`. Example:
 
 ```
-CONDUIT_RELAY_URL = wss://my-host.tailnet-name.ts.net
+LANCER_RELAY_URL = wss://my-host.tailnet-name.ts.net
 → daemon dials  wss://my-host.tailnet-name.ts.net/ws/relay?role=daemon&code=<code>&publicKey=<b64>
 ```
 
@@ -41,7 +41,7 @@ Query params (all required; relay rejects 400 otherwise):
 | Param       | Value                                                                 |
 |-------------|-----------------------------------------------------------------------|
 | `role`      | `daemon` or `phone`. The daemon connects as `daemon`, the phone as `phone`. |
-| `code`      | The 6-character pairing code from the QR / `conduitd pair`. Daemon mints 6 **digits**; relay only checks `len == 6`. |
+| `code`      | The 6-character pairing code from the QR / `lancerd pair`. Daemon mints 6 **digits**; relay only checks `len == 6`. |
 | `publicKey` | This peer's X25519 **public** key, raw 32 bytes, **base64url, no padding** (`base64.RawURLEncoding`), then URL-query-escaped. |
 
 WebSocket subprotocol: none required. The relay speaks **text frames** carrying JSON.
@@ -110,15 +110,15 @@ The relay re-emits it to the target as:
 Both peers compute the **same** 32-byte key. Inputs:
 
 - `shared = X25519(myPrivateKey, peerPublicKey)` — raw 32-byte ECDH output.
-- `helperID  = "conduit-relay"`  (constant string, both sides)
+- `helperID  = "lancer-relay"`  (constant string, both sides)
 - `helperKeyB64 = base64url(daemonPublicKey)`  — **always the daemon's** public key
 - `appKeyB64    = base64url(phonePublicKey)`    — **always the phone's** public key
 
 Then:
 
 ```
-salt = SHA256("conduit-pairing:" + helperID)            // 32 bytes
-info = "conduit-v1:" + helperKeyB64 + ":" + appKeyB64    // ASCII bytes
+salt = SHA256("lancer-pairing:" + helperID)            // 32 bytes
+info = "lancer-v1:" + helperKeyB64 + ":" + appKeyB64    // ASCII bytes
 key  = HKDF-Expand(HKDF-Extract(salt, shared), info, 32) // golang.org/x/crypto/hkdf
 ```
 
@@ -129,7 +129,7 @@ calls:
 
 ```go
 deriveSessionKey(daemonPriv, phonePubB64,
-    "conduit-relay",
+    "lancer-relay",
     base64url(daemonPub),   // helperKeyB64 = own (daemon) key
     phonePubB64)            // appKeyB64    = peer (phone) key
 ```
@@ -138,7 +138,7 @@ So the **phone** (role `phone`) must call:
 
 ```
 deriveSessionKey(phonePriv, daemonPubB64,
-    "conduit-relay",
+    "lancer-relay",
     daemonPubB64,           // helperKeyB64 = peer (daemon) key
     base64url(phonePub))    // appKeyB64    = own (phone) key
 ```
@@ -166,7 +166,7 @@ base64 everywhere is `base64.RawURLEncoding` (URL-safe alphabet, **no padding**)
 
 - AEAD: **ChaCha20-Poly1305** (`golang.org/x/crypto/chacha20poly1305`, 32-byte key).
 - Nonce: 12 random bytes per frame.
-- AAD (additional authenticated data): the ASCII string **`conduit-frame-v1`**.
+- AAD (additional authenticated data): the ASCII string **`lancer-frame-v1`**.
 - `ciphertext` and `tag` are split: Go seals to `ciphertext||tag` then stores the
   last 16 bytes as `tag` and the rest as `ciphertext`. To decrypt, re-concatenate
   `ciphertext || tag` and `Open` with the nonce and AAD.

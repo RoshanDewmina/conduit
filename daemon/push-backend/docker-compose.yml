@@ -1,8 +1,8 @@
 services:
-  conduit-relay:
+  lancer-relay:
     build: .
-    image: conduit-relay
-    container_name: conduit-relay
+    image: lancer-relay
+    container_name: lancer-relay
     ports:
       - "8080:8080"
     env_file:

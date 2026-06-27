@@ -1,5 +1,5 @@
-// web/lib/relay/types.ts — shared contract for the Conduit web dashboard.
-// Mirrors daemon relay payloads (ConduitCore/E2ERelayMessage.swift + daemon/push-backend/PAIRING_PROTOCOL.md).
+// web/lib/relay/types.ts — shared contract for the Lancer web dashboard.
+// Mirrors daemon relay payloads (LancerCore/E2ERelayMessage.swift + daemon/push-backend/PAIRING_PROTOCOL.md).
 
 export type RiskTier = "low" | "medium" | "high" | "critical";
 

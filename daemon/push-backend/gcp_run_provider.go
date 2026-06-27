@@ -41,13 +41,13 @@ func (p gcpCloudRunProvider) Launch(agent *Agent, run *AgentRun, env RunnerEnv) 
 
 	// Per-execution env overrides (run-specific secrets injected at launch time)
 	execEnvOverrides := []*runv2.GoogleCloudRunV2EnvVar{
-		{Name: "CONDUIT_RUN_ID", Value: env.RunID},
-		{Name: "CONDUIT_RUNNER_TOKEN", Value: env.RunnerToken},
-		{Name: "CONDUIT_CONTROL_PLANE_URL", Value: env.ControlPlaneURL},
-		{Name: "CONDUIT_COMMAND_ARGV", Value: buildCommandArgv(env.Command)},
-		{Name: "CONDUIT_MODEL", Value: env.Model},
-		{Name: "CONDUIT_OPENROUTER_KEY", Value: env.OpenRouterKey},
-		{Name: "CONDUIT_AGENT_ID", Value: env.AgentID},
+		{Name: "LANCER_RUN_ID", Value: env.RunID},
+		{Name: "LANCER_RUNNER_TOKEN", Value: env.RunnerToken},
+		{Name: "LANCER_CONTROL_PLANE_URL", Value: env.ControlPlaneURL},
+		{Name: "LANCER_COMMAND_ARGV", Value: buildCommandArgv(env.Command)},
+		{Name: "LANCER_MODEL", Value: env.Model},
+		{Name: "LANCER_OPENROUTER_KEY", Value: env.OpenRouterKey},
+		{Name: "LANCER_AGENT_ID", Value: env.AgentID},
 	}
 
 	runReq := &runv2.GoogleCloudRunV2RunJobRequest{
@@ -81,7 +81,7 @@ func (p gcpCloudRunProvider) Cancel(handle string) error {
 }
 
 // buildCommandArgv converts a command string to a JSON array string suitable
-// for CONDUIT_COMMAND_ARGV. Safe: the runner uses exec.Command (no shell expansion).
+// for LANCER_COMMAND_ARGV. Safe: the runner uses exec.Command (no shell expansion).
 // Defined here; shared by lightsail_provider.go and fly_provider.go via the same package.
 func buildCommandArgv(command string) string {
 	parts := strings.Fields(command)

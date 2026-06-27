@@ -10,12 +10,12 @@ const POINTS = [
   },
   {
     label: "Privacy policy",
-    body: "No account required. No behavioural analytics. Keys stored in iOS Keychain — never synced, never transmitted to Conduit servers.",
+    body: "No account required. No behavioural analytics. Keys stored in iOS Keychain — never synced, never transmitted to Lancer servers.",
     href: "/privacy",
   },
   {
     label: "Self-hosted relay",
-    body: "Run your own push relay. No mandatory Conduit cloud in the approval loop. End-to-end encryption of the relay is [PLANNED].",
+    body: "Run your own push relay. No mandatory Lancer cloud in the approval loop. End-to-end encryption of the relay is [PLANNED].",
     href: "/trust",
   },
 ];
@@ -30,7 +30,7 @@ export default function TrustSection() {
             your code stays your code<span className="text-accent">_</span>
           </h2>
           <p className="font-mono text-sm text-dim leading-relaxed">
-            Conduit is designed so that you never have to trust a cloud. The
+            Lancer is designed so that you never have to trust a cloud. The
             bridge runs on your machine. Credentials stay in your keychain.
             Source never leaves your host. Everything else is a verifiable
             choice.

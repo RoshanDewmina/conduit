@@ -38,7 +38,7 @@ type schedulesData struct {
 var schedulesStore = struct {
 	path string
 }{
-	path: dataFilePath("SCHEDULES_FILE", "conduit-schedules.json"),
+	path: dataFilePath("SCHEDULES_FILE", "lancer-schedules.json"),
 }
 
 func initSchedulesStore() {

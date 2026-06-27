@@ -1,9 +1,9 @@
-name: Conduit
+name: Lancer
 options:
-  bundleIdPrefix: dev.conduit
+  bundleIdPrefix: dev.lancer
   deploymentTarget:
     iOS: "26.0"
-  xcodeVersion: "26.0"
+  xcodeVersion: "27.0"
   createIntermediateGroups: true
   developmentLanguage: en
 
@@ -14,7 +14,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     # Must stay YES: the Approve/Reject Live Activity & widget buttons are backed
-    # by App Intents (ApprovalActionIntent / ConduitWidgetIntent). With extraction
+    # by App Intents (ApprovalActionIntent / LancerWidgetIntent). With extraction
     # off, the Metadata.appintents bundle isn't generated and the system can fail
     # to resolve those intents in Release → lock-screen approvals silently no-op.
     ENABLE_APP_INTENTS_METADATA_EXTRACTION: "YES"
@@ -22,29 +22,35 @@ settings:
     OTHER_SWIFT_FLAGS: "-warn-implicit-overrides"
     # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
-    # Example: https://conduit-push-HASH-ts.a.run.app
-    CONDUIT_PUSH_BACKEND_URL: "https://35.201.3.231.sslip.io"
+    # Example: https://lancer-push-HASH-ts.a.run.app
+    LANCER_PUSH_BACKEND_URL: "https://conduit-push-y4wpy6zeva-ts.a.run.app"
+    # Standard account configuration (Supabase project sfuqarvoxfupvadsvejb).
+    # The PUBLISHABLE/anon key is a PUBLIC client key (RLS-protected) and ships in
+    # the app binary by design, so it's committed here. NEVER put the service-role
+    # key (or the JWT secret) here — those are server-side secrets.
+    LANCER_SUPABASE_URL: "https://sfuqarvoxfupvadsvejb.supabase.co"
+    LANCER_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmdXFhcnZveGZ1cHZhZHN2ZWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5OTU1MTEsImV4cCI6MjA5NzU3MTUxMX0.qQCNAR3VQvilyySnx7037bicekJt3jL_TNH2GnZ_CaE"
 
 packages:
-  ConduitKit:
-    path: Packages/ConduitKit
+  LancerKit:
+    path: Packages/LancerKit
   # Crash reporting — privacy-friendly, self-hostable. No ad/tracking data collected.
-  # Set sentryDSN in Conduit/ConduitApp.swift before release. See ARCHITECTURE.md §19.
+  # Set sentryDSN in Lancer/LancerApp.swift before release. See ARCHITECTURE.md §19.
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
     from: 8.0.0
 
 targets:
-  Conduit:
+  Lancer:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: Conduit
+      - path: Lancer
     resources:
-      - path: Conduit/Resources
+      - path: Lancer/Resources
     info:
-      path: Conduit/Info.plist
+      path: Lancer/Info.plist
       properties:
         # Drive the bundle version strings from the build settings so a single
         # MARKETING_VERSION / CURRENT_PROJECT_VERSION bump is authoritative
@@ -52,10 +58,10 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchStoryboardName: LaunchScreen
-        NSCameraUsageDescription: "Conduit uses the camera to scan the pairing QR code shown by your host when connecting a new bridge."
-        NSFaceIDUsageDescription: "Conduit uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
-        NSMicrophoneUsageDescription: "Conduit uses the microphone so you can dictate terminal commands and agent prompts by voice."
-        NSSpeechRecognitionUsageDescription: "Conduit transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
+        NSCameraUsageDescription: "Lancer uses the camera to scan the pairing QR code shown by your host when connecting a new bridge."
+        NSFaceIDUsageDescription: "Lancer uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
+        NSMicrophoneUsageDescription: "Lancer uses the microphone so you can dictate terminal commands and agent prompts by voice."
+        NSSpeechRecognitionUsageDescription: "Lancer transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
         NSSupportsLiveActivities: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -70,44 +76,49 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         CFBundleURLTypes:
-          - CFBundleURLName: dev.conduit.mobile
+          - CFBundleURLName: dev.lancer.mobile
             CFBundleURLSchemes:
-              - conduit
-        # Push backend HTTPS URL — read at runtime by ConduitApp.swift.
-        # Set CONDUIT_PUSH_BACKEND_URL in build settings to the Cloud Run service URL.
-        CONDUIT_PUSH_BACKEND_URL: "$(CONDUIT_PUSH_BACKEND_URL)"
+              - lancer
+        # Push backend HTTPS URL — read at runtime by LancerApp.swift.
+        # Set LANCER_PUSH_BACKEND_URL in build settings to the Cloud Run service URL.
+        LANCER_PUSH_BACKEND_URL: "$(LANCER_PUSH_BACKEND_URL)"
+        # Standard-account (Supabase) config — read at runtime by AccountConfiguration.fromBundle.
+        # Empty build-setting values leave standard sign-in unavailable (offline pairing still works);
+        # inject real values via local/CI build settings, never committed.
+        LANCER_SUPABASE_URL: "$(LANCER_SUPABASE_URL)"
+        LANCER_SUPABASE_PUBLISHABLE_KEY: "$(LANCER_SUPABASE_PUBLISHABLE_KEY)"
         # iCloud/CloudKit gate, read at runtime by SyncKit/CloudSync.swift.
-        # MUST stay false while building with Conduit-DeviceTesting.entitlements
+        # MUST stay false while building with Lancer-DeviceTesting.entitlements
         # (no icloud-services entitlement). Flip to true together with the
         # entitlements swap below, once the iCloud capability + CloudKit
         # container are enabled in the Apple Developer portal.
-        CONDUIT_ICLOUD_ENABLED: true
+        LANCER_ICLOUD_ENABLED: true
         ITSAppUsesNonExemptEncryption: false
     # NOTE: iCloud + Push (aps-environment) require a paid Apple Developer
-    # account. Entitlements are already pointing at `Conduit.entitlements`
+    # account. Entitlements are already pointing at `Lancer.entitlements`
     # (push + CloudKit declared). To activate them:
     # 1. Enroll in the Apple Developer Program ($99/yr) or sign in with a paid Apple ID
     # 2. Enable Push Notifications + CloudKit container in App Store Connect
-    # 3. Flip CONDUIT_ICLOUD_ENABLED above to true
+    # 3. Flip LANCER_ICLOUD_ENABLED above to true
     # See docs/ship-gate-owner-steps.md for the complete checklist.
     entitlements:
-      path: Conduit/Conduit.entitlements
+      path: Lancer/Lancer.entitlements
       properties:
         aps-environment: production
         com.apple.developer.icloud-services:
           - CloudKit
         com.apple.developer.icloud-container-identifiers:
-          - iCloud.dev.conduit.mobile
-        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)dev.conduit.mobile
+          - iCloud.dev.lancer.mobile
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)dev.lancer.mobile
         keychain-access-groups:
-          - $(AppIdentifierPrefix)dev.conduit.mobile
+          - $(AppIdentifierPrefix)dev.lancer.mobile
         com.apple.security.application-groups:
-          - group.dev.conduit.mobile
+          - group.dev.lancer.mobile
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         SWIFT_EMIT_LOC_STRINGS: "YES"
         DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -115,41 +126,37 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
     dependencies:
-      - package: ConduitKit
+      - package: LancerKit
         product: AppFeature
       - package: Sentry
         product: Sentry
       - sdk: AppIntents.framework
-      - target: ConduitLiveActivityWidget
+      - target: LancerLiveActivityWidget
         embed: true
-      - target: ConduitWidget
+      - target: LancerWidget
         embed: true
-      - target: ConduitWatchWidget
-        embed: true
+      # LancerWatch is intentionally NOT embedded in the iOS app: an embedded
+      # watchOS app/extension makes the iOS .app un-installable on the iOS
+      # Simulator via simctl/XcodeBuildMCP (watchOS-arch binary isn't runnable
+      # there), which is the project's authoritative verification path. The
+      # target still builds standalone via its own scheme. Re-embed only once a
+      # paired-watch-sim or device flow replaces the simctl install path.
 
-  ConduitWatchWidget:
-    type: app-extension
+  LancerWatch:
+    type: application
     platform: watchOS
     deploymentTarget: "11.0"
     sources:
-      - path: ConduitWatchWidget
+      - path: LancerWatch
     info:
-      path: ConduitWatchWidget/Info.plist
-      properties:
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+      path: LancerWatch/Info.plist
     entitlements:
-      path: ConduitWatchWidget/ConduitWatchWidget.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.dev.conduit.mobile
+      path: LancerWatch/LancerWatch.entitlements
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.watchwidget
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.watchapp
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         WATCHOS_DEPLOYMENT_TARGET: "11.0"
         TARGETED_DEVICE_FAMILY: "4"
         CODE_SIGN_STYLE: Automatic
@@ -157,30 +164,70 @@ targets:
         SWIFT_VERSION: "6.2"
         ENABLE_BITCODE: "NO"
     dependencies:
-      - package: ConduitKit
-        product: ConduitCore
+      - package: LancerKit
+        product: LancerCore
+      - sdk: WatchConnectivity.framework
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - target: LancerWatchWidget
+        embed: true
+
+  LancerWatchWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: LancerWatchWidget
+    info:
+      path: LancerWatchWidget/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).LancerWatchWidgetBundle"
+    entitlements:
+      path: LancerWatchWidget/LancerWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.lancer.mobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.watchwidget
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 2
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+    dependencies:
+      - package: LancerKit
+        product: LancerCore
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: AppIntents.framework
 
-  ConduitLiveActivityWidget:
+  LancerLiveActivityWidget:
     type: app-extension
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: ConduitLiveActivityWidget
+      - path: LancerLiveActivityWidget
     info:
-      path: ConduitLiveActivityWidget/Info.plist
+      path: LancerLiveActivityWidget/Info.plist
       properties:
+        CFBundleDisplayName: Lancer Live Activity
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.liveactivity
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.liveactivity
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
@@ -188,36 +235,37 @@ targets:
         SWIFT_VERSION: "6.2"
         ENABLE_BITCODE: "NO"
     dependencies:
-      - package: ConduitKit
+      - package: LancerKit
         product: SessionFeature
       - sdk: AppIntents.framework
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: ActivityKit.framework
 
-  ConduitWidget:
+  LancerWidget:
     type: app-extension
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: ConduitWidget
+      - path: LancerWidget
     info:
-      path: ConduitWidget/Info.plist
+      path: LancerWidget/Info.plist
       properties:
+        CFBundleDisplayName: Lancer Widget
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: ConduitWidget/ConduitWidget.entitlements
+      path: LancerWidget/LancerWidget.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.dev.conduit.mobile
+          - group.dev.lancer.mobile
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.widget
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.widget
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
@@ -225,40 +273,77 @@ targets:
         SWIFT_VERSION: "6.2"
         ENABLE_BITCODE: "NO"
     dependencies:
-      - package: ConduitKit
-        product: ConduitCore
+      - package: LancerKit
+        product: LancerCore
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: AppIntents.framework
 
-  ConduitUITests:
+  LancerUITests:
     type: bundle.ui-testing
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: ConduitUITests
+      - path: LancerUITests
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.conduit.mobile.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.uitests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
         GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
-      - target: Conduit
+      - target: Lancer
       - sdk: AppIntents.framework
 
+  LancerMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: LancerMac
+    info:
+      path: LancerMac/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSUIElement: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mac
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 2
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        ENABLE_HARDENED_RUNTIME: "YES"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        SWIFT_VERSION: "6.2"
+    dependencies:
+      - package: LancerKit
+        product: HostControlKit
+      - package: LancerKit
+        product: DesignSystem
+
 schemes:
-  Conduit:
+  Lancer:
     build:
       targets:
-        Conduit: all
-        ConduitUITests: [test]
+        Lancer: all
+        LancerUITests: [test]
     run:
       config: Debug
-      storeKitConfiguration: Conduit/Conduit.storekit
+      storeKitConfiguration: Lancer/Lancer.storekit
     test:
       config: Debug
       targets:
-        - ConduitUITests
+        - LancerUITests
+    archive:
+      config: Release
+
+  LancerMac:
+    build:
+      targets:
+        LancerMac: all
+    run:
+      config: Debug
     archive:
       config: Release

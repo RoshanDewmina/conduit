@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Get Conduit — Approve your agents. Keep your code.",
+  title: "Get Lancer — Approve your agents. Keep your code.",
   description:
-    "Get Conduit for iPhone. Join the TestFlight beta — governed approvals for Claude Code, Codex & opencode. No account required.",
+    "Get Lancer for iPhone. Join the TestFlight beta — governed approvals for Claude Code, Codex & opencode. No account required.",
 };
 
 const TESTFLIGHT_URL = "https://testflight.apple.com/join/PLACEHOLDER";
-const BUNDLE_ID = "dev.conduit.mobile";
+const BUNDLE_ID = "dev.lancer.mobile";
 
 export default function DownloadPage() {
   return (
@@ -19,7 +19,7 @@ export default function DownloadPage() {
             href="/"
             className="font-display text-sm font-semibold tracking-tight text-fg"
           >
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </Link>
         </nav>
         <div className="spectrum-line h-px w-full mt-4" />
@@ -31,7 +31,7 @@ export default function DownloadPage() {
             TESTFLIGHT BETA
           </p>
           <h1 className="font-display text-4xl font-bold text-fg mb-4 leading-none">
-            get conduit<span className="text-accent">_</span>
+            get lancer<span className="text-accent">_</span>
           </h1>
           <p className="font-mono text-base text-dim max-w-xl mx-auto leading-relaxed">
             Governed approvals for AI coding agents on your phone. BYO host,

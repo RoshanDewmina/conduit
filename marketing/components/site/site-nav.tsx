@@ -27,7 +27,7 @@ export default function SiteNav() {
             href="/"
             className="font-display font-bold text-base tracking-tight text-fg shrink-0"
           >
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-6">

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Conduit",
+  title: "Privacy Policy — Lancer",
   description:
-    "Conduit does not use analytics, advertising SDKs, or tracking. Your SSH credentials, API keys, and host configurations stay on your device.",
+    "Lancer does not use analytics, advertising SDKs, or tracking. Your SSH credentials, API keys, and host configurations stay on your device.",
 };
 
 export default function PrivacyPage() {
@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             href="/"
             className="font-display text-sm font-semibold tracking-tight text-fg"
           >
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </Link>
         </nav>
         <div className="spectrum-line h-px w-full mt-4" />
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
         <p className="font-mono text-sm text-faint mb-10">
           Last updated: <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">{`{{DATE}}`}</code>. Bundle ID:{" "}
           <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">
-            dev.conduit.mobile
+            dev.lancer.mobile
           </code>
         </p>
 
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
               1. introduction<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit (the &ldquo;App&rdquo;) is an iOS application that lets
+              Lancer (the &ldquo;App&rdquo;) is an iOS application that lets
               you approve, deny, and review actions initiated by AI coding
               agents (Claude Code, Codex, opencode) running on your own
               computer or server. The App is published by{" "}
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
               of the App worldwide.
             </p>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3 font-semibold text-fg">
-              Conduit does not use analytics SDKs, advertising networks, or
+              Lancer does not use analytics SDKs, advertising networks, or
               third-party tracking of any kind. We do not sell your data.
             </p>
           </section>
@@ -119,24 +119,24 @@ export default function PrivacyPage() {
               opt in to push notifications for remote approval alerts, the App
               registers a device token with Apple Push Notification service
               (APNs). This token is a random identifier that Apple assigns to
-              your device &mdash; Conduit does not read or store it as raw
+              your device &mdash; Lancer does not read or store it as raw
               text; we forward it to our push relay so Apple can deliver
               notifications to your device.
             </p>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3">
               <strong className="text-fg">CloudKit sync (optional).</strong>{" "}
               If you enable iCloud sync, your host list and snippets are stored
-              in your personal Apple CloudKit container. Conduit does not have
+              in your personal Apple CloudKit container. Lancer does not have
               access to your CloudKit data &mdash; it is governed by
               Apple&rsquo;s privacy policy.
             </p>
 
             <h3 className="font-display text-base font-semibold text-fg mt-6 mb-3">
-              2.3 Data transmitted to Conduit&rsquo;s push relay
+              2.3 Data transmitted to Lancer&rsquo;s push relay
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
               When you enable remote approval alerts, your app sends the
-              following to Conduit&rsquo;s push notification relay (hosted on
+              following to Lancer&rsquo;s push notification relay (hosted on
               Fly.io):
             </p>
             <ul className="font-mono text-sm text-dim space-y-1 mt-3 list-none pl-4 border-l border-line">
@@ -169,8 +169,8 @@ export default function PrivacyPage() {
               2.5 Purchase data (if applicable)
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              If you purchase Conduit Pro (a one-time in-app purchase) or a
-              future subscription, Apple processes the transaction. Conduit
+              If you purchase Lancer Pro (a one-time in-app purchase) or a
+              future subscription, Apple processes the transaction. Lancer
               receives only a receipt token from StoreKit that confirms the
               purchase &mdash; we never see your payment card details.
             </p>
@@ -278,7 +278,7 @@ export default function PrivacyPage() {
             </p>
 
             <h3 className="font-display text-base font-semibold text-fg mt-6 mb-3">
-              5.2 Data on Conduit&rsquo;s push relay
+              5.2 Data on Lancer&rsquo;s push relay
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
               APNs device tokens and session identifiers are retained for as
@@ -292,7 +292,7 @@ export default function PrivacyPage() {
               5.3 No account = no server-side personal data
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit does not operate a user account system. There is no
+              Lancer does not operate a user account system. There is no
               registration, login, or profile stored on our servers.
               Consequently, there is no server-side personal data to delete
               beyond the push tokens described above.
@@ -302,7 +302,7 @@ export default function PrivacyPage() {
               5.4 Requesting deletion
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              To request deletion of any data held by Conduit&rsquo;s services,
+              To request deletion of any data held by Lancer&rsquo;s services,
               contact{" "}
               <strong className="text-fg">
                 [privacy@conduit.dev &mdash; placeholder: insert support email]
@@ -338,7 +338,7 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3">
-              <strong className="text-fg">Conduit is not a backup
+              <strong className="text-fg">Lancer is not a backup
               service.</strong> We cannot recover your SSH keys, host
               configurations, or session history if you lose your device.
               Maintain independent backups of your SSH credentials.
@@ -350,7 +350,7 @@ export default function PrivacyPage() {
               7. children<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit is not directed at children under 13 and does not
+              Lancer is not directed at children under 13 and does not
               knowingly collect personal information from children. If you
               believe a child has provided personal data, contact{" "}
               <strong className="text-fg">[privacy@conduit.dev]</strong>.

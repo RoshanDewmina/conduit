@@ -93,7 +93,7 @@ func TestHandleRegisterValidation(t *testing.T) {
 	}
 }
 
-// conduitd's /register call carrying only a relayToken must upsert it without
+// lancerd's /register call carrying only a relayToken must upsert it without
 // clobbering an APNs token the app registered separately (and vice versa).
 func TestRegisterUpsertsRelayAndApnsIndependently(t *testing.T) {
 	resetRegistryForTest()
@@ -106,12 +106,12 @@ func TestRegisterUpsertsRelayAndApnsIndependently(t *testing.T) {
 		t.Fatalf("app register: status = %d, want 204", recApp.Code)
 	}
 
-	// conduitd registers the relayToken for the same session.
+	// lancerd registers the relayToken for the same session.
 	cdBody, _ := json.Marshal(map[string]string{"sessionId": "sess-A", "relayToken": "rt-xyz"})
 	recCD := httptest.NewRecorder()
 	handleRegister(recCD, httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(cdBody)))
 	if recCD.Code != http.StatusNoContent {
-		t.Fatalf("conduitd register: status = %d, want 204", recCD.Code)
+		t.Fatalf("lancerd register: status = %d, want 204", recCD.Code)
 	}
 
 	registry.RLock()
@@ -225,12 +225,12 @@ func TestRelayProductionDeploymentFromEnv(t *testing.T) {
 		want bool
 	}{
 		{"local", map[string]string{}, false},
-		{"fly", map[string]string{"FLY_APP_NAME": "conduit-push"}, true},
-		{"cloud run service", map[string]string{"K_SERVICE": "conduit-push"}, true},
-		{"cloud run revision", map[string]string{"K_REVISION": "conduit-push-0001"}, true},
-		{"explicit production", map[string]string{"CONDUIT_ENV": "production"}, true},
+		{"fly", map[string]string{"FLY_APP_NAME": "lancer-push"}, true},
+		{"cloud run service", map[string]string{"K_SERVICE": "lancer-push"}, true},
+		{"cloud run revision", map[string]string{"K_REVISION": "lancer-push-0001"}, true},
+		{"explicit production", map[string]string{"LANCER_ENV": "production"}, true},
 		{"app env prod", map[string]string{"APP_ENV": "prod"}, true},
-		{"staging", map[string]string{"CONDUIT_ENV": "staging"}, false},
+		{"staging", map[string]string{"LANCER_ENV": "staging"}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

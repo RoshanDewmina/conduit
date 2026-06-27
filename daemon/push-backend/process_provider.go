@@ -8,27 +8,27 @@ import (
 )
 
 // processProvider runs the agent-runner binary as a local process.
-// Enabled by setting CONDUIT_LOCAL_RUNNER=1. The runner binary path
-// defaults to "agent-runner" (must be in PATH) or CONDUIT_RUNNER_PATH.
+// Enabled by setting LANCER_LOCAL_RUNNER=1. The runner binary path
+// defaults to "agent-runner" (must be in PATH) or LANCER_RUNNER_PATH.
 type processProvider struct{}
 
 func (p processProvider) Launch(agent *Agent, run *AgentRun, env RunnerEnv) (string, error) {
-	runnerPath := os.Getenv("CONDUIT_RUNNER_PATH")
+	runnerPath := os.Getenv("LANCER_RUNNER_PATH")
 	if runnerPath == "" {
 		runnerPath = "agent-runner"
 	}
 	cmd := exec.Command(runnerPath)
-	// The runner requires CONDUIT_COMMAND_ARGV (a JSON array) and exits if it is
-	// missing — it never parses CONDUIT_COMMAND. Send the same ARGV form the cloud
+	// The runner requires LANCER_COMMAND_ARGV (a JSON array) and exits if it is
+	// missing — it never parses LANCER_COMMAND. Send the same ARGV form the cloud
 	// providers use so the local e2e path matches production exactly.
 	cmd.Env = append(os.Environ(),
-		"CONDUIT_RUN_ID="+env.RunID,
-		"CONDUIT_RUNNER_TOKEN="+env.RunnerToken,
-		"CONDUIT_CONTROL_PLANE_URL="+env.ControlPlaneURL,
-		"CONDUIT_COMMAND_ARGV="+buildCommandArgv(env.Command),
-		"CONDUIT_MODEL="+env.Model,
-		"CONDUIT_OPENROUTER_KEY="+env.OpenRouterKey,
-		"CONDUIT_AGENT_ID="+env.AgentID,
+		"LANCER_RUN_ID="+env.RunID,
+		"LANCER_RUNNER_TOKEN="+env.RunnerToken,
+		"LANCER_CONTROL_PLANE_URL="+env.ControlPlaneURL,
+		"LANCER_COMMAND_ARGV="+buildCommandArgv(env.Command),
+		"LANCER_MODEL="+env.Model,
+		"LANCER_OPENROUTER_KEY="+env.OpenRouterKey,
+		"LANCER_AGENT_ID="+env.AgentID,
 	)
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start local runner: %w", err)

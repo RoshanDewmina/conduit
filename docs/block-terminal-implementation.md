@@ -62,7 +62,7 @@ on any localhost shell. A 6s probe timeout (`integrationProbeTimeout`) falls bac
 to "blockless live PTY" (raw) if no `133;A` ever arrives (Phase 7).
 
 Agent **approvals** (the `patch`/Approve/Deny tool cards in the design) are a
-separate, structured path via `conduitd` (remote daemon) → `ApprovalIngest` /
+separate, structured path via `lancerd` (remote daemon) → `ApprovalIngest` /
 `DaemonChannel` → Inbox + `RiskScorer`. That is not part of the shell-block
 pipeline above; it is the future "Phase 3" layer.
 
@@ -143,7 +143,7 @@ pipeline above; it is the future "Phase 3" layer.
 
 ## 4. What did NOT work / dead ends (so we don't retry them)
 
-- **Swapping the POSIX bootstrap for the zsh-specific `conduit-init.zsh`.** They
+- **Swapping the POSIX bootstrap for the zsh-specific `lancer-init.zsh`.** They
   are functionally identical (both use `add-zsh-hook precmd/preexec`, emit A/C/D,
   no B). The `~ %` noise was the escalation bug (§3.2), not the script. No swap
   needed; `bootstrapForPOSIXShells()`'s `ZSH_VERSION` branch is correct.
@@ -160,42 +160,42 @@ There is no web renderer; the only way to see the UI is the iOS Simulator.
 # prerequisites
 xcrun simctl list devices booted                      # need a booted sim
 nc -z 127.0.0.1 22 && echo "sshd up"                  # macOS Remote Login on
-security find-generic-password -s conduit-localhost-ssh -w   # password present
+security find-generic-password -s lancer-localhost-ssh -w   # password present
 
 # build + install
 cd /Users/roshansilva/Documents/command-center
-xcodebuild -project Conduit.xcodeproj -scheme Conduit \
+xcodebuild -project Lancer.xcodeproj -scheme Lancer \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -derivedDataPath /tmp/conduit-dd build
-xcrun simctl install booted /tmp/conduit-dd/Build/Products/Debug-iphonesimulator/Conduit.app
+  -derivedDataPath /tmp/lancer-dd build
+xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/Lancer.app
 
 # launch the LIVE block session (real SSH) — run as a STANDALONE command
-xcrun simctl terminate booted dev.conduit.mobile 2>/dev/null; sleep 2
-PW="$(security find-generic-password -s conduit-localhost-ssh -w)"
-env SIMCTL_CHILD_CONDUIT_GALLERY=session \
-    SIMCTL_CHILD_CONDUIT_TEST_HOST=127.0.0.1 \
-    SIMCTL_CHILD_CONDUIT_TEST_USER="$USER" \
-    SIMCTL_CHILD_CONDUIT_TEST_PW="$PW" \
-    SIMCTL_CHILD_CONDUIT_TEST_AUTOCMD='claude' \
-    xcrun simctl launch booted dev.conduit.mobile
+xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
+PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
+env SIMCTL_CHILD_LANCER_GALLERY=session \
+    SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
+    SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
+    SIMCTL_CHILD_LANCER_TEST_PW="$PW" \
+    SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
+    xcrun simctl launch booted dev.lancer.mobile
 
 sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 ```
 
 ### Debug entry points
-- `CONDUIT_GALLERY=session` → `DebugSessionHarness` → real `SessionView` +
+- `LANCER_GALLERY=session` → `DebugSessionHarness` → real `SessionView` +
   `SessionViewModel` over SSH (the live block pipeline).
-- `CONDUIT_GALLERY=blocks` → `BlocksReviewScreen` → `ChatTranscriptView` over a
+- `LANCER_GALLERY=blocks` → `BlocksReviewScreen` → `ChatTranscriptView` over a
   mock `BlockRenderer` (no SSH; static design reference for the card states).
-- `CONDUIT_TERMINAL_TEST=1` → `DebugTerminalHarness` → raw-only `LiveTerminalView`
-  (routed in `Conduit/ConduitApp.swift`, not `AppRoot`).
+- `LANCER_TERMINAL_TEST=1` → `DebugTerminalHarness` → raw-only `LiveTerminalView`
+  (routed in `Lancer/LancerApp.swift`, not `AppRoot`).
 - The `review` gallery also has **Live SSH Terminal**, **Block Transcript**, and
   **Live Session** buttons.
 
 ### Env vars the harnesses read
-- `CONDUIT_TEST_HOST` (default `127.0.0.1`), `CONDUIT_TEST_PORT` (`22`),
-  `CONDUIT_TEST_USER` (`roshansilva`), `CONDUIT_TEST_PW`.
-- `CONDUIT_TEST_AUTOCMD` — a command auto-run on connect (so you can see a block
+- `LANCER_TEST_HOST` (default `127.0.0.1`), `LANCER_TEST_PORT` (`22`),
+  `LANCER_TEST_USER` (`roshansilva`), `LANCER_TEST_PW`.
+- `LANCER_TEST_AUTOCMD` — a command auto-run on connect (so you can see a block
   form without typing). For `DebugSessionHarness` it routes through
   `host.startupCommand`; for `DebugTerminalHarness` through `LiveTerminalModel.autoCommand`.
 
@@ -244,7 +244,7 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
   fresh session is harmless (Warp shows `clear` blocks too) but could be suppressed.
 - **Resize / block interactions** (collapse, star, search, long-press) verified by
   code review only — need manual simulator interaction to confirm visually.
-- **Agent approval cards** (conduitd `patch`/Approve/Deny, `RiskScorer`, Inbox) —
+- **Agent approval cards** (lancerd `patch`/Approve/Deny, `RiskScorer`, Inbox) —
   the structured Phase 3 layer — not started.
 
 ## 8. Key files
@@ -254,7 +254,7 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 | Block store + per-block live grid | `TerminalEngine/BlockRenderer.swift` |
 | OSC 133 / alt-screen parsing | `TerminalEngine/PTYBridge.swift` |
 | TUI heuristic | `TerminalEngine/AnsiSGRParser.swift` (`TUIDetector`) |
-| Integration scripts | `TerminalEngine/ShellIntegrationScript.swift`, `Resources/conduit-init.*` |
+| Integration scripts | `TerminalEngine/ShellIntegrationScript.swift`, `Resources/lancer-init.*` |
 | Block card UI | `SessionFeature/Chat/ToolCardView.swift`, `ChatTranscriptView.swift` |
 | Composer | `SessionFeature/Chat/ChatInputBar.swift`, `DesignSystem/TerminalSafeTextField.swift` |
 | Canonical block card (design system) | `DesignSystem/Components/Composites.swift` (`DSBlockCard`) |

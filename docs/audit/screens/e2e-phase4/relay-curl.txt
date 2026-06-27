@@ -1,5 +1,5 @@
 ############################################################
-# Conduit approval-relay auth contract — curl transcript
+# Lancer approval-relay auth contract — curl transcript
 # backend: push-backend @ http://127.0.0.1:8077  (APPROVAL_RELAY_SECRET=test-secret-123)
 # commit: f6a36a55ce6ca5d32f0e2b6c1eb2c0eed8ec39b6
 # date:   2026-06-12T19:41:25Z

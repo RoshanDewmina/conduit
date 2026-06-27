@@ -4,48 +4,48 @@
 
 **Goal:** Ship one defining App Store feature — a **cross-vendor governed approval inbox**: your AI coding agents (Claude Code, Codex, opencode) running on *your own* machine ask permission on your phone; you decide in one tap **even when the app was closed**; a policy you set auto-handles the safe 90%; every decision is logged to an audit trail; you can glance your fleet's status and spend.
 
-**Architecture:** Three already-built layers — iOS app (`Packages/ConduitKit/`, SwiftUI), the resident daemon `conduitd` (Go, on the dev's host), and the `push-backend` control plane (Go, APNs + relay). ~85% of this feature already exists and is wired; this plan **assembles, hardens, tests, and closes the two real gaps**: (1) a **backend decision-relay** so a tapped decision reaches `conduitd` with no live SSH session (today it silently queues until SSH reconnects, then conduitd times out and auto-denies), and (2) a **governance-first information architecture** (Inbox / Fleet / Activity at the top level; the terminal demoted to a power-user depth).
+**Architecture:** Three already-built layers — iOS app (`Packages/LancerKit/`, SwiftUI), the resident daemon `lancerd` (Go, on the dev's host), and the `push-backend` control plane (Go, APNs + relay). ~85% of this feature already exists and is wired; this plan **assembles, hardens, tests, and closes the two real gaps**: (1) a **backend decision-relay** so a tapped decision reaches `lancerd` with no live SSH session (today it silently queues until SSH reconnects, then lancerd times out and auto-denies), and (2) a **governance-first information architecture** (Inbox / Fleet / Activity at the top level; the terminal demoted to a power-user depth).
 
-**Tech Stack:** Swift 6.2 / iOS 26 / SwiftUI (`@Observable`, actors, `AsyncStream`), GRDB, Citadel SSH; Go 1.22 (`conduitd`, `push-backend`, `agent-runner`); APNs (token auth, `.p8`); xcodegen; Swift Testing (`@Test`) + Go `testing`.
+**Tech Stack:** Swift 6.2 / iOS 26 / SwiftUI (`@Observable`, actors, `AsyncStream`), GRDB, Citadel SSH; Go 1.22 (`lancerd`, `push-backend`, `agent-runner`); APNs (token auth, `.p8`); xcodegen; Swift Testing (`@Test`) + Go `testing`.
 
 ---
 
 ## 0. CONTEXT — read this before touching anything
 
-You have **zero prior context** assumed. Read this whole section first. The canonical state-of-project briefing is `docs/CONDUIT_PROJECT_DOSSIER.md` — skim it. Architecture invariants you must not regress are in `docs/agent-contract.md` and `CLAUDE.md`.
+You have **zero prior context** assumed. Read this whole section first. The canonical state-of-project briefing is `docs/LANCER_PROJECT_DOSSIER.md` — skim it. Architecture invariants you must not regress are in `docs/agent-contract.md` and `CLAUDE.md`.
 
 ### 0.1 What the product is
-Conduit is an iOS app for **steering** AI coding agents that run on the developer's own computer/server. The phone is where you get notified an agent needs a decision, approve/deny/edit it, see what ran autonomously, and glance the fleet. A small Go daemon, **`conduitd`**, runs on the host: it intercepts each agent tool call (via the agent's PreToolUse hook), applies a **policy** (auto-allow safe / auto-deny dangerous / **ask** the human for the ambiguous), records an **audit log**, and survives SSH disconnects. The **`push-backend`** sends APNs alerts and (after this plan) relays decisions back.
+Lancer is an iOS app for **steering** AI coding agents that run on the developer's own computer/server. The phone is where you get notified an agent needs a decision, approve/deny/edit it, see what ran autonomously, and glance the fleet. A small Go daemon, **`lancerd`**, runs on the host: it intercepts each agent tool call (via the agent's PreToolUse hook), applies a **policy** (auto-allow safe / auto-deny dangerous / **ask** the human for the ambiguous), records an **audit log**, and survives SSH disconnects. The **`push-backend`** sends APNs alerts and (after this plan) relays decisions back.
 
 ### 0.2 The ONE feature this plan ships
 **Cross-vendor Governed Approvals.** Everything else (fleet glance, activity feed) is a *supporting surface* that reuses data the daemon already produces. The defining, hard-to-copy claim: *one governed approval inbox across Claude Code + Codex + opencode, on your own host, with a policy that handles the boring 90% and an audit trail — and you can decide from your phone even when you're away.* First-party tools (Anthropic Remote Control, OpenAI Codex mobile) do single-vendor mobile approvals; none govern *across* vendors on *your* host with *your* policy and audit.
 
 ### 0.3 What already exists (DO NOT rebuild — verify and wire)
-- **Wire protocol carries structured fields.** `ApprovalEvent` (Go, `daemon/conduitd/approval.go:10`) and `ApprovalPendingParams` (Swift, `Packages/ConduitKit/Sources/ConduitCore/ConduitDProtocol.swift:49`) both carry `toolName`, `toolUseID`, `agentSessionID`, `toolInput`, plus `files`/`touchesGit`/`touchesNetwork`/`matchedRule` (blast radius). All three vendor hooks pass these (`docs/conduit-hook.sh`, `docs/codex-conduit-hook.sh`, `docs/opencode-conduit-hook.sh`).
-- **Rich approval card UI.** `DSApprovalCard` (`Packages/ConduitKit/Sources/DesignSystem/Components/ChatComponents.swift:150`) renders agent badge, risk badge, action sentence, host/path, command block, and DENY / ALLOW ALWAYS / EDIT & RUN / APPROVE actions. `DSBlastRadiusBanner` (`.../Components/DSBlastRadiusBanner.swift:1`) renders git/network/files. `InboxView` (`Packages/ConduitKit/Sources/InboxFeature/InboxView.swift`) dispatches card-per-kind.
-- **Decision round-trip (connected).** `LiveInboxViewModel.decide` → `DaemonChannel.respond(approvalId:decision:editedToolInput:)` (`Packages/ConduitKit/Sources/SSHTransport/DaemonChannel.swift:116`) → conduitd `agent.approval.response` → `approvalStore.resolve` (`daemon/conduitd/approval.go:74`) → hook unblocks. `.approvedAlways` already maps to wire `"approveAlways"` and conduitd persists it to `~/.conduit/policy-always.yaml`.
-- **Push (alert) path.** conduitd `postApprovalPush` POSTs to `push-backend /approval` (`daemon/conduitd/server.go:594`); `handleApproval` looks up the device token and calls `pushApproval` (APNs, token auth) (`daemon/push-backend/main.go:124,226`). iOS registers via `Notifications.registerDeviceToken` and `DaemonChannel.registerDevice` (`AppRoot.swift:963`); `ConduitNotificationDelegate` handles lock-screen Approve/Reject actions (`Conduit/ConduitApp.swift:99`), posting `.conduitApprovalAction`, observed in `AppRoot.swift:299`.
-- **Audit feed view.** `BridgeAuditFeedView(entries:)` ("while you were away") exists (`Packages/ConduitKit/Sources/InboxFeature/BridgeAuditFeedView.swift:7`); fed by `DaemonChannel.tailAudit` → `[AuditLogEntry]`.
-- **Fleet store + cross-vendor status.** `FleetStore` (≤3 slots; `Packages/ConduitKit/Sources/AppFeature/FleetStore.swift`) with `refreshBridgeStatus()`. Per-vendor status `AgentVendorStatus` (agent, loggedIn, model, sessionCount, usageUSD; `Packages/ConduitKit/Sources/ConduitCore/AgentStatusProtocol.swift:14`) is produced by conduitd `collectAgentStatus` for all three vendors (`daemon/conduitd/agent_status.go:29`).
-- **Notification filtering type.** `NotificationFilter` (minRisk / enabledAgents / quiet hours; `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift`).
-- **Policy presets (iOS-side only).** `PolicyEditorView` has Strict/Balanced/Permissive YAML presets (`Packages/ConduitKit/Sources/SettingsFeature/PolicyEditorView.swift`). conduitd has `DefaultDocument()` (`daemon/conduitd/policy/types.go:76`) but **no named presets**.
+- **Wire protocol carries structured fields.** `ApprovalEvent` (Go, `daemon/lancerd/approval.go:10`) and `ApprovalPendingParams` (Swift, `Packages/LancerKit/Sources/LancerCore/LancerDProtocol.swift:49`) both carry `toolName`, `toolUseID`, `agentSessionID`, `toolInput`, plus `files`/`touchesGit`/`touchesNetwork`/`matchedRule` (blast radius). All three vendor hooks pass these (`docs/lancer-hook.sh`, `docs/codex-lancer-hook.sh`, `docs/opencode-lancer-hook.sh`).
+- **Rich approval card UI.** `DSApprovalCard` (`Packages/LancerKit/Sources/DesignSystem/Components/ChatComponents.swift:150`) renders agent badge, risk badge, action sentence, host/path, command block, and DENY / ALLOW ALWAYS / EDIT & RUN / APPROVE actions. `DSBlastRadiusBanner` (`.../Components/DSBlastRadiusBanner.swift:1`) renders git/network/files. `InboxView` (`Packages/LancerKit/Sources/InboxFeature/InboxView.swift`) dispatches card-per-kind.
+- **Decision round-trip (connected).** `LiveInboxViewModel.decide` → `DaemonChannel.respond(approvalId:decision:editedToolInput:)` (`Packages/LancerKit/Sources/SSHTransport/DaemonChannel.swift:116`) → lancerd `agent.approval.response` → `approvalStore.resolve` (`daemon/lancerd/approval.go:74`) → hook unblocks. `.approvedAlways` already maps to wire `"approveAlways"` and lancerd persists it to `~/.lancer/policy-always.yaml`.
+- **Push (alert) path.** lancerd `postApprovalPush` POSTs to `push-backend /approval` (`daemon/lancerd/server.go:594`); `handleApproval` looks up the device token and calls `pushApproval` (APNs, token auth) (`daemon/push-backend/main.go:124,226`). iOS registers via `Notifications.registerDeviceToken` and `DaemonChannel.registerDevice` (`AppRoot.swift:963`); `LancerNotificationDelegate` handles lock-screen Approve/Reject actions (`Lancer/LancerApp.swift:99`), posting `.lancerApprovalAction`, observed in `AppRoot.swift:299`.
+- **Audit feed view.** `BridgeAuditFeedView(entries:)` ("while you were away") exists (`Packages/LancerKit/Sources/InboxFeature/BridgeAuditFeedView.swift:7`); fed by `DaemonChannel.tailAudit` → `[AuditLogEntry]`.
+- **Fleet store + cross-vendor status.** `FleetStore` (≤3 slots; `Packages/LancerKit/Sources/AppFeature/FleetStore.swift`) with `refreshBridgeStatus()`. Per-vendor status `AgentVendorStatus` (agent, loggedIn, model, sessionCount, usageUSD; `Packages/LancerKit/Sources/LancerCore/AgentStatusProtocol.swift:14`) is produced by lancerd `collectAgentStatus` for all three vendors (`daemon/lancerd/agent_status.go:29`).
+- **Notification filtering type.** `NotificationFilter` (minRisk / enabledAgents / quiet hours; `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift`).
+- **Policy presets (iOS-side only).** `PolicyEditorView` has Strict/Balanced/Permissive YAML presets (`Packages/LancerKit/Sources/SettingsFeature/PolicyEditorView.swift`). lancerd has `DefaultDocument()` (`daemon/lancerd/policy/types.go:76`) but **no named presets**.
 
 ### 0.4 The two real gaps this plan closes
-1. **Decide-while-away is unreliable (THE differentiator).** When the app isn't foreground-connected over SSH, a tapped decision is only written to the local DB and **queued in `ApprovalRelay`** (`Packages/ConduitKit/Sources/SessionFeature/ApprovalRelay.swift`); it reaches conduitd only when SSH reconnects. If that doesn't happen within conduitd's 120 s wait, conduitd **auto-denies**. Fix (Milestone 2): a backend decision-relay — phone POSTs the decision to `push-backend`; `conduitd` polls `push-backend` for decisions addressed to its session and resolves them. No live SSH required.
+1. **Decide-while-away is unreliable (THE differentiator).** When the app isn't foreground-connected over SSH, a tapped decision is only written to the local DB and **queued in `ApprovalRelay`** (`Packages/LancerKit/Sources/SessionFeature/ApprovalRelay.swift`); it reaches lancerd only when SSH reconnects. If that doesn't happen within lancerd's 120 s wait, lancerd **auto-denies**. Fix (Milestone 2): a backend decision-relay — phone POSTs the decision to `push-backend`; `lancerd` polls `push-backend` for decisions addressed to its session and resolves them. No live SSH required.
 2. **Terminal-first IA.** Today's tabs are `hosts / inbox / library / settings` with the terminal as home (`Tab` enum, `AppRoot.swift:107`). The product is a governance cockpit. Fix (Milestone 6): top-level `Inbox / Fleet / Activity / Settings`; terminal reachable from a connected session, not a root tab.
 
 ### 0.5 Where things live (quick map)
-- iOS package: `Packages/ConduitKit/` (`swift build` / `swift test` from there). Targets under `Sources/`: `AppFeature`, `ConduitCore`, `SSHTransport`, `AgentKit`, `InboxFeature`, `SettingsFeature`, `NotificationsKit`, `SessionFeature`, `DesignSystem`, …
-- App shell (AppDelegate / entry): `Conduit/ConduitApp.swift`. Xcode project generated by `xcodegen generate` from `project.yml`.
-- Daemons: `daemon/conduitd/` (resident), `daemon/push-backend/` (control plane), `daemon/agent-runner/` (cloud runner — untouched here).
-- Tests: `Packages/ConduitKit/Tests/ConduitKitTests/` (Swift), `daemon/*/**_test.go` (Go).
-- Hooks: `docs/conduit-hook.sh`, `docs/codex-conduit-hook.sh`, `docs/opencode-conduit-hook.sh`.
+- iOS package: `Packages/LancerKit/` (`swift build` / `swift test` from there). Targets under `Sources/`: `AppFeature`, `LancerCore`, `SSHTransport`, `AgentKit`, `InboxFeature`, `SettingsFeature`, `NotificationsKit`, `SessionFeature`, `DesignSystem`, …
+- App shell (AppDelegate / entry): `Lancer/LancerApp.swift`. Xcode project generated by `xcodegen generate` from `project.yml`.
+- Daemons: `daemon/lancerd/` (resident), `daemon/push-backend/` (control plane), `daemon/agent-runner/` (cloud runner — untouched here).
+- Tests: `Packages/LancerKit/Tests/LancerKitTests/` (Swift), `daemon/*/**_test.go` (Go).
+- Hooks: `docs/lancer-hook.sh`, `docs/codex-lancer-hook.sh`, `docs/opencode-lancer-hook.sh`.
 
 ### 0.6 Build & verify commands (use throughout)
-- iOS engine build: `cd Packages/ConduitKit && swift build`
-- iOS engine tests: `cd Packages/ConduitKit && swift test`
-- Full app target (catches strict-concurrency breaks SPM misses): `mcp__XcodeBuildMCP__build_sim` (scheme `Conduit`); first call `mcp__XcodeBuildMCP__session_show_defaults` once.
-- conduitd: `cd daemon/conduitd && go build ./... && go test ./...`
+- iOS engine build: `cd Packages/LancerKit && swift build`
+- iOS engine tests: `cd Packages/LancerKit && swift test`
+- Full app target (catches strict-concurrency breaks SPM misses): `mcp__XcodeBuildMCP__build_sim` (scheme `Lancer`); first call `mcp__XcodeBuildMCP__session_show_defaults` once.
+- lancerd: `cd daemon/lancerd && go build ./... && go test ./...`
 - push-backend: `cd daemon/push-backend && go test ./...`
 - Project regen: `xcodegen generate`
 - **Invariant:** zero new Swift 6 concurrency warnings; never edit two files from two agents at once; never commit to `master` (work on this branch `feat/product-depth-sprint` or a child).
@@ -57,7 +57,7 @@ Conduit is an iOS app for **steering** AI coding agents that run on the develope
 - **Decision-relay (Milestone 2) is the defining capability** and is on the critical path. If the owner wants an even faster *first* submission, Milestone 2 may be deferred and the App Store copy changed from "decide from anywhere" to "tap to open and decide" — see Milestone 8, Task 8.1 note. Default: include it.
 
 ### 0.8 Glossary (use these exact objects)
-`Approval` (`ConduitCore/Approval.swift`): `id, sessionID, agent (AgentSource: claudeCode|codex|opencode|cursor|devin|unknown), kind (Kind: command|patch|fileWrite|fileDelete|network|credential|browser|callMCP|askQuestion), command?, patch?, cwd, risk (Risk: low|medium|high|critical), decision? (Decision: approved|approvedAlways|rejected|expired), toolName?, toolUseID?, agentSessionID?, toolInput?, blastRadius?`. `AgentVendorStatus`: `agent, loggedIn?, model?, sessionCount, runningCount?, usageUSD?, usagePeriod?, displayName`. `AuditLogEntry`: `timestamp, action, agent?, kind?, command?, effect?, rule?, approvalId?`.
+`Approval` (`LancerCore/Approval.swift`): `id, sessionID, agent (AgentSource: claudeCode|codex|opencode|cursor|devin|unknown), kind (Kind: command|patch|fileWrite|fileDelete|network|credential|browser|callMCP|askQuestion), command?, patch?, cwd, risk (Risk: low|medium|high|critical), decision? (Decision: approved|approvedAlways|rejected|expired), toolName?, toolUseID?, agentSessionID?, toolInput?, blastRadius?`. `AgentVendorStatus`: `agent, loggedIn?, model?, sessionCount, runningCount?, usageUSD?, usagePeriod?, displayName`. `AuditLogEntry`: `timestamp, action, agent?, kind?, command?, effect?, rule?, approvalId?`.
 
 ---
 
@@ -71,30 +71,30 @@ Conduit is an iOS app for **steering** AI coding agents that run on the develope
 
 - [ ] **Step 1: Build + test the iOS engine**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -20`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -20`
 Expected: `Build complete!` (no errors).
 
 - [ ] **Step 2: Run the iOS engine test suite, record the count**
 
-Run: `cd Packages/ConduitKit && swift test 2>&1 | tail -25`
+Run: `cd Packages/LancerKit && swift test 2>&1 | tail -25`
 Expected: all tests pass. Record the number (e.g. "327 tests, 0 failures") in a scratch note — this is your regression floor.
 
 - [ ] **Step 3: Build + test both daemons**
 
-Run: `cd daemon/conduitd && go build ./... && go test ./... 2>&1 | tail -20`
+Run: `cd daemon/lancerd && go build ./... && go test ./... 2>&1 | tail -20`
 Then: `cd daemon/push-backend && go build ./... && go test ./... 2>&1 | tail -20`
 Expected: `ok` for each package; record counts.
 
 - [ ] **Step 4: Confirm the app target builds (strict concurrency)**
 
-Call `mcp__XcodeBuildMCP__session_show_defaults` once; if scheme/sim unset, `mcp__XcodeBuildMCP__session_set_defaults` (scheme `Conduit`, an installed simulator runtime). Then `mcp__XcodeBuildMCP__build_sim`.
+Call `mcp__XcodeBuildMCP__session_show_defaults` once; if scheme/sim unset, `mcp__XcodeBuildMCP__session_set_defaults` (scheme `Lancer`, an installed simulator runtime). Then `mcp__XcodeBuildMCP__build_sim`.
 Expected: build succeeds. If it fails on a missing watchOS runtime, build the iOS app target only and note it (known footgun — see `CLAUDE.md`).
 
 - [ ] **Step 5: Commit a baseline marker (docs only)**
 
 ```bash
 git checkout -b feat/governed-approvals
-git commit --allow-empty -m "chore: baseline before governed-approvals milestone (engine N tests, conduitd M, push-backend K green)"
+git commit --allow-empty -m "chore: baseline before governed-approvals milestone (engine N tests, lancerd M, push-backend K green)"
 ```
 
 ---
@@ -106,7 +106,7 @@ git commit --allow-empty -m "chore: baseline before governed-approvals milestone
 ### Task 1.1: Go test — all three vendor agents normalize into a structured `ApprovalEvent`
 
 **Files:**
-- Test: `daemon/conduitd/hook_parity_test.go` (create)
+- Test: `daemon/lancerd/hook_parity_test.go` (create)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -115,7 +115,7 @@ package main
 
 import "testing"
 
-// Each vendor's hook invokes `conduitd agent-hook` with the same flags; this
+// Each vendor's hook invokes `lancerd agent-hook` with the same flags; this
 // asserts the agent name normalization + structured fields survive into an
 // ApprovalEvent for all three vendors.
 func TestAgentHookBuildsStructuredEventPerVendor(t *testing.T) {
@@ -151,12 +151,12 @@ func TestAgentHookBuildsStructuredEventPerVendor(t *testing.T) {
 
 - [ ] **Step 2: Run it — expect a compile failure**
 
-Run: `cd daemon/conduitd && go test ./... -run TestAgentHookBuildsStructuredEventPerVendor 2>&1 | tail -15`
+Run: `cd daemon/lancerd && go test ./... -run TestAgentHookBuildsStructuredEventPerVendor 2>&1 | tail -15`
 Expected: FAIL — `undefined: buildApprovalEventForTest`.
 
 - [ ] **Step 3: Extract the event-building logic so it's testable**
 
-In `daemon/conduitd/hook.go`, refactor the inline event construction (currently lines ~50–69 inside `runAgentHook`) into a small pure helper, and call it from `runAgentHook`. Add:
+In `daemon/lancerd/hook.go`, refactor the inline event construction (currently lines ~50–69 inside `runAgentHook`) into a small pure helper, and call it from `runAgentHook`. Add:
 
 ```go
 // buildApprovalEventForTest constructs the ApprovalEvent exactly as runAgentHook
@@ -194,29 +194,29 @@ Then replace the inline `event := ApprovalEvent{...}` in `runAgentHook` with:
 
 - [ ] **Step 4: Run the test — expect PASS**
 
-Run: `cd daemon/conduitd && go test ./... -run TestAgentHookBuildsStructuredEventPerVendor 2>&1 | tail -8`
+Run: `cd daemon/lancerd && go test ./... -run TestAgentHookBuildsStructuredEventPerVendor 2>&1 | tail -8`
 Expected: PASS.
 
 - [ ] **Step 5: Full daemon suite still green, then commit**
 
-Run: `cd daemon/conduitd && go test ./... 2>&1 | tail -5`
+Run: `cd daemon/lancerd && go test ./... 2>&1 | tail -5`
 Expected: `ok`.
 ```bash
-git add daemon/conduitd/hook.go daemon/conduitd/hook_parity_test.go
-git commit -m "test(conduitd): cross-vendor structured ApprovalEvent parity (claude/codex/opencode)"
+git add daemon/lancerd/hook.go daemon/lancerd/hook_parity_test.go
+git commit -m "test(lancerd): cross-vendor structured ApprovalEvent parity (claude/codex/opencode)"
 ```
 
 ### Task 1.2: Swift test — `ApprovalPendingParams` from each vendor maps to a rich `Approval`
 
 **Files:**
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/ApprovalParityTests.swift` (create)
+- Test: `Packages/LancerKit/Tests/LancerKitTests/ApprovalParityTests.swift` (create)
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
 import Testing
 import Foundation
-@testable import ConduitCore
+@testable import LancerCore
 
 @Suite struct ApprovalParityTests {
     private func params(agent: String) -> ApprovalPendingParams {
@@ -249,24 +249,24 @@ import Foundation
 
 - [ ] **Step 2: Run it — expect PASS or a precise failure**
 
-Run: `cd Packages/ConduitKit && swift test --filter ApprovalParityTests 2>&1 | tail -15`
+Run: `cd Packages/LancerKit && swift test --filter ApprovalParityTests 2>&1 | tail -15`
 Expected: PASS (the mapping computed-properties exist on `ApprovalPendingParams`). If it FAILS, the failure pinpoints a real decode bug to fix before proceeding — fix it, do not weaken the test.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Packages/ConduitKit/Tests/ConduitKitTests/ApprovalParityTests.swift
+git add Packages/LancerKit/Tests/LancerKitTests/ApprovalParityTests.swift
 git commit -m "test(ios): cross-vendor ApprovalPendingParams → Approval mapping parity"
 ```
 
 ### Task 1.3: Approval card shows the tool name + diff affordance for patches
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift` (the `pendingCard(_:)` default branch, ~line 134–193 — the agent that mapped this file showed `DSApprovalCard(...)` is constructed here).
+- Modify: `Packages/LancerKit/Sources/InboxFeature/InboxView.swift` (the `pendingCard(_:)` default branch, ~line 134–193 — the agent that mapped this file showed `DSApprovalCard(...)` is constructed here).
 
 - [ ] **Step 1: Read the current default-branch construction**
 
-Run: `cd Packages/ConduitKit && grep -n "DSApprovalCard(" Sources/InboxFeature/InboxView.swift`
+Run: `cd Packages/LancerKit && grep -n "DSApprovalCard(" Sources/InboxFeature/InboxView.swift`
 Read the surrounding `pendingCard` function so you match its existing argument wiring exactly.
 
 - [ ] **Step 2: Ensure the card passes `onViewDiff` when a patch exists and surfaces the tool name in the action string**
@@ -278,19 +278,19 @@ In the default branch, where `DSApprovalCard(...)` is built, make these guarante
 
 - [ ] **Step 3: Build the engine**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8`
 Expected: `Build complete!`.
 
 - [ ] **Step 4: Visual check in the gallery**
 
 Build+install+launch the inbox gallery route and screenshot:
-`mcp__XcodeBuildMCP__build_sim` → `install_app_sim` → `launch_app_sim` with `env: { CONDUIT_GALLERY: "review" }` → `screenshot`.
+`mcp__XcodeBuildMCP__build_sim` → `install_app_sim` → `launch_app_sim` with `env: { LANCER_GALLERY: "review" }` → `screenshot`.
 Expected: an approval card shows the agent badge, a risk badge, an action line that names the tool, the command block, and (for a patch sample) a VIEW DIFF button. Confirm visually.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/InboxFeature/InboxView.swift
+git add Packages/LancerKit/Sources/InboxFeature/InboxView.swift
 git commit -m "feat(inbox): approval card names the tool and exposes View Diff for patches"
 ```
 
@@ -298,9 +298,9 @@ git commit -m "feat(inbox): approval card names the tool and exposes View Diff f
 
 ## Milestone 2 — Decide-from-anywhere (backend decision-relay) — THE defining capability
 
-**Goal:** a decision tapped on the phone reaches `conduitd` and unblocks the agent **without a live SSH session**. Phone POSTs the decision to `push-backend`; `conduitd` polls `push-backend` for decisions addressed to its registered session and resolves them through the same path the SSH channel uses. This is what makes "decide from your phone, even when away" true.
+**Goal:** a decision tapped on the phone reaches `lancerd` and unblocks the agent **without a live SSH session**. Phone POSTs the decision to `push-backend`; `lancerd` polls `push-backend` for decisions addressed to its registered session and resolves them through the same path the SSH channel uses. This is what makes "decide from your phone, even when away" true.
 
-### Task 2.1: push-backend — store phone-posted decisions, serve them to conduitd
+### Task 2.1: push-backend — store phone-posted decisions, serve them to lancerd
 
 **Files:**
 - Create: `daemon/push-backend/decisions.go`
@@ -333,7 +333,7 @@ func TestDecisionRelayPostThenPoll(t *testing.T) {
 		t.Fatalf("post: status = %d, want 204", rec.Code)
 	}
 
-	// conduitd polls for that session; gets exactly one decision and it drains.
+	// lancerd polls for that session; gets exactly one decision and it drains.
 	rec2 := httptest.NewRecorder()
 	handlePollDecisions(rec2, httptest.NewRequest(http.MethodGet, "/decisions?sessionId=sess-A", nil))
 	if rec2.Code != http.StatusOK {
@@ -390,8 +390,8 @@ import (
 )
 
 // decisionRecord is a phone-posted approval decision awaiting pickup by the
-// conduitd resident that owns the session. In-memory is sufficient: a decision
-// only needs to outlive conduitd's ~120s approval wait.
+// lancerd resident that owns the session. In-memory is sufficient: a decision
+// only needs to outlive lancerd's ~120s approval wait.
 type decisionRecord struct {
 	ApprovalID      string `json:"approvalId"`
 	Decision        string `json:"decision"` // approve | approveAlways | deny
@@ -467,19 +467,19 @@ Expected: PASS (both).
 Run: `cd daemon/push-backend && go test ./... 2>&1 | tail -5`
 ```bash
 git add daemon/push-backend/decisions.go daemon/push-backend/decisions_test.go daemon/push-backend/main.go
-git commit -m "feat(push-backend): decision relay — phone posts decision, conduitd polls"
+git commit -m "feat(push-backend): decision relay — phone posts decision, lancerd polls"
 ```
 
-### Task 2.2: conduitd — poll push-backend for decisions and resolve approvals
+### Task 2.2: lancerd — poll push-backend for decisions and resolve approvals
 
 **Files:**
-- Create: `daemon/conduitd/decision_poll.go`
-- Create (test): `daemon/conduitd/decision_poll_test.go`
-- Modify: `daemon/conduitd/server.go` (construct the poller; start it on `conduit.device.register`)
+- Create: `daemon/lancerd/decision_poll.go`
+- Create (test): `daemon/lancerd/decision_poll_test.go`
+- Modify: `daemon/lancerd/server.go` (construct the poller; start it on `lancer.device.register`)
 
 - [ ] **Step 1: Confirm the resolve signature and server fields**
 
-Run: `cd daemon/conduitd && grep -n "func (s \*approvalStore) resolve" approval.go && grep -n "approvals \*approvalStore" server.go && grep -n "case \"conduit.device.register\"" server.go`
+Run: `cd daemon/lancerd && grep -n "func (s \*approvalStore) resolve" approval.go && grep -n "approvals \*approvalStore" server.go && grep -n "case \"lancer.device.register\"" server.go`
 Expected: `resolve(id, decision, editedToolInput string) (ApprovalEvent, bool)`; `s.approvals`; the register case at ~`server.go:397`.
 
 - [ ] **Step 2: Write the failing test**
@@ -537,7 +537,7 @@ func TestDecisionPollerResolves(t *testing.T) {
 
 - [ ] **Step 3: Run it — expect compile failure**
 
-Run: `cd daemon/conduitd && go test ./... -run TestDecisionPollerResolves 2>&1 | tail -15`
+Run: `cd daemon/lancerd && go test ./... -run TestDecisionPollerResolves 2>&1 | tail -15`
 Expected: FAIL — `undefined: newDecisionPoller`.
 
 - [ ] **Step 4: Implement `decision_poll.go`**
@@ -632,12 +632,12 @@ func (p *decisionPoller) loop(backendURL, sessionID string, stop chan struct{}) 
 
 - [ ] **Step 5: Run the test — expect PASS**
 
-Run: `cd daemon/conduitd && go test ./... -run TestDecisionPollerResolves 2>&1 | tail -8`
+Run: `cd daemon/lancerd && go test ./... -run TestDecisionPollerResolves 2>&1 | tail -8`
 Expected: PASS.
 
 - [ ] **Step 6: Wire the poller into the server**
 
-In `daemon/conduitd/server.go`: add a field to `server` and construct the poller wherever `newServer`/`&server{...}` is built (grep `func newServer` or `&server{`), passing `s.approvals.resolve`:
+In `daemon/lancerd/server.go`: add a field to `server` and construct the poller wherever `newServer`/`&server{...}` is built (grep `func newServer` or `&server{`), passing `s.approvals.resolve`:
 
 ```go
 // add to type server struct { ... }
@@ -648,7 +648,7 @@ In `daemon/conduitd/server.go`: add a field to `server` and construct the poller
 	s.poller = newDecisionPoller(s.approvals.resolve)
 ```
 
-Then in the `conduit.device.register` case (after `s.device = &info` / unlock), start polling:
+Then in the `lancer.device.register` case (after `s.device = &info` / unlock), start polling:
 
 ```go
 		s.poller.ensureRunning(info.PushBackendURL, info.SessionID)
@@ -656,19 +656,19 @@ Then in the `conduit.device.register` case (after `s.device = &info` / unlock), 
 
 - [ ] **Step 7: Build + full suite + commit**
 
-Run: `cd daemon/conduitd && go build ./... && go test ./... 2>&1 | tail -8`
+Run: `cd daemon/lancerd && go build ./... && go test ./... 2>&1 | tail -8`
 Expected: `ok`.
 ```bash
-git add daemon/conduitd/decision_poll.go daemon/conduitd/decision_poll_test.go daemon/conduitd/server.go
-git commit -m "feat(conduitd): poll push-backend for phone decisions; resolve without live SSH"
+git add daemon/lancerd/decision_poll.go daemon/lancerd/decision_poll_test.go daemon/lancerd/server.go
+git commit -m "feat(lancerd): poll push-backend for phone decisions; resolve without live SSH"
 ```
 
 ### Task 2.3: iOS — post decisions to the backend when no live channel
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/ApprovalRelay.swift`
-- Create (test): `Packages/ConduitKit/Tests/ConduitKitTests/ApprovalRelayBackendTests.swift`
-- Modify: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` (configure the relay with backend URL + session id)
+- Modify: `Packages/LancerKit/Sources/SessionFeature/ApprovalRelay.swift`
+- Create (test): `Packages/LancerKit/Tests/LancerKitTests/ApprovalRelayBackendTests.swift`
+- Modify: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` (configure the relay with backend URL + session id)
 
 - [ ] **Step 1: Write the failing test (build the POST body deterministically)**
 
@@ -676,7 +676,7 @@ git commit -m "feat(conduitd): poll push-backend for phone decisions; resolve wi
 import Testing
 import Foundation
 @testable import SessionFeature
-@testable import ConduitCore
+@testable import LancerCore
 
 @Suite struct ApprovalRelayBackendTests {
     @Test("Backend decision POST body has approvalId, decision wire value, sessionId")
@@ -698,7 +698,7 @@ import Foundation
 
 - [ ] **Step 2: Run it — expect compile failure**
 
-Run: `cd Packages/ConduitKit && swift test --filter ApprovalRelayBackendTests 2>&1 | tail -12`
+Run: `cd Packages/LancerKit && swift test --filter ApprovalRelayBackendTests 2>&1 | tail -12`
 Expected: FAIL — `backendDecisionBody` not found.
 
 - [ ] **Step 3: Implement the body builder + backend POST in `ApprovalRelay`**
@@ -753,7 +753,7 @@ Now change the `else` branch in `enqueue(...)` (the "channel not yet available" 
         if let ch = channel {
             try? await ch.respond(approvalId: approvalID, decision: decision)
         } else {
-            // No live SSH channel: deliver via the backend relay so conduitd can
+            // No live SSH channel: deliver via the backend relay so lancerd can
             // resolve it without us reconnecting; also queue as a belt-and-suspenders
             // drain for the next SSH attach.
             await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: nil)
@@ -763,7 +763,7 @@ Now change the `else` branch in `enqueue(...)` (the "channel not yet available" 
 
 - [ ] **Step 4: Run the unit test — expect PASS**
 
-Run: `cd Packages/ConduitKit && swift test --filter ApprovalRelayBackendTests 2>&1 | tail -8`
+Run: `cd Packages/LancerKit && swift test --filter ApprovalRelayBackendTests 2>&1 | tail -8`
 Expected: PASS.
 
 - [ ] **Step 5: Configure the relay from AppRoot**
@@ -800,56 +800,56 @@ Place this after the existing `self.daemonChannel` branch (so connected paths st
 
 - [ ] **Step 7: Build engine + app target**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8` (expect `Build complete!`)
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8` (expect `Build complete!`)
 Then `mcp__XcodeBuildMCP__build_sim` (expect success; zero new concurrency warnings).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/ApprovalRelay.swift Packages/ConduitKit/Sources/AppFeature/AppRoot.swift Packages/ConduitKit/Tests/ConduitKitTests/ApprovalRelayBackendTests.swift
+git add Packages/LancerKit/Sources/SessionFeature/ApprovalRelay.swift Packages/LancerKit/Sources/AppFeature/AppRoot.swift Packages/LancerKit/Tests/LancerKitTests/ApprovalRelayBackendTests.swift
 git commit -m "feat(ios): post approval decisions to backend relay when no live SSH channel"
 ```
 
 ### Task 2.4: Document the new relay flow
 
 **Files:**
-- Modify: `docs/conduitd-resident.md` (add a "Decision relay" subsection)
+- Modify: `docs/lancerd-resident.md` (add a "Decision relay" subsection)
 
 - [ ] **Step 1: Append the section**
 
-Add at the end of `docs/conduitd-resident.md`:
+Add at the end of `docs/lancerd-resident.md`:
 
 ```markdown
 ## Decision relay (decide while detached)
 
 When the phone is not attached over SSH, approval decisions reach the resident via push-backend instead of the framed socket:
 
-1. conduitd escalates → `postApprovalPush` POSTs `/approval` (APNs alert) AND the poller is already running (started at `conduit.device.register`).
+1. lancerd escalates → `postApprovalPush` POSTs `/approval` (APNs alert) AND the poller is already running (started at `lancer.device.register`).
 2. The phone POSTs `POST /approval/decision { approvalId, decision, sessionId, editedToolInput? }`.
-3. conduitd's `decisionPoller` GETs `/decisions?sessionId=…` every ~3s, draining decisions, and calls `approvalStore.resolve` — unblocking the waiting hook with no SSH session.
+3. lancerd's `decisionPoller` GETs `/decisions?sessionId=…` every ~3s, draining decisions, and calls `approvalStore.resolve` — unblocking the waiting hook with no SSH session.
 4. The SSH framed `agent.approval.response` path still works when attached; `resolve` is idempotent (first caller wins).
 
-In-memory on the backend is sufficient — a decision only needs to outlive conduitd's 120 s approval wait.
+In-memory on the backend is sufficient — a decision only needs to outlive lancerd's 120 s approval wait.
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/conduitd-resident.md
-git commit -m "docs: describe the conduitd↔push-backend decision relay"
+git add docs/lancerd-resident.md
+git commit -m "docs: describe the lancerd↔push-backend decision relay"
 ```
 
 ---
 
 ## Milestone 3 — Governed policy presets (the "governed" half)
 
-**Goal:** named presets (`cautious` / `balanced` / `bypass`) that exist on the **bridge** (so autonomy is real and consistent), plus a one-tap autonomy quick-set in the app that pushes the chosen preset YAML to conduitd. Today presets are iOS-side strings only; this makes them first-class and tested.
+**Goal:** named presets (`cautious` / `balanced` / `bypass`) that exist on the **bridge** (so autonomy is real and consistent), plus a one-tap autonomy quick-set in the app that pushes the chosen preset YAML to lancerd. Today presets are iOS-side strings only; this makes them first-class and tested.
 
-### Task 3.1: conduitd — named preset documents
+### Task 3.1: lancerd — named preset documents
 
 **Files:**
-- Modify: `daemon/conduitd/policy/types.go` (add `PresetDocument(name)`)
-- Create (test): `daemon/conduitd/policy/presets_test.go`
+- Modify: `daemon/lancerd/policy/types.go` (add `PresetDocument(name)`)
+- Create (test): `daemon/lancerd/policy/presets_test.go`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -903,12 +903,12 @@ func hasEffectKind(d Document, effect, kind string) bool {
 
 - [ ] **Step 2: Run it — expect compile failure**
 
-Run: `cd daemon/conduitd && go test ./policy/ -run TestPresetDocuments 2>&1 | tail -12`
+Run: `cd daemon/lancerd && go test ./policy/ -run TestPresetDocuments 2>&1 | tail -12`
 Expected: FAIL — `undefined: PresetDocument`.
 
 - [ ] **Step 3: Implement `PresetDocument`**
 
-Add to `daemon/conduitd/policy/types.go`:
+Add to `daemon/lancerd/policy/types.go`:
 
 ```go
 // PresetDocument returns a named, human-recognizable policy preset. These map 1:1
@@ -949,20 +949,20 @@ func PresetDocument(name string) (Document, bool) {
 
 - [ ] **Step 4: Run the test — expect PASS, then full suite**
 
-Run: `cd daemon/conduitd && go test ./policy/ -run TestPresetDocuments 2>&1 | tail -6` (expect PASS)
-Run: `cd daemon/conduitd && go test ./... 2>&1 | tail -5` (expect `ok`)
+Run: `cd daemon/lancerd && go test ./policy/ -run TestPresetDocuments 2>&1 | tail -6` (expect PASS)
+Run: `cd daemon/lancerd && go test ./... 2>&1 | tail -5` (expect `ok`)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add daemon/conduitd/policy/types.go daemon/conduitd/policy/presets_test.go
-git commit -m "feat(conduitd): named policy presets (cautious/balanced/bypass)"
+git add daemon/lancerd/policy/types.go daemon/lancerd/policy/presets_test.go
+git commit -m "feat(lancerd): named policy presets (cautious/balanced/bypass)"
 ```
 
 ### Task 3.2: iOS — autonomy quick-set pushes a preset to the bridge
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SettingsFeature/PolicyEditorView.swift` (map preset names → the existing YAML constants; align to cautious/balanced/bypass labels)
+- Modify: `Packages/LancerKit/Sources/SettingsFeature/PolicyEditorView.swift` (map preset names → the existing YAML constants; align to cautious/balanced/bypass labels)
 - Verify wiring through the existing `BridgeSessionActions.savePolicyYAML` / `reloadPolicy` already surfaced in `AppRoot.bridgeSessionActions()` (`AppRoot.swift:570`).
 
 - [ ] **Step 1: Align the three preset buttons to the bridge preset names and push-on-tap**
@@ -998,7 +998,7 @@ Add the helper:
 
 - [ ] **Step 2: Build the engine**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8`
 Expected: `Build complete!`.
 
 - [ ] **Step 3: Visual check**
@@ -1008,7 +1008,7 @@ Launch the policy editor surface (it's reachable from Settings via `PolicyEditor
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/SettingsFeature/PolicyEditorView.swift
+git add Packages/LancerKit/Sources/SettingsFeature/PolicyEditorView.swift
 git commit -m "feat(ios): autonomy presets (Cautious/Balanced/Bypass) push to the bridge on tap"
 ```
 
@@ -1021,14 +1021,14 @@ git commit -m "feat(ios): autonomy presets (Cautious/Balanced/Bypass) push to th
 ### Task 4.1: Test the notification filter's decision logic
 
 **Files:**
-- Create (test): `Packages/ConduitKit/Tests/ConduitKitTests/NotificationFilterTests.swift`
+- Create (test): `Packages/LancerKit/Tests/LancerKitTests/NotificationFilterTests.swift`
 
 - [ ] **Step 1: Write the failing/￼characterization test**
 
 ```swift
 import Testing
 @testable import NotificationsKit
-@testable import ConduitCore
+@testable import LancerCore
 
 @Suite struct NotificationFilterTests {
     @Test("minRisk gates low-risk approvals")
@@ -1052,20 +1052,20 @@ import Testing
 
 - [ ] **Step 2: Run it**
 
-Run: `cd Packages/ConduitKit && swift test --filter NotificationFilterTests 2>&1 | tail -10`
+Run: `cd Packages/LancerKit && swift test --filter NotificationFilterTests 2>&1 | tail -10`
 Expected: PASS (the logic exists). If a case FAILS, it's a real bug — fix `shouldDeliver`, keep the test.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Packages/ConduitKit/Tests/ConduitKitTests/NotificationFilterTests.swift
+git add Packages/LancerKit/Tests/LancerKitTests/NotificationFilterTests.swift
 git commit -m "test(ios): notification filter risk/agent gating"
 ```
 
 ### Task 4.2: Activity screen that loads the bridge audit tail
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/InboxFeature/ActivityView.swift`
+- Create: `Packages/LancerKit/Sources/InboxFeature/ActivityView.swift`
 - (Uses existing `BridgeAuditFeedView`, `BridgeSessionActions.tailAudit`, `AuditLogEntry`.)
 
 - [ ] **Step 1: Create `ActivityView`**
@@ -1073,10 +1073,10 @@ git commit -m "test(ios): notification filter risk/agent gating"
 ```swift
 #if os(iOS)
 import SwiftUI
-import ConduitCore
+import LancerCore
 import DesignSystem
 
-/// "While you were away" — the autonomous decisions conduitd made for you.
+/// "While you were away" — the autonomous decisions lancerd made for you.
 /// Loads the bridge audit tail via BridgeSessionActions; degrades gracefully
 /// when no bridge is connected.
 public struct ActivityView: View {
@@ -1085,7 +1085,7 @@ public struct ActivityView: View {
     @State private var isLoading = false
     @State private var loadError: String?
 
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 
     public init(actions: BridgeSessionActions) {
         self.actions = actions
@@ -1125,17 +1125,17 @@ public struct ActivityView: View {
 #endif
 ```
 
-Note: confirm `BridgeSessionActions` exposes `isConnected: Bool` and `tailAudit: ((Int) async throws -> [AuditLogEntry])?` (the agent report showed `tailAudit` wired in `AppRoot.bridgeSessionActions()`). If property names differ, grep `Sources/ConduitCore/BridgeSessionActions.swift` and adapt.
+Note: confirm `BridgeSessionActions` exposes `isConnected: Bool` and `tailAudit: ((Int) async throws -> [AuditLogEntry])?` (the agent report showed `tailAudit` wired in `AppRoot.bridgeSessionActions()`). If property names differ, grep `Sources/LancerCore/BridgeSessionActions.swift` and adapt.
 
 - [ ] **Step 2: Build**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8`
 Expected: `Build complete!`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/InboxFeature/ActivityView.swift
+git add Packages/LancerKit/Sources/InboxFeature/ActivityView.swift
 git commit -m "feat(ios): Activity (while-you-were-away) screen over bridge audit tail"
 ```
 
@@ -1148,14 +1148,14 @@ git commit -m "feat(ios): Activity (while-you-were-away) screen over bridge audi
 ### Task 5.1: Fleet aggregation helper (testable)
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/ConduitCore/FleetSummary.swift`
-- Create (test): `Packages/ConduitKit/Tests/ConduitKitTests/FleetSummaryTests.swift`
+- Create: `Packages/LancerKit/Sources/LancerCore/FleetSummary.swift`
+- Create (test): `Packages/LancerKit/Tests/LancerKitTests/FleetSummaryTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
 import Testing
-@testable import ConduitCore
+@testable import LancerCore
 
 @Suite struct FleetSummaryTests {
     @Test("aggregates vendor count, logged-in, and total spend")
@@ -1180,7 +1180,7 @@ import Testing
 
 - [ ] **Step 2: Run it — expect compile failure**
 
-Run: `cd Packages/ConduitKit && swift test --filter FleetSummaryTests 2>&1 | tail -12`
+Run: `cd Packages/LancerKit && swift test --filter FleetSummaryTests 2>&1 | tail -12`
 Expected: FAIL — `FleetSummary` not found.
 
 - [ ] **Step 3: Implement `FleetSummary`**
@@ -1214,20 +1214,20 @@ public struct FleetSummary: Sendable, Equatable {
 
 - [ ] **Step 4: Run the test — expect PASS**
 
-Run: `cd Packages/ConduitKit && swift test --filter FleetSummaryTests 2>&1 | tail -6`
+Run: `cd Packages/LancerKit && swift test --filter FleetSummaryTests 2>&1 | tail -6`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/ConduitCore/FleetSummary.swift Packages/ConduitKit/Tests/ConduitKitTests/FleetSummaryTests.swift
+git add Packages/LancerKit/Sources/LancerCore/FleetSummary.swift Packages/LancerKit/Tests/LancerKitTests/FleetSummaryTests.swift
 git commit -m "feat(core): FleetSummary aggregation across bridge status snapshots"
 ```
 
 ### Task 5.2: Fleet screen
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/AppFeature/FleetView.swift`
+- Create: `Packages/LancerKit/Sources/AppFeature/FleetView.swift`
 - (Uses `FleetStore`, `AgentVendorStatus`, `FleetSummary`, DesignSystem.)
 
 - [ ] **Step 1: Create `FleetView`**
@@ -1235,7 +1235,7 @@ git commit -m "feat(core): FleetSummary aggregation across bridge status snapsho
 ```swift
 #if os(iOS)
 import SwiftUI
-import ConduitCore
+import LancerCore
 import DesignSystem
 
 /// Cross-vendor fleet glance: per-agent status + spend, with an aggregate strip.
@@ -1245,7 +1245,7 @@ public struct FleetView: View {
     private let onConnectHost: () -> Void
     @State private var summary = FleetSummary(snapshots: [])
 
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 
     public init(store: FleetStore, onConnectHost: @escaping () -> Void) {
         self.store = store
@@ -1262,7 +1262,7 @@ public struct FleetView: View {
                     ContentUnavailableView {
                         Label("No agents connected", systemImage: "server.rack")
                     } description: {
-                        Text("Connect a host running conduitd to see your agents, their status, and spend.")
+                        Text("Connect a host running lancerd to see your agents, their status, and spend.")
                     } actions: {
                         Button("Connect a host", action: onConnectHost)
                     }
@@ -1330,13 +1330,13 @@ public struct FleetView: View {
 
 - [ ] **Step 2: Build**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8`
 Expected: `Build complete!`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/FleetView.swift
+git add Packages/LancerKit/Sources/AppFeature/FleetView.swift
 git commit -m "feat(ios): Fleet glance — cross-vendor agent status + spend"
 ```
 
@@ -1351,7 +1351,7 @@ git commit -m "feat(ios): Fleet glance — cross-vendor agent status + spend"
 ### Task 6.1: Redefine the `Tab` enum
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` (the `Tab` enum at ~line 107, the `compactRoot` tab items at ~line 599, and `tabContent`/`rootDestination`).
+- Modify: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` (the `Tab` enum at ~line 107, the `compactRoot` tab items at ~line 599, and `tabContent`/`rootDestination`).
 
 - [ ] **Step 1: Replace the `Tab` cases**
 
@@ -1414,7 +1414,7 @@ Find where `selectedTab` is initialized (default was likely `.hosts`); set the d
 
 - [ ] **Step 5: Build engine + app target**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -8` (expect complete)
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -8` (expect complete)
 Then `mcp__XcodeBuildMCP__build_sim` (expect success).
 
 - [ ] **Step 6: Verify each tab renders in the simulator**
@@ -1424,14 +1424,14 @@ Then `mcp__XcodeBuildMCP__build_sim` (expect success).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/AppRoot.swift
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift
 git commit -m "feat(ios): governance-first IA — Inbox/Fleet/Activity/Settings; terminal demoted to session depth"
 ```
 
 ### Task 6.2: Update the onboarding end-state to land on Inbox
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` (onboarding `onContinue` / provisioning `onComplete` set `selectedTab`).
+- Modify: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` (onboarding `onContinue` / provisioning `onComplete` set `selectedTab`).
 
 - [ ] **Step 1: Point onboarding completion at the new tabs**
 
@@ -1439,9 +1439,9 @@ In `readyRoot(env:)`, the onboarding `onContinue` sets `selectedTab = .hosts`; c
 
 - [ ] **Step 2: Build + commit**
 
-Run: `cd Packages/ConduitKit && swift build 2>&1 | tail -6`
+Run: `cd Packages/LancerKit && swift build 2>&1 | tail -6`
 ```bash
-git add Packages/ConduitKit/Sources/AppFeature/AppRoot.swift
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift
 git commit -m "feat(ios): onboarding lands on Fleet after first host connect"
 ```
 
@@ -1449,7 +1449,7 @@ git commit -m "feat(ios): onboarding lands on Fleet after first host connect"
 
 ## Milestone 7 — Push end-to-end (alert when away)
 
-**Goal:** prove the push alert path with a mock APNs server (no cert needed), and document the owner steps for the real `.p8`. The wiring (register token → conduitd POST `/approval` → backend `pushApproval`) already exists; this hardens and tests it.
+**Goal:** prove the push alert path with a mock APNs server (no cert needed), and document the owner steps for the real `.p8`. The wiring (register token → lancerd POST `/approval` → backend `pushApproval`) already exists; this hardens and tests it.
 
 ### Task 7.1: push-backend — test the approval push payload with an injectable sender
 
@@ -1560,8 +1560,8 @@ Append a section (if not already precise):
 ## APNs production push (owner, ~15 min — needs paid Apple account)
 
 1. App Store Connect → Keys → create an **APNs Auth Key (.p8)**; note Key ID + Team ID.
-2. Deploy push-backend with env: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH=/secrets/AuthKey.p8`, `APNS_BUNDLE_ID=dev.conduit.mobile`.
-3. Set the app's `CONDUIT_PUSH_BACKEND_URL` (Info.plist / scheme) to the deployed URL.
+2. Deploy push-backend with env: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_PATH=/secrets/AuthKey.p8`, `APNS_BUNDLE_ID=dev.lancer.mobile`.
+3. Set the app's `LANCER_PUSH_BACKEND_URL` (Info.plist / scheme) to the deployed URL.
 4. On a **physical device** (APNs is no-op in the simulator): connect a host, background the app, trigger an approval on the host → expect a push within ~2s with the command + risk; tapping Approve resolves it via the decision relay (Milestone 2) even though the app was backgrounded.
 ```
 
@@ -1581,13 +1581,13 @@ git commit -m "docs: APNs production push owner steps + decision-relay device te
 ### Task 8.1: Verify entitlements + write the App Store positioning copy
 
 **Files:**
-- Verify: `project.yml` (entitlements already point at `Conduit.entitlements` with `aps-environment: production` + iCloud — confirm).
+- Verify: `project.yml` (entitlements already point at `Lancer.entitlements` with `aps-environment: production` + iCloud — confirm).
 - Create: `docs/app-store-metadata-governed-approvals.md`
 
 - [ ] **Step 1: Confirm entitlements + team**
 
 Run: `grep -n "entitlements\|aps-environment\|DEVELOPMENT_TEAM\|com.apple.developer.icloud" project.yml | head`
-Expected: `Conduit/Conduit.entitlements`, `aps-environment: production`, a `DEVELOPMENT_TEAM`. If the team is still the free personal team (`39HM2X8GS6`), note `TODO(owner): confirm paid-account team id`.
+Expected: `Lancer/Lancer.entitlements`, `aps-environment: production`, a `DEVELOPMENT_TEAM`. If the team is still the free personal team (`39HM2X8GS6`), note `TODO(owner): confirm paid-account team id`.
 
 - [ ] **Step 2: Write the metadata draft (positioning = cross-vendor governed approvals)**
 
@@ -1596,14 +1596,14 @@ Create `docs/app-store-metadata-governed-approvals.md`:
 ```markdown
 # App Store metadata — Governed Approvals v1
 
-**Name:** Conduit — Agent Approvals
+**Name:** Lancer — Agent Approvals
 **Subtitle:** Govern Claude Code, Codex & opencode from your phone
 
 **Promotional text:**
 Your AI coding agents ask permission on your phone. Decide in one tap — even when you're away. Safe actions auto-handle by your policy; everything's logged.
 
 **Description (opening):**
-Conduit is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app was closed. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
+Lancer is mission control for the AI coding agents running on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human. When it does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app was closed. Works across Claude Code, OpenAI Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 
 **Keywords:** claude code, codex, opencode, ai agent, approvals, ssh, devops, audit, policy, governance
 
@@ -1632,7 +1632,7 @@ git commit -m "docs: App Store metadata for Governed Approvals v1"
 
 - [ ] **Step 1: Capture the five surfaces**
 
-Boot a required-size simulator; `build_sim` → `install_app_sim` → `launch_app_sim`. Use the gallery (`CONDUIT_GALLERY: review`) for populated approval cards, and the real app for Fleet/Activity empty+populated. Screenshot each of the five surfaces in Task 8.1 Step 2 (light and dark via `mcp__XcodeBuildMCP__set_sim_appearance`). Save to `docs/screenshots/governed-approvals/`.
+Boot a required-size simulator; `build_sim` → `install_app_sim` → `launch_app_sim`. Use the gallery (`LANCER_GALLERY: review`) for populated approval cards, and the real app for Fleet/Activity empty+populated. Screenshot each of the five surfaces in Task 8.1 Step 2 (light and dark via `mcp__XcodeBuildMCP__set_sim_appearance`). Save to `docs/screenshots/governed-approvals/`.
 
 - [ ] **Step 2: Commit**
 
@@ -1655,13 +1655,13 @@ Run `mcp__XcodeBuildMCP__build_sim` with the Release configuration if supported 
 Ensure `docs/ship-gate-owner-steps.md` ends with an ordered, one-action-each list:
 1. Enroll/confirm paid Apple Developer account; set `DEVELOPMENT_TEAM`; `xcodegen generate`.
 2. App Store Connect: app record, enable Push + CloudKit, create the IAP, privacy label, upload screenshots from `docs/screenshots/governed-approvals/`.
-3. Deploy `push-backend` with APNs `.p8` env (Task 7.2) + set `CONDUIT_PUSH_BACKEND_URL`.
+3. Deploy `push-backend` with APNs `.p8` env (Task 7.2) + set `LANCER_PUSH_BACKEND_URL`.
 4. Physical-device validation: connect host, background app, trigger approval → push → tap Approve → decision relay resolves (Milestone 2).
 5. `fastlane beta` → TestFlight; after testing, `fastlane release`.
 
 - [ ] **Step 3: Final full-suite verification**
 
-Run all four suites (engine swift test, conduitd go test, push-backend go test, app `build_sim`). Expected: ≥ baseline counts from Milestone 0, zero failures, zero new warnings.
+Run all four suites (engine swift test, lancerd go test, push-backend go test, app `build_sim`). Expected: ≥ baseline counts from Milestone 0, zero failures, zero new warnings.
 
 - [ ] **Step 4: Commit + open PR**
 

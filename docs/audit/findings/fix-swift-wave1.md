@@ -40,7 +40,7 @@ Status legend: [ ] todo · [x] done · [~] partial/blocked
 
 ## Change log (filled as items complete)
 
-- **B4-17** `project.yml` Conduit `info.properties`: added `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` (dictation purpose strings) — prevents first-mic-tap crash + review rejection.
+- **B4-17** `project.yml` Lancer `info.properties`: added `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` (dictation purpose strings) — prevents first-mic-tap crash + review rejection.
 - **B4-18** `project.yml`: `MARKETING_VERSION` `0.1.0`→`1.0.0` on all 5 targets; added `CFBundleShortVersionString: $(MARKETING_VERSION)` + `CFBundleVersion: $(CURRENT_PROJECT_VERSION)` to every target's `info.properties` so versions are no longer hardcoded `1.0`/`1` by XcodeGen.
 - **M16** `project.yml` `settings.base`: `ENABLE_APP_INTENTS_METADATA_EXTRACTION` `NO`→`YES` so App-Intent (Approve/Reject) metadata bundle generates for app + iOS widget/live-activity extensions.
 - **W19/W20** `SSHTransport/DaemonChannel.swift` `start()`: dropped redundant `await` on same-actor `handleFrame`/`failPendingRPCs` (Task inherits actor isolation).

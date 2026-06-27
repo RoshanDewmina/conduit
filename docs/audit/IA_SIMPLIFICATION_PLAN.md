@@ -1,11 +1,11 @@
-# Conduit iOS — Information Architecture Simplification Plan (4 tabs)
+# Lancer iOS — Information Architecture Simplification Plan (4 tabs)
 
 > READ-ONLY architecture map. No source was modified to produce this document.
-> All paths are relative to `Packages/ConduitKit/Sources/` unless noted.
+> All paths are relative to `Packages/LancerKit/Sources/` unless noted.
 > Note: the SPM target compiles **every** `.swift` under `Sources/` regardless of the
 > Xcode project membership, so "dead" views still must build — but they are unreachable
 > at runtime (not referenced from `AppRoot` or any live destination). None of the
-> dead-candidate views appear in `Conduit.xcodeproj/project.pbxproj` (verified: 0 hits each).
+> dead-candidate views appear in `Lancer.xcodeproj/project.pbxproj` (verified: 0 hits each).
 
 ---
 
@@ -64,7 +64,7 @@ The tab bar is **already** the target four tabs — the IA refactor is partly la
 - **KEEP (canonical):** `InboxFeature/InboxView.swift:48` (+ `InboxViewModel` `:12`, `InboxViewModel+Live.swift`). Card components `DesignSystem/Components/InboxCards.swift`, `ChatComponents.swift` (`DSApprovalCard`), `DSDecisionSheet.swift`, `AllowAlwaysScopeSheet.swift`.
 - **MOVE-IN / already there:** Inbox already renders a "WHILE YOU WERE AWAY" preview from `awayAuditEntries` (`InboxView.swift:100-106`) via `BridgeAuditFeedView` — this is the merge-2 overlap point (see Risk R2).
 - **Shared (NOT view):** the decision pipeline lives in AppRoot, not Inbox — `handleApprovalAction` (`AppRoot.swift:397`), `drainPendingApprovalActions` (`AppRoot.swift:426`), `ApprovalRelay`/`ApprovalIngest`, `configureGlobalInbox` (`AppRoot.swift:664`). Lock-screen notification-action routing: `AppRoot.swift:328-336`.
-- **Notification/action extensions (NOT in ConduitKit — separate Xcode targets):** Live Activity → `ConduitLiveActivityWidget/`, `SessionFeature/LiveActivityManager.swift`, `SessionFeature/ApprovalActionIntent.swift`. Watch → `ConduitWatch/InboxListView.swift`, `ApprovalDetailView.swift`, `WatchConnector.swift`; phone side `AppFeature/PhoneWatchConnector.swift`, watch decision sink `AppRoot.swift:~1254-1272`.
+- **Notification/action extensions (NOT in LancerKit — separate Xcode targets):** Live Activity → `LancerLiveActivityWidget/`, `SessionFeature/LiveActivityManager.swift`, `SessionFeature/ApprovalActionIntent.swift`. Watch → `LancerWatch/InboxListView.swift`, `ApprovalDetailView.swift`, `WatchConnector.swift`; phone side `AppFeature/PhoneWatchConnector.swift`, watch decision sink `AppRoot.swift:~1254-1272`.
 - **DEAD:** none unique to this merge. These are already one approval model fanned out to extensions — mostly a *documentation/consistency* merge, not a deletion.
 
 ### Merge 2 — Activity + Activity Audit + "while you were away" → one Activity timeline
@@ -108,7 +108,7 @@ The tab bar is **already** the target four tabs — the IA refactor is partly la
 
 ### Merge 8 — Agent Cloud Hosted + AgentsView + Billing → Advanced/Cloud
 - **KEEP (canonical):** `AppFeature/AgentsView.swift:8` + its whole cluster + `SettingsFeature/BillingView.swift:8`.
-- **DISCOVERABILITY (problem):** the **only** live entry to `AgentsView` is `AddHostView`'s "conduit cloud" source toggle (`AddHostView.swift:217,313`) → `onUseHosted` → `showingHostedAgents` sheet (`AppRoot.swift:494-523`). There is no Settings or runtime-picker entry. Merge #8 wants a runtime picker / Settings surface. Billing is reachable from Settings (`SettingsView.swift:717`) but cloud agents are not.
+- **DISCOVERABILITY (problem):** the **only** live entry to `AgentsView` is `AddHostView`'s "lancer cloud" source toggle (`AddHostView.swift:217,313`) → `onUseHosted` → `showingHostedAgents` sheet (`AppRoot.swift:494-523`). There is no Settings or runtime-picker entry. Merge #8 wants a runtime picker / Settings surface. Billing is reachable from Settings (`SettingsView.swift:717`) but cloud agents are not.
 - **Shared:** `AgentStore`, `HostedAgent`/`HostedAgentRuntime`/`HostedAgentAPIClient`, `PurchaseManager`, `CloudEntitlementClient`, `BillingEligibility`.
 
 ### Merge 9 — Settings → grouped (Connection, Policy, Security, Notifications, Account, Advanced)
@@ -117,8 +117,8 @@ The tab bar is **already** the target four tabs — the IA refactor is partly la
 - **Shared:** `SettingsViewModel`, all `SettingsFeature/*` pushed views.
 
 ### Merge 10 — Platform Surfaces (Live Activity, Widgets, Watch, complications) → mirror core states
-- **Separate Xcode targets, NOT ConduitKit views:** `ConduitWidget/`, `ConduitLiveActivityWidget/`, `ConduitWatch/`, `ConduitWatchWidget/` (verified at repo root).
-- **Shared model contract:** `ConduitCore/WidgetSnapshot.swift` is the cross-target state mirror; `SessionFeature/LiveActivityManager.swift`, `DesignSystem/Components/AgentIsland.swift`, `AppFeature/PhoneWatchConnector.swift`. Core states to mirror already modeled: pending approval (`hudStore.pendingApprovals` `AppRoot.swift:622-623`), running loop (`Loop.Status`), quota warning (`QuotaGuard`), completed/failed run (`RunOutputStore`/`.conduitRunCompleteAction` `AppRoot.swift:337`).
+- **Separate Xcode targets, NOT LancerKit views:** `LancerWidget/`, `LancerLiveActivityWidget/`, `LancerWatch/`, `LancerWatchWidget/` (verified at repo root).
+- **Shared model contract:** `LancerCore/WidgetSnapshot.swift` is the cross-target state mirror; `SessionFeature/LiveActivityManager.swift`, `DesignSystem/Components/AgentIsland.swift`, `AppFeature/PhoneWatchConnector.swift`. Core states to mirror already modeled: pending approval (`hudStore.pendingApprovals` `AppRoot.swift:622-623`), running loop (`Loop.Status`), quota warning (`QuotaGuard`), completed/failed run (`RunOutputStore`/`.lancerRunCompleteAction` `AppRoot.swift:337`).
 - This is a **contract-alignment** merge (one snapshot model → all surfaces), not a view deletion.
 
 ---
@@ -170,7 +170,7 @@ Principle: delete dead code first (pure subtractions can't break live paths once
 - Onboarding is actively being redesigned today. Do not auto-dispatch. Once the redesign settles, unify `OnboardingView` SSH/relay screens with `AddHostView` + `E2ERelayPairingView` into one Connect-Bridge component.
 
 **Cross-cutting (no swift build risk, separate targets):**
-- merge 1 & 10 are largely consistency/contract work across `ConduitWatch/`, `ConduitWidget/`, `ConduitLiveActivityWidget/`, `WidgetSnapshot.swift` — schedule independently; they don't touch the four-tab ConduitKit views.
+- merge 1 & 10 are largely consistency/contract work across `LancerWatch/`, `LancerWidget/`, `LancerLiveActivityWidget/`, `WidgetSnapshot.swift` — schedule independently; they don't touch the four-tab LancerKit views.
 
 **Parallel-safe set:** {A1, A2, A3, A4} together; then {B3} alongside one of {B1|B2|B4}. **Never parallel:** anything touching `AppRoot.swift`, `SettingsView.swift`, `FleetView.swift`, or `OnboardingView.swift` simultaneously.
 
@@ -184,7 +184,7 @@ Principle: delete dead code first (pure subtractions can't break live paths once
 
 **R3 — Fleet overload (MEDIUM).** FleetView already carries: saved hosts, live slots, active loops + LoopDetail nav, per-agent spend, local-model banner, pending-approval attention banner, quota-guard entry, host-health. Merge #3 adds quota rings/spend inline and #7 makes it the primary connect entry. Risk of a kitchen-sink tab. Consider sub-sections or a Fleet overview vs detail split before piling on.
 
-**R4 — Cloud/billing discoverability collapses (MEDIUM-HIGH).** The hosted-cloud surface (`AgentsView`) has exactly ONE live entry today: the "conduit cloud" toggle buried inside `AddHostView` (`AddHostView.swift:217` → `onUseHosted` → `AppRoot.swift:503`). If merge #7 unifies/replaces `AddHostView`, that single entry point can be lost, orphaning the entire cloud cluster (`AgentDetailView`/`AgentStore`/`BillingView`). Merge #8 must add a durable Settings/runtime-picker entry BEFORE or DURING any AddHostView rework.
+**R4 — Cloud/billing discoverability collapses (MEDIUM-HIGH).** The hosted-cloud surface (`AgentsView`) has exactly ONE live entry today: the "lancer cloud" toggle buried inside `AddHostView` (`AddHostView.swift:217` → `onUseHosted` → `AppRoot.swift:503`). If merge #7 unifies/replaces `AddHostView`, that single entry point can be lost, orphaning the entire cloud cluster (`AgentDetailView`/`AgentStore`/`BillingView`). Merge #8 must add a durable Settings/runtime-picker entry BEFORE or DURING any AddHostView rework.
 
 **R5 — Two parallel detail stacks silently diverge (MEDIUM).** `LoopDetailView` (on-device `Loop`) and the `AgentDetailView` cluster (cloud `HostedAgent`) both implement Overview/Changes/Spend/Proof/Audit-style sections against different models/stores, sharing only `GitStore`. The proposal's "one Loop/Agent Detail screen" risks implying a single view, but they cannot trivially merge (different data sources). Plan for two skins of one design language, not one view — and ensure `GitStore` (shared by both) is never removed during a view deletion.
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans`. This is a Swift UI implementation plan, not a product ideation brief.
 
-**Goal:** Replace Conduit's tab-first root with a chat-first sidebar shell on all device classes, using the prototype direction in `docs/conduit-ui-prototype/app/interactive/page.tsx` as the interaction reference.
+**Goal:** Replace Lancer's tab-first root with a chat-first sidebar shell on all device classes, using the prototype direction in `docs/lancer-ui-prototype/app/interactive/page.tsx` as the interaction reference.
 
 ## Dependencies
 
@@ -12,12 +12,12 @@ Do not ship a sidebar whose Recent Threads and Search are only mock data. If the
 
 ## Current Reality
 
-- `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+- `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
   - `Tab.rootTabs` is `Inbox / Fleet / New Chat / Settings`.
   - compact width uses a bottom `DSTabBar`.
   - regular width uses `NavigationSplitView` with a simple `List` of tabs.
   - `NewChatTabView` is one root tab, not the default app shell.
-- `docs/conduit-ui-prototype/app/interactive/page.tsx`
+- `docs/lancer-ui-prototype/app/interactive/page.tsx`
   - already demonstrates three sidebar variants.
   - current recommendation is Chat-first.
   - sidebar contains New Chat, Search, Recent Threads, Needs Attention, Fleet, Settings.
@@ -54,17 +54,17 @@ Add UI-only routing types in `AppFeature`:
   - search query
   - filtered thread IDs
 
-Keep the data models from `ConduitCore`/`PersistenceKit`; do not duplicate persisted chat entities in UI state.
+Keep the data models from `LancerCore`/`PersistenceKit`; do not duplicate persisted chat entities in UI state.
 
 ## Implementation Tasks
 
 - [ ] **Task 1: Add a sidebar destination model**
-  - File: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` or a new small `SidebarShell.swift` if `AppRoot.swift` becomes too large.
+  - File: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` or a new small `SidebarShell.swift` if `AppRoot.swift` becomes too large.
   - Add the destination enum and selection state.
-  - Preserve existing `CONDUIT_TAB` debug launch behavior by mapping `newchat` to the chat destination, `inbox` to needs-attention, `fleet` to fleet, and `settings` to settings.
+  - Preserve existing `LANCER_TAB` debug launch behavior by mapping `newchat` to the chat destination, `inbox` to needs-attention, `fleet` to fleet, and `settings` to settings.
 
-- [ ] **Task 2: Build `ConduitSidebarView`**
-  - File: `Packages/ConduitKit/Sources/AppFeature/ConduitSidebarView.swift`
+- [ ] **Task 2: Build `LancerSidebarView`**
+  - File: `Packages/LancerKit/Sources/AppFeature/LancerSidebarView.swift`
   - Sections:
     - New Chat action.
     - Search field.
@@ -72,20 +72,20 @@ Keep the data models from `ConduitCore`/`PersistenceKit`; do not duplicate persi
     - Needs Attention.
     - Fleet.
     - Settings.
-  - Use existing `DesignSystem` tokens and `conduitGlassChrome`.
+  - Use existing `DesignSystem` tokens and `lancerGlassChrome`.
   - Use icons for primary actions.
   - Keep text compact and phone-readable.
 
 - [ ] **Task 3: Replace compact bottom tabs with drawer shell**
-  - File: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
   - Replace `compactRoot` and `tabContent` with a chat detail plus drawer overlay.
   - Detail should default to `NewChatTabView`.
   - A toolbar/sidebar button opens the drawer.
   - Selecting a sidebar item closes the drawer on compact width.
 
 - [ ] **Task 4: Replace regular split list with persistent sidebar**
-  - File: `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
-  - Use `NavigationSplitView` with `ConduitSidebarView` as the sidebar.
+  - File: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
+  - Use `NavigationSplitView` with `LancerSidebarView` as the sidebar.
   - Detail renders `SidebarDestination`.
   - Keep `SessionView` full-screen cover behavior intact.
 
@@ -106,7 +106,7 @@ Keep the data models from `ConduitCore`/`PersistenceKit`; do not duplicate persi
 - [ ] **Task 7: Preserve deep links and notification routes**
   - Approval notification action must still route to the related approval.
   - Run-complete action must still open the related live session/thread.
-  - Existing `.conduitApprovalAction` and `.conduitRunCompleteAction` observers must keep working.
+  - Existing `.lancerApprovalAction` and `.lancerRunCompleteAction` observers must keep working.
 
 - [ ] **Task 8: Remove dead tab UI after shell is stable**
   - Remove or stop using `DSTabBar` from the root shell if no longer needed.
@@ -114,7 +114,7 @@ Keep the data models from `ConduitCore`/`PersistenceKit`; do not duplicate persi
 
 ## Testing
 
-- [ ] Run `swift test --package-path Packages/ConduitKit`.
+- [ ] Run `swift test --package-path Packages/LancerKit`.
 - [ ] Run app-target simulator build with XcodeBuildMCP.
 - [ ] Launch compact iPhone simulator:
   - app opens to chat;

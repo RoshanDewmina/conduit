@@ -1,8 +1,8 @@
-# Git Support / Control for Conduit (iOS) — Research & Design
+# Git Support / Control for Lancer (iOS) — Research & Design
 
 **Date:** 2026-06-15
 **Author pass:** competitor survey (web, 2025–2026) + local scaffold audit
-**Thesis anchor:** *supervision, not a mobile IDE.* Conduit's git surface exists to **review, approve, and ship the agent's work** from the phone — not to be a hand-editing git client. (Source: `~/Downloads/conduit-competitor-research-feature-backlog-2026-06-14.md`, §"Many developers are skeptical of mobile coding".)
+**Thesis anchor:** *supervision, not a mobile IDE.* Lancer's git surface exists to **review, approve, and ship the agent's work** from the phone — not to be a hand-editing git client. (Source: `~/Downloads/lancer-competitor-research-feature-backlog-2026-06-14.md`, §"Many developers are skeptical of mobile coding".)
 
 ---
 
@@ -13,13 +13,13 @@ From `docs/audit/FEATURE_VERIFICATION_AUDIT.md` (#12, #13) and direct file reads
 | Asset | State | Evidence |
 |---|---|---|
 | `SSHTransport/GitClient.swift` | **Complete, ZERO callers.** Full git-over-SSH actor: `status`, `currentBranch`, `diff`, `log`, `listBranches`, `changedFiles`, `latestCommit`, `createBranch`, `checkout`, `stage`, `commit`, `push`, `createPullRequest` (via `gh`). Shell-quotes all inputs; captures exit code via sentinel marker. | `GitClient.swift:77-312` |
-| `ConduitCore/Worktree.swift` | Model exists (`Worktree`/`ChangedFile`/`CommitInfo`), used only by gallery samples. | `Worktree.swift` |
+| `LancerCore/Worktree.swift` | Model exists (`Worktree`/`ChangedFile`/`CommitInfo`), used only by gallery samples. | `Worktree.swift` |
 | `AppFeature/WorktreeBoardView.swift` + `WorktreeStore.swift` | 3-column board renders, but `DaemonChannel.fetchWorktrees()` is a literal `return []`. **NO-OP.** | `WorktreeStore.swift:76-82` |
-| `ConduitCore/CIEvent.swift` | Model exists. iOS calls RPC `agent.ci.recent` which **conduitd never registers** → swallowed `try?` → `[]`. Webhook receiver lives only in `daemon/push-backend/webhooks.go`, unbridged. **BROKEN.** | audit #13; `DaemonChannel.swift:327-330` |
+| `LancerCore/CIEvent.swift` | Model exists. iOS calls RPC `agent.ci.recent` which **lancerd never registers** → swallowed `try?` → `[]`. Webhook receiver lives only in `daemon/push-backend/webhooks.go`, unbridged. **BROKEN.** | audit #13; `DaemonChannel.swift:327-330` |
 | `DiffFeature/DiffView.swift` | **Works.** Renders `UnifiedDiff` (per-file sections, +/- summary, pinned headers) over `DiffKit`. | `DiffView.swift:5-32` |
 | `SessionFeature/RecentPatch.swift` | Listens for `.approvalPending(kind:.patch)` events and forwards the unified-diff string to a sheet. **Works for patch approvals.** | `RecentPatch.swift:24-40` |
 
-**Net:** the *client-side primitive* (`GitClient`) and the *diff renderer* (`DiffView`) are both real and unused. The gap is entirely **conduitd RPCs + one store that calls `GitClient`**. This is a wiring job, not a greenfield build.
+**Net:** the *client-side primitive* (`GitClient`) and the *diff renderer* (`DiffView`) are both real and unused. The gap is entirely **lancerd RPCs + one store that calls `GitClient`**. This is a wiring job, not a greenfield build.
 
 ---
 
@@ -47,9 +47,9 @@ Legend: ● full · ◐ partial / via-agent · ○ none / N/A.
 
 ---
 
-## 2. What Conduit should offer (framed by "supervision, not IDE")
+## 2. What Lancer should offer (framed by "supervision, not IDE")
 
-Conduit's git is the **review-and-ship tail of an agent loop**: the agent did the work on the host; the phone's job is *see what changed → judge it → ship it → confirm CI is green.* Everything that fights that (manual editing, conflict UIs, blame browsing) is explicitly out.
+Lancer's git is the **review-and-ship tail of an agent loop**: the agent did the work on the host; the phone's job is *see what changed → judge it → ship it → confirm CI is green.* Everything that fights that (manual editing, conflict UIs, blame browsing) is explicitly out.
 
 ### Must-have (v1) — minimum to review + ship agent work — **≤5 items**
 
@@ -66,7 +66,7 @@ Conduit's git is the **review-and-ship tail of an agent loop**: the agent did th
 - **Branch switch / create on the host** (`GitClient.checkout` / `createBranch`) — for "start the agent on a fresh branch" or redirect.
 - **Worktree board that actually works** — wire `fetchWorktrees()` to a real `agent.worktree.list` RPC so the existing 3-column board shows *which agent/loop owns which branch + its changed files*. Supervision board, not a worktree manager.
 - **Stage / partial (per-hunk) commit** — CC Pocket's "hunk → chat" and selective staging; lets the user ship *part* of the agent's work. Reuse `GitClient.stage(paths:)`; per-hunk needs `git apply --cached` plumbing.
-- **PR review comments + merge from Conduit** — either deep-link to GitHub Mobile (cheap) or proxy `gh pr review` / `gh pr merge` (richer, more auth surface).
+- **PR review comments + merge from Lancer** — either deep-link to GitHub Mobile (cheap) or proxy `gh pr review` / `gh pr merge` (richer, more auth surface).
 
 ### Later / avoid (fights the thesis)
 
@@ -101,7 +101,7 @@ Fleet ▸ Worktree Board (v1.5)
             (now fed by real agent.worktree.list)
 ```
 
-**Flow (v1 happy path):** agent finishes a run → run shows "12 files changed on `feat/x`" → user taps **Review diff** (`DiffView`) → taps **Ship it** → confirmation sheet (diff summary + commit message prefilled from run goal) → conduitd runs commit+push+`gh pr create` on the host → Proof Card updates with PR link + checks. This is the *same approve-from-phone gesture* the product already centers on, applied to "ship the branch."
+**Flow (v1 happy path):** agent finishes a run → run shows "12 files changed on `feat/x`" → user taps **Review diff** (`DiffView`) → taps **Ship it** → confirmation sheet (diff summary + commit message prefilled from run goal) → lancerd runs commit+push+`gh pr create` on the host → Proof Card updates with PR link + checks. This is the *same approve-from-phone gesture* the product already centers on, applied to "ship the branch."
 
 ### 3.2 Reuse vs build
 
@@ -116,19 +116,19 @@ Fleet ▸ Worktree Board (v1.5)
 
 | Layer | What to add | Notes |
 |---|---|---|
-| **conduitd RPCs** | `agent.git.status` (→ `GitStatus`), `agent.git.diff` (path?/staged? → unified diff string), `agent.git.changedFiles`, `agent.git.ship` (stage+commit+push+`gh pr create`, returns PR URL), `agent.worktree.list` (→ `[Worktree]`), `agent.ci.recent` (the one iOS already calls but conduitd never registers) | All follow the existing `sendRPC(method:params:)` JSON-RPC pattern (`DaemonChannel.swift:73`). conduitd executes git on the host (it already shells out for hooks/dispatch). Conduitd *could* even reuse the same git invocations `GitClient` uses. |
-| **CI bridge** | Bridge `push-backend/webhooks.go` ring buffer → conduitd, so `agent.ci.recent` returns real `CIEvent`s. Either conduitd proxies push-backend, or push-backend pushes events to conduitd. | audit #13 names both options. |
+| **lancerd RPCs** | `agent.git.status` (→ `GitStatus`), `agent.git.diff` (path?/staged? → unified diff string), `agent.git.changedFiles`, `agent.git.ship` (stage+commit+push+`gh pr create`, returns PR URL), `agent.worktree.list` (→ `[Worktree]`), `agent.ci.recent` (the one iOS already calls but lancerd never registers) | All follow the existing `sendRPC(method:params:)` JSON-RPC pattern (`DaemonChannel.swift:73`). lancerd executes git on the host (it already shells out for hooks/dispatch). Lancerd *could* even reuse the same git invocations `GitClient` uses. |
+| **CI bridge** | Bridge `push-backend/webhooks.go` ring buffer → lancerd, so `agent.ci.recent` returns real `CIEvent`s. Either lancerd proxies push-backend, or push-backend pushes events to lancerd. | audit #13 names both options. |
 | **iOS store** | A `GitStore` (mirror of `WorktreeStore`) that calls the new RPCs and feeds the Loop/Run "Changes" section. Replace `fetchWorktrees()`'s `return []` with a real `agent.worktree.list` call. | `WorktreeStore.refresh()` already iterates connected slots — only `fetchWorktrees()` is hollow. |
 | **iOS UI glue** | A "Changes" section on the run/loop detail + a "Ship it" confirmation sheet (reuse approval-sheet styling). Wire PR link + checks into `ProofCardModel`. | No new rendering primitives needed. |
 
-**Decision: client-side `GitClient` over SSH, OR conduitd-side git RPCs?**
-The architecture says git runs *on the host via conduitd* (phone = control surface). Two viable paths:
-- **(A) conduitd owns git** (recommended): add `agent.git.*` / `agent.worktree.*` RPCs; conduitd runs git/`gh` on the host. Keeps a single host-side chokepoint (consistent with policy/audit/approvals), works through the relay, and `GitClient`'s shell-quoting + porcelain parsers can be **ported into the Go daemon** (or conduitd shells the same commands). `GitClient` then becomes a fallback/local-SSH path.
-- **(B) iOS `GitClient` over the SSH command channel** (already built): zero daemon work — the app runs git directly over SSH. Faster to ship a demo, but bypasses conduitd governance (no audit/policy on git ops) and won't work over the pure-relay path where there's no raw SSH command channel.
+**Decision: client-side `GitClient` over SSH, OR lancerd-side git RPCs?**
+The architecture says git runs *on the host via lancerd* (phone = control surface). Two viable paths:
+- **(A) lancerd owns git** (recommended): add `agent.git.*` / `agent.worktree.*` RPCs; lancerd runs git/`gh` on the host. Keeps a single host-side chokepoint (consistent with policy/audit/approvals), works through the relay, and `GitClient`'s shell-quoting + porcelain parsers can be **ported into the Go daemon** (or lancerd shells the same commands). `GitClient` then becomes a fallback/local-SSH path.
+- **(B) iOS `GitClient` over the SSH command channel** (already built): zero daemon work — the app runs git directly over SSH. Faster to ship a demo, but bypasses lancerd governance (no audit/policy on git ops) and won't work over the pure-relay path where there's no raw SSH command channel.
 
-**Recommendation:** ship v1 read paths (status/diff/changedFiles) via **(A) conduitd RPCs** for governance consistency, and treat the existing `GitClient` as the proven reference implementation to port / as a direct-SSH fallback. The **write path ("Ship it")** *must* go through conduitd so it lands in the tamper-evident audit log and can be policy-gated.
+**Recommendation:** ship v1 read paths (status/diff/changedFiles) via **(A) lancerd RPCs** for governance consistency, and treat the existing `GitClient` as the proven reference implementation to port / as a direct-SSH fallback. The **write path ("Ship it")** *must* go through lancerd so it lands in the tamper-evident audit log and can be policy-gated.
 
-### 3.3 Conduitd RPC sketch (matches existing envelope)
+### 3.3 Lancerd RPC sketch (matches existing envelope)
 
 ```
 // status
@@ -149,7 +149,7 @@ The architecture says git runs *on the host via conduitd* (phone = control surfa
 → {"method":"agent.worktree.list","params":{}}
 ← {"worktrees":[{ Worktree JSON }]}
 
-// CI (already called by iOS; register it on conduitd + bridge push-backend)
+// CI (already called by iOS; register it on lancerd + bridge push-backend)
 → {"method":"agent.ci.recent","params":{"repo":"o/r","limit":50}}
 ← {"events":[{ CIEvent JSON }]}
 ```
@@ -161,13 +161,13 @@ The architecture says git runs *on the host via conduitd* (phone = control surfa
 **Effort (rough):**
 - **v1 read (status/diff/changedFiles + UI section):** Low. `GitClient` + `DiffView` exist; ~2 RPCs + a store + a detail section.
 - **v1 "Ship it" write:** Low–Medium. One RPC orchestrating commit+push+`gh pr create`; the risk is auth (below) and a good confirmation UX.
-- **CI bridge (`agent.ci.recent`):** Medium. Cross-process plumbing (push-backend → conduitd) is the real work; the iOS side already calls it.
+- **CI bridge (`agent.ci.recent`):** Medium. Cross-process plumbing (push-backend → lancerd) is the real work; the iOS side already calls it.
 - **Worktree board real data:** Low. UI built; one RPC + replace `return []`.
 - **Per-hunk staging (v1.5):** Medium. `git apply --cached` of selected hunks is fiddly.
 
 **Risks & open questions:**
 
-1. **PR-creation auth.** `gh pr create` needs `gh` authenticated on the host (audit #2 found *"agent-auth error: No API keys found"* on the live VPS — so `gh` is likely **not** authenticated today). Options: (a) require `gh auth login` on the host as a `conduit doctor` check; (b) route a GitHub token through the **Secrets Broker** (`agent.secret.*`, already built per audit #11) and export `GH_TOKEN` for the `gh` call — keeps the token off the phone and inside conduitd's governance. **Recommend (b) + a doctor check.** Open: per-repo vs per-host token scoping.
+1. **PR-creation auth.** `gh pr create` needs `gh` authenticated on the host (audit #2 found *"agent-auth error: No API keys found"* on the live VPS — so `gh` is likely **not** authenticated today). Options: (a) require `gh auth login` on the host as a `lancer doctor` check; (b) route a GitHub token through the **Secrets Broker** (`agent.secret.*`, already built per audit #11) and export `GH_TOKEN` for the `gh` call — keeps the token off the phone and inside lancerd's governance. **Recommend (b) + a doctor check.** Open: per-repo vs per-host token scoping.
 2. **Large-diff scaling.** `GitClient.diff()` returns the *entire* unified diff as one string over the channel; a big agent change (or a generated lockfile) can be megabytes. Need: per-file lazy diff (`diff(path:)` already supports it), a size cap with "diff too large — open on host / PR" fallback, and binary-file elision. `DiffView` is `LazyVStack`-based so rendering scales, but transport doesn't.
 3. **Monorepo / worktree edge cases.** `workdir` must be the *agent's actual worktree path*, not the repo root — the `Worktree.path` field carries this, but the Loop/Run → workdir mapping must be reliable (ties into audit #6's "Loop needs a producer"). Detached HEAD, multiple worktrees of one repo, and submodules need graceful degradation (status already handles detached `HEAD`).
 4. **"Ship" idempotency & partial failure.** commit-ok-but-push-fails, or push-ok-but-`gh`-fails, must surface a precise state (not a generic error) and be safely retryable — mirror the approval-decision idempotency the research backlog already calls for. `GitClient` returns `GitCommandError` with combined stdout/stderr, which helps.
@@ -181,11 +181,11 @@ The architecture says git runs *on the host via conduitd* (phone = control surfa
 **Recommended v1 must-have set (≤5):**
 1. Changed-files + unified diff per run/loop (reuse `GitClient.diff/changedFiles` → `DiffView`).
 2. Agent's branch + git status on the run/loop (reuse `GitClient.status/currentBranch`).
-3. One-tap **Ship it** = commit + push + open PR (reuse `GitClient.stage/commit/push/createPullRequest`, via conduitd).
+3. One-tap **Ship it** = commit + push + open PR (reuse `GitClient.stage/commit/push/createPullRequest`, via lancerd).
 4. PR status + checks on run/loop & Proof Card (reuse `CIEvent`; wire the CI bridge).
 5. PR link in the Proof Card.
 
-**Reuse vs build:** The hard parts are already built and unused — `GitClient` (every git primitive, shell-safe), `DiffView`/`DiffKit`, `RecentPatch`, and the `Worktree`/`CIEvent`/`ProofCardModel` models, plus the finished `WorktreeBoardView`. **The entire gap is wiring:** ~5 conduitd RPCs (`agent.git.status/diff/changedFiles/ship`, `agent.worktree.list`, plus registering the already-called `agent.ci.recent`), bridging push-backend CI → conduitd, a `GitStore` that calls them, and a "Changes" section + "Ship it" sheet on the run detail. Write paths go through conduitd for audit/policy coverage; the existing `GitClient` is the reference impl and a direct-SSH fallback. Avoid manual editing, conflict UIs, and blame/history — they fight the "supervision, not IDE" thesis.
+**Reuse vs build:** The hard parts are already built and unused — `GitClient` (every git primitive, shell-safe), `DiffView`/`DiffKit`, `RecentPatch`, and the `Worktree`/`CIEvent`/`ProofCardModel` models, plus the finished `WorktreeBoardView`. **The entire gap is wiring:** ~5 lancerd RPCs (`agent.git.status/diff/changedFiles/ship`, `agent.worktree.list`, plus registering the already-called `agent.ci.recent`), bridging push-backend CI → lancerd, a `GitStore` that calls them, and a "Changes" section + "Ship it" sheet on the run detail. Write paths go through lancerd for audit/policy coverage; the existing `GitClient` is the reference impl and a direct-SSH fallback. Avoid manual editing, conflict UIs, and blame/history — they fight the "supervision, not IDE" thesis.
 
 **Doc path:** `docs/audit/GIT_SUPPORT_RESEARCH.md`
 
@@ -203,5 +203,5 @@ The architecture says git runs *on the host via conduitd* (phone = control surfa
 - opencode (mobile + PR review on open): https://opencode.ai/docs/github/ · https://hubtool.ai/opencode
 - GitKraken / Tower (desktop-only; no iOS): https://www.git-tower.com/blog/history-of-ios · https://www.softwaresuggest.com/gitkraken-client
 - `gh` headless auth (`GH_TOKEN` / `gh auth login --with-token`): https://cli.github.com/manual/gh_auth_login · https://josh-ops.com/posts/gh-auth-login-in-actions/
-- Conduit thesis & backlog: `~/Downloads/conduit-competitor-research-feature-backlog-2026-06-14.md`
-- Conduit current-state audit: `docs/audit/FEATURE_VERIFICATION_AUDIT.md`
+- Lancer thesis & backlog: `~/Downloads/lancer-competitor-research-feature-backlog-2026-06-14.md`
+- Lancer current-state audit: `docs/audit/FEATURE_VERIFICATION_AUDIT.md`

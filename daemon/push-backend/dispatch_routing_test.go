@@ -12,7 +12,7 @@ import (
 func TestProviderForRouting(t *testing.T) {
 	setProviderOverrideForTest(nil) // exercise the real switch, not the test hook
 	t.Cleanup(func() { setProviderOverrideForTest(nil) })
-	t.Setenv("CONDUIT_LOCAL_RUNNER", "") // ensure local-runner shortcut is off
+	t.Setenv("LANCER_LOCAL_RUNNER", "") // ensure local-runner shortcut is off
 
 	cases := []struct {
 		runtime string
@@ -46,12 +46,12 @@ func TestProviderForRouting(t *testing.T) {
 	}
 }
 
-// With CONDUIT_LOCAL_RUNNER=1 every non-ssh-host runtime routes to the local
+// With LANCER_LOCAL_RUNNER=1 every non-ssh-host runtime routes to the local
 // process provider (the dev/e2e path); ssh-host still returns nil.
 func TestProviderForLocalRunnerOverride(t *testing.T) {
 	setProviderOverrideForTest(nil)
 	t.Cleanup(func() { setProviderOverrideForTest(nil) })
-	t.Setenv("CONDUIT_LOCAL_RUNNER", "1")
+	t.Setenv("LANCER_LOCAL_RUNNER", "1")
 
 	if got := providerFor("gcp_cloud_run"); typeName(got) != typeName(processProvider{}) {
 		t.Errorf("local runner: gcp routed to %T, want processProvider", got)

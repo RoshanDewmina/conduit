@@ -1,8 +1,8 @@
-# Conduit Relay Chat UX — Research + Design Spec
+# Lancer Relay Chat UX — Research + Design Spec
 
 > **Target:** Best-in-class mobile agent-chat experience on the relay run screen.
 > **Aesthetic:** opencode TUI, but for mobile — monospace, terminal-flavored, tasteful motion.
-> **Constraint:** Zero new colors or fonts. Every element maps to existing `ConduitTokens` / components.
+> **Constraint:** Zero new colors or fonts. Every element maps to existing `LancerTokens` / components.
 
 ---
 
@@ -17,7 +17,7 @@
 | `.working` | Per-segment staggered ease-in-out pulse (1.05 s cycle) | Agent actively executing / thinking |
 | `.scan` | Blurred bright bar tracking across | Connecting / establishing link |
 
-Animations reset on mode change (`onChange(of: mode) { start = Date() }`). Height defaults 6 pt, gap 1.5. Uses `ConduitTokens.spectrumColors` (7-segment famicom palette).
+Animations reset on mode change (`onChange(of: mode) { start = Date() }`). Height defaults 6 pt, gap 1.5. Uses `LancerTokens.spectrumColors` (7-segment famicom palette).
 
 ### 1.2 AgentState + AgentStateContext (`DesignSystem/Components/AgentState.swift`)
 
@@ -150,7 +150,7 @@ Current relay control surface:
 
 ---
 
-## 3. SPEC: Conduit relay-chat screen
+## 3. SPEC: Lancer relay-chat screen
 
 ### 3.1 Screen layout (top → bottom)
 

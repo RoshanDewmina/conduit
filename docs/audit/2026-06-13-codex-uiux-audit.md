@@ -4,14 +4,14 @@
 
 Branch: `codex/uiux-audit`
 
-Target: Conduit iOS on the iPhone 17 Pro Device Hub runtime, Xcode 27.0 beta (`27A5194q`), iOS 27.0 simulator runtime.
+Target: Lancer iOS on the iPhone 17 Pro Device Hub runtime, Xcode 27.0 beta (`27A5194q`), iOS 27.0 simulator runtime.
 
 Primary inventory reviewed:
 
 - `docs/design-handoff/PAGES.md`
 - `docs/design-handoff/screenshots/`
 - `docs/design-handoff/BACKEND_COVERAGE.md`
-- `docs/superpowers/specs/2026-06-12-conduit-pixel-perfect-polish-plan.md`
+- `docs/superpowers/specs/2026-06-12-lancer-pixel-perfect-polish-plan.md`
 
 Apple docs checked while judging macOS 27 / Xcode 27 behavior and HIG issues:
 
@@ -39,7 +39,7 @@ The runtime was still unstable later in the pass:
 - `simctl io booted screenshot` worked but was slow.
 - The iPhone 17 Pro runtime shut down during screenshot/install cycles.
 - After a reboot, MCP taps sometimes returned success while the screen hash stayed unchanged.
-- XCUITest could synthesize taps, but the iOS 27 runner repeatedly terminated with `Test crashed with signal term` / `SBMainWorkspace` request denied while relaunching `dev.conduit.mobile.uitests.xctrunner`.
+- XCUITest could synthesize taps, but the iOS 27 runner repeatedly terminated with `Test crashed with signal term` / `SBMainWorkspace` request denied while relaunching `dev.lancer.mobile.uitests.xctrunner`.
 
 Because of that, I treated fresh screenshots as evidence only for the affected surfaces and used the existing design-handoff inventory plus source review for the full route pass. I did not fake a full fresh recapture.
 
@@ -55,7 +55,7 @@ Fix: preserve compact visual height, but wrap every `DSButton` in a minimum 44 x
 
 Files:
 
-- `Packages/ConduitKit/Sources/DesignSystem/Components/DSButton.swift`
+- `Packages/LancerKit/Sources/DesignSystem/Components/DSButton.swift`
 
 Verification screenshots:
 
@@ -72,7 +72,7 @@ Fix: expand the reconnect affordance to a fixed 44 x 44 pt slot without changing
 
 Files:
 
-- `Packages/ConduitKit/Sources/AppFeature/FleetView.swift`
+- `Packages/LancerKit/Sources/AppFeature/FleetView.swift`
 
 Verification screenshots:
 
@@ -89,7 +89,7 @@ Fix: replace the custom row with `DSDetailHeader("connect", onBack:)`.
 
 Files:
 
-- `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+- `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
 
 Verification screenshot:
 
@@ -107,7 +107,7 @@ Fix: only swipe when the target is below the safe bottom threshold; otherwise st
 
 Files:
 
-- `ConduitUITests/TapInjectionProofTests.swift`
+- `LancerUITests/TapInjectionProofTests.swift`
 
 ## Page review
 
@@ -149,18 +149,18 @@ Files:
 Passed:
 
 - `xcodegen generate`
-- `cd Packages/ConduitKit && swift build`
-- `xcodebuild -project Conduit.xcodeproj -scheme Conduit -destination 'platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730' -configuration Debug -derivedDataPath /tmp/conduit-dd-codex build`
-- `cd Packages/ConduitKit && swift test`
+- `cd Packages/LancerKit && swift build`
+- `xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730' -configuration Debug -derivedDataPath /tmp/lancer-dd-codex build`
+- `cd Packages/LancerKit && swift test`
   - 6 XCTest cases passed in `NotificationFilterXCTests`
   - 345 Swift Testing tests passed across 57 suites
 - Manual Device Hub tap gate: Inbox -> Fleet changed screen
 
 Partially verified / blocked by beta runtime:
 
-- `xcodebuild test ... -only-testing:ConduitUITests/TapInjectionProofTests`
-  - First run: the approval tap and visual attachment paths executed, but the suite failed after the iOS 27 runner restarted and later refused to launch the xctrunner. Result: `/tmp/conduit-tap-proof.xcresult`.
-  - Rerun after `@MainActor`: zero warnings in the result bundle, but the first approval test terminated with `Test crashed with signal term`. Result: `/tmp/conduit-tap-proof-rerun.xcresult`.
+- `xcodebuild test ... -only-testing:LancerUITests/TapInjectionProofTests`
+  - First run: the approval tap and visual attachment paths executed, but the suite failed after the iOS 27 runner restarted and later refused to launch the xctrunner. Result: `/tmp/lancer-tap-proof.xcresult`.
+  - Rerun after `@MainActor`: zero warnings in the result bundle, but the first approval test terminated with `Test crashed with signal term`. Result: `/tmp/lancer-tap-proof-rerun.xcresult`.
 
 The Xcode 27 failure mode matches the observed Device Hub instability, not an app assertion failure.
 
@@ -168,7 +168,7 @@ The Xcode 27 failure mode matches the observed Device Hub instability, not an ap
 
 - Full fresh dark/light screenshot recapture for all 66 baseline screenshots. Device Hub screenshot and launch instability made this impractical in one pass; the route inventory was still reviewed against existing screenshots and source.
 - Light-mode after-shot for the connect sheet. The post-reboot tap path no-oped.
-- Live `CONDUIT_GALLERY=session` real localhost SSH flow. This needs Remote Login and a valid `conduit-localhost-ssh` keychain entry.
+- Live `LANCER_GALLERY=session` real localhost SSH flow. This needs Remote Login and a valid `lancer-localhost-ssh` keychain entry.
 - Physical-device APNs and lock-screen/Watch approval copy. Do not treat lock-screen/Watch claims as verified from this simulator pass.
 - Cloud/paid entitlement inner screens. I evaluated locked/baseline states only.
 

@@ -1,0 +1,34 @@
+{
+  "agent": "goose",
+  "socketPath": "~/.lancer/lancerd.sock",
+  "tools": [
+    {
+      "name": "bash",
+      "description": "Execute a shell command",
+      "agentHook": "hooks",
+      "kind": "command",
+      "risk": 2
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to a file",
+      "agentHook": "hooks",
+      "kind": "fileWrite",
+      "risk": 2
+    },
+    {
+      "name": "read_file",
+      "description": "Read a file",
+      "agentHook": "hooks",
+      "kind": "read",
+      "risk": 0
+    },
+    {
+      "name": "edit_file",
+      "description": "Edit a file",
+      "agentHook": "hooks",
+      "kind": "patch",
+      "risk": 2
+    }
+  ]
+}

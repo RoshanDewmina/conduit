@@ -11,8 +11,8 @@ default_platform(:ios)
 #   fastlane beta       # archive + TestFlight
 #   fastlane release    # archive + App Store submission
 
-APP_ID = "dev.conduit.mobile"
-APP_NAME = "Conduit"
+APP_ID = "dev.lancer.mobile"
+APP_NAME = "Lancer"
 
 platform :ios do
 
@@ -33,15 +33,15 @@ platform :ios do
   lane :build do
     increment_build_number(
       build_number: latest_testflight_build_number + 1,
-      xcodeproj: "Conduit.xcodeproj"
+      xcodeproj: "Lancer.xcodeproj"
     )
     build_app(
-      project: "Conduit.xcodeproj",
-      scheme: "Conduit",
+      project: "Lancer.xcodeproj",
+      scheme: "Lancer",
       configuration: "Release",
       export_method: "app-store",
       output_directory: "./build",
-      output_name: "Conduit.ipa"
+      output_name: "Lancer.ipa"
     )
   end
 

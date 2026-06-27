@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # resident-bridge-smoke.sh — resident daemon + fail-closed + attach + audit (no iOS)
 # Usage:
-#   cd daemon/conduitd && go build -o conduitd .
-#   CONDUITD_BINARY=./daemon/conduitd/conduitd ./scripts/validation/resident-bridge-smoke.sh
+#   cd daemon/lancerd && go build -o lancerd .
+#   LANCERD_BINARY=./daemon/lancerd/lancerd ./scripts/validation/resident-bridge-smoke.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CONDUITD="${CONDUITD_BINARY:-$REPO_ROOT/daemon/conduitd/conduitd}"
-STATE_DIR="$(mktemp -d /tmp/conduit-resident-smoke.XXXXXX)"
-export CONDUIT_STATE_DIR="$STATE_DIR"
+LANCERD="${LANCERD_BINARY:-$REPO_ROOT/daemon/lancerd/lancerd}"
+STATE_DIR="$(mktemp -d /tmp/lancer-resident-smoke.XXXXXX)"
+export LANCER_STATE_DIR="$STATE_DIR"
 
 PASS=0
 FAIL=0
@@ -25,15 +25,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "--- resident-bridge-smoke (state: $CONDUIT_STATE_DIR) ---"
+echo "--- resident-bridge-smoke (state: $LANCER_STATE_DIR) ---"
 
-if [[ ! -x "$CONDUITD" ]]; then
-  echo "Build conduitd first: cd daemon/conduitd && go build -o conduitd ."
+if [[ ! -x "$LANCERD" ]]; then
+  echo "Build lancerd first: cd daemon/lancerd && go build -o lancerd ."
   exit 1
 fi
 
 echo "--- 1. Mutating hook held while daemon down ---"
-if "$CONDUITD" agent-hook --agent claudeCode --kind command --command "ls" --cwd "/tmp" 2>"$STATE_DIR/hook-down.err"; then
+if "$LANCERD" agent-hook --agent claudeCode --kind command --command "ls" --cwd "/tmp" 2>"$STATE_DIR/hook-down.err"; then
   fail "command hook should exit non-zero when daemon down"
 else
   if grep -q "mutating action held" "$STATE_DIR/hook-down.err"; then
@@ -44,13 +44,13 @@ else
 fi
 
 echo "--- 2. Start resident daemon ---"
-"$CONDUITD" daemon &
+"$LANCERD" daemon &
 DAEMON_PID=$!
 for _ in $(seq 1 50); do
-  if [[ -S "$STATE_DIR/conduitd.sock" ]]; then break; fi
+  if [[ -S "$STATE_DIR/lancerd.sock" ]]; then break; fi
   sleep 0.1
 done
-if [[ ! -S "$STATE_DIR/conduitd.sock" ]]; then
+if [[ ! -S "$STATE_DIR/lancerd.sock" ]]; then
   fail "resident socket did not appear"
   exit 1
 fi
@@ -59,7 +59,7 @@ pass "resident socket listening"
 echo "--- 3. Hook queues / escalates with daemon up (fileWrite) ---"
 # Use a kind that default policy asks on (not auto-denied).
 set +e
-"$CONDUITD" agent-hook --agent claudeCode --kind fileWrite --command "notes.txt" --cwd "/tmp" --risk 0 \
+"$LANCERD" agent-hook --agent claudeCode --kind fileWrite --command "notes.txt" --cwd "/tmp" --risk 0 \
   >"$STATE_DIR/hook-up.out" 2>"$STATE_DIR/hook-up.err"
 HOOK_RC=$?
 set -e
@@ -76,8 +76,8 @@ echo "--- 4. Attach client + audit.tail ---"
 python3 - <<'PY' || fail "attach + audit.tail failed"
 import json, os, socket, struct, sys
 
-state = os.environ["CONDUIT_STATE_DIR"]
-sock_path = os.path.join(state, "conduitd.sock")
+state = os.environ["LANCER_STATE_DIR"]
+sock_path = os.path.join(state, "lancerd.sock")
 
 def frame(obj):
     b = json.dumps(obj).encode()

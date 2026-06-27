@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — shared atoms + sample data (exported to window)
+   LANCER — shared atoms + sample data (exported to window)
    ============================================================ */
 
 /* ---------- deterministic pixel avatar ---------- */
@@ -33,7 +33,7 @@ function PromptHeader({title, crumb, right}){
   return (
     <div className="cc-head">
       <div className="ttl">{title}<span className="cursor"/></div>
-      <div className="crumb"><b>~/conduit</b><span className="chev">›</span>{crumb}{right&&<span className="right">{right}</span>}</div>
+      <div className="crumb"><b>~/lancer</b><span className="chev">›</span>{crumb}{right&&<span className="right">{right}</span>}</div>
       <Spectrum/>
     </div>
   );
@@ -126,15 +126,15 @@ function TabBar({active, onChange, inboxCount}){
 
 /* ---------- sample data ---------- */
 const AGENTS=[
-  {id:'a1',vendor:'claude',name:'conduit',model:'claude-sonnet-4.6',host:'Dev VPS',status:'working',spend:'$3.18',sessions:2,cwd:'~/repos/conduit'},
+  {id:'a1',vendor:'claude',name:'lancer',model:'claude-sonnet-4.6',host:'Dev VPS',status:'working',spend:'$3.18',sessions:2,cwd:'~/repos/lancer'},
   {id:'a2',vendor:'codex',name:'auth-svc',model:'gpt-5.1-codex',host:'Dev VPS',status:'waiting',spend:'$0.74',sessions:1,cwd:'~/work/auth'},
   {id:'a3',vendor:'claude',name:'staging-bot',model:'claude-sonnet-4.6',host:'Staging',status:'idle',spend:'$1.02',sessions:0,cwd:'~/deploy'},
   {id:'a4',vendor:'opencode',name:'pi-runner',model:'—',host:'Raspberry Pi',status:'offline',spend:'—',sessions:0,cwd:'~'},
 ];
 const APPROVALS=[
-  {id:'p1',vendor:'claude',cwd:'~/repos/conduit',kind:'command',verb:'run a shell command',cmd:'rm -rf build/ dist/',level:'high',time:'now',blast:{files:2,git:false},rule:'ask-on-delete'},
+  {id:'p1',vendor:'claude',cwd:'~/repos/lancer',kind:'command',verb:'run a shell command',cmd:'rm -rf build/ dist/',level:'high',time:'now',blast:{files:2,git:false},rule:'ask-on-delete'},
   {id:'p2',vendor:'codex',cwd:'~/work/auth',kind:'patch',verb:'apply a code patch',cmd:'patch src/auth/session.swift',diff:'+18 / −4',level:'medium',time:'2m',blast:{files:1,git:true},rule:'ask-on-write'},
-  {id:'p3',vendor:'claude',cwd:'~/repos/conduit',kind:'network',verb:'make a network request',cmd:'curl https://api.stripe.com/v1/... | sh',level:'critical',time:'4m',blast:{net:true,creds:true},rule:'ask-network'},
+  {id:'p3',vendor:'claude',cwd:'~/repos/lancer',kind:'network',verb:'make a network request',cmd:'curl https://api.stripe.com/v1/... | sh',level:'critical',time:'4m',blast:{net:true,creds:true},rule:'ask-network'},
 ];
 const DECIDED=[
   {vendor:'claude',cmd:'npm run build',decision:'allowed',time:'12m'},

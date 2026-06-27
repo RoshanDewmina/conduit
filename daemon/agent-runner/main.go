@@ -15,18 +15,18 @@ import (
 
 func main() {
 	// 1. Read and validate required env vars
-	runID := os.Getenv("CONDUIT_RUN_ID")
-	token := os.Getenv("CONDUIT_RUNNER_TOKEN")
-	baseURL := os.Getenv("CONDUIT_CONTROL_PLANE_URL")
-	commandArgvJSON := os.Getenv("CONDUIT_COMMAND_ARGV")
+	runID := os.Getenv("LANCER_RUN_ID")
+	token := os.Getenv("LANCER_RUNNER_TOKEN")
+	baseURL := os.Getenv("LANCER_CONTROL_PLANE_URL")
+	commandArgvJSON := os.Getenv("LANCER_COMMAND_ARGV")
 
 	if runID == "" || token == "" || baseURL == "" || commandArgvJSON == "" {
-		log.Fatalf("required env vars missing: CONDUIT_RUN_ID, CONDUIT_RUNNER_TOKEN, CONDUIT_CONTROL_PLANE_URL, CONDUIT_COMMAND_ARGV")
+		log.Fatalf("required env vars missing: LANCER_RUN_ID, LANCER_RUNNER_TOKEN, LANCER_CONTROL_PLANE_URL, LANCER_COMMAND_ARGV")
 	}
 
 	var argv []string
 	if err := json.Unmarshal([]byte(commandArgvJSON), &argv); err != nil || len(argv) == 0 {
-		log.Fatalf("CONDUIT_COMMAND_ARGV must be a valid non-empty JSON array: %v", err)
+		log.Fatalf("LANCER_COMMAND_ARGV must be a valid non-empty JSON array: %v", err)
 	}
 
 	client := NewClient(baseURL, runID, token)
@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("start command: %v", err)
 	}
 
-	log.Printf("agent-runner: started run=%s agent=%s", runID, os.Getenv("CONDUIT_AGENT_ID"))
+	log.Printf("agent-runner: started run=%s agent=%s", runID, os.Getenv("LANCER_AGENT_ID"))
 
 	// 5. Stream logs to control plane
 	// Collect lines from both pipes and batch-flush every 250ms or 50 lines.
@@ -181,7 +181,7 @@ func main() {
 }
 
 // agentChildEnv returns the env additions handed to the agent command, derived from
-// the CONDUIT_* env the control plane injects. It is split out from main() so the
+// the LANCER_* env the control plane injects. It is split out from main() so the
 // OpenRouter wiring can be unit-tested.
 //
 // The bundled Claude Code CLI authenticates via the Anthropic env vars, NOT
@@ -194,11 +194,11 @@ func main() {
 // OPENROUTER_API_KEY is also exported for any agent command that reads it directly.
 func agentChildEnv() []string {
 	var env []string
-	if model := os.Getenv("CONDUIT_MODEL"); model != "" {
+	if model := os.Getenv("LANCER_MODEL"); model != "" {
 		env = append(env, "ANTHROPIC_MODEL="+model, "OPENROUTER_DEFAULT_MODEL="+model)
 	}
-	if key := os.Getenv("CONDUIT_OPENROUTER_KEY"); key != "" {
-		base := os.Getenv("CONDUIT_OPENROUTER_BASE_URL")
+	if key := os.Getenv("LANCER_OPENROUTER_KEY"); key != "" {
+		base := os.Getenv("LANCER_OPENROUTER_BASE_URL")
 		if base == "" {
 			base = "https://openrouter.ai/api"
 		}

@@ -16,9 +16,9 @@ const fira = Fira_Code({
   display: "swap",
 });
 
-const TITLE = "Conduit — Approve your agents. Keep your code.";
+const TITLE = "Lancer — Approve your agents. Keep your code.";
 const DESCRIPTION =
-  "Conduit is a phone-first approval, policy, and audit layer for AI coding agents — Claude Code, Codex, and opencode. Risky actions pause and ping your phone; safe actions auto-run by your policy. Your code never leaves your machine.";
+  "Lancer is a phone-first approval, policy, and audit layer for AI coding agents — Claude Code, Codex, and opencode. Risky actions pause and ping your phone; safe actions auto-run by your policy. Your code never leaves your machine.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://conduit.dev"),
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "https://conduit.dev",
-    siteName: "Conduit",
+    siteName: "Lancer",
     // Add public/og.png (1200x630) before launch — referenced here as the OG image.
     images: [{ url: "/og.png", width: 1200, height: 630, alt: TITLE }],
     locale: "en_US",

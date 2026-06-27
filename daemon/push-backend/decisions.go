@@ -2,14 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
 )
 
 // decisionRecord is a phone-posted approval decision awaiting pickup by the
-// conduitd resident that owns the session. In-memory is sufficient: a decision
-// only needs to outlive conduitd's ~120s approval wait.
+// lancerd resident that owns the session. In-memory is sufficient: a decision
+// only needs to outlive lancerd's ~120s approval wait.
 type decisionRecord struct {
 	ApprovalID      string `json:"approvalId"`
 	Decision        string `json:"decision"` // approve | approveAlways | deny
@@ -19,10 +20,10 @@ type decisionRecord struct {
 }
 
 const (
-	// decisionTTL bounds how long an un-polled decision is retained. conduitd's
+	// decisionTTL bounds how long an un-polled decision is retained. lancerd's
 	// approval wait is ~120s; we keep a margin then evict so decisions posted for
 	// sessions that never poll (dead sessions, or an attacker flooding sessionIds)
-	// cannot grow the map without bound. A lost decision fails safe: conduitd's
+	// cannot grow the map without bound. A lost decision fails safe: lancerd's
 	// 120s wait elapses and the approval auto-denies.
 	decisionTTL = 5 * time.Minute
 	// maxDecisionsPerSession caps distinct pending decisions for one session, to
@@ -74,7 +75,7 @@ func evictExpiredDecisionsLocked(now int64) {
 // handlePostDecision: POST /approval/decision { approvalId, decision, sessionId, editedToolInput? }
 //
 // Tier-2 auth: requires `Authorization: Bearer <relayToken>` matching the token
-// conduitd registered for sessionId (constant-time). Input is validated first so
+// lancerd registered for sessionId (constant-time). Input is validated first so
 // malformed requests get a generic 400; a valid-looking request with a
 // missing/wrong/unknown token gets 401 with NO side effects (fail-safe — never
 // auto-resolve on an auth failure).
@@ -93,7 +94,7 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "field too large", http.StatusBadRequest)
 		return
 	}
-	// Fail safe: never relay a decision verb we don't understand. conduitd treats
+	// Fail safe: never relay a decision verb we don't understand. lancerd treats
 	// any non-approve value as deny, so silently forwarding garbage could surface
 	// as an unintended deny; reject it at the edge instead.
 	if !validDecision(rec.Decision) {
@@ -107,39 +108,57 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 	rec.CreatedAt = time.Now().Unix()
 
 	decisions.Lock()
-	defer decisions.Unlock()
 	evictExpiredDecisionsLocked(rec.CreatedAt)
 
 	existing := decisions.bySession[rec.SessionID]
 	// Idempotent by approvalId: a re-POST (e.g. a phone retry) replaces the prior
 	// record for the same approvalId rather than appending a duplicate, so the
-	// poller delivers — and conduitd applies — each decision exactly once.
+	// poller delivers — and lancerd applies — each decision exactly once.
 	for i := range existing {
 		if existing[i].ApprovalID == rec.ApprovalID {
 			existing[i] = rec
 			decisions.bySession[rec.SessionID] = existing
+			decisions.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 	}
 	if len(existing) >= maxDecisionsPerSession {
+		decisions.Unlock()
 		http.Error(w, "too many pending decisions for session", http.StatusTooManyRequests)
 		return
 	}
 	if _, ok := decisions.bySession[rec.SessionID]; !ok && len(decisions.bySession) >= maxDecisionSessions {
+		decisions.Unlock()
 		http.Error(w, "decision capacity reached", http.StatusServiceUnavailable)
 		return
 	}
 	decisions.bySession[rec.SessionID] = append(existing, rec)
+	sessionID := rec.SessionID
+	rawDecision := rec.Decision
+	decisions.Unlock()
+
+	var decisionVerb string
+	switch rawDecision {
+	case "approve", "approveAlways":
+		decisionVerb = "approved"
+	default:
+		decisionVerb = "rejected"
+	}
+	// Confirm the decision on the lock-screen Live Activity (incl. cold path).
+	if err := pushLiveActivityDecision(sessionID, decisionVerb); err != nil {
+		log.Printf("live-activity decision push failed: %v", err)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // handlePollDecisions: GET /decisions?sessionId=... -> { decisions: [...] } and drains them.
 //
 // Tier-2 auth: requires `Authorization: Bearer <relayToken>` matching the token
-// conduitd registered for sessionId (constant-time). A missing/wrong/unknown
+// lancerd registered for sessionId (constant-time). A missing/wrong/unknown
 // token returns 401 and does NOT drain (fail-safe — an attacker cannot siphon
-// another session's decisions, and a 401'd conduitd simply retries while its
+// another session's decisions, and a 401'd lancerd simply retries while its
 // ~120s auto-deny backstops any genuinely undelivered decision).
 func handlePollDecisions(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.URL.Query().Get("sessionId")

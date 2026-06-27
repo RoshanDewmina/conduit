@@ -3,17 +3,17 @@
 ## Prerequisites
 - M8 complete: snippets work.
 - Two devices (iPhone + iPad) with the same iCloud account.
-- Conduit app signed with App Store or Development provisioning profile with iCloud entitlements.
+- Lancer app signed with App Store or Development provisioning profile with iCloud entitlements.
 
 ## Steps
 
 ### 1. Verify iCloud entitlements
-Settings → General → VPN & Device Management → verify iCloud container `iCloud.dev.conduit.mobile` appears in the app's entitlements.
+Settings → General → VPN & Device Management → verify iCloud container `iCloud.dev.lancer.mobile` appears in the app's entitlements.
 
 ### 2. Add host on iPhone
-Open Conduit on iPhone → Workspaces → Add host "Sync Test" → Save.
+Open Lancer on iPhone → Workspaces → Add host "Sync Test" → Save.
 
-**Expected within 30s:** Open Conduit on iPad → Workspaces → "Sync Test" host appears.
+**Expected within 30s:** Open Lancer on iPad → Workspaces → "Sync Test" host appears.
 
 ### 3. Add snippet on iPad
 Settings → Snippets → + → name "List files", body "ls -la" → Save.

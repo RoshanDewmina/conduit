@@ -1,18 +1,18 @@
-# Conduit — Feature Verification Audit ("built vs actually-works")
+# Lancer — Feature Verification Audit ("built vs actually-works")
 
 **Date:** 2026-06-15
 **Auditor pass:** static data-path trace + live read-only probe against the running VPS daemon.
 **Subject:** the 15–18 competitor-research features claimed in
-`~/Downloads/conduit-competitor-research-implementation-report.md`.
+`~/Downloads/lancer-competitor-research-implementation-report.md`.
 **Method:** for each feature, trace iOS view → store → `DaemonChannel` RPC → daemon handler,
 then probe the live daemon where cheap. Verdicts cite `file:line`.
 
 ## Live environment used
 
-- `ssh hermes-box` → `silvapulle@100.83.108.60`, **conduitd `0.2.0-vps-20260615`**, resident
-  daemon running, socket `~/.conduit/conduitd.sock`, audit log with 2 real entries
+- `ssh hermes-box` → `silvapulle@100.83.108.60`, **lancerd `0.2.0-vps-20260615`**, resident
+  daemon running, socket `~/.lancer/lancerd.sock`, audit log with 2 real entries
   (`escalate` + `approve`, hash-chained).
-- The resident daemon allows **one** attach client; the app's `conduitd serve` was **not**
+- The resident daemon allows **one** attach client; the app's `lancerd serve` was **not**
   attached during the audit, so I attached with the proper `{"op":"attach"}` handshake and
   issued read-only RPCs directly. Raw live results are quoted per-feature below.
 
@@ -22,7 +22,7 @@ then probe the live daemon where cheap. Verdicts cite `file:line`.
 
 | # | Feature | Verdict | One-line evidence |
 |---|---|---|---|
-| 1 | conduit doctor (CLI) | **WORKS-LIVE** | `conduitd doctor` → 10 ok / 1 warn / 0 fail on VPS |
+| 1 | lancer doctor (CLI) | **WORKS-LIVE** | `lancerd doctor` → 10 ok / 1 warn / 0 fail on VPS |
 | 2 | `agent.doctor` RPC + DoctorView | **WIRED-UNPROVEN→LIVE** | RPC returns 6 real computed checks; DoctorView binds `actions.runDoctor()` |
 | 3 | Tamper-evident audit (verify/export) | **WORKS-LIVE** | `agent.audit.verify`→`{valid:true,entryCount:2}`; export returns chained JSONL |
 | 4 | Policy simulator | **WORKS-LIVE** | live `agent.policy.simulate` replayed the real audit entry → `asked:1, ruleHits:[default:ask]` |
@@ -34,8 +34,8 @@ then probe the live daemon where cheap. Verdicts cite `file:line`.
 | 10 | Host-health guard | **WIRED-LIVE (Linux-degraded)** | live health real, but all battery/sleep/lid logic is macOS-only → null on the Linux VPS |
 | 11 | Secrets broker | **WIRED-UNPROVEN** | full store + 6 RPCs; live `agent.secret.list`→`{secrets:[],pending:[]}` |
 | 12 | Worktree / branch board | **NOT-WIRED / NO-OP** | `DaemonChannel.fetchWorktrees()` `return []`; no `agent.worktree.*` RPC; GitClient methods have **no callers** |
-| 13 | CI / PR webhooks | **NOT-WIRED (broken path)** | iOS calls RPC `agent.ci.recent` which **conduitd does not register**; webhook lives only in push-backend, never bridged |
-| 14 | Adapter SPI + conduit-mcp | **WIRED-UNPROVEN** | real stdio MCP server shelling to `conduitd agent-hook`; not exercised this pass |
+| 13 | CI / PR webhooks | **NOT-WIRED (broken path)** | iOS calls RPC `agent.ci.recent` which **lancerd does not register**; webhook lives only in push-backend, never bridged |
+| 14 | Adapter SPI + lancer-mcp | **WIRED-UNPROVEN** | real stdio MCP server shelling to `lancerd agent-hook`; not exercised this pass |
 | 15 | Blocked-state OS | **MOCK-ONLY (gallery)** | `AgentStatusBar`/`DSBlockedReasonRow` instantiated only in DebugGalleryView; real producer hardcodes `blockedReason: nil` |
 | 16 | opencode status path fix | **PARTIAL: path fixed / usage STUB** | path corrected to `~/.config/opencode/opencode.json`; `opencodeUsageUSD` hard-returns `(0,nil,false)` |
 
@@ -45,7 +45,7 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 **Most at risk — "look real, aren't":**
 1. **Quota/Spend Guardrails** — renders cards, real RPC, but daemon never feeds spend → always empty/zero.
 2. **Worktree/Branch Board** — full 3-column UI, but `fetchWorktrees()` is a literal `return []`.
-3. **CI/PR Integration** — UI section + loader present, but the RPC it calls doesn't exist on conduitd.
+3. **CI/PR Integration** — UI section + loader present, but the RPC it calls doesn't exist on lancerd.
 4. **Scoped Allow-Always** — sheet offers repo/path/expiry/revoke, but those choices never reach the daemon (UserDefaults only); `buildPolicyYAML` dead.
 5. **Blocked-State OS** — the "why am I blocked" row only renders in the gallery; production sessions never feed it a reason.
 
@@ -54,8 +54,8 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 ## Per-feature detail
 
 ### 1–2. Doctor (CLI + RPC) — WORKS-LIVE / WIRED→LIVE
-- **CLI** `daemon/conduitd/doctor.go:71` `collectDoctorResults` runs 11 real checks. Live:
-  `conduitd doctor` → `10 ok, 1 warnings, 0 failures` (the warn is "policy.yaml absent → default-ask", desired).
+- **CLI** `daemon/lancerd/doctor.go:71` `collectDoctorResults` runs 11 real checks. Live:
+  `lancerd doctor` → `10 ok, 1 warnings, 0 failures` (the warn is "policy.yaml absent → default-ask", desired).
 - **RPC** `agent.doctor` (`server.go:504`) → `collectDoctorReport()` (`server.go:1105`) is a **separate** 6-check report.
   Live probe returned real data: `daemon-version` pass, `hooks-installed` fail (`Missing config for: codex, opencode`),
   `agent-auth` error (`No API keys found`), `policy-parseable` pass, `fs-permissions` pass, `local-models` none.
@@ -74,7 +74,7 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 
 ### 4. Policy simulator — WORKS-LIVE
 - `policy/simulate.go:44` `Simulate` replays audit entries through the real `Evaluate`; `LoadAuditEntries` :119
-  reads the actual `~/.conduit/audit.log`. Server wrapper `server.go:148 simulatePolicy`.
+  reads the actual `~/.lancer/audit.log`. Server wrapper `server.go:148 simulatePolicy`.
 - **Live:** `agent.policy.simulate` with `default: ask` → `{totalActions:1, asked:1, ruleHits:[{ruleID:"default:ask",
   effect:"ask", count:1, sampleCommands:["ls -la ~"]}], riskDistribution:{low:1}}`. Correctly classified the
   real escalate entry. **This is the standout: it operates on real history.**
@@ -158,15 +158,15 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 
 ### 13. CI / PR webhooks — NOT-WIRED (broken path)
 - `push-backend/webhooks.go` is a real GitHub receiver (HMAC verify, ring buffer) — but it lives in **push-backend**,
-  a different process from conduitd.
-- iOS `DaemonChannel.recentCIEvents` (`:327`) calls RPC **`agent.ci.recent`**, which **conduitd does not register**
+  a different process from lancerd.
+- iOS `DaemonChannel.recentCIEvents` (`:327`) calls RPC **`agent.ci.recent`**, which **lancerd does not register**
   (grep `daemon/` → not found) → "method not found", swallowed by `try?` in `FleetView.swift:451` → `[]`.
-- Nothing bridges push-backend CI events → conduitd → app. The webhook buffer is write-only from the app's POV.
-- **Verdict:** Cut from v1. To revive: either expose CI via push-backend directly to the app, or add a conduitd
+- Nothing bridges push-backend CI events → lancerd → app. The webhook buffer is write-only from the app's POV.
+- **Verdict:** Cut from v1. To revive: either expose CI via push-backend directly to the app, or add a lancerd
   `agent.ci.recent` that proxies push-backend.
 
-### 14. Adapter SPI + conduit-mcp — WIRED-UNPROVEN
-- `conduit-mcp/main.go:97-178`: real stdio MCP server; `tools/call` shells out to `conduitd agent-hook --kind ...`
+### 14. Adapter SPI + lancer-mcp — WIRED-UNPROVEN
+- `lancer-mcp/main.go:97-178`: real stdio MCP server; `tools/call` shells out to `lancerd agent-hook --kind ...`
   and denies on nonzero exit. `docs/adapter-spi.md` documents Class A/B. Builds (`go 1.22` module).
 - Not exercised this pass (would need a Goose/Cline client). The hook path it targets *is* proven (Phase 3 approve loop).
 - **Verdict:** Keep as an extensibility bet; low risk because it reuses the proven `agent-hook` chokepoint. Don't
@@ -192,7 +192,7 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 ## Ship vs cut vs fix (v1 — thesis: "supervision, not mobile IDE")
 
 **SHIP (real, on-spine, trust-building):**
-- conduit doctor (CLI + RPC) — proven.
+- lancer doctor (CLI + RPC) — proven.
 - Tamper-evident audit — proven; add the negative/tamper unit test.
 - Policy simulator — proven; best differentiator of the batch.
 - Proof card — real, degrades gracefully.
@@ -209,7 +209,7 @@ MIXED/PARTIAL 3 · MOCK-ONLY 1 · STUB/NO-OP 1 · NOT-WIRED 2.
 - **CI/PR integration** — calls a nonexistent RPC; hide the section until bridged.
 
 **DEFER (real plumbing, unexercised — fine to keep dark):**
-- Secrets broker, Adapter SPI + conduit-mcp, Loop object (needs a producer), Privacy badge "local-proof" fields.
+- Secrets broker, Adapter SPI + lancer-mcp, Loop object (needs a producer), Privacy badge "local-proof" fields.
 
 ## Prioritized shortlist — highest-value things to actually make work
 

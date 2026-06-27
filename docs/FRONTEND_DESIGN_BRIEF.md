@@ -1,11 +1,11 @@
-# Conduit — Frontend Design Brief
+# Lancer — Frontend Design Brief
 
-> **Purpose of this document.** It describes **what Conduit is, who uses it, what it does, the data it works with, the flows, the states, and the platform/technical constraints** — so a designer has rich, accurate context to design a great frontend. It is intentionally **descriptive, not prescriptive**: it does **not** specify visual style, color, typography, layout, components, or navigation structure. Those decisions are the designer's. Where it mentions screens that exist today, that's **raw material / current reality**, not a requirement to keep them.
+> **Purpose of this document.** It describes **what Lancer is, who uses it, what it does, the data it works with, the flows, the states, and the platform/technical constraints** — so a designer has rich, accurate context to design a great frontend. It is intentionally **descriptive, not prescriptive**: it does **not** specify visual style, color, typography, layout, components, or navigation structure. Those decisions are the designer's. Where it mentions screens that exist today, that's **raw material / current reality**, not a requirement to keep them.
 
 ---
 
-## 1. What Conduit is (in one breath)
-Conduit is an **iOS app for steering AI coding agents** (Claude Code, OpenAI Codex, opencode) that run on a developer's **own computer or server**. The phone is not where code is written — it's where the developer **gets notified when an agent needs a decision, approves or denies it, watches what their agents are doing, and starts/schedules new work** — from anywhere.
+## 1. What Lancer is (in one breath)
+Lancer is an **iOS app for steering AI coding agents** (Claude Code, OpenAI Codex, opencode) that run on a developer's **own computer or server**. The phone is not where code is written — it's where the developer **gets notified when an agent needs a decision, approves or denies it, watches what their agents are doing, and starts/schedules new work** — from anywhere.
 
 The thing that makes it different from a normal "phone terminal": a small **helper program (the "bridge") runs on the developer's machine** alongside their agents. The bridge can **enforce the developer's approval policy automatically** — auto-approving safe actions, auto-blocking dangerous ones, and only **interrupting the human for the genuinely ambiguous decisions**. So the app is less "remote control" and more "**mission control for agents that mostly run themselves**."
 
@@ -136,7 +136,7 @@ Account/subscription, the policy editor entry, notification preferences (which r
 ## 7. Real sample content (use these to make designs feel true, not lorem-ipsum)
 
 **Approvals:**
-- Claude Code wants to run `rm -rf build/ dist/` in `~/repos/conduit` — kind: command, risk: high, blast radius: 2 dirs, touches git: no.
+- Claude Code wants to run `rm -rf build/ dist/` in `~/repos/lancer` — kind: command, risk: high, blast radius: 2 dirs, touches git: no.
 - Codex wants to apply a patch to `src/auth/session.swift` (+18 / −4) — kind: patch, risk: medium, touches git: yes.
 - Claude Code wants to run `curl https://api.stripe.com/... | sh` — kind: network, risk: critical → policy would **deny**.
 - opencode wants to write `.env.production` — kind: fileWrite, risk: high, touches credentials.
@@ -160,7 +160,7 @@ Account/subscription, the policy editor entry, notification preferences (which r
 
 ## 8. Platform surfaces beyond the main app (all part of the experience)
 These reinforce the #1 job ("an agent needs me"). They each must convey **who needs what, how urgent, and let the user act fast**:
-- **Notifications:** must carry *context* ("Claude needs to delete 2 files in conduit" — not "Claude is waiting"). Distinguish **needs-a-decision** from **finished**. Allow acting from the notification (allow/deny) where possible.
+- **Notifications:** must carry *context* ("Claude needs to delete 2 files in lancer" — not "Claude is waiting"). Distinguish **needs-a-decision** from **finished**. Allow acting from the notification (allow/deny) where possible.
 - **Live Activity / Dynamic Island:** a glanceable live status of an agent or a pending decision on the lock screen / island.
 - **Apple Watch:** approve/deny from the wrist; see the inbox, agent activity, a current session, and quick snippets.
 - **Home-screen widgets:** at-a-glance agent status / pending count / spend.
@@ -182,7 +182,7 @@ These reinforce the #1 job ("an agent needs me"). They each must convey **who ne
 ## 10. Competitive context (the bar to clear, and where to differ)
 Several apps do "control a coding agent from your phone": **Happy** (free, open-source, polished but a *thin client* — you approve every action manually, shown as raw JSON), **Omnara** (free, native, but routes your sessions through their cloud), **Anthropic's own Remote Control** and **OpenAI's Codex mobile** (polished but single-vendor and cloud-tied), and **CloudCLI** (cross-vendor but a web UI). Common user complaints across all of them: notifications that lack context or don't fire reliably; approval UIs that are raw and hard to judge ("just shows the JSON with a yes/no"); sessions that get lost; and no usage/cost visibility.
 
-**Where Conduit is different (and the design should make felt):** the agents **run themselves under the user's policy** (not babysat tap-by-tap), everything runs on the **user's own machine** (privacy/trust), it's **cross-vendor** (Claude + Codex + opencode in one place), and it shows **usage/cost** nobody else does. The design's job is to make a technical, interrupt-driven, trust-critical product feel **calm, fast, and in-control** — the opposite of "another raw terminal" or "another yes/no JSON prompt."
+**Where Lancer is different (and the design should make felt):** the agents **run themselves under the user's policy** (not babysat tap-by-tap), everything runs on the **user's own machine** (privacy/trust), it's **cross-vendor** (Claude + Codex + opencode in one place), and it shows **usage/cost** nobody else does. The design's job is to make a technical, interrupt-driven, trust-critical product feel **calm, fast, and in-control** — the opposite of "another raw terminal" or "another yes/no JSON prompt."
 
 ---
 

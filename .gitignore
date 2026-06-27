@@ -21,16 +21,15 @@ Package.resolved
 secrets.plist
 
 # Generated launch screen color
-Conduit/Resources/Assets.xcassets/LaunchBackground.colorset/
+Lancer/Resources/Assets.xcassets/LaunchBackground.colorset/
 
 # Profiling
 *.trace
 *.instrumentscli
 .dmux/
 
-# Local agent scratch worktrees and installed skills (Claude Code tooling)
+# Local agent scratch worktrees (Claude Code tooling). Skills are handled below.
 .claude/worktrees/
-.claude/skills/
 
 # AI agent tooling dotfiles (Claude Code, Cursor, Goose, Kiro, etc.)
 # New agents drop a dot-dir at repo root — catch them all with this glob.
@@ -95,8 +94,13 @@ daemon/push-backend/push-backend
 # Claude Code / superpowers lock file
 skills-lock.json
 
-# Claude Code plugin skill symlinks (user-local tooling state)
-.claude/skills/
+# Claude Code skills: ignore auto-installed/symlinked skills, but TRACK the hand-authored
+# Lancer project skills so a clean checkout / teammate / fresh machine gets them.
+.claude/skills/*
+!.claude/skills/README.md
+!.claude/skills/lancer-*
+!.claude/skills/agent-session-history-reader
+!.claude/skills/vendor-cli-adapter-audit
 
 # Remotion/animations node_modules
 animations/node_modules/
@@ -112,15 +116,15 @@ daemon/agent-runner/agent-runner
 daemon/push-backend/push-backend
 daemon/push-backend/push-backend-linux
 
-# conduitd compiled binaries (distributed via GitHub Releases, not git)
-daemon/conduitd/conduitd
-daemon/conduitd/conduitd-macos
-daemon/conduitd/conduitd-linux-amd64
-daemon/conduitd/conduitd-linux-arm64
-daemon/conduitd/conduitd-darwin-arm64
+# lancerd compiled binaries (distributed via GitHub Releases, not git)
+daemon/lancerd/lancerd
+daemon/lancerd/lancerd-macos
+daemon/lancerd/lancerd-linux-amd64
+daemon/lancerd/lancerd-linux-arm64
+daemon/lancerd/lancerd-darwin-arm64
 
-# conduitd release build artifacts
-daemon/conduitd/dist/
+# lancerd release build artifacts
+daemon/lancerd/dist/
 
 # Root npm artifacts (this repo uses bun; root node_modules/package-lock/package are accidental)
 /node_modules/
@@ -137,3 +141,4 @@ daemon/conduitd/dist/
 
 # Git worktrees
 .worktrees/
+__pycache__/

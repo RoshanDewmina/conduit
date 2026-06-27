@@ -1,11 +1,11 @@
-# Conduit Distribution Strategy (Stage 5)
+# Lancer Distribution Strategy (Stage 5)
 
 ## Why Distribution Is The Main Risk
 
 The market now has free and visible options (first-party mobile controls and popular OSS clients). Product quality alone is not enough; trust and discoverability are the bottleneck.
 
-Conduit's initial distribution strategy is therefore:
-- publish the bridge (`conduitd`) as a transparent self-host component
+Lancer's initial distribution strategy is therefore:
+- publish the bridge (`lancerd`) as a transparent self-host component
 - win a focused beachhead first (security-conscious teams), not broad consumer adoption
 
 ## Beachhead: Security-Conscious / Enterprise-Like Users
@@ -18,26 +18,26 @@ Primary target profile:
 Why this niche first:
 - has clearer willingness-to-pay than casual consumers
 - values auditability and deployment control
-- aligns directly with Conduit's SSH-native architecture
+- aligns directly with Lancer's SSH-native architecture
 
-## Open-Source `conduitd` Strategy
+## Open-Source `lancerd` Strategy
 
-`conduitd` should be treated as the trust anchor and distributed as a standalone, inspectable package.
+`lancerd` should be treated as the trust anchor and distributed as a standalone, inspectable package.
 
 Stage 5 baseline:
-- documented self-host install path (`daemon/conduitd/install.sh`)
-- portable release tarballs (`scripts/release-conduitd.sh`)
+- documented self-host install path (`daemon/lancerd/install.sh`)
+- portable release tarballs (`scripts/release-lancerd.sh`)
 - hook templates for Claude and Codex included in release artifacts
 - security posture documented in `docs/SECURITY.md`
 
 Next steps (deferred):
-- public repository split or mirror for `conduitd`
+- public repository split or mirror for `lancerd`
 - signed release artifacts and checksum publication
 - package channels (Homebrew tap / apt repo) after artifact signing is in place
 
 ## Positioning Narrative
 
-Conduit should be positioned as:
+Lancer should be positioned as:
 
 > A secure, native, cross-vendor cockpit for steering AI coding agents, designed for teams that prefer self-hosted control paths.
 
@@ -48,7 +48,7 @@ Messaging pillars:
 
 ## Go-To-Market Sequence
 
-1. Ship `conduitd` install + docs + release artifacts (this stage).
+1. Ship `lancerd` install + docs + release artifacts (this stage).
 2. Publish implementation walkthroughs (self-host setup, security model).
 3. Recruit design partners in security-conscious teams.
 4. Add enterprise features based on partner feedback (policy and audit depth).
@@ -56,6 +56,6 @@ Messaging pillars:
 ## Success Metrics (Early)
 
 - number of successful self-host installs
-- number of active hosts using `conduitd`
+- number of active hosts using `lancerd`
 - time-to-first-approval after install
 - ratio of approvals handled without reconnect/notification loss

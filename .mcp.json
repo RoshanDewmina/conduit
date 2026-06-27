@@ -7,7 +7,11 @@
     "XcodeBuildMCP": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "xcodebuildmcp@latest", "mcp"],
+      "args": [
+        "-y",
+        "xcodebuildmcp@latest",
+        "mcp"
+      ],
       "env": {
         "XCODEBUILDMCP_SENTRY_DISABLED": "true",
         "XCODEBUILDMCP_ENABLED_WORKFLOWS": "simulator,simulator-management,session-management,project-discovery,device,debugging,ui-automation,coverage,swift-package,macos,utilities,doctor"
@@ -16,20 +20,32 @@
     "xcode": {
       "type": "stdio",
       "command": "xcrun",
-      "args": ["mcpbridge"],
+      "args": [
+        "mcpbridge"
+      ],
       "env": {}
     },
     "apple-docs": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@kimsungwhee/apple-docs-mcp"],
+      "args": [
+        "-y",
+        "@kimsungwhee/apple-docs-mcp"
+      ],
       "env": {}
     },
     "ios-simulator": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "ios-simulator-mcp"],
+      "args": [
+        "-y",
+        "ios-simulator-mcp"
+      ],
       "env": {}
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=sfuqarvoxfupvadsvejb"
     }
   }
 }

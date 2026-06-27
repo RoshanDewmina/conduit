@@ -1,4 +1,4 @@
-# Conduit — Launch Scope & Deferral Ledger
+# Lancer — Launch Scope & Deferral Ledger
 
 > The single source of truth for **what ships at v1 launch**, **what is deferred (and to which roadmap
 > tier)**, and **what is cut entirely**. Reconciles `BACKEND_COVERAGE.md`, `docs/_archive/audit/FEATURE_COVERAGE.md`, the
@@ -7,7 +7,7 @@
 > **Status keys:** `✅ ship` (in v1) · `🔶 ship-gated` (v1 but behind paid cloud entitlement) ·
 > `🟡 defer` (planned, post-v1, with tier) · `✂️ cut` (removed from the product).
 >
-> Roadmap tiers (from `docs/superpowers/plans/2026-06-13-conduit-bridge-platform-roadmap.md`):
+> Roadmap tiers (from `docs/superpowers/plans/2026-06-13-lancer-bridge-platform-roadmap.md`):
 > **T0** foundations · **T1** usage intelligence · **T2** two-way control · **T3** awareness · **T4** trust & scale.
 
 ---
@@ -83,14 +83,14 @@
 | Vendor | Status | Notes (from `AGENT_TOOLS_INTEGRATION_MATRIX.md`) |
 |---|---|---|
 | Claude Code | ✅ ship | reference adapter (PreToolUse hook) |
-| Codex | ✅ ship | Conduit hook already live (`~/.codex/hooks/`) |
+| Codex | ✅ ship | Lancer hook already live (`~/.codex/hooks/`) |
 | opencode (+ local models) | ✅ ship | permission hook; **fix status-reader path bug first** (see §D) |
 
 ### A8 · Monetization
 | Feature | Surface | Status | Notes |
 |---|---|---|---|
 | Billing & usage (spend + quota remaining) | Billing | ✅ ship | `/billing/quota`; doubles as T1 preview |
-| Conduit Pro paywall | Paywall sheet | 🔶 ship-gated | Stripe `/billing/checkout` |
+| Lancer Pro paywall | Paywall sheet | 🔶 ship-gated | Stripe `/billing/checkout` |
 | Manage subscription / restore | Billing | 🔶 ship-gated | Stripe portal |
 | Dispatch (start a task from phone) | Dispatch | ✅ ship | wired to real `agent.dispatch` RPC |
 
@@ -101,11 +101,11 @@
 | Feature | Tier | Why deferred |
 |---|---|---|
 | **Live bidirectional E2E relay** (duplex, blind ciphertext pipe) | T0 | Biggest single foundation; v1 leans on SSH + APNs. Unblocks true zero-config pairing on any network. |
-| **Adapter SPI formalization** + `conduit-mcp` gateway | T0 | Documented, community-extensible interface; the MCP gateway is the **one component that unlocks the entire Class-B agent set** (goose, Cline, Roo, Kilo) at once. |
+| **Adapter SPI formalization** + `lancer-mcp` gateway | T0 | Documented, community-extensible interface; the MCP gateway is the **one component that unlocks the entire Class-B agent set** (goose, Cline, Roo, Kilo) at once. |
 | **Account registry** (multi-account per vendor) | T0 | Prereq for account-switch + cross-account failover. |
-| **`conduit` user CLI** (the bridge as a standalone program) | T0 | "A program on its own" — usage checks, control, status from the terminal. |
+| **`lancer` user CLI** (the bridge as a standalone program) | T0 | "A program on its own" — usage checks, control, status from the terminal. |
 | Gemini CLI adapter | T0 (Class A) | Has a `BeforeTool` hook + `hooks migrate`; needs a thin JSON-decision shim. **Reportedly retiring ~2026-06-18 — verify before investing.** |
-| goose / Cline / RooCode / Kilo adapters | T0 | Class B (closed approval loop); only reachable via the `conduit-mcp` gateway above. |
+| goose / Cline / RooCode / Kilo adapters | T0 | Class B (closed approval loop); only reachable via the `lancer-mcp` gateway above. |
 | Usage intelligence: burn-rate projection, limit alerts, **auto-failover** across accounts | T1 | Builds on account registry + quota readers. Flagship post-v1 feature. |
 | **Run-control: Nudge** (one-line instruction to a working agent) | T2 | Deferred from the v1 run-control slice. |
 | **Run-control: Switch model / account mid-run** | T2 | Needs account registry (T0). |

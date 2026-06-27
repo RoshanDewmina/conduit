@@ -1,4 +1,4 @@
-# App Review Notes — Conduit
+# App Review Notes — Lancer
 
 **Purpose:** Paste the text below into App Store Connect → App Information →
 "Notes for Review" when submitting the app. Also include reviewer demo
@@ -9,7 +9,7 @@ instructions from §2 below.
 ## 1. Notes for Review — core text
 
 ```
-Conduit is an "approval firewall / audit cockpit" for AI coding agents
+Lancer is an "approval firewall / audit cockpit" for AI coding agents
 (Claude Code, Codex, opencode) that run on the USER'S OWN computer or
 server.
 
@@ -22,19 +22,19 @@ Architecture overview:
 
   [User's Mac/Linux host]
       ├── Runs AI agents (Claude Code, Codex, opencode)
-      ├── Runs conduitd daemon → listens for approval requests
-      └── SSH connection ←──── [Conduit iOS app]
+      ├── Runs lancerd daemon → listens for approval requests
+      └── SSH connection ←──── [Lancer iOS app]
                                     └── Shows transcript + approval UI
                                     └── Sends approve/deny/edit decisions
 
 Data flow:
   1. An agent on the user's host proposes an action (e.g., edit a file,
      run a command).
-  2. conduitd suspends the action and sends a notification to the phone
+  2. lancerd suspends the action and sends a notification to the phone
      (either via SSH keepalive or optional push relay).
   3. The iOS app displays the proposed action to the user.
   4. The user approves, denies, or edits; the decision goes back over SSH.
-  5. conduitd on the host executes (or discards) the action.
+  5. lancerd on the host executes (or discards) the action.
 
 Guideline compliance notes:
   - Guideline 2.5.2: The app does NOT download, install, or execute code
@@ -45,7 +45,7 @@ Guideline compliance notes:
   - Guideline 5.1.1: The app collects only the APNs device token for
     optional push notifications. Full privacy policy at the URL in
     metadata. PrivacyInfo.xcprivacy is included.
-  - Guideline 3.1.1: Conduit Pro is a one-time non-consumable IAP
+  - Guideline 3.1.1: Lancer Pro is a one-time non-consumable IAP
     ($14.99) that unlocks multi-host management and advanced surfaces.
     No auto-renewing subscriptions are currently shipped.
   - Guideline 4.2 (Minimum Functionality): The app is fully functional
@@ -61,7 +61,7 @@ Guideline compliance notes:
 ### Prerequisites for reviewer
 
 The reviewer needs a macOS or Linux machine with SSH enabled and the
-`conduitd` daemon running. Follow the steps below to set up the demo
+`lancerd` daemon running. Follow the steps below to set up the demo
 environment.
 
 ### Option A: Demo mode (recommended for review — no SSH required)
@@ -73,7 +73,7 @@ requiring a live SSH connection or external hardware:
 2. The app will detect "no paired hosts" and offer onboarding.
 3. **Skip pairing** — the app's Debug Gallery can be activated for review
    purposes:
-   - Set environment variable `SIMCTL_CHILD_CONDUIT_GALLERY=review` on
+   - Set environment variable `SIMCTL_CHILD_LANCER_GALLERY=review` on
      launch, OR
    - The app shows the full UI flow with mock data: session list, approval
      cards, transcript blocks, and settings.
@@ -81,7 +81,7 @@ requiring a live SSH connection or external hardware:
    Approve / deny / edit flows → Settings for IAP display.
 5. The demo mode exhibits the app's full functionality for review.
 
-**Important for reviewer:** The debug gallery flag (`CONDUIT_GALLERY=review`)
+**Important for reviewer:** The debug gallery flag (`LANCER_GALLERY=review`)
 activates pre-seeded mock data so you can evaluate every screen without a
 remote host. All IAP products and restore flow are also testable in demo
 mode via the StoreKit configuration.
@@ -92,37 +92,37 @@ If the reviewer has a Mac available:
 
 1. On the Mac, ensure SSH Remote Login is enabled (System Settings →
    General → Sharing → Remote Login).
-2. Install `conduitd` from the `conduitd/` directory in the project repo:
+2. Install `lancerd` from the `lancerd/` directory in the project repo:
    ```
    swift build -c release
-   cp .build/release/conduitd /usr/local/bin/
+   cp .build/release/lancerd /usr/local/bin/
    ```
-3. Start conduitd:
+3. Start lancerd:
    ```
-   conduitd serve
+   lancerd serve
    ```
 4. On the iOS device, tap "Pair with host." The app shows a QR code
    scanner. On the Mac, run:
    ```
-   conduitd pair
+   lancerd pair
    ```
    This displays a QR code. Scan it with the iOS app.
 5. After pairing, the app connects to the host via SSH and shows a live
-   session view. No commands need to be typed — conduitd will show the
+   session view. No commands need to be typed — lancerd will show the
    terminal prompt and the connection is visible.
 6. For a full approval-flow demo, run `claude` or another agent on the
    host — the app will display pending approval requests.
 
 ### Demo account / credentials
 
-**Not applicable.** Conduit has no user account system. Pairing is
+**Not applicable.** Lancer has no user account system. Pairing is
 device-to-device. If using Option B, the SSH credentials are the
 reviewer's own login credentials for the Mac they set up.
 
 ### Notes for the reviewer
 
 - **All IAP testing:** Use the StoreKit configuration file included in the
-  project (Conduit/StoreKitConfig.storekit) to test the non-consumable IAP
+  project (Lancer/StoreKitConfig.storekit) to test the non-consumable IAP
   without real payment.
 - **Camera permission** is requested only during QR-code pairing.
 - **Face ID permission** is requested if the user enables "Require Face ID

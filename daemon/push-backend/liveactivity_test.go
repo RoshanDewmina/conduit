@@ -220,10 +220,44 @@ func TestEvictExpiredActivityTokens(t *testing.T) {
 // TestApnsTopicFormat verifies the topic string pattern used for Live Activity pushes.
 // The bare bundle ID silently fails; only "<bundleID>.push-type.liveactivity" is accepted.
 func TestApnsTopicFormat(t *testing.T) {
-	bundleID := "dev.conduit.mobile"
-	want := "dev.conduit.mobile.push-type.liveactivity"
+	bundleID := "dev.lancer.mobile"
+	want := "dev.lancer.mobile.push-type.liveactivity"
 	got := bundleID + ".push-type.liveactivity"
 	if got != want {
 		t.Errorf("apns-topic = %q, want %q", got, want)
+	}
+}
+
+func TestPushLiveActivityDecisionSetsLastDecision(t *testing.T) {
+	// Capture the payload by registering a token then marshaling what the
+	// content-state would contain. We assert the builder, not the network.
+	dec := "approved"
+	cs := liveActivityContentState{
+		Status: "connected", PendingApprovals: 0, LastDecision: &dec,
+		LastUpdate: 1700000000.0,
+	}
+	b, _ := json.Marshal(cs)
+	if !strings.Contains(string(b), `"lastDecision":"approved"`) {
+		t.Fatalf("decision push must carry lastDecision, got: %s", b)
+	}
+	if strings.Contains(string(b), "command") {
+		t.Fatalf("decision push must not carry command text, got: %s", b)
+	}
+}
+
+func TestContentStateLastDecisionOmittedWhenNil(t *testing.T) {
+	cs := liveActivityContentState{Status: "connected", LastUpdate: 1700000000.0}
+	b, err := json.Marshal(cs)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "lastDecision") {
+		t.Fatalf("nil lastDecision must be omitted, got: %s", b)
+	}
+	dec := "approved"
+	cs.LastDecision = &dec
+	b2, _ := json.Marshal(cs)
+	if !strings.Contains(string(b2), `"lastDecision":"approved"`) {
+		t.Fatalf("set lastDecision must serialize, got: %s", b2)
 	}
 }

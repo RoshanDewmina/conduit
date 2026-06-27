@@ -1,9 +1,9 @@
-# Conduit
+# Lancer
 
 A phone-native cockpit for remote AI coding workspaces.
 
 The phone is the best on-body computer humans have ever owned. The remote
-machine is where the toolchain, repo, and agent actually live. Conduit is
+machine is where the toolchain, repo, and agent actually live. Lancer is
 the missing client between them.
 
 > Read the full design at [`ARCHITECTURE.md`](./ARCHITECTURE.md).
@@ -13,11 +13,11 @@ the missing client between them.
 ```
 .
 ├── ARCHITECTURE.md              ← product + technical spec
-├── Conduit/                     ← iOS app target (thin shell over AppFeature)
-├── Packages/ConduitKit/         ← all real code: engines + features
+├── Lancer/                     ← iOS app target (thin shell over AppFeature)
+├── Packages/LancerKit/         ← all real code: engines + features
 │   ├── Package.swift            ← module graph
 │   ├── Sources/
-│   │   ├── ConduitCore/         ← types, ids, errors (no UIKit)
+│   │   ├── LancerCore/         ← types, ids, errors (no UIKit)
 │   │   ├── SecurityKit/         ← Keychain, Ed25519 KeyStore, pairing crypto
 │   │   ├── SSHTransport/        ← Citadel actor, SessionPool, reconnect
 │   │   ├── TerminalEngine/      ← ANSI SGR parser, block model, SwiftTerm bridge
@@ -43,12 +43,12 @@ Requirements: Xcode 26.x, Swift 6, [XcodeGen](https://github.com/yonaskolb/Xcode
 xcodegen
 
 # 2. Build the SwiftPM workspace (sanity check, no UI)
-cd Packages/ConduitKit
+cd Packages/LancerKit
 swift build
 
 # 3. Build & run on simulator (iPhone 17 Pro)
-xcodebuild -project Conduit.xcodeproj \
-  -scheme Conduit \
+xcodebuild -project Lancer.xcodeproj \
+  -scheme Lancer \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   build
 ```
@@ -67,8 +67,8 @@ Three rules keep the codebase honest:
 
 ## Status
 
-> **Current direction (2026-06-18):** the app home is a **sidebar / New Chat shell** with durable
-> chat threads — *not* a tab bar. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
+> **Current direction (2026-06-20):** the app home is a **sidebar / Command Home shell**; New Chat and
+> durable threads remain a primary action and depth destinations — *not* a tab bar. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
 > and §4.1 for the authoritative picture; the milestone table below is historical milestone history.
 
 | M  | Title             | Status |
@@ -78,7 +78,7 @@ Three rules keep the codebase honest:
 | M2 | Real terminal     | ✅ raw PTY via SwiftTerm, auto block↔raw |
 | M3 | Survive           | ✅ tmux auto-attach, auto-reconnect on scene resume |
 | M4 | AI loop           | ✅ `#`-prefix NL→cmd, explain-block streaming |
-| M5 | Inbox + Approvals | ✅ conduitd daemon + LiveInboxViewModel + Codex hook |
+| M5 | Inbox + Approvals | ✅ lancerd daemon + LiveInboxViewModel + Codex hook |
 | M6 | Preview           | ✅ WKWebView + SSH-proxy scheme + port auto-detect |
 | M7 | Diff + Files      | ✅ SFTPFiles + DiffView + UnifiedDiffParser |
 | M8 | Watch + Sync      | ✅ Watch app + CloudKit LWW + widget |
@@ -96,7 +96,7 @@ Historical state audits have been archived under [`docs/_archive/`](./docs/_arch
 
 ## Heritage
 
-Conduit synthesises learnings from three earlier prototypes plus a
+Lancer synthesises learnings from three earlier prototypes plus a
 research survey:
 
 - `~/warp-mobile/`              → Block model, Citadel actor pattern
@@ -104,5 +104,5 @@ research survey:
 - `~/Documents/mobile-coding/` → React UX prototype + cloned upstreams (cmux, warp, ghostty)
 - `~/Downloads/deep-research-report (2).md` → market analysis
 
-None of those repos are imported wholesale; Conduit is a fresh, opinionated
+None of those repos are imported wholesale; Lancer is a fresh, opinionated
 build that takes the *patterns* and leaves the *baggage*.

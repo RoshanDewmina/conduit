@@ -1297,11 +1297,11 @@
   {
     "index": 45,
     "slot": "paywall",
-    "label": "Conduit Pro \u00b7 paywall",
+    "label": "Lancer Pro \u00b7 paywall",
     "category": "Billing",
     "status": "matches",
     "coverageGroup": "current-captured",
-    "boardScreenshot": "board-screenshots/45-conduit-pro-paywall.jpg",
+    "boardScreenshot": "board-screenshots/45-lancer-pro-paywall.jpg",
     "swiftScreenshot": "swift-screenshots/gallery-paywall.jpg",
     "purpose": "Explain why a paid capability is unavailable and let the user upgrade or compare plans.",
     "primaryActions": [

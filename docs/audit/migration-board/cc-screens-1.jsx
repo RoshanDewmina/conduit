@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — core screens: Inbox, ApprovalSheet, Fleet, Activity
+   LANCER — core screens: Inbox, ApprovalSheet, Fleet, Activity
    ============================================================ */
 
 /* ---------- refined approval card ---------- */

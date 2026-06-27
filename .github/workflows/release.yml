@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  release-build:
+    name: Build lancerd release assets
+    runs-on: ubuntu-latest
+    # The source repo is private, so release assets are published to a PUBLIC
+    # Cloud Storage bucket (not GitHub Releases, whose assets 404 unauthenticated
+    # on a private repo). install.sh's default download base points at this bucket.
+    #
+    # Owner setup (one-time) before this job can publish:
+    #   - Create a Workload Identity Federation provider + service account with
+    #     roles/storage.objectAdmin on gs://${GCS_DIST_BUCKET}.
+    #   - Add repo vars: GCS_DIST_BUCKET (e.g. conduit-dist-f1c2466d),
+    #     GCP_WIF_PROVIDER, GCP_DEPLOY_SA.
+    permissions:
+      contents: read
+      id-token: write   # for GCP Workload Identity Federation
+    defaults:
+      run:
+        working-directory: daemon/lancerd
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Test
+        run: go test ./...
+
+      - name: Cross-compile lancerd
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          GOOS=darwin GOARCH=arm64 go build -o dist/lancerd_darwin_arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o dist/lancerd_darwin_amd64 .
+          GOOS=linux  GOARCH=arm64 go build -o dist/lancerd_linux_arm64 .
+          GOOS=linux  GOARCH=amd64 go build -o dist/lancerd_linux_amd64 .
+
+      - name: Generate SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd dist
+          shasum -a 256 lancerd_* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Copy install.sh into dist
+        run: cp install.sh dist/install.sh
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Publish release assets to GCS
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path: daemon/lancerd/dist
+          destination: ${{ vars.GCS_DIST_BUCKET }}
+          parent: false
+          # Short TTL so install.sh / SHA256SUMS updates propagate within a minute
+          # (objects otherwise default to public, max-age=3600 on the edge cache).
+          headers: |-
+            cache-control: public, max-age=60

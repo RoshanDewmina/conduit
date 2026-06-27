@@ -31,12 +31,12 @@ export function generateKeyPair(): { priv: Uint8Array; pub: Uint8Array } {
 export function deriveSessionKey(ownPriv: Uint8Array, daemonPubB64: string, ownPubB64: string): Uint8Array {
   const daemonPub = b64uDecode(daemonPubB64);
   const shared = x25519.getSharedSecret(ownPriv, daemonPub);
-  const salt = sha256(enc.encode("conduit-pairing:conduit-relay"));
-  const info = enc.encode("conduit-v1:" + daemonPubB64 + ":" + ownPubB64);
+  const salt = sha256(enc.encode("lancer-pairing:lancer-relay"));
+  const info = enc.encode("lancer-v1:" + daemonPubB64 + ":" + ownPubB64);
   return hkdf(sha256, shared, salt, info, 32);
 }
 
-const AAD = enc.encode("conduit-frame-v1");
+const AAD = enc.encode("lancer-frame-v1");
 
 export function encryptFrame(plaintext: Uint8Array, key: Uint8Array): EncryptedFrame {
   const nonce = crypto.getRandomValues(new Uint8Array(12));

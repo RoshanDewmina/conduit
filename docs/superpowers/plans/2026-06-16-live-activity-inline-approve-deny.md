@@ -6,13 +6,13 @@
 
 **Architecture:** The widget extension, the `ApprovalActionIntent`, and the lock-screen/Dynamic-Island buttons **already exist and ship**. This plan closes the two real gaps: (1) push delivery — register an ActivityKit push-to-start token, add a `liveactivity` APNs path in the push-backend, and switch `Activity.request(pushType:)` from `nil` to `.token`; (2) inline decisioning — keep the decision running in-process but add a system auth gate for high-risk approvals and make the no-foreground path reliable.
 
-**Tech Stack:** Swift 6 (ConduitKit + `ConduitLiveActivityWidget` app-extension target), ActivityKit, AppIntents, APNs (`.p8` key), Go push-backend (`daemon/push-backend/`).
+**Tech Stack:** Swift 6 (LancerKit + `LancerLiveActivityWidget` app-extension target), ActivityKit, AppIntents, APNs (`.p8` key), Go push-backend (`daemon/push-backend/`).
 
 ## Global Constraints
 
 - **iOS 17.2+** required for ActivityKit push-to-start (research: fine for the Fall-2026 floor).
 - **The decision intent must run in the app process** (`openAppWhenRun` stays effectively true for self-host) so the governance chain — audit log, blast-radius, relay verification — stays intact. The Live Activity is a *remote trigger*, never a bypass (verbatim, `docs/audit/live-activity-decision.md:24`).
-- **Apple does NOT require biometric for Live Activity buttons** — Conduit MUST add `authenticationPolicy = .requiresAuthentication` on the high-risk Approve path (`live-activity-decision.md:24`).
+- **Apple does NOT require biometric for Live Activity buttons** — Lancer MUST add `authenticationPolicy = .requiresAuthentication` on the high-risk Approve path (`live-activity-decision.md:24`).
 - **Hybrid A+B tier:** hosted-relay paid tier gets full push Live Activities; self-host tier gets app-foreground updates + `UNNotification` fallback only. Do not promise remote push on self-host.
 - **First-decision-wins** is enforced in SQL (`ApprovalRepository.decide` — `WHERE decision IS NULL`); a stale Live Activity tap on a resolved gate is already a safe no-op. Do not weaken it.
 - **APNs `.p8` secret never printed/committed.** Push-backend reads it from env/secret store, same as today's `pushApproval`.
@@ -24,13 +24,13 @@
 
 | File | New/Mod | Responsibility |
 |---|---|---|
-| `Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift` | Mod (`:114-117`) | `start()` requests `pushType: .token`; expose the push-to-start token + per-activity update token. |
-| `Packages/ConduitKit/Sources/SessionFeature/LiveActivityPushManager.swift` | New | Observe `Activity.pushToStartTokenUpdates` + per-activity `pushTokenUpdates`; register both with the push-backend. |
-| `Packages/ConduitKit/Sources/SessionFeature/ApprovalActionIntent.swift` | Mod (`:20-60`) | Add `authenticationPolicy` for high-risk; keep `ApprovalRelay.enqueue` routing. |
-| `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift` | Mod (`:230`) | Add `registerLiveActivityToken(pushToStart:update:sessionID:)` → `POST /register-liveactivity`. |
+| `Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift` | Mod (`:114-117`) | `start()` requests `pushType: .token`; expose the push-to-start token + per-activity update token. |
+| `Packages/LancerKit/Sources/SessionFeature/LiveActivityPushManager.swift` | New | Observe `Activity.pushToStartTokenUpdates` + per-activity `pushTokenUpdates`; register both with the push-backend. |
+| `Packages/LancerKit/Sources/SessionFeature/ApprovalActionIntent.swift` | Mod (`:20-60`) | Add `authenticationPolicy` for high-risk; keep `ApprovalRelay.enqueue` routing. |
+| `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift` | Mod (`:230`) | Add `registerLiveActivityToken(pushToStart:update:sessionID:)` → `POST /register-liveactivity`. |
 | `daemon/push-backend/main.go` | Mod (`:350`) | Add `POST /register-liveactivity` + a `pushLiveActivity()` sender (`apns-push-type: liveactivity`). |
 | `daemon/push-backend/main_test.go` | Mod | Tests for the new endpoint + payload shape. |
-| `Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityPushTests.swift` | New | Token-registration payload tests (entitlement-independent). |
+| `Packages/LancerKit/Tests/LancerKitTests/LiveActivityPushTests.swift` | New | Token-registration payload tests (entitlement-independent). |
 
 ---
 
@@ -42,7 +42,7 @@
 **Interfaces:**
 - Produces:
   - `POST /register-liveactivity` body `{sessionId, pushToStartToken, updateToken?, apnsToken}` → stores tokens on the session record.
-  - `func (s *server) pushLiveActivity(sessionID string, state liveActivityState) error` sending `apns-push-type: liveactivity`, `apns-priority: 10`, topic `<bundle>.push-type.liveactivity`, payload `{aps:{timestamp, event:"start"|"update", "content-state":{…}, "attributes-type":"ConduitSessionAttributes", attributes:{…}, alert:{…}}}`.
+  - `func (s *server) pushLiveActivity(sessionID string, state liveActivityState) error` sending `apns-push-type: liveactivity`, `apns-priority: 10`, topic `<bundle>.push-type.liveactivity`, payload `{aps:{timestamp, event:"start"|"update", "content-state":{…}, "attributes-type":"LancerSessionAttributes", attributes:{…}, alert:{…}}}`.
 
 **Background (verified):** `pushApproval()` (`main.go:350-413`) already sends `apns-push-type: alert` via `.p8` auth and stores `apnsToken` per session. The Live Activity sender mirrors this with a different push type, topic suffix, and payload schema. No `liveactivity` code exists yet.
 
@@ -93,15 +93,15 @@ git commit -m "feat(push-backend): liveactivity push-to-start registration + sen
 ## Task 2: iOS push-to-start token registration
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/SessionFeature/LiveActivityPushManager.swift`
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift:114-117`, `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift:230`
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityPushTests.swift`
+- Create: `Packages/LancerKit/Sources/SessionFeature/LiveActivityPushManager.swift`
+- Modify: `Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift:114-117`, `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift:230`
+- Test: `Packages/LancerKit/Tests/LancerKitTests/LiveActivityPushTests.swift`
 
 **Interfaces:**
-- Consumes: `Notifications.registerDeviceToken()` pattern (`Notifications.swift:230`), `ConduitLiveActivityManager` (`LiveActivityManager.swift`).
+- Consumes: `Notifications.registerDeviceToken()` pattern (`Notifications.swift:230`), `LancerLiveActivityManager` (`LiveActivityManager.swift`).
 - Produces:
   - `Notifications.registerLiveActivityToken(pushToStart: String?, update: String?, sessionID: String) async`
-  - `LiveActivityPushManager.start()` — spawns tasks observing `Activity<ConduitSessionAttributes>.pushToStartTokenUpdates` and each activity's `pushTokenUpdates`, forwarding hex token strings to `registerLiveActivityToken`.
+  - `LiveActivityPushManager.start()` — spawns tasks observing `Activity<LancerSessionAttributes>.pushToStartTokenUpdates` and each activity's `pushTokenUpdates`, forwarding hex token strings to `registerLiveActivityToken`.
 
 - [ ] **Step 1: Write the failing token-encoding test**
 
@@ -114,7 +114,7 @@ func testTokenHexEncoding() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd Packages/ConduitKit && swift test --filter LiveActivityPushTests`
+Run: `cd Packages/LancerKit && swift test --filter LiveActivityPushTests`
 Expected: FAIL — `LiveActivityPushManager` undefined.
 
 - [ ] **Step 3: Implement `LiveActivityPushManager` + `start()` token request**
@@ -123,20 +123,20 @@ In `LiveActivityManager.swift:114`, change `Activity.request(... pushType: nil)`
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd Packages/ConduitKit && swift test --filter LiveActivityPushTests`
+Run: `cd Packages/LancerKit && swift test --filter LiveActivityPushTests`
 Expected: PASS.
 
 - [ ] **Step 5: Authoritative app-target build**
 
-`mcp__XcodeBuildMCP__build_sim` (Conduit / iPhone 17 Pro). Expected: BUILD SUCCEEDED.
+`mcp__XcodeBuildMCP__build_sim` (Lancer / iPhone 17 Pro). Expected: BUILD SUCCEEDED.
 
 - [ ] **Step 6: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/LiveActivityPushManager.swift \
-        Packages/ConduitKit/Sources/SessionFeature/LiveActivityManager.swift \
-        Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift \
-        Packages/ConduitKit/Tests/ConduitKitTests/LiveActivityPushTests.swift
+git add Packages/LancerKit/Sources/SessionFeature/LiveActivityPushManager.swift \
+        Packages/LancerKit/Sources/SessionFeature/LiveActivityManager.swift \
+        Packages/LancerKit/Sources/NotificationsKit/Notifications.swift \
+        Packages/LancerKit/Tests/LancerKitTests/LiveActivityPushTests.swift
 git commit -m "feat(ios): register Live Activity push-to-start + update tokens"
 ```
 
@@ -145,7 +145,7 @@ git commit -m "feat(ios): register Live Activity push-to-start + update tokens"
 ## Task 3: biometric gate on the high-risk Approve intent
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/ApprovalActionIntent.swift:20-60`
+- Modify: `Packages/LancerKit/Sources/SessionFeature/ApprovalActionIntent.swift:20-60`
 
 **Interfaces:**
 - Consumes: `ApprovalRelay.shared.enqueue` (`ApprovalRelay.swift:88`), `AppDatabase.openShared()`.
@@ -159,7 +159,7 @@ Add `static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuth
 
 - [ ] **Step 2: Wire the widget buttons to the right intent by risk**
 
-In `ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift` (the 4 `Button(intent:)` sites at `:60,71,115,125`), choose the high-risk Approve intent when `context.state` indicates a high-risk pending approval; Deny + low-risk use the existing intent.
+In `LancerLiveActivityWidget/LancerLiveActivityWidget.swift` (the 4 `Button(intent:)` sites at `:60,71,115,125`), choose the high-risk Approve intent when `context.state` indicates a high-risk pending approval; Deny + low-risk use the existing intent.
 
 - [ ] **Step 3: Authoritative app-target build**
 
@@ -168,8 +168,8 @@ In `ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift` (the 4 `Button(in
 - [ ] **Step 4: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/ApprovalActionIntent.swift \
-        ConduitLiveActivityWidget/ConduitLiveActivityWidget.swift
+git add Packages/LancerKit/Sources/SessionFeature/ApprovalActionIntent.swift \
+        LancerLiveActivityWidget/LancerLiveActivityWidget.swift
 git commit -m "feat(ios): require auth for high-risk Approve from Live Activity"
 ```
 
@@ -178,15 +178,15 @@ git commit -m "feat(ios): require auth for high-risk Approve from Live Activity"
 ## Task 4: hosted-relay push trigger + end-to-end verification
 
 **Files:**
-- Modify: `daemon/conduitd/` (the relay/approval emit path that already forwards approvals) to additionally request a `liveactivity` push from the push-backend on `approvalPending` for hosted-tier hosts.
+- Modify: `daemon/lancerd/` (the relay/approval emit path that already forwards approvals) to additionally request a `liveactivity` push from the push-backend on `approvalPending` for hosted-tier hosts.
 
 - [ ] **Step 1: Forward approval-pending → push-backend liveactivity push (hosted tier only)**
 
-Where conduitd already forwards an approval to the phone/relay, add (gated on hosted tier) a call to the push-backend's liveactivity sender so a locked phone gets a push-to-start. Self-host tier skips this (foreground-only + UNNotification fallback already exist).
+Where lancerd already forwards an approval to the phone/relay, add (gated on hosted tier) a call to the push-backend's liveactivity sender so a locked phone gets a push-to-start. Self-host tier skips this (foreground-only + UNNotification fallback already exist).
 
 - [ ] **Step 2: Daemon + backend test pass**
 
-Run: `cd daemon/push-backend && go test ./...` and `cd daemon/conduitd && go test ./...`
+Run: `cd daemon/push-backend && go test ./...` and `cd daemon/lancerd && go test ./...`
 Expected: PASS.
 
 - [ ] **Step 3: Manual device verification (documented in PR)**

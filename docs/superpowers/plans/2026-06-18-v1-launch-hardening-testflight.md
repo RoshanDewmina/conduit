@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans`. This plan is verification and launch hardening only; do not use it to redesign product flows.
 
-**Goal:** Move Conduit from working prototype/product implementation to a release-candidate state: repeatable tests, app-target build/archive confidence, APNs/approval-loop validation, and launch docs that match current reality.
+**Goal:** Move Lancer from working prototype/product implementation to a release-candidate state: repeatable tests, app-target build/archive confidence, APNs/approval-loop validation, and launch docs that match current reality.
 
 ## Source Of Truth
 
@@ -20,7 +20,7 @@ From the publish checklist:
 - Reconcile current working tree before release.
 - Make live app-to-daemon relay repeatable.
 - Green app-target Release build and clean archive.
-- Rebuild/repackage `conduitd` from Go source.
+- Rebuild/repackage `lancerd` from Go source.
 - Finish remaining pixel polish and a11y sweep.
 - Reconcile push-backend WIP.
 - Verify feature wiring from real navigation.
@@ -33,8 +33,8 @@ From the publish checklist:
 
 - [ ] **Task 1: Establish clean verification baseline**
   - Run and capture:
-    - `swift test --package-path Packages/ConduitKit`
-    - `go test ./daemon/conduitd/...`
+    - `swift test --package-path Packages/LancerKit`
+    - `go test ./daemon/lancerd/...`
     - push-backend Go tests if that tree is touched
     - agent-runner Go tests if that tree is touched
   - Do not update checklist as green unless commands actually pass in this branch.
@@ -56,7 +56,7 @@ From the publish checklist:
   - Save evidence under `docs/test-runs/`.
 
 - [ ] **Task 4: Real navigation feature wiring audit**
-  - Verify from production navigation, not `CONDUIT_GALLERY`:
+  - Verify from production navigation, not `LANCER_GALLERY`:
     - policy editor;
     - while-you-were-away/audit feed or its replacement;
     - usage/spend dashboard;
@@ -78,8 +78,8 @@ From the publish checklist:
     - error states.
   - File focused fixes or record residuals in `docs/KNOWN_ISSUES.md`.
 
-- [ ] **Task 6: Repackage Go `conduitd`**
-  - Verify `scripts/release-conduitd.sh` builds the Go daemon, not stale Swift output.
+- [ ] **Task 6: Repackage Go `lancerd`**
+  - Verify `scripts/release-lancerd.sh` builds the Go daemon, not stale Swift output.
   - Run `go vet`, `go build`, and `go test` for daemon.
   - Replace packaged binary only through the release script.
   - Record binary version/hash in release notes or test-run evidence.
@@ -111,7 +111,7 @@ From the publish checklist:
   - Verify:
     - app record;
     - bundle ID;
-    - IAP product `dev.conduit.mobile.pro`;
+    - IAP product `dev.lancer.mobile.pro`;
     - sandbox purchase;
     - restore purchases;
     - locked state when purchase state is unknown.

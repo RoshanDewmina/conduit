@@ -42,7 +42,7 @@ P1+P2+P3 shipped (commits 7c4c186a, 04747ccd, 5d0c8ffc):
   button presenting the former Activity view.
 - **Settings** regrouped: Connection / Notifications(pointer) / Security / Trust&Privacy
   / Advanced(SSH keys, Secrets, Health check) / Account.
-- Verified: app-target build green; full ConduitUITests suite (7 tests) passes.
+- Verified: app-target build green; full LancerUITests suite (7 tests) passes.
 
 Remaining soft deviation: G10 quiet-hours lives in Control; Settings→Notifications is a
 pointer. Decide if testers expect the control under Settings.

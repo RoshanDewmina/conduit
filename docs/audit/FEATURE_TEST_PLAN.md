@@ -1,6 +1,6 @@
-# Conduit — Feature Test Plan
+# Lancer — Feature Test Plan
 
-Goal: prove Conduit is solid enough to **develop Conduit from the phone** — run
+Goal: prove Lancer is solid enough to **develop Lancer from the phone** — run
 Claude Code / Codex / OpenCode sessions, review/approve, and steer next steps
 without touching the Mac. We go **phase by phase**: each phase has a goal, exact
 steps, a pass bar, and an honest note on what can only be proven on a **physical
@@ -17,24 +17,24 @@ There are **two** ways an agent runs — both relevant:
 1. **Interactive session (block terminal).** Fleet → connect a host → a live SSH
    PTY opens as a full-screen `SessionView`. You type in the command bar and
    launch the agent yourself (`claude`, `codex`, `opencode`). Output renders as
-   Warp-style blocks. The **resident `conduitd`** on the host brokers approvals
+   Warp-style blocks. The **resident `lancerd`** on the host brokers approvals
    via the agent's hooks → risky action pauses → card on your phone → approve →
    run resumes. *This is where you "enter prompts and discuss next steps."*
 
 2. **Dispatch (headless task).** Fleet → `+ task` → `DispatchView` → `agent.dispatch`
-   RPC. Here **conduitd launches the process itself**: `claude -p <prompt>` /
+   RPC. Here **lancerd launches the process itself**: `claude -p <prompt>` /
    `codex exec` / `opencode run`, applies `--model` if you pick one, enforces
    policy + daily budget, streams `agent.run.output`/`agent.run.status` back, and
    raises approval cards. No typing into a PTY — fire-and-monitor.
 
-So: **conduitd owns the dispatch path end-to-end; the interactive path is the SSH
-PTY + conduitd-brokered approvals.** Phase 1 tests both.
+So: **lancerd owns the dispatch path end-to-end; the interactive path is the SSH
+PTY + lancerd-brokered approvals.** Phase 1 tests both.
 
 ---
 
 ## Phase 0 — Environment & clean slate  ✅ (done this session)
 
-- ✅ Demo seed is now **opt-in** (`CONDUIT_SEED_DEMO=1`); a normal launch is a
+- ✅ Demo seed is now **opt-in** (`LANCER_SEED_DEMO=1`); a normal launch is a
   true clean slate (boots to onboarding, empty Fleet, $0.00, "Connect a host").
 - ✅ DEBUG **Settings → DEVELOPER → "Reset local data"** wipes hosts/snippets/
   approvals on demand (confirmation dialog).
@@ -49,7 +49,7 @@ PTY + conduitd-brokered approvals.** Phase 1 tests both.
 Goal: connect to a real host and start an agent **both** ways.
 
 Steps:
-1. Onboarding → "i already use conduit" (or "get started") → **add host** (SSH
+1. Onboarding → "i already use lancer" (or "get started") → **add host** (SSH
    command or fields). Save. 🧪
 2. Tap the host → connect. Expect: TOFU host-key prompt (first time), then live
    `SessionView`. 🧪 (TOFU prompt must appear — production safety invariant.)
@@ -75,20 +75,20 @@ and a dispatched task returns a runId + streams output.
 - 📱 **Typing not provable on sim.** `ui_type "ls -la"` did not reach the command
   pill (keyboard up, but text never registered) — the documented automation
   limitation. Needs a real device. No bytes sent to the VPS.
-- ⚠️ **conduitd is NOT installed/running on the VPS** (`pgrep conduitd` → none).
+- ⚠️ **lancerd is NOT installed/running on the VPS** (`pgrep lancerd` → none).
   The raw SSH PTY works without it, but **approval brokering (Phase 3) cannot work
-  until conduitd is installed on the host.** Blocks Phase 3 on this VPS.
+  until lancerd is installed on the host.** Blocks Phase 3 on this VPS.
 - Confirms **Finding #5**: connect lands directly in the full-screen block
   terminal, not a monitoring overview.
-- ✅ **conduitd installed on the VPS + bridge attached (verified).** Cross-built
-  `conduitd` for linux/arm64, deployed to `~/.conduit/bin/conduitd`, ran
-  `conduitd install` (wrote systemd user unit + **auto-wired the Claude PreToolUse
+- ✅ **lancerd installed on the VPS + bridge attached (verified).** Cross-built
+  `lancerd` for linux/arm64, deployed to `~/.lancer/bin/lancerd`, ran
+  `lancerd install` (wrote systemd user unit + **auto-wired the Claude PreToolUse
   hook**), started the resident daemon (`systemctl --user enable --now
-  conduitd.service` → active, listening on `~/.conduit/conduitd.sock`). `doctor`:
+  lancerd.service` → active, listening on `~/.lancer/lancerd.sock`). `doctor`:
   9 ok / 2 warn (no custom policy = default-ask; that's desired) / 0 fail. App
   reconnected → status bar shows **"bridge connected"**, and the VPS shows BOTH
-  `conduitd daemon` and `conduitd serve` (the app's attached bridge channel)
-  running. Full chain live: app ↔ `conduitd serve` ↔ resident daemon. Approval
+  `lancerd daemon` and `lancerd serve` (the app's attached bridge channel)
+  running. Full chain live: app ↔ `lancerd serve` ↔ resident daemon. Approval
   brokering (Phase 3) is now unblocked on this VPS.
   - ⚠ Not yet done: `loginctl enable-linger` (needs sudo) so the daemon survives
     after all SSH sessions close — defer / have the owner run it.
@@ -128,16 +128,16 @@ Pass bar: approve resumes, deny blocks, both audited; halt + reconnect work.
 
 **Session results (2026-06-15, live VPS, bridge connected):**
 - ✅ **Approve→resume proven end-to-end.** Triggered `claude -p` on the VPS with a
-  Bash call (`ls -la ~`). PreToolUse hook → `conduitd agent-hook` → resident daemon
+  Bash call (`ls -la ~`). PreToolUse hook → `lancerd agent-hook` → resident daemon
   → app raised a real card: "Claude Code is asking permission to run Bash · HIGH",
   cwd `/home/silvapulle`, blast-radius panel. Tapped **Approve** → claude resumed,
   ran the command, returned the listing, exited 0. Inbox card moved pending→
   **"DECIDED · approved"**.
-- ✅ **Tamper-evident audit chain.** `~/.conduit/audit.log`: `escalate`(ask,
+- ✅ **Tamper-evident audit chain.** `~/.lancer/audit.log`: `escalate`(ask,
   rule `ask-high`) then `approve`, same `approvalId`, hash-chained via `prevHash`.
 - ⏳ Deny path, halt/disconnect, dispatch pause/resume: not yet (deny is the same
   path inverted; worth a quick confirm on device).
-- 📌 **Read-only tools auto-approve by design** (`conduit-hook.sh` exits 0 for
+- 📌 **Read-only tools auto-approve by design** (`lancer-hook.sh` exits 0 for
   Read/LS/Grep/WebFetch/…), so only Bash/Write/Edit/Patch raise cards.
 
 ---
@@ -238,7 +238,7 @@ part of the onboarding redesign.
   fresh key on a key-only server from a phone (no computer) is a dead end. SSH is
   only the *install-free* default; it should become the power-user fallback.
   **Fix (next session):** front the already-scaffolded pairing path —
-  `daemon/conduitd/install.sh` (`curl | sh`) + `BridgePairingView` /
+  `daemon/lancerd/install.sh` (`curl | sh`) + `BridgePairingView` /
   `E2ERelayPairingView` / `E2ERelayClient` + `daemon/push-backend` relay — and
   **wire QR pairing** (today it's a typed `000000` placeholder) or design an even
   smoother handshake. Decision this session: **Plan B** — use SSH to punch
@@ -246,9 +246,9 @@ part of the onboarding redesign.
 
 - **Finding #2 — the "Pair the bridge" flow is a mockup of non-functional infra.**
   - `curl -fsSL conduit.dev/install | sh` (BridgePairingView) — **`conduit.dev` doesn't
-    resolve**; no release pipeline builds/publishes conduitd; repo `install.sh` is
+    resolve**; no release pipeline builds/publishes lancerd; repo `install.sh` is
     local-only. → Task #5.
-  - Pairing relay is **built + tested** (push-backend `websocket_relay.go`, conduitd
+  - Pairing relay is **built + tested** (push-backend `websocket_relay.go`, lancerd
     `e2e_router.go`, app `E2ERelayClient`, Fly config) but **`relay.conduit.dev` is
     not deployed**. → Task #6.
   - "paired" status copy is misleading; too much top text; needs polish → Claude
@@ -262,7 +262,7 @@ part of the onboarding redesign.
   - Final-step footer is now a full-width "continue" — fixes the inconsistent
     bottom-left step-dots + offset button. (Full footer/indicator consistency
     across the flow still belongs to the redesign, Task #7.)
-  - **Resolved:** the AddHostView **"conduit cloud"** tab is now gated off behind
+  - **Resolved:** the AddHostView **"lancer cloud"** tab is now gated off behind
     `ProvisioningFeatureFlags.managedCloudEnabled` (default false; AddHostView reads
     the key directly). Add-host offers BYO-only. Verified on sim. Reversible — flip
     the flag when the hosted offering is real (Tasks #5/#6 territory).
@@ -317,8 +317,8 @@ part of the onboarding redesign.
   when it is not. Reconcile to a single source of truth; never show "connected"
   until the bridge/SSH session is actually established.
 
-- **Finding #10 — `conduitd install` drops the Claude hook script but never wires
-  it into `settings.json`.** After install, `~/.claude/hooks/conduit-hook.sh` exists
+- **Finding #10 — `lancerd install` drops the Claude hook script but never wires
+  it into `settings.json`.** After install, `~/.claude/hooks/lancer-hook.sh` exists
   and `doctor` reports "✓ hooks: installed: claude" — but that check only verifies
   the *script file*, not that Claude is configured to call it. `settings.json` had
   no `hooks` block, so the interactive PreToolUse approval path would silently never

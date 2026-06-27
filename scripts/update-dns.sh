@@ -33,14 +33,14 @@ if [[ -z "$ZONE_NAME" ]]; then
   echo ""
   echo "No Cloud DNS managed zone found for ${DOMAIN} in project ${PROJECT}."
   echo "Create one first:"
-  echo "  gcloud dns managed-zones create conduit-dev \\"
+  echo "  gcloud dns managed-zones create lancer-dev \\"
   echo "    --project=$PROJECT \\"
   echo "    --dns-name=${DOMAIN}. \\"
   echo "    --description='conduit.dev' \\"
   echo "    --visibility=public"
   echo ""
   echo "Then update your registrar's NS records to the values shown by:"
-  echo "  gcloud dns managed-zones describe conduit-dev --project=$PROJECT"
+  echo "  gcloud dns managed-zones describe lancer-dev --project=$PROJECT"
   exit 1
 fi
 

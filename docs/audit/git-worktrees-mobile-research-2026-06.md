@@ -1,13 +1,13 @@
 # Git Worktrees + Mobile Agent Control: Research Report
 
 **Date:** 2026-06-16  
-**Context:** Conduit iOS app — remote control for AI coding agents (Claude Code, Codex CLI, Gemini CLI) running on user's own host via SSH/E2EE relay. Phone screen: 402pt wide. 3-tab IA: Fleet, Inbox, Settings.
+**Context:** Lancer iOS app — remote control for AI coding agents (Claude Code, Codex CLI, Gemini CLI) running on user's own host via SSH/E2EE relay. Phone screen: 402pt wide. 3-tab IA: Fleet, Inbox, Settings.
 
 ---
 
 ## Executive Summary
 
-Git worktrees are the consensus isolation primitive for running multiple AI coding agents on one repo. Every major tool in the 2025-2026 parallel-agent ecosystem — Conductor, Nimbalyst/Crystal, Vibe Kanban, Claude Squad, Omnara, Claude Code itself (`--worktree` flag) — uses worktrees as the "one worktree per agent per branch" pattern. The phone presents a hard design constraint: you cannot replicate a desktop orchestrator's terminal panes, file trees, or side-by-side diffs at 402pt. The fit is instead governance-first: Conduit's existing Fleet tab maps naturally to a worktree/agent list, and the Inbox is the right place to surface per-agent diffs + approval requests + merge-back confirmation. V1 should expose exactly four git operations: (1) create worktree/agent, (2) review diff, (3) approve+merge, (4) clean up. Everything else (interactive rebase, cherry-pick, stash management, granular staging) is YAGNI on a phone. The single biggest UX risk is accidental merge of un-reviewed agent output into a protected branch — solve with a mandatory Face-ID gate on merge-back and a diff-summary confirmation screen that forces the user to see what changed.
+Git worktrees are the consensus isolation primitive for running multiple AI coding agents on one repo. Every major tool in the 2025-2026 parallel-agent ecosystem — Conductor, Nimbalyst/Crystal, Vibe Kanban, Claude Squad, Omnara, Claude Code itself (`--worktree` flag) — uses worktrees as the "one worktree per agent per branch" pattern. The phone presents a hard design constraint: you cannot replicate a desktop orchestrator's terminal panes, file trees, or side-by-side diffs at 402pt. The fit is instead governance-first: Lancer's existing Fleet tab maps naturally to a worktree/agent list, and the Inbox is the right place to surface per-agent diffs + approval requests + merge-back confirmation. V1 should expose exactly four git operations: (1) create worktree/agent, (2) review diff, (3) approve+merge, (4) clean up. Everything else (interactive rebase, cherry-pick, stash management, granular staging) is YAGNI on a phone. The single biggest UX risk is accidental merge of un-reviewed agent output into a protected branch — solve with a mandatory Face-ID gate on merge-back and a diff-summary confirmation screen that forces the user to see what changed.
 
 ---
 
@@ -74,13 +74,13 @@ git worktree remove --force ../hotfix
 The canonical pattern across all tools surveyed:
 
 ```
-1. Task arrives         → conduitd creates branch + worktree
+1. Task arrives         → lancerd creates branch + worktree
 2. Agent starts         → launched in that worktree directory
 3. Agent works          → edits files, commits locally (auto-commit per iteration)
-4. Agent finishes/needs input → conduitd reads worktree state
-5. User reviews diff    → via Conduit phone UI (unified diff)
-6. User approves merge  → conduitd merges to main / pushes PR
-7. Cleanup              → conduitd removes worktree + deletes branch
+4. Agent finishes/needs input → lancerd reads worktree state
+5. User reviews diff    → via Lancer phone UI (unified diff)
+6. User approves merge  → lancerd merges to main / pushes PR
+7. Cleanup              → lancerd removes worktree + deletes branch
 ```
 
 Source: [Parallel AI Agents architecture](https://www.gitworktree.org/ai-tools/parallel-agents)
@@ -133,7 +133,7 @@ Sources: [vibekanban.online](https://vibekanban.online/), [virtuslab blog - deep
 **Mechanism:** CLI wrapper runs on host, relays agent output to cloud. Mobile app shows diffs, logs, approval requests. Sessions can migrate to cloud if laptop goes offline. Voice input/output.  
 **Worktree handling:** "Sessions run in worktree-isolated environments" per their docs. Diffs are mobile-optimized with "rich diff visualization."  
 **Pricing:** Free tier (10 sessions/mo), $9/mo unlimited.  
-**Notable:** Direct competitor to Conduit's phone-control concept. The "cloud migration" feature (session survives laptop sleep) is a differentiator — Conduit's SSH/E2EE approach avoids the privacy tradeoff of cloud relay.  
+**Notable:** Direct competitor to Lancer's phone-control concept. The "cloud migration" feature (session survives laptop sleep) is a differentiator — Lancer's SSH/E2EE approach avoids the privacy tradeoff of cloud relay.  
 Sources: [omnara.com](https://www.omnara.com/), [Omnara mobile diff review docs](https://omnaradocs.com/task/blog/mobile-app-review-git-diffs-autonomous-coding-agents), [revuo.ai review](https://www.revuo.ai/category/coding-agent-remotes/omnara)
 
 ### 2.6 Claude Code Native (`--worktree` flag)
@@ -219,11 +219,11 @@ Sources: [Working Copy app store](https://apps.apple.com/us/app/git-client-worki
 
 ### 3.2 What Belongs on a Phone vs. What Doesn't
 
-**Yes, on phone (Conduit v1 scope):**
+**Yes, on phone (Lancer v1 scope):**
 
 | Operation | Why on phone | Pattern |
 |---|---|---|
-| Create worktree + agent | Core loop: user sees a task, dispatches an agent | Tap "New Agent" → branch name + prompt → conduitd creates worktree + launches agent |
+| Create worktree + agent | Core loop: user sees a task, dispatches an agent | Tap "New Agent" → branch name + prompt → lancerd creates worktree + launches agent |
 | Review diff | The #1 mobile activity after "is it done?" | Unified diff, per-file scroll, tap lines to expand |
 | Approve + merge | Governance gate | Face ID + "Merge to main" confirmation |
 | Clean up worktree | Post-merge hygiene | Auto-delete worktree after merge (with undo window) |
@@ -239,7 +239,7 @@ Sources: [Working Copy app store](https://apps.apple.com/us/app/git-client-worki
 | Manual branch create (no agent) | Low frequency. Settings > Advanced. |
 | Conflict resolution | Rare but high-value. Working Copy proves it's possible on iOS. Delegate to v2. |
 | Commit message editing | Agent auto-commits. Manual message editing is edge case. |
-| Push to remote | Useful but not core to agent workflow. Agent typically creates local commits; conduitd can push automatically on merge. |
+| Push to remote | Useful but not core to agent workflow. Agent typically creates local commits; lancerd can push automatically on merge. |
 
 **No, YAGNI on phone (desktop/terminal only):**
 
@@ -251,12 +251,12 @@ Sources: [Working Copy app store](https://apps.apple.com/us/app/git-client-worki
 | Granular staging (per-line) | Too fine-grained for 402pt touch targets. |
 | Git blame | Text-heavy, wide-table operation. |
 | Submodule management | Worktrees + submodules already complex on desktop. |
-| `git gc`, `git fsck` | Maintenance operations. conduitd handles silently. |
+| `git gc`, `git fsck` | Maintenance operations. lancerd handles silently. |
 | Reflog exploration | Debug-only. |
 
 ### 3.3 Mobile Diff View Design (402pt Wide)
 
-Conduit has already chosen unified diff — correct choice. Design constraints:
+Lancer has already chosen unified diff — correct choice. Design constraints:
 
 - **Single file per screen.** File list above (scrollable vertical list of changed files), diff content below. No side-by-side at this width.
 - **Syntax highlighting is critical.** Agent diffs are large. Highlighting helps the user quickly find meaningful changes vs. whitespace/import reordering.
@@ -302,7 +302,7 @@ The Fleet tab already shows hosts + running agents. Extending for worktrees:
 
 On Fleet tab, a segmented control or picker at top: "Active" | "Completed" | "All". Default = Active (worktrees with running agents or unmerged changes).
 
-Pull-to-refresh fetches latest `git worktree list` and `git branch` state via conduitd.
+Pull-to-refresh fetches latest `git worktree list` and `git branch` state via lancerd.
 
 ---
 
@@ -317,9 +317,9 @@ In a single-agent workflow, the blast radius is: one branch, one working tree, o
 
 ### 4.2 Approval/Policy Composition
 
-**Per-worktree policy inheritance:** When conduitd creates a worktree, it should apply the host's current policy set (allowed tools, file-scope restrictions, max-turns). This is *delegated policy* — the agent inherits the parent repository's rules. Conductor and Omnara do not appear to offer per-agent policy — they apply host-level constraints equally.
+**Per-worktree policy inheritance:** When lancerd creates a worktree, it should apply the host's current policy set (allowed tools, file-scope restrictions, max-turns). This is *delegated policy* — the agent inherits the parent repository's rules. Conductor and Omnara do not appear to offer per-agent policy — they apply host-level constraints equally.
 
-**Approve-once-per-agent:** The emerging pattern (Conductor, Vibe Kanban) is that an agent runs until it needs human input (approval for a risky tool call, clarification of intent, or final merge approval). The user isn't approving each edit — they're approving the *merge*. This is the right model for Conduit: agents run with the same permission model as single-agent mode, but the approval Inbox is *consolidated across all agents* and sorted by urgency.
+**Approve-once-per-agent:** The emerging pattern (Conductor, Vibe Kanban) is that an agent runs until it needs human input (approval for a risky tool call, clarification of intent, or final merge approval). The user isn't approving each edit — they're approving the *merge*. This is the right model for Lancer: agents run with the same permission model as single-agent mode, but the approval Inbox is *consolidated across all agents* and sorted by urgency.
 
 **Consolidated Inbox:** The Inbox tab shows approval requests from *all* running agents in one stream, with agent/branch attribution on each item:
 
@@ -347,7 +347,7 @@ In a single-agent workflow, the blast radius is: one branch, one working tree, o
 - Vibe Kanban: Card moves to "Done" after review. Merge happens then.
 - Omnara: User approves diffs from phone. No description of a merge gate.
 
-This is Conduit's differentiator — a genuine governance gap in the market.
+This is Lancer's differentiator — a genuine governance gap in the market.
 
 **Design for governed merge-back:**
 
@@ -355,7 +355,7 @@ This is Conduit's differentiator — a genuine governance gap in the market.
 User reviews diff on phone
   → taps "Approve & Merge"
   → Face ID prompt (mandatory for merge-to-protected-branch)
-  → conduitd runs: git checkout main && git merge <agent-branch> --squash
+  → lancerd runs: git checkout main && git merge <agent-branch> --squash
   → if conflict: notify user on phone, provide option to cancel or view conflicts
   → if clean: push to remote, remove worktree, archive session
   → audit log entry: "User [name] merged [branch] → main at [time], Face-ID verified"
@@ -371,7 +371,7 @@ Each worktree lifecycle event should be recorded in the tamper-evident chain:
 - Merge initiated / completed (with Face-ID attestation if available)
 - Worktree removed
 
-This is already Conduit's architecture — the addition of worktrees simply adds a `worktree_id` dimension to the audit schema.
+This is already Lancer's architecture — the addition of worktrees simply adds a `worktree_id` dimension to the audit schema.
 
 Sources: [Blast radius engineering](https://activewizards.com/blog/blast-radius-engineering-tool-permission-design-for-ai-agents/), [Claude agent containment](https://open-techstack.com/blog/anthropic-claude-agent-containment-architecture-2026/), [PuppyOne agent compliance](https://www.puppyone.ai/en/blog/compliance-management-ai-agents-governance)
 
@@ -384,7 +384,7 @@ Sources: [Blast radius engineering](https://activewizards.com/blog/blast-radius-
 | # | Feature | Value | Effort | Location | Notes |
 |---|---|---|---|---|---|
 | 1 | **Agent = worktree card in Fleet** | High | Low | Fleet tab | Each agent session creates a worktree. Card shows branch, status, agent type, diff summary. This *is* the worktree list. |
-| 2 | **One-tap "New Agent" = create worktree + launch** | High | Medium | Fleet tab "+" | conduitd runs `git worktree add -b <name> <path>`, starts agent in that directory. User provides task prompt. |
+| 2 | **One-tap "New Agent" = create worktree + launch** | High | Medium | Fleet tab "+" | lancerd runs `git worktree add -b <name> <path>`, starts agent in that directory. User provides task prompt. |
 | 3 | **Unified diff review (read-only)** | High | Medium | Inbox tab (per-item) | Per-file unified diff. Color coding. Collapsible hunks. Purple tint for AI code. Mark-file-reviewed. |
 | 4 | **Approve + merge (governed)** | High | Medium | Inbox tab | Face ID gate. `git merge --squash`. Conflict detection (not resolution). Audit log. |
 | 5 | **Consolidated approval Inbox** | High | Medium | Inbox tab | All agents' approval requests + merge-ready notifications in one stream, sorted by urgency. |
@@ -419,19 +419,19 @@ This is non-negotiable. The same pattern should apply to high-risk tool call app
 
 | Don't build | Why |
 |---|---|
-| Interactive rebase UI | Desktop-only power feature. conduitd handles squash via `--squash` merge. |
+| Interactive rebase UI | Desktop-only power feature. lancerd handles squash via `--squash` merge. |
 | Per-line staging | Too granular for 402pt. Agent output is all-or-nothing per file. |
 | Git blame on phone | Text-heavy. Extremely wide. Low value in agent context. |
 | Worktree-aware file browser | Users should not be browsing worktree files on a phone. That's what the desktop/terminal is for. |
 | Cherry-pick UI | Frequency too low. Exceptionally complex touch UI for branch selection. |
-| Submodule init/update | Rare. Delegate to desktop or auto-handle in conduitd's worktree-create hook. |
+| Submodule init/update | Rare. Delegate to desktop or auto-handle in lancerd's worktree-create hook. |
 | Multiple remotes management | Single origin is sufficient. Configure once on desktop. |
-| SSH key management | Already handled by conduitd's SSH setup. Not a phone task. |
+| SSH key management | Already handled by lancerd's SSH setup. Not a phone task. |
 | Real-time terminal scrollback | Omnara offers this; users report it's noisy. Structured diffs + summaries win on mobile. |
 
 ### 5.5 Claude Code 2.1 `--worktree` Flag — Note
 
-Claude Code v2.1+ has native `--worktree` support. conduitd should detect whether the agent CLI supports this flag and use it when available, falling back to manual `git worktree add` for agents that don't (Codex CLI, Gemini CLI). This is a *host-side* detail — the phone UI is the same regardless of which mechanism created the worktree.
+Claude Code v2.1+ has native `--worktree` support. lancerd should detect whether the agent CLI supports this flag and use it when available, falling back to manual `git worktree add` for agents that don't (Codex CLI, Gemini CLI). This is a *host-side* detail — the phone UI is the same regardless of which mechanism created the worktree.
 
 ---
 

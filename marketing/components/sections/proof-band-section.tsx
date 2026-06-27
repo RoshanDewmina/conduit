@@ -22,7 +22,7 @@ export default function ProofBandSection() {
   return (
     <section className="max-w-[1152px] mx-auto px-6 md:px-8 py-20">
       <Reveal>
-        <SectionHeader number="07" name="What Conduit guarantees" />
+        <SectionHeader number="07" name="What Lancer guarantees" />
         <div className="grid md:grid-cols-3 gap-6 mb-14">
           {GUARANTEES.map((g, i) => (
             <div

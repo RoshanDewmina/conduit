@@ -1,4 +1,4 @@
-# Conduit Onboarding & Connection Architecture Review
+# Lancer Onboarding & Connection Architecture Review
 
 > **Research + recommendations only.** No code changed.
 > Date: 2026-06-15. Branch: `opencode/phase-next`.
@@ -10,7 +10,7 @@
 2. [Question 1: Relay vs alternatives](#2-question-1-relay-vs-alternatives)
 3. [Question 2: Handshake direction](#3-question-2-handshake-direction)
 4. [Question 3: How comparable tools do it (2025–2026)](#4-question-3-how-comparable-tools-do-it-2025-2026)
-5. [Question 4: Verdict for Conduit](#5-question-4-verdict-for-conduit)
+5. [Question 4: Verdict for Lancer](#5-question-4-verdict-for-lancer)
 6. [Prioritized recommendation (concrete, file-referenced)](#6-prioritized-recommendation)
 7. [Bottom line](#7-bottom-line)
 
@@ -30,7 +30,7 @@
 | **Omnara** | `pip install omnara && omnara` → mobile sees sessions via cloud relay | Cloud relay (bridge → Omnara cloud → phone) | Omnara | Open source bridge; cloud sees metadata (not agent execution) | No — cloud relay required |
 | **CC Pocket** | `npx @ccpocket/bridge` → QR, mDNS auto-discovery, or manual URL | Direct LAN / Tailscale P2P (self-hosted bridge, no relay) | User (self-hosted bridge on dev machine) | Fully self-hosted, open source; data encrypted in transit | Excellent — direct LAN; remote via Tailscale |
 | **Blink.sh** | Manual host entry (IP + credentials in app) | Direct SSH | N/A | Standard SSH key trust | Excellent — direct |
-| **Conduit (current)** | Phone shows QR → `conduitd pair` scans it → `conduitd relay` connects | Blind WebSocket relay (ciphertext-only) | User (self-host via Tailscale Funnel or GCP; default `relay.conduit.dev` not deployed) | X25519 ECDH + ChaCha20-Poly1305; relay sees only ciphertext; ephemeral keys | None — relay-only |
+| **Lancer (current)** | Phone shows QR → `lancerd pair` scans it → `lancerd relay` connects | Blind WebSocket relay (ciphertext-only) | User (self-host via Tailscale Funnel or GCP; default `relay.conduit.dev` not deployed) | X25519 ECDH + ChaCha20-Poly1305; relay sees only ciphertext; ephemeral keys | None — relay-only |
 
 ---
 
@@ -38,7 +38,7 @@
 
 ### The case for "relay right now, extend later"
 
-Conduit's blind relay (`daemon/push-backend/websocket_relay.go`) has the right security
+Lancer's blind relay (`daemon/push-backend/websocket_relay.go`) has the right security
 properties: it forwards only ciphertext, holds no key material, and the
 X25519 ECDH handshake means compromise of the relay buys an attacker
 nothing but opaque bytes. This is the same model Warp's mobile pairing
@@ -56,7 +56,7 @@ targets ([Warp #5093](https://github.com/warpdotdev/Warp/issues/5093),
 
 **Weaknesses:**
 - **Single point of failure.** If `relay.conduit.dev` is down, *all*
-  pairing breaks. The relay is self-hostable (`CONDUIT_RELAY_URL` env var)
+  pairing breaks. The relay is self-hostable (`LANCER_RELAY_URL` env var)
   but the default is a single domain not yet deployed.
 - **Latency.** All traffic bounces through the relay, even two machines on
   the same LAN. This matters for the block terminal (PTY frames are
@@ -83,7 +83,7 @@ targets ([Warp #5093](https://github.com/warpdotdev/Warp/issues/5093),
 - **Pros:** P2P traffic, NAT traversal via DERP relays (same model as
   "direct + relay fallback"), strong identity model (node keys + ACLs).
 - **Cons:** Requires the user to install and configure Tailscale. That's
-  an extra dependency and an extra login flow. Conduit would either need
+  an extra dependency and an extra login flow. Lancer would either need
   to embed Tailscale (heavy) or require it as a prerequisite (friction).
 - **Verdict:** Good for the *power-user* SSH path — `BridgePairingView`
   already has an "advanced · connect over SSH" link. The Tailscale
@@ -95,7 +95,7 @@ targets ([Warp #5093](https://github.com/warpdotdev/Warp/issues/5093),
 - **Cons:** Requires a publicly-reachable SSH server (a VPS) or the
   phone to accept inbound SSH (impossible on cellular). No E2E story
   without adding a layer. High latency. Complex reconnect.
-- **Verdict:** Wrong tool. This is what Conduit is *replacing*.
+- **Verdict:** Wrong tool. This is what Lancer is *replacing*.
 
 #### ngrok / Cloudflare Tunnel
 - **Pros:** Mature, well-maintained, free tier available, excellent NAT
@@ -104,7 +104,7 @@ targets ([Warp #5093](https://github.com/warpdotdev/Warp/issues/5093),
   (ngrok/Cloudflare) sees **plaintext** unless the app adds its own
   encryption layer. Both are opaque dependencies. Neither is
   self-hostable (ngrok has a self-hosted option for paying customers
-  only; Cloudflare Tunnel requires Cloudflare). Conduit already has
+  only; Cloudflare Tunnel requires Cloudflare). Lancer already has
   the blind relay — adding an ngrok tunnel in front of it is just
   another hop.
 - **Verdict:** No benefit over the existing blind relay.
@@ -123,7 +123,7 @@ targets ([Warp #5093](https://github.com/warpdotdev/Warp/issues/5093),
 The blind relay is the right starting point: it works everywhere, is
 already built, and is security-proven. The risk is a single point of
 failure (`relay.conduit.dev`). Mitigate by:
-1. Making the relay self-host trivially (already done via `CONDUIT_RELAY_URL`
+1. Making the relay self-host trivially (already done via `LANCER_RELAY_URL`
    and `DEPLOY.md`).
 2. Adding a LAN-direct path (mDNS + direct TCP/WebSocket) so same-network
    pairs skip the relay entirely.
@@ -142,8 +142,8 @@ simple `{ v, relay, code, pk }` shape — a `lanURL` field fits naturally.
 
 `BridgePairingView.swift` (line 114–159) renders a QR on the phone
 containing `{ v, relay, code, pk }` where `pk` is the phone's ephemeral
-public key. The user is told to scan it with `conduitd pair`. But
-`conduitd pair` (`relay_install_helper.go:69`) ALSO generates its
+public key. The user is told to scan it with `lancerd pair`. But
+`lancerd pair` (`relay_install_helper.go:69`) ALSO generates its
 own QR and prints it to the terminal — creating **two QRs in two
 different directions** with no clear primary flow.
 
@@ -156,19 +156,19 @@ second peer triggers `peer_joined`.
 
 | Direction | UX | Security | Caveat |
 |---|---|---|---|
-| **Phone shows QR → host scans** | Phone already on, user looks at phone, host needs a camera to scan (terminal can't scan a QR — `conduitd pair` would need to read from webcam or accept a typed code). | Phone is source of trust: phone generates keypair, host never needs a camera. | Host terminal has no camera — the host can't actually scan a phone QR. The code must be typed manually, which is friction + phishable. |
-| **Host prints QR → phone scans** | Host terminal is already running `conduitd pair`, renders ANSI QR. Phone has camera — natural scan. | Host generates keypair, QR carries host's public key. Phone must trust the host key — but the phone user is physically present, so visual confirmation works. | Requires the user to look at the host terminal. The QR encodes `{ v, relay, code, pk }` where `pk` is the DAEMON's public key. |
+| **Phone shows QR → host scans** | Phone already on, user looks at phone, host needs a camera to scan (terminal can't scan a QR — `lancerd pair` would need to read from webcam or accept a typed code). | Phone is source of trust: phone generates keypair, host never needs a camera. | Host terminal has no camera — the host can't actually scan a phone QR. The code must be typed manually, which is friction + phishable. |
+| **Host prints QR → phone scans** | Host terminal is already running `lancerd pair`, renders ANSI QR. Phone has camera — natural scan. | Host generates keypair, QR carries host's public key. Phone must trust the host key — but the phone user is physically present, so visual confirmation works. | Requires the user to look at the host terminal. The QR encodes `{ v, relay, code, pk }` where `pk` is the DAEMON's public key. |
 | **Both (bidirectional, current)** | Confusing — which QR do I scan? | Both directions work at the protocol level; the issue is UX clarity. | The relay's order-independence is correct, but the UI doesn't guide the user to one clear flow. |
 
 ### Verdict: Host-prints-QR → phone-scans is the correct primary direction
 
 **Reasons:**
-1. **The host terminal can already render ANSI QRs.** `conduitd pair`
+1. **The host terminal can already render ANSI QRs.** `lancerd pair`
    (`relay_install_helper.go:69`) does this today — the QR is inverted
    for dark terminals. The phone has a camera. This is the natural
    pairing motion.
 2. **The installer flow** (`curl ... | sh`) runs on the host. After
-   installing, `conduitd pair` prints the QR and the code. The user
+   installing, `lancerd pair` prints the QR and the code. The user
    already has their phone in hand — they scan. No typing.
 3. **Phone-shows-QR is physically impossible for the host to scan.**
    A terminal cannot read a camera image. The typed-code fallback
@@ -190,7 +190,7 @@ second peer triggers `peer_joined`.
 - Keep the phone-generates-QR path as an **alternative** for the
   "I don't have a camera on my host" scenario (Raspberry Pi, headless
   server) — triggered by a "show QR for the host to type" button.
-- Merge `conduitd pair` and `conduitd relay` into a single `conduitd pair`
+- Merge `lancerd pair` and `lancerd relay` into a single `lancerd pair`
   command that prints the QR AND starts the relay session, so the user
   doesn't need to run two commands.
 
@@ -200,22 +200,22 @@ second peer triggers `peer_joined`.
 
 ### Tailscale — `tailscale up --auth-key` + device approval
 
-Tailscale's auth-key model is the closest parallel to Conduit's
+Tailscale's auth-key model is the closest parallel to Lancer's
 pairing code. An admin generates a pre-approved key, embeds it in a
 one-liner, and the node joins the tailnet without interactive auth.
 Keys can be ephemeral (auto-removed on disconnect), single-use, or
 reusable, with configurable expiry.
 [Src](https://tailscale.com/docs/features/access-control/auth-keys).
 Device approval adds a human-in-the-loop gate that's exactly what
-Conduit's phone-approves flow does — but at the *node join* level, not
+Lancer's phone-approves flow does — but at the *node join* level, not
 per-action. The Co-ordination server (or headscale for self-host) is
-the analogue of Conduit's relay — but Tailscale traffic goes P2P once
+the analogue of Lancer's relay — but Tailscale traffic goes P2P once
 coordination completes, with DERP relays as fallback.
 
 **Takeaway:** Pre-approved ephemeral keys are a proven pattern for
-"install once, trust forever." Conduit's 6-digit code is an ephemeral
+"install once, trust forever." Lancer's 6-digit code is an ephemeral
 pre-auth key. The DERP relay architecture (P2P-first, relay-fallback)
-is the direction Conduit should grow toward.
+is the direction Lancer should grow toward.
 
 ### VS Code Remote Tunnels — GitHub device-code OAuth
 
@@ -227,10 +227,10 @@ Microsoft's relay — no P2P.
 [Src](https://code.visualstudio.com/docs/remote/tunnels).
 
 **Takeaway:** This works because Microsoft can assume every user has a
-GitHub or Microsoft account. Conduit has no account system — so it
+GitHub or Microsoft account. Lancer has no account system — so it
 cannot use device-code OAuth without adding identity infrastructure.
 The relay-only transport is a deliberate choice (simplicity over
-performance), which validates Conduit's same choice.
+performance), which validates Lancer's same choice.
 
 ### Cloudflare Tunnel — token-in-one-line install
 
@@ -242,11 +242,11 @@ edge.
 [Src](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
 
 **Takeaway:** This is the gold standard for *delivery UX*. The token and
-the install are fused into one copy-paste. Conduit's `curl ... | sh &&
-conduitd pair` is architecturally identical — but Cloudflare does it
+the install are fused into one copy-paste. Lancer's `curl ... | sh &&
+lancerd pair` is architecturally identical — but Cloudflare does it
 at scale with signed binaries and a global edge network.
 
-### CC Pocket — QR + mDNS + direct LAN (closest analogue to Conduit)
+### CC Pocket — QR + mDNS + direct LAN (closest analogue to Lancer)
 
 CC Pocket runs `npx @ccpocket/bridge@latest` on the host, which starts
 a local bridge server. The mobile app pairs via QR code, mDNS
@@ -255,11 +255,11 @@ connection to the bridge) or **Tailscale P2P** for remote access. No
 cloud relay.
 [Src](https://play.google.com/store/apps/details?id=com.k9i.ccpocket).
 
-**Takeaway:** CC Pocket's architecture is what Conduit v2 should be:
+**Takeaway:** CC Pocket's architecture is what Lancer v2 should be:
 self-hosted bridge on the agent machine, QR pairing, direct LAN, and
 Tailscale for remote. CC Pocket proves this works today, and it's
 open source. The difference is that CC Pocket's bridge is for
-Codex/Claude Code session control — same use case as Conduit.
+Codex/Claude Code session control — same use case as Lancer.
 
 ### Termius — E2E encrypted vault sync
 
@@ -269,7 +269,7 @@ Termius does not tunnel or relay SSH traffic — each device connects
 directly to the SSH server.
 [Src](https://docs.termius.com/security/encryption-overview.md).
 
-**Takeaway:** Conduit should also support this pattern for its SSH path:
+**Takeaway:** Lancer should also support this pattern for its SSH path:
 paired hosts should sync across the user's devices via iCloud Keychain
 (maybe already done via `HostRepository`). But the *pairing* problem
 (trust a brand-new host) is what Termius doesn't solve — it assumes
@@ -282,8 +282,8 @@ Omnara's cloud. The mobile/web app connects to the cloud to see
 approvals, diffs, and logs. Non-open-source cloud relay.
 [Src](https://omnara.com).
 
-**Takeaway:** Same model as Conduit's relay but with a proprietary
-backend. Conduit's blind-relay approach is strictly more secure
+**Takeaway:** Same model as Lancer's relay but with a proprietary
+backend. Lancer's blind-relay approach is strictly more secure
 (Omnara's cloud can read the data). The market validates the
 "bridge on host → relay → phone" pattern.
 
@@ -291,7 +291,7 @@ backend. Conduit's blind-relay approach is strictly more secure
 
 Warp has no mobile app. Issue [#5093](https://github.com/warpdotdev/Warp/issues/5093)
 requests QR-based login for multi-device auth. The described pattern in
-a related spec ("QR + blind E2E relay") is byte-for-byte Conduit's
+a related spec ("QR + blind E2E relay") is byte-for-byte Lancer's
 architecture — strong external validation.
 [Src](https://www.mintlify.com/dyoburon/jarvis/networking/mobile-pairing).
 
@@ -299,12 +299,12 @@ architecture — strong external validation.
 
 Both are mobile SSH clients. You type or paste a hostname/IP and
 credentials. No pairing, no relay, no onboarding flow. They solve a
-different problem (I-already-have-SSH-access) than Conduit (I-want-to-
+different problem (I-already-have-SSH-access) than Lancer (I-want-to-
 bootstrap-trust-with-a-new-host).
 
 ---
 
-## 5. Question 4: Verdict for Conduit
+## 5. Question 4: Verdict for Lancer
 
 ### Current architecture assessment
 
@@ -321,9 +321,9 @@ The gaps are:
 2. **No release pipeline.** `install.sh` downloads from
    `conduit.dev/releases/latest` which does not exist. `curl|sh` is
    a dead end.
-3. **Two commands to pair.** `conduitd pair` prints a QR but does not
-   connect to the relay. `conduitd relay` connects but needs
-   `CONDUIT_PAIRING_CODE` set manually. The user must run two commands.
+3. **Two commands to pair.** `lancerd pair` prints a QR but does not
+   connect to the relay. `lancerd relay` connects but needs
+   `LANCER_PAIRING_CODE` set manually. The user must run two commands.
 4. **No LAN-direct path.** Everything goes through the relay, even
    same-LAN pairs.
 5. **QR direction is confused.** Both phone-shows-QR and host-shows-QR
@@ -334,14 +334,14 @@ The gaps are:
 **Phase 0 (must-ship):**
 1. Deploy `relay.conduit.dev` (follow `DEPLOY.md` — GCP `e2-micro` or
    Fly.io). This is a hard blocker — nothing works without it.
-2. Merge `conduitd pair` + `conduitd relay` into one command. The
-   `conduitd pair` command should print the QR and immediately start
+2. Merge `lancerd pair` + `lancerd relay` into one command. The
+   `lancerd pair` command should print the QR and immediately start
    the relay WebSocket session, so the user runs one command and waits.
 3. Swap the default direction in `BridgePairingView`: show the scanner
    first (waiting for host QR), with a "show QR for host" button as
    fallback. The host is always the first thing configured (install +
-   `conduitd pair`), so the phone should wait to scan.
-4. Publish a signed `conduitd` binary + `install.sh` at a real URL.
+   `lancerd pair`), so the phone should wait to scan.
+4. Publish a signed `lancerd` binary + `install.sh` at a real URL.
 
 **Phase 1 (high priority):**
 5. Encode a `lanURL` in the QR payload. When phone and daemon detect
@@ -354,7 +354,7 @@ The gaps are:
 
 **Phase 2 (nice to have):**
 8. Add mDNS auto-discovery for same-LAN pairs (no QR needed — the
-   phone discovers `conduitd` on the network automatically).
+   phone discovers `lancerd` on the network automatically).
 9. iCloud sync of paired hosts so re-pairing on a new phone is
    unnecessary.
 10. Fleet/team mode: Tailscale-style pre-auth keys + device approval
@@ -368,13 +368,13 @@ The gaps are:
 | `BridgePairingView.swift:351-355` | Add optional `lanURL` field to `QRPairingPayload`. |
 | `relay_install_helper.go:69-150` | Merge `printRelayInstructions` with the relay connect loop — print QR, THEN connect. |
 | `relay_install_helper.go:31-37` | Add `lanURL` to `qrPairingPayload`. |
-| `main.go:53-54` | Make `conduitd pair` run `printRelayInstructions()` + `runRelay()` in sequence (or make `pair` the entry point and have it do both). |
-| `main.go:68-93` | `runRelay()` needs to accept the code from `pair` instead of only reading `CONDUIT_PAIRING_CODE`. |
+| `main.go:53-54` | Make `lancerd pair` run `printRelayInstructions()` + `runRelay()` in sequence (or make `pair` the entry point and have it do both). |
+| `main.go:68-93` | `runRelay()` needs to accept the code from `pair` instead of only reading `LANCER_PAIRING_CODE`. |
 | `RelaySettings.swift:11` | `defaultURLString` resolves to nothing. Must deploy the relay at that URL. |
 | `install.sh:45-47` | `DOWNLOAD_BASE` resolves to nothing. Must publish binaries. |
 | `websocket_relay.go:35-41` | Add code expiry check (`CreatedAt + 5min > now`). |
 | `E2ERelayClient.swift:148-155` | Add direct-connect try-before-relay logic. |
-| `websocket_relay.go:150-155` | Add `CONDUIT_PAIRING_CODE` as a one-time-use gate (delete pair after both sides connect). |
+| `websocket_relay.go:150-155` | Add `LANCER_PAIRING_CODE` as a one-time-use gate (delete pair after both sides connect). |
 
 ---
 
@@ -384,7 +384,7 @@ The gaps are:
    onboarding is dead code. This is the hardest item (ops work) but
    the only real blocker. (P0)
 2. **Merge `pair` + `relay` into one command.** One command prints QR
-   and waits. The user runs `curl ... | sh && conduitd pair` and
+   and waits. The user runs `curl ... | sh && lancerd pair` and
    does nothing else on the host. (P0)
 3. **Flip the QR direction to host-prints → phone-scans.** The phone
    opens a camera viewfinder by default, with a typed-code fallback.
@@ -395,7 +395,7 @@ The gaps are:
    local use. (P1)
 5. **Harden the relay.** Code expiry, single-use, rate-limits on the
    typed-code path. (P2)
-6. **Add mDNS auto-discovery.** The phone discovers `conduitd` on the
+6. **Add mDNS auto-discovery.** The phone discovers `lancerd` on the
    LAN without scanning anything. (P3)
 
 ---

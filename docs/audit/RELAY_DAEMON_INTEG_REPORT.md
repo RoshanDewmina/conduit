@@ -2,7 +2,7 @@
 
 ## Summary
 
-Integrated the resident `conduitd daemon` with the E2E blind relay so a
+Integrated the resident `lancerd daemon` with the E2E blind relay so a
 relay-paired phone gets the full loop: approval requests forwarded over the
 relay, decisions returned and applied, and agent dispatch initiated and tracked
 over the relay — all without SSH.
@@ -42,7 +42,7 @@ over the relay — all without SSH.
 
 **`relaypair.go`** (new)
 - `relayPairConfig` struct with `RelayURL`, `Code`, `PrivateKey`, `PublicKey`.
-- `relayPairingPath()` → `~/.conduit/relay-pairing.json`
+- `relayPairingPath()` → `~/.lancer/relay-pairing.json`
 - `readRelayPairing()` / `writeRelayPairing()` — JSON persistence.
 - `relayPairWatcher` — polls the file every 5s using SHA-256 hash comparison,
   fires `onChange` when the content changes.
@@ -53,7 +53,7 @@ over the relay — all without SSH.
   resident daemon can connect with the same identity the QR advertised.
 
 **`main.go`**
-- Added `conduitd relay-attach <code>` subcommand for manual/managed pairing
+- Added `lancerd relay-attach <code>` subcommand for manual/managed pairing
   flows. Generates a fresh keypair, writes relay-pairing.json, and advises the
   user to restart or let the daemon auto-detect within 5s.
 - Updated usage string.
@@ -92,14 +92,14 @@ over the relay — all without SSH.
 ## Pairing-code handoff design
 
 ```
-conduitd pair (or relay-attach)
+lancerd pair (or relay-attach)
   │
   ├── generates X25519 keypair + 6-digit code
   ├── prints ANSI QR (existing behavior)
-  └── writes ~/.conduit/relay-pairing.json
+  └── writes ~/.lancer/relay-pairing.json
         { relayURL, code, privateKey, publicKey }
 
-conduitd daemon (startup)
+lancerd daemon (startup)
   │
   ├── reads relay-pairing.json
   ├── creates e2eRelayClient(relayURL, code, persistedKeypair)
@@ -122,25 +122,25 @@ Change detection:
 
 | File | Change |
 |------|--------|
-| `daemon/conduitd/relaypair.go` | **NEW** — pairing config persistence + watcher |
-| `daemon/conduitd/resident.go` | Modified — E2E relay wire-up in runDaemon |
-| `daemon/conduitd/main.go` | Modified — added relay-attach, updated usage |
-| `daemon/conduitd/relay_install_helper.go` | Modified — persist pairing after QR |
-| `daemon/conduitd/e2e_router.go` | Modified — agentDispatch handler, relay notification, relayClient interface |
-| `daemon/conduitd/e2e_client.go` | Modified — newE2ERelayClientWithKey constructor |
-| `daemon/conduitd/server.go` | Modified — emitNotification fans out to relay |
-| `daemon/conduitd/e2e_router_test.go` | **NEW** — tests for agentDispatch, relay notifications, pairing persistence, watcher, resident wiring |
-| `Packages/ConduitKit/Sources/ConduitCore/E2ERelayMessage.swift` | Modified — added DispatchParams + RelayInnerEnvelope |
-| `Packages/ConduitKit/Sources/SessionFeature/E2ERelayBridge.swift` | Modified — sendDispatch + dispatch message handlers |
-| `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift` | Modified — relay agent in dispatchAgents, relay route in performDispatch |
+| `daemon/lancerd/relaypair.go` | **NEW** — pairing config persistence + watcher |
+| `daemon/lancerd/resident.go` | Modified — E2E relay wire-up in runDaemon |
+| `daemon/lancerd/main.go` | Modified — added relay-attach, updated usage |
+| `daemon/lancerd/relay_install_helper.go` | Modified — persist pairing after QR |
+| `daemon/lancerd/e2e_router.go` | Modified — agentDispatch handler, relay notification, relayClient interface |
+| `daemon/lancerd/e2e_client.go` | Modified — newE2ERelayClientWithKey constructor |
+| `daemon/lancerd/server.go` | Modified — emitNotification fans out to relay |
+| `daemon/lancerd/e2e_router_test.go` | **NEW** — tests for agentDispatch, relay notifications, pairing persistence, watcher, resident wiring |
+| `Packages/LancerKit/Sources/LancerCore/E2ERelayMessage.swift` | Modified — added DispatchParams + RelayInnerEnvelope |
+| `Packages/LancerKit/Sources/SessionFeature/E2ERelayBridge.swift` | Modified — sendDispatch + dispatch message handlers |
+| `Packages/LancerKit/Sources/AppFeature/AppRoot.swift` | Modified — relay agent in dispatchAgents, relay route in performDispatch |
 
 ## Test results
 
 ```
-daemon/conduitd$ go build ./...                    ✓
-daemon/conduitd$ go test ./... -count=1 -timeout 120s   ✓ (21.9s)
+daemon/lancerd$ go build ./...                    ✓
+daemon/lancerd$ go test ./... -count=1 -timeout 120s   ✓ (21.9s)
 daemon/push-backend$ go build ./...                 ✓
-Packages/ConduitKit$ swift build                    ✓ (39.5s)
+Packages/LancerKit$ swift build                    ✓ (39.5s)
 ```
 
 Specific new tests:
@@ -156,7 +156,7 @@ Specific new tests:
 
 ## Reviewer deployment / test instructions
 
-### 1. VPS conduitd redeploy
+### 1. VPS lancerd redeploy
 
 ```bash
 # On the relay host (VPS):
@@ -165,21 +165,21 @@ go build -o push-backend ./...
 # restart the push-backend service
 
 # On the daemon host (where agents run):
-cd daemon/conduitd
-go build -o conduitd .
-# install + restart conduitd daemon
+cd daemon/lancerd
+go build -o lancerd .
+# install + restart lancerd daemon
 ```
 
 ### 2. Live phone pairing
 
 ```bash
 # On the daemon host:
-conduitd pair
+lancerd pair
 # Shows QR code + saves relay-pairing.json
 # Daemon auto-detects within 5s and connects to relay
 
 # On iPhone:
-# Open Conduit, tap "Relay Pairing", scan the QR
+# Open Lancer, tap "Relay Pairing", scan the QR
 # Phone connects as role=phone with the same pairing code
 # Daemon and phone derive shared session key
 # Encrypted channel established
@@ -204,9 +204,9 @@ With the phone paired:
 
 ### 5. Known limitations
 
-- The `relay-pairing.json` keypair is ephemeral: `conduitd pair` generates a
+- The `relay-pairing.json` keypair is ephemeral: `lancerd pair` generates a
   fresh one each time. Long-lived daemon sessions (e.g. a tailscale-hosted VPS)
-  should use `conduitd relay-attach <code>` with a code distributed out-of-band.
+  should use `lancerd relay-attach <code>` with a code distributed out-of-band.
 - File polling (5s) means a relay config change takes up to 5s to auto-detect.
   For faster turnaround, SIGUSR1 or a unix-socket RPC could be added later.
 - The iOS relay dispatch only supports the `opencode` agent name for now

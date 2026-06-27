@@ -1,7 +1,7 @@
 /* ============================================================
-   CONDUIT — MIGRATION BOARD
+   LANCER — MIGRATION BOARD
    Latest target UI, with decisions applied:
-     • square corners (subtle 0–2px) — set in conduit.css
+     • square corners (subtle 0–2px) — set in lancer.css
      • production fonts = Chakra Petch + Fira Code (board uses IBM Plex as a stand-in)
      • risk ramp decoupled from brand (green→amber→orange→red)
      • Dispatch INCLUDED · Library DISSOLVED
@@ -166,7 +166,7 @@ function FleetPrivacyRow({a}){
 }
 function FleetPrivacyScreen(){
   const FLEET=[
-    {vendor:'claude',name:'conduit',model:'claude-sonnet-4.6',host:'Dev VPS',status:'working',spend:'$3.18',local:false},
+    {vendor:'claude',name:'lancer',model:'claude-sonnet-4.6',host:'Dev VPS',status:'working',spend:'$3.18',local:false},
     {vendor:'opencode',name:'api-svc',model:'qwen2.5-coder:32b (Ollama)',host:'Workstation',status:'waiting',spend:'—',local:true},
     {vendor:'codex',name:'auth',model:'gpt-5.1-codex',host:'Dev VPS',status:'idle',spend:'$0.74',local:false},
     {vendor:'opencode',name:'pi-bot',model:'llama3.3 (llama.cpp)',host:'Raspberry Pi',status:'offline',spend:'—',local:true},
@@ -223,7 +223,7 @@ function AddHostScreen(){
       <SubNav title="add host"/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 10px'}}>Paste an SSH command — Conduit parses host, user, and port.</p>
+          <p className="cc-lead" style={{margin:'0 0 10px'}}>Paste an SSH command — Lancer parses host, user, and port.</p>
           <CCInput value="ssh ubuntu@dev-vps -p 22" onChange={()=>{}} mono prefix="$"/>
           <div className="cc-chiprow" style={{marginTop:10}}>
             <span className="cc-chip">host: dev-vps</span>
@@ -234,7 +234,7 @@ function AddHostScreen(){
           <div className="cc-seg"><button>password</button><button className="on">ed25519 key</button></div>
           <div className="cc-card" style={{marginTop:12,padding:'14px 15px'}}>
             <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:8}}><Ic d={ICON.key} s={16}/><span style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--ink)',fontWeight:600}}>Generate Ed25519 key</span></div>
-            <div className="cc-cmd" style={{marginBottom:8}}><div className="gut"/><div className="body" style={{fontSize:11.5,padding:'9px 11px',color:'var(--ink-2)'}}>ssh-ed25519 AAAAC3Nz…u9Qe conduit</div></div>
+            <div className="cc-cmd" style={{marginBottom:8}}><div className="gut"/><div className="body" style={{fontSize:11.5,padding:'9px 11px',color:'var(--ink-2)'}}>ssh-ed25519 AAAAC3Nz…u9Qe lancer</div></div>
             <button className="cc-btn cc-btn--quiet cc-btn--block"><Ic d={ICON.copy} s={14}/>Copy public key</button>
             <p className="cc-note" style={{margin:'10px 2px 0'}}>Stored in the Keychain. Copy or rotate keys from <b style={{color:'var(--ink-2)'}}>Settings → Security</b>.</p>
           </div>
@@ -300,7 +300,7 @@ function TrustPrivacyScreen(){
   const COMPARE=[
     ['Omnara','yes','yes','yes',false],
     ['Anthropic','yes','yes','yes',false],
-    ['Conduit','no','no','no',true],
+    ['Lancer','no','no','no',true],
   ];
   return (
     <div className="cc">
@@ -325,7 +325,7 @@ function TrustPrivacyScreen(){
 
           <div className="cc-sec">connectivity<span className="rule"/></div>
           <div className="cc-card">
-            <ConnRow on label="Conduit relay" sub="end-to-end encrypted (default)"/>
+            <ConnRow on label="Lancer relay" sub="end-to-end encrypted (default)"/>
             <ConnRow label="Self-hosted relay" sub="run the relay container yourself"/>
             <ConnRow label="Direct / same network" sub="skip the relay entirely"/>
           </div>
@@ -368,7 +368,7 @@ function SR({ icon, title, detail, toggle, on, danger }){
 function SettingsCleanScreen(){
   return (
     <div className="cc-scroll">
-      <StatusHeader state="ok" label="bridge connected" detail="conduitd v1.0"/>
+      <StatusHeader state="ok" label="bridge connected" detail="lancerd v1.0"/>
       <PromptHeader title="settings" crumb={<b>device &amp; policy</b>}/>
       <div className="cc-pad">
         <div className="cc-sec">bridge &amp; hosts<span className="rule"/></div>
@@ -395,10 +395,10 @@ function SettingsCleanScreen(){
         </div>
         <div className="cc-sec">account<span className="rule"/></div>
         <div className="cc-card">
-          <SR icon={ICON.bolt} title="Conduit Pro" detail="lifetime · unlocked"/>
+          <SR icon={ICON.bolt} title="Lancer Pro" detail="lifetime · unlocked"/>
           <SR icon={ICON.card} title="Billing &amp; usage" detail="$4.94 today · across vendors"/>
         </div>
-        <p className="cc-note" style={{textAlign:'center',margin:'22px 0 0'}}>Conduit 1.0 · conduitd v1.0 · your code stays on your host</p>
+        <p className="cc-note" style={{textAlign:'center',margin:'22px 0 0'}}>Lancer 1.0 · lancerd v1.0 · your code stays on your host</p>
       </div>
       <div className="cc-bottompad"/>
     </div>
@@ -442,7 +442,7 @@ function SessionSwitcherGhost(){
   </div>;
 }
 function MockKeyCountsGhost(){
-  const keys=[['conduit-dev','3 hosts'],['ci-runner','1 host'],['backup-key','unused']];
+  const keys=[['lancer-dev','3 hosts'],['ci-runner','1 host'],['backup-key','unused']];
   return <div className="cc-scroll">
     <PromptHeader title="ssh keys" crumb={<b>library › keys</b>}/>
     <div className="cc-pad">
@@ -620,7 +620,7 @@ function MigrationBoard(){
         <DCArtboard id="usage" label="Billing · spend + quota remaining" width={320} height={660}>
           <Frame tag="redesign"><BillingScreen/></Frame>
         </DCArtboard>
-        <DCArtboard id="paywall" label="Conduit Pro · paywall" width={320} height={660}>
+        <DCArtboard id="paywall" label="Lancer Pro · paywall" width={320} height={660}>
           <div className="cc cc-frame" style={{position:'relative'}}><StatusTag k="redesign"/>
             <div style={{flex:1,position:'relative',overflow:'hidden'}}>
               <SettingsCleanScreen/>

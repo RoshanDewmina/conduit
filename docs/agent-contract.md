@@ -13,7 +13,7 @@ be corrected.
 
 ## 1. Module discipline
 
-1. **Engines never import UIKit or SwiftUI.** `ConduitCore`, `SSHTransport`,
+1. **Engines never import UIKit or SwiftUI.** `LancerCore`, `SSHTransport`,
    `TerminalEngine`, `SecurityKit`, `AgentKit`, `PersistenceKit`,
    `NotificationsKit`, `DiffKit`, `PreviewKit`, and `SyncKit` are SwiftPM
    libraries testable on a macOS CLI. UI belongs in `*Feature` modules.
@@ -25,13 +25,13 @@ be corrected.
 
 ## 2. Platform contract
 
-- Deployment target: **iOS 26.0** (`project.yml` and `Package.swift`).
-- Toolchain: Xcode 26.x, Swift 6.2, SwiftPM-first.
+- Deployment target: **iOS 27.0** (`project.yml` and `Package.swift`).
+- Toolchain: Xcode 27.x, Swift 6.2, SwiftPM-first.
 - Strict concurrency and existential-any are on by default — do not add
   upcoming-feature flags for them.
-- iOS 26-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
+- iOS 27-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
   modifiers, `BGContinuedProcessingTask`, Foundation Models, etc.) can be
-  used without `#available` gating once the rest of the file requires iOS 26.
+  used without `#available` gating once the rest of the file requires iOS 27.
 
 ## 3. Code change rules
 
@@ -48,7 +48,7 @@ be corrected.
 
 ## 4. UI surface rules
 
-- All glass / chrome surfaces use `View.conduitGlassChrome(...)` from
+- All glass / chrome surfaces use `View.lancerGlassChrome(...)` from
   `DesignSystem/Atoms.swift`, not raw `.background(.bar)` /
   `.background(.thinMaterial)` / `.glassEffect(...)`. The single helper is
   what we change when Apple revises Liquid Glass.

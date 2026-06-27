@@ -103,7 +103,7 @@ func TestReaperTearsDownTerminalRunWithHandle(t *testing.T) {
 		AgentID:        "agent_y",
 		Status:         "succeeded",
 		Runtime:        "lightsail",
-		ProviderHandle: "conduit-run-run_done",
+		ProviderHandle: "lancer-run-run_done",
 		StartedAt:      now.Add(-5 * time.Minute).Format(time.RFC3339),
 		CreatedAt:      now.Add(-5 * time.Minute).Format(time.RFC3339),
 	})
@@ -117,7 +117,7 @@ func TestReaperTearsDownTerminalRunWithHandle(t *testing.T) {
 	if got.ProviderHandle != "" {
 		t.Fatalf("expected handle cleared after teardown, got %q", got.ProviderHandle)
 	}
-	if !rp.didCancel("conduit-run-run_done") {
+	if !rp.didCancel("lancer-run-run_done") {
 		t.Fatal("expected reaper to tear down the leaked instance")
 	}
 }

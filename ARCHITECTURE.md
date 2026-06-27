@@ -1,16 +1,16 @@
-# Conduit — Architecture & Product Specification
+# Lancer — Architecture & Product Specification
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-18 (IA §4.1 refreshed to the shipped **sidebar / New Chat** shell; tab bar deprecated)
-Target platform: iOS 26.0+ deployment (project.yml and Package.swift); verified on iOS 26.4 simulator (Swift 6.2, strict concurrency on)
+Last updated: 2026-06-20 (editorial Command Home redesign and workspace refresh)
+Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
 ---
 
 ## 0. Document scope
 
-This is the single source of truth for what Conduit is, why it exists, what it
+This is the single source of truth for what Lancer is, why it exists, what it
 will and will not do, and how it is built. It is structured to be cited from
 code reviews, design reviews, and roadmap discussions. When code disagrees
 with this document, one of the two is wrong; do not let drift accumulate.
@@ -26,60 +26,72 @@ the reason for rejection.
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
 > snapshot, **this snapshot wins** until they are rewritten. The former
-> `docs/CONDUIT_PROJECT_DOSSIER.md` is **archived** (`docs/_archive/`); this is its successor.
+> `docs/LANCER_PROJECT_DOSSIER.md` is **archived** (`docs/_archive/`); this is its successor.
 
-**What Conduit is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
+> **Strategic direction (2026-06-24, narrowed).** The broad "mobile control plane for coding agents"
+> category is commoditized (OpenAI Codex Remote, GitHub Agent HQ, Claude Code auto mode) and **Omnara**
+> (YC S25, open-source: iOS + Apple Watch, multi-provider push approvals, worktrees) already ships
+> mobile cross-provider approvals — so that is **no longer Lancer's differentiator**. Lancer's
+> defensible wedge is the **policy + audit + emergency-stop governance layer** for agents on your own
+> machines across providers (durable per-host policy, blast-radius/reason on approvals, hash-chained
+> audit, fleet drift, team-owned stop). **Lead the product with policy/audit; demote chat/terminal
+> depth.** This is a *conditional* continue, gated on `docs/validation-cycle-v1.md`; if that returns a
+> weak signal, salvage to open-source/SDK. Rationale + verification: the verdict memo (plan file
+> `read-this-claude-code-encapsulated-blossom.md`).
+
+**What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/ConduitKit/` (SwiftUI, 21 SPM targets). **Sidebar / New Chat shell** (see §4.1).
-2. **`conduitd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/conduitd/`.
+1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 21 SPM targets). **Sidebar / Command Home shell** (see §4.1).
+2. **`lancerd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/lancerd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
 **V1 transport = the blind E2E relay.** The phone (`E2ERelayClient` + `E2ERelayBridge`) pairs to
-the `push-backend` relay, and the resident `conduitd` connects to the same relay on the host side;
+the `push-backend` relay, and the resident `lancerd` connects to the same relay on the host side;
 phone ↔ **relay** ↔ daemon. The relay is end-to-end encrypted — it forwards ciphertext it can't read.
-**The phone never holds an SSH session in V1.** A second transport — SSH (`conduitd serve` over a live
+**The phone never holds an SSH session in V1.** A second transport — SSH (`lancerd serve` over a live
 session, `DaemonChannel`) — still exists in code but is **legacy / power-user, NOT the V1 path**; do
 not frame V1 around it. Both transports re-run policy + budget gates.
 
 > **Resilience implication:** because the **resident daemon** holds session/approval state and the phone
 > only attaches via the relay (waking on APNs), "the agent survives when the phone disconnects" is a
 > property of the architecture, not a feature to add. This is why Mosh-style roaming transport (Moshi)
-> and cloud session-migration (Omnara) are largely **non-gaps** for Conduit — the phone was never the
+> and cloud session-migration (Omnara) are largely **non-gaps** for Lancer — the phone was never the
 > session holder.
 
 ### V1 scope (locked 2026-06-18; transport corrected 2026-06-19)
-- **V1 ships:** the sidebar/New Chat shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, fleet (≤3), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+- **V1 ships:** the sidebar/Command Home shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, machine detail (≤3 live sessions), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
 - **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
 
 ### Implemented (✅ verified in code / tests)
-- **Sidebar/New Chat IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
+- **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
-- **conduitd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
+- **lancerd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
 - **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, biometric gate + app-lock + audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop.
 - **V1 reach work (2026-06-19, code-complete; device verification pending):**
-  - **opencode approval gating** — conduitd-dispatched `opencode` runs now gate every tool call through the policy engine via a `CONDUIT_GATE=1`-guarded PreToolUse hook (the guard means the owner's interactive opencode sessions are unaffected). Live-verified against `~/.conduit/audit.log` (auto-allow + auto-deny, hash-chain intact). Closes the prior governance bypass where only Claude Code gated. `daemon/conduitd/dispatch.go` + `docs/opencode-conduit-hook.sh`.
+  - **opencode approval gating** — lancerd-dispatched `opencode` runs now gate every tool call through the policy engine via a `LANCER_GATE=1`-guarded PreToolUse hook (the guard means the owner's interactive opencode sessions are unaffected). Live-verified against `~/.lancer/audit.log` (auto-allow + auto-deny, hash-chain intact). Closes the prior governance bypass where only Claude Code gated. `daemon/lancerd/dispatch.go` + `docs/opencode-lancer-hook.sh`.
   - **Push-driven Live Activity** — `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New `daemon/push-backend/liveactivity.go` ActivityKit sender with the strict APNs contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). **APNs payload privacy:** the alert body no longer carries the raw command (`body := ev.Command` removed) — redacted risk/tool summary only; full detail fetched in-app post-unlock.
-  - **Cold-decision gate** — `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a killed-app Live Activity forwards to conduitd (previously the singleton creds were empty cold → decision dropped).
+  - **Cold-decision gate** — `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a killed-app Live Activity forwards to lancerd (previously the singleton creds were empty cold → decision dropped).
   - **Watch WCSession polish** — `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gains `.accessoryRectangular` + VoiceOver labels.
 
-### Partial / built-but-not-wired (🔶)
-- **Chat artifacts:** `ChatArtifactCard`/`ChatArtifactDetailView` (6 sub-cards, 14 tests) are the **intended richer artifact renderer** but are **not yet wired** — `NewChatTabView` currently renders live tool calls via its own `InlineChatToolCard`. **Decision (2026-06-18): keep both**; they are complementary (live tool-call card vs. run-artifact card), not duplicates. Wire `ChatArtifactCard` when run artifacts (diff/file/test/preview) flow into the transcript. `FleetThreadMapper` (4 tests) similarly built, awaiting fleet→thread wiring.
-- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, **live APNs device delivery** — not yet proven on device (see `docs/LIVE_LOOP_RUNBOOK.md`). The Live Activity **push token → push-backend registration** now routes securely through `DaemonChannel.registerActivityToken` → conduitd RPC `conduit.device.register.activity` → push-backend (conduitd holds `APPROVAL_RELAY_SECRET`; the app never does). **One manual wiring step remains:** paste the `.conduitLiveActivityTokenReady` subscriber into `AppRoot.configureE2ERelayBridge` (next to the `.conduitAPNSTokenReceived` one) and call `startPushToStartMonitor(sessionID:)` — deferred only because `AppRoot.swift` is under active IA editing.
+### Partial / deployment- or device-gated (🔶)
+- **Chat artifacts and Fleet→thread routing:** `ChatArtifactCard`/`ChatArtifactDetailView` now render persisted run artifacts inside `NewChatTabView`, alongside live `InlineChatToolCard`s. Tapping a Fleet agent opens its matching active chat (including legacy titles) or falls back to that host's terminal when no related chat exists. The two card types remain complementary.
+- **Standard accounts and daemon binding:** the app has a Lancer-account vs. self-hosted-offline entry decision, Supabase email/password flow, deep-link recovery, Keychain session restore/sign-out, authenticated backend ownership checks, and QR bind/redeem contracts. A **device-management screen** (Settings → Connection → Devices, standard-account only) lists bound daemons and revokes them against `GET /v1/devices` + `POST /v1/devices/{id}/revoke`. Production Supabase URL, publishable key, JWT secret, and production SMTP are owner-configured deployment inputs; offline pairing remains account-free. JWT verification is **HS256-only** (`SUPABASE_JWT_SECRET`) — a JWKS/asymmetric path is needed if the chosen Supabase project signs with RS256.
+- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, and **live APNs device delivery** are not yet proven on a physical device (see `docs/LIVE_LOOP_RUNBOOK.md`). The Live Activity **push token → push-backend registration** is now wired in code: `LancerApp` posts `.lancerLiveActivityTokenReady`, `AppRoot.configureE2ERelayBridge` subscribes, and `startPushToStartMonitor(sessionID:)` runs after cloud-service setup. The remaining gap is physical-device proof, not a manual source edit.
 - **`continue`/follow-up:** implemented for all vendors in `dispatch.go` (`continueArgv`) — **in V1 scope.** Re-verify each vendor's argv with the `vendor-cli-adapter-audit` skill before trusting (CLI flags drift).
 
 ### Deferred to V2 — code retained, NOT deleted
 - **Hosted-cloud execution UI:** `ProviderDetailView`, `HostedProvisioningView`, `HostedRunnerStatusView`, `SelfHostVsHostedView` (orphaned, 0 refs) and the `agent-runner`/multi-cloud dispatch depth (Fly real; GCP needs an image; Lightsail bootstrap only). Compiles, stays in tree, unwired in V1. **Do not delete.**
 
 ### Planned (not started)
-- First-class **Loop** primitive (`conduit_loop_start`/`conduit_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
-- Cross-vendor breadth beyond the four CLIs; open-sourcing `conduitd`.
+- First-class **Loop** primitive (`lancer_loop_start`/`lancer_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
+- Cross-vendor breadth beyond the four CLIs; open-sourcing `lancerd`.
 
 ### Deprecated / removed
 - **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — replaced by the sidebar shell (§4.1).
 - Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
-- `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `CONDUIT_PROJECT_DOSSIER.md` → `docs/_archive/` (point-in-time, superseded).
+- `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `LANCER_PROJECT_DOSSIER.md` → `docs/_archive/` (point-in-time, superseded).
 
 ### Current priorities (in order)
 1. **Close the live loop on a real device:** hook→policy→inbox→approve→audit + **APNs delivery while the app is closed** + relay dispatch round-trip, end-to-end (the #1 unverified gap). Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
@@ -91,7 +103,7 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 ## 1. Product thesis
 
 **Phones are not where serious software is written. They are where serious
-software is steered.** Conduit is built around that asymmetry.
+software is steered.** Lancer is built around that asymmetry.
 
 Concretely: the iPhone (and iPad) is the best on-body computer humans have
 ever owned. It is always with the developer, has push, biometrics, camera,
@@ -101,7 +113,7 @@ a cloud VM, a personal devbox, a teammate's machine, or a self-hosted server
 — is where the toolchain, the repo, the AI agent, the language server, the
 test runner, and the dev server actually live.
 
-Conduit is the missing client. It is not a phone IDE. It is the **control
+Lancer is the missing client. It is not a phone IDE. It is the **control
 plane for remote AI coding**, optimized for six jobs the research validates
 as the actual mobile loop:
 
@@ -126,7 +138,7 @@ even when users ask, because pursuing them dilutes the product.
 | **Full desktop split-pane layouts on the phone** | Density on a 6.1" screen produces tap-targets too small to hit reliably. Use stacked sheets and quick transitions. iPad gets real splits. |
 | **Custom SSH protocol implementation** | swift-nio-ssh + Citadel is solved. Re-implementing SSH is a multi-year tax with no upside. |
 | **Built-in cloud VMs at launch** | The cost envelope (see §13) destroys margins. Start BYO-host / BYOK. Managed compute is a later, opt-in upsell. |
-| **Generic "mobile terminal" positioning** | Termius and Blink already own that frame. Conduit's wedge is *AI workflow*, not raw terminal. |
+| **Generic "mobile terminal" positioning** | Termius and Blink already own that frame. Lancer's wedge is *AI workflow*, not raw terminal. |
 | **Pure subscription gating of the client** | Documented backlash against Blink/Termius pricing makes this commercially bad. Client is paid; cloud and AI are metered. |
 | **Re-implementing tmux semantics in-app** | Server-side `tmux` is universal, durable, and our users already know it. We integrate, we do not replace. |
 | **Real-time multi-cursor collaboration** | Wrong product. We are async / steering, not pair-coding. |
@@ -135,10 +147,10 @@ even when users ask, because pursuing them dilutes the product.
 
 ## 2. Naming, identity, and scope
 
-- **Name:** Conduit
-- **Bundle ID:** `dev.conduit.mobile` (app), `dev.conduit.kit` (frameworks)
-- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 26.4 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
-- **Toolchain:** Xcode 26.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
+- **Name:** Lancer
+- **Bundle ID:** `dev.lancer.mobile` (app), `dev.lancer.kit` (frameworks)
+- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
 
@@ -203,7 +215,7 @@ Drawn directly from issue trackers, App Store reviews, and the research report:
 
 Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier · ⏳ roadmap
 
-| Capability | Termius | Blink | Warp (desktop) | cmux (mac) | Helm | **Conduit** |
+| Capability | Termius | Blink | Warp (desktop) | cmux (mac) | Helm | **Lancer** |
 |---|---|---|---|---|---|---|
 | SSH (password, key, agent) | ✅ | ✅ | ✅ | ✅ | ⚪ | ✅ |
 | Mosh | ✅ | ✅ | ⚪ | ⚪ | ⚪ | ⏳ M3 |
@@ -231,32 +243,33 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation — **sidebar / New Chat shell** (shipped 2026-06-18)
+### 4.1 Top-level navigation — **sidebar / Command Home shell** (redesigned 2026-06-20)
 
 The home is **not** a tab bar. It is a **sidebar/drawer shell** (ChatGPT/Claude-app
-style) whose default surface is **New Chat**. Source of truth:
+style) whose default surface is **Command Home**. Source of truth:
 `AppFeature/AppRoot.swift` (`compactRoot` = drawer overlay on iPhone, `regularRoot`
-= `NavigationSplitView` on iPad), `ConduitSidebarView.swift`, `SidebarShellState.swift`.
+= `NavigationSplitView` on iPad), `LancerSidebarView.swift`, `SidebarShellState.swift`.
 
 Navigation is driven by `SidebarDestination`, not `enum Tab`:
 
 | Sidebar destination | Surface | Notes |
 |---|---|---|
-| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | **Default first surface.** Durable, backed by `ChatConversationRepository`. |
+| **Home** (`.home`) | `LancerHomeView` — attention, machines, recent work | **Default first surface.** Opens New Chat from its primary action. |
+| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | Durable, backed by `ChatConversationRepository`. |
 | **Thread** (`.thread(id)`) | `NewChatTabView(initialConversationID:)` | Resume a persisted conversation from the sidebar's Recent list. |
 | **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | Inbox is the system of record for approvals; History/Activity is a sheet off Inbox, not a root. |
-| **Fleet** (`.fleet`) | `FleetView` — hosts + active session slots (≤3) | Opens a slot's live block terminal as an intentional drill-in. |
+| **Machines** (`.machines`) | `FleetView` — hosts + active session slots (≤3) | Machine detail opens a slot's live block terminal as an intentional drill-in. |
 | **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security / Advanced / Account. |
 
 > **Deprecated:** the earlier `enum Tab { inbox, fleet, newchat, settings }` **tab bar**
 > and the `Inbox / Fleet / Activity / Settings` and `Inbox / Fleet / Control / Settings`
 > layouts. The `Tab` enum still exists in `AppRoot.swift` but is **vestigial** — only
-> `rootDestination(.inbox/.fleet)` is reached, from inside `sidebarDetail`. `Activity` and
+> `rootDestination(.inbox)` is reached, from inside `sidebarDetail`. `Activity` and
 > `Control` are **not** root surfaces; Activity history lives in Recent Threads / the Inbox
 > History sheet / audit detail. Do **not** reintroduce a tab bar.
 >
 > The chat-based session/terminal surface is a **depth** destination reached from
-> Fleet/Inbox, never a root.
+> Machines/Inbox, never a root.
 
 ### 4.2 Session screen layout
 
@@ -354,7 +367,7 @@ patch approval is supported.
 
 ## 5. Module / package architecture
 
-Conduit is a SwiftPM workspace with a single app target consuming many small
+Lancer is a SwiftPM workspace with a single app target consuming many small
 library modules. Modules form a dependency DAG; cycles fail the build.
 
 ```
@@ -374,7 +387,7 @@ AppFeature (root router, deep links, scene phase, push handler)      │
    └── SettingsFeature   ── PersistenceKit, AgentKit                  │
                                                                        │
    Engines (no UIKit/SwiftUI imports):                                 │
-   ├── ConduitCore       — value types, errors, ids, durations        │
+   ├── LancerCore       — value types, errors, ids, durations        │
    ├── SecurityKit       — Keychain, Secure Enclave, pairing crypto   │
    ├── SSHTransport      — Citadel wrapper, SessionPool, PTY, SFTP    │
    ├── TerminalEngine    — SwiftTerm bridge, AnsiSGRParser, BlockModel│
@@ -406,7 +419,7 @@ Strict rules:
 
 ### 6.1 Runtime topology
 
-Conduit operates in three runtime tiers; each tier owns specific state and
+Lancer operates in three runtime tiers; each tier owns specific state and
 trust boundaries.
 
 ```
@@ -439,12 +452,12 @@ mirrored in the Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`)
 for older hardware.
 
 Tier 2, the **workspace host**, runs whatever the user already runs.
-Conduit ships an optional, single-binary, code-signed **bootstrap helper**
-(`conduitd`) that is uploaded over the SSH session itself, verified against
+Lancer ships an optional, single-binary, code-signed **bootstrap helper**
+(`lancerd`) that is uploaded over the SSH session itself, verified against
 a SHA-256 manifest embedded in the app bundle (cmux's model), and exposes a
 small stdio JSON-RPC surface for: PTY allocation, structured event taps,
 SOCKS5 proxy stream RPC, file deltas, and tmux/screen session enumeration.
-The helper is *opt-in*; Conduit works fully against an unmodified sshd.
+The helper is *opt-in*; Lancer works fully against an unmodified sshd.
 
 Tier 3, the **control plane**, is intentionally small. It exists only for
 the features that *require* a server: push notification dispatch, optional
@@ -499,7 +512,7 @@ Backgrounding does **not** drop sessions immediately. We rely on:
 | **SFTP (over SSH)** | File transfer, image upload | Citadel SFTPClient | M2 |
 | **WebSocket (TLS)** | Control plane: push tokens, relay signaling, sync | `URLSessionWebSocketTask` | M3 |
 | **HTTPS (TLS)** | AI provider API, host metadata, manifest fetch | `URLSession` + async-bytes | M1 |
-| **SOCKS5 over stream RPC** | Browser preview egress through remote net | `Network.framework` listener + `conduitd` | M4 |
+| **SOCKS5 over stream RPC** | Browser preview egress through remote net | `Network.framework` listener + `lancerd` | M4 |
 | **Mosh (UDP)** | High-latency cellular durability | `mosh-client` ported to SwiftPM (eval) | M5 |
 | **APNs** | Foreground/background approval pushes | `UNUserNotificationCenter` + Live Activities | M3 |
 
@@ -524,8 +537,8 @@ session state. Rules:
 
 ### 7.3 Side-channel JSON-RPC
 
-When `conduitd` is installed on the workspace host, we open one additional
-SSH `exec` channel running `conduitd serve --stdio`. The protocol is
+When `lancerd` is installed on the workspace host, we open one additional
+SSH `exec` channel running `lancerd serve --stdio`. The protocol is
 length-prefixed JSON (4-byte big-endian length, then UTF-8 JSON body), with
 JSON-RPC 2.0 semantics and named methods:
 
@@ -547,7 +560,7 @@ it grow without explicit review.
 
 ### 7.4 Manifest-verified bootstrap
 
-Borrowed directly from cmux. The app bundle ships a `ConduitDaemonManifest`
+Borrowed directly from cmux. The app bundle ships a `LancerDaemonManifest`
 plist:
 
 ```xml
@@ -558,7 +571,7 @@ plist:
     <dict>
       <key>os</key><string>linux</string>
       <key>arch</key><string>amd64</string>
-      <key>url</key><string>https://releases.conduit.dev/d/1.4.2/conduitd-linux-amd64</string>
+      <key>url</key><string>https://releases.conduit.dev/d/1.4.2/lancerd-linux-amd64</string>
       <key>sha256</key><string>9f3a…</string>
     </dict>
     <!-- darwin, linux × amd64, arm64 -->
@@ -566,8 +579,8 @@ plist:
 </dict>
 ```
 
-On first attach to a host, Conduit `uname -sm`'s, downloads the matching
-asset to `~/.conduit/bin/conduitd-1.4.2`, verifies its SHA-256 against the
+On first attach to a host, Lancer `uname -sm`'s, downloads the matching
+asset to `~/.lancer/bin/lancerd-1.4.2`, verifies its SHA-256 against the
 bundled manifest, and only then launches it. Updates are pinned to the
 shipped app version — never auto-pulled from the network. This is
 non-negotiable: the helper runs as the user on their server.
@@ -578,7 +591,7 @@ non-negotiable: the helper runs as the user on their server.
 
 ### 8.1 Two rendering modes
 
-Conduit operates in two modes, chosen automatically per command:
+Lancer operates in two modes, chosen automatically per command:
 
 1. **Block mode (default).** Each shell command produces a discrete `Block`
    object (command + cwd + chunks of stdout/stderr + exit). Streamed in
@@ -622,7 +635,7 @@ Wrap SwiftTerm's `TerminalView` (UIKit) in `UIViewRepresentable`. The
 delegate `send(source:data:)` writes user input into the SSH PTY channel.
 `feed(byteArray:)` is called from the SSH read stream on the main actor.
 Resize is debounced (50 ms) and round-tripped through `session.resize` on
-`conduitd` or `SIGWINCH` on the PTY.
+`lancerd` or `SIGWINCH` on the PTY.
 
 `smallest-screen-wins`: when multiple devices attach to the same tmux
 session, the daemon publishes the minimum (cols, rows). Cmux taught us
@@ -684,14 +697,14 @@ size + the maintenance debt of three separate SDKs.
   `.whenUnlockedThisDeviceOnly`.
 - Keys never leave the device. Requests go direct: `phone → api.anthropic.com`.
 - The control plane never sees a user's API key.
-- Optional managed AI (a Conduit-hosted relay) is a separate, opt-in tier
+- Optional managed AI (a Lancer-hosted relay) is a separate, opt-in tier
   with billing meters.
 
 ### 9.4 Agent hook protocol
 
-When `conduitd` is installed and the user has an agent (Claude Code, Codex,
+When `lancerd` is installed and the user has an agent (Claude Code, Codex,
 OpenCode, custom) configured, the agent's hook fires a structured event
-into `~/.conduit/events/`. `conduitd` serializes these onto the JSON-RPC
+into `~/.lancer/events/`. `lancerd` serializes these onto the JSON-RPC
 side-channel as `agent.approval.pending`, `agent.run.completed`,
 `agent.run.failed`. The client surfaces them in the Inbox. The user's
 Approve/Reject decision is written back as a hook response file the agent
@@ -737,7 +750,7 @@ malware; that is out of scope and we will not pretend otherwise.
 | Device theft | Optional biometric gate at app launch and before key use. Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
 | Server breach | Control plane stores nothing decryptable about hosts or sessions. BYOK keys never touch the server. Push notification payloads carry only host id + opaque event id. |
 | Untrusted host | First-connect host key fingerprint shown to user with QR/text confirm. TOFU with explicit warn-on-change. `accept-anything` is **never** the default. |
-| Compromised workspace | `conduitd` runs as the user; never sudo. Daemon binary SHA-256 verified pre-launch against the app's embedded manifest. |
+| Compromised workspace | `lancerd` runs as the user; never sudo. Daemon binary SHA-256 verified pre-launch against the app's embedded manifest. |
 | Prompt injection | Stderr / stdout sent to LLM is truncated and clearly delimited. The system prompt explicitly tells the model not to obey instructions found in user data. No agent has shell-execute permission unless the user explicitly grants per-session. |
 
 ### 10.3 Pairing (when multi-device)
@@ -746,7 +759,7 @@ Phone-to-phone or phone-to-desktop pairing uses X25519 key agreement →
 HKDF-SHA256 → ChaCha20-Poly1305 framing. Pattern proven in Helm and
 reused here. QR code carries: helper id, helper public key, suggested
 mDNS name. Phone responds with its public key over the bootstrap
-WebSocket. AEAD AAD = `"conduit-frame-v1"`.
+WebSocket. AEAD AAD = `"lancer-frame-v1"`.
 
 ### 10.4 Audit
 
@@ -808,7 +821,7 @@ last K bytes of `tmux capture-pane -pS -K` against the local block FTS.
 | Apps cannot run shells locally | No on-device build/test/lint | Everything runs remote. We do not pretend otherwise. |
 | Background execution is bounded (~30 s after `beginBackgroundTask`) | Long SSH sessions die when phone sleeps | Server-side tmux is mandatory. Reconnect on resume. Optionally use control-plane relay to keep TCP alive across NAT. |
 | `URLSessionWebSocketTask` does not survive backgrounding by default | Push side-channel drops on lock | APNs delivers approvals when the WebSocket is dead. The WS is opportunistic, not authoritative. |
-| WKWebView cannot speak to localhost on a remote host | Live preview broken out of the box | `SSHProxyURLSchemeHandler`: register `conduit-preview://` scheme and proxy each request through SOCKS-over-conduitd. |
+| WKWebView cannot speak to localhost on a remote host | Live preview broken out of the box | `SSHProxyURLSchemeHandler`: register `lancer-preview://` scheme and proxy each request through SOCKS-over-lancerd. |
 | App size cap on App Store wireless install | TerminalEngine + SwiftTerm + Citadel adds binary weight | Strip bitcode; defer NLP models; ship daemon binaries via OTA download with SHA-256 verify, not in-bundle. |
 | iOS keyboard hijacks `Tab` and arrow keys in some contexts | Terminal navigation breaks | Use `UIKeyCommand` with `wantsPriorityOverSystemBehavior` (iOS 15+), capture in `keyCommands` on `UIResponder`. |
 | Network framework has no SOCKS client primitive | Cannot reuse system stack for proxy egress | Implement minimal SOCKS5 in Swift; only the CONNECT path is needed. |
@@ -859,7 +872,7 @@ testable app.
 | **M2** | Real terminal | SwiftTerm raw mode for TUI apps, mode switch heuristic, keyboard accessory rail | vim/htop/tmux work |
 | **M3** | Survive | ReconnectController, tmux replay, Mosh evaluation, basic push | Sessions don't die on Wi-Fi switch |
 | **M4** | AI loop | Anthropic + OpenAI clients, `#` NL→cmd, explain-block, BYOK | The core differentiator works |
-| **M5** | Inbox + Approvals | conduitd MVP, agent hook ingest, approval cards, risk scoring | Phone steers Claude Code in another window |
+| **M5** | Inbox + Approvals | lancerd MVP, agent hook ingest, approval cards, risk scoring | Phone steers Claude Code in another window |
 | **M6** | Preview | SSHProxyURLSchemeHandler, SOCKS-over-RPC, port auto-detect, WKWebView surface | Show your dev server from your phone |
 | **M7** | Diff + Files | DiffKit, file explorer, SFTP put/get, image upload composer | Review the agent's work without a laptop |
 | **M8** | Snippets + Workflows | Snippet library, parameterized snippets, host-scoped presets | Heavy-user retention |
@@ -884,7 +897,7 @@ warp-mobile learnings.
 
 2. **No competitor uses a SHA-256-verified single-binary helper for
    advanced features.** cmux is the only one that does this on desktop; on
-   mobile, nobody. Our `conduitd` is opt-in and the verification path
+   mobile, nobody. Our `lancerd` is opt-in and the verification path
    matches Apple's notarization mental model, so users in regulated
    environments can ship it.
 
@@ -919,8 +932,10 @@ These are decisions we will revisit; recording them prevents re-litigation.
 | Q3 | Use Anthropic SDK / OpenAI SDK or hand-rolled URLSession? | Hand-rolled | If a provider adds tools we cannot trivially port |
 | Q4 | CloudKit vs custom sync server? | CloudKit | When we need cross-org sync |
 | Q5 | Local LLM (Apple Intelligence / WhisperKit) for offline NL→cmd? | Out of scope at launch | When Apple Intelligence on-device proves capable |
-| Q6 | Run conduitd as a systemd unit or per-ssh-session? | Per-ssh-session via `exec` channel | If users ask for proactive event push |
+| Q6 | Run lancerd as a systemd unit or per-ssh-session? | Per-ssh-session via `exec` channel | If users ask for proactive event push |
 | Q7 | License model for engine modules? | Likely MIT/Apache for engines | Before App Store submission |
+| Q8 | Product positioning: broad mobile manager vs. narrow governance layer? | **Narrow to policy + audit + emergency-stop governance** across own-machine, multi-provider agents (see §0.1 strategic note). Mobile approvals alone are commodity (Omnara/native). | After `docs/validation-cycle-v1.md` — continue vs. open-source salvage |
+| Q9 | Self-host/SSH vs. hosted-cloud execution as the V1 story? | **Self-host/relay supervision is V1; hosted-cloud execution stays V2** (retained, unwired). The narrowed governance wedge lives above any one backend. | If validation shows demand for hosted execution |
 
 ---
 
@@ -1021,14 +1036,14 @@ integration.
 
 ### 19.2 Crash reporting (Sentry)
 
-Sentry is wired in `Conduit/ConduitApp.swift` via `SentrySDK.start`. Configuration notes:
+Sentry is wired in `Lancer/LancerApp.swift` via `SentrySDK.start`. Configuration notes:
 
-- **DSN:** Set the `sentryDSN` constant in `ConduitApp.swift` before App Store release.
+- **DSN:** Set the `sentryDSN` constant in `LancerApp.swift` before App Store release.
   Create a project at your Sentry instance (cloud or self-hosted) to obtain the DSN.
-- **Opt-out:** Set `UserDefaults` key `dev.conduit.crashReportingOptedOut = true` to disable at
+- **Opt-out:** Set `UserDefaults` key `dev.lancer.crashReportingOptedOut = true` to disable at
   runtime. No PII is collected (`sendDefaultPii = false`). No performance tracing
   (`tracesSampleRate = 0`). No advertising or tracking.
-- **Privacy manifest:** `Conduit/PrivacyInfo.xcprivacy` declares `NSPrivacyAccessedAPICategorySystemBootTime`
+- **Privacy manifest:** `Lancer/PrivacyInfo.xcprivacy` declares `NSPrivacyAccessedAPICategorySystemBootTime`
   (reason `35F9.1` — crash reporting) and `NSPrivacyCollectedDataTypeCrashData` (no linking, no tracking).
 - **Verifying symbolication:** In `configureSentry()` there is a commented-out `SentrySDK.crash()`
   line under `#if DEBUG`. Temporarily un-comment, run on a real device, recomment, and check your

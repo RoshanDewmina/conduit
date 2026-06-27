@@ -1,7 +1,7 @@
 # Frontend Simplification Report - Governed Approvals v1
 
 **Date:** 2026-06-13
-**Context:** Conduit shifted from a broader SSH cockpit / agent-management app toward a governed-approvals product. This report captures which frontend surfaces still feel like pre-pivot weight, which capabilities should remain, and what the next simplification pass should try to achieve.
+**Context:** Lancer shifted from a broader SSH cockpit / agent-management app toward a governed-approvals product. This report captures which frontend surfaces still feel like pre-pivot weight, which capabilities should remain, and what the next simplification pass should try to achieve.
 
 ## What I Was Trying To Do
 
@@ -9,7 +9,7 @@ I was trying to judge the app against the current product thesis, not the old on
 
 The current thesis is: **a coding agent asks permission, the user approves from the phone, and the remote host resumes safely.** Anything that helps a first-time user understand and trust that loop should stay close to the surface. Anything that mainly supports generic SSH management, hosted-agent operations, snippets, workflows, file browsing, scheduling, or billing should either move behind Advanced, be hidden until production-ready, or be deferred.
 
-The goal was not to make Conduit less capable. It was to make the first-use experience simpler, so the real capability is easier to understand.
+The goal was not to make Lancer less capable. It was to make the first-use experience simpler, so the real capability is easier to understand.
 
 ## Core Product Spine To Keep
 

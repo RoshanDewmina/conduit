@@ -16,7 +16,7 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
 
 ## Changes by File
 
-### 1. `Packages/ConduitKit/Sources/InboxFeature/InboxView.swift`
+### 1. `Packages/LancerKit/Sources/InboxFeature/InboxView.swift`
 **Lines changed:** +311 / -50 (net ~260 lines added)
 
 **What changed:**
@@ -45,7 +45,7 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
 - Added blast radius chips (`DSBlastChips`) to pending approval cards
 - Added "Edit & run" and "Allow always..." secondary action buttons
 
-### 2. `Packages/ConduitKit/Sources/AppFeature/FleetView.swift`
+### 2. `Packages/LancerKit/Sources/AppFeature/FleetView.swift`
 **Lines changed:** +233 / -20
 
 **What changed:**
@@ -64,7 +64,7 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
 - Added agent detail rows showing running/completed/failed counts with color-coded dots
 - Added host health badges and local agent count indicators
 
-### 3. `Packages/ConduitKit/Sources/InboxFeature/ActivityView.swift`
+### 3. `Packages/LancerKit/Sources/InboxFeature/ActivityView.swift`
 **Lines changed:** +6 / -1
 
 **What changed:**
@@ -78,7 +78,7 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
   ```
 - Minimal change — Activity is primarily a log view, so the header provides the only status context
 
-### 4. `Packages/ConduitKit/Sources/SettingsFeature/SettingsView.swift`
+### 4. `Packages/LancerKit/Sources/SettingsFeature/SettingsView.swift`
 **Lines changed:** +475 / -120 (net ~355 lines added)
 
 **What changed:**
@@ -93,13 +93,13 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
   ```
   - Uses the actual `autonomyPresetRaw` AppStorage value (e.g., `"alwaysAsk"`) instead of hardcoded `"balanced"`
 - Extended `TrustPrivacyView` with:
-  - "CONNECTIVITY" section showing three relay options (Conduit relay, self-hosted, direct/LAN)
-  - "HOW IT COMPARES" comparison table (Conduit vs Omnara vs Anthropic) showing code-leaves-device, model-aware, relay encryption attributes
+  - "CONNECTIVITY" section showing three relay options (Lancer relay, self-hosted, direct/LAN)
+  - "HOW IT COMPARES" comparison table (Lancer vs Omnara vs Anthropic) showing code-leaves-device, model-aware, relay encryption attributes
   - `connRow(active:title:detail:)` helper for connectivity options
   - `comparisonTable` computed property for the vendor comparison grid
 - Added `daemonChannel` parameter to `SettingsWithLibraryView` for relay diagnostics
 
-### 5. `Packages/ConduitKit/Package.swift`
+### 5. `Packages/LancerKit/Package.swift`
 **Lines changed:** +1
 
 **What changed:**
@@ -109,14 +109,14 @@ Wired the existing `DSStatusHeader` component into all four tab screens (Inbox, 
   ```
   - Required because `SettingsView.swift` now imports `SSHTransport` for `DaemonChannel` type
 
-### 6. `Conduit.xcodeproj/project.pbxproj`
+### 6. `Lancer.xcodeproj/project.pbxproj`
 **Lines changed:** +2 / -2
 
 **What changed:**
-- Fixed `IPHONEOS_DEPLOYMENT_TARGET` for the Conduit app target from `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)` (resolves to iOS 17) to `26.0` in both Debug and Release configurations
+- Fixed `IPHONEOS_DEPLOYMENT_TARGET` for the Lancer app target from `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)` (resolves to iOS 17) to `26.0` in both Debug and Release configurations
 - This was a pre-existing mismatch — the SPM package requires iOS 26 but the Xcode project target resolved to iOS 17 via the Xcode recommendation variable
 
-### 7. `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift`
+### 7. `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
 **Lines changed:** +22 / -8
 
 **What changed:**
@@ -146,7 +146,7 @@ The working tree also contains ~1,500 lines of pre-existing uncommitted changes 
 
 | Feature Area | Files | Lines |
 |---|---|---|
-| Pairing & Bridge | `BridgePairingView.swift`, `ConduitDProtocol.swift`, `DaemonChannel.swift` | ~300 |
+| Pairing & Bridge | `BridgePairingView.swift`, `LancerDProtocol.swift`, `DaemonChannel.swift` | ~300 |
 | Privacy & Security | `TrustPrivacyView`, `SecretsView`, `SecretsPolicy`, `PrivacyBadge` | ~250 |
 | Face ID | `SettingsView` biometrics toggle | ~30 |
 | Settings Fidelity | `PolicyEditorView`, `AuditView`, `DoctorView` | ~400 |
@@ -163,7 +163,7 @@ These are **independent** of the StatusHeader wiring and would be committed sepa
 ### Build Verification
 | Step | Result |
 |---|---|
-| `cd Packages/ConduitKit && swift build` | ✅ Build complete (1.77s) |
+| `cd Packages/LancerKit && swift build` | ✅ Build complete (1.77s) |
 | `xcodebuild ... build` (after deployment target fix) | ✅ BUILD SUCCEEDED |
 
 ### Screenshot Verification
@@ -211,7 +211,7 @@ All four tabs now match this pattern. The StatusHeader sits above the `DSScreenH
 | `InboxFeature/ActivityView.swift` | Modified | +6 / -1 |
 | `SettingsFeature/SettingsView.swift` | Modified | +475 / -120 |
 | `Package.swift` | Modified | +1 |
-| `Conduit.xcodeproj/project.pbxproj` | Modified | +2 / -2 |
+| `Lancer.xcodeproj/project.pbxproj` | Modified | +2 / -2 |
 | `AppFeature/AppRoot.swift` | Modified | +22 / -8 |
 | **Total** | | **+1,050 / -201** |
 

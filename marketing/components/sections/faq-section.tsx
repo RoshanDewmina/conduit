@@ -8,7 +8,7 @@ const FAQS = [
   },
   {
     q: "How is this different from Claude's or OpenAI's mobile app?",
-    a: "Those are single-vendor (Claude-only / Codex-only), and Anthropic's isn't available to Team/Enterprise. Conduit governs all your agents, with your code on your host.",
+    a: "Those are single-vendor (Claude-only / Codex-only), and Anthropic's isn't available to Team/Enterprise. Lancer governs all your agents, with your code on your host.",
   },
   {
     q: "Will it constantly interrupt me?",

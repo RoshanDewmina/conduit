@@ -13,9 +13,9 @@ export default function LocalFirstSection() {
         <p className="font-mono text-sm text-dim leading-relaxed mb-4">
           A small bridge —{" "}
           <span className="font-mono text-fg bg-input border border-line px-1">
-            conduitd
+            lancerd
           </span>{" "}
-          — runs on your host and enforces the policy <em>you</em> set. Conduit
+          — runs on your host and enforces the policy <em>you</em> set. Lancer
           never gets your source or your credentials; the approval relay carries
           only the action metadata you choose to send. You own the bridge.
         </p>
@@ -46,7 +46,7 @@ export default function LocalFirstSection() {
                 </span>
               ))}
               <span className="font-mono text-[11px] px-2 py-1 border border-accent bg-accent text-white">
-                conduitd
+                lancerd
               </span>
             </div>
             <div className="font-mono text-[11.5px] text-low mt-3">

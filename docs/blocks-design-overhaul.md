@@ -2,7 +2,7 @@
 
 Branch: `feat/blocks-design-system` · Base: `feat/warp-style-agent-blocks`
 
-A full re-skin of the Conduit iOS app to the **BLOCKS** visual language: a dark,
+A full re-skin of the Lancer iOS app to the **BLOCKS** visual language: a dark,
 square-cornered, electric-blue, monospace-first terminal aesthetic. The overhaul
 re-themes the design tokens and typography at the foundation, squares and recolors
 every atomic component, and migrates each tab screen onto the BLOCKS layout
@@ -45,8 +45,8 @@ patterns — without touching the SSH/block-terminal pipeline.
 
 ## Verification
 
-- `cd Packages/ConduitKit && swift build` — clean.
-- `xcodebuild -project Conduit.xcodeproj -scheme Conduit -destination 'platform=iOS
+- `cd Packages/LancerKit && swift build` — clean.
+- `xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS
   Simulator,name=iPhone 17 Pro' build` — **BUILD SUCCEEDED**.
 - Driven live in the simulator (real app, not gallery): Settings (blue Save-keys +
   blue theme segmented control), Inbox (compact autonomy bar, no stretch), Sessions

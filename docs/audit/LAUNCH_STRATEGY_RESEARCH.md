@@ -1,6 +1,6 @@
-# Launch Strategy Research: Conduit
+# Launch Strategy Research: Lancer
 
-> **Product:** Conduit — iOS mobile control plane for AI coding-agent loops.
+> **Product:** Lancer — iOS mobile control plane for AI coding-agent loops.
 > **File:** `docs/audit/LAUNCH_STRATEGY_RESEARCH.md`
 > **Date:** 2026-06-15
 
@@ -18,7 +18,7 @@
    - 2.6 Linear
    - 2.7 Conan (adjacent benchmark)
    - 2.8 Blink Shell (iOS market benchmark)
-3. Pricing & Monetization Options for Conduit
+3. Pricing & Monetization Options for Lancer
    - 3.1 Analysis of Available Models
    - 3.2 Recommended Model
    - 3.3 Rough Price Points
@@ -34,13 +34,13 @@
 
 1. **Ship a free‑forever Personal tier immediately; monetize via a single Pro subscription at $9–$12/mo (or $99/yr) with a 14‑day free trial, no usage caps.** The leading direct competitor (Omnara) charges $9/mo after 10 free sessions. Warp charges $20/mo for its Build tier. Cursor charges $20/mo for Pro. Blink Shell charges $19.99/yr. $9–$12/mo is the sweet spot for a mobile‑first companion that doesn't replace a full IDE. Usage‑based pricing (relay minutes, agent runs) adds complexity too early — start simple, add credits later.
 
-2. **Lead with the privacy narrative in every piece of copy.** Conduit's blind‑relay, X25519/ChaCha20, ciphertext‑only forwarding is the single strongest differentiator vs. Omnara (which relays plaintext through its servers). This is Tailscale's playbook. Own "private agent control plane."
+2. **Lead with the privacy narrative in every piece of copy.** Lancer's blind‑relay, X25519/ChaCha20, ciphertext‑only forwarding is the single strongest differentiator vs. Omnara (which relays plaintext through its servers). This is Tailscale's playbook. Own "private agent control plane."
 
 3. **Launch via Show HN + Product Hunt on the same week, seeded by 2–3 weeks of Reddit credibility-building (r/iOSProgramming, r/ClaudeAI, r/coding).** Developer tools that launch on HN and PH together see 3–5× the sustained traffic of a single‑channel launch. Conan (#7 PH on June 14, 2026, $29 one‑time) proves the App Store + PH combo works for Claude Code adjacencies.
 
 4. **Self‑host free + relay‑hosted paid is your wedge into enterprise.** Give teams the option to run their own relay (open‑core, AGPL). Sell the hosted relay with SLA, SSO, team management, audit logs, and priority support at $20–$30/user/mo. Mirror Tailscale's self‑serve personal → team expansion motion.
 
-5. **Invest in App Store presence and TestFlight from Day 1 — not as an afterthought.** Conduit lives on the App Store. Apple has tightened review for AI/agent apps in 2026 (ref: Appbot analysis, "stricter reviews, more manual checks"). Pre‑submit early, test with TestFlight, budget for rejection cycles. The App Store is both a distribution channel and a chokepoint.
+5. **Invest in App Store presence and TestFlight from Day 1 — not as an afterthought.** Lancer lives on the App Store. Apple has tightened review for AI/agent apps in 2026 (ref: Appbot analysis, "stricter reviews, more manual checks"). Pre‑submit early, test with TestFlight, budget for rejection cycles. The App Store is both a distribution channel and a chokepoint.
 
 ---
 
@@ -76,7 +76,7 @@
 - Cloud sync ("laptop goes offline") is a compelling pitch but a massive infra cost — they're essentially running a cloud IDE backend
 - No self‑host option, so all traffic goes through Omnara servers (privacy concern for enterprise)
 
-**Conduit lesson:** Omnara validates the market ("agents from phone") but leaves the privacy angle completely unaddressed. Their relay sees plaintext. Conduit's blind relay is a moat.
+**Lancer lesson:** Omnara validates the market ("agents from phone") but leaves the privacy angle completely unaddressed. Their relay sees plaintext. Lancer's blind relay is a moat.
 
 ### 2.2 Cursor (Anysphere)
 
@@ -106,7 +106,7 @@
 - Teams ($40/user/mo)
 - Enterprise (custom)
 
-**Conduit lesson:** Cursor proves that a dev‑first PLG motion with a generous free tier and frictionless upgrade path ($20/mo is the anchor price for AI dev tools) can produce extraordinary results. But Cursor is an IDE — a primary tool. Conduit is a companion. The PLG principles apply; the price point must be lower.
+**Lancer lesson:** Cursor proves that a dev‑first PLG motion with a generous free tier and frictionless upgrade path ($20/mo is the anchor price for AI dev tools) can produce extraordinary results. But Cursor is an IDE — a primary tool. Lancer is a companion. The PLG principles apply; the price point must be lower.
 
 ### 2.3 Warp
 
@@ -139,7 +139,7 @@
 - Credit‑based pricing creates "sticker shock" anxiety (common criticism in reviews)
 - Oz (cloud agents) requires significant cloud infra investment
 
-**Conduit lesson:** Multiple launches compound attention. Warp launched 6 separate times on PH. Conduit should plan launches for: (1) iOS app launch, (2) SSH relay launch, (3) self‑host launch, (4) team/enterprise features.
+**Lancer lesson:** Multiple launches compound attention. Warp launched 6 separate times on PH. Lancer should plan launches for: (1) iOS app launch, (2) SSH relay launch, (3) self‑host launch, (4) team/enterprise features.
 
 ### 2.4 Replit
 
@@ -168,7 +168,7 @@
 - Platform lock‑in (can't easily migrate off Replit)
 - Enterprise teams find it insufficient vs. local dev environments
 
-**Conduit lesson:** Avoid opaque credit systems at launch. Replit's pricing complexity is a known pain point. Simplicity wins at early stage.
+**Lancer lesson:** Avoid opaque credit systems at launch. Replit's pricing complexity is a known pain point. Simplicity wins at early stage.
 
 ### 2.5 Tailscale
 
@@ -192,7 +192,7 @@
 - **Community → standard → premium** tier progression maps to startup growth stages
 - Content engine: blog, conference (TailscaleUp), zero‑trust report
 
-**Conduit lesson:** This is the closest GTM analogy. Tailscale sells "private, secure connectivity." Conduit sells "private, secure agent relay." The open‑core model, generous personal tier, $8/user team upsell, and privacy‑first positioning all translate directly.
+**Lancer lesson:** This is the closest GTM analogy. Tailscale sells "private, secure connectivity." Lancer sells "private, secure agent relay." The open‑core model, generous personal tier, $8/user team upsell, and privacy‑first positioning all translate directly.
 
 ### 2.6 Linear
 
@@ -217,7 +217,7 @@
 - **Land‑and‑expand** — small team adoption → org‑wide rollout
 - **Product Hunt + direct word of mouth** — no paid channels
 
-**Conduit lesson:** Linear's playbook is opinionated quality plus founder‑led craft narrative. Don't try to be everything. Be the best at one thing (private agent relay from iOS).
+**Lancer lesson:** Linear's playbook is opinionated quality plus founder‑led craft narrative. Don't try to be everything. Be the best at one thing (private agent relay from iOS).
 
 ### 2.7 Conan (adjacent benchmark)
 
@@ -230,7 +230,7 @@
 - Reddit launch: r/ClaudeAI + r/SideProject
 - Hunter: Randy Daniel
 
-**Conduit lesson:** Conan proves a focused Claude Code companion can monetize on the App Store ecosystem. The $29 one‑time price is conservative (likely too low for long‑term sustainment, but good for early velocity). Conan's privacy stance ("no telemetry, nothing about your code or prompts ever leaves the machine") mirrors Conduit's blind‑relay differentiator.
+**Lancer lesson:** Conan proves a focused Claude Code companion can monetize on the App Store ecosystem. The $29 one‑time price is conservative (likely too low for long‑term sustainment, but good for early velocity). Conan's privacy stance ("no telemetry, nothing about your code or prompts ever leaves the machine") mirrors Lancer's blind‑relay differentiator.
 
 ### 2.8 Blink Shell (iOS market benchmark)
 
@@ -251,22 +251,22 @@
 - Mosh support quality complaints in recent reviews
 - $19.99/yr may be underpriced relative to value
 
-**Conduit lesson:** Blink proves a paid iOS developer tool at $19.99/yr can sustain a business. However, the forced trial friction is a warning — Conduit should keep a genuinely useful free tier. Mosh's "always on" property is exactly what Conduit should claim via its relay architecture.
+**Lancer lesson:** Blink proves a paid iOS developer tool at $19.99/yr can sustain a business. However, the forced trial friction is a warning — Lancer should keep a genuinely useful free tier. Mosh's "always on" property is exactly what Lancer should claim via its relay architecture.
 
 ---
 
-## 3. Pricing & Monetization Options for Conduit
+## 3. Pricing & Monetization Options for Lancer
 
 ### 3.1 Analysis of Available Models
 
-| Model | Example | Pros | Cons | Fit for Conduit |
+| Model | Example | Pros | Cons | Fit for Lancer |
 |---|---|---|---|---|
-| **Freemium (usage‑capped)** | Omnara (10 free sessions/mo → $9), Replit (daily credits) | Low barrier, viral potential, PLG | 2–5% conversion; free users cost money | Moderate. Good for awareness but Conduit's relay has real server costs |
+| **Freemium (usage‑capped)** | Omnara (10 free sessions/mo → $9), Replit (daily credits) | Low barrier, viral potential, PLG | 2–5% conversion; free users cost money | Moderate. Good for awareness but Lancer's relay has real server costs |
 | **Free‑forever Personal + Paid Pro** | Tailscale (free up to 6 users), Warp (free up to 10 seats) | Generates massive grassroots adoption; teams buy | Need clear Pro value; free tier must be useful alone | **Best fit.** Mirror Tailscale exactly |
 | **One‑time purchase** | Conan ($29), Blink ($19.99/yr) | Simple, no churn mgmt | Low LTV; no expansion revenue; harder to fund relay infra | Poor fit — relay has ongoing server costs |
 | **Subscription (flat)** | Cursor Pro ($20/mo), Linear ($8/user/mo) | Predictable revenue, simple messaging | High price expectation; need to justify monthly charge | Good for Pro tier |
 | **Usage‑based (credits)** | Warp Build ($20 + 1,500 credits), Replit Core ($20 + $25 credits) | Aligns cost with value | Sticker shock, confusing, hard to forecast | Avoid at launch; consider later for heavy relay users |
-| **Open‑core (self‑host free, relay paid)** | Tailscale, GitLab | Enterprise trust, no vendor lock‑in objection | Self‑host users never pay; support burden | **Essential.** Self‑host is Conduit's best enterprise wedge |
+| **Open‑core (self‑host free, relay paid)** | Tailscale, GitLab | Enterprise trust, no vendor lock‑in objection | Self‑host users never pay; support burden | **Essential.** Self‑host is Lancer's best enterprise wedge |
 
 ### 3.2 Recommended Model
 
@@ -275,7 +275,7 @@
 | Tier | Price | For | Key features |
 |---|---|---|---|
 | Personal (Self‑Host) | Free forever | Solo devs, privacy maximalists | Run your own relay. Full encryption. All agent integrations. Community support. AGPL. |
-| Personal (Cloud Relay) | Free forever | Solo devs who want convenience | Conduit‑hosted relay. 5 active sessions/month. Push notifications. Community support. |
+| Personal (Cloud Relay) | Free forever | Solo devs who want convenience | Lancer‑hosted relay. 5 active sessions/month. Push notifications. Community support. |
 | Pro (Cloud Relay) | $9/mo or $89/yr | Active solo devs, power users | Unlimited sessions. Priority relay (lower latency). Team sharing (up to 5 members). Email support. |
 | Teams (Cloud Relay) | $25/user/mo | Small teams, startups | Everything in Pro. Unlimited team members. SSO/SAML. Audit logs. Self‑host relay option. SLA. Slack/Discord support. |
 | Enterprise | Custom | Orgs with compliance needs | Dedicated relay infra. On‑prem deployment. SOC2/HIPAA. Admin API. White‑glove onboarding. |
@@ -286,7 +286,7 @@
 - **$89/yr** (≈$7.42/mo) incentivizes annual commitment. Target: 40% annual mix.
 - **Free self‑host** removes the "what if you go under?" objection that kills early‑stage dev tools. It also feeds the open‑core community engine.
 - **Free cloud relay (5 sessions/mo)** is enough for weekend experimentation but hits a wall for daily use. The conversion trigger is "I'm using this every day."
-- **$25/user/mo Teams** is premium but reasonable for a team where Conduit replaces Slack pings, SSH config, and terminal tmux juggling.
+- **$25/user/mo Teams** is premium but reasonable for a team where Lancer replaces Slack pings, SSH config, and terminal tmux juggling.
 
 **Conversion funnel prediction:** Free → Pro at 5–8% (consistent with PLG benchmarks for $9/mo products). Self‑host users convert at lower rates but serve as marketing/credibility engine. Teams upsell from Pro should be targeted at 8–12% of Pro users.
 
@@ -306,7 +306,7 @@
 
 ### 4.1 Launch Channels (Priority Order)
 
-1. **Show HN ("Show HN: Conduit — Private agent relay for Claude Code on iOS")**
+1. **Show HN ("Show HN: Lancer — Private agent relay for Claude Code on iOS")**
    - Post Tue–Thu 9 AM–12 PM EST
    - Title formula: literal, no marketing adjectives, under 80 chars
    - First comment: candid "why we built this" + technical detail (blind relay, X25519/ChaCha20, the specific architecture)
@@ -369,7 +369,7 @@
 
 ### 5.1 The Privacy Moat
 
-Privacy is Conduit's single strongest long‑term defensibility. No competitor (Omnara, Warp, Conan) offers a blind relay where *the server cannot see the content*. This is a structural advantage, not a feature bullet.
+Privacy is Lancer's single strongest long‑term defensibility. No competitor (Omnara, Warp, Conan) offers a blind relay where *the server cannot see the content*. This is a structural advantage, not a feature bullet.
 
 **Playbook (from Tailscale):**
 - Publish a security/architecture whitepaper (cite the crypto: X25519 ECDH, ChaCha20‑Poly1305, session key rotation)
@@ -380,15 +380,15 @@ Privacy is Conduit's single strongest long‑term defensibility. No competitor (
 
 ### 5.2 Network Effects
 
-- **Shared relay / team sessions:** When a team uses Conduit, the relay becomes infrastructure. Switching costs go up.
-- **Community agent integrations:** Conduit's value increases as it works with more agent frameworks (Claude Code → Codex → OpenCode → Cline → Aider → Gemini CLI)
+- **Shared relay / team sessions:** When a team uses Lancer, the relay becomes infrastructure. Switching costs go up.
+- **Community agent integrations:** Lancer's value increases as it works with more agent frameworks (Claude Code → Codex → OpenCode → Cline → Aider → Gemini CLI)
 - **Self‑host community:** Self‑hosted relay operators contribute back to the project, create documentation, answer questions on Discord. This compounds.
 
 ### 5.3 Switching Costs
 
 - **Saved relay configurations:** SSH keys, host configs, agent preferences. Moving this data is friction.
-- **Team onboarding:** Once a team uses Conduit's team relay, switching means re‑inviting everyone.
-- **Notification muscle memory:** Developers learn Conduit's notification patterns. Breaking that habit is hard.
+- **Team onboarding:** Once a team uses Lancer's team relay, switching means re‑inviting everyone.
+- **Notification muscle memory:** Developers learn Lancer's notification patterns. Breaking that habit is hard.
 
 ### 5.4 Content Engine
 
@@ -413,7 +413,7 @@ The ideal upsell pattern (proven by Cursor, Linear, Tailscale):
 Self‑hosting is not a revenue loss — it's an enterprise entry point.
 - GitLab proved open‑core works: self‑host CE → paid EE.
 - Tailscale proved personal free → team paid.
-- Conduit should ship the self‑host relay as a single Docker container (`docker run conduit-relay`) with clear docs. It costs near‑nothing to support and eliminates the "what if you shut down?" objection that kills early‑stage dev tools.
+- Lancer should ship the self‑host relay as a single Docker container (`docker run lancer-relay`) with clear docs. It costs near‑nothing to support and eliminates the "what if you shut down?" objection that kills early‑stage dev tools.
 
 ---
 
@@ -421,13 +421,13 @@ Self‑hosting is not a revenue loss — it's an enterprise entry point.
 
 ### 6.1 App Store Rejection Risk (CRITICAL)
 
-**Conduit operates in a gray area:** It relays agent commands from a phone to a remote machine. Apple may classify this as "remote execution" or "code downloading," triggering rejection under Guideline 2.5.2 (self‑contained apps) or 2.1 (app completeness).
+**Lancer operates in a gray area:** It relays agent commands from a phone to a remote machine. Apple may classify this as "remote execution" or "code downloading," triggering rejection under Guideline 2.5.2 (self‑contained apps) or 2.1 (app completeness).
 
 **Mitigation:**
 - Submit an earlier build for TestFlight review (well before launch)
 - Be explicit in App Review notes: "This app relays user‑authored commands between the user's own devices. It does not download executable code from external sources."
 - Remove any "agent runs code on cloud" features from the initial submission — keep it pure device‑to‑device relay
-- Reference Blink Shell ($19.99/yr, SSH terminal) as a precedent — if they pass, Conduit should pass
+- Reference Blink Shell ($19.99/yr, SSH terminal) as a precedent — if they pass, Lancer should pass
 - Budget for 1–3 rejection cycles (3–7 days each per [SwapTest analysis](https://swaptest.net/blog/ios-preflight-check-app-store-rejection-guide))
 
 ### 6.2 Pricing Mistakes
@@ -450,17 +450,17 @@ Self‑hosting is not a revenue loss — it's an enterprise entry point.
 
 **The #1 cause of dev‑tool failure** (40–42% of SaaS startups die from no market need, per [Novative 2026 analysis](https://www.novative.dev/blog/saas-launch-playbook)). Omnara had YC distribution; Warp had 6 PH launches; Cursor had a VS Code fork with instant familiarity.
 
-**Conduit action:** Don't ship without a distribution plan. The HN/PH/Reddit launch must be coordinated and rehearsed. Have 50 beta testers ready to upvote and comment on launch day.
+**Lancer action:** Don't ship without a distribution plan. The HN/PH/Reddit launch must be coordinated and rehearsed. Have 50 beta testers ready to upvote and comment on launch day.
 
 ### 6.4 Premature Scaling
 
 - Don't hire sales people before product‑market fit.
-- Don't build cloud agent execution (Conduit runs agents on your machine) until the core relay is validated.
+- Don't build cloud agent execution (Lancer runs agents on your machine) until the core relay is validated.
 - Don't support 10 agent frameworks at launch. Ship with Claude Code + Codex. Add OpenCode, Aider, Cline when users ask for them.
 
 ### 6.5 Security‑Critical Product + Indie Team Risk
 
-Conduit handles SSH keys, agent traffic, and push notification relay. If the relay is compromised, user trust is destroyed permanently.
+Lancer handles SSH keys, agent traffic, and push notification relay. If the relay is compromised, user trust is destroyed permanently.
 
 - **Must:** Third‑party security audit before any paid tier launches.
 - **Must:** Bug bounty program (HackerOne or similar) from month 3.
@@ -469,8 +469,8 @@ Conduit handles SSH keys, agent traffic, and push notification relay. If the rel
 
 ### 6.6 Android / Desktop Neglect
 
-- Developers who love Conduit on iOS will ask for Android. **Say no for the first 12 months.** A single‑platform focus is how Linear succeeded (macOS + web only for 2 years before iOS/Android).
-- Conduit's web dashboard is the Android substitute (responsive web works on any device).
+- Developers who love Lancer on iOS will ask for Android. **Say no for the first 12 months.** A single‑platform focus is how Linear succeeded (macOS + web only for 2 years before iOS/Android).
+- Lancer's web dashboard is the Android substitute (responsive web works on any device).
 
 ---
 
@@ -492,7 +492,7 @@ Conduit handles SSH keys, agent traffic, and push notification relay. If the rel
 - [ ] **Begin Reddit credibility building** (r/iOSProgramming, r/ClaudeAI, r/netsec) — 0 product mentions
 - [ ] Start Twitter/X presence: post about the blind relay architecture 2–3×/week
 - [ ] Publish 1–2 technical blog posts: (1) "Blind E2EE relay with X25519/ChaCha20", (2) "How we built an iOS agent control plane without a cloud backend"
-- [ ] Hacker News meta‑preparation: submit 1–2 non‑Conduit technical posts to build account history
+- [ ] Hacker News meta‑preparation: submit 1–2 non‑Lancer technical posts to build account history
 - [ ] Product Hunt account: engage with similar products, follow hunters, build network
 - [ ] Finalize pricing page: Personal (Self‑Host) = free, Personal (Cloud) = free (5 sessions), Pro = $9/mo
 
@@ -503,7 +503,7 @@ Conduit handles SSH keys, agent traffic, and push notification relay. If the rel
 - [ ] **Day 1 (Wednesday):** Launch on Product Hunt. 7 AM PT. Activate beta testers for first‑hour upvotes.
 - [ ] **Day 1:** Twitter/X thread from founder account. Pin the demo video.
 - [ ] **Day 1:** Discord goes live with all beta testers in #general
-- [ ] **Day 2:** Follow‑up blog: "What we learned from launching Conduit" (ride the wave)
+- [ ] **Day 2:** Follow‑up blog: "What we learned from launching Lancer" (ride the wave)
 - [ ] **Days 3–7:** Answer every HN/PH/Reddit comment. Fix bugs. Ship 1–2 small improvements.
 
 ### Phase 3: Post‑Launch Sustain (Days 8–30)
@@ -512,7 +512,7 @@ Conduit handles SSH keys, agent traffic, and push notification relay. If the rel
 - [ ] Publish the self‑host relay Docker image + setup guide
 - [ ] Release first agent integration beyond Claude Code (Codex or OpenCode)
 - [ ] Feature requests triage → build the #1 requested feature
-- [ ] Email every beta tester individually: "What do you need to pay for Conduit?"
+- [ ] Email every beta tester individually: "What do you need to pay for Lancer?"
 - [ ] Set up Stripe billing for Personal → Pro upgrade
 
 ### Phase 4: Monetization & Growth (Days 31–90)

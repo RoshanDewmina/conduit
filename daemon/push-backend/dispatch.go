@@ -54,7 +54,7 @@ func providerFor(runtime string) RuntimeProvider {
 	if override := getProviderOverrideForTest(); override != nil {
 		return override(runtime)
 	}
-	if os.Getenv("CONDUIT_LOCAL_RUNNER") == "1" && normalizeRuntime(runtime) != "ssh-host" {
+	if os.Getenv("LANCER_LOCAL_RUNNER") == "1" && normalizeRuntime(runtime) != "ssh-host" {
 		return processProvider{}
 	}
 	switch normalizeRuntime(runtime) {

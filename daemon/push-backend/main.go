@@ -1,13 +1,13 @@
-// push-backend: minimal APNs delivery server for Conduit approval alerts.
+// push-backend: minimal APNs delivery server for Lancer approval alerts.
 //
 // Deploy to Fly.io or AWS Lambda (as a Lambda function URL) — it receives
-// a JSON-RPC conduitd event forwarded by the conduitd daemon and pushes
+// a JSON-RPC lancerd event forwarded by the lancerd daemon and pushes
 // a local notification to the registered iOS device.
 //
 // Build: CGO_ENABLED=0 GOOS=linux go build -o push-backend .
 //
 //	Run:   APNS_KEY_ID=... APNS_TEAM_ID=... APNS_KEY_PATH=AuthKey_XXX.p8 \
-//	       APNS_BUNDLE_ID=dev.conduit.mobile ./push-backend
+//	       APNS_BUNDLE_ID=dev.lancer.mobile ./push-backend
 package main
 
 import (
@@ -17,9 +17,11 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,15 +32,15 @@ import (
 // two control-plane registration sources (both hit POST /register, authenticated
 // by APPROVAL_RELAY_SECRET):
 //   - apnsToken:  APNs device token, registered by the iOS app, used to push.
-//   - relayToken: the per-session capability secret minted by conduitd. The app
-//     and conduitd present it as `Authorization: Bearer <relayToken>` on the
+//   - relayToken: the per-session capability secret minted by lancerd. The app
+//     and lancerd present it as `Authorization: Bearer <relayToken>` on the
 //     decision-relay endpoints (POST /approval/decision, GET /decisions) and the
 //     backend constant-time-compares it here. TREAT AS SECRET — never logged.
 //   - seen:       last-touch unix time (registration or a successful relay auth),
 //     used for TTL eviction so the map stays bounded.
 //
 // The two fields are upserted independently so the app's APNs registration and
-// conduitd's relay-token registration can arrive in any order.
+// lancerd's relay-token registration can arrive in any order.
 type sessionRecord struct {
 	apnsToken  string
 	relayToken string
@@ -104,6 +106,7 @@ func main() {
 	registerScheduleRoutes(mux)
 	registerRunLogRoutes(mux)
 	registerOrgRoutes(mux)
+	registerDeviceBindingRoutes(mux)
 	initWebhookRoutes(mux)
 
 	initEntitlementStore()
@@ -145,9 +148,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// handleRegister is the conduitd→backend / app→backend control-plane endpoint.
+// handleRegister is the lancerd→backend / app→backend control-plane endpoint.
 // It is guarded by APPROVAL_RELAY_SECRET (the deployment-wide control-plane
-// secret) so conduitd can bootstrap a session's relayToken before any
+// secret) so lancerd can bootstrap a session's relayToken before any
 // per-session capability exists. It upserts whichever of {deviceToken,
 // relayToken} the caller supplied for the session.
 func handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -393,31 +396,55 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	}
 
 	buf, _ := json.Marshal(payload)
-	host := "api.push.apple.com"
-	url := fmt.Sprintf("https://%s/3/device/%s", host, deviceToken)
-
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(buf))
-	req.Header.Set("authorization", "bearer "+token)
-	req.Header.Set("apns-topic", bundleID)
-	req.Header.Set("apns-push-type", "alert")
-	req.Header.Set("apns-priority", "10")
-	req.Header.Set("content-type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
+	if err := sendAPNsAlert(deviceToken, bundleID, token, buf, "10"); err != nil {
 		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("APNs returned %d", resp.StatusCode)
 	}
 
 	// Also update the Live Activity (best-effort; errors don't fail the alert push).
 	_ = pushLiveActivityApproval(ev.SessionID, ev.ID, risk, body, nil)
 
 	return nil
+}
+
+// sendAPNsAlert POSTs an alert payload to APNs, trying the production host first
+// and falling back to the sandbox host on a 400 BadDeviceToken. Development-signed
+// builds (Xcode automatic signing forces aps-environment=development) get sandbox
+// tokens that production rejects with 400; TestFlight/App Store builds get
+// production tokens. Trying both makes push work for either without per-build
+// configuration. The reason is logged so token-environment issues are diagnosable.
+func sendAPNsAlert(deviceToken, bundleID, jwt string, payload []byte, priority string) error {
+	hosts := []string{"api.push.apple.com", "api.sandbox.push.apple.com"}
+	var lastStatus int
+	var lastReason string
+	for _, host := range hosts {
+		url := fmt.Sprintf("https://%s/3/device/%s", host, deviceToken)
+		req, _ := http.NewRequest("POST", url, bytes.NewReader(payload))
+		req.Header.Set("authorization", "bearer "+jwt)
+		req.Header.Set("apns-topic", bundleID)
+		req.Header.Set("apns-push-type", "alert")
+		req.Header.Set("apns-priority", priority)
+		req.Header.Set("content-type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		lastStatus = resp.StatusCode
+		lastReason = strings.TrimSpace(string(body))
+		// Only a 400 (e.g. BadDeviceToken — wrong environment) is worth retrying on
+		// the other host; other statuses are terminal.
+		if resp.StatusCode != http.StatusBadRequest {
+			break
+		}
+		log.Printf("APNs %s rejected token (HTTP %d: %s) — trying next host", host, resp.StatusCode, lastReason)
+	}
+	return fmt.Errorf("APNs returned %d: %s", lastStatus, lastReason)
 }
 
 // registerActivityTokenRequest is the body for POST /register-activity-token.

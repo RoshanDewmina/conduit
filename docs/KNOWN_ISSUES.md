@@ -1,11 +1,24 @@
-# Conduit — Known Issues & Pre-Launch Audit (canonical)
+# Lancer — Known Issues & Pre-Launch Audit (canonical)
+
+> **2026-06-20 editorial redesign — deferred perf items.** The pixel-faithful redesign +
+> IA refactor shipped (see git log on `codex/ios27-shell-workspace`). Cheap perf wins done:
+> all `.repeatForever()` animations confirmed Reduce-Motion-gated; 711 lines of dead code
+> removed (SessionsListView, GovernanceView, WorkspaceRoute enum). **Deferred (real, but
+> high-risk — warrant a dedicated session with live-harness regression testing, NOT bundled
+> into a UI pass):** (1) `SessionViewModel` is ~1218 lines / 30+ `@Observable` props — a single
+> property change invalidates the whole session view; split into focused sub-stores
+> (connection / block-render / keyboard) without regressing the sacred terminal pipeline.
+> (2) `AppRoot.mainBody` getter type-checks at ~328ms (>300ms limit) — compile-time only, on a
+> load-bearing `.task`/`.onChange` lifecycle chain; decompose only with care. (3) Optional:
+> further decompose `NewChatTabView`/`SessionView` bodies. The redesigned screens themselves
+> profile fine; these are pre-existing hotspots.
 
 > **Compiled:** 2026-06-19 · branch `master` (updated).
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
 > `docs/PUBLISH_READINESS_CHECKLIST.md`; for product/architecture narrative use `ARCHITECTURE.md`
 > (§0.1 current-state snapshot + §4.1 IA). The current IA is the **sidebar / New Chat shell** —
-> not a tab bar (the old `CONDUIT_PROJECT_DOSSIER.md` is archived under `docs/_archive/`).
+> not a tab bar (the old `LANCER_PROJECT_DOSSIER.md` is archived under `docs/_archive/`).
 >
 > **Method note:** the multi-agent fan-out repeatedly tripped the account session limit (parallel agents
 > burn quota fast), so **all dimensions were audited inline by a single agent** against current source —
@@ -13,28 +26,63 @@
 
 ---
 
+## 0. P0 tester-readiness blockers — RECONCILED (2026-06-24)
+
+> Found while assessing "can self-hosted testers use this yet?". Re-verified 2026-06-24; status below
+> supersedes the 2026-06-20 "VERIFIED DOWN" snapshot. Neither was ever an app-code bug.
+
+- **`TESTER-1` — Relay reachability: RESOLVED (relay is live).** The canonical instance is
+  `https://conduit-push-y4wpy6zeva-ts.a.run.app` (the URL the app actually ships in
+  `project.yml:26`); `GET /health` returns **200** (verified 2026-06-24), and `install.sh` paired
+  against `wss://conduit-push-y4wpy6zeva-ts.a.run.app`. The old `35.201.3.231.sslip.io` and the
+  `lancer-push` (australia-southeast1) name in `PUBLISH_READINESS_CHECKLIST.md` §A are **stale doc
+  drift** — `conduit-push` is canonical (preserved per the rebrand infra-migration decision). Fix §A.
+- **`TESTER-2` — installer 404s: FIXED in source (publish is owner-gated).** Root cause was
+  rebrand drift in the GCS dist path, not the old GitHub-release naming: `install.sh` fetches flat
+  `lancerd_${os}_${arch}` + `SHA256SUMS`, but `scripts/release-lancerd.sh` only emitted versioned
+  hyphenated tarballs and never wrote `SHA256SUMS`, and the bucket still held stale `conduitd_*` sums
+  with **no binaries** (all 404). `release-lancerd.sh` now also emits the flat `lancerd_${os}_${arch}`
+  binaries (incl. darwin-amd64) + a matching `SHA256SUMS` + `install.sh`, and prints the `gsutil`
+  upload command. The full `curl|sh` loop was proven end-to-end offline (download → checksum → install
+  → pair) on 2026-06-24. **Owner step remaining:** run `scripts/release-lancerd.sh <ver>` then the
+  printed `gsutil cp … gs://conduit-dist-f1c2466d/` to publish; a release CI job is still nice-to-have.
+
+## 0.1 Account / device management — COMPLETED (2026-06-20)
+
+- Codex's account-identity stack (Supabase email/password, self-hosted offline mode, QR device
+  bind/redeem, HS256 JWT verification, billing rebound to JWT subject) verified green: 414 SPM tests,
+  app-target UI tests 7/7 on iPhone + iPad, all 3 Go modules, resident smoke 4/4.
+- **Device-management screen added** (`SettingsFeature/DeviceManagementView.swift`): Settings →
+  Connection → Devices (standard-account only) lists bound daemons and revokes them against
+  `GET /v1/devices` + `POST /v1/devices/{id}/revoke`. Covered by `AccountSessionTests`.
+- **Residual release gates** (owner-configured, not code bugs): production Supabase project + SMTP +
+  `SUPABASE_JWT_SECRET`; **HS256-only** verifier (add JWKS if the project signs RS256); physical-device
+  APNs/biometric/StoreKit/Watch pass per `OWNER_DEVICE_CHECKLIST.md`.
+
+---
+
 ## 1. Build & test baseline — VERIFIED GREEN (2026-06-18)
 
 | Target | Command | Result |
 |---|---|---|
-| ConduitKit (SPM) | `cd Packages/ConduitKit && swift build` | ✅ clean |
-| ConduitKit tests | `cd Packages/ConduitKit && swift test` | ✅ **385 tests / 61 suites pass** |
+| LancerKit (SPM) | `cd Packages/LancerKit && swift build` | ✅ clean |
+| LancerKit tests | `cd Packages/LancerKit && swift test` | ✅ **385 tests / 61 suites pass** |
 | Xcode app-target (iOS sim) | `XcodeBuildMCP build_sim` | ✅ **SUCCEEDED** 0 errors 0 warnings (2026-06-19) |
-| conduitd + policy (Go) | `go vet ./... && go build ./... && go test ./...` | ✅ 124 tests pass |
+| lancerd + policy (Go) | `go vet ./... && go build ./... && go test ./...` | ✅ 124 tests pass |
 | push-backend (Go) | `go vet/build/test ./...` | ✅ pass |
 | agent-runner (Go) | `go vet/build/test ./...` | ✅ pass |
-| conduit-mcp (Go) | `go build ./...` | ✅ pass (no test target) |
+| lancer-mcp (Go) | `go build ./...` | ✅ pass (no test target) |
 
 Only compiler **warnings** in our code (8 total) are "getter took >300ms to type-check" hints — compile-time
 only, no runtime effect. See §4.
 
-**Open test debt — `UI-IA-1` (tracked 2026-06-19):** four `ConduitUITests/TapInjectionProofTests` are
+**Open test debt — `UI-IA-1` (tracked 2026-06-19):** four `LancerUITests/TapInjectionProofTests` are
 **quarantined with `XCTSkip`** — `testTapInjectionViaTabSwitch`, `testApproveDecisionApplies`,
 `testFaceIDToggleOptIn`, `testSavedHostReconnectPresentsPrompt`. They assert the **superseded tab-bar
-navigation** (`app.buttons["Settings"]`/`["Inbox"]`, `CONDUIT_TAB=settings/fleet`, "inbox" default header).
+navigation** (`app.buttons["Settings"]`/`["Inbox"]`, `LANCER_TAB=settings/fleet`, "inbox" default header).
 The app home is now the **sidebar / New Chat shell**, so these surfaces aren't reachable via the old nav.
 They are *not* a regression from the 2026-06-19 V1 work (Live Activity push / watch / opencode gating) —
-`git diff` shows that work never touched `ConduitUITests/`. **Re-enable** them with sidebar-shell navigation
+`git diff` shows that work never touched `LancerUITests/`. **Re-enable** them with sidebar-shell navigation
 (open-drawer → destination) once the sidebar IA is committed/settled. The XCUITest injection-proof value
 (approve-applies, Face-ID opt-in, saved-host reconnect, TOFU) is worth preserving — rewrite, don't delete.
 
@@ -48,7 +96,7 @@ doc is now stale on its "OPEN" column:
 
 | Prior finding (Jun 13) | Status now | Evidence (2026-06-17) |
 |---|---|---|
-| FINDING-1 Dockerfiles run as root | ✅ **CLOSED** | `daemon/agent-runner/Dockerfile:26-27` (`useradd conduit; USER conduit`); `daemon/push-backend/Dockerfile:10-14` (`adduser conduit; USER conduit`) |
+| FINDING-1 Dockerfiles run as root | ✅ **CLOSED** | `daemon/agent-runner/Dockerfile:26-27` (`useradd lancer; USER lancer`); `daemon/push-backend/Dockerfile:10-14` (`adduser lancer; USER lancer`) |
 | FINDING-2 `APPROVAL_RELAY_SECRET` unenforced | ✅ **CLOSED** | `relay_security.go:143-166` `relaySecretStartupCheck` → `log.Fatal` in prod; wired at `main.go:120` `warnIfRelayUnauthenticated()` |
 | LOW-5 Redactor missing PEM/Bearer/JWT | ✅ **CLOSED** | `AgentKit/Redactor.swift:29,33,37` (PEM private key, Bearer token, JWT patterns present) |
 | LOW-1 no `.privacySensitive()` on key views | 🟢 **Residual-LOW (effectively moot)** | Secret *values* use `SecureField` (already snapshot-masked): `ProviderKeysView.swift:69`, `SecretsView.swift:296`, `KeyImportView.swift:176`. Only *public* keys/fingerprints render as plain `Text` (`KeysView.swift:142,247`). `.privacySensitive()` would be redundant. |
@@ -85,7 +133,7 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
 
 **Residual operational items (not code bugs):**
 - Confirm `APNS_*` + live `STRIPE_*` secrets are set on the running push-backend instance (D1 in checklist).
-- Ensure the **deployed daemon is the Go build**, not the stale Swift `conduitd` 0.1.0 (now quarantined in §3).
+- Ensure the **deployed daemon is the Go build**, not the stale Swift `lancerd` 0.1.0 (now quarantined in §3).
 
 ---
 
@@ -93,8 +141,8 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
 
 **Verified against current code (V1_READINESS_AUDIT.md was partially actioned):**
 - ✅ Already removed: `isDemo` dead branches (InboxView), `SessionsHomeView`, `WorktreeBoardView`.
-- ✅ Engine boundary intact: `ConduitCore/SecurityKit/SSHTransport/AgentKit/PersistenceKit/NotificationsKit/DiffKit/SyncKit` import **zero** SwiftUI/UIKit.
-- ✅ **Removed this session:** stale Swift `conduitd` → `daemon/conduitd/legacy-swift/`; 8 zero-ref DS
+- ✅ Engine boundary intact: `LancerCore/SecurityKit/SSHTransport/AgentKit/PersistenceKit/NotificationsKit/DiffKit/SyncKit` import **zero** SwiftUI/UIKit.
+- ✅ **Removed this session:** stale Swift `lancerd` → `daemon/lancerd/legacy-swift/`; 8 zero-ref DS
   components (`DSMetricTile/DSRiskRow/DSStepNode/DSHealthRow/DSToast/DSIconTokenView` + dead `DSSkeletonRow`
   siblings); `SnippetEditorView`; **`PreviewFeature/*` whole module** (verified orphan — only a dead
   `import PreviewFeature` in `AppRoot.swift:18`, zero type usage; removed dir + Package.swift target/product/dep).
@@ -139,7 +187,7 @@ perf issues.** The hot paths are correctly engineered:
 **UX (verdict: solid):**
 - ✅ Empty states exist on core surfaces — `InboxView.swift:102-103` (`InboxEmptyState`), `FleetView.swift:140-141`
   (`emptyState`), `ActivityView.swift:66` (loading `ProgressView` + empty branch).
-- ✅ Design-system glass primitive (`conduitGlassChrome`) is the single chrome path (agent-contract §4).
+- ✅ Design-system glass primitive (`lancerGlassChrome`) is the single chrome path (agent-contract §4).
 - No prototype-quality/placeholder screens found in the production navigation.
 
 **Accessibility — VoiceOver labels FIXED this session:**
@@ -177,13 +225,13 @@ perf issues.** The hot paths are correctly engineered:
 `ARCHITECTURE.md` (product/architecture + §0.1 current-state snapshot), `docs/agent-contract.md`,
 `docs/PUBLISH_READINESS_CHECKLIST.md` (launch state), `docs/SECURITY.md` +
 `docs/legal/SECURITY_ARCHITECTURE.md`, `docs/ROADMAP.md`, **this file** (`KNOWN_ISSUES.md`),
-`docs/block-terminal-implementation.md`. (`CONDUIT_PROJECT_DOSSIER.md` is **archived** —
+`docs/block-terminal-implementation.md`. (`LANCER_PROJECT_DOSSIER.md` is **archived** —
 ARCHITECTURE.md §0.1 is its successor.)
 
 **Recommended archival** (move to `docs/_archive/` with a pointer — preserve, don't delete; do deliberately
 in a dedicated cleanup pass, checking inbound references first): `docs/current-state-audit.md`,
 `docs/remaining-work.md`, `docs/APP_AUDIT.md`, `docs/cloud-execution-engine-plan.md`,
-`docs/demos/M0–M11*.md`, the dated `docs/conduit-test-run-2026-05-*.md`, and the redundant audit reports
+`docs/demos/M0–M11*.md`, the dated `docs/lancer-test-run-2026-05-*.md`, and the redundant audit reports
 that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFICATION_REPORT` vs `_REVIEW`,
 `FABLE_FINDINGS` vs `FABLE_REPORT`, `FEATURE_COVERAGE` vs `FEATURE_VERIFICATION_AUDIT`).
 
@@ -192,18 +240,18 @@ that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFIC
 ## 6. Remaining P0/P1/P2 after this audit
 
 - **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
-- **P1:** `e2eRouter.sendApproval` (`daemon/conduitd/e2e_router.go`) silently no-ops with zero logging when
+- **P1:** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero logging when
   `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live testing on a
   real phone. A real escalation was dropped this way (audit showed `escalate`→`deny` exactly 120s apart,
-  i.e. the fail-closed timeout, not a human decision) while `conduitd.stderr.log` showed irregular relay
+  i.e. the fail-closed timeout, not a human decision) while `lancerd.stderr.log` showed irregular relay
   re-pairing right around that timestamp — the daemon and phone's websocket pairing flaps, and any
   approval that fires inside a flap window vanishes with no trace beyond the eventual timeout-deny. A
   retry once the relay had been stable for 30+ min succeeded normally (`escalate`→`approve` in 49s). The
   loop's fail-closed behavior means this is safe, not silent-unsafe — but it's silent-*undiagnosable*: add
   a log line on the early-return so a dropped send is distinguishable from "phone never got it" in
-  `conduitd.stderr.log` instead of only inferable from audit-log timing + re-pair-log correlation after
+  `lancerd.stderr.log` instead of only inferable from audit-log timing + re-pair-log correlation after
   the fact.
-  (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `conduitd` was quarantined this session;
+  (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `lancerd` was quarantined this session;
   `SnippetEditorView` + dead DS components were removed.)
 - **P2:** (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8).
   *(a) Reduce-Motion ✓ fixed 53bac151. (c) PreviewFeature ✓ removed 59e7ae3d.*

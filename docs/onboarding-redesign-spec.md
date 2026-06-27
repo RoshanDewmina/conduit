@@ -1,6 +1,6 @@
 # Onboarding Redesign — Swift port spec (FLOW 01)
 
-Source design: `~/Downloads/Conduit GitHub repo/Conduit Onboarding.dc.html`
+Source design: `~/Downloads/Lancer GitHub repo/Lancer Onboarding.dc.html`
 Rendered reference: `.design-shots/onboarding-design-wide.png` (6 frames, left→right)
 Branch: `opencode/onboarding-redesign`
 
@@ -21,7 +21,7 @@ Each *screen* is its own file producing a self-contained `View` struct that rend
 (`OnboardingView.swift`, owned by the lead, not the swarm) provides the consistent chrome and
 footer and composes the screens.
 
-| File (in `Packages/ConduitKit/Sources/OnboardingFeature/`) | Struct | Owner |
+| File (in `Packages/LancerKit/Sources/OnboardingFeature/`) | Struct | Owner |
 |---|---|---|
 | `OnboardingChrome.swift` | shared top bar + footer + step dots | LEAD (not swarm) |
 | `OnboardingPairing.swift` | pairing helpers (QR, labels) | LEAD (not swarm) |
@@ -50,7 +50,7 @@ footer and composes the screens.
     | Bridge paired | **none** (can't undo a pairing) |
     | How cautious? | back ‹ → previous |
     | You're set | back ‹ → previous |
-- All screens use `@Environment(\.conduitTokens) var t` for colors/radii. Never hardcode colors.
+- All screens use `@Environment(\.lancerTokens) var t` for colors/radii. Never hardcode colors.
 - All screens wrap content in `ScrollView(.vertical, showsIndicators: false)` and
   `.frame(maxWidth: 520).frame(maxWidth: .infinity, alignment: .leading)` and
   `.dynamicTypeSize(...DynamicTypeSize.accessibility3)` — match existing OnboardingView screens.
@@ -58,11 +58,11 @@ footer and composes the screens.
 
 ## Reference code (READ THESE — every component you need already has a working example)
 
-- `Packages/ConduitKit/Sources/OnboardingFeature/OnboardingView.swift`
-  - `screen1Welcome` → exact hero you are porting (SpectrumBar, CONDUIT label, big hero text, description)
+- `Packages/LancerKit/Sources/OnboardingFeature/OnboardingView.swift`
+  - `screen1Welcome` → exact hero you are porting (SpectrumBar, LANCER label, big hero text, description)
   - `screen3Preset` + `presetRow(_:)` → exact policy-row visual you are porting
   - `screen5Success` → exact green-check + "bridge paired" + E2E card you are porting
-- `Packages/ConduitKit/Sources/OnboardingFeature/BridgePairingView.swift`
+- `Packages/LancerKit/Sources/OnboardingFeature/BridgePairingView.swift`
   - `qrSection`, `pairingStatusCard`, the curl `DSQuoteBlock(title:"INSTALL", …)`, copy button — the pair screen reuses these
 - Components: `DSButton`, `DSChip`, `DSQuoteBlock`, `DSIconView(.copy/.check/.key/.chevronRight)`,
   `SpectrumBar`. Tokens in `DesignSystem/Tokens.swift`.
@@ -80,13 +80,13 @@ Practically: remove the large `Spacer`/top padding that centers it; use a modest
 
 Contents top→bottom:
 - `SpectrumBar(mode: .working, height: 8)` (full width, hpad 18)
-- `CONDUIT` mono label (uppercase, kerning, `t.text3`)
+- `LANCER` mono label (uppercase, kerning, `t.text3`)
 - Hero (monospaced, size 47, weight bold, lineSpacing 0, tracking -0.025):
   - `agents ask.` → `t.text`
   - `you approve.` → `t.text3`
   - `work resumes.` → `t.accent`
 - Description (`dsSansPt(14.5)`, `t.text3`):
-  `Your coding agents run on your own machine. Conduit taps you only when one needs a decision — and resumes the moment you choose.`
+  `Your coding agents run on your own machine. Lancer taps you only when one needs a decision — and resumes the moment you choose.`
 
 Footer CTA (shell renders): primary `Get started`.
 
@@ -100,7 +100,7 @@ struct OnboardingPairScreen: View {
     let qrImage: Image?                            // pre-rendered by shell via OnboardingPairing
     let pairingCode: String
     let onScanTapped: () -> Void
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
     var body: some View { ... }
 }
 ```
@@ -124,7 +124,7 @@ struct OnboardingScanScreen: View {
     let onScan: (String) -> Void          // forward to QRScannerView
     let onUnavailable: (String) -> Void
     let onEnterCodeInstead: () -> Void
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 }
 ```
 Contents:
@@ -143,7 +143,7 @@ Port `screen5Success` from current OnboardingView. Inputs:
 struct OnboardingPairedScreen: View {
     let hostName: String      // e.g. "Dev VPS"
     let agents: String        // e.g. "claude-code · codex"
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 }
 ```
 Contents:
@@ -160,7 +160,7 @@ Port `screen3Preset` visual but with the design's **3 levels**. Inputs:
 ```swift
 struct OnboardingCautionScreen: View {
     @Binding var level: OnboardingCautionLevel   // enum defined in OnboardingChrome.swift by LEAD
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 }
 ```
 `OnboardingCautionLevel` (the LEAD defines this; agent 3 just uses `.cautious/.balanced/.bypass`,
@@ -184,7 +184,7 @@ Inputs:
 struct OnboardingFirstRunScreen: View {
     let cautionTitle: String          // e.g. "balanced" (lowercased level title)
     let onRunDemo: () -> Void
-    @Environment(\.conduitTokens) private var t
+    @Environment(\.lancerTokens) private var t
 }
 ```
 Contents:
@@ -215,6 +215,6 @@ when it becomes `.paired` it auto-advances to the Bridge-paired sub-screen. The 
 
 - Agents: produce the file matching the struct signature + copy + visual spec above. Use only
   existing DS components & tokens. Do NOT add the top bar/footer (shell provides them).
-- LEAD: `cd Packages/ConduitKit && swift build`, then app-target build via XcodeBuildMCP,
+- LEAD: `cd Packages/LancerKit && swift build`, then app-target build via XcodeBuildMCP,
   launch gallery route `onboarding-redesign`, screenshot light+dark, diff against
   `.design-shots/onboarding-design-wide.png`, confirm chrome consistency across all 4 steps.

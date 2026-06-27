@@ -37,14 +37,14 @@ Background ticker runs every minute unless `SCHEDULE_TICKER_ENABLED=false`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CREDITS_FILE` | `conduit-credits.json` | JSON credit balances |
+| `CREDITS_FILE` | `lancer-credits.json` | JSON credit balances |
 | `CREDITS_INITIAL_USD` | `0` | Starting prepaid on first access |
 | `CREDITS_ALLOW_OVERAGE` | `true` | Allow overage ledger when prepaid exhausted |
-| `ARTIFACTS_FILE` | `conduit-artifacts.json` | Artifact metadata store |
+| `ARTIFACTS_FILE` | `lancer-artifacts.json` | Artifact metadata store |
 | `GCS_ARTIFACTS_BUCKET` | — | If set, populate `gcsUri` as `gs://bucket/ref` |
-| `SCHEDULES_FILE` | `conduit-schedules.json` | Schedules store |
+| `SCHEDULES_FILE` | `lancer-schedules.json` | Schedules store |
 | `SCHEDULE_TICKER_ENABLED` | `true` | Set `false` to disable background scheduler |
-| `GCP_ORCHESTRATION_FILE` | `conduit-gcp-orchestrations.json` | GCP job orchestration records |
+| `GCP_ORCHESTRATION_FILE` | `lancer-gcp-orchestrations.json` | GCP job orchestration records |
 | `GCP_PROJECT` | — | Enables `spec_ready` / submit stub when set |
 | `GCP_REGION` | `us-central1` | Cloud Run region |
 | `GCP_CLOUD_RUN_IMAGE` | `gcr.io/cloudrun/hello` | Container image in generated spec |
@@ -57,17 +57,17 @@ Background ticker runs every minute unless `SCHEDULE_TICKER_ENABLED=false`.
 | `QUOTA_MAX_AGENTS` | `20` | Max agents per customer |
 | `QUOTA_MAX_CONCURRENT_RUNS` | `5` | Active runs (`pending`, `running`, …) |
 | `QUOTA_DAILY_USAGE_USD` | `100` | Daily summed `cost` from usage records |
-| `ORGS_FILE` | `conduit-orgs.json` | Org member invites |
+| `ORGS_FILE` | `lancer-orgs.json` | Org member invites |
 
 Entitlements may include `orgId`; agents/runs/schedules/artifacts inherit org scope when set.
 
 ## GCP Cloud Run Jobs deploy (orchestration stub → production)
 
 1. Create GCP project; enable Cloud Run Admin API.
-2. Create per-agent service account (name pattern `conduit-agent-<id>` in generated spec).
+2. Create per-agent service account (name pattern `lancer-agent-<id>` in generated spec).
 3. Set Fly/local secrets: `GCP_PROJECT`, `GCP_REGION`, `GCP_CLOUD_RUN_IMAGE`, credentials.
 4. Deploy push-backend; create agent with `"runtime": "gcp_cloud_run"`.
-5. Inspect `config.gcpCloudRun` and `conduit-gcp-orchestrations.json` for generated Job spec.
+5. Inspect `config.gcpCloudRun` and `lancer-gcp-orchestrations.json` for generated Job spec.
 6. **Production:** implement `submitCloudRunJobIfConfigured` against Cloud Run Jobs API (currently records spec only).
 
 ## Stub vs production-ready

@@ -1,46 +1,46 @@
 # Agent Tools Integration Matrix
 
-> Integration research for a vendor-agnostic **conduitd adapter SPI**.
-> conduitd (Go) sits at each coding agent's tool-call approval chokepoint and forwards
-> approval requests to the Conduit iOS app. This document inventories the popular AI
+> Integration research for a vendor-agnostic **lancerd adapter SPI**.
+> lancerd (Go) sits at each coding agent's tool-call approval chokepoint and forwards
+> approval requests to the Lancer iOS app. This document inventories the popular AI
 > coding agents, probes their **approval surface** (the single most important seam),
 > their **local-model** support, and their **status/usage state**, then rates how hard
-> each is to wire into conduitd given the existing opencode/codex/claude adapters.
+> each is to wire into lancerd given the existing opencode/codex/claude adapters.
 >
 > Captured: 2026-06-13 · macOS arm64 (Darwin 27.0.0) · all installs by explicit user authorization.
 
-## How conduitd integrates (the two seams every adapter must satisfy)
+## How lancerd integrates (the two seams every adapter must satisfy)
 
-Grounded in the existing adapters (`daemon/conduitd/`):
+Grounded in the existing adapters (`daemon/lancerd/`):
 
 1. **Approval seam** — a vendor **pre-tool hook** runs and shells out to
-   `conduitd agent-hook` (see `hook.go:runAgentHook`). The hook passes
+   `lancerd agent-hook` (see `hook.go:runAgentHook`). The hook passes
    `--agent --kind --command --cwd --risk` plus structured `--tool-name --tool-use-id
-   --session-id --tool-input`. conduitd builds an `ApprovalEvent`
+   --session-id --tool-input`. lancerd builds an `ApprovalEvent`
    (`approval.go:17`), forwards it over the unix socket to the resident `serve`
    process, blocks until the phone decides, and maps the decision to an **exit code**:
    - `exit 0` = approved → tool proceeds
    - `exit non-zero` = denied/timeout → tool blocked
    - Fail-safety (verified live, daemon down): read-only kinds fail **open** with
-     `CONDUIT_HOOK_READONLY_FAIL_OPEN=1` (exit 0); mutating/critical fail **closed**
+     `LANCER_HOOK_READONLY_FAIL_OPEN=1` (exit 0); mutating/critical fail **closed**
      (exit 1) — `hook.go:hookShouldHold`.
    - Canonical agent IDs are normalized in `agent_registry.go:normalizeAgentSource`
      (`claudeCode`/`codex`/`cursor`/`gemini`/`opencode`).
 
    The reference vendor hook is **already installed on this machine** at
-   `~/.codex/hooks/conduit-hook.sh` (wired via `~/.codex/hooks.json` `PreToolUse`).
+   `~/.codex/hooks/lancer-hook.sh` (wired via `~/.codex/hooks.json` `PreToolUse`).
    It: parses the pre-tool JSON on stdin → classifies tool→`kind`/`risk` →
    **auto-approves read-only tools/MCP** locally → otherwise calls
-   `conduitd agent-hook --agent codex …` → maps exit code. Repo templates live in
-   `docs/conduit-hook.sh` (Claude), `docs/codex-conduit-hook.sh`,
-   `docs/opencode-conduit-hook.sh` + their `*-hooks.json`.
+   `lancerd agent-hook --agent codex …` → maps exit code. Repo templates live in
+   `docs/lancer-hook.sh` (Claude), `docs/codex-lancer-hook.sh`,
+   `docs/opencode-lancer-hook.sh` + their `*-hooks.json`.
 
 2. **Status seam** — a `collectXStatus(home)` reader (`agent_status_*.go`) mines the
    vendor's config dir for `loggedIn` / `model` / `usageUSD` / `sessionCount`,
    returning an `AgentVendorStatus` (`agent_status.go:14`). Wired into the fan-out at
    `agent_status.go:33` (`collectAgentStatus`).
 
-**Therefore an adapter = `{a hook that calls `conduitd agent-hook`} + {a `collectXStatus`
+**Therefore an adapter = `{a hook that calls `lancerd agent-hook`} + {a `collectXStatus`
 reader}`.** The hook is the load-bearing half; the status reader is best-effort.
 
 ---
@@ -66,11 +66,11 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
 ### Claude Code — *runtime; documented only, not reinstalled*
 1. **Install** — already present: `/opt/homebrew/bin/claude`, `claude --version` → `2.1.177 (Claude Code)`. Not touched.
 2. **Approval surface** — `PreToolUse` hook in `~/.claude/settings.json` →
-   `hooks.PreToolUse[].hooks[] = {type:"command", command:"bash ~/.claude/hooks/conduit-hook.sh"}`
+   `hooks.PreToolUse[].hooks[] = {type:"command", command:"bash ~/.claude/hooks/lancer-hook.sh"}`
    (template: `docs/claude-settings-hook.json`). Payload JSON on stdin
    (`tool_name,tool_input,tool_use_id,session_id,cwd,permission_mode`). Hook signals via
-   exit code (and supports JSON `decision`). Conduit hook installed at
-   `~/.claude/hooks/conduit-hook.sh`.
+   exit code (and supports JSON `decision`). Lancer hook installed at
+   `~/.claude/hooks/lancer-hook.sh`.
 3. **Local models** — via gateway base-url (Bedrock/Vertex/proxy); no first-class Ollama.
 4. **Status reader** — **live**: `agent_status_claude.go` reads `~/.claude/.credentials.json`
    (loggedIn), `settings.json` `model`, `~/.claude/statusline.jsonl` (cost), counts
@@ -81,11 +81,11 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
 1. **Install** — already present: `~/.hermes/node/bin/codex`, `codex --version` → `codex-cli 0.139.0`.
 2. **Approval surface** — `~/.codex/hooks.json` declares
    `hooks.PreToolUse[{matcher:"Bash|apply_patch|Edit|Write|mcp__.*", hooks:[{type:"command",
-   command:"bash ~/.codex/hooks/conduit-hook.sh", timeout:150}]}]`. **The Conduit hook is
-   already installed and wired** (`~/.codex/hooks/conduit-hook.sh`) — it calls
-   `conduitd agent-hook --agent codex --kind … --command … --cwd … --risk …` and maps
+   command:"bash ~/.codex/hooks/lancer-hook.sh", timeout:150}]}]`. **The Lancer hook is
+   already installed and wired** (`~/.codex/hooks/lancer-hook.sh`) — it calls
+   `lancerd agent-hook --agent codex --kind … --command … --cwd … --risk …` and maps
    exit code (rejected → `exit 2`). Note `config.toml` has `approval_policy = "never"` +
-   `sandbox_mode = "danger-full-access"` — Codex's own gate is off, so the Conduit hook is
+   `sandbox_mode = "danger-full-access"` — Codex's own gate is off, so the Lancer hook is
    the *only* approval chokepoint here. Hook **trust** is enforced (`config.toml`
    `[hooks.state]`); bypass via `--dangerously-bypass-hook-trust`.
 3. **Local models** — OSS/OpenAI-compatible providers via `[model_providers]` `base_url` in
@@ -98,7 +98,7 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
 1. **Install** — already present: `/opt/homebrew/bin/opencode` → `1.17.3`.
 2. **Approval surface** — Claude-compatible `PreToolUse` hooks (`docs/opencode-hooks.json`
    matcher `Bash|bash|apply_patch|Edit|Write|edit|write|patch`; hook at
-   `~/.config/opencode/hooks/conduit-hook.sh`). Payload mapping captured by
+   `~/.config/opencode/hooks/lancer-hook.sh`). Payload mapping captured by
    `opencode_hook.go:approvalEventFromOpencodeFixture` (`session_id,cwd,hook_event_name,
    tool_name,tool_use_id,tool_input`). opencode also exposes a **plugin** API
    (`opencode plugin`) and a **permission** config block, and an **ACP** server.
@@ -121,7 +121,7 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
    `smart_approve`}. `smart_approve` runs an in-process LLM `PermissionJudge` /
    `PermissionInspector` to auto-allow read-only and prompt on state-changing ops. There is
    **no documented callback for a third party to gate a call before exec.** The realistic
-   conduitd seams: (a) run goose's tools through an **MCP server** that conduitd controls and
+   lancerd seams: (a) run goose's tools through an **MCP server** that lancerd controls and
    gate there, or (b) drive goose via its **ACP** server (`goose acp`) and intercept at the
    ACP layer, or (c) upstream a hook PR. `goose plugin install <git-url>` exists but plugins
    extend tools, not the approval gate.
@@ -159,7 +159,7 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
    in VS Code `globalState` (opaque).
 3. **Local models** — yes (Ollama/LM Studio/OpenRouter in provider settings).
 4. **Status reader** — none practical (VS Code global storage, not a flat file).
-5. **Adapter effort** — **Hard.** Closed approval loop. Only realistic conduitd hook is to
+5. **Adapter effort** — **Hard.** Closed approval loop. Only realistic lancerd hook is to
    restrict Cline to **MCP-server tools** and gate at the MCP server, or fork the SDK.
 
 ### gemini-cli (Google) — *already installed; retiring ~2026-06-18*
@@ -175,9 +175,9 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
 3. **Local models** — yes via OpenAI-compatible/custom endpoints; OAuth-personal here.
 4. **Status reader** — feasible: `~/.gemini/oauth_creds.json` (loggedIn),
    `~/.gemini/settings.json`/`state.json` (model), `google_accounts.json`.
-5. **Adapter effort** — **Moderate.** The hook exists and is Claude-shaped, so the Conduit
+5. **Adapter effort** — **Moderate.** The hook exists and is Claude-shaped, so the Lancer
    hook script ports almost directly — **but** Gemini wants a **JSON decision object** on
-   stdout, not just an exit code, so a thin wrapper must translate conduitd's exit code into
+   stdout, not just an exit code, so a thin wrapper must translate lancerd's exit code into
    `{"decision":"approve"}` / `{"decision":"deny","reason":…}`. Tempered by the reported
    2026-06-18 retirement (verify before investing).
 
@@ -188,22 +188,22 @@ Other notables scanned (no deep install): **Cursor CLI / cursor-agent** — plac
 Across all tools, exactly **two shapes** of approval surface exist:
 
 - **(A) External pre-tool hook** that runs a command, hands it JSON on stdin, and reads a
-  verdict — Claude Code, Codex, opencode, **Gemini**. This is conduitd's home turf.
+  verdict — Claude Code, Codex, opencode, **Gemini**. This is lancerd's home turf.
 - **(B) Closed/internal approval** (in-agent mode, model-tagged `requires_approval`, or
   interactive prompt) with no external attach point — goose, aider, Cline, RooCode, Kilo.
   The only universal bridge for class B is **MCP**: run the agent's tools through an MCP
-  server conduitd owns and gate there.
+  server lancerd owns and gate there.
 
 So the minimal SPI is:
 
 ```
-ConduitAdapter:
+LancerAdapter:
   # 1. APPROVAL (required) — exactly one transport:
   approval:
     transport: "hook" | "mcp"           # class A → hook;  class B → mcp
     # hook: vendor config writes a PreToolUse/BeforeTool entry that execs
-    #       `conduitd agent-hook` (the existing CLI IS the SPI).
-    emit:   conduitd agent-hook
+    #       `lancerd agent-hook` (the existing CLI IS the SPI).
+    emit:   lancerd agent-hook
               --agent <canonicalID>      # normalizeAgentSource()
               --kind  <command|patch|fileWrite|fileDelete|network|browser>
               --command <...> --cwd <...> --risk <low|medium|high|critical>
@@ -216,13 +216,13 @@ ConduitAdapter:
           # reads the vendor's config/creds/usage files under $HOME
 ```
 
-Concretely, **`conduitd agent-hook` already *is* the SPI** for class A — adding a vendor is:
-(1) a `<vendor>-conduit-hook.sh` that classifies tool→`kind`/`risk` and calls `agent-hook`
-(copy `docs/codex-conduit-hook.sh`), (2) a `<vendor>-hooks.json` install fragment, (3) a
+Concretely, **`lancerd agent-hook` already *is* the SPI** for class A — adding a vendor is:
+(1) a `<vendor>-lancer-hook.sh` that classifies tool→`kind`/`risk` and calls `agent-hook`
+(copy `docs/codex-lancer-hook.sh`), (2) a `<vendor>-hooks.json` install fragment, (3) a
 canonical ID in `normalizeAgentSource`, and (4) an optional `collect<Vendor>Status`. The only
 new primitive worth adding is an **output-format flag on `agent-hook`** (e.g.
 `--emit json-decision`) so the same binary can satisfy Gemini's `HookOutput` JSON contract
-without a per-vendor wrapper. For class B, ship a single **conduit-mcp gateway** (one MCP
+without a per-vendor wrapper. For class B, ship a single **lancer-mcp gateway** (one MCP
 server that wraps the dangerous tools and calls `agent-hook` internally) — that one component
 covers goose, Cline, RooCode, and Kilo at once.
 
@@ -260,9 +260,9 @@ goose `local-models` + opencode LM Studio/OpenRouter + aider `--openai-api-base`
 install. (`continue` on PATH is the zsh shell builtin, a false positive.)
 
 Verification performed (no secrets printed):
-- Read live reference hook `~/.codex/hooks/conduit-hook.sh` + `~/.codex/hooks.json`.
-- Built conduitd (`go build` in `daemon/conduitd`) and exercised `agent-hook`:
-  read-only + `CONDUIT_HOOK_READONLY_FAIL_OPEN=1` → exit 0 (proceed); mutating high-risk with
-  daemon down → exit 1 (fail-closed). A live `~/.conduit/conduitd.sock` is present.
+- Read live reference hook `~/.codex/hooks/lancer-hook.sh` + `~/.codex/hooks.json`.
+- Built lancerd (`go build` in `daemon/lancerd`) and exercised `agent-hook`:
+  read-only + `LANCER_HOOK_READONLY_FAIL_OPEN=1` → exit 0 (proceed); mutating high-risk with
+  daemon down → exit 1 (fail-closed). A live `~/.lancer/lancerd.sock` is present.
 - Confirmed Gemini hook contract from source (`migrate.ts` event/tool mapping; `types.ts`
   `HookDecision`/`HookOutput`).

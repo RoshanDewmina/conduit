@@ -1,5 +1,5 @@
 /* ============================================================
-   CONDUIT — ALL settings sub-pages (board coverage sweep)
+   LANCER — ALL settings sub-pages (board coverage sweep)
    • Terminal customisation  • Relay pairing / E2E
    • Trust & privacy          • Premium comparison
    • Billing overview         • Provider keys (expanded)
@@ -81,7 +81,7 @@ function E2ERelayPairingView(){
       <SubNav title="relay &amp; e2e"/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <StatusHeader state="ok" label="relay paired" detail="conduit-relay-01.us-east"/>
+          <StatusHeader state="ok" label="relay paired" detail="lancer-relay-01.us-east"/>
 
           <div className="cc-sec">connection<span className="rule"/></div>
           <div className="cc-card">
@@ -137,7 +137,7 @@ function TrustPrivacyView(){
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',marginBottom:16}}>
             <span style={{width:54,height:54,borderRadius:14,background:'var(--brand-soft)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--brand)'}}><svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
           </div>
-          <p className="cc-lead" style={{margin:'0 0 12px',textAlign:'center'}}>Your data stays on your host. Conduit's relay only carries what you approve — end-to-end encrypted.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px',textAlign:'center'}}>Your data stays on your host. Lancer's relay only carries what you approve — end-to-end encrypted.</p>
 
           <div className="cc-sec">data path trace<span className="rule"/></div>
           <div className="cc-card" style={{padding:0}}>
@@ -163,7 +163,7 @@ function TrustPrivacyView(){
 
           <div className="cc-card" style={{marginTop:12,padding:'12px 14px',display:'flex',gap:10,alignItems:'flex-start'}}>
             <Ic d={ICON.shield} s={16}/>
-            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Conduit has no telemetry, no analytics, and no cloud storage of your commands or code. The bridge is open source and independently auditable.</span>
+            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Lancer has no telemetry, no analytics, and no cloud storage of your commands or code. The bridge is open source and independently auditable.</span>
           </div>
         </div>
         <div className="cc-bottompad"/>
@@ -242,7 +242,7 @@ function BillingView(){
               <div>
                 <div className="cc-note" style={{marginBottom:4}}>current plan</div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--ink)'}}>Conduit Pro</span>
+                  <span style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--ink)'}}>Lancer Pro</span>
                   <span className="cc-chip" style={{color:'var(--r-low)',borderColor:'var(--r-low-bd)'}}>$8/mo</span>
                 </div>
               </div>
@@ -284,7 +284,7 @@ function ProviderKeysView(){
       <SubNav title="provider keys"/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Add the providers your agents use. Keys live in the Keychain and go straight to the provider — Conduit's relay never sees them.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Add the providers your agents use. Keys live in the Keychain and go straight to the provider — Lancer's relay never sees them.</p>
           <div className="cc-card">
             <KeyRow vendor="claude" accent={VENDOR.claude.c} label="Anthropic" sub="sk-ant-…M2 · Claude Code" state="ok"/>
             <KeyRow vendor="codex" accent={VENDOR.codex.c} label="OpenAI" sub="sk-…9f · GPT-5.1 Codex" state="ok"/>
@@ -621,7 +621,7 @@ function AuditView(){
 /* ---------- Doctor / health check ---------- */
 function DoctorView(){
   const checks=[
-    ['Daemon version','conduitd v1.0.2','ok'],
+    ['Daemon version','lancerd v1.0.2','ok'],
     ['Hook installed','shell-integration hook active','ok'],
     ['API keys configured','Anthropic, OpenAI, OpenRouter','ok'],
     ['Policy valid','9 rules · valid YAML','ok'],
@@ -636,7 +636,7 @@ function DoctorView(){
       <SubNav title="doctor"/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run diagnostics to verify your Conduit setup is healthy. Any failures are highlighted for investigation.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Run diagnostics to verify your Lancer setup is healthy. Any failures are highlighted for investigation.</p>
           <div className="cc-card">
             {checks.map(([check,detail,status],i)=>(
               <div key={i} className="cc-row" style={{cursor:'default'}}>
@@ -667,7 +667,7 @@ function DoctorView(){
 /* ---------- SSH key management (expanded) ---------- */
 function KeysView(){
   const keys=[
-    {name:'conduit-dev',fp:'SHA256:k7Hf3…Lm2',host:'dev-vps',used:'used 2h ago'},
+    {name:'lancer-dev',fp:'SHA256:k7Hf3…Lm2',host:'dev-vps',used:'used 2h ago'},
     {name:'ci-runner',fp:'SHA256:9aQ2x…pR8',host:'staging',used:'used Jun 11'},
     {name:'personal-mac',fp:'SHA256:bx4Ff…Zw1',host:'MacBook Pro',used:'used 3d ago'},
     {name:'backup-gateway',fp:'SHA256:q3ZvW…Dt9',host:'gateway-01',used:'never'},

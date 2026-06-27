@@ -1,14 +1,14 @@
 "use client";
 
-import { useConduitStore } from "@/lib/store/useConduitStore";
+import { useLancerStore } from "@/lib/store/useLancerStore";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 
 export default function InboxPage() {
-  const pending = useConduitStore((s) => s.pending);
-  const lastError = useConduitStore((s) => s.lastError);
-  const clearError = useConduitStore((s) => s.clearError);
+  const pending = useLancerStore((s) => s.pending);
+  const lastError = useLancerStore((s) => s.lastError);
+  const clearError = useLancerStore((s) => s.clearError);
 
   return (
     <div className="flex-1 flex flex-col p-6 max-w-3xl mx-auto w-full gap-4">

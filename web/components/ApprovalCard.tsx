@@ -3,13 +3,13 @@
 import { useState } from "react";
 import type { ApprovalPending } from "@/lib/relay/types";
 import { riskTier } from "@/lib/relay/types";
-import { useConduitStore } from "@/lib/store/useConduitStore";
+import { useLancerStore } from "@/lib/store/useLancerStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RiskBadge } from "./RiskBadge";
 
 export function ApprovalCard({ approval }: { approval: ApprovalPending }) {
-  const decide = useConduitStore((s) => s.decide);
+  const decide = useLancerStore((s) => s.decide);
   const [working, setWorking] = useState(false);
   const tier = riskTier(approval.risk);
 

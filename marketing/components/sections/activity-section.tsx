@@ -39,7 +39,7 @@ export default function ActivitySection() {
 
       <Reveal delay={0.1}>
         <Panel
-          header="~/.conduit/audit.log"
+          header="~/.lancer/audit.log"
           headerRight="APPEND-ONLY · SECRET-REDACTED"
         >
           <div className="overflow-x-auto">

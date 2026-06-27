@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.config/opencode/hooks/conduit-hook.sh",
+            "command": "bash ~/.config/opencode/hooks/lancer-hook.sh",
             "timeout": 150,
-            "statusMessage": "Waiting for Conduit approval"
+            "statusMessage": "Waiting for Lancer approval"
           }
         ]
       }

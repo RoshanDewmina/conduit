@@ -70,7 +70,7 @@ var controlPlane = struct {
 	path string
 	data controlPlaneData
 }{
-	path: dataFilePath("CONTROL_PLANE_FILE", "conduit-control-plane.json"),
+	path: dataFilePath("CONTROL_PLANE_FILE", "lancer-control-plane.json"),
 	data: controlPlaneData{},
 }
 

@@ -1,4 +1,4 @@
-# PRODUCT_RESEARCH.md — Conduit Market & Competitive Research
+# PRODUCT_RESEARCH.md — Lancer Market & Competitive Research
 
 > **Data integrity rule:** Every market claim carries a source URL and a confidence tag (High / Medium / Low).
 > §2.7 verified primary-source data is used throughout. Earlier §2.4/§2.5 figures are NOT used.
@@ -72,9 +72,9 @@ Pieter Levels, a widely-followed indie developer, publicly documented running Cl
 | **OpenAI Codex mobile** | ALL plans incl. Free (iOS + Android) | Approve commands; streams diffs/tests/screenshots; Remote SSH GA | developers.openai.com/codex/remote-connections — HIGH confidence, TechCrunch + official, May 14 2026 |
 | **Cursor cloud agents** | Announced | Mobile companion | MEDIUM confidence — announced but adoption unverified |
 | **GitHub Copilot cloud agent (mobile)** | Announced | Research + code from mobile | MEDIUM confidence — github.blog/changelog/2026-04-08-github-mobile-research-and-code-with-copilot-cloud-agent-anywhere/ |
-| **AgentsRoom** | Desktop (mac/Linux/Win) + iOS/Android companion | Free; **own-host execution via encrypted relay that forwards only opaque blobs**; multi-vendor (Claude, Codex, OpenCode, Gemini, Aider, Grok, Mistral Vibe); push notifications, terminal streaming, live dev-server preview, activity summaries | agentsroom.dev — **HIGH confidence (verified 2026-06-19), closest direct analog to Conduit's own-host + E2E-relay + cross-vendor model.** Tagline "Your Agents Don't Stop When You Leave Your Desk." Gaps vs Conduit: no policy engine / audit chain / risk scoring. |
+| **AgentsRoom** | Desktop (mac/Linux/Win) + iOS/Android companion | Free; **own-host execution via encrypted relay that forwards only opaque blobs**; multi-vendor (Claude, Codex, OpenCode, Gemini, Aider, Grok, Mistral Vibe); push notifications, terminal streaming, live dev-server preview, activity summaries | agentsroom.dev — **HIGH confidence (verified 2026-06-19), closest direct analog to Lancer's own-host + E2E-relay + cross-vendor model.** Tagline "Your Agents Don't Stop When You Leave Your Desk." Gaps vs Lancer: no policy engine / audit chain / risk scoring. |
 | **Orca** | Open-source mobile app | Run + monitor + direct existing Claude Code agentic sessions from mobile | MEDIUM confidence (verified 2026-06-19) — monitoring/direction focus; less feature detail public. |
-| **Blume / "Blume Sidecar"** | Web-based desktop app (local) | Agent **oversight/governance**: monitors agent status (working / awaiting approval), **tracks hidden files, skills, hooks & rules** + flags config↔instruction **drift**, approve-before-apply; agents run **locally**; supports Cursor, Claude Code, Codex, omp, Pi | blume.codes — **HIGH confidence (verified 2026-06-19), governance-adjacent.** Overlaps Conduit's policy/oversight angle; its **agent-config drift detection** is a feature Conduit lacks. Gap vs Conduit: **desktop-first, not phone-native** (no mobile control/notifications surfaced); no audit chain / risk scoring. NOTE: distinct from the unrelated `blume.page` (AI website builder). |
+| **Blume / "Blume Sidecar"** | Web-based desktop app (local) | Agent **oversight/governance**: monitors agent status (working / awaiting approval), **tracks hidden files, skills, hooks & rules** + flags config↔instruction **drift**, approve-before-apply; agents run **locally**; supports Cursor, Claude Code, Codex, omp, Pi | blume.codes — **HIGH confidence (verified 2026-06-19), governance-adjacent.** Overlaps Lancer's policy/oversight angle; its **agent-config drift detection** is a feature Lancer lacks. Gap vs Lancer: **desktop-first, not phone-native** (no mobile control/notifications surfaced); no audit chain / risk scoring. NOTE: distinct from the unrelated `blume.page` (AI website builder). |
 | **Termius** | Mobile SSH incumbent | $10/mo — termius.com/pricing | Dumb terminal; no agent approvals |
 | **Blink Shell** | Mobile SSH incumbent | $20/yr | Dumb terminal; no agent approvals |
 | **Additional OSS** | Various | Paseo, Companion, Happier, Catnip, Sled, CallMe, PeonPing, Lucarne, CC Pocket | github.com/K9i-0/ccpocket and others |
@@ -83,7 +83,7 @@ Pieter Levels, a widely-followed indie developer, publicly documented running Cl
 
 **Name-collision note:** the competitor is **`blume.codes`** (Blume Sidecar, in the table above). The similarly-named **`blume.page`** is an unrelated AI *website builder* ("Websites that evolve, rank, and grow without lifting a finger") — **not** a competitor; don't confuse the two. (Both checked 2026-06-19.)
 
-### 3.2 Claude Code Platform Capabilities Relevant to Conduit
+### 3.2 Claude Code Platform Capabilities Relevant to Lancer
 **Confidence: HIGH** — official docs
 
 - **PreToolUse hook:** fires before any tool; can return a permission decision that BLOCKS the tool (deny wins even in `bypassPermissions`). Blocks while your gateway waits on the phone.
@@ -111,7 +111,7 @@ Pieter Levels, a widely-followed indie developer, publicly documented running Cl
 ### 4.1 First-Party Anthropic Remote Control Is Now a Major Competitor
 **Confidence: HIGH** — official docs at code.claude.com/docs/en/remote-control
 
-Multi-session + push notifications + start-from-mobile is now FIRST-PARTY from Anthropic, available FREE for Pro+/Team/Enterprise users. This is not a distant incumbent — it is Anthropic directly competing in the exact use case Conduit addresses. Any developer already paying for Claude Pro gets this for free.
+Multi-session + push notifications + start-from-mobile is now FIRST-PARTY from Anthropic, available FREE for Pro+/Team/Enterprise users. This is not a distant incumbent — it is Anthropic directly competing in the exact use case Lancer addresses. Any developer already paying for Claude Pro gets this for free.
 
 ### 4.2 OSS Field Is Crowded and Free
 Happy (21.6k★), cmux (20.9k★), CloudCLI (11.6k★) = ~54k combined GitHub stars, all MIT-licensed, all free. These are not vaporware — they are actively maintained with significant community trust.
@@ -146,10 +146,10 @@ This positioning carves out the segment that first-party Anthropic Remote Contro
 - Why rivals can't easily copy: Live Activities + Dynamic Island are Apple-exclusive APIs; web/Electron/Android-first rivals structurally can't match native quality
 
 **Stage 2 — Security / self-host / enterprise (the one segment with real WTP):**
-- E2E, on-premises bridge (conduitd), Secure Enclave / TOFU (already built)
+- E2E, on-premises bridge (lancerd), Secure Enclave / TOFU (already built)
 - Audit log (already built), team approval routing
 - Pricing: team seats / enterprise tier; precedent is Termius $10/mo for transport-grade reliability — real WTP exists in this segment
-- Open-source conduitd bridge in this stage (earned developer trust via transparency — Happy + CloudCLI model)
+- Open-source lancerd bridge in this stage (earned developer trust via transparency — Happy + CloudCLI model)
 
 **Stage 3 — Cross-vendor breadth (anti-lock-in wedge):**
 - Claude + Codex first; later Cursor / Gemini
@@ -162,9 +162,9 @@ NOT a broad consumer launch. This segment:
 - Values on-premises bridge + audit log + Secure Enclave
 
 ### 5.4 Distribution Risk (Biggest Risk)
-Conduit will be the best-built and least-known app in a crowded field.
+Lancer will be the best-built and least-known app in a crowded field.
 
 **Mitigation:**
-1. Open-source conduitd bridge — Happy/CloudCLI earned 11–21k★ by going open-source. The bridge is low-IP (hook plumbing, not the iOS app), high-trust.
+1. Open-source lancerd bridge — Happy/CloudCLI earned 11–21k★ by going open-source. The bridge is low-IP (hook plumbing, not the iOS app), high-trust.
 2. Beachhead a specific underserved niche first; avoid spray-and-pray consumer launch.
 3. Positioning that cannot be undercut by Anthropic Remote Control: "your code never leaves your host."

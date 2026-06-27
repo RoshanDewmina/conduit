@@ -22,8 +22,8 @@ const columns = [
   {
     heading: "Community",
     links: [
-      { label: "GitHub", href: "https://github.com/conduit" },
-      { label: "Discord", href: "https://discord.gg/conduit" },
+      { label: "GitHub", href: "https://github.com/lancer" },
+      { label: "Discord", href: "https://discord.gg/lancer" },
     ],
   },
 ];
@@ -36,7 +36,7 @@ export default function SiteFooter() {
       <div className="max-w-[1152px] mx-auto px-6 md:px-8 py-14 grid grid-cols-1 md:grid-cols-3 gap-10">
         <div>
           <p className="font-display font-bold text-base text-fg mb-2">
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </p>
           <p className="font-mono text-[11px] text-faint leading-relaxed">
             approve your agents · keep your code

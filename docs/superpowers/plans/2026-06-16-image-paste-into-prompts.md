@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let the user attach/paste an image into the chat prompt composer on iOS; the image is uploaded to the remote host via SFTP and referenced by path in the agent prompt (e.g. `claude -i /tmp/conduit-img-<uuid>.png …`), so the agent receives it as a real image input.
+**Goal:** Let the user attach/paste an image into the chat prompt composer on iOS; the image is uploaded to the remote host via SFTP and referenced by path in the agent prompt (e.g. `claude -i /tmp/lancer-img-<uuid>.png …`), so the agent receives it as a real image input.
 
 **Architecture:** The composer already has a dead-but-complete attachment stub (`ComposerAttachment` enum + `PhotosPicker` + `onAttach` callback in `ChatInputBar`) — it is simply never wired in `SessionView`. This plan wires it, adds an `ImageAttachmentService` that SFTP-uploads the image to a deterministic remote path (SFTP is already production-grade), and augments `SessionViewModel.submit()` to prepend the agent-specific image flag before sending the prompt over the PTY.
 
-**Tech Stack:** Swift 6 (ConduitKit), SwiftUI `PhotosPicker`/`Transferable`, existing `SFTPClient` (`SSHTransport/SFTPClient.swift`), `AgentRegistry` for per-agent image-flag formatting.
+**Tech Stack:** Swift 6 (LancerKit), SwiftUI `PhotosPicker`/`Transferable`, existing `SFTPClient` (`SSHTransport/SFTPClient.swift`), `AgentRegistry` for per-agent image-flag formatting.
 
 ## Global Constraints
 
@@ -23,40 +23,40 @@
 
 | File | New/Mod | Responsibility |
 |---|---|---|
-| `Packages/ConduitKit/Sources/SessionFeature/ImageAttachmentService.swift` | New | Given image `Data`+`UTType`, compress/resize, SFTP-write to `/tmp/conduit-img-<uuid>.<ext>`, return the remote path. |
-| `Packages/ConduitKit/Sources/SessionFeature/SessionViewModel.swift` | Mod (`:1045-1087`, add state) | Hold a `pendingAttachment`; on `submit()` upload then prepend the agent image flag. |
-| `Packages/ConduitKit/Sources/SessionFeature/SessionView.swift` | Mod (`:343`) | Pass `onAttach:` into `ChatInputBar` (wire the existing stub). |
-| `Packages/ConduitKit/Sources/SessionFeature/Chat/ChatInputBar.swift` | Mod (`:251` chip area) | Render a small attachment preview chip when an attachment is pending (UI only; mechanism already present). |
-| `Packages/ConduitKit/Tests/ConduitKitTests/ImageAttachmentTests.swift` | New | Tests for remote-path generation + prompt rewriting (SFTP mocked). |
+| `Packages/LancerKit/Sources/SessionFeature/ImageAttachmentService.swift` | New | Given image `Data`+`UTType`, compress/resize, SFTP-write to `/tmp/lancer-img-<uuid>.<ext>`, return the remote path. |
+| `Packages/LancerKit/Sources/SessionFeature/SessionViewModel.swift` | Mod (`:1045-1087`, add state) | Hold a `pendingAttachment`; on `submit()` upload then prepend the agent image flag. |
+| `Packages/LancerKit/Sources/SessionFeature/SessionView.swift` | Mod (`:343`) | Pass `onAttach:` into `ChatInputBar` (wire the existing stub). |
+| `Packages/LancerKit/Sources/SessionFeature/Chat/ChatInputBar.swift` | Mod (`:251` chip area) | Render a small attachment preview chip when an attachment is pending (UI only; mechanism already present). |
+| `Packages/LancerKit/Tests/LancerKitTests/ImageAttachmentTests.swift` | New | Tests for remote-path generation + prompt rewriting (SFTP mocked). |
 
 ---
 
 ## Task 1: prompt rewriting for the connected agent
 
 **Files:**
-- Create: `Packages/ConduitKit/Sources/SessionFeature/ImageAttachmentService.swift` (the pure rewriting helper first; SFTP added in Task 2)
-- Test: `Packages/ConduitKit/Tests/ConduitKitTests/ImageAttachmentTests.swift`
+- Create: `Packages/LancerKit/Sources/SessionFeature/ImageAttachmentService.swift` (the pure rewriting helper first; SFTP added in Task 2)
+- Test: `Packages/LancerKit/Tests/LancerKitTests/ImageAttachmentTests.swift`
 
 **Interfaces:**
 - Produces:
   - `enum AgentImageFlag { static func command(agentID: String, remotePath: String, userText: String) -> String }` — returns the full line to send. claude → `claude -i '<path>' -p '<text>'`? **No** — the agent is already running in the PTY; we send to the *running* agent's stdin, so we emit a reference the running CLI understands. For claude interactive, the supported form is to include the path token in the message text. Use: `"<userText> <remotePath>"` for claude (it auto-detects image paths in the message), `"<userText>\n<remotePath>"` otherwise. (Implementer: confirm the exact in-session image syntax per agent via that agent's docs before finalizing; the rewriting is centralized here so it is the only place to change.)
-  - `func remoteImagePath(uuid: String, ext: String) -> String` → `"/tmp/conduit-img-<uuid>.<ext>"`.
+  - `func remoteImagePath(uuid: String, ext: String) -> String` → `"/tmp/lancer-img-<uuid>.<ext>"`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
 func testRemotePathAndRewrite() {
     let path = remoteImagePath(uuid: "abc", ext: "png")
-    XCTAssertEqual(path, "/tmp/conduit-img-abc.png")
+    XCTAssertEqual(path, "/tmp/lancer-img-abc.png")
     let line = AgentImageFlag.command(agentID: "claude", remotePath: path, userText: "Explain this")
-    XCTAssertTrue(line.contains("/tmp/conduit-img-abc.png"))
+    XCTAssertTrue(line.contains("/tmp/lancer-img-abc.png"))
     XCTAssertTrue(line.contains("Explain this"))
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd Packages/ConduitKit && swift test --filter ImageAttachmentTests`
+Run: `cd Packages/LancerKit && swift test --filter ImageAttachmentTests`
 Expected: FAIL — undefined symbols.
 
 - [ ] **Step 3: Implement the helpers**
@@ -65,7 +65,7 @@ Expected: FAIL — undefined symbols.
 import Foundation
 
 public func remoteImagePath(uuid: String, ext: String) -> String {
-    "/tmp/conduit-img-\(uuid).\(ext)"
+    "/tmp/lancer-img-\(uuid).\(ext)"
 }
 
 public enum AgentImageFlag {
@@ -82,14 +82,14 @@ public enum AgentImageFlag {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd Packages/ConduitKit && swift test --filter ImageAttachmentTests`
+Run: `cd Packages/LancerKit && swift test --filter ImageAttachmentTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/ImageAttachmentService.swift \
-        Packages/ConduitKit/Tests/ConduitKitTests/ImageAttachmentTests.swift
+git add Packages/LancerKit/Sources/SessionFeature/ImageAttachmentService.swift \
+        Packages/LancerKit/Tests/LancerKitTests/ImageAttachmentTests.swift
 git commit -m "feat(ios): centralize per-agent image prompt rewriting"
 ```
 
@@ -98,7 +98,7 @@ git commit -m "feat(ios): centralize per-agent image prompt rewriting"
 ## Task 2: SFTP upload of the attachment
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/ImageAttachmentService.swift`
+- Modify: `Packages/LancerKit/Sources/SessionFeature/ImageAttachmentService.swift`
 - Test: extend `ImageAttachmentTests.swift` with a mock SFTP writer.
 
 **Interfaces:**
@@ -112,7 +112,7 @@ func testUploadWritesToRemotePathAndReturnsIt() async throws {
     let mock = MockSFTPWriter()
     let svc = ImageAttachmentService(writer: mock, uuid: { "abc" })
     let path = try await svc.upload(Data([0,1,2]), ext: "png")
-    XCTAssertEqual(path, "/tmp/conduit-img-abc.png")
+    XCTAssertEqual(path, "/tmp/lancer-img-abc.png")
     XCTAssertEqual(mock.lastPath, path)
     XCTAssertEqual(mock.lastData?.count, 3)
 }
@@ -120,7 +120,7 @@ func testUploadWritesToRemotePathAndReturnsIt() async throws {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd Packages/ConduitKit && swift test --filter ImageAttachmentTests`
+Run: `cd Packages/LancerKit && swift test --filter ImageAttachmentTests`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `ImageAttachmentService` with an injectable writer**
@@ -150,14 +150,14 @@ Provide a production `SFTPWriting` conformance that wraps `session.withSFTP { tr
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd Packages/ConduitKit && swift test --filter ImageAttachmentTests`
+Run: `cd Packages/LancerKit && swift test --filter ImageAttachmentTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/ImageAttachmentService.swift \
-        Packages/ConduitKit/Tests/ConduitKitTests/ImageAttachmentTests.swift
+git add Packages/LancerKit/Sources/SessionFeature/ImageAttachmentService.swift \
+        Packages/LancerKit/Tests/LancerKitTests/ImageAttachmentTests.swift
 git commit -m "feat(ios): SFTP-upload pasted images to a deterministic remote path"
 ```
 
@@ -166,7 +166,7 @@ git commit -m "feat(ios): SFTP-upload pasted images to a deterministic remote pa
 ## Task 3: wire the composer stub + submit augmentation
 
 **Files:**
-- Modify: `Packages/ConduitKit/Sources/SessionFeature/SessionView.swift:343`, `Packages/ConduitKit/Sources/SessionFeature/SessionViewModel.swift:1045-1087`, `Packages/ConduitKit/Sources/SessionFeature/Chat/ChatInputBar.swift`
+- Modify: `Packages/LancerKit/Sources/SessionFeature/SessionView.swift:343`, `Packages/LancerKit/Sources/SessionFeature/SessionViewModel.swift:1045-1087`, `Packages/LancerKit/Sources/SessionFeature/Chat/ChatInputBar.swift`
 
 **Interfaces:**
 - Consumes: existing `ChatInputBar.onAttach: ((ComposerAttachment) -> Void)?` (`ChatInputBar.swift:38`), `ComposerAttachment.photo(Data, UTType)` (`:10`), `ImageAttachmentService`, `AgentImageFlag`.
@@ -178,18 +178,18 @@ git commit -m "feat(ios): SFTP-upload pasted images to a deterministic remote pa
 @MainActor
 func testSubmitWithAttachmentUploadsThenSendsRewrittenLine() async throws {
     let vm = SessionViewModel.makeTestInstance() // existing test factory or minimal init
-    vm.injectImageService(stubReturning: "/tmp/conduit-img-abc.png")
+    vm.injectImageService(stubReturning: "/tmp/lancer-img-abc.png")
     vm.attach(.photo(Data([0]), .png))
     vm.inputText = "Explain this"
     await vm.submit()
-    XCTAssertTrue(vm.lastSentText.contains("/tmp/conduit-img-abc.png"))
+    XCTAssertTrue(vm.lastSentText.contains("/tmp/lancer-img-abc.png"))
     XCTAssertNil(vm.pendingAttachment) // cleared after send
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cd Packages/ConduitKit && swift test --filter SessionViewModel`
+Run: `cd Packages/LancerKit && swift test --filter SessionViewModel`
 Expected: FAIL — `pendingAttachment`/`attach`/`injectImageService` undefined.
 
 - [ ] **Step 3: Implement the submit path**
@@ -202,19 +202,19 @@ In `SessionView.swift:343`, pass `onAttach: { vm.attach($0) }` to `ChatInputBar`
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cd Packages/ConduitKit && swift test --filter SessionViewModel`
+Run: `cd Packages/LancerKit && swift test --filter SessionViewModel`
 Expected: PASS.
 
 - [ ] **Step 6: Authoritative app-target build + visual check**
 
-`mcp__XcodeBuildMCP__build_sim` (Conduit / iPhone 17 Pro) → BUILD SUCCEEDED. Then launch the chat gallery route and confirm the paperclip + PhotosPicker now appear and a selected image shows a chip.
+`mcp__XcodeBuildMCP__build_sim` (Lancer / iPhone 17 Pro) → BUILD SUCCEEDED. Then launch the chat gallery route and confirm the paperclip + PhotosPicker now appear and a selected image shows a chip.
 
 - [ ] **Step 7: Commit (stage only)**
 
 ```bash
-git add Packages/ConduitKit/Sources/SessionFeature/SessionView.swift \
-        Packages/ConduitKit/Sources/SessionFeature/SessionViewModel.swift \
-        Packages/ConduitKit/Sources/SessionFeature/Chat/ChatInputBar.swift
+git add Packages/LancerKit/Sources/SessionFeature/SessionView.swift \
+        Packages/LancerKit/Sources/SessionFeature/SessionViewModel.swift \
+        Packages/LancerKit/Sources/SessionFeature/Chat/ChatInputBar.swift
 git commit -m "feat(ios): wire image attachment composer → SFTP upload → prompt"
 ```
 
@@ -228,7 +228,7 @@ Use the live block-session harness (CLAUDE.md "Block terminal" section). Connect
 
 - [ ] **Step 2: Confirm the image landed and was referenced**
 
-On the host: `ls -la /tmp/conduit-img-*.png` shows the file; the agent's response references the image content. Confirm a dropped connection mid-upload aborts the send (no prompt referencing a missing path).
+On the host: `ls -la /tmp/lancer-img-*.png` shows the file; the agent's response references the image content. Confirm a dropped connection mid-upload aborts the send (no prompt referencing a missing path).
 
 ---
 

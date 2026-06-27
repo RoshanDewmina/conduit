@@ -1,6 +1,6 @@
 # App Privacy Nutrition Label — App Store Connect Mapping
 
-This document maps Conduit's actual data collection onto Apple's App Privacy
+This document maps Lancer's actual data collection onto Apple's App Privacy
 questionnaire in App Store Connect. Use these answers when filling out the
 "App Privacy" section for the submission.
 
@@ -8,7 +8,7 @@ questionnaire in App Store Connect. Use these answers when filling out the
 
 ## Overview
 
-Conduit collects **minimal data** — only what is strictly necessary for
+Lancer collects **minimal data** — only what is strictly necessary for
 push notification delivery and optional iCloud sync. There is **no tracking**
 (no third-party analytics, no ads SDK, no data brokers).
 
@@ -56,7 +56,7 @@ push notification delivery and optional iCloud sync. There is **no tracking**
 
 ### Note 1: Audio Data — No (microphone permission declared)
 
-Conduit declares `NSMicrophoneUsageDescription` and
+Lancer declares `NSMicrophoneUsageDescription` and
 `NSSpeechRecognitionUsageDescription` in Info.plist **for a planned future
 feature** (voice dictation of terminal commands). The feature is not yet
 shipped, and no audio data is collected or transmitted at this time.
@@ -68,39 +68,39 @@ tracking."
 ### Note 2: Other User Content — No
 
 The App lets you type commands. Command text is sent over SSH to your host
-(not to Conduit's servers) and is stored locally on-device in an encrypted
+(not to Lancer's servers) and is stored locally on-device in an encrypted
 database. Apple's guidelines consider user-supplied text "other user content"
-— but Conduit does not transmit this to its own infrastructure. It is
+— but Lancer does not transmit this to its own infrastructure. It is
 transmitted over SSH (your own connection) and stored locally.
 
-**Safe conservative answer:** No (Conduit does not send user content to its
+**Safe conservative answer:** No (Lancer does not send user content to its
 own servers).
 
 ### Note 3: Crash Data / Performance Data — No
 
 Sentry SDK is linked in the binary but the DSN is empty — Sentry is
-never initialized and no crash data is transmitted. Conduit has no other
+never initialized and no crash data is transmitted. Lancer has no other
 crash-reporting or performance-monitoring SDK.
 
 **App Store Connect answer:** No.
 
 ### Note 4: Purchase History — No
 
-Apple's StoreKit processes the Conduit Pro in-app purchase. Conduit receives
+Apple's StoreKit processes the Lancer Pro in-app purchase. Lancer receives
 only a receipt validation token from Apple (on-device). No purchase history
-is sent to Conduit's servers.
+is sent to Lancer's servers.
 
 **App Store Connect answer:** No.
 
 ### Note 5: Device ID — APNs token (Yes)
 
-Conduit registers an APNs device token for push notification delivery. This
+Lancer registers an APNs device token for push notification delivery. This
 is a random, rotatable identifier assigned by Apple. It is forwarded to
-Conduit's push relay for the sole purpose of sending you approval
+Lancer's push relay for the sole purpose of sending you approval
 notifications.
 
 - **Linked to user?** No — the token is not associated with a user identity.
-  Conduit has no user account system.
+  Lancer has no user account system.
 - **Used for tracking?** No — it is never used for analytics, advertising, or
   any purpose other than push delivery.
 - **Purpose:** App Functionality
@@ -113,7 +113,7 @@ No → Purpose: App Functionality
 ## Data not collected — important to declare
 
 The following data categories are **common in other apps but entirely absent
-from Conduit:**
+from Lancer:**
 
 - **Email / Phone / Address** — no account system, no registration form
 - **Location** — not collected, not needed
@@ -127,7 +127,7 @@ from Conduit:**
 
 ## Third-party data collection
 
-Conduit integrates **no third-party SDKs that collect data** for their own
+Lancer integrates **no third-party SDKs that collect data** for their own
 purposes. The linked SDKs that touch the network are:
 
 | SDK / Framework | Role | Collects data for itself? |
@@ -141,7 +141,7 @@ purposes. The linked SDKs that touch the network are:
 
 ## Tracking and App Tracking Transparency
 
-Conduit does **not** use any form of tracking as defined by Apple (no
+Lancer does **not** use any form of tracking as defined by Apple (no
 targeted advertising, no cross-app tracking, no data sharing with data
 brokers). **No App Tracking Transparency (ATT) prompt is required or
 shown.**
@@ -151,7 +151,7 @@ shown.**
 ## Privacy manifest (`PrivacyInfo.xcprivacy`)
 
 The project already includes a `PrivacyInfo.xcprivacy` file at
-`Conduit/PrivacyInfo.xcprivacy` with:
+`Lancer/PrivacyInfo.xcprivacy` with:
 
 - `NSPrivacyTracking: false`
 - `NSPrivacyCollectedDataTypeDeviceID` for `AppFunctionality` (APNs token)

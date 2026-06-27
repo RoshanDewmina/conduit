@@ -145,7 +145,7 @@ func TestRelayBuffersUntilPeerJoins(t *testing.T) {
 }
 
 // Regression: the PHONE may connect BEFORE the daemon (the real-world order —
-// the app's pairing screen auto-dials, then the user runs `conduitd pair`).
+// the app's pairing screen auto-dials, then the user runs `lancerd pair`).
 // The relay must hold the phone open and pair on the daemon's later join,
 // rather than dropping the phone with a "waiting"+close. (Pre-fix, phone-first
 // was closed immediately and pairing never completed.)

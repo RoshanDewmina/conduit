@@ -21,9 +21,9 @@
 #
 # ---------------------------------------------------------------------------
 # Driver-side env (this script):
-#   CONDUIT_STAGING_URL    public base URL of the staging control plane
+#   LANCER_STAGING_URL    public base URL of the staging control plane
 #                          (e.g. http://35.201.3.231:8080)
-#   CONDUIT_CLIENT_TOKEN   a valid, ACTIVE entitlement client token in staging
+#   LANCER_CLIENT_TOKEN   a valid, ACTIVE entitlement client token in staging
 #                          (Authorization: Bearer — customerId is derived server-side)
 # Optional:
 #   SMOKE_TIMEOUT_SECS     overall poll budget (default 240 — Cloud Run cold start
@@ -41,7 +41,7 @@
 # Backend-side prerequisites the smoke test VALIDATES by failing if absent — verify
 # these on the staging deployment BEFORE blaming the test:
 #   GCP_PROJECT                 set (else Launch returns "GCP_PROJECT not configured")
-#   GCP_CLOUD_RUN_IMAGE         a REAL conduit runner image whose entrypoint is the
+#   GCP_CLOUD_RUN_IMAGE         a REAL lancer runner image whose entrypoint is the
 #                               agent-runner binary. The code default is
 #                               gcr.io/cloudrun/hello, which has NO runner — a run
 #                               against it never calls back and this test times out.
@@ -62,19 +62,19 @@ for arg in "$@"; do
   esac
 done
 
-: "${CONDUIT_STAGING_URL:?set CONDUIT_STAGING_URL (e.g. http://35.201.3.231:8080)}"
-: "${CONDUIT_CLIENT_TOKEN:?set CONDUIT_CLIENT_TOKEN (an active staging entitlement token)}"
+: "${LANCER_STAGING_URL:?set LANCER_STAGING_URL (e.g. http://35.201.3.231:8080)}"
+: "${LANCER_CLIENT_TOKEN:?set LANCER_CLIENT_TOKEN (an active staging entitlement token)}"
 TIMEOUT="${SMOKE_TIMEOUT_SECS:-240}"
 POLL="${SMOKE_POLL_SECS:-5}"
-BASE="${CONDUIT_STAGING_URL%/}"
-AUTH="Authorization: Bearer ${CONDUIT_CLIENT_TOKEN}"
+BASE="${LANCER_STAGING_URL%/}"
+AUTH="Authorization: Bearer ${LANCER_CLIENT_TOKEN}"
 
 command -v jq  >/dev/null || { echo "FATAL: jq is required"; exit 2; }
 command -v curl >/dev/null || { echo "FATAL: curl is required"; exit 2; }
 
 # Unique marker so concurrent/previous runs can't produce a false positive.
 NONCE="$(date +%s)-$$-${RANDOM}"
-MARKER="conduit-gcp-smoke-${NONCE}"
+MARKER="lancer-gcp-smoke-${NONCE}"
 
 say()  { printf '\033[1;36m›\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m✗ FAIL:\033[0m %s\n' "$*" >&2; exit 1; }

@@ -1,20 +1,20 @@
-# Encryption Export Compliance — Conduit
+# Encryption Export Compliance — Lancer
 
 ## ITSAppUsesNonExemptEncryption
 
 **Current setting:** `false`
 
-**Conduit/Info.plist:**
+**Lancer/Info.plist:**
 ```xml
 <key>ITSAppUsesNonExemptEncryption</key>
 <false/>
 ```
 
-This is correct. Conduit qualifies for the mass-market encryption exemption (ERN) under EAR Category 5 Part 2 (ENC).
+This is correct. Lancer qualifies for the mass-market encryption exemption (ERN) under EAR Category 5 Part 2 (ENC).
 
 ## Rationale
 
-Conduit uses only encryption that qualifies for exemption:
+Lancer uses only encryption that qualifies for exemption:
 
 | Cryptography used | Where | Exemption basis |
 |---|---|---|
@@ -49,7 +49,7 @@ is documented at:
 
 Before final submission:
 
-- [ ] Confirm `Conduit/Info.plist` contains `<key>ITSAppUsesNonExemptEncryption</key><false/>`
+- [ ] Confirm `Lancer/Info.plist` contains `<key>ITSAppUsesNonExemptEncryption</key><false/>`
 - [ ] Verify the app does not load any custom crypto framework or call deprecated crypto APIs
 - [ ] Verify Sentry crash reporter is never initialized (DSN is empty) — no crash data collected
 - [ ] Review [current Apple export compliance docs](https://developer.apple.com/documentation/security/export-compliance-for-apps-with-encryption) for any policy changes

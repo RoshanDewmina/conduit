@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Conduit",
+  title: "Terms of Service — Lancer",
   description:
-    "Conduit terms of service. By downloading, installing, or using Conduit, you agree to be bound by these Terms.",
+    "Lancer terms of service. By downloading, installing, or using Lancer, you agree to be bound by these Terms.",
 };
 
 export default function TermsPage() {
@@ -16,7 +16,7 @@ export default function TermsPage() {
             href="/"
             className="font-display text-sm font-semibold tracking-tight text-fg"
           >
-            conduit<span className="text-accent">_</span>
+            lancer<span className="text-accent">_</span>
           </Link>
         </nav>
         <div className="spectrum-line h-px w-full mt-4" />
@@ -29,7 +29,7 @@ export default function TermsPage() {
         <p className="font-mono text-sm text-faint mb-10">
           Last updated: <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">{`{{DATE}}`}</code>. Bundle ID:{" "}
           <code className="font-mono text-xs bg-input border border-line text-fg px-1.5 py-0.5">
-            dev.conduit.mobile
+            dev.lancer.mobile
           </code>
         </p>
 
@@ -39,7 +39,7 @@ export default function TermsPage() {
               1. acceptance<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              By downloading, installing, or using Conduit (the &ldquo;App&rdquo;),
+              By downloading, installing, or using Lancer (the &ldquo;App&rdquo;),
               you agree to be bound by these Terms of Service (the
               &ldquo;Terms&rdquo;). If you do not agree, do not use the App.
             </p>
@@ -63,7 +63,7 @@ export default function TermsPage() {
               2. the app&rsquo;s purpose<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit is an iOS approval-firewall and audit interface for AI
+              Lancer is an iOS approval-firewall and audit interface for AI
               coding agents (Claude Code, Codex, opencode) that run on
               computers you own or control. The App:
             </p>
@@ -85,7 +85,7 @@ export default function TermsPage() {
               3. license<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit grants you a personal, non-transferable, non-exclusive
+              Lancer grants you a personal, non-transferable, non-exclusive
               license to use the App on Apple-branded devices that you own or
               control, as permitted by the Apple Terms.
             </p>
@@ -100,7 +100,7 @@ export default function TermsPage() {
               4.1 Authorized access only
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              You may use Conduit only to connect to:
+              You may use Lancer only to connect to:
             </p>
             <ul className="font-mono text-sm text-dim space-y-1 mt-2 list-none pl-4 border-l border-line">
               <li>Hosts that you own</li>
@@ -115,7 +115,7 @@ export default function TermsPage() {
               4.2 Your agents, your liability
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              You control what AI coding agents do on your host. Conduit merely
+              You control what AI coding agents do on your host. Lancer merely
               relays approval decisions. You are responsible for:
             </p>
             <ul className="font-mono text-sm text-dim space-y-1 mt-2 list-none pl-4 border-l border-line">
@@ -128,7 +128,7 @@ export default function TermsPage() {
               4.3 Prohibited uses
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              You must not use Conduit to:
+              You must not use Lancer to:
             </p>
             <ul className="font-mono text-sm text-dim space-y-1 mt-2 list-none pl-4 border-l border-line">
               <li>Access any system without authorization</li>
@@ -144,14 +144,14 @@ export default function TermsPage() {
               5. accounts<span className="text-accent">_</span>
             </h2>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              <strong className="text-fg">Conduit does not create or manage
+              <strong className="text-fg">Lancer does not create or manage
               user accounts.</strong> Pairing is device-to-device &mdash; you
               scan a QR code from your host to link your phone. There is no
-              login, no profile, and no Conduit-hosted user database.
+              login, no profile, and no Lancer-hosted user database.
             </p>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3">
-              If you purchase Conduit Pro via in-app purchase, Apple manages
-              the transaction and receipt. Conduit does not create a separate
+              If you purchase Lancer Pro via in-app purchase, Apple manages
+              the transaction and receipt. Lancer does not create a separate
               account for this purpose.
             </p>
           </section>
@@ -165,7 +165,7 @@ export default function TermsPage() {
               6.1 Current offering
             </h3>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit Pro is a one-time in-app purchase (non-consumable) that
+              Lancer Pro is a one-time in-app purchase (non-consumable) that
               unlocks additional features (e.g., multi-host management, advanced
               surfaces). Price and feature set are displayed in the App. Apple
               processes all payments.
@@ -193,7 +193,7 @@ export default function TermsPage() {
             <ul className="font-mono text-sm text-dim space-y-1 mt-2 list-none pl-4 border-l border-line">
               <li>All purchases are final unless Apple&rsquo;s refund policy applies</li>
               <li>Prices are as displayed in the App and may be updated for future purchases</li>
-              <li>Conduit Pro is a single-device purchase (Apple ID bound)</li>
+              <li>Lancer Pro is a single-device purchase (Apple ID bound)</li>
             </ul>
           </section>
 
@@ -239,7 +239,7 @@ export default function TermsPage() {
               </table>
             </div>
             <p className="font-mono text-sm text-dim leading-relaxed">
-              Conduit is not responsible for the availability, security, or
+              Lancer is not responsible for the availability, security, or
               policies of these third-party services.
             </p>
           </section>
@@ -256,7 +256,7 @@ export default function TermsPage() {
               NON-INFRINGEMENT.
             </p>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3">
-              Conduit does not warrant that:
+              Lancer does not warrant that:
             </p>
             <ul className="font-mono text-sm text-dim space-y-1 mt-2 list-none pl-4 border-l border-line">
               <li>The App will be uninterrupted, timely, secure, or error-free</li>
@@ -265,7 +265,7 @@ export default function TermsPage() {
             </ul>
             <p className="font-mono text-sm text-dim leading-relaxed mt-3">
               <strong className="text-fg">Security tool disclaimer.</strong>{" "}
-              Conduit is a tool to assist with agent governance. It does not
+              Lancer is a tool to assist with agent governance. It does not
               guarantee that your agents will never perform unauthorized or
               harmful actions. You must independently verify agent behavior and
               maintain backups.

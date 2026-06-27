@@ -57,7 +57,7 @@ Use `ChatArtifact.Kind` from the durable chat plan:
 ## Implementation Tasks
 
 - [ ] **Task 1: Extend repository artifact API if needed**
-  - File: `Packages/ConduitKit/Sources/PersistenceKit/ChatConversationRepository.swift`
+  - File: `Packages/LancerKit/Sources/PersistenceKit/ChatConversationRepository.swift`
   - Add helpers:
     - `artifacts(turnID:)`
     - `artifacts(runID:)`
@@ -66,12 +66,12 @@ Use `ChatArtifact.Kind` from the durable chat plan:
   - Keep FTS artifact text updated.
 
 - [ ] **Task 2: Persist tool artifacts**
-  - Files: `Packages/ConduitKit/Sources/AppFeature/ApprovalIngest.swift`, chat run persistence sink from the durable chat plan.
+  - Files: `Packages/LancerKit/Sources/AppFeature/ApprovalIngest.swift`, chat run persistence sink from the durable chat plan.
   - On `ToolStartParams`, upsert a `tool` artifact keyed by `toolId`.
   - When tool completion is available, update status. If only live `markToolDone` exists, leave persisted status as running until a terminal run status marks unresolved tool artifacts done/unknown.
 
 - [ ] **Task 3: Persist approval artifacts**
-  - Files: `Packages/ConduitKit/Sources/AppFeature/ApprovalIngest.swift`, `Packages/ConduitKit/Sources/InboxFeature/InboxViewModel+Live.swift`, repository.
+  - Files: `Packages/LancerKit/Sources/AppFeature/ApprovalIngest.swift`, `Packages/LancerKit/Sources/InboxFeature/InboxViewModel+Live.swift`, repository.
   - Associate approvals to a chat turn using the best available key:
     - exact `runId` if present in event metadata later;
     - `agentSessionID`/tool use ID if available;
@@ -79,7 +79,7 @@ Use `ChatArtifact.Kind` from the durable chat plan:
   - If no safe association exists, do not guess. Keep it Inbox-only.
 
 - [ ] **Task 4: Add artifact card components**
-  - File: `Packages/ConduitKit/Sources/AppFeature/ChatArtifactCards.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/ChatArtifactCards.swift`
   - Components:
     - `ChatToolArtifactCard`
     - `ChatDiffArtifactCard`
@@ -91,7 +91,7 @@ Use `ChatArtifact.Kind` from the durable chat plan:
   - Keep cards compact and tappable on phone.
 
 - [ ] **Task 5: Add artifact detail panels**
-  - File: `Packages/ConduitKit/Sources/AppFeature/ChatArtifactDetailView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/ChatArtifactDetailView.swift`
   - Diff: unified diff single-column view.
   - Files: path list and lightweight preview/excerpt.
   - Tests: command, status, output excerpt.
@@ -99,7 +99,7 @@ Use `ChatArtifact.Kind` from the durable chat plan:
   - Tool: raw structured JSON behind disclosure, not shown by default.
 
 - [ ] **Task 6: Render artifacts in `NewChatTabView`**
-  - File: `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift`
+  - File: `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift`
   - Saved turns should show saved artifacts.
   - Live turns should merge live `RunOutputStore` tool blocks with persisted artifacts without duplicates.
   - Tapping an artifact opens the detail panel.

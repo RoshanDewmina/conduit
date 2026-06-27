@@ -12,13 +12,13 @@ the remaining step: pointing the **real app backend** at that path.
 | GCP project | `conduit-runner-0603190634` (billing linked) |
 | Runner image | `gcr.io/conduit-runner-0603190634/agent-runner:latest` (amd64, ships agent-runner + claude CLI on node 22) |
 | push-backend image | `gcr.io/conduit-runner-0603190634/push-backend:smoke` (amd64; has a **baked smoke entitlement** — do NOT use as real prod) |
-| Smoke service | Cloud Run `conduit-push-smoke` (scaled to `min-instances=0`; re-runnable, ~$0 idle) |
+| Smoke service | Cloud Run `lancer-push-smoke` (scaled to `min-instances=0`; re-runnable, ~$0 idle) |
 | Runtime SA | `161446405814-compute@developer.gserviceaccount.com` — granted `run.admin`, `iam.serviceAccountUser`, `artifactregistry.reader` |
 
 Re-run the live smoke anytime:
 ```bash
-CONDUIT_STAGING_URL=https://conduit-push-smoke-ufeid7srfq-uc.a.run.app \
-CONDUIT_CLIENT_TOKEN=<the smoke token> \
+LANCER_STAGING_URL=https://conduit-push-smoke-ufeid7srfq-uc.a.run.app \
+LANCER_CLIENT_TOKEN=<the smoke token> \
 scripts/gcp-staging-smoke.sh --cleanup-agent
 ```
 
@@ -45,23 +45,23 @@ This is the smallest change to make the shipped app use cloud execution.
    `roles/run.admin` + `roles/iam.serviceAccountUser`, download a key, and place it on the
    VM. (Workload Identity Federation is the keyless alternative and preferred if available.)
    ```bash
-   gcloud iam service-accounts create conduit-backend \
-     --project conduit-runner-0603190634 --display-name "Conduit backend"
-   SA=conduit-backend@conduit-runner-0603190634.iam.gserviceaccount.com
+   gcloud iam service-accounts create lancer-backend \
+     --project conduit-runner-0603190634 --display-name "Lancer backend"
+   SA=lancer-backend@conduit-runner-0603190634.iam.gserviceaccount.com
    for R in roles/run.admin roles/iam.serviceAccountUser; do
      gcloud projects add-iam-policy-binding conduit-runner-0603190634 \
        --member="serviceAccount:$SA" --role="$R" --condition=None
    done
-   gcloud iam service-accounts keys create /tmp/conduit-backend.json --iam-account "$SA"
-   scp /tmp/conduit-backend.json roshansilva@35.201.3.231:~/.conduit/push-backend/gcp-sa.json
+   gcloud iam service-accounts keys create /tmp/lancer-backend.json --iam-account "$SA"
+   scp /tmp/lancer-backend.json roshansilva@35.201.3.231:~/.lancer/push-backend/gcp-sa.json
    ```
-2. **Set env on the VM** (`~/.conduit/push-backend/.env`): the four GCP vars above, plus
-   `GOOGLE_APPLICATION_CREDENTIALS=/home/roshansilva/.conduit/push-backend/gcp-sa.json`, and
+2. **Set env on the VM** (`~/.lancer/push-backend/.env`): the four GCP vars above, plus
+   `GOOGLE_APPLICATION_CREDENTIALS=/home/roshansilva/.lancer/push-backend/gcp-sa.json`, and
    `CONTROL_PLANE_PUBLIC_URL=http://35.201.3.231:8080` (must be reachable from GCP egress —
    open the firewall for inbound 8080 if not already).
 3. **Deploy the current binary + restart** via `scripts/deploy-push-backend.sh` (already
    updated to write `CONTROL_PLANE_PUBLIC_URL` and the GCP vars).
-4. **Verify**: `scripts/gcp-staging-smoke.sh` with `CONDUIT_STAGING_URL=http://35.201.3.231:8080`
+4. **Verify**: `scripts/gcp-staging-smoke.sh` with `LANCER_STAGING_URL=http://35.201.3.231:8080`
    and a real entitlement token from the VM's control plane.
 
 > ⚠️ Caveat: the VM's push-backend uses the local JSON file store — fine for the current
@@ -96,11 +96,11 @@ now terminates TLS via **Caddy** (auto Let's Encrypt cert):
   no domain registrar needed; swap for `api.conduit.dev` later by adding an A record
   and changing the Caddyfile host).
 - `/etc/caddy/Caddyfile`: `35.201.3.231.sslip.io { reverse_proxy localhost:8080 }`.
-- GCP firewall: opened `tcp:80,443` (rule `conduit-https`, tag `conduit-ssh`); **removed**
+- GCP firewall: opened `tcp:80,443` (rule `lancer-https`, tag `lancer-ssh`); **removed**
   the public `tcp:8080` rule — 8080 is now localhost-only (Caddy reaches it internally).
 - Backend `.env`: `PUBLIC_BASE_URL` and `CONTROL_PLANE_PUBLIC_URL` set to the https host
   (runner callbacks use HTTPS too).
-- **App config:** the iOS app's `CONDUIT_PUSH_BACKEND_URL` must be the https host. With
+- **App config:** the iOS app's `LANCER_PUSH_BACKEND_URL` must be the https host. With
   HTTPS + a valid cert, no ATS exception is needed (never ship `NSAllowsArbitraryLoads`).
 
 To renew/rotate: Caddy auto-renews. To move to a real domain: add an A record →
@@ -141,7 +141,7 @@ none of these — one budget for everyone, no per-user limit.
 Migration steps when ready:
 1. Create an OpenRouter **management/provisioning key** on a **funded** account.
 2. Set `OPENROUTER_PROVISIONING_KEY` on the VM (and optional `OPENROUTER_LIMIT_MONTHLY`
-   / `OPENROUTER_LIMIT_ANNUAL` / `OPENROUTER_LIMIT_RESET`); restart `conduit-push`.
+   / `OPENROUTER_LIMIT_ANNUAL` / `OPENROUTER_LIMIT_RESET`); restart `lancer-push`.
 3. Unset `OPENROUTER_SHARED_KEY` (per-customer sub-keys take precedence anyway, but
    removing it avoids a silent fallback for customers not yet provisioned).
 No code change needed — `ensureOpenRouterSubKey` mints capped per-customer sub-keys
@@ -156,6 +156,6 @@ tokens are stored plaintext-at-rest in the JSON store (see the `NOTE` in
 
 ## Cleanup (if abandoning the smoke harness)
 ```bash
-gcloud run services delete conduit-push-smoke --project conduit-runner-0603190634 --region us-central1
+gcloud run services delete lancer-push-smoke --project conduit-runner-0603190634 --region us-central1
 ```
 Images are cheap to retain and are reused by both paths.

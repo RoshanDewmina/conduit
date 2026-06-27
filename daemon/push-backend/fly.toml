@@ -1,4 +1,4 @@
-app = "conduit-push"
+app = "lancer-push"
 primary_region = "iad"
 
 [build]

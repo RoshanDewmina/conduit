@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# local-sshd-fixture.sh — validate and configure local sshd for Conduit hook testing
+# local-sshd-fixture.sh — validate and configure local sshd for Lancer hook testing
 # Usage: ./scripts/validation/local-sshd-fixture.sh
 # Prereq: macOS (Remote Login must be enabled in System Settings)
 set -euo pipefail
 
-FIXTURE_KEY="/tmp/conduit-test-ed25519"
-CONDUIT_KEYCHAIN_SERVICE="conduit-localhost-ssh"
+FIXTURE_KEY="/tmp/lancer-test-ed25519"
+LANCER_KEYCHAIN_SERVICE="lancer-localhost-ssh"
 
 check_remote_login() {
     local status
@@ -67,36 +67,36 @@ test_ssh_connection() {
     fi
 }
 
-print_conduit_keychain_setup() {
+print_lancer_keychain_setup() {
     echo ""
-    echo "--- Conduit iOS keychain entry (run once) ---"
-    echo "Conduit iOS needs your macOS login password to SSH to 127.0.0.1."
+    echo "--- Lancer iOS keychain entry (run once) ---"
+    echo "Lancer iOS needs your macOS login password to SSH to 127.0.0.1."
     echo "Store it in the macOS Keychain so the fixture test can find it:"
     echo ""
     echo "  security add-generic-password \\"
-    echo "    -s '$CONDUIT_KEYCHAIN_SERVICE' \\"
+    echo "    -s '$LANCER_KEYCHAIN_SERVICE' \\"
     echo "    -a '$(whoami)' \\"
     echo "    -w 'YOUR_MACOS_LOGIN_PASSWORD' \\"
     echo "    -U"
     echo ""
-    echo "To verify: security find-generic-password -s '$CONDUIT_KEYCHAIN_SERVICE' -w"
+    echo "To verify: security find-generic-password -s '$LANCER_KEYCHAIN_SERVICE' -w"
 }
 
 main() {
-    echo "=== Conduit Local sshd Fixture ==="
+    echo "=== Lancer Local sshd Fixture ==="
     check_remote_login
     generate_test_key
     authorize_test_key
     test_ssh_connection
-    print_conduit_keychain_setup
+    print_lancer_keychain_setup
     echo ""
     echo "=== Fixture ready ==="
     echo "  Host:       127.0.0.1"
     echo "  User:       $(whoami)"
     echo "  SSH key:    $FIXTURE_KEY"
-    echo "  Bundle ID:  dev.conduit.mobile"
+    echo "  Bundle ID:  dev.lancer.mobile"
     echo ""
-    echo "Next: build and install the Conduit app on a simulator, then follow"
+    echo "Next: build and install the Lancer app on a simulator, then follow"
     echo "docs/validation-playbook.md for the live approval loop tests."
 }
 

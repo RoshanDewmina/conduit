@@ -1,4 +1,4 @@
-# Privacy Policy — Conduit
+# Privacy Policy — Lancer
 
 **Last updated:** {{DATE}}
 
@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-Conduit (the "App") is an iOS application that lets you approve, deny, and review
+Lancer (the "App") is an iOS application that lets you approve, deny, and review
 actions initiated by AI coding agents (Claude Code, Codex, opencode) running on
 your own computer or server. The App is published by **[Legal entity name —
 _placeholder: insert company/individual name here_]**.
@@ -14,7 +14,7 @@ _placeholder: insert company/individual name here_]**.
 This Privacy Policy explains what data the App collects, how it is used, and
 your rights over your data. It applies to all users of the App worldwide.
 
-**Conduit does not use analytics SDKs, advertising networks, or third-party
+**Lancer does not use analytics SDKs, advertising networks, or third-party
 tracking of any kind.** We do not sell your data.
 
 ---
@@ -39,19 +39,19 @@ transmit it (see §3):
 - **APNs device token.** When you opt in to push notifications for remote
   approval alerts, the App registers a device token with Apple Push
   Notification service (APNs). This token is a random identifier that Apple
-  assigns to your device — Conduit does not read or store it as raw text; we
+  assigns to your device — Lancer does not read or store it as raw text; we
   forward it to our push relay so Apple can deliver notifications to your
   device.
 
 - **CloudKit sync (optional).** If you enable iCloud sync, your host list and
-  snippets are stored in your personal Apple CloudKit container. Conduit does
+  snippets are stored in your personal Apple CloudKit container. Lancer does
   not have access to your CloudKit data — it is governed by Apple's privacy
   policy.
 
-### 2.3 Data transmitted to Conduit's push relay
+### 2.3 Data transmitted to Lancer's push relay
 
 When you enable remote approval alerts, your app sends the following to
-Conduit's push notification relay (hosted on Fly.io):
+Lancer's push notification relay (hosted on Fly.io):
 
 - **APNs device token** (forwarded from Apple — see §2.2)
 - **An app-generated session identifier** (a UUID scoped to the pairing
@@ -72,8 +72,8 @@ routing metadata (destination host identifier).
 
 ### 2.5 Purchase data (if applicable)
 
-If you purchase Conduit Pro (a one-time in-app purchase) or a future
-subscription, Apple processes the transaction. Conduit receives only a
+If you purchase Lancer Pro (a one-time in-app purchase) or a future
+subscription, Apple processes the transaction. Lancer receives only a
 receipt token from StoreKit that confirms the purchase — we never see your
 payment card details.
 
@@ -124,7 +124,7 @@ brokers, or AI model providers.
 All SSH keys, host configurations, session history, and preferences are stored
 locally. Deleting the App from your device removes all local data.
 
-### 5.2 Data on Conduit's push relay
+### 5.2 Data on Lancer's push relay
 
 APNs device tokens and session identifiers are retained for as long as your
 session is registered with the relay. You can unregister at any time from
@@ -133,13 +133,13 @@ within the App's settings. After unregistration, tokens are deleted within
 
 ### 5.3 No account = no server-side personal data
 
-Conduit does not operate a user account system. There is no registration,
+Lancer does not operate a user account system. There is no registration,
 login, or profile stored on our servers. Consequently, there is no
 server-side personal data to delete beyond the push tokens described above.
 
 ### 5.4 Requesting deletion
 
-To request deletion of any data held by Conduit's services, contact
+To request deletion of any data held by Lancer's services, contact
 **[privacy@conduit.dev — _placeholder: insert support email_]**.
 We will respond within 30 days.
 
@@ -156,7 +156,7 @@ We will respond within 30 days.
 - Communication with the push relay is over HTTPS (TLS).
 - Face ID / Touch ID can be enabled to gate access to stored keys.
 
-**Conduit is not a backup service.** We cannot recover your SSH keys,
+**Lancer is not a backup service.** We cannot recover your SSH keys,
 host configurations, or session history if you lose your device. Maintain
 independent backups of your SSH credentials.
 
@@ -164,7 +164,7 @@ independent backups of your SSH credentials.
 
 ## 7. Children
 
-Conduit is not directed at children under 13 and does not knowingly collect
+Lancer is not directed at children under 13 and does not knowingly collect
 personal information from children. If you believe a child has provided
 personal data, contact **[privacy@conduit.dev]**.
 

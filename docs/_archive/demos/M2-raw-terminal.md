@@ -17,7 +17,7 @@ In the composer, type `vim test.md` and tap Send (↑).
 - BlockRenderer sends `\x1b[?1049h` → SessionViewModel detects `pendingTUIEscalation`.
 - `SessionView` swaps `BlockScrollView` for `RawTerminalView` (SwiftTerm).
 - Keyboard accessory rail shows: **Esc · Tab · Ctrl · ← ↑ ↓ → · | · ; · / · $ · &&**
-- Type `iHello, Conduit!` → text appears in the SwiftTerm canvas.
+- Type `iHello, Lancer!` → text appears in the SwiftTerm canvas.
 - Press **Esc** (accessory rail) → normal mode.
 - Type `:wq` → vim exits.
 

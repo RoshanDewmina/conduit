@@ -29,8 +29,8 @@ to the daemon (in addition to the local UserDefaults cache).
 
 ## 2. Worktree / Branch Board — ✅ FIXED
 
-**Status:** The git-v1 merge added `agent.worktree.list` RPC on conduitd
-(`daemon/conduitd/git.go`) and `DaemonChannel.listWorktrees()` on the iOS side.
+**Status:** The git-v1 merge added `agent.worktree.list` RPC on lancerd
+(`daemon/lancerd/git.go`) and `DaemonChannel.listWorktrees()` on the iOS side.
 `WorktreeStore.refresh()` calls it with per-host workdirs. `WorktreeBoardView`
 now passes `workdirByHost` derived from connected fleet slots' `cwd`.
 
@@ -41,13 +41,13 @@ now passes `workdirByHost` derived from connected fleet slots' `cwd`.
 
 ## 3. CI / PR Integration — ✅ FIXED
 
-**Status:** The git-v1 merge registered `agent.ci.recent` on conduitd
-(`daemon/conduitd/server.go:914`). The handler proxies the push-backend's
+**Status:** The git-v1 merge registered `agent.ci.recent` on lancerd
+(`daemon/lancerd/server.go:914`). The handler proxies the push-backend's
 `GET /webhooks/recent` endpoint. `DaemonChannel.recentCIEvents()` calls this
 RPC. `FleetView.gitStore()` and `FleetView.ciEventLoader()` wire `GitStore`
 and CI events into `LoopDetailView` with per-loop workdir/repo.
 
-- `daemon/conduitd/git.go`: `recentCIEvents()` proxies push-backend webhook
+- `daemon/lancerd/git.go`: `recentCIEvents()` proxies push-backend webhook
   ring buffer. Gracefully degrades (returns `[]`) when no device/backend
   is registered.
 - PR link in Proof Card and CI checks section in LoopDetailView will render

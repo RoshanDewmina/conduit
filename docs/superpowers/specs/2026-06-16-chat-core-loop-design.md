@@ -5,7 +5,7 @@ Status: Approved (direction) — building
 
 ## Problem
 
-Conduit's core loop is host-centric: connect SSH host → land on Fleet → drill into a slot's
+Lancer's core loop is host-centric: connect SSH host → land on Fleet → drill into a slot's
 full-screen block terminal to reach the agent. The "chat with an agent" surface exists in code
 (`SessionView` + `SessionFeature/Chat/*`) but is buried, unlabeled, and absent from the design
 board. There is a `DispatchView` (one-shot "start a task" composer with agent + model pickers)
@@ -37,7 +37,7 @@ page for it.
 - **Warp**: "default mode for new sessions" setting; model selector lives *inside* the agent
   conversation (Claude/GPT/Gemini/Auto), multi-model by design.
 - **Omnara** (closest competitor, Claude Code + Codex mobile): control laptop agents from phone,
-  monitor/steer/approve live, voice. Their relay sees code — Conduit's E2EE is a differentiator.
+  monitor/steer/approve live, voice. Their relay sees code — Lancer's E2EE is a differentiator.
 - **OpenCode Mobile / AirCodum**: connect to self-hosted agent, stream + diff + tool approval.
 - **Universal lesson**: nobody gates a new chat behind a model picker. Default the model, expose
   it in-session.
@@ -58,8 +58,8 @@ The approval half is already closed in code. This work adds the missing front ha
 
 ## Deliverables
 
-### A. Design board (static `.dc.html`, in `~/Downloads/Conduit GitHub repo/`)
-1. **New page** `Conduit New Chat.dc.html` — composer states:
+### A. Design board (static `.dc.html`, in `~/Downloads/Lancer GitHub repo/`)
+1. **New page** `Lancer New Chat.dc.html` — composer states:
    - *Fast/zero-config*: `+` → chat opens directly (show the transition).
    - *Composer*: prompt input (autofocused), Agent pill, Workspace pill, collapsed Options
      (Model, Budget), Send.
@@ -75,7 +75,7 @@ does, including the onboarding animations we will ship.
 
 - **Architecture**: `index.html` + a tiny vanilla-JS screen router. Design tokens copied from the
   board helmet `:root`. A phone-frame shell. Screens are registered into a global
-  `CONDUIT_SCREENS` map; navigation via `data-goto="<screen-id>"`; enter/exit CSS transition
+  `LANCER_SCREENS` map; navigation via `data-goto="<screen-id>"`; enter/exit CSS transition
   classes drive animations. Parallel-safe authoring: one JS module per screen group.
 - **Screens (core loop)**:
   1. `onboarding-welcome` — animated hero (spectrum sweep, pixel avatar).

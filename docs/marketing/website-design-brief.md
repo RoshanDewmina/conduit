@@ -1,4 +1,4 @@
-# Conduit — Website & Design Brief
+# Lancer — Website & Design Brief
 
 > **Purpose:** everything Claude Design (and whoever builds the site) needs to design and ship conduit.dev — codebase findings, verified research, strategy, copy for all 6 pages, App Store copy, an ads plan, and a paste-ready Claude Design prompt.
 > **Compiled:** 2026-06-11 · **Status:** ready for design. Research-and-write only; no production code touched.
@@ -19,12 +19,12 @@
 ## 1. Codebase findings
 
 ### 1.1 What the app actually does (from the repo, not marketing)
-Conduit is an iOS app + two Go daemons:
-- **iOS app** (`Packages/ConduitKit/`, SwiftUI, Swift 6.2): the approval **Inbox**, **Activity** (audit) feed, **Fleet** glance, **Settings** (policy editor + bridge pairing), and a power-user **block terminal** demoted to depth. Recent commits (`feat/governed-approvals`) explicitly moved the IA to **Inbox / Fleet / Activity / Settings, terminal at session depth** — governance-first.
-- **`conduitd`** (`daemon/conduitd/`): a resident daemon on the developer's host. Enforces a **policy** (deny > ask > allow, default *ask* / fail-closed), keeps an **audit log** (`~/.conduit/audit.log`, JSONL, secret-redacted), computes **blast radius** (files touched, touches-git, touches-network), persists **allow-always** rules, and queues approvals offline. Ingests **PreToolUse hooks** from Claude Code, Codex, and opencode.
+Lancer is an iOS app + two Go daemons:
+- **iOS app** (`Packages/LancerKit/`, SwiftUI, Swift 6.2): the approval **Inbox**, **Activity** (audit) feed, **Fleet** glance, **Settings** (policy editor + bridge pairing), and a power-user **block terminal** demoted to depth. Recent commits (`feat/governed-approvals`) explicitly moved the IA to **Inbox / Fleet / Activity / Settings, terminal at session depth** — governance-first.
+- **`lancerd`** (`daemon/lancerd/`): a resident daemon on the developer's host. Enforces a **policy** (deny > ask > allow, default *ask* / fail-closed), keeps an **audit log** (`~/.lancer/audit.log`, JSONL, secret-redacted), computes **blast radius** (files touched, touches-git, touches-network), persists **allow-always** rules, and queues approvals offline. Ingests **PreToolUse hooks** from Claude Code, Codex, and opencode.
 - **`push-backend`** (`daemon/push-backend/`): control plane — relays approval decisions, sends APNs pushes; also (currently) Stripe billing + a hosted cloud-execution path. *(Strategically, the hosted-cloud-execution piece is being de-scoped — see §3; the website should not market "we run your agents in our cloud.")*
 
-**The verified differentiator:** a Claude Code `PreToolUse` hook returning `deny` **blocks the action even under `--dangerously-skip-permissions`**. Conduit's enforcement is robust and un-circumventable, not a fragile wrapper. (Source: Claude Code hooks docs — §2.)
+**The verified differentiator:** a Claude Code `PreToolUse` hook returning `deny` **blocks the action even under `--dangerously-skip-permissions`**. Lancer's enforcement is robust and un-circumventable, not a fragile wrapper. (Source: Claude Code hooks docs — §2.)
 
 ### 1.2 Existing marketing site (the thing we're replacing/redesigning)
 - **Location:** `marketing/` — **Next.js 16.2.6 (App Router) + React 19.2.4 + Tailwind v4**. Fonts: Geist + Geist Mono. Theme: dark (`zinc-950` bg, `zinc-100` text, `emerald-400` accent).
@@ -36,7 +36,7 @@ Conduit is an iOS app + two Go daemons:
 
 ### 1.3 Assets
 - **Real app screenshots exist** at `docs/screenshots/governed-approvals/` (`01-inbox-review`, `02-inbox-tabs-live`, `03-fleet`, `04-activity`, `05-settings`). **Owner has chosen to supply final hero screenshots themselves**, so treat these as reference only and use **placeholders** in the design (§8).
-- **No logo/wordmark asset** found — design should produce a wordmark (recommendation: lowercase **`conduit`** set in Instrument Serif; a small monospace variant for technical contexts).
+- **No logo/wordmark asset** found — design should produce a wordmark (recommendation: lowercase **`lancer`** set in Instrument Serif; a small monospace variant for technical contexts).
 - Domain: **conduit.dev** (already referenced in `layout.tsx` metadata).
 
 ### 1.4 Design constraints summary
@@ -86,7 +86,7 @@ Establish **Purpose → Audience → Aesthetic Direction** before generating. **
 - **Happy / cmux / CloudCLI** (OSS, ~11–22k★ combined) — mostly **manual tap-every-action**, thin clients; little/no policy-based auto-approval.
 - **Omnara** (YC) — pricing collapsed $9→$20→free = **consumer WTP ≈ 0** signal.
 - **Termius / Blink** — dumb terminals, no agent semantics, but prove transport-tooling WTP ($10/mo, $20/yr).
-- **AI-agent governance market** is real and growing (~$0.3B→$4.8B by 2034; **EU AI Act high-risk duties land Aug 2 2026**; SOC2/ISO 42001 want "audit evidence generated automatically") — Conduit's audit log *is* that artifact. The named GRC players (AuditBoard/Optro, Holistic AI) are enterprise platforms, **not** developer-host, per-action, cross-vendor — that's our white space.
+- **AI-agent governance market** is real and growing (~$0.3B→$4.8B by 2034; **EU AI Act high-risk duties land Aug 2 2026**; SOC2/ISO 42001 want "audit evidence generated automatically") — Lancer's audit log *is* that artifact. The named GRC players (AuditBoard/Optro, Holistic AI) are enterprise platforms, **not** developer-host, per-action, cross-vendor — that's our white space.
 
 **Takeaway:** the website must say, in five seconds, the one thing no first-party tool can: **one local-first approval + policy + audit layer across *all* your agents, with your code staying on your machine.**
 
@@ -106,10 +106,10 @@ Establish **Purpose → Audience → Aesthetic Direction** before generating. **
 You can't babysit an agent every second — but you can't let it run blind either. Approve-everything is fatigue; approve-nothing is a `rm -rf` waiting to happen. And every vendor wants its own unrestricted access to your repo.
 
 ### 3.4 Main promise
-Let your agents run while you're away. Conduit pauses them at the risky moments, asks you on your phone, auto-handles the safe stuff by your policy, and logs everything — across every vendor, with your code on your host.
+Let your agents run while you're away. Lancer pauses them at the risky moments, asks you on your phone, auto-handles the safe stuff by your policy, and logs everything — across every vendor, with your code on your host.
 
 ### 3.5 Differentiator (the one a buyer can't get first-party)
-**Cross-vendor + local-first + policy/audit, in one layer.** Anthropic RC is Claude-only & not for teams; Codex mobile is Codex-only & macOS-only. Conduit is the *governance* layer over all of them, and your source never transits a vendor's cloud.
+**Cross-vendor + local-first + policy/audit, in one layer.** Anthropic RC is Claude-only & not for teams; Codex mobile is Codex-only & macOS-only. Lancer is the *governance* layer over all of them, and your source never transits a vendor's cloud.
 
 ### 3.6 Tone & visual direction
 - **Tone:** calm, precise, confident, engineer-to-engineer. Short declaratives. No hype, no "revolutionary," no emoji-soup. Show the actual command and the actual decision.
@@ -129,7 +129,7 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 | Objection | Where / how the site answers |
 |---|---|
 | "Claude/OpenAI already let me do this from my phone." | A comparison strip: *single-vendor & not for teams* vs **all your agents, your policy, your host.** State it plainly above the fold. |
-| "Is my source code safe? You're a relay." | **Trust page**, prominent: source + credentials never leave the host; the relay carries only the action metadata you send; **E2EE of that relay [PLANNED]**; conduitd is **open-sourcing [PLANNED]**. Be precise, not absolute. |
+| "Is my source code safe? You're a relay." | **Trust page**, prominent: source + credentials never leave the host; the relay carries only the action metadata you send; **E2EE of that relay [PLANNED]**; lancerd is **open-sourcing [PLANNED]**. Be precise, not absolute. |
 | "Setup sounds painful." | **Getting-started**: real one-liner install + pair + point your agent's hook. Show the actual commands. "Working in ~5 minutes." |
 | "Will it nag me constantly?" | **Policy** section: presets (Cautious/Balanced/Bypass) + per-repo rules → "most actions never reach you." |
 | "Another dashboard to babysit." | Reframe: *you don't open it — it opens you.* It buzzes a few times a day, you tap, done. |
@@ -159,7 +159,7 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 ### 4.1 Landing (`/`)
 **Eyebrow:** Governed approvals for AI coding agents
 **H1:** Approve your agents. Keep your code.
-**Subhead:** Conduit puts everything risky your AI coding agents try — across Claude Code, Codex, and opencode — into one inbox on your phone. Approve, deny, or edit in a tap. Set a policy and most actions never reach you. Your code never leaves your machine.
+**Subhead:** Lancer puts everything risky your AI coding agents try — across Claude Code, Codex, and opencode — into one inbox on your phone. Approve, deny, or edit in a tap. Set a policy and most actions never reach you. Your code never leaves your machine.
 **Primary CTA:** Join the TestFlight beta · **Secondary:** See how it works
 **Vendor row:** Works with Claude Code · Codex · opencode
 
@@ -182,11 +182,11 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 
 **Section — Cross-vendor**
 *Headline:* One layer over every agent you run.
-*Body:* Claude Code, Codex, and opencode each have their own permission system. Conduit is the single policy, approval, and audit layer across all three — so you set the rules once, not three times.
+*Body:* Claude Code, Codex, and opencode each have their own permission system. Lancer is the single policy, approval, and audit layer across all three — so you set the rules once, not three times.
 
 **Section — Local-first / trust**
 *Headline:* Your code stays on your machine.
-*Body:* A small bridge — `conduitd` — runs on your host and enforces the policy *you* set. Conduit never gets your source or your credentials; the approval relay carries only the action metadata you choose to send. You own the bridge. *(End-to-end encryption of the relay and an open-source bridge are [PLANNED] — see Trust.)*
+*Body:* A small bridge — `lancerd` — runs on your host and enforces the policy *you* set. Lancer never gets your source or your credentials; the approval relay carries only the action metadata you choose to send. You own the bridge. *(End-to-end encryption of the relay and an open-source bridge are [PLANNED] — see Trust.)*
 
 **Section — Fleet (keep minimal)**
 *Headline:* A glance across every machine.
@@ -195,25 +195,25 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 **Final CTA**
 *Headline:* Let your agents run. We'll get you when it matters.
 *Body:* Join the TestFlight beta — no account required.
-*Button:* Get Conduit
+*Button:* Get Lancer
 
 **FAQ**
 - *Does my code go through your servers?* No. Source and credentials stay on your host. The relay only carries the approval metadata you send. E2EE of the relay is [PLANNED].
-- *How is this different from Claude's or OpenAI's mobile app?* Those are single-vendor (Claude-only / Codex-only) and Anthropic's isn't available to Team/Enterprise. Conduit governs *all* your agents, with your code on your host.
+- *How is this different from Claude's or OpenAI's mobile app?* Those are single-vendor (Claude-only / Codex-only) and Anthropic's isn't available to Team/Enterprise. Lancer governs *all* your agents, with your code on your host.
 - *Will it constantly interrupt me?* No — policy auto-handles the safe majority. You tune how cautious it is.
 - *Which agents are supported?* Claude Code, Codex, and opencode today.
 - *Is it available?* TestFlight beta now; App Store [PLANNED].
-- *What does it cost?* Free to use; a one-time Conduit Pro unlock is $14.99. Team/self-host [PLANNED].
+- *What does it cost?* Free to use; a one-time Lancer Pro unlock is $14.99. Team/self-host [PLANNED].
 
 ---
 
 ### 4.2 Product (`/product`)
-**H1:** How Conduit works
-**Subhead:** Four pieces: your agents, the bridge, the approvals, the policy. Once they're set up, you mostly forget Conduit exists — until it matters.
+**H1:** How Lancer works
+**Subhead:** Four pieces: your agents, the bridge, the approvals, the policy. Once they're set up, you mostly forget Lancer exists — until it matters.
 
-**Block — Agents:** Your coding agents (Claude Code, Codex, opencode) run where they always have: on your laptop, your Mac mini, your server. Conduit doesn't run them and doesn't move them.
+**Block — Agents:** Your coding agents (Claude Code, Codex, opencode) run where they always have: on your laptop, your Mac mini, your server. Lancer doesn't run them and doesn't move them.
 
-**Block — The bridge (`conduitd`):** A small daemon on your host. It owns the policy, the audit log, and the approval queue, and it survives disconnects — so an agent can keep working (and keep being governed) whether your phone is attached or not.
+**Block — The bridge (`lancerd`):** A small daemon on your host. It owns the policy, the audit log, and the approval queue, and it survives disconnects — so an agent can keep working (and keep being governed) whether your phone is attached or not.
 
 **Block — Approvals:** When a tool call is risky, the bridge pauses it, computes blast radius (files, git, network), and surfaces a card to your phone. Allow · Deny · Edit-then-run · Always-allow. Decisions relay back and the agent continues — even if the app was backgrounded.
 
@@ -236,9 +236,9 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 **On the wire today vs. tomorrow:**
 - Today: the relay transmits that approval metadata to deliver pushes and relay your decision.
 - **[PLANNED] End-to-end encryption:** the bridge will encrypt each approval payload to your device's public key, so the relay only ever sees an opaque blob plus routing metadata.
-- **[PLANNED] Open-source `conduitd`:** the bridge is being opened so you can read exactly what runs on your host.
+- **[PLANNED] Open-source `lancerd`:** the bridge is being opened so you can read exactly what runs on your host.
 
-**Enforcement you can trust:** Conduit's hook returns a hard *deny* that holds **even under `--dangerously-skip-permissions`** — a policy your agent can't talk its way around. Default is fail-closed: if the bridge isn't reachable, mutating actions hold rather than auto-run.
+**Enforcement you can trust:** Lancer's hook returns a hard *deny* that holds **even under `--dangerously-skip-permissions`** — a policy your agent can't talk its way around. Default is fail-closed: if the bridge isn't reachable, mutating actions hold rather than auto-run.
 
 **Audit:** Every decision — auto and human — is written to an append-only, secret-redacted log on your host. Export it as evidence if you need it.
 
@@ -252,7 +252,7 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 **H1:** Free to run. Pay once if you want the full app.
 **Subhead:** No subscription to use it. No account required to start.
 
-| | **Free** | **Conduit Pro** | **Team & Self-host** |
+| | **Free** | **Lancer Pro** | **Team & Self-host** |
 |---|---|---|---|
 | Price | $0 | **$14.99 once** | **[PLANNED] — talk to us** |
 | Approvals across your hosts | ✓ | ✓ | ✓ |
@@ -261,7 +261,7 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 | Full app unlock (fleet depth, advanced surfaces) | — | ✓ | ✓ |
 | Shared team policies, signed audit export, on-prem relay | — | — | **[PLANNED]** |
 
-*Footnote:* Conduit Pro is a one-time StoreKit purchase, not a subscription. Team/self-host pricing isn't set yet — [PLANNED]; tell us what you need and we'll talk.
+*Footnote:* Lancer Pro is a one-time StoreKit purchase, not a subscription. Team/self-host pricing isn't set yet — [PLANNED]; tell us what you need and we'll talk.
 **CTA:** Join the TestFlight beta
 
 > ⚠️ **Owner note (not site copy):** confirm exactly what the $14.99 IAP gates before publishing the feature rows — the repo gates "paid surfaces" behind `showPaidSurfaces`, but don't list a specific Pro-only feature on the live site unless it's actually gated. Keep rows honest.
@@ -274,20 +274,20 @@ Let your agents run while you're away. Conduit pauses them at the risky moments,
 
 **1 — Install the bridge on your host**
 ```bash
-cd daemon/conduitd && go build -o conduitd .
-./conduitd install        # writes the binary + a launchd/systemd unit
+cd daemon/lancerd && go build -o lancerd .
+./lancerd install        # writes the binary + a launchd/systemd unit
 ```
 The bridge runs in the background and survives reboots.
 
 **2 — Point your agent's hook at it**
 | Agent | Hook |
 |---|---|
-| Claude Code | `cp docs/conduit-hook.sh ~/.claude/hooks/conduit-hook.sh && chmod 700 ~/.claude/hooks/conduit-hook.sh` |
-| Codex | `cp docs/codex-conduit-hook.sh ~/.config/codex/hooks/conduit-hook.sh` |
-| opencode | `cp docs/opencode-conduit-hook.sh ~/.config/opencode/hooks/conduit-hook.sh` |
+| Claude Code | `cp docs/lancer-hook.sh ~/.claude/hooks/lancer-hook.sh && chmod 700 ~/.claude/hooks/lancer-hook.sh` |
+| Codex | `cp docs/codex-lancer-hook.sh ~/.config/codex/hooks/lancer-hook.sh` |
+| opencode | `cp docs/opencode-lancer-hook.sh ~/.config/opencode/hooks/lancer-hook.sh` |
 
 **3 — Set a policy (optional — there's a sane default)**
-Drop a `~/.conduit/policy.yaml` (global) or `<repo>/.conduit/policy.yaml` (per-repo). Default is *ask* on anything mutating; reads auto-allow.
+Drop a `~/.lancer/policy.yaml` (global) or `<repo>/.lancer/policy.yaml` (per-repo). Default is *ask* on anything mutating; reads auto-allow.
 
 **4 — Pair your phone & go**
 Install the app, scan the pairing code, choose a caution preset. Next time an agent hits something risky, your phone buzzes.
@@ -299,12 +299,12 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 ---
 
 ### 4.6 Download / App Store (`/download`)
-**H1:** Get Conduit
+**H1:** Get Lancer
 **Subhead:** TestFlight beta now. No account required.
-**Body:** Conduit is in active beta. Join TestFlight to run it against your own hosts and agents; the App Store release is [PLANNED]. Requires a recent iPhone and a host (macOS or Linux) you can install the bridge on.
+**Body:** Lancer is in active beta. Join TestFlight to run it against your own hosts and agents; the App Store release is [PLANNED]. Requires a recent iPhone and a host (macOS or Linux) you can install the bridge on.
 **Primary CTA:** Join the TestFlight beta
 **Secondary:** Read the getting-started guide
-**Reassurance line:** No Conduit account. Your code stays on your machine.
+**Reassurance line:** No Lancer account. Your code stays on your machine.
 
 ---
 
@@ -313,9 +313,9 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 > Aligns with `docs/app-store-metadata.md`. Honest-claims rules apply; reviewer notes pre-empt the SSH-app Guideline 2.5.2 trap.
 
 **App name options (30 char):**
-1. **Conduit — Agent Approvals** *(recommended)*
-2. Conduit: AI Agent Control
-3. Conduit — Agent Governance
+1. **Lancer — Agent Approvals** *(recommended)*
+2. Lancer: AI Agent Control
+3. Lancer — Agent Governance
 
 **Subtitle options (30 char):**
 1. **Approve AI agents from anywhere** *(recommended)*
@@ -326,7 +326,7 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 > Your AI coding agents pause and ask your phone before doing anything risky. Approve in one tap — even when you're away. Safe actions auto-handle by your policy. All logged.
 
 **Full description:**
-> Conduit is the approval and governance layer for AI coding agents that run on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human.
+> Lancer is the approval and governance layer for AI coding agents that run on *your own* machine. A small bridge on your host enforces the policy *you* set — auto-allowing safe actions, blocking dangerous ones, and tapping you only for the calls that genuinely need a human.
 >
 > When one does, you get a notification with the exact command, the files it touches, and a risk read — and you approve, deny, or edit it in seconds, even when the app is closed. Works across Claude Code, Codex, and opencode, with a full audit trail of every decision. Your code never leaves your host.
 >
@@ -335,7 +335,7 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 > • SEE EVERYTHING — a while-you-were-away activity feed logs every autonomous decision; a fleet glance shows status across vendors.
 > • GO DEEP — a full block-mode terminal, diff review, and file browser live one tap down.
 >
-> Conduit governs agents on your own remote host. It does not download or execute code on your device.
+> Lancer governs agents on your own remote host. It does not download or execute code on your device.
 
 **Keywords (100 char):**
 `claude code,codex,opencode,ai agent,approvals,governance,policy,audit,ssh,devops,terminal,fleet`
@@ -347,11 +347,11 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 4. **Activity feed** — "Every autonomous decision, logged."
 5. **Fleet** — "Every agent, every machine, at a glance."
 
-**App preview video idea (15–20s):** Cold open on a phone face-down on a desk. It buzzes. Hand picks it up — an approval card: `npm install` touching `package-lock.json`, risk amber. Thumb taps **Allow once**. Cut to a laptop across the room: the agent resumes. Cut to the Activity feed ticking the decision in. End card: "Approve your agents. Keep your code. — Conduit." No voiceover; mono captions only.
+**App preview video idea (15–20s):** Cold open on a phone face-down on a desk. It buzzes. Hand picks it up — an approval card: `npm install` touching `package-lock.json`, risk amber. Thumb taps **Allow once**. Cut to a laptop across the room: the agent resumes. Cut to the Activity feed ticking the decision in. End card: "Approve your agents. Keep your code. — Lancer." No voiceover; mono captions only.
 
 **Privacy / trust positioning (nutrition label):** No tracking. Declare: APNs device token (push registration) and, if Pro billing is used, subscription data. State plainly: **source code never leaves the device.** Verify against actual data flows before submission.
 
-**App Review notes:** Conduit governs AI coding agents on the developer's own remote host; it drives a *remote* shell and does **not** download or execute code locally (pre-empts Guideline 2.5.2). The Inbox is pre-seeded in DEBUG builds so reviewers see cards without a live host. A $14.99 StoreKit non-consumable (`dev.conduit.mobile.pro`) unlocks the full app — use a sandbox account.
+**App Review notes:** Lancer governs AI coding agents on the developer's own remote host; it drives a *remote* shell and does **not** download or execute code locally (pre-empts Guideline 2.5.2). The Inbox is pre-seeded in DEBUG builds so reviewers see cards without a live host. A $14.99 StoreKit non-consumable (`dev.lancer.mobile.pro`) unlocks the full app — use a sandbox account.
 
 ---
 
@@ -360,7 +360,7 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 > Small budget, developer audience, honest beta. Lead with the *demo*, not adjectives.
 
 ### 6.1 Best launch channels (in priority order)
-1. **Show HN** ("Show HN: Conduit — a local-first approval layer for Claude Code / Codex / opencode"). The single highest-leverage launch for this audience; open-sourcing `conduitd` [PLANNED] amplifies it.
+1. **Show HN** ("Show HN: Lancer — a local-first approval layer for Claude Code / Codex / opencode"). The single highest-leverage launch for this audience; open-sourcing `lancerd` [PLANNED] amplifies it.
 2. **Reddit:** r/ClaudeAI, r/ChatGPTCoding, r/ExperiencedDevs, r/devops, r/selfhosted, r/LocalLLaMA. Post the *demo clip*, not a pitch.
 3. **X / dev-twitter:** the 15s approval-card clip; reply-guy in threads about agents going rogue / `rm -rf` horror stories.
 4. **Dev newsletters / communities:** TLDR, Console.dev, relevant Discords (Claude, Codex, opencode).
@@ -378,7 +378,7 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 - **Aesthetic:** warm-light (our bet) vs. a dark control — confirm the differentiation actually converts.
 
 ### 6.4 CTA tests
-"Join the TestFlight beta" · "Get Conduit" · "Try it on your own host" · "Put a guardrail on your agents."
+"Join the TestFlight beta" · "Get Lancer" · "Try it on your own host" · "Put a guardrail on your agents."
 
 ### 6.5 Ten ad hooks
 1. Your AI agent will run `rm -rf` eventually. Be the one who taps **Deny**.
@@ -393,23 +393,23 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 10. The guardrail for agents that run on *your* machine.
 
 ### 6.6 Ten short ads (1–2 lines)
-1. **Approve your agents. Keep your code.** Conduit pings your phone the moment an agent needs a human. TestFlight now.
-2. Your agents can run while you're away. Conduit pauses them at the risky bits and asks you — in one tap.
+1. **Approve your agents. Keep your code.** Lancer pings your phone the moment an agent needs a human. TestFlight now.
+2. Your agents can run while you're away. Lancer pauses them at the risky bits and asks you — in one tap.
 3. `rm -rf node_modules`? Allowed. `rm -rf /`? Never. Set the policy, sleep fine.
 4. Claude Code, Codex, opencode — one approval inbox for all of them.
 5. Death by a thousand approvals? Set a policy and most actions never reach you.
 6. The agent stopped, showed you the command and the blast radius, and waited. You tapped Allow.
 7. Code stays on your host. Decisions come to your phone. That's the whole deal.
 8. Every autonomous action your agents take — logged, on your machine.
-9. First-party mobile control is single-vendor. Conduit governs all your agents.
+9. First-party mobile control is single-vendor. Lancer governs all your agents.
 10. Put a guardrail on your AI agents in about five minutes.
 
 ### 6.7 Five longer ads (paragraph)
-1. *"You wouldn't give a new contractor root and walk away. Why do it with an AI agent? Conduit sits between your agents — Claude Code, Codex, opencode — and your machine. Safe actions auto-run by your policy; risky ones pause and ping your phone with the exact command and what it touches. Approve, deny, or edit in a tap. Your code never leaves your host. TestFlight now."*
-2. *"The pitch for agents was 'let them work while you don't.' The reality is you hover over the terminal hitting 'approve' all day. Conduit fixes that: set a caution level, let reads and tests fly, and only get pinged for the calls that actually need you — lockfiles, pushes, anything near your secrets. Run agents like you mean it."*
-3. *"Anthropic and OpenAI shipped mobile control — for their own agent. If you run more than one, you've got more than one app and zero shared policy. Conduit is the layer above all of them: one inbox, one rulebook, one audit log, across every agent on every machine you own."*
-4. *"Compliance teams are about to start asking who approved what your agents did. Conduit answers it by default — an append-only, redacted log of every autonomous decision and every human tap, on your own host, exportable as evidence. Governance that happens to also make your day calmer."*
-5. *"Your source is the one thing you can't get back. Conduit never has it — agents run on your host, your keys stay in your Keychain, and only the approval metadata you send ever leaves, to reach your phone. End-to-end encryption of even that is on the way. You own the bridge."* *(Note: E2EE is [PLANNED] — keep the future-tense phrasing.)*
+1. *"You wouldn't give a new contractor root and walk away. Why do it with an AI agent? Lancer sits between your agents — Claude Code, Codex, opencode — and your machine. Safe actions auto-run by your policy; risky ones pause and ping your phone with the exact command and what it touches. Approve, deny, or edit in a tap. Your code never leaves your host. TestFlight now."*
+2. *"The pitch for agents was 'let them work while you don't.' The reality is you hover over the terminal hitting 'approve' all day. Lancer fixes that: set a caution level, let reads and tests fly, and only get pinged for the calls that actually need you — lockfiles, pushes, anything near your secrets. Run agents like you mean it."*
+3. *"Anthropic and OpenAI shipped mobile control — for their own agent. If you run more than one, you've got more than one app and zero shared policy. Lancer is the layer above all of them: one inbox, one rulebook, one audit log, across every agent on every machine you own."*
+4. *"Compliance teams are about to start asking who approved what your agents did. Lancer answers it by default — an append-only, redacted log of every autonomous decision and every human tap, on your own host, exportable as evidence. Governance that happens to also make your day calmer."*
+5. *"Your source is the one thing you can't get back. Lancer never has it — agents run on your host, your keys stay in your Keychain, and only the approval metadata you send ever leaves, to reach your phone. End-to-end encryption of even that is on the way. You own the bridge."* *(Note: E2EE is [PLANNED] — keep the future-tense phrasing.)*
 
 ### 6.8 Metrics to track
 - **Top funnel:** landing → "Join beta" click-through; hero-variant conversion; clip completion rate.
@@ -430,16 +430,16 @@ Install the app, scan the pairing code, choose a caution preset. Next time an ag
 *(Also saved standalone in `docs/marketing/prompt-for-claude-design.md`.)*
 
 ```
-You are designing the marketing website for Conduit — conduit.dev.
+You are designing the marketing website for Lancer — conduit.dev.
 
 PURPOSE
-Design a 6-page marketing site that makes Conduit feel like a serious, trustworthy developer tool — not a generic AI app. The hero must communicate the product in five seconds and show the real app on a modern iPhone.
+Design a 6-page marketing site that makes Lancer feel like a serious, trustworthy developer tool — not a generic AI app. The hero must communicate the product in five seconds and show the real app on a modern iPhone.
 
 AMBITION / QUALITY BAR
 Design this to Awwwards "Site of the Day" standard — the level of craft featured on awwwards.com: confident typography, orchestrated motion, impeccable spacing, memorable detail. But it must stay a serious, fast, accessible developer tool: restraint over spectacle. Never trade clarity, load speed, or the five-second message for decoration. "Award-grade" here means the most polished possible version of calm-editorial — not a maximalist agency showreel.
 
 WHAT THE PRODUCT IS
-Conduit is a phone-first approval, policy, and audit layer for AI coding agents (Claude Code, OpenAI Codex, opencode) that run on the developer's OWN machine. A small bridge (conduitd) on the host enforces the user's policy: safe actions auto-run, dangerous ones are blocked, and ambiguous ones pause and ping the phone with the exact command, the files it touches, and a risk read. The user approves, denies, edits-then-runs, or sets an allow-always rule — in one tap, even when the app is closed. Every decision is logged. The user's source code never leaves their host.
+Lancer is a phone-first approval, policy, and audit layer for AI coding agents (Claude Code, OpenAI Codex, opencode) that run on the developer's OWN machine. A small bridge (lancerd) on the host enforces the user's policy: safe actions auto-run, dangerous ones are blocked, and ambiguous ones pause and ping the phone with the exact command, the files it touches, and a risk read. The user approves, denies, edits-then-runs, or sets an allow-always rule — in one tap, even when the app is closed. Every decision is logged. The user's source code never leaves their host.
 
 WHO IT IS FOR
 Developers and small teams running MULTIPLE agents across their OWN machines, who won't give each vendor unrestricted repo access. NOT casual single-vendor users (first-party tools serve those for free). Speak engineer-to-engineer: precise, calm, specific. No hype.
@@ -454,9 +454,9 @@ Calm-editorial, but serious devtool. This is a deliberate counter-position: ever
 
 PAGES TO DESIGN (6)
 1. Landing (/) — the priority. Above the fold: wordmark + nav (Product, Trust, Pricing, Docs, Get the app); H1 "Approve your agents. Keep your code."; one-sentence subhead; primary CTA "Join the TestFlight beta" + secondary "See how it works"; the live iPhone approval-card hero; a vendor row "Works with Claude Code · Codex · opencode." Then sections: the problem; the approval card; policy; activity/audit; cross-vendor; local-first/trust; minimal fleet; final CTA; FAQ.
-2. Product (/product) — the four concepts: Agents, the Bridge (conduitd), Approvals, Policy; plus "go deep" (terminal/diff/files as depth).
+2. Product (/product) — the four concepts: Agents, the Bridge (lancerd), Approvals, Policy; plus "go deep" (terminal/diff/files as depth).
 3. Trust/Security (/trust) — precise privacy story: source + credentials never leave the host; relay carries only chosen approval metadata; E2EE of the relay and open-source bridge are PLANNED (label clearly); fail-closed default; deny holds even under --dangerously-skip-permissions; audit log. No certification claims.
-4. Pricing (/pricing) — Free / Conduit Pro $14.99 one-time / Team & Self-host PLANNED. Honest, no contact-sales wall.
+4. Pricing (/pricing) — Free / Lancer Pro $14.99 one-time / Team & Self-host PLANNED. Honest, no contact-sales wall.
 5. Docs / Getting started (/docs) — three steps: install the bridge, point the agent's hook, pair the phone. Show real commands in monospace. "Working in ~5 minutes."
 6. Download (/download) — TestFlight beta now; App Store PLANNED; "No account. Your code stays on your machine."
 
@@ -464,7 +464,7 @@ COPY
 Use the copy in docs/marketing/website-design-brief.md §4 (landing, product, trust, pricing, docs, download) and §5 (App Store) verbatim where possible. Headline lane is locked: "Approve your agents. Keep your code." Everything marked [PLANNED] must read as future tense — never imply it ships today.
 
 HERO — THE LIVE MOMENT (replaces an old Nokia-phone-on-a-beach mockup)
-A modern iPhone (clean device frame) showing the Conduit inbox approval card. A scripted micro-animation, looping:
+A modern iPhone (clean device frame) showing the Lancer inbox approval card. A scripted micro-animation, looping:
 1) a command types into the card in monospace (e.g. `rm -rf node_modules/`),
 2) a risk pill appears (amber "ask"), blast-radius lines populate (files touched),
 3) a tap lands on Allow → the card resolves to a green "✓ Approved" state → the next card slides up.
@@ -478,7 +478,7 @@ DESKTOP / MOBILE
 Desktop: centered max-width ~1024–1152px content column, asymmetric hero (text left / device right or device-centered with text above), generous margins. Mobile: single column, device hero stacks under the headline, sticky compact nav, thumb-reachable CTAs. The site must look native on a 390×844 iPhone.
 
 ASSETS TO USE / PRODUCE
-- Produce a wordmark: lowercase "conduit" in Instrument Serif (a small monospace lockup variant for footers/technical contexts).
+- Produce a wordmark: lowercase "lancer" in Instrument Serif (a small monospace lockup variant for footers/technical contexts).
 - Produce /og.png (1200×630) and /icon.png (512×512) — they're referenced but missing.
 - Use PLACEHOLDER device screenshots throughout (owner supplies finals). Reference shots exist at docs/screenshots/governed-approvals/ for layout only — do not treat as final.
 
@@ -503,7 +503,7 @@ Design exactly the 6 pages and the sections specified — do not invent extra pa
 
 - 🔔 **REMINDER (you asked me to flag this): you are supplying the real iPhone app screenshots yourself.** The design + App Store copy use placeholders marked `[SCREENSHOT — owner-supplied]`. Capture the 6.9" set at **1320×2868** for: approval card · a decision · policy presets · activity feed · fleet. Until you drop them in, the hero relies on the designed approval-card overlay component.
 - ⚠️ **Replace stale site copy:** the current `marketing/` landing still sells "SSH Agent Terminal." Do not ship it as-is.
-- ⚠️ **Honest-claims checklist before publish:** E2EE relay = [PLANNED]; open-source `conduitd` = [PLANNED]; Team/self-host pricing = [PLANNED]; App Store = [PLANNED] (TestFlight now); no SOC2/ISO claims; confirm what the $14.99 IAP actually gates before listing Pro-only feature rows.
+- ⚠️ **Honest-claims checklist before publish:** E2EE relay = [PLANNED]; open-source `lancerd` = [PLANNED]; Team/self-host pricing = [PLANNED]; App Store = [PLANNED] (TestFlight now); no SOC2/ISO claims; confirm what the $14.99 IAP actually gates before listing Pro-only feature rows.
 - ✅ **Model:** run Claude Design on **Fable 5** (owner-confirmed selectable). Use high/xhigh effort, feed it a reference screenshot (vision is a Fable 5 strength), keep instructions concise, and lean on the prompt's "don't over-build" guard. See §2.2.
 - ✅ **Decisions locked this session:** aesthetic = calm-editorial-serious; deliverable = design-only (framework later); scope = all 6 pages; claims = documented model + honest; **sequence = website design first, then port the design language into the iOS app (§9)**.
 
@@ -515,9 +515,9 @@ Agreed sequencing (this session): **design the website first, then take its desi
 
 - **Phase 1 — Website (now):** run the §7 prompt in Claude Design on Fable 5. Iterate the hero approval-card animation and the warm-editorial system until it's right. Output: designed pages + a settled token set (§3.6).
 - **Phase 2 — Extract the design language:** from the approved site, lock the canonical tokens — warm paper, ink, evergreen primary, the approve/ask/deny semantic set, Instrument Serif + Inter + Geist Mono, card/shadow/grid motifs, and the approval-card motion spec.
-- **Phase 3 — Port into the iOS app (separate, code-touching task — flagged, not started):** map those tokens onto the app's existing DesignSystem (`Packages/ConduitKit/Sources/DesignSystem/Tokens.swift` + `Components/`). The app is currently dark with glass chrome — decide whether it adopts the warm-light language wholesale or keeps a dark variant using the *same* type/accent/semantic system.
+- **Phase 3 — Port into the iOS app (separate, code-touching task — flagged, not started):** map those tokens onto the app's existing DesignSystem (`Packages/LancerKit/Sources/DesignSystem/Tokens.swift` + `Components/`). The app is currently dark with glass chrome — decide whether it adopts the warm-light language wholesale or keeps a dark variant using the *same* type/accent/semantic system.
   - **Reuse:** the approval-card component (the site's hero *is* the app's core screen), the approve/ask/deny color language, the serif+mono pairing for command text, the risk-pill treatment.
-  - **Don't:** port the web layout 1:1 — re-flow natively (the app IA is already Inbox/Fleet/Activity/Settings). Respect the architecture invariants in `docs/agent-contract.md` (glass chrome via `conduitGlassChrome`, design tokens single-sourced).
+  - **Don't:** port the web layout 1:1 — re-flow natively (the app IA is already Inbox/Fleet/Activity/Settings). Respect the architecture invariants in `docs/agent-contract.md` (glass chrome via `lancerGlassChrome`, design tokens single-sourced).
 
 ---
 

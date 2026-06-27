@@ -1,14 +1,14 @@
-# Conduit — Page-by-Page Design Handoff
+# Lancer — Page-by-Page Design Handoff
 
-## What Conduit is
+## What Lancer is
 
-Conduit is an iOS control plane for AI coding agents. You connect it over SSH to any host you
-own (a VPS, a Pi, your Mac) that runs the `conduitd` resident daemon. When an agent on that host
-(Claude Code, Codex, Cursor, …) wants to run a command, write a file, or call an MCP tool, Conduit
+Lancer is an iOS control plane for AI coding agents. You connect it over SSH to any host you
+own (a VPS, a Pi, your Mac) that runs the `lancerd` resident daemon. When an agent on that host
+(Claude Code, Codex, Cursor, …) wants to run a command, write a file, or call an MCP tool, Lancer
 turns that request into a **typed approval card on your phone** — you APPROVE / DENY / ALLOW-ALWAYS /
 EDIT&RUN, and the agent unblocks. It is a **passive approval loop**, not a dispatch console: the
 job is "review what your agents want to do, from anywhere," plus a Warp-style block terminal for
-when you want to drive the host directly. A paid Conduit Cloud tier adds hosted agents, push relay,
+when you want to drive the host directly. A paid Lancer Cloud tier adds hosted agents, push relay,
 and metered cross-vendor AI spend.
 
 ### Design language
@@ -17,7 +17,7 @@ and metered cross-vendor AI spend.
   prompts, and metadata; a humanist sans for prose. Output renders as Warp-style **blocks** with a
   left state gutter, `$ command` bar, and an exit chip (`✓ exit 0` / `✗ exit 1`).
 - **`DSScreenHeader` prompt headers.** Every primary screen opens with a lowercase glyph title and a
-  blinking `_` cursor (`inbox_`, `fleet_`, `library_`), a `~/conduit › <breadcrumb>` line, and a
+  blinking `_` cursor (`inbox_`, `fleet_`, `library_`), a `~/lancer › <breadcrumb>` line, and a
   full-width spectrum rule. This is the single most recognizable element — keep it consistent.
 - **Risk as color.** Approval cards carry a severity chip (LOW/MED/HIGH/DESTRUCTIVE) that tints the
   card's left bar — green→amber→red. The pixel-art `PixelBox`/`PixelAvatar` motifs seed agent state
@@ -28,7 +28,7 @@ and metered cross-vendor AI spend.
 ### How to read this doc
 
 Screenshots live in `screenshots/` as `NN-<screen>-<state>-<appearance>.png`. Each page lists its
-captured files. "Real-app" = navigated in the running app; "Gallery" = `CONDUIT_GALLERY=<route>`
+captured files. "Real-app" = navigated in the running app; "Gallery" = `LANCER_GALLERY=<route>`
 debug harness (used for screens needing a live session or seeded data).
 
 ---
@@ -48,7 +48,7 @@ debug harness (used for screens needing a live session or seeded data).
 - **DS components:** `DSScreenHeader`, `DSApprovalCard` (risk chip + `$ command` + 4 actions),
   `DSAutonomyPresetBar`, decided-row strip with status chips (`approved`/`always`).
 - **States captured:** populated (2 pending + 1 decided), empty ("inbox zero — Agents are running clean").
-- **Shots:** `01-inbox-populated-{dark,light}.png`, `01-inbox-empty-{dark,light}.png`. *(Real-app: `CONDUIT_TAB=inbox`)*
+- **Shots:** `01-inbox-populated-{dark,light}.png`, `01-inbox-empty-{dark,light}.png`. *(Real-app: `LANCER_TAB=inbox`)*
 
 ### 05 · Inbox — typed approval cards (Ask-Question + MCP-call)
 - **Job:** richer approval kinds beyond shell commands — agent asks a multiple-choice question; agent
@@ -65,7 +65,7 @@ debug harness (used for screens needing a live session or seeded data).
 - **DS components:** `DSScreenHeader`, summary stat card (vendors / sessions / $today), saved-host rows
   (`PixelAvatar` + name + `user@host:port` + reconnect glyph in a fixed-width slot), `DSEmptyState`.
 - **States captured:** populated (5 seeded hosts), empty ("No agents connected — Connect a host").
-- **Shots:** `02-fleet-populated-{dark,light}.png`, `02-fleet-empty-{dark,light}.png`. *(Real-app: `CONDUIT_TAB=fleet`)*
+- **Shots:** `02-fleet-populated-{dark,light}.png`, `02-fleet-empty-{dark,light}.png`. *(Real-app: `LANCER_TAB=fleet`)*
 
 ### 03 · Activity (tab) — "while you were away"
 - **Job:** the audit feed of what agents did while you weren't watching (`agent.audit.tail`).
@@ -74,7 +74,7 @@ debug harness (used for screens needing a live session or seeded data).
   rows, `DSEmptyState(.server, "not connected")`.
 - **States captured:** not-connected (the empty/disconnected state). A populated feed requires a live
   SSH session with audit history — see "couldn't capture" note below.
-- **Shots:** `03-activity-notconnected-{dark,light}.png`. *(Real-app: `CONDUIT_TAB=activity`)*
+- **Shots:** `03-activity-notconnected-{dark,light}.png`. *(Real-app: `LANCER_TAB=activity`)*
 
 ### 04 · Settings (tab)
 - **Job:** AI provider + API keys (on-device Keychain), appearance, security (Face-ID lock, redact
@@ -83,17 +83,17 @@ debug harness (used for screens needing a live session or seeded data).
 - **DS components:** `DSScreenHeader` + trailing `DSIconButton`, provider picker, secure key fields,
   segmented theme control, `DSListSectionHead` sections, nav rows, switches.
 - **States:** populated.
-- **Shots:** `04-settings-populated-{dark,light}.png`. *(Real-app: `CONDUIT_TAB=settings`)*
+- **Shots:** `04-settings-populated-{dark,light}.png`. *(Real-app: `LANCER_TAB=settings`)*
 
 ### 11 · Billing & usage
-- **Job:** Conduit Pro (one-time) status + Conduit Cloud status + metered AI-usage-today.
+- **Job:** Lancer Pro (one-time) status + Lancer Cloud status + metered AI-usage-today.
 - **Entry:** Settings → "Billing & usage".
 - **DS components:** `BillingView`, `DSScreenHeader`, status cards with verified/restore rows, footnote.
 - **States:** populated (Pro unlocked, Cloud active).
 - **Shots:** `11-billing-{dark,light}.png`. *(Gallery: `billing`)*
 
 ### 12 · Paywall
-- **Job:** convert to Conduit Pro — "pay once, yours forever," one-time $14.99, no subscription.
+- **Job:** convert to Lancer Pro — "pay once, yours forever," one-time $14.99, no subscription.
 - **Entry:** tapping a Pro-gated feature (e.g. partial-hunk diff); Settings.
 - **DS components:** `PaywallSheet`, big display headline, price block, primary unlock button, restore link.
 - **States:** populated. *(StoreKit "product not found" line is a simulator-only testing artifact — the
@@ -133,7 +133,7 @@ debug harness (used for screens needing a live session or seeded data).
 - **Shots:** `16-library-keys-{dark,light}.png`. *(Real-app)*
 
 ### 17 · Policy editor (Agent policy)
-- **Job:** edit the host's `~/.conduit/policy.yaml` — which agent actions auto-allow / ask / deny by risk.
+- **Job:** edit the host's `~/.lancer/policy.yaml` — which agent actions auto-allow / ask / deny by risk.
 - **Entry:** Settings → "Edit bridge policy.yaml".
 - **DS components:** `PolicyEditorBridgeScreen` / `PolicyEditorView`, Safe-presets card
   (Cautious / Balanced / Bypass), monospace YAML editor, "Reload policy on bridge" action.
@@ -149,9 +149,9 @@ debug harness (used for screens needing a live session or seeded data).
 - **Shots:** `18-connect-host-{dark,light}.png`. *(Real-app)*
 
 ### 19 · Add host
-- **Job:** add a BYO SSH host by pasting an `ssh` command, or pick Conduit Cloud; advanced auth/tmux/startup.
+- **Job:** add a BYO SSH host by pasting an `ssh` command, or pick Lancer Cloud; advanced auth/tmux/startup.
 - **Entry:** Fleet empty-state "Connect a host"; post-onboarding.
-- **DS components:** `AddHostView`, `DSScreenHeader` ("add host_"), "bring your own / conduit cloud"
+- **DS components:** `AddHostView`, `DSScreenHeader` ("add host_"), "bring your own / lancer cloud"
   segmented toggle, `$ ssh user@host -p 2222` paste field, "advanced (auth · tmux · startup)" disclosure,
   "connect & save" button.
 - **States:** populated (blank form).
@@ -259,16 +259,16 @@ debug harness (used for screens needing a live session or seeded data).
   `BridgeAuditFeedView`; a populated capture needs a live daemon with logged events.
 - **SSH Keys — populated.** Keys are Secure-Enclave-backed and generated on-device; they can't be
   seeded externally, so only the "no keys yet" state is captured.
-- **Cloud Agents / runs (Library → Agents).** Entirely gated behind a paid Conduit Cloud entitlement
+- **Cloud Agents / runs (Library → Agents).** Entirely gated behind a paid Lancer Cloud entitlement
   (`PurchaseManager.cloudEntitlement`), which isn't active in the simulator. The category card shows the
-  locked "Conduit Cloud" affordance (captured in page 14); the inner `AgentsView`/`AgentRunDetailView`
+  locked "Lancer Cloud" affordance (captured in page 14); the inner `AgentsView`/`AgentRunDetailView`
   need a live entitlement + backend.
 
 ---
 
 ## Known design debt (deferred from the pixel-perfect polish plan)
 
-`docs/superpowers/specs/2026-06-12-conduit-pixel-perfect-polish-plan.md`. **Batches 1–3 are DONE**
+`docs/superpowers/specs/2026-06-12-lancer-pixel-perfect-polish-plan.md`. **Batches 1–3 are DONE**
 (header unification across the 4 tabs, DS empty states, Activity mono fonts, Settings section
 typography/padding, Fleet stat labels, Billing DS header + card chrome, MCP-card 44pt touch targets,
 paywall surfaces — all built and verified in light+dark). Only two items remain **deferred**:

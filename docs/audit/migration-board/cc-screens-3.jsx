@@ -1,6 +1,6 @@
 /* ============================================================
-   CONDUIT — backend-backed screens that were missing from the board
-   Each surfaces an IMPLEMENTED capability (conduitd RPC or push-backend route):
+   LANCER — backend-backed screens that were missing from the board
+   Each surfaces an IMPLEMENTED capability (lancerd RPC or push-backend route):
      • EditRunScreen / AllowAlwaysSheet  — agent.approval.response (edit / standing-rule)
      • AgentRunDetailScreen              — agent.status + agent.cancel (run-control)
      • PolicyYamlScreen                  — agent.policy.get / set / reload (raw YAML)
@@ -28,10 +28,10 @@ function EditRunScreen(){
       <SubNav title="edit &amp; run" right={<RiskChip level="high"/>}/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Adjust the command before it runs. Conduit re-checks the edited version against your policy.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Adjust the command before it runs. Lancer re-checks the edited version against your policy.</p>
           <div className="cc-card" style={{padding:'12px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
             <VendorMark vendor="claude"/>
-            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:11.5,color:'var(--ink-3)'}}>~/repos/conduit</span>
+            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:11.5,color:'var(--ink-3)'}}>~/repos/lancer</span>
           </div>
           <div className="cc-sec">original<span className="rule"/></div>
           <div className="cc-cmd" data-r="high" style={{opacity:.6}}><div className="gut"/><div className="body"><span className="sigil">$ </span>rm -rf build/ dist/</div></div>
@@ -66,7 +66,7 @@ function AllowAlwaysSheet(){
           <div className="cc-note" style={{marginBottom:16}}>Future matches auto-allow — you won't be asked again.</div>
           <div className="cc-sec">rule to write<span className="rule"/></div>
           <div className="cc-card" style={{padding:'4px 0'}}>
-            {[['tool','command'],['input','git status'],['path','~/repos/conduit'],['effect','allow']].map(([k,v],i)=>(
+            {[['tool','command'],['input','git status'],['path','~/repos/lancer'],['effect','allow']].map(([k,v],i)=>(
               <div key={i} className="cc-row" style={{cursor:'default'}}>
                 <span style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--ink-4)',width:54,flex:'none'}}>{k}</span>
                 <span style={{fontFamily:'var(--mono)',fontSize:13,color:k==='effect'?'var(--r-low)':'var(--ink)'}}>{v}</span>
@@ -100,7 +100,7 @@ function CtrlBtn({icon, label, soon, danger}){
 function AgentRunDetailScreen(){
   const out=[
     ['$ swift build','c'],
-    ['Compiling ConduitKit (38 files)','o'],
+    ['Compiling LancerKit (38 files)','o'],
     ['[142/318] Compiling SessionViewModel.swift','o'],
     ['patch src/auth/session.swift','o'],
     ['› waiting on your decision in Inbox','w'],
@@ -112,9 +112,9 @@ function AgentRunDetailScreen(){
         <div className="cc-pad" style={{paddingTop:10}}>
           <div className="cc-card" style={{padding:'14px 15px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <PixelAvatar seed="claudeconduit" size={38} color={VENDOR.claude.c}/>
+              <PixelAvatar seed="claudelancer" size={38} color={VENDOR.claude.c}/>
               <div className="grow" style={{minWidth:0}}>
-                <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code <span style={{color:'var(--ink-4)',fontSize:11.5}}>conduit</span></div>
+                <div style={{fontFamily:'var(--mono)',fontSize:14,color:'var(--ink)',fontWeight:500}}>Claude Code <span style={{color:'var(--ink-4)',fontSize:11.5}}>lancer</span></div>
                 <div className="s" style={{marginTop:3}}>Dev VPS · claude-sonnet-4.6</div>
               </div>
               <div style={{textAlign:'right'}}>
@@ -251,7 +251,7 @@ function ProviderKeysScreen(){
       <SubNav title="provider keys"/>
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
-          <p className="cc-lead" style={{margin:'0 0 12px'}}>Add the providers your agents use. Keys live in the Keychain and go straight to the provider — Conduit's relay never sees them.</p>
+          <p className="cc-lead" style={{margin:'0 0 12px'}}>Add the providers your agents use. Keys live in the Keychain and go straight to the provider — Lancer's relay never sees them.</p>
           <div className="cc-card">
             <KeyRow vendor="claude" accent={VENDOR.claude.c} label="Anthropic" sub="sk-ant-…M2 · Claude Code" state="ok"/>
             <KeyRow vendor="codex" accent={VENDOR.codex.c} label="OpenAI" sub="sk-…9f · Codex" state="ok"/>
@@ -316,7 +316,7 @@ function BillingScreen(){
           <div className="cc-card">
             <div className="cc-row" style={{cursor:'default'}}>
               <span style={{width:30,height:30,borderRadius:2,background:'var(--surface-2)',border:'1px solid var(--line)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--brand)',flex:'none'}}><Ic d={ICON.bolt} s={16}/></span>
-              <div className="grow"><div className="t" style={{fontSize:14}}>Conduit Pro</div><div className="s">cloud agents · multi-host · team org</div></div>
+              <div className="grow"><div className="t" style={{fontSize:14}}>Lancer Pro</div><div className="s">cloud agents · multi-host · team org</div></div>
               <span className="cc-sd"><span className="d done"/>active</span>
             </div>
             <div className="cc-row" style={{cursor:'pointer'}}>
@@ -348,7 +348,7 @@ function PaywallSheet(){
         <div className="grip"/>
         <div className="sheetscroll">
           <Spectrum/>
-          <h2 className="cc-h2" style={{margin:'14px 0 4px'}}>Conduit Pro</h2>
+          <h2 className="cc-h2" style={{margin:'14px 0 4px'}}>Lancer Pro</h2>
           <div className="cc-note" style={{marginBottom:18}}>The private bridge is free. Pro adds hosted muscle.</div>
           <div style={{display:'flex',flexDirection:'column',gap:2}}>
             {feats.map(([t,s],i)=>(
@@ -389,7 +389,7 @@ function TofuSheet(){
           <div className="cc-cmd"><div className="gut"/><div className="body" style={{fontSize:11.5,padding:'11px 12px',color:'var(--ink-2)',wordBreak:'break-all'}}>SHA256:k7Hf3…Qx9Lm2pR8vNcUeJdW0aZ</div></div>
           <div className="cc-card" style={{marginTop:12,padding:'12px 14px',display:'flex',gap:10,alignItems:'flex-start'}}>
             <Ic d={ICON.lock} s={16}/>
-            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Pinned after you trust it — Conduit warns you if it ever changes (possible man-in-the-middle).</span>
+            <span style={{fontSize:12.5,color:'var(--ink-2)',lineHeight:1.5}}>Pinned after you trust it — Lancer warns you if it ever changes (possible man-in-the-middle).</span>
           </div>
         </div>
         <div className="sheetfoot">
@@ -426,8 +426,8 @@ function TerminalScreen(){
       <div className="cc-scroll">
         <div className="cc-pad" style={{paddingTop:10}}>
           <p className="cc-note" style={{margin:'0 0 12px'}}>Power-user · the real PTY in Warp-style blocks. Reachable from <b style={{color:'var(--ink-2)'}}>Settings → Open terminal</b>.</p>
-          <TermBlock prompt="~/repos/conduit ›" cmd="swift build" lines={['Build complete! (12.4s)']} status="ok"/>
-          <TermBlock prompt="~/repos/conduit ›" cmd="claude" status="run" live/>
+          <TermBlock prompt="~/repos/lancer ›" cmd="swift build" lines={['Build complete! (12.4s)']} status="ok"/>
+          <TermBlock prompt="~/repos/lancer ›" cmd="claude" status="run" live/>
         </div>
         <div className="cc-bottompad"/>
       </div>
@@ -463,7 +463,7 @@ function SshKeysScreen(){
         <div className="cc-pad" style={{paddingTop:10}}>
           <p className="cc-lead" style={{margin:'0 0 12px'}}>Keys for reaching your hosts over SSH — the advanced path. Generated on-device and held in the Keychain; the private key never leaves this phone.</p>
           <div className="cc-card">
-            <SshKeyRow name="conduit-dev" fp="SHA256:k7Hf3…Lm2" used="used 2h ago" host="dev-vps"/>
+            <SshKeyRow name="lancer-dev" fp="SHA256:k7Hf3…Lm2" used="used 2h ago" host="dev-vps"/>
             <SshKeyRow name="ci-runner" fp="SHA256:9aQ2x…pR8" used="used Jun 11" host="staging"/>
           </div>
           <div className="cc-btnrow" style={{marginTop:14}}>
@@ -495,7 +495,7 @@ function FileViewerSheet(){
           <Ic d={ICON.file} s={15}/>
           <div style={{minWidth:0}}>
             <div style={{fontFamily:'var(--mono)',fontSize:13.5,color:'var(--ink)',fontWeight:600}}>session.swift</div>
-            <div style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)'}}>~/repos/conduit/Sources · 16 lines · read-only</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:10.5,color:'var(--ink-4)'}}>~/repos/lancer/Sources · 16 lines · read-only</div>
           </div>
           <button className="cc-btn cc-btn--quiet" style={{marginLeft:'auto',width:34,height:34,padding:0}}><Ic d={ICON.x} s={16}/></button>
         </div>

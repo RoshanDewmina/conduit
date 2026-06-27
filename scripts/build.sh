@@ -7,7 +7,7 @@ cd "$SCRIPT_DIR/.."
 
 case "${1:-engines}" in
   engines)
-    cd Packages/ConduitKit
+    cd Packages/LancerKit
     swift build
     ;;
   ios)
@@ -16,8 +16,8 @@ case "${1:-engines}" in
       exit 1
     fi
     xcodegen
-    xcodebuild -project Conduit.xcodeproj \
-      -scheme Conduit \
+    xcodebuild -project Lancer.xcodeproj \
+      -scheme Lancer \
       -configuration Debug \
       -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
       build

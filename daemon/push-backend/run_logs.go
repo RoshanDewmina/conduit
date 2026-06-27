@@ -33,14 +33,14 @@ var runLogsStore = struct {
 	mu   sync.Mutex
 	path string
 }{
-	path: dataFilePath("RUN_LOGS_FILE", "conduit-run-logs.json"),
+	path: dataFilePath("RUN_LOGS_FILE", "lancer-run-logs.json"),
 }
 
 var runTokensStore = struct {
 	mu   sync.Mutex
 	path string
 }{
-	path: dataFilePath("RUN_TOKENS_FILE", "conduit-run-tokens.json"),
+	path: dataFilePath("RUN_TOKENS_FILE", "lancer-run-tokens.json"),
 }
 
 func initRunLogsStore() {

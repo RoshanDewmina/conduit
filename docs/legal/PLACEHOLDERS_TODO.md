@@ -9,7 +9,7 @@ Grouped by category. Fill in the "Suggested default" column with real values bef
 
 | Placeholder | Files (file:line) | What value is needed | Suggested default |
 |---|---|---|---|
-| `[Legal entity name — placeholder: insert company or individual name here]` | `TERMS_OF_SERVICE.md:13` | Legal entity name (company or individual) | Conduit (individual) / Conduit Inc. |
+| `[Legal entity name — placeholder: insert company or individual name here]` | `TERMS_OF_SERVICE.md:13` | Legal entity name (company or individual) | Lancer (individual) / Lancer Inc. |
 | `[Legal entity name placeholder]` | `APP_REVIEW_NOTES.md:149` | Legal entity name for copyright line | Same as above |
 | `[Jurisdiction — placeholder: insert governing law jurisdiction]` | `TERMS_OF_SERVICE.md:200` | Governing law jurisdiction | California, USA / New South Wales, Australia |
 | `[County / District — placeholder]` | `TERMS_OF_SERVICE.md:203` | Venue county/district for legal disputes | San Francisco County, CA |

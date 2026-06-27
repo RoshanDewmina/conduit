@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add MCP Streamable HTTP protocol support to the existing `push-backend` service so any AI agent can call `conduit_notify()` and `conduit_checkpoint()` as native MCP tools — delivering rich push notifications to the user's iOS device without requiring an SSH session or conduitd running locally.
+**Goal:** Add MCP Streamable HTTP protocol support to the existing `push-backend` service so any AI agent can call `lancer_notify()` and `lancer_checkpoint()` as native MCP tools — delivering rich push notifications to the user's iOS device without requiring an SSH session or lancerd running locally.
 
-**Architecture:** The `push-backend` (deployed on Fly.io) gains a `POST /mcp` endpoint implementing MCP JSON-RPC. Agents authenticate with a Bearer API key that maps to a registered iOS device session. `conduit_notify()` fires APNs immediately and returns. `conduit_checkpoint()` stores a pending checkpoint, fires APNs with Approve/Deny action buttons, and returns a `checkpoint_id`. The agent polls `conduit_checkpoint_status()` until the user acts on their phone.
+**Architecture:** The `push-backend` (deployed on Fly.io) gains a `POST /mcp` endpoint implementing MCP JSON-RPC. Agents authenticate with a Bearer API key that maps to a registered iOS device session. `lancer_notify()` fires APNs immediately and returns. `lancer_checkpoint()` stores a pending checkpoint, fires APNs with Approve/Deny action buttons, and returns a `checkpoint_id`. The agent polls `lancer_checkpoint_status()` until the user acts on their phone.
 
 **Tech Stack:** Go 1.25, `net/http`, `net/http/httptest` (tests), existing APNs JWT delivery, JSON file store (matches existing push-backend pattern), MCP JSON-RPC 2.0 over HTTP.
 
@@ -15,7 +15,7 @@
 | File | Responsibility |
 |---|---|
 | `daemon/push-backend/mcp.go` | MCP HTTP handler, JSON-RPC dispatch, `initialize` handshake, tool routing |
-| `daemon/push-backend/mcp_tools.go` | `conduit_notify`, `conduit_checkpoint`, `conduit_checkpoint_status` implementations |
+| `daemon/push-backend/mcp_tools.go` | `lancer_notify`, `lancer_checkpoint`, `lancer_checkpoint_status` implementations |
 | `daemon/push-backend/mcp_store.go` | Event log (append-only) and checkpoint store (mutable) using JSON file pattern |
 | `daemon/push-backend/api_keys.go` | API key CRUD: generate, lookup, revoke; keys stored in `apikeys.json` |
 | `daemon/push-backend/mcp_test.go` | Integration tests: full MCP request/response cycles against `httptest.Server` |
@@ -495,7 +495,7 @@ func TestMCPToolsList(t *testing.T) {
             names[m["name"].(string)] = true
         }
     }
-    for _, required := range []string{"conduit_notify", "conduit_checkpoint", "conduit_checkpoint_status"} {
+    for _, required := range []string{"lancer_notify", "lancer_checkpoint", "lancer_checkpoint_status"} {
         if !names[required] {
             t.Errorf("missing tool %q", required)
         }
@@ -589,7 +589,7 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
             ID:      req.ID,
             Result: map[string]any{
                 "protocolVersion": "2024-11-05",
-                "serverInfo":      map[string]any{"name": "conduit", "version": "1.0.0"},
+                "serverInfo":      map[string]any{"name": "lancer", "version": "1.0.0"},
                 "capabilities":    map[string]any{"tools": map[string]any{}},
             },
         })
@@ -625,7 +625,7 @@ func writeJSONRPCError(w http.ResponseWriter, id any, code int, msg string) {
 func mcpToolDefinitions() []map[string]any {
     return []map[string]any{
         {
-            "name":        "conduit_notify",
+            "name":        "lancer_notify",
             "description": "Send a push notification to the user's phone. Fire-and-forget — returns immediately.",
             "inputSchema": map[string]any{
                 "type": "object",
@@ -639,8 +639,8 @@ func mcpToolDefinitions() []map[string]any {
             },
         },
         {
-            "name":        "conduit_checkpoint",
-            "description": "Request a human decision. Returns a checkpoint_id immediately. Poll conduit_checkpoint_status() until status != 'pending'.",
+            "name":        "lancer_checkpoint",
+            "description": "Request a human decision. Returns a checkpoint_id immediately. Poll lancer_checkpoint_status() until status != 'pending'.",
             "inputSchema": map[string]any{
                 "type": "object",
                 "properties": map[string]any{
@@ -652,12 +652,12 @@ func mcpToolDefinitions() []map[string]any {
             },
         },
         {
-            "name":        "conduit_checkpoint_status",
-            "description": "Poll the status of a checkpoint created with conduit_checkpoint(). Returns status: pending | approved | denied | edited. If edited, edited_input contains the user's modification.",
+            "name":        "lancer_checkpoint_status",
+            "description": "Poll the status of a checkpoint created with lancer_checkpoint(). Returns status: pending | approved | denied | edited. If edited, edited_input contains the user's modification.",
             "inputSchema": map[string]any{
                 "type": "object",
                 "properties": map[string]any{
-                    "checkpoint_id": map[string]any{"type": "string", "description": "ID returned by conduit_checkpoint()"},
+                    "checkpoint_id": map[string]any{"type": "string", "description": "ID returned by lancer_checkpoint()"},
                 },
                 "required": []string{"checkpoint_id"},
             },
@@ -706,7 +706,7 @@ Add at the top of `daemon/push-backend/mcp_tools.go`, after the imports:
 ```go
 // sendAPNS delivers a push notification to an APNs device token.
 // title, body: visible notification text.
-// category: APNs category string (e.g. "CONDUIT_NOTIFY", "CONDUIT_CHECKPOINT").
+// category: APNs category string (e.g. "LANCER_NOTIFY", "LANCER_CHECKPOINT").
 // extra: custom payload keys merged into the notification's data dict.
 // This is best-effort — callers must not block on it.
 func sendAPNS(deviceToken, title, body, category string, extra map[string]string) {
@@ -815,14 +815,14 @@ git commit -m "feat(mcp): shared sendAPNS helper and recordAndPushMCPEvent, test
 - Create: `daemon/push-backend/mcp_tools.go`
 - Modify: `daemon/push-backend/mcp_test.go` (append tool invocation tests)
 
-`conduit_notify` stores the event and fires APNs. `conduit_checkpoint` stores a pending checkpoint, fires APNs with action category `CONDUIT_CHECKPOINT`, returns `checkpoint_id`. `conduit_checkpoint_status` returns current checkpoint state.
+`lancer_notify` stores the event and fires APNs. `lancer_checkpoint` stores a pending checkpoint, fires APNs with action category `LANCER_CHECKPOINT`, returns `checkpoint_id`. `lancer_checkpoint_status` returns current checkpoint state.
 
 - [ ] **Step 1: Append tool tests to mcp_test.go**
 
 ```go
 // Append to mcp_test.go
 
-func TestConduitNotify(t *testing.T) {
+func TestLancerNotify(t *testing.T) {
     srv := newMCPServer(t)
     defer srv.Close()
     key, _ := createAPIKey("session-notify")
@@ -832,7 +832,7 @@ func TestConduitNotify(t *testing.T) {
         "id":      10,
         "method":  "tools/call",
         "params": map[string]any{
-            "name": "conduit_notify",
+            "name": "lancer_notify",
             "arguments": map[string]any{
                 "message":    "Trade executed: BUY AAPL 10 @ $201",
                 "level":      "info",
@@ -864,7 +864,7 @@ func TestConduitNotify(t *testing.T) {
     }
 }
 
-func TestConduitCheckpointLifecycle(t *testing.T) {
+func TestLancerCheckpointLifecycle(t *testing.T) {
     srv := newMCPServer(t)
     defer srv.Close()
     key, _ := createAPIKey("session-cp")
@@ -875,7 +875,7 @@ func TestConduitCheckpointLifecycle(t *testing.T) {
         "id":      20,
         "method":  "tools/call",
         "params": map[string]any{
-            "name": "conduit_checkpoint",
+            "name": "lancer_checkpoint",
             "arguments": map[string]any{
                 "message": "Sell TSLA at market? Current price: $312",
                 "context": "Portfolio: 50 shares TSLA. Stop-loss at $290.",
@@ -910,7 +910,7 @@ func TestConduitCheckpointLifecycle(t *testing.T) {
         "id":      21,
         "method":  "tools/call",
         "params": map[string]any{
-            "name":      "conduit_checkpoint_status",
+            "name":      "lancer_checkpoint_status",
             "arguments": map[string]any{"checkpoint_id": cpResult.CheckpointID},
         },
     })
@@ -938,7 +938,7 @@ func TestConduitCheckpointLifecycle(t *testing.T) {
         "id":      22,
         "method":  "tools/call",
         "params": map[string]any{
-            "name":      "conduit_checkpoint_status",
+            "name":      "lancer_checkpoint_status",
             "arguments": map[string]any{"checkpoint_id": cpResult.CheckpointID},
         },
     })
@@ -956,7 +956,7 @@ func TestConduitCheckpointLifecycle(t *testing.T) {
 - [ ] **Step 2: Run to verify failure**
 
 ```bash
-cd daemon/push-backend && go test -run "TestConduitNotify|TestConduitCheckpointLifecycle" -v
+cd daemon/push-backend && go test -run "TestLancerNotify|TestLancerCheckpointLifecycle" -v
 ```
 
 Expected: `FAIL — undefined: handleToolCall`
@@ -991,11 +991,11 @@ func handleToolCall(w http.ResponseWriter, req mcpRequest, sessionID string) {
     var toolErr error
 
     switch params.Name {
-    case "conduit_notify":
+    case "lancer_notify":
         result, toolErr = toolNotify(params.Arguments, sessionID)
-    case "conduit_checkpoint":
+    case "lancer_checkpoint":
         result, toolErr = toolCheckpoint(params.Arguments, sessionID)
-    case "conduit_checkpoint_status":
+    case "lancer_checkpoint_status":
         result, toolErr = toolCheckpointStatus(params.Arguments, sessionID)
     default:
         writeJSONRPCError(w, req.ID, -32601, "unknown tool: "+params.Name)
@@ -1030,7 +1030,7 @@ func mcpJSONResult(v any) (map[string]any, error) {
     return mcpTextResult(string(b)), nil
 }
 
-// --- conduit_notify ---
+// --- lancer_notify ---
 
 type notifyArgs struct {
     Message   string `json:"message"`
@@ -1070,7 +1070,7 @@ func toolNotify(raw json.RawMessage, sessionID string) (any, error) {
     return mcpTextResult("notification sent"), nil
 }
 
-// --- conduit_checkpoint ---
+// --- lancer_checkpoint ---
 
 type checkpointArgs struct {
     Message   string `json:"message"`
@@ -1108,7 +1108,7 @@ func toolCheckpoint(raw json.RawMessage, sessionID string) (any, error) {
     })
 }
 
-// --- conduit_checkpoint_status ---
+// --- lancer_checkpoint_status ---
 
 type checkpointStatusArgs struct {
     CheckpointID string `json:"checkpoint_id"`
@@ -1152,7 +1152,7 @@ func pushMCPNotify(sessionID string, evt MCPEvent) {
     if title == "" {
         title = "Agent"
     }
-    sendAPNS(token, title, evt.Message, "CONDUIT_NOTIFY", map[string]string{
+    sendAPNS(token, title, evt.Message, "LANCER_NOTIFY", map[string]string{
         "eventId":   evt.ID,
         "level":     evt.Level,
         "sessionId": sessionID,
@@ -1164,7 +1164,7 @@ func pushMCPCheckpoint(sessionID string, cp MCPCheckpoint) {
     if token == "" {
         return
     }
-    sendAPNS(token, "Decision needed", cp.Message, "CONDUIT_CHECKPOINT", map[string]string{
+    sendAPNS(token, "Decision needed", cp.Message, "LANCER_CHECKPOINT", map[string]string{
         "checkpointId": cp.ID,
         "sessionId":    sessionID,
     })
@@ -1189,7 +1189,7 @@ func newID(prefix string) string {
 - [ ] **Step 4: Run tests**
 
 ```bash
-cd daemon/push-backend && go test -run "TestConduitNotify|TestConduitCheckpointLifecycle" -v
+cd daemon/push-backend && go test -run "TestLancerNotify|TestLancerCheckpointLifecycle" -v
 ```
 
 Expected: `PASS`
@@ -1206,7 +1206,7 @@ Expected: no new failures.
 
 ```bash
 git add mcp_tools.go mcp_test.go
-git commit -m "feat(mcp): conduit_notify, conduit_checkpoint, conduit_checkpoint_status tools"
+git commit -m "feat(mcp): lancer_notify, lancer_checkpoint, lancer_checkpoint_status tools"
 ```
 
 ---
@@ -1283,7 +1283,7 @@ Add this function at the bottom of `daemon/push-backend/mcp.go`:
 // handleMCPDecide is called by the iOS app when the user acts on a checkpoint.
 // POST /mcp-decide
 // Body: {"checkpointId": "...", "sessionId": "...", "decision": "approved"|"denied"|"edited", "editedInput": "..."}
-// Auth: session token (existing Conduit iOS auth — X-Session-ID header)
+// Auth: session token (existing Lancer iOS auth — X-Session-ID header)
 func handleMCPDecide(w http.ResponseWriter, r *http.Request) {
     var body struct {
         CheckpointID string `json:"checkpointId"`
@@ -1372,7 +1372,7 @@ func handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 - [ ] **Step 5: Run all MCP tests**
 
 ```bash
-cd daemon/push-backend && go test -run "TestMCP|TestConduit|TestAPIKey|TestEvent|TestCheckpoint" -v
+cd daemon/push-backend && go test -run "TestMCP|TestLancer|TestAPIKey|TestEvent|TestCheckpoint" -v
 ```
 
 Expected: all `PASS`
@@ -1403,7 +1403,7 @@ w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-S
 - [ ] **Step 8: Build and run tests**
 
 ```bash
-cd daemon/push-backend && go test -run "TestMCP|TestConduit|TestAPIKey|TestEvent|TestCheckpoint" -v && go build ./...
+cd daemon/push-backend && go test -run "TestMCP|TestLancer|TestAPIKey|TestEvent|TestCheckpoint" -v && go build ./...
 ```
 
 Expected: all `PASS`, clean build.
@@ -1425,8 +1425,8 @@ Verify the full flow works against a locally running push-backend before deployi
 
 ```bash
 cd daemon/push-backend
-APNS_KEY_ID=test APNS_TEAM_ID=test APNS_KEY_PATH=/dev/null APNS_BUNDLE_ID=dev.conduit.mobile \
-DATA_DIR=/tmp/conduit-mcp-test \
+APNS_KEY_ID=test APNS_TEAM_ID=test APNS_KEY_PATH=/dev/null APNS_BUNDLE_ID=dev.lancer.mobile \
+DATA_DIR=/tmp/lancer-mcp-test \
 go run . &
 sleep 1
 ```
@@ -1463,15 +1463,15 @@ curl -s -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1"},"capabilities":{}}}'
 ```
 
-Expected: `{"jsonrpc":"2.0","id":1,"result":{"capabilities":...,"protocolVersion":"2024-11-05","serverInfo":{"name":"conduit","version":"1.0.0"}}}`
+Expected: `{"jsonrpc":"2.0","id":1,"result":{"capabilities":...,"protocolVersion":"2024-11-05","serverInfo":{"name":"lancer","version":"1.0.0"}}}`
 
-- [ ] **Step 5: Call conduit_notify**
+- [ ] **Step 5: Call lancer_notify**
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"conduit_notify","arguments":{"message":"BUY AAPL 10 @ $201","level":"info","agent_name":"TradingBot"}}}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lancer_notify","arguments":{"message":"BUY AAPL 10 @ $201","level":"info","agent_name":"TradingBot"}}}'
 ```
 
 Expected: `{"jsonrpc":"2.0","id":2,"result":{"content":[{"text":"notification sent","type":"text"}]}}`
@@ -1483,7 +1483,7 @@ Expected: `{"jsonrpc":"2.0","id":2,"result":{"content":[{"text":"notification se
 RESP=$(curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"conduit_checkpoint","arguments":{"message":"Sell TSLA at market?","context":"50 shares @ $312"}}}')
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lancer_checkpoint","arguments":{"message":"Sell TSLA at market?","context":"50 shares @ $312"}}}')
 echo $RESP
 
 CP_ID=$(echo $RESP | python3 -c "import sys,json; r=json.load(sys.stdin); print(json.loads(r['result']['content'][0]['text'])['checkpoint_id'])")
@@ -1493,7 +1493,7 @@ echo "Checkpoint ID: $CP_ID"
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"conduit_checkpoint_status\",\"arguments\":{\"checkpoint_id\":\"$CP_ID\"}}}"
+  -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"lancer_checkpoint_status\",\"arguments\":{\"checkpoint_id\":\"$CP_ID\"}}}"
 ```
 
 Expected status: `"pending"`
@@ -1509,7 +1509,7 @@ curl -s -X POST http://localhost:8080/mcp-decide \
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"conduit_checkpoint_status\",\"arguments\":{\"checkpoint_id\":\"$CP_ID\"}}}"
+  -d "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"lancer_checkpoint_status\",\"arguments\":{\"checkpoint_id\":\"$CP_ID\"}}}"
 ```
 
 Expected status: `"approved"`
@@ -1531,15 +1531,15 @@ git commit -m "test(mcp): smoke test verified end-to-end (notify + checkpoint + 
 
 ## Task 7: Wire MCP Config to Claude Code Agent
 
-Verify an actual Claude Code agent can call `conduit_notify` and `conduit_checkpoint` against the local push-backend. This is the developer-facing integration test.
+Verify an actual Claude Code agent can call `lancer_notify` and `lancer_checkpoint` against the local push-backend. This is the developer-facing integration test.
 
 - [ ] **Step 1: Create a test MCP config file**
 
 ```bash
-cat > /tmp/conduit-mcp-config.json << 'EOF'
+cat > /tmp/lancer-mcp-config.json << 'EOF'
 {
   "mcpServers": {
-    "conduit": {
+    "lancer": {
       "type": "http",
       "url": "http://localhost:8080/mcp",
       "headers": {
@@ -1557,18 +1557,18 @@ Replace `REPLACE_WITH_API_KEY` with the key generated in Task 6.
 
 ```bash
 cd daemon/push-backend
-DATA_DIR=/tmp/conduit-mcp-test go run . &
+DATA_DIR=/tmp/lancer-mcp-test go run . &
 sleep 1
 ```
 
-- [ ] **Step 3: Run a one-shot claude command with conduit MCP**
+- [ ] **Step 3: Run a one-shot claude command with lancer MCP**
 
 ```bash
-claude --mcp-config /tmp/conduit-mcp-config.json \
-  -p "Call the conduit_notify tool with message 'Hello from Claude' and level 'info'. Then call conduit_checkpoint with message 'Should I continue?' and poll conduit_checkpoint_status until the result is not pending. Report the final status."
+claude --mcp-config /tmp/lancer-mcp-config.json \
+  -p "Call the lancer_notify tool with message 'Hello from Claude' and level 'info'. Then call lancer_checkpoint with message 'Should I continue?' and poll lancer_checkpoint_status until the result is not pending. Report the final status."
 ```
 
-Expected: Claude calls `conduit_notify`, then `conduit_checkpoint`, polls `conduit_checkpoint_status` (returns "pending"), waits/polls. In a separate terminal, approve it:
+Expected: Claude calls `lancer_notify`, then `lancer_checkpoint`, polls `lancer_checkpoint_status` (returns "pending"), waits/polls. In a separate terminal, approve it:
 
 ```bash
 # In a separate terminal — simulate the iOS app approving
@@ -1599,9 +1599,9 @@ git commit -m "docs(mcp): integration verified with claude --mcp-config"
 
 **Spec coverage:**
 - [x] Cloud MCP endpoint — Tasks 3, 5
-- [x] `conduit_notify()` — Task 4
-- [x] `conduit_checkpoint()` — Task 4
-- [x] `conduit_checkpoint_status()` — Task 4
+- [x] `lancer_notify()` — Task 4
+- [x] `lancer_checkpoint()` — Task 4
+- [x] `lancer_checkpoint_status()` — Task 4
 - [x] API key auth — Tasks 1, 5
 - [x] Event storage — Task 2
 - [x] Checkpoint storage — Task 2
@@ -1629,7 +1629,7 @@ If the function is named differently (e.g. `sendPush`, `pushToDevice`), update t
 
 ---
 
-## Task 8: Loop Tracking — conduit_loop_start + conduit_step_complete
+## Task 8: Loop Tracking — lancer_loop_start + lancer_step_complete
 
 **Files:**
 - Modify: `daemon/push-backend/mcp_store.go` (add `MCPLoop` type + store)
@@ -1637,7 +1637,7 @@ If the function is named differently (e.g. `sendPush`, `pushToDevice`), update t
 - Modify: `daemon/push-backend/mcp.go` (add to `mcpToolDefinitions()`)
 - Modify: `daemon/push-backend/mcp_test.go` (append loop tests)
 
-Loops let the mobile app show structured progress ("Step 4/8 — running tests") instead of a flat notification stream. `conduit_loop_start` returns a `loop_id`; each `conduit_step_complete` call advances the progress and fires a notification only when `status` is `"failed"` or `"blocked"`.
+Loops let the mobile app show structured progress ("Step 4/8 — running tests") instead of a flat notification stream. `lancer_loop_start` returns a `loop_id`; each `lancer_step_complete` call advances the progress and fires a notification only when `status` is `"failed"` or `"blocked"`.
 
 - [ ] **Step 1: Append failing test to mcp_test.go**
 
@@ -1654,7 +1654,7 @@ func TestLoopLifecycle(t *testing.T) {
     startResp := mcpPost(t, srv, key, map[string]any{
         "jsonrpc": "2.0", "id": 30, "method": "tools/call",
         "params": map[string]any{
-            "name": "conduit_loop_start",
+            "name": "lancer_loop_start",
             "arguments": map[string]any{
                 "name":        "Deploy Loop",
                 "total_steps": 6,
@@ -1679,7 +1679,7 @@ func TestLoopLifecycle(t *testing.T) {
     stepResp := mcpPost(t, srv, key, map[string]any{
         "jsonrpc": "2.0", "id": 31, "method": "tools/call",
         "params": map[string]any{
-            "name": "conduit_step_complete",
+            "name": "lancer_step_complete",
             "arguments": map[string]any{
                 "loop_id": startObj.LoopID,
                 "step":    1,
@@ -1713,7 +1713,7 @@ func TestLoopLifecycle(t *testing.T) {
 cd daemon/push-backend && go test -run TestLoopLifecycle -v
 ```
 
-Expected: `FAIL — undefined: mcpLoopStore, conduit_loop_start, getLoop`
+Expected: `FAIL — undefined: mcpLoopStore, lancer_loop_start, getLoop`
 
 - [ ] **Step 3: Add MCPLoop type and store to mcp_store.go**
 
@@ -1788,7 +1788,7 @@ func updateLoop(loop MCPLoop) error {
 
 // updateLoopAtomic loads the loop, verifies sessionID ownership, calls mutate
 // under the same lock, then saves — preventing lost-update races from concurrent
-// conduit_step_complete calls.
+// lancer_step_complete calls.
 func updateLoopAtomic(loopID, sessionID string, mutate func(*MCPLoop) error) error {
     mcpLoopsMu.Lock()
     defer mcpLoopsMu.Unlock()
@@ -1816,7 +1816,7 @@ func updateLoopAtomic(loopID, sessionID string, mutate func(*MCPLoop) error) err
 Append to `daemon/push-backend/mcp_tools.go`:
 
 ```go
-// --- conduit_loop_start ---
+// --- lancer_loop_start ---
 
 type loopStartArgs struct {
     Name       string `json:"name"`
@@ -1852,7 +1852,7 @@ func toolLoopStart(raw json.RawMessage, sessionID string) (any, error) {
     })
 }
 
-// --- conduit_step_complete ---
+// --- lancer_step_complete ---
 
 type stepCompleteArgs struct {
     LoopID  string `json:"loop_id"`
@@ -1875,7 +1875,7 @@ func toolStepComplete(raw json.RawMessage, sessionID string) (any, error) {
     }
 
     // Atomic read-mutate-write under a single lock to avoid lost-update races
-    // when two concurrent conduit_step_complete calls arrive for the same loop.
+    // when two concurrent lancer_step_complete calls arrive for the same loop.
     var loopSnapshot MCPLoop
     err = updateLoopAtomic(args.LoopID, sessionID, func(loop *MCPLoop) error {
         if args.Step > loop.TotalSteps {
@@ -1936,8 +1936,8 @@ Add two entries to the slice returned by `mcpToolDefinitions()`:
 
 ```go
 {
-    "name":        "conduit_loop_start",
-    "description": "Start a named multi-step loop. Returns a loop_id. Call conduit_step_complete() after each step. The mobile app shows a progress bar.",
+    "name":        "lancer_loop_start",
+    "description": "Start a named multi-step loop. Returns a loop_id. Call lancer_step_complete() after each step. The mobile app shows a progress bar.",
     "inputSchema": map[string]any{
         "type": "object",
         "properties": map[string]any{
@@ -1949,12 +1949,12 @@ Add two entries to the slice returned by `mcpToolDefinitions()`:
     },
 },
 {
-    "name":        "conduit_step_complete",
-    "description": "Report completion of one step in a loop started with conduit_loop_start(). Fires a push notification only when status is 'failed' or 'blocked'.",
+    "name":        "lancer_step_complete",
+    "description": "Report completion of one step in a loop started with lancer_loop_start(). Fires a push notification only when status is 'failed' or 'blocked'.",
     "inputSchema": map[string]any{
         "type": "object",
         "properties": map[string]any{
-            "loop_id": map[string]any{"type": "string", "description": "loop_id returned by conduit_loop_start()"},
+            "loop_id": map[string]any{"type": "string", "description": "loop_id returned by lancer_loop_start()"},
             "step":    map[string]any{"type": "integer", "description": "Step number (1-indexed)"},
             "status":  map[string]any{"type": "string", "enum": []string{"ok", "failed", "blocked", "skipped"}},
             "summary": map[string]any{"type": "string", "description": "One-line description of what happened"},
@@ -1967,9 +1967,9 @@ Add two entries to the slice returned by `mcpToolDefinitions()`:
 Also add the new cases to the `switch params.Name` block in `handleToolCall` in `mcp_tools.go`:
 
 ```go
-case "conduit_loop_start":
+case "lancer_loop_start":
     result, toolErr = toolLoopStart(params.Arguments, sessionID)
-case "conduit_step_complete":
+case "lancer_step_complete":
     result, toolErr = toolStepComplete(params.Arguments, sessionID)
 ```
 
@@ -1991,12 +1991,12 @@ cd daemon/push-backend && go build ./...
 
 ```bash
 git add mcp_store.go mcp_tools.go mcp.go mcp_test.go
-git commit -m "feat(mcp): conduit_loop_start and conduit_step_complete for loop progress tracking"
+git commit -m "feat(mcp): lancer_loop_start and lancer_step_complete for loop progress tracking"
 ```
 
 ---
 
-## Task 9: Proof-of-Work — conduit_report
+## Task 9: Proof-of-Work — lancer_report
 
 **Files:**
 - Modify: `daemon/push-backend/mcp_store.go` (add `MCPReport` type + store)
@@ -2011,7 +2011,7 @@ Every loop completion or significant checkpoint should produce a structured proo
 ```go
 // Append to mcp_test.go
 
-func TestConduitProof(t *testing.T) {
+func TestLancerProof(t *testing.T) {
     mcpReportStore.path = t.TempDir() + "/proofs.json"
     srv := newMCPServer(t)
     defer srv.Close()
@@ -2020,7 +2020,7 @@ func TestConduitProof(t *testing.T) {
     resp := mcpPost(t, srv, key, map[string]any{
         "jsonrpc": "2.0", "id": 40, "method": "tools/call",
         "params": map[string]any{
-            "name": "conduit_report",
+            "name": "lancer_report",
             "arguments": map[string]any{
                 "goal":          "Fix failing login test",
                 "changed_files": []string{"src/auth/session.ts", "tests/auth.test.ts"},
@@ -2070,7 +2070,7 @@ func TestConduitProof(t *testing.T) {
 - [ ] **Step 2: Run to verify failure**
 
 ```bash
-cd daemon/push-backend && go test -run TestConduitProof -v
+cd daemon/push-backend && go test -run TestLancerProof -v
 ```
 
 Expected: `FAIL — undefined: mcpReportStore, getReport`
@@ -2136,7 +2136,7 @@ func getReport(id string) (MCPReport, error) {
 Append to `daemon/push-backend/mcp_tools.go`:
 
 ```go
-// --- conduit_report ---
+// --- lancer_report ---
 
 type reportArgs struct {
     LoopID                string   `json:"loop_id"`
@@ -2212,7 +2212,7 @@ Add to the slice:
 
 ```go
 {
-    "name":        "conduit_report",
+    "name":        "lancer_report",
     "description": "Submit a structured proof-of-work card when a task completes. Creates a rich card in the mobile inbox showing what changed, what was tested, risks, and what could not be verified.",
     "inputSchema": map[string]any{
         "type": "object",
@@ -2237,14 +2237,14 @@ Add to the slice:
 Add the case to `handleToolCall`:
 
 ```go
-case "conduit_report":
+case "lancer_report":
     result, toolErr = toolReport(params.Arguments, sessionID)
 ```
 
 - [ ] **Step 6: Run tests**
 
 ```bash
-cd daemon/push-backend && go test -run TestConduitProof -v
+cd daemon/push-backend && go test -run TestLancerProof -v
 ```
 
 Expected: `PASS`
@@ -2259,7 +2259,7 @@ cd daemon/push-backend && go build ./...
 
 ```bash
 git add mcp_store.go mcp_tools.go mcp.go mcp_test.go
-git commit -m "feat(mcp): conduit_report structured proof-of-work cards"
+git commit -m "feat(mcp): lancer_report structured proof-of-work cards"
 ```
 
 ---
@@ -2269,7 +2269,7 @@ git commit -m "feat(mcp): conduit_report structured proof-of-work cards"
 **Files:**
 - Modify: `daemon/push-backend/mcp_store.go` (add `Provenance` struct, embed in `MCPEvent` and `MCPCheckpoint`)
 - Modify: `daemon/push-backend/mcp_tools.go` (populate provenance from tool args)
-- Modify: `daemon/push-backend/mcp.go` (add provenance fields to `conduit_notify` and `conduit_checkpoint` input schemas)
+- Modify: `daemon/push-backend/mcp.go` (add provenance fields to `lancer_notify` and `lancer_checkpoint` input schemas)
 - Modify: `daemon/push-backend/mcp_test.go` (append provenance test)
 
 Every event and checkpoint must carry agent identity: which agent, on which machine, in which repo/branch, with what permission mode. Without this, the inbox is a notification bucket with no trust signal.
@@ -2288,7 +2288,7 @@ func TestProvenanceStored(t *testing.T) {
     mcpPost(t, srv, key, map[string]any{
         "jsonrpc": "2.0", "id": 50, "method": "tools/call",
         "params": map[string]any{
-            "name": "conduit_notify",
+            "name": "lancer_notify",
             "arguments": map[string]any{
                 "message":    "Build passed",
                 "level":      "info",
@@ -2385,7 +2385,7 @@ In `toolCheckpoint`, set `cp.Provenance = args.Provenance` after setting the oth
 
 - [ ] **Step 5: Update input schemas in mcpToolDefinitions()**
 
-Add to the `conduit_notify` and `conduit_checkpoint` properties maps:
+Add to the `lancer_notify` and `lancer_checkpoint` properties maps:
 
 ```go
 "provenance": map[string]any{
@@ -2428,12 +2428,12 @@ git commit -m "feat(mcp): agent provenance metadata on all events and checkpoint
 ## Updated Self-Review Checklist
 
 **All tools covered:**
-- [x] `conduit_notify` — Task 4
-- [x] `conduit_checkpoint` — Task 4
-- [x] `conduit_checkpoint_status` — Task 4
-- [x] `conduit_loop_start` — Task 8
-- [x] `conduit_step_complete` — Task 8
-- [x] `conduit_report` — Task 9
+- [x] `lancer_notify` — Task 4
+- [x] `lancer_checkpoint` — Task 4
+- [x] `lancer_checkpoint_status` — Task 4
+- [x] `lancer_loop_start` — Task 8
+- [x] `lancer_step_complete` — Task 8
+- [x] `lancer_report` — Task 9
 - [x] Agent provenance on all events/checkpoints — Task 10
 
 **Type consistency (updated):**

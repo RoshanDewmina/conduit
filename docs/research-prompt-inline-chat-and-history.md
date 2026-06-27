@@ -8,10 +8,10 @@ needs to drive.
 
 ## Context
 
-Conduit is an iOS app that dispatches AI coding agents (`claude`, `codex`, `opencode`, `kimi`) on a
+Lancer is an iOS app that dispatches AI coding agents (`claude`, `codex`, `opencode`, `kimi`) on a
 remote/local host over SSH or an E2E-encrypted blind relay. Today's flow for a phone-initiated dispatch:
 
-1. `Packages/ConduitKit/Sources/AppFeature/NewChatTabView.swift` — a compose screen: text editor +
+1. `Packages/LancerKit/Sources/AppFeature/NewChatTabView.swift` — a compose screen: text editor +
    bottom toolbar (agent picker, machine·cwd picker, model/budget options, send).
 2. On send, `AppRoot.performDispatch()` (in `AppRoot.swift`) calls either
    `E2ERelayBridge.sendDispatch` (relay) or `slot.channel.dispatchAgent` (SSH).
@@ -62,7 +62,7 @@ that named conversation should become discoverable later from the Fleet tab.
    user message + agent response render as a distinct turn (timestamped, scrollable history of turns),
    or does the existing single-flowing-text-block model (`StreamingOutputText`) extend naturally to
    multiple turns by just appending separators? Look at how `ChatTranscriptView.swift` and `ToolCardView`
-   (`Packages/ConduitKit/Sources/SessionFeature/Chat/`) — used for the SSH block-terminal pipeline
+   (`Packages/LancerKit/Sources/SessionFeature/Chat/`) — used for the SSH block-terminal pipeline
    elsewhere in the app — solve this exact "multi-turn agent conversation in one scrolling view" problem,
    since reusing that pattern would keep New Chat visually consistent with the rest of the app rather
    than introducing a third chat-rendering approach.
@@ -87,7 +87,7 @@ that named conversation should become discoverable later from the Fleet tab.
    stored — phone-side cache only (simplest, but lost if you reinstall/use a second phone) or persisted
    by the daemon alongside the session id (more durable, consistent with "host is source of truth," but
    requires the daemon to track titles it didn't generate for externally/Terminal-started sessions —
-   does it just label those "Untitled session — started outside Conduit" instead?).
+   does it just label those "Untitled session — started outside Lancer" instead?).
 6. **Phone-side caching strategy**: which conversations does the phone cache a rendered transcript for
    (only ones it has actually dispatched/streamed itself, presumably, not ones discovered via the host's
    index but never opened) — and what should the Fleet "Conversations" row show before the phone has any

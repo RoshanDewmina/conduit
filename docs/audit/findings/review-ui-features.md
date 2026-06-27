@@ -19,7 +19,7 @@ Each finding has been through an adversarial reachability pass before listing. F
 Verified-good (prior flags resolved):
 - `AgentIsland` / `AgentStatusHeader` no longer use `.system` text fonts — they use `DI.mono(_:)` / `.dsSansPt` (always-dark `DI` palette is the documented exception). Prior `.system`-font flag is **resolved**.
 - `isPro` DEBUG bypass + `DebugSeeder` are correctly compiled out of Release (`PurchaseManager.isPro`/`hasCloudEntitlement` `#if DEBUG`; `DebugProBypassToggle` `#if DEBUG`; `DebugSeeder.swift` file-level `#if os(iOS) && DEBUG`; `AppRoot`/`SessionShellView` bypasses `#if DEBUG`).
-- Pro IAP product id `dev.conduit.mobile.pro` and `$14.99` fallback price match the spec (`PurchaseManager.proProductID`).
+- Pro IAP product id `dev.lancer.mobile.pro` and `$14.99` fallback price match the spec (`PurchaseManager.proProductID`).
 - Terminal settings toggles/pickers are all actually consumed (font/keepAlive/preventSleep/haptics/scrollback/theme/all gesture flags); "Off" keep-alive (0) and "Unlimited" scrollback (0) are handled by the real readers.
 
 ---
@@ -33,7 +33,7 @@ None.
 ## MAJOR
 
 **[MAJOR] SettingsFeature/SnippetEditorView.swift:178-182 — editing a snippet silently drops `tags` and `hostTags` (data loss).**
-`SnippetEditSheet` initializes `hostTagsRaw`/`tagsRaw` from the snippet (lines 157-158) and defines `parseTags(_:)` (line 280), but the Save action constructs `Snippet(id:name:body:arguments:useCount:createdAt:)` with **no** `tags:`/`hostTags:` arguments. `Snippet.init` defaults both to `[]` (ConduitCore/Snippet.swift:20-21), so any snippet that has tags/host-tags (e.g. imported from Warp YAML or arrived via SyncEngine) is rewritten with empty arrays on every edit. `modifiedAt` also resets to `.now`, so LWW propagates the loss to other devices.
+`SnippetEditSheet` initializes `hostTagsRaw`/`tagsRaw` from the snippet (lines 157-158) and defines `parseTags(_:)` (line 280), but the Save action constructs `Snippet(id:name:body:arguments:useCount:createdAt:)` with **no** `tags:`/`hostTags:` arguments. `Snippet.init` defaults both to `[]` (LancerCore/Snippet.swift:20-21), so any snippet that has tags/host-tags (e.g. imported from Warp YAML or arrived via SyncEngine) is rewritten with empty arrays on every edit. `modifiedAt` also resets to `.now`, so LWW propagates the loss to other devices.
 *Reachability:* any snippet with non-empty `tags`/`hostTags` opened in the editor and saved. The editor has no tag-editing UI, so `hostTagsRaw`/`tagsRaw`/`parseTags` are also dead, but the round-trip wipe is the real bug.
 *Fix:* pass `hostTags: snippet.hostTags` and `tags: snippet.tags` through `original…` captured state (mirroring `originalCreatedAt`/`originalUseCount`), or wire the existing `parseTags(hostTagsRaw)` / `parseTags(tagsRaw)` into the constructor and add the missing tag fields to the form.
 
@@ -48,9 +48,9 @@ None.
 *Fix:* drop the `isoLatin1` fallback, or gate it behind a binary heuristic first (presence of NUL byte / high ratio of non-printable bytes ⇒ show the binary placeholder).
 
 **[MAJOR] KeysFeature/KeyImportView.swift:75 — encrypted-key import relies on an English error-substring match; silent failure on rewording/localization.**
-The transition into the passphrase-prompt state is `if msg.localizedCaseInsensitiveContains("passphrase") && effectivePassphrase == nil`. Control flow keys off the *localized* text of `ConduitError.errorDescription`. It works today (English descriptions contain "passphrase"), but any localization, copy edit, or upstream error-message change makes encrypted keys fall through to `.failed(...)` — the passphrase `SecureField` never appears and the user cannot import a passphrase-protected key, with only a confusing generic error.
+The transition into the passphrase-prompt state is `if msg.localizedCaseInsensitiveContains("passphrase") && effectivePassphrase == nil`. Control flow keys off the *localized* text of `LancerError.errorDescription`. It works today (English descriptions contain "passphrase"), but any localization, copy edit, or upstream error-message change makes encrypted keys fall through to `.failed(...)` — the passphrase `SecureField` never appears and the user cannot import a passphrase-protected key, with only a confusing generic error.
 *Reachability:* importing any encrypted OpenSSH key once the error wording changes / is localized. Latent now, but a brittle gate on a core path.
-*Fix:* surface a typed error case (e.g. `ConduitError.encryptedKeyRequiresPassphrase` / `.wrongPassphrase`) from `KeyStore.importEd25519FromPEM` and switch on it instead of substring-matching the description.
+*Fix:* surface a typed error case (e.g. `LancerError.encryptedKeyRequiresPassphrase` / `.wrongPassphrase`) from `KeyStore.importEd25519FromPEM` and switch on it instead of substring-matching the description.
 
 ---
 
@@ -98,7 +98,7 @@ The outer `LazyVStack` only lazily renders file sections; within a file, `ForEac
 *Fix:* record a `parseErrors` entry when a hunk has no enclosing file; treat `""` as an empty context line.
 
 **[MINOR] PreviewFeature/PreviewViewModel.swift:13, 36 — `manualPortText` and `remoteHost` are dead state.**
-`ManualPortSheet` (PreviewToolbar.swift:139-181) uses its own local `portText` and writes `selectedPort`; `manualPortText` is never read/written. `remoteHost` is never used (`PreviewSurface` hardcodes `conduit-preview://localhost/`).
+`ManualPortSheet` (PreviewToolbar.swift:139-181) uses its own local `portText` and writes `selectedPort`; `manualPortText` is never read/written. `remoteHost` is never used (`PreviewSurface` hardcodes `lancer-preview://localhost/`).
 *Fix:* remove the unused properties.
 
 **[MINOR] PreviewFeature/PreviewViewModel.swift:54-68 — screenshot temp files are never cleaned up.**
@@ -114,7 +114,7 @@ The outer `LazyVStack` only lazily renders file sections; within a file, `ForEac
 *Fix:* keep but clearly label as a placeholder, or remove until M7.
 
 **[MINOR] AppFeature/SessionShellView.swift:53-65, AppFeature/AppRoot.swift:156-168, SettingsFeature/PurchaseManager.swift:44-51 — `isPro` logic triplicated with divergent DEBUG semantics.**
-Three independent `isPro` implementations. In DEBUG with no overrides: `PurchaseManager.isPro` and `SessionShellView.isPro` default **unlocked** (`conduitDebugProBypass` absent ⇒ `true`), but `AppRoot.isPro` defaults **locked** (only `CONDUIT_FORCE_PRO=1` unlocks). The `DebugProBypassToggle` therefore unlocks session surfaces + BillingView but not `AppRoot`-driven paywalls. Release behavior is identical and correct across all three (`purchased` only, `.unknown` locked), so this is DEBUG-only confusion, but it invites drift.
+Three independent `isPro` implementations. In DEBUG with no overrides: `PurchaseManager.isPro` and `SessionShellView.isPro` default **unlocked** (`lancerDebugProBypass` absent ⇒ `true`), but `AppRoot.isPro` defaults **locked** (only `LANCER_FORCE_PRO=1` unlocks). The `DebugProBypassToggle` therefore unlocks session surfaces + BillingView but not `AppRoot`-driven paywalls. Release behavior is identical and correct across all three (`purchased` only, `.unknown` locked), so this is DEBUG-only confusion, but it invites drift.
 *Fix:* centralize on `PurchaseManager.shared.isPro` and delete the copies.
 
 **[MINOR] SettingsFeature/PremiumComparisonView.swift:20 vs AppFeature/SessionShellView.swift:173-184 — Free/Pro table contradicts gating for "inbox".**
@@ -166,7 +166,7 @@ These render real text content with the OS monospaced face, breaking glyph/metri
 ### Hardcoded colors instead of tokens
 - `KeysFeature/KeyImportView.swift:195` — `.foregroundStyle(.green)` → `t.ok`.
 - `KeysFeature/KeyImportView.swift:214` — `.foregroundStyle(.orange)` → `t.warn`.
-- `PreviewFeature/PreviewToolbar.swift:155` (`ManualPortSheet`) — `.foregroundStyle(.red)` → `t.danger` (and adopt `@Environment(\.conduitTokens)` here; the sheet currently has no token access).
+- `PreviewFeature/PreviewToolbar.swift:155` (`ManualPortSheet`) — `.foregroundStyle(.red)` → `t.danger` (and adopt `@Environment(\.lancerTokens)` here; the sheet currently has no token access).
 - `FilesFeature/FilesView.swift:272` — `renameSwipeButton.tint(.blue)` → `t.accent` (or `t.info`).
 - `DesignSystem/Components/InboxCards.swift:128` — selected letter chip `.foregroundStyle(.white)` → `t.accentFg`.
 - `DesignSystem/Components/InboxCards.swift:360` (`DSAutonomyPresetBar`) — active label `.foregroundStyle(.white)` → `t.accentFg`.
@@ -186,7 +186,7 @@ Sizing `Image(systemName:)` with `.font(.system(size:))` is idiomatic for SF Sym
 
 ## Light/Dark correctness
 
-All scoped feature views consume `@Environment(\.conduitTokens)` and apply via `.conduitTokens()` upstream, so they flip with scheme. The hardcoded `.green/.orange/.red/.blue/.white` literals above are the only scheme-blind spots in the feature surfaces; each has a scheme-adaptive token equivalent. Terminal/HUD/island stay always-dark by design.
+All scoped feature views consume `@Environment(\.lancerTokens)` and apply via `.lancerTokens()` upstream, so they flip with scheme. The hardcoded `.green/.orange/.red/.blue/.white` literals above are the only scheme-blind spots in the feature surfaces; each has a scheme-adaptive token equivalent. Terminal/HUD/island stay always-dark by design.
 
 ## Fixed-geometry list-row invariant
 

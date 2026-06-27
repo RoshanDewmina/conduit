@@ -1,6 +1,6 @@
 # Governed Approvals v1 — Pre-submission Audit: Core Kits
 
-**Scope:** AgentKit, SecurityKit, SyncKit, PersistenceKit, NotificationsKit, DiffKit + ConduitCore types.
+**Scope:** AgentKit, SecurityKit, SyncKit, PersistenceKit, NotificationsKit, DiffKit + LancerCore types.
 **Branch:** `feat/governed-approvals` (worktree `governed-approvals-audit`).
 **Method:** read-only correctness/security/concurrency review. No source modified, no build run.
 **Focus:** correctness, edge cases, races/actor-isolation, retain cycles, security, silent failures.
@@ -18,21 +18,21 @@ None found. (Several MAJOR items below are governance/security-relevant and shou
 ## MAJOR
 
 ### [MAJOR][security] BiometricGate silently *succeeds* on `.biometryLockout` (PRIOR FLAG LOW-2, still unfixed)
-`Packages/ConduitKit/Sources/SecurityKit/BiometricGate.swift:31-32`
+`Packages/LancerKit/Sources/SecurityKit/BiometricGate.swift:31-32`
 ```swift
 case .biometryNotAvailable, .biometryNotEnrolled, .biometryLockout:
     cont.resume()  // Degrade gracefully
 ```
 `biometryLockout` means biometrics *are* enrolled but are locked out after too many failed match attempts. Treating it like "no biometrics available" makes the gate **resolve as success with no authentication at all**. The policy used is `.deviceOwnerAuthenticationWithBiometrics` (no passcode fallback), so once an attacker forces a lockout (e.g. 5 failed Face ID attempts), the gate is fully bypassed.
 
-**Reachability:** confirmed reachable. `AppRoot.openSession` calls `BiometricGate.shared.unlock()` immediately before loading the Ed25519 SSH private key (`Packages/ConduitKit/Sources/AppFeature/AppRoot.swift:819-821`). So a locked-out attacker holding the device can unlock and use stored SSH keys.
+**Reachability:** confirmed reachable. `AppRoot.openSession` calls `BiometricGate.shared.unlock()` immediately before loading the Ed25519 SSH private key (`Packages/LancerKit/Sources/AppFeature/AppRoot.swift:819-821`). So a locked-out attacker holding the device can unlock and use stored SSH keys.
 
-**Proposed fix:** On `.biometryLockout`, do **not** resume success. Either throw (`ConduitError.authFailed`) or re-evaluate with `.deviceOwnerAuthentication` (allows secure passcode fallback) and only resume on a real success. Keep graceful skip only for `.biometryNotAvailable`/`.biometryNotEnrolled` (and ideally gate even those behind device-passcode existence).
+**Proposed fix:** On `.biometryLockout`, do **not** resume success. Either throw (`LancerError.authFailed`) or re-evaluate with `.deviceOwnerAuthentication` (allows secure passcode fallback) and only resume on a real success. Keep graceful skip only for `.biometryNotAvailable`/`.biometryNotEnrolled` (and ideally gate even those behind device-passcode existence).
 
 ---
 
 ### [MAJOR][correctness] SSH-host run cancellation is ineffective, and every finished run is force-marked "succeeded"
-`Packages/ConduitKit/Sources/AgentKit/Runtimes/SSHHostRuntime.swift:71-76, 88-97, 292-304, 331-337`
+`Packages/LancerKit/Sources/AgentKit/Runtimes/SSHHostRuntime.swift:71-76, 88-97, 292-304, 331-337`
 
 Three compounding defects in the run lifecycle:
 
@@ -49,7 +49,7 @@ Three compounding defects in the run lifecycle:
 ---
 
 ### [MAJOR][data-integrity] CloudKit deletions never propagate; deleted hosts/snippets are resurrected on the next pull
-`Packages/ConduitKit/Sources/SyncKit/SyncEngine.swift:98-161`, `Packages/ConduitKit/Sources/SyncKit/CloudSync.swift:51-82`, `Packages/ConduitKit/Sources/PersistenceKit/HostRepository.swift:24-28`, `Packages/ConduitKit/Sources/PersistenceKit/SnippetRepository.swift:73-76`
+`Packages/LancerKit/Sources/SyncKit/SyncEngine.swift:98-161`, `Packages/LancerKit/Sources/SyncKit/CloudSync.swift:51-82`, `Packages/LancerKit/Sources/PersistenceKit/HostRepository.swift:24-28`, `Packages/LancerKit/Sources/PersistenceKit/SnippetRepository.swift:73-76`
 
 The sync cycle is pull-then-push (`SyncEngine.swift:80-87`). Two interacting problems destroy delete semantics:
 
@@ -65,13 +65,13 @@ Net effect when enabled: deletions of hosts/snippets do not stick — they bounc
 
 ---
 
-### [MAJOR][gating/correctness] The `CONDUIT_ICLOUD_ENABLED` gate is dead code; iCloud sync is hard-disabled and, if turned on, runs **bidirectional** (contradicting the push-only contract)
-`Packages/ConduitKit/Sources/SyncKit/CloudSync.swift:22-29, 155-157`, `Packages/ConduitKit/Sources/AppFeature/AppRoot.swift:50`
+### [MAJOR][gating/correctness] The `LANCER_ICLOUD_ENABLED` gate is dead code; iCloud sync is hard-disabled and, if turned on, runs **bidirectional** (contradicting the push-only contract)
+`Packages/LancerKit/Sources/SyncKit/CloudSync.swift:22-29, 155-157`, `Packages/LancerKit/Sources/AppFeature/AppRoot.swift:50`
 
-`CloudSync.hasCloudKitEntitlement()` (the function that reads the `CONDUIT_ICLOUD_ENABLED` Info.plist flag) is `private static` and has **no callers** anywhere — it is dead code. The only construction site is `let cloudSync = CloudSync()` (`AppRoot.swift:50`), which takes the default `cloudKitEnabled: false`, so `container` is always `nil` and every CloudKit op no-ops regardless of the flag.
+`CloudSync.hasCloudKitEntitlement()` (the function that reads the `LANCER_ICLOUD_ENABLED` Info.plist flag) is `private static` and has **no callers** anywhere — it is dead code. The only construction site is `let cloudSync = CloudSync()` (`AppRoot.swift:50`), which takes the default `cloudKitEnabled: false`, so `container` is always `nil` and every CloudKit op no-ops regardless of the flag.
 
 Two problems:
-- The intended gate is not actually wired: flipping `CONDUIT_ICLOUD_ENABLED` to `true` does nothing, because nobody passes `hasCloudKitEntitlement()` into the initializer.
+- The intended gate is not actually wired: flipping `LANCER_ICLOUD_ENABLED` to `true` does nothing, because nobody passes `hasCloudKitEntitlement()` into the initializer.
 - The prior audit states iCloud sync must be **push-only** with its UI row hidden. The implemented `SyncEngine` is explicitly **bidirectional** (`pullHosts`/`pullSnippets` then push, `SyncEngine.swift:80-87`). If someone "fixes" the gate by wiring `hasCloudKitEntitlement()` in, they silently enable two-way sync (including the delete-resurrection bug above), violating the push-only contract.
 
 **Reachability:** Currently safe-by-accident (sync never runs, so no unintended PII sync). Risk is the latent mismatch between the dead gate and the documented contract.
@@ -83,7 +83,7 @@ Two problems:
 ## MINOR
 
 ### [MINOR][security] Redactor does not cover PEM private keys, generic `Bearer`/JWT tokens, or xAI keys (PRIOR FLAG LOW-5, still unfixed)
-`Packages/ConduitKit/Sources/AgentKit/Redactor.swift:17-26`
+`Packages/LancerKit/Sources/AgentKit/Redactor.swift:17-26`
 Built-in patterns cover AWS, GitHub (`gh*`/`ghs_`), Anthropic, OpenRouter, and OpenAI keys only. Missing:
 - **PEM blocks** (`-----BEGIN ... PRIVATE KEY-----`) — SSH/RSA/EC private keys would pass through unredacted if ever logged.
 - **Generic `Authorization: Bearer <token>` / JWT (`eyJ...`)** — notably `CloudEntitlement.clientToken` (a control-plane bearer token, `CloudEntitlementClient`/`HostedAgentAPIClient`) is not matched.
@@ -94,33 +94,33 @@ Built-in patterns cover AWS, GitHub (`gh*`/`ghs_`), Anthropic, OpenRouter, and O
 **Proposed fix:** add PEM-block, `Bearer\s+\S+`, JWT, and `xai-` patterns; add `_` to the OpenAI class. Add fixture tests for each.
 
 ### [MINOR][concurrency] Data race on `nonisolated(unsafe)` usage counters read concurrently with actor-isolated writes
-`Packages/ConduitKit/Sources/AgentKit/OpenRouterClient.swift:13-14, 92-109`, `Packages/ConduitKit/Sources/AgentKit/AnthropicClient.swift:20, 111-113`
+`Packages/LancerKit/Sources/AgentKit/OpenRouterClient.swift:13-14, 92-109`, `Packages/LancerKit/Sources/AgentKit/AnthropicClient.swift:20, 111-113`
 `sessionTokens`/`sessionCostUSD` are `nonisolated(unsafe)`, written inside actor-isolated `complete()` and read from `nonisolated` accessors (`latestTokenUsage()`/`latestCostUSD()`/`latestUsageRecord()`). A read can race with a write of a non-atomic value (`Double`, two-`Int` struct) → torn/stale reads (UB under the Swift memory model / TSan). The "only mutated inside the actor, so safe" comment ignores the concurrent *reader*.
 **Reachability:** UI/usage-reporter polling `latestUsageRecord()` while a completion is in flight (`SessionViewModel.swift:1052`, `AgentStore.swift:585`).
 **Proposed fix:** make the accessors `async` and actor-isolated, or back the counters with an atomic / a small lock; drop `nonisolated(unsafe)`.
 
 ### [MINOR][correctness/billing] OpenRouter streaming path never accumulates usage/cost, so `latestUsageRecord()` under-reports for streamed sessions
-`Packages/ConduitKit/Sources/AgentKit/OpenRouterClient.swift:26-71` vs `73-90`
+`Packages/LancerKit/Sources/AgentKit/OpenRouterClient.swift:26-71` vs `73-90`
 Only `complete()` updates `sessionTokens`/`sessionCostUSD`. `streamCompletion` yields `.usage` deltas but never folds them into the accumulators. Billing ingest reads `client.latestUsageRecord()` and skips when totals are zero (`AgentStore.ingestOpenRouterUsage` `AgentStore.swift:585-587`; `SessionViewModel.reportAIUsageIfNeeded` `SessionViewModel.swift:1049-1056`). For the streaming path (the primary one), the OpenRouter "inline cost tracking" silently reports nothing unless the consumer separately accumulates the `.usage` deltas.
 **Reachability:** any managed-OpenRouter streamed chat/explain → usage/cost under-metered.
 **Proposed fix:** accumulate `.usage` deltas into the actor's counters within `streamCompletion`, or document that streaming usage must be tracked by the caller and verify the caller does so.
 
 ### [MINOR][governance] RiskScorer substring rules are trivially evadable; an underscored risk can suppress approval push notifications
-`Packages/ConduitKit/Sources/AgentKit/RiskScorer.swift:9-46`, `Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift:34-39, 101`
+`Packages/LancerKit/Sources/AgentKit/RiskScorer.swift:9-46`, `Packages/LancerKit/Sources/NotificationsKit/Notifications.swift:34-39, 101`
 Scoring is literal `lowercased().contains(...)`. Flag reordering (`rm -fr /`), extra whitespace (`rm  -rf  /`), absolute paths (`/bin/rm -rf /`), or env prefixes evade the critical/high lists and score `.low`. Because `NotificationFilter.shouldDeliver` gates on `risk.rawValue >= minRisk` (`Notifications.swift:35`, used in `notifyPendingApproval` line 101), a destructive-but-underscored command will **not** generate a push notification when the user has raised `minRisk`. The in-app Inbox still lists it, which limits severity, but a user relying on notifications could miss a dangerous pending approval.
 **Reachability:** user sets `minRisk` above `.low`; agent proposes an evasive destructive command.
 **Proposed fix:** the scorer is advisory by design, but since notifications gate on it, fail safe: tokenize/normalize the command, and treat unknown/parse-failure as at least `.medium`, or do not let the notification filter suppress on risk band alone (e.g. always notify for agent-proposed `command`/`patch` regardless of band, filtering only by agent/quiet-hours).
 
 ### [MINOR][reliability/silent-failure] Device-token registration is fire-and-forget with no error handling or transport check
-`Packages/ConduitKit/Sources/NotificationsKit/Notifications.swift:162-171`
+`Packages/LancerKit/Sources/NotificationsKit/Notifications.swift:162-171`
 `registerDeviceToken` does `_ = try? await URLSession.shared.data(for: req)` — a failed registration (network error, non-2xx) is swallowed with no retry and no signal. For an approvals product this silently breaks remote (app-killed) approval delivery. Also no enforcement that `backendURL` is https (a misconfigured http URL would send the APNs token in clear).
 **Reachability:** transient failure during registration → remote approvals never arrive, user unaware.
 **Proposed fix:** check the HTTP status, surface/log failures, and retry with backoff; assert/require https for the backend URL.
 
 ### [MINOR][injection/correctness] WorkflowEngine substitutes parameter values unquoted and in nondeterministic order
-`Packages/ConduitKit/Sources/AgentKit/WorkflowEngine.swift:42-52`
+`Packages/LancerKit/Sources/AgentKit/WorkflowEngine.swift:42-52`
 `for (param, value) in resolved { command = command.replacingOccurrences(of: "{{\(param)}}", with: value) }` iterates a **dictionary** (nondeterministic order) and performs **no shell quoting** — unlike the careful `ShellQuoting` used in `AgentResumeBuilder`. A value containing `{{otherParam}}` gets re-substituted depending on iteration order (nondeterministic output), and metacharacter-bearing values break/inject into the emitted command.
-**Reachability:** currently **low** — `WorkflowEngine` is not instantiated anywhere in app sources (only `WorkflowEngineTests`). The live parameterized-snippet path is `SnippetPaletteSheet.filledBody` (`Packages/ConduitKit/Sources/SessionFeature/SnippetPaletteSheet.swift:150-158`), which is *also* unquoted but renders into a user-reviewed preview before insertion (self-injection on the user's own host).
+**Reachability:** currently **low** — `WorkflowEngine` is not instantiated anywhere in app sources (only `WorkflowEngineTests`). The live parameterized-snippet path is `SnippetPaletteSheet.filledBody` (`Packages/LancerKit/Sources/SessionFeature/SnippetPaletteSheet.swift:150-158`), which is *also* unquoted but renders into a user-reviewed preview before insertion (self-injection on the user's own host).
 **Proposed fix:** substitute over `orderedParams` (already computed) instead of the dict; shell-quote values destined for command lines (reuse `ShellQuoting`), or clearly scope substitution to non-shell contexts.
 
 ---
@@ -128,27 +128,27 @@ Scoring is literal `lowercased().contains(...)`. Flag reordering (`rm -fr /`), e
 ## NIT
 
 ### [NIT][hardening] AgentResumeBuilder emits env keys unquoted and allows leading `-` in tokens
-`Packages/ConduitKit/Sources/AgentKit/AgentResumeBuilder.swift:33-42, 142-146`
+`Packages/LancerKit/Sources/AgentKit/AgentResumeBuilder.swift:33-42, 142-146`
 Env keys are interpolated bare (`"\(key)=\(singleQuoted(value))"`); a key with shell metacharacters would break/inject the `env …` prefix. `shellToken` permits a bare leading `-` (allowed set includes `-`), so a `sessionId`/value starting with `-` can be read as a flag by the agent CLI (argument injection, not shell injection). Inputs are app-controlled today, so low risk.
 **Proposed fix:** validate/whitelist env key names; prefix ambiguous tokens with `--`/`./` or quote them.
 
 ### [NIT][security] HostKeyStore treats keychain read errors as "unknown host", weakening TOFU on transient failures
-`Packages/ConduitKit/Sources/SecurityKit/HostKeyStore.swift:21-24, 34-41`
+`Packages/LancerKit/Sources/SecurityKit/HostKeyStore.swift:21-24, 34-41`
 `recorded(for:)` does `try? await keychain.read(...)` → returns `nil` on *any* error (locked keychain, transient OSStatus), not just not-found. `verify` then returns `.unknown` instead of `.match`/`.mismatch`, producing a fresh trust prompt for an already-known host. A MITM coinciding with keychain unavailability could get a re-TOFU.
 **Proposed fix:** distinguish `errSecItemNotFound` (genuinely unknown) from other errors (fail closed / surface error) rather than collapsing both to `nil`.
 
 ### [NIT][robustness] `HostedAgentAPIClient.url(for:)` force-unwraps `URLComponents`/`.url`
-`Packages/ConduitKit/Sources/AgentKit/HostedAgentRuntime.swift:586-598`
+`Packages/LancerKit/Sources/AgentKit/HostedAgentRuntime.swift:586-598`
 `URLComponents(...)!` and `components.url!` can theoretically return `nil` for malformed query strings (e.g. an `agentID` with `&`/`#` in `listRuns`). Server-generated ids make this low-risk, but a crash on bad input is avoidable.
 **Proposed fix:** build queries with `URLQueryItem` (percent-encoded) and return a thrown error instead of force-unwrapping.
 
 ### [NIT][robustness] OpenAIClient.complete assumes non-optional `message.content`
-`Packages/ConduitKit/Sources/AgentKit/OpenAIClient.swift:81-86`
+`Packages/LancerKit/Sources/AgentKit/OpenAIClient.swift:81-86`
 `Choice.Msg.content` is a non-optional `String`; an OpenAI response with `content: null` (tool-call/refusal) makes decoding throw rather than yielding empty text. AnthropicClient handles optional text. Minor robustness asymmetry.
 **Proposed fix:** make `content` optional and default to `""`.
 
 ### [NIT][resource] SyncEngine.start() can leak a prior notification task; counters grow unbounded
-`Packages/ConduitKit/Sources/SyncKit/SyncEngine.swift:48-61, 83`
+`Packages/LancerKit/Sources/SyncKit/SyncEngine.swift:48-61, 83`
 Calling `start()` twice overwrites `notificationTask` without cancelling the previous observer (task leak). `conflictCount` accumulates across cycles and is never reset.
 **Proposed fix:** cancel any existing `notificationTask` before reassigning; reset/define the lifetime of `conflictCount`.
 

@@ -3,7 +3,7 @@
 > Depends on WS-0. Mostly verification + small spacing fixes. Best done on a device/sim with a notch + home indicator.
 
 ## Context
-Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/ConduitKit && swift build`. Read `CLAUDE.md` "Visual verification".
+Repo `/Users/roshansilva/Documents/command-center`, branch off `feat/warp-style-agent-blocks`. Build: `cd Packages/LancerKit && swift build`. Read `CLAUDE.md` "Visual verification".
 
 **Areas to audit:** the bottom `DSTabBar` (fixed 64pt, `DesignSystem/Components/Composites.swift:570–622`) and its `safeAreaInset(.bottom)` + `safeAreaPadding(.bottom)` wiring in `AppFeature/AppRoot.swift:488–519`; the session composer inset (`SessionView.swift:137–141`). Source marks this **SUSPECTED — needs on-device confirmation** (code respects insets; real-device check pending).
 

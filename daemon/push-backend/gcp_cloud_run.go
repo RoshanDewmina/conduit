@@ -35,7 +35,7 @@ var gcpOrchestrationStore = struct {
 	mu   sync.Mutex
 	path string
 }{
-	path: dataFilePath("GCP_ORCHESTRATION_FILE", "conduit-gcp-orchestrations.json"),
+	path: dataFilePath("GCP_ORCHESTRATION_FILE", "lancer-gcp-orchestrations.json"),
 }
 
 func initGCPOrchestrationStore() {
@@ -145,8 +145,8 @@ func buildCloudRunJobSpec(agent *Agent, project, region, jobName string) map[str
 			"name":      jobName,
 			"namespace": project,
 			"labels": map[string]string{
-				"conduit-agent-id": agent.ID,
-				"conduit-customer": agent.CustomerID,
+				"lancer-agent-id": agent.ID,
+				"lancer-customer": agent.CustomerID,
 			},
 		},
 		"spec": map[string]any{
@@ -158,17 +158,17 @@ func buildCloudRunJobSpec(agent *Agent, project, region, jobName string) map[str
 								{
 									"image": cloudRunDefaultImage(),
 									"env": []map[string]string{
-										{"name": "CONDUIT_AGENT_ID", "value": agent.ID},
+										{"name": "LANCER_AGENT_ID", "value": agent.ID},
 									},
 								},
 							},
-							"serviceAccountName": fmt.Sprintf("conduit-agent-%s", truncateID(agent.ID, 8)),
+							"serviceAccountName": fmt.Sprintf("lancer-agent-%s", truncateID(agent.ID, 8)),
 						},
 					},
 				},
 			},
 		},
-		"_conduit": map[string]any{
+		"_lancer": map[string]any{
 			"project": project,
 			"region":  region,
 			"runtime": "gcp_cloud_run",
@@ -206,7 +206,7 @@ func submitCloudRunJobIfConfigured(spec map[string]any) error {
 					{
 						Image: image,
 						Env: []*runv2.GoogleCloudRunV2EnvVar{
-							{Name: "CONDUIT_CONTROL_PLANE_URL", Value: controlPlaneURL},
+							{Name: "LANCER_CONTROL_PLANE_URL", Value: controlPlaneURL},
 						},
 					},
 				},
