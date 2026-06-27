@@ -1,5 +1,9 @@
 # Lancer — Known Issues & Pre-Launch Audit (canonical)
 
+> **2026-06-27 lean sweep.** Periphery app-target scan, reachability grep, Swift/Go gates, and
+> Go `deadcode` were used to remove dead Swift/Go/rebrand cruft. Remaining zero-ref hosted-cloud
+> UI and SSH/legacy transport are intentionally retained per `AGENTS.md`.
+>
 > **2026-06-20 editorial redesign — deferred perf items.** The pixel-faithful redesign +
 > IA refactor shipped (see git log on `codex/ios27-shell-workspace`). Cheap perf wins done:
 > all `.repeatForever()` animations confirmed Reduce-Motion-gated; 711 lines of dead code
@@ -140,7 +144,8 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
 ## 3. Architecture & dead code
 
 **Verified against current code (V1_READINESS_AUDIT.md was partially actioned):**
-- ✅ Already removed: `isDemo` dead branches (InboxView), `SessionsHomeView`, `WorktreeBoardView`.
+- ✅ Already removed: `isDemo` dead branches (InboxView), `SessionsHomeView`.
+- ✅ Removed in the 2026-06-27 lean sweep: `WorktreesFeature` whole target, `RunnerSetupView`, `EditScheduleSheet`, `LoopDetailView`, `GitStore`, stale `scripts/rebrand-lancer.py`, Conduit StoreKit metadata, HostControlKit `.conduit` socket/token fallback, and unused Go helpers flagged by `deadcode`.
 - ✅ Engine boundary intact: `LancerCore/SecurityKit/SSHTransport/AgentKit/PersistenceKit/NotificationsKit/DiffKit/SyncKit` import **zero** SwiftUI/UIKit.
 - ✅ **Removed this session:** stale Swift `lancerd` → `daemon/lancerd/legacy-swift/`; 8 zero-ref DS
   components (`DSMetricTile/DSRiskRow/DSStepNode/DSHealthRow/DSToast/DSIconTokenView` + dead `DSSkeletonRow`
@@ -227,6 +232,9 @@ perf issues.** The hot paths are correctly engineered:
 `docs/legal/SECURITY_ARCHITECTURE.md`, `docs/ROADMAP.md`, **this file** (`KNOWN_ISSUES.md`),
 `docs/block-terminal-implementation.md`. (`LANCER_PROJECT_DOSSIER.md` is **archived** —
 ARCHITECTURE.md §0.1 is its successor.)
+Tab/gallery-era handoff/planning docs (`docs/design-handoff/PAGES.md`,
+`docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, root `ship-plan/`)
+are now archived under `docs/_archive/`.
 
 **Recommended archival** (move to `docs/_archive/` with a pointer — preserve, don't delete; do deliberately
 in a dedicated cleanup pass, checking inbound references first): `docs/current-state-audit.md`,

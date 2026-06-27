@@ -5,7 +5,7 @@
 >
 > **Screenshots — read this first.**
 > - `docs/design-handoff/app-screenshots/` — **real app**, captured 2026-06-23 from the current build (post-cleanup). These are the source of truth for the *current* design language.
-> - `docs/audits/screenshots/` — earlier renders of the production SwiftUI components (the in-app preview harness that produced them has since been **deleted**, so they can't be regenerated). Treat as design reference for shipping components, not as live screens.
+> - `docs/_archive/stale-ui-audits-2026-06-27/audits/screenshots/` — earlier renders of the production SwiftUI components (the in-app preview harness that produced them has since been **deleted**, so they can't be regenerated). Treat as design reference for shipping components, not as live screens.
 > - **Removed as old-design prototypes** (deleted from code this pass, do not design around them): "Agent Features", "Agent HUD / island", "Proof Card", the "Sessions glyph gallery", and the "Typed Inbox" prototype.
 >
 > Supporting audit: `docs/audits/*.md`.
@@ -81,7 +81,7 @@ Onboarding account+SSH screens (text-heavy, value-late) · the agent-detail view
 
 ### Codebase cleanup already done (2026-06-23, build-verified)
 To reduce sprawl before redesign, the following were **deleted** (builds green, app + package):
-the entire **debug gallery harness**, the **legacy 7-step onboarding** flow (production uses the 4-step redesign), the duplicate **KeysView** module + legacy **FilesView**/**AgentsView**, both repo `archive/` dirs, and ~13 **orphaned prototype components/sheets** (incl. the 5 old-design screens above). Net ≈ **−8,000 LOC**. **Kept** (your earlier decision): the deferred-V2 code (hosted-cloud, loops, worktrees). So the live surface is now meaningfully smaller than the original audit's screen-inventory implies.
+the entire **debug gallery harness**, the **legacy 7-step onboarding** flow (production uses the 4-step redesign), the duplicate **KeysView** module + legacy **FilesView**/**AgentsView**, both repo `archive/` dirs, and ~13 **orphaned prototype components/sheets** (incl. the 5 old-design screens above). The 2026-06-27 lean sweep also deleted the dead `WorktreesFeature` target and stale loop/runner setup sheets. Net ≈ **−8,000 LOC** plus the later target sweep. **Kept:** deferred-V2 hosted-cloud code and legacy SSH transport. So the live surface is now meaningfully smaller than the original audit's screen-inventory implies.
 
 ### Real screen captures (full set, 2026-06-23)
 All driven through the **real running app** via XCUITest navigation against the app's populated-state seams (`LANCER_UITEST_RESEED` + `LANCER_FAKE_RELAY_HOST`) — not the (now-deleted) gallery. In `app-screenshots/`:
@@ -133,7 +133,7 @@ Save these into `app-screenshots/` with matching `real-NN-<name>.png` names and 
 - CI events / git-clone (backend-only) — *future*.
 
 ### Future-only (retain, keep OUT of V1)
-Hosted-cloud execution (run agents in the cloud + prepaid credits + Provider/Hosted/SelfHostVsHosted screens), multi-cloud agent-runner, scheduling, loops, worktrees, SFTP file browser.
+Hosted-cloud execution (run agents in the cloud + prepaid credits + Provider/Hosted/SelfHostVsHosted screens), multi-cloud agent-runner, scheduling, loops, and SFTP file browser.
 
 ### May be removed / deferred
 Legacy onboarding flow; AgentOrg; Appearance setting (fixed-dark no-op); duplicate Keys/Audit/Premium-comparison screens; 7 of 8 agent-detail views.

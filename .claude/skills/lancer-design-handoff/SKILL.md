@@ -8,10 +8,10 @@ description: Use when generating, regenerating, or updating the Lancer design ha
 ## Overview
 
 Regenerate the design handoff so it **cannot go stale**. The screen list is always derived
-from current Swift source and gallery routes — never from an old doc or memory. Screenshots are
-captured fresh for everything the gallery can render; everything else is listed with source +
-purpose so a human can shoot it. This is the task from the 2026-06-24 session where the prior
-handoff showed the *old* design and had to be rebuilt by hand.
+from current Swift source and real-app debug seams — never from an old doc or memory. Screenshots are
+captured fresh for every reachable seeded route; everything else is listed with source + purpose so a
+human can shoot it. This is the task from the 2026-06-24 session where the prior handoff showed the
+*old* design and had to be rebuilt by hand.
 
 **Why this skill exists:** the recurring failure is a handoff whose page list and screenshots
 drift from the shipped UI. Deriving both from code each run removes the drift at the root.
@@ -20,7 +20,7 @@ drift from the shipped UI. Deriving both from code each run removes the drift at
 
 - **Derive the screen set from code, not from the existing handoff.** The old doc is suspect.
 - **Delete the old screenshots dir before capturing** — never let a stale PNG survive a rerun.
-- **The old `LANCER_GALLERY` debug gallery was deleted (2026-06-24).** Do not reference it.
+- **The old debug-gallery launch seam was deleted (2026-06-24).** Do not reference it.
   Screenshots now come from the **real app**, seeded and deep-linked via env (below). **Re-verify
   the env knobs against `AppRoot.swift` before each run** — they drift.
 - Screens with no deep-link land via in-app navigation; if you can't reach one, mark it

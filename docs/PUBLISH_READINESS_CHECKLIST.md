@@ -1,8 +1,8 @@
 # Lancer — Publish Readiness Checklist (single source of truth)
 
-> Reconciled 2026-06-18 against **today's verified state** (branch `v1-chat-persistence-sidebar`).
+> Reconciled 2026-06-27 against the current cleanup branch and live-loop/TestFlight state.
 > Supersedes the status claims in `docs/_archive/remaining-work.md` (2026-05-28, stale: says "free team"),
-> and reconciles `ship-gate-owner-steps.md` + `PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
+> and reconciles `ship-gate-owner-steps.md` + archived `docs/_archive/PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
 > When those disagree, **this file + `ARCHITECTURE.md` (§0.1 / §4.1) win.**
 > (`LANCER_PROJECT_DOSSIER.md` is archived under `docs/_archive/` — superseded by `ARCHITECTURE.md` §0.1.)
 
@@ -10,11 +10,11 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 
 ---
 
-## A. Verified GREEN (2026-06-18)
+## A. Verified GREEN (updated 2026-06-27)
 
 | Layer | Result | Evidence |
 |---|---|---|
-| LancerKit (SPM) build + tests | ✅ **385 tests / 61 suites pass** | `swift build && swift test` exit 0 |
+| LancerKit (SPM) build + tests | ✅ **449 Swift Testing tests / 75 suites + 13 HostControlKit tests + 8 XCTest tests pass** | `cd Packages/LancerKit && swift build && swift test` exit 0 |
 | lancerd + policy (Go) | ✅ pass | `go test ./...` exit 0 |
 | push-backend (Go) | ✅ pass | `go test ./...` exit 0 |
 | agent-runner (Go) | ✅ pass | `go test ./...` exit 0 |
@@ -27,6 +27,9 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 | Fleet thread routing | ✅ `FleetThreadMapper` with 4 tests | maps host/agent/cwd to conversation |
 | Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop |
 | **Full live governed-approvals loop** | ✅ **proven on simulator** after fixing 2 bugs | `docs/test-runs/2026-06-12-live-loop-pass1.md` |
+| **App-closed physical-device approval loop** | ✅ **PASSED 2026-06-23** | APNs lock-screen push → approve while app closed → decision round-tripped → agent resumed; see `docs/test-runs/2026-06-22-full-device-test.md` |
+| **Governance home** | ✅ merged | Sidebar route consolidates policy/audit/secrets/drift/doctor/usage without reintroducing a Control tab |
+| **TestFlight** | ✅ uploaded | Build uploaded; release remains gated on beta validation/App Review/owner store operations |
 | Visual consistency, light+dark | ✅ | polish batch 1 |
 
 **Two live-relay bugs found & fixed (June 17):** TOFU first-connect never armed the daemon channel;
@@ -39,7 +42,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [x] **B1 — Reconcile the current working tree before release.** ✅ 2026-06-20: Codex's account-identity + V1-surface WIP verified (414 SPM tests, app-target UI 7/7 iPhone+iPad, all 3 Go modules, resident smoke 4/4) and committed to `codex/ios27-shell-workspace`; device-management screen added. No secrets staged (Supabase config is `$(...)` placeholders).
 - [x] **B0 — Restore the tester loop (P0).** ✅ RECONCILED 2026-06-24 (see `KNOWN_ISSUES.md` §0): (a) the canonical relay `https://conduit-push-y4wpy6zeva-ts.a.run.app` (the URL `project.yml:26` actually ships) returns `/health` 200 — the `sslip.io` / `lancer-push` references were stale doc drift; (b) `scripts/release-lancerd.sh` now emits the flat `lancerd_${os}_${arch}` binaries + `SHA256SUMS` + `install.sh` that the installer consumes, and the `curl|sh` loop was proven end-to-end offline. **Owner step:** run the release script + the printed `gsutil cp … gs://conduit-dist-f1c2466d/` to publish the binaries.
 - [x] **B2 — Make the live app↔daemon relay repeatable.** ✅ `scripts/relay-regression.sh` created. Run it to verify the loop.
-- [ ] **B3 — Green *app-target* Release build + clean archive.** Requires Xcode (watchOS runtime gate). SPM passes, but full Xcode scheme catches strict-concurrency breaks SPM misses.
+- [ ] **B3 — Green *app-target* build/archive on this cleanup branch.** Requires Xcode (watchOS runtime gate). SPM passes, but full Xcode scheme catches strict-concurrency breaks SPM misses.
 - [ ] **B4 — Rebuild/repackage lancerd from Go source.** `scripts/release-lancerd.sh` must emit the Go build.
 - [ ] **B5 — Finish the 16 remaining pixel-polish items.** Documented in `docs/superpowers/specs/2026-06-12-lancer-pixel-perfect-polish-plan.md`.
 - [ ] **B6 — Reconcile the push-backend WIP.** Divergent security design parked in stash.
@@ -63,9 +66,9 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 
 - [x] **D1 — Confirm APNs secrets on the *running* backend.** ✅ Set on Cloud Run `lancer-push` (australia-southeast1) + hermes-box `relay.env`. `APPROVAL_RELAY_SECRET` enforced.
 - [ ] **D2 — App Store Connect setup.** App record, Push + CloudKit + App Groups entitlements, IAP `dev.lancer.mobile.pro` Non-Consumable $14.99, privacy nutrition label, screenshots, reviewer notes.
-- [ ] **D3 — Physical-device validation** (= C2).
+- [x] **D3 — Physical-device validation** (= C2). ✅ PASSED 2026-06-23.
 - [ ] **D4 — Vanity domain + DNS.** Repoint `LANCER_PUSH_BACKEND_URL` off `sslip.io` to `push.conduit.dev`.
-- [ ] **D5 — Archive → TestFlight → release.** Xcode Organizer or `fastlane`.
+- [x] **D5 — Archive → TestFlight upload.** ✅ TestFlight build uploaded; release/App Review remains owner-gated after beta validation.
 
 ---
 

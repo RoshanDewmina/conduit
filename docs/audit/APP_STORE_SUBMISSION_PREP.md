@@ -25,7 +25,7 @@ Lancer relays commands and outputs between the user's own iOS device and their o
 User's phone ↔ (TLS WebSocket) ↔ open-source blind relay ↔ (WebSocket) ↔ lancerd daemon (Go, on user's host) ↔ (SSH to user's own machine). The relay never has access to plaintext data, SSH keys, or source code. End-to-end encryption uses X25519 ECDH + ChaCha20-Poly1305.
 
 **Test account / demo:**
-No login required. On first launch the app shows an onboarding screen. To see the approval UI without a live host, build the DEBUG scheme with `LANCER_GALLERY=review` — this pre-seeds the inbox with sample approval cards. The production app requires the user to install `lancerd` on their own machine (open-source, `go install github.com/lancer-dev/lancerd@latest`) and pair via QR code.
+No login required. On first launch the app shows an onboarding screen. For reviewer/demo screenshots, use the current real-app debug seams (`LANCER_UITEST_RESEED=1`, optional `LANCER_FAKE_RELAY_HOST=1`, and `LANCER_DESTINATION=inbox|machines|settings|sessions`) rather than the deleted gallery harness. The production app requires the user to install `lancerd` on their own machine (open-source, `go install github.com/lancer-dev/lancerd@latest`) and pair via QR code.
 
 **Precedent:**
 Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Lancer adds AI-agent approval on top of the same SSH terminal pattern. The agent interaction is text-in/text-out over SSH, identical to a terminal session. No executable code is downloaded to the device.
@@ -35,7 +35,7 @@ Blink Shell (CA Tech Kids Inc., ID 1594898306) — SSH terminal app. Lancer adds
 
 ---
 
-*If Apple requests a demo video: approve a screen recording of the gallery mode showing the inbox flow. The simulation produces the same approval cards a live host would send.*
+*If Apple requests a demo video: record the real app with the seeded DEBUG reviewer seam showing the Inbox approval flow, or use a live paired host. The deleted gallery mode must not be referenced in reviewer instructions.*
 
 ---
 
@@ -297,7 +297,7 @@ Use the text from `docs/app-store-metadata.md` (§Promotional text, §Descriptio
 Apple reviews the first TestFlight external build. Use the same App Review notes from §1. Additionally:
 
 - Note that the app requires the user's own daemon (`lancerd`) running on their own host — testers must install it separately.
-- Provide a `DEBUG`-scheme test scenario: launch with `LANCER_GALLERY=review` to see seeded approval cards without a live daemon.
+- Provide a `DEBUG`-scheme test scenario using `LANCER_UITEST_RESEED=1` and `LANCER_DESTINATION=inbox` to see seeded approval cards without a live daemon.
 
 ### 5.3 Common rejection scenarios and responses
 
@@ -344,7 +344,7 @@ Before uploading:
 
 - [ ] `swift build && swift test` passes in `Packages/LancerKit`
 - [ ] Xcode Release archive succeeds (iOS app target — not just SPM)
-- [ ] No DEBUG-only features leak into Release build (gallery harness, auto-trust host key)
+- [ ] No DEBUG-only features leak into Release build (seeded reviewer seams, auto-trust host key)
 - [ ] All `NSPrivacy*` declarations match actual API usage
 - [ ] `ITSAppUsesNonExemptEncryption = false` and the rationale is documented
 - [ ] App Review notes drafted (§1 above) and pasted into App Store Connect

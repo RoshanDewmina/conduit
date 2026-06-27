@@ -253,7 +253,7 @@ The Snippets / Workflow system is fully implemented with `{{arg}}` placeholders 
 
 These invariants are documented in CLAUDE.md and must be preserved across all UX work:
 
-1. **Fixed-geometry right columns:** Session rows must allocate a fixed-width slot for the unread badge even when empty. Use `ZStack(alignment: .trailing) { ... }.frame(width: 20, alignment: .trailing)` so the animated PixelBox never shifts horizontally between rows. Reference: `ReviewSessionRow` in `AppFeature/DebugGalleryView.swift`.
+1. **Fixed-geometry right columns:** Session rows must allocate a fixed-width slot for the unread badge even when empty. Use `ZStack(alignment: .trailing) { ... }.frame(width: 20, alignment: .trailing)` so status badges and animated identity marks never shift horizontally between rows.
 
 2. **Alt-screen renders block-embedded:** vim/htop/tmux render inside their block via the block-embedded SwiftTerm. There is no full-screen overlay swap. The `isRaw`/`activeShell`/`RawTerminalView` escalation path is dormant — do not re-activate it.
 

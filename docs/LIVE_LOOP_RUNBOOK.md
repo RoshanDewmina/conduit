@@ -135,7 +135,7 @@ This is the proven path; use it to confirm your environment before going to devi
 ```bash
 ./scripts/relay-regression.sh
 ```
-What it does: builds the app, installs to the booted sim, launches the **session harness** (`LANCER_GALLERY=session`) with `LANCER_TEST_AUTOCMD=claude` so a block forms without typing, screenshots `before-approval`, waits for you to tap **Approve**, screenshots `after-approval`.
+What it does: builds the app, installs to the booted sim, launches the real sidebar shell with `LANCER_DAEMON_E2E=1` and `LANCER_DESTINATION=sessions`, seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve**, screenshots `after-approval`. The old session gallery route is gone.
 
 Manual equivalent (if you want to drive it yourself):
 ```bash
@@ -143,9 +143,9 @@ xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
 xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/Lancer.app
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
-env SIMCTL_CHILD_LANCER_GALLERY=session \
+env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 SIMCTL_CHILD_LANCER_DESTINATION=sessions \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
-    SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
+    SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted dev.lancer.mobile
 sleep 12; xcrun simctl io booted screenshot /tmp/loop-card.png && open /tmp/loop-card.png
 ```

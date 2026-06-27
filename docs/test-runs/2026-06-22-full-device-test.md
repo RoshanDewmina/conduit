@@ -104,7 +104,7 @@ Trust Center + onboarding/subscribe strings) — owner decision, infra deliberat
 
 ## Simulator visual/design QA sweep — 2026-06-23 (Xcode 27, iOS 27 sim)
 
-Walked 31 Debug Gallery routes (`LANCER_GALLERY=<route>`) on iPhone 17 Pro. **Structural finding:**
+Walked 31 now-deleted debug-gallery routes on iPhone 17 Pro. **Structural finding:**
 the app is **fixed-dark** — it ignores the system appearance toggle (`simctl ui … appearance`);
 appearance is an in-app `@AppStorage` (Settings → Appearance). So light/dark parity is a deliberate
 dark-first product stance, not a per-route bug; light-mode testing is N/A until a light theme ships.
