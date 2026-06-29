@@ -93,7 +93,9 @@ public final class ApprovalRelay {
     /// Tracks pending decision deliveries for staleness detection.
     public private(set) var deliveryTracker = DecisionDeliveryTracker()
 
-    private init() {}
+    /// Internal (not private) so tests can construct a fresh instance instead of
+    /// mutating the shared singleton. Production code uses `shared`.
+    init() {}
 
     // MARK: - Public API
 
@@ -141,7 +143,7 @@ public final class ApprovalRelay {
 
         // 2. Hydrate credentials from Keychain in case this is a cold launch
         //    (no prior foreground connect in this process lifetime).
-        hydrateCredentialsIfNeeded()
+        await hydrateCredentialsIfNeeded()
 
         // 3. Forward to lancerd (live SSH channel → backend relay → SSH-drain queue).
         await forwardDecisionOnly(approvalID: approvalID, decision: decision, editedToolInput: nil)
@@ -184,7 +186,7 @@ public final class ApprovalRelay {
         }
 
         // 3. Try backend relay (hydrate credentials if still empty from cold launch)
-        hydrateCredentialsIfNeeded()
+        await hydrateCredentialsIfNeeded()
         let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
         if delivered {
             deliveryTracker.recordAcknowledgement(approvalID: approvalID)
@@ -264,29 +266,28 @@ public final class ApprovalRelay {
 
     /// Load relay credentials from Keychain when the in-memory vars are empty
     /// (i.e. this is a cold-launch process that was never connected to a daemon).
-    /// This is called synchronously but spawns a Task; the relay path's URLSession
-    /// call is also async so the credentials will be populated before the network
-    /// request fires.
-    private func hydrateCredentialsIfNeeded() {
+    /// `await` this before any path that reads the credentials: the Keychain read
+    /// is async, and `postDecisionToBackend`'s `guard !relayToken.isEmpty` runs
+    /// *before* its URLSession suspension — so a fire-and-forget hydration would
+    /// not have populated the token in time and the cold-launch forward would be
+    /// queued instead of relayed.
+    private func hydrateCredentialsIfNeeded() async {
         guard backendURL.isEmpty || sessionID.isEmpty || relayToken.isEmpty else { return }
         let kc = credentialKeychain
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            if self.backendURL.isEmpty,
-               let d = try? await kc.read(account: Self.kcBackendURL),
-               let s = String(data: d, encoding: .utf8), !s.isEmpty {
-                self.backendURL = s
-            }
-            if self.sessionID.isEmpty,
-               let d = try? await kc.read(account: Self.kcSessionID),
-               let s = String(data: d, encoding: .utf8), !s.isEmpty {
-                self.sessionID = s
-            }
-            if self.relayToken.isEmpty,
-               let d = try? await kc.read(account: Self.kcRelayToken),
-               let s = String(data: d, encoding: .utf8), !s.isEmpty {
-                self.relayToken = s
-            }
+        if backendURL.isEmpty,
+           let d = try? await kc.read(account: Self.kcBackendURL),
+           let s = String(data: d, encoding: .utf8), !s.isEmpty {
+            backendURL = s
+        }
+        if sessionID.isEmpty,
+           let d = try? await kc.read(account: Self.kcSessionID),
+           let s = String(data: d, encoding: .utf8), !s.isEmpty {
+            sessionID = s
+        }
+        if relayToken.isEmpty,
+           let d = try? await kc.read(account: Self.kcRelayToken),
+           let s = String(data: d, encoding: .utf8), !s.isEmpty {
+            relayToken = s
         }
     }
 

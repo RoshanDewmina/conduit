@@ -173,6 +173,15 @@ public struct DispatchResult: Codable, Sendable, Hashable {
         self.rule = rule
         self.message = message
     }
+
+    /// The runId of a genuinely *started* run, or `nil` otherwise. A usable run
+    /// requires `status == "started"` AND a non-empty runId — an empty-string
+    /// runId from the daemon would pass a bare `if let` and then silently break
+    /// approval/output matching on the follow-up turn (TEST-02).
+    public var startedRunId: String? {
+        guard status == "started", let runId, !runId.isEmpty else { return nil }
+        return runId
+    }
 }
 
 // A recurring interval dispatch on the resident bridge (WS-B2), persisted by

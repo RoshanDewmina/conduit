@@ -1011,7 +1011,7 @@ public struct NewChatTabView: View {
             let result = try await active.channel.continueRun(runId: active.runId, prompt: trimmed)
             switch result.status {
             case "started":
-                guard let newRunId = result.runId else {
+                guard let newRunId = result.startedRunId else {
                     dispatchErrorMessage = result.message ?? "Couldn't continue the run."
                     return
                 }

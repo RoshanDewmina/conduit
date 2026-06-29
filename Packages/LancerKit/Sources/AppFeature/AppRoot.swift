@@ -16,7 +16,6 @@ import OnboardingFeature
 import SettingsFeature
 import DesignSystem
 
-import DiffFeature
 import SyncKit
 
 /// The single composition root. The whole app graph is wired in `init`.
