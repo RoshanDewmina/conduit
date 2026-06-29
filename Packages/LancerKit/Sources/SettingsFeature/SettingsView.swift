@@ -663,9 +663,9 @@ public struct SettingsView: View {
                 NavigationLink { AutonomyLevelView() } label: {
                     settingsGridCard("Default autonomy", icon: "slider.horizontal.3", tint: t.accent, detail: autonomyLabel)
                 }.buttonStyle(.plain)
-                if auditRepository != nil {
+                if let auditRepository {
                     NavigationLink {
-                        AuditView(viewModel: AuditViewModel(repository: auditRepository!), daemonChannel: daemonChannel)
+                        AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
                     } label: {
                         settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "approval & run history")
                     }.buttonStyle(.plain)

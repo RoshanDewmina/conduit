@@ -58,6 +58,11 @@ struct LancerApp: App {
         AppRoot()
             .onOpenURL { url in
                 guard url.scheme == "lancer" else { return }
+                // Defense-in-depth (SEC-1): the supported hosts take no path. Reject
+                // any extra path segments so a crafted `lancer://auth/<smuggled>`
+                // can't reach a future path-dispatched handler. Query/fragment are
+                // intentionally allowed — the auth callback carries its tokens there.
+                guard url.path.isEmpty || url.path == "/" else { return }
                 switch url.host {
                 case "billing":
                     // Store the return URL so BillingView / settings can surface it.
