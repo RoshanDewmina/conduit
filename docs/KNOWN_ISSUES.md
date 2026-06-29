@@ -220,11 +220,11 @@ perf issues.** The hot paths are correctly engineered:
 
 ## 5. Documentation state — heavy sprawl; canonical set proposed
 
-~90 markdown docs, many overlapping or point-in-time. **Drift confirmed:**
-- `agent-contract.md` §8 named `docs/current-state-audit.md` (2026-06-02) as the source of truth for
-  "what works" — that doc is the **oldest** state doc. Pointer corrected this session.
-- `docs/remaining-work.md` is self-flagged SUPERSEDED yet still states a **wrong** "free Apple team"
-  blocker — keep the banner, do not act on its blockers.
+~90 markdown docs, many overlapping or point-in-time. **Drift found earlier, now resolved:**
+- `agent-contract.md` §8 once named `docs/current-state-audit.md` (2026-06-02) as the source of truth
+  for "what works"; the pointer was corrected and that doc is now archived (`docs/_archive/`).
+- `docs/remaining-work.md` (self-flagged SUPERSEDED, with a wrong "free Apple team" blocker) is now
+  archived; ARCHITECTURE.md §0.1 is the live state doc.
 
 **Canonical set (keep + maintain):**
 `ARCHITECTURE.md` (product/architecture + §0.1 current-state snapshot), `docs/agent-contract.md`,
@@ -236,12 +236,13 @@ Tab/gallery-era handoff/planning docs (`docs/design-handoff/PAGES.md`,
 `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, root `ship-plan/`)
 are now archived under `docs/_archive/`.
 
-**Recommended archival** (move to `docs/_archive/` with a pointer — preserve, don't delete; do deliberately
-in a dedicated cleanup pass, checking inbound references first): `docs/current-state-audit.md`,
-`docs/remaining-work.md`, `docs/APP_AUDIT.md`, `docs/cloud-execution-engine-plan.md`,
-`docs/demos/M0–M11*.md`, the dated `docs/lancer-test-run-2026-05-*.md`, and the redundant audit reports
-that have been folded into newer ones (`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFICATION_REPORT` vs `_REVIEW`,
-`FABLE_FINDINGS` vs `FABLE_REPORT`, `FEATURE_COVERAGE` vs `FEATURE_VERIFICATION_AUDIT`).
+**Archived in the 2026-06-27 lean sweep** (moved to `docs/_archive/`, inbound references checked):
+`docs/current-state-audit.md`, `docs/remaining-work.md`, `docs/APP_AUDIT.md`,
+`docs/cloud-execution-engine-plan.md`, plus the tab/gallery-era handoff/planning docs above.
+**Still candidates** (lower priority): `docs/demos/M0–M11*.md`, the dated
+`docs/lancer-test-run-2026-05-*.md`, and redundant audit reports folded into newer ones
+(`V1_SIMPLIFY_REPORT`, `FRONTEND_SIMPLIFICATION_REPORT` vs `_REVIEW`, `FABLE_FINDINGS` vs
+`FABLE_REPORT`, `FEATURE_COVERAGE` vs `FEATURE_VERIFICATION_AUDIT`).
 
 ---
 
