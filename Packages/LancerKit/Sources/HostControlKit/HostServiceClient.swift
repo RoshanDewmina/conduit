@@ -56,9 +56,20 @@ public actor HostServiceClient {
         }
     }
 
+    /// The current user's home directory. `homeDirectoryForCurrentUser` is
+    /// macOS-only and returns the real home even when sandboxed — required for the
+    /// daemon socket path. iOS gets a sandbox-home fallback purely so the package
+    /// compiles for iOS test builds; HostControlKit is never used on iOS.
+    private static var homeDirectory: String {
+        #if os(macOS)
+        FileManager.default.homeDirectoryForCurrentUser.path
+        #else
+        NSHomeDirectory()
+        #endif
+    }
+
     private static func resolveSocketPath() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return home + "/.lancer/lancerd.sock"
+        homeDirectory + "/.lancer/lancerd.sock"
     }
 
     /// Reads the local IPC auth token from `~/.lancer/ipc-token`. Returns an
@@ -66,8 +77,7 @@ public actor HostServiceClient {
     /// daemon will reject the empty token with -32001, which `connect()`
     /// surfaces as `HostServiceError.rpc`.
     private static func resolveToken() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let tokenPath = home + "/.lancer/ipc-token"
+        let tokenPath = homeDirectory + "/.lancer/ipc-token"
         if let raw = try? String(contentsOfFile: tokenPath, encoding: .utf8) {
             return raw.trimmingCharacters(in: .whitespacesAndNewlines)
         }

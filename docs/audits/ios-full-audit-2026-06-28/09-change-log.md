@@ -110,6 +110,39 @@ App-target `build_sim`: SUCCEEDED, 1 warning (`mainBody` 380ms). `swift test`: 4
 | TEST-01 (iOS-gated) | ⚠️ written, compiles-as-pattern, **unrun** — blocked by TEST-INFRA |
 | `git diff` review | ✅ 10 source files + 2 new tests; no accidental changes |
 
+## Follow-up batch (2026-06-29) — TEST-INFRA, ARCH-1, BUILD-2
+
+### C1 — TEST-INFRA fixed (Medium) → unblocks iOS-gated tests + TEST-01
+- **File:** `HostControlKit/HostServiceClient.swift` — extracted a `homeDirectory` helper that is
+  `#if os(macOS)` `homeDirectoryForCurrentUser` (real home, sandbox-safe — required for the daemon
+  socket path) and `NSHomeDirectory()` on iOS so the package compiles for iOS. HostControlKit is
+  never used on iOS; the fallback only needs to compile.
+- **Verify — EXECUTED:** `xcodebuild test -scheme LancerKit-Package -destination 'iOS Simulator,
+  name=iPhone 17 Pro'` now builds the package for iOS and runs the iOS-gated suite.
+  **TEST-01 (`ApprovalRelayColdLaunchTests`) PASSES**, as does the formerly-unrun
+  `ApprovalRelayBackendTests`. So SEC-2 now has an executed regression test.
+
+### C2 — ARCH-1 fixed (Low) → build warning eliminated
+- **File:** `AppFeature/AppRoot.swift` — split the 160-line `mainBody` chain into two generic
+  helpers, `lifecycleModifiers(_:)` and `relayEventModifiers(_:)` (all modifiers preserved verbatim;
+  order within each group is immaterial).
+- **Verify:** app-target `build_sim` SUCCEEDED with **0 warnings** (the 380-428ms `mainBody`
+  type-check warning is gone).
+
+### C3 — BUILD-2 addressed (Low)
+- **File:** `SSHTransport/RelaySettings.swift` — `LANCER_RELAY_URL` override is now validated
+  (must parse as a `ws`/`wss` URL with a host) and fails safe to the hosted default otherwise.
+  Kept as a self-host feature (not gated to DEBUG).
+- **Verify:** compiled (app-target `build_sim` SUCCEEDED).
+
+### C4 — CONC-2 regression test: assessed, **deferred** (documented)
+- Even with iOS tests now running, a deterministic double-resume test needs a throwing-writer
+  injection seam **and** access to `DaemonChannel`'s private RPC internals, for an inherently
+  actor-scheduling-dependent race. That single-use scaffolding is the over-engineering the audit
+  warns against. The fix remains verified by the clean build + by mirroring the two already-correct
+  sibling resume sites (`handleFrame`, `failPendingRPCs`). Revisit only if a writer seam is added
+  for other reasons.
+
 ## Known limitations / follow-ups
 - **TEST-INFRA (new finding):** iOS-gated package tests (`#if os(iOS)` in `LancerKitTests`) do not
   run in CI or via `swift test` (macOS host skips them) and the package's iOS test build fails on

@@ -28,6 +28,20 @@ Status: `OPEN` (carry to Phase B) · `VERIFIED-SAFE` (challenged → not a real 
 | URL-STALE | — | Config (challenged) | Reported "stale `conduit-push` URL" is **intentional and live** — the Cloud Run service name was deliberately preserved across the Conduit→Lancer rebrand so pairing keeps working. | `project.yml:26`; confirmed in `PUBLISH_READINESS_CHECKLIST.md`, `LIVE_LOOP_RUNBOOK.md`, `lancer-infra-migration-checklist.md`. | None. | No code change. Cosmetic rename only as part of a planned infra migration. | VERIFIED-SAFE |
 | DEBUG-SEAMS | — | Release safety | All dev/mock/test seams (`LANCER_DESTINATION/SEED_DEMO/FAKE_RELAY_HOST/FORCE_PRO/DRAWER_OPEN/RELAY_CODE/PUSH_BACKEND_URL/UITEST_RESEED/TEST_*`, `DebugSeeder`) verified `#if DEBUG`-gated. Only `LANCER_RELAY_URL` is intentionally not (BUILD-2). | See 06. | — | None (except BUILD-2). | VERIFIED-SAFE |
 
+## Resolution (implemented on `audit/ios-2026-06-28`)
+All actionable findings are now **fixed**, verified by the gate below:
+- **CONC-2** ✅ fixed (guard); race test deferred (no clean seam — see change-log C4).
+- **SEC-2** ✅ fixed (async hydration) **+ TEST-01 executed & passing on iOS**.
+- **TEST-02** ✅ fixed (`startedRunId`) + 5 tests passing.
+- **TEST-INFRA** ✅ fixed — package builds for iOS; iOS-gated suite now runs.
+- **ARCH-1** ✅ fixed — `mainBody` split; **0 build warnings**.
+- **CONC-1, SEC-1, BUILD-1, BUILD-2, CQ-1/2/4** ✅ fixed.
+- **CQ-3** deferred (no logging facility; Info-only). **SEC-3** monitor. ACCT-476/SettingsView
+  force-op/URL-stale remain VERIFIED-SAFE (no change).
+
+Gate: app-target `build_sim` SUCCEEDED, **0 warnings**; `swift test` 467/0; iOS-gated
+`ApprovalRelayColdLaunchTests` + `ApprovalRelayBackendTests` pass; `go test` pass (daemon untouched).
+
 ## Severity tally (actionable)
 - **Critical:** 0
 - **High:** 0
