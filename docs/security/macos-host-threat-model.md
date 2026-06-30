@@ -159,19 +159,24 @@ reason — the redaction is in the name, not optional.
 
 Lancer.app drives the **existing** pairing flow (plan: "Reuse existing pairing: drive `conduitd
 pair` and render the QR + 6-digit code in the app... Manual-code fallback already exists.") — it
-does not implement new crypto. Confirmed against code:
+does not implement new crypto. **Correction to the plan's framing:** there is no QR path left to
+reuse. Per `docs/V1_IMPLEMENTATION_PLAN.md`, the iOS app's QR/camera pairing entry was removed
+app-wide (`OnboardingPairing.swift`, `BridgePairingView.swift`) in favor of code-only entry through
+the relay — the flow `daemon/push-backend/PAIRING_PROTOCOL.md` specifies and
+`SECURITY_ARCHITECTURE.md` §2 describes. Lancer.app should drive `lancerd pair` and render the
+6-digit code; "manual-code" is the *only* path now, not a fallback. Confirmed against code:
 
 | Property | Verified in | Status |
 |---|---|---|
 | Single-use 6-digit pairing code | `daemon/push-backend/PAIRING_PROTOCOL.md` §1 ("Daemon mints 6 **digits**"); relay channel keyed by `code`, one daemon+phone pair per code | Confirmed |
 | X25519 ECDH key exchange | `daemon/conduitd/e2e_crypto.go: generateKeyPair`, `deriveSessionKey` (curve25519, HKDF-SHA256) | Confirmed |
-| Replay resistance | `SECURITY_ARCHITECTURE.md` §2.2 ("QR code is single-use... `conduitd` invalidates the pairing nonce") for the direct-SSH QR path. For the **relay** path (`PAIRING_PROTOCOL.md` §2), the code is consumed by the relay's first daemon+phone join — a captured code that's already been used to complete a pairing cannot be replayed to join a new channel because the relay's pair-by-code state is single-shot per pairing session | Confirmed for the mechanisms that exist; **not yet a Mac-specific addition** |
+| Replay resistance | `SECURITY_ARCHITECTURE.md` §2.2 (key pinning, unconfirmed-code expiry, per-IP rate limiting) and `PAIRING_PROTOCOL.md` §2 — the code is consumed by the relay's first daemon+phone join, and a captured code that's already completed a pairing cannot be replayed to join a new channel because the relay's pair-by-code state is single-shot per pairing session; once a role's key is pinned to the code, a later connection presenting a different key for that role is rejected outright | Confirmed for the mechanisms that exist; **not yet a Mac-specific addition** |
 | Mutual verification phrase | **Not found in code.** No `verificationPhrase`/equivalent exists in `e2e_crypto.go`, `relaypair.go`, or the iOS pairing UI as of this writing | **Gap — new requirement for Lancer.app, not yet implemented anywhere** |
 | Device revocation takes effect immediately | `daemon/push-backend/device_bindings.go: handleRevokeDevice` sets `RevokedAt` and **clears `CredentialHash`** in the same update — the device's credential hash is gone, so any subsequent request bearing the old credential fails the next `sameCapability` check immediately, not on a delay or TTL | Confirmed |
 
 ### 4.1 New requirement: mutual verification phrase
 
-The plan calls for "pairing QR → **mutual verification phrase**" (Phase B, full first-run flow) as
+The plan calls for "pairing → **mutual verification phrase**" (Phase B, full first-run flow) as
 a step the Mac displays that the user must confirm matches what the phone shows, before either
 side is trusted. This does not exist yet on either platform and must be designed, not assumed:
 
@@ -180,13 +185,14 @@ side is trusted. This does not exist yet on either platform and must be designed
   `PAIRING_PROTOCOL.md` — the HKDF output both sides already compute identically), not from any
   value transmitted over the relay. Both sides compute it locally from material only they hold
   post-ECDH; the relay never sees the phrase or its inputs.
-- **Why it matters specifically for the relay path:** the direct-QR path's MITM resistance already
-  rests on the QR being read out-of-band (`SECURITY_ARCHITECTURE.md` §2.2). The **relay** path has
-  no equivalent out-of-band channel binding the two ends together beyond "both used the same
-  6-digit code" — a verification phrase displayed on the Mac and confirmed on the phone (or vice
-  versa) is the out-of-band check that the X25519 keys exchanged via the blind relay weren't
-  substituted by a relay-side or network-path attacker who can see (but, per the relay's design,
-  not decrypt) the `peer_joined` exchange.
+- **Why it matters:** pairing has no QR step to provide out-of-band binding — the only thing tying
+  the two ends together is "both used the same 6-digit code," plus the relay-side protections in
+  `SECURITY_ARCHITECTURE.md` §2.2 (key pinning, unconfirmed-code expiry, per-IP rate limiting).
+  Those guard against guessing or hijacking the code, but they do not *verify* that the X25519 keys
+  each side received via `peer_joined` are the ones the other side actually sent. A verification
+  phrase displayed on the Mac and confirmed on the phone (or vice versa) is the out-of-band check
+  that those keys weren't substituted by a relay-side or network-path attacker who can see (but,
+  per the relay's design, not decrypt) the `peer_joined` exchange.
 - **Fail-closed:** pairing must not be considered complete (no credential persisted, no device
   marked trusted in `device_bindings.go`) until the human confirms the phrase matches. A mismatch
   must surface as a hard stop with re-pair instructions, not a warning the user can dismiss.
@@ -198,7 +204,7 @@ is the revocation endpoint the plan's Devices pane (Phase B) wires to. It requir
 `requireAuthenticatedUser` and ownership match (`binding.UserID != user.ID` → 404, not 403 — avoids
 confirming the ID exists to a non-owner). Revocation is immediate and irreversible (no "undo" —
 `RevokedAt` is set and `CredentialHash` is zeroed in the same atomic store update); pairing again
-requires a fresh challenge/QR cycle, not a restore.
+requires a fresh pairing cycle (a new code), not a restore.
 
 ---
 

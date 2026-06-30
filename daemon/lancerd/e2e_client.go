@@ -141,6 +141,7 @@ func (c *e2eRelayClient) messageLoop() {
 			From    string `json:"from,omitempty"`
 			Payload string `json:"payload,omitempty"`
 			PeerKey string `json:"peerPublicKey,omitempty"`
+			Message string `json:"message,omitempty"`
 		}
 
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -149,6 +150,15 @@ func (c *e2eRelayClient) messageLoop() {
 
 		switch msg.Type {
 		case "pong":
+
+		case "error":
+			// The relay rejects a pairing connection (key mismatch, expired
+			// unconfirmed code, or rate limited) by sending this frame, then
+			// closing the connection — see daemon/push-backend/websocket_relay.go.
+			// Log the reason before the next Receive hits the closed connection
+			// and falls into the existing connectLoop backoff/retry, otherwise
+			// a rejected pairing is silently indistinguishable from a network drop.
+			log.Printf("e2e: relay rejected: %s", msg.Message)
 
 		case "peer_joined":
 			c.mu.Lock()
