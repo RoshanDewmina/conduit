@@ -30,55 +30,68 @@ relay pairing and physical-device APNs behavior still require live validation be
 
 ### 2.1 The pairing flow
 
-```
-┌──────────────────┐                ┌─────────────────────┐
-│   iOS Device     │                │  Mac / Linux Host   │
-│                  │                │                     │
-│  1. Scan QR code │◄─── QR ────── │  2. lancerd pair   │
-│                  │    (contains  │     generates QR     │
-│  3. Parse QR     │     host +    │     containing:      │
-│     extract      │     key info) │     - host address   │
-│     host info    │                │     - X25519 pubkey  │
-│     + pubkey     │                │                     │
-│                  │                │                     │
-│  4. Generate     │                │                     │
-│     X25519 key   │                │                     │
-│     pair         │                │                     │
-│                  │                │                     │
-│  5. Compute      │◄─── SSH ───── │  6. lancerd         │
-│     shared       │    (encrypted │     receives client  │
-│     secret via   │     transport)│     pubkey, computes │
-│     ECDH         │                │     shared secret    │
-└──────────────────┘                └─────────────────────┘
-```
+Pairing is **code-only** — the app no longer scans a QR code. Both sides
+dial out to Lancer's push relay and exchange X25519 public keys through it;
+the relay only ever forwards opaque routing/key data, never SSH credentials
+or session-key material (see §2.2, §4.3).
 
-Steps:
-
-1. The user runs `lancerd pair` on their host. The daemon generates an
-   X25519 key pair and displays a QR code containing the host address,
-   the X25519 public key, and a one-time nonce.
-2. The user scans the QR code with the iOS app (camera permission required).
-3. The iOS app generates its own X25519 key pair.
-4. Both sides compute the shared secret using X25519 ECDH (Elliptic Curve
-   Diffie-Hellman).
-5. The shared secret is used to derive a session key via HKDF (SHA-256).
-6. The X25519 private key is stored in the iOS Keychain with
+1. The iOS app generates an X25519 key pair, mints a one-time 6-digit
+   pairing code, and opens a relay connection (`/ws/relay`) as the `phone`
+   role, displaying the code to the user.
+2. The user enters that code on the host — via `lancerd pair` or the
+   install flow. `lancerd` generates its own X25519 key pair and opens a
+   relay connection as the `daemon` role with the same code. (The relay
+   accepts either side first; in the product flow the phone displays the
+   code before the host is told to enter it.)
+3. Once both roles have joined a code, the relay sends each side a
+   `peer_joined` message carrying the *other* side's public key. Each side
+   then derives the shared session key via X25519 ECDH (see §3).
+4. The X25519 private key is stored in the iOS Keychain with
    `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` and
-   `kSecAttrSynchronizable: false` — it never leaves the device.
+   `kSecAttrSynchronizable: false` — it never leaves the device. The setup
+   code itself is not persisted after pairing completes.
 
-### 2.2 Security properties
+The full wire contract (relay frame shapes, key-derivation inputs, sequence
+diagram) lives in `daemon/push-backend/PAIRING_PROTOCOL.md`.
 
-- **QR code is single-use.** Once scanned, `lancerd` invalidates the
-  pairing nonce. An intercepted QR code cannot be replayed.
-- **The QR does not contain SSH credentials.** It only contains the host's
-  X25519 public key and addressing info. A compromised QR code reveals no
-  SSH secrets.
+### 2.2 Relay-side pairing-code protections
+
+A 6-digit code is far lower-entropy than a scanned QR payload, so the relay
+(`daemon/push-backend/websocket_relay.go`) treats it strictly as a
+short-lived rendezvous identifier — never a permanent credential — and
+enforces three protections:
+
+- **Key pinning.** Once a role's (`phone` or `daemon`) public key is
+  recorded for a code, a later connection on that code presenting a
+  *different* key is rejected outright instead of silently replacing it.
+  This closes a hijack/MITM path where an attacker who guesses or observes
+  the code could otherwise take over a role mid-pairing. The legitimate key
+  can always reconnect (e.g. a daemon restart, or the app re-opening the
+  pairing screen).
+- **Unconfirmed-code expiry.** A code where only one side ever joined
+  expires 10 minutes after creation and is deleted from the relay — an
+  abandoned or guessed-but-unused code does not stay valid indefinitely. A
+  code that completed a full key exchange keeps working for legitimate
+  reconnects regardless of age.
+- **Per-IP rate limiting.** Connection attempts are capped at 20 per minute
+  per source IP (HTTP 429 beyond that), bounding brute-force guessing
+  against the 6-digit (1,000,000-combination) code space. A periodic sweep
+  bounds the limiter's own memory under sustained source-IP rotation.
+
+### 2.3 Security properties
+
+- **The pairing code is single-use per pairing attempt and not persisted**
+  after pairing completes — see §2.2 for what enforces this on the relay
+  side.
+- **The code carries no SSH credentials.** It only allows the two sides to
+  find each other on the relay and exchange X25519 public keys. A
+  compromised code reveals no SSH secrets, and §2.2's key pinning means it
+  cannot be used to hijack an in-progress or completed pairing.
 - **The SSH connection is authenticated separately** using the user's own SSH
   keys. Lancer never sends SSH private keys over the network.
-- **MITM resistance:** The QR code is displayed on the host's screen and
-  scanned in person (or via a trusted video call). A network attacker
-  intercepting the later SSH connection cannot forge the X25519 key exchange
-  because the host's public key was communicated out-of-band via the QR code.
+- **The relay is blind to key material** — it forwards public keys and
+  opaque ciphertext only; private keys and the derived session key never
+  reach it (see §4.3).
 
 ---
 
@@ -207,8 +220,8 @@ iCloud.
 
 - **SSH keys:** Rotated independently by the user on their host. Lancer
   stores whatever private key the user imports.
-- **X25519 pairing keys:** A new QR pairing generates fresh X25519 keys on
-  both sides. Old keys are discarded from the Keychain.
+- **X25519 pairing keys:** Pairing with a fresh code generates fresh X25519
+  keys on both sides. Old keys are discarded from the Keychain.
 - **Session keys** are derived fresh each session (HKDF with a new epoch
   nonce). Past session keys cannot be recovered from Keychain material.
 
@@ -234,7 +247,7 @@ termination and HTTP logs are under your control.
 
 | Threat | Mitigation |
 |--------|-----------|
-| Attacker steals QR code | Single-use nonce; no SSH credentials in QR |
+| Attacker guesses/observes the pairing code | No SSH credentials in the code; relay key-pinning rejects a different key claiming an already-pinned role; per-IP rate limiting bounds brute-force guessing; unconfirmed codes expire after 10 minutes (§2.2) |
 | Attacker MiTM SSH connection | SSH key authentication; X25519 key bindings verified out-of-band |
 | Relay is compromised | Relay sees only ciphertext — key material stays on device and host |
 | Phone is lost or stolen | Face ID / device passcode gate Keychain access; `whenUnlockedThisDeviceOnly` prevents iCloud sync |
