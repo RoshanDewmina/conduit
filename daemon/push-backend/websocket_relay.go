@@ -71,6 +71,31 @@ func (rl *rateLimiter) allow(key string) bool {
 	return true
 }
 
+// sweepStale removes entries with no attempts left inside the current
+// window. Per-key pruning in allow() only runs when that same key is
+// queried again, so a key visited exactly once (e.g. an attacker rotating
+// source IPs, trivial over IPv6) would otherwise sit in this map forever —
+// unbounded growth that also weakens the limiter's effect for a
+// rotating-IP attacker. Called periodically by startRelayJanitor in main.go.
+func (rl *rateLimiter) sweepStale() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-pairAttemptWindow)
+	for key, times := range rl.attempts {
+		kept := times[:0]
+		for _, t := range times {
+			if t.After(cutoff) {
+				kept = append(kept, t)
+			}
+		}
+		if len(kept) == 0 {
+			delete(rl.attempts, key)
+		} else {
+			rl.attempts[key] = kept
+		}
+	}
+}
+
 var pairAttemptLimiter = &rateLimiter{attempts: make(map[string][]time.Time)}
 
 func clientIP(r *http.Request) string {

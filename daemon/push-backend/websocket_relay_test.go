@@ -395,3 +395,31 @@ func TestRelayRateLimitsPairingAttempts(t *testing.T) {
 		t.Fatalf("expected attempts beyond pairAttemptMax (%d) to be rate-limited, but dials kept succeeding", pairAttemptMax)
 	}
 }
+
+// Security: sweepStale must bound the rate limiter's memory under an
+// attacker rotating source IPs (one attempt per IP, never revisited) — the
+// per-key pruning inside allow() never fires again for a key that's only
+// ever queried once, so without a periodic sweep the map would grow
+// without bound.
+func TestRateLimiterSweepStaleBoundsMemory(t *testing.T) {
+	rl := &rateLimiter{attempts: make(map[string][]time.Time)}
+
+	// Simulate 500 distinct attacker IPs, each making exactly one attempt
+	// well outside the rate-limit window (so every entry is stale).
+	stale := time.Now().Add(-2 * pairAttemptWindow)
+	for i := 0; i < 500; i++ {
+		key := fmt.Sprintf("203.0.113.%d", i)
+		rl.attempts[key] = []time.Time{stale}
+	}
+	// One fresh, in-window entry that must survive the sweep.
+	rl.attempts["198.51.100.1"] = []time.Time{time.Now()}
+
+	rl.sweepStale()
+
+	if got := len(rl.attempts); got != 1 {
+		t.Fatalf("sweepStale left %d entries, want 1 (only the fresh one)", got)
+	}
+	if _, ok := rl.attempts["198.51.100.1"]; !ok {
+		t.Fatal("sweepStale removed the fresh in-window entry, want it kept")
+	}
+}

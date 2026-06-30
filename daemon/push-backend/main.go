@@ -210,6 +210,7 @@ func startRelayJanitor() {
 			decisions.Unlock()
 			evictExpiredDevices(now)
 			evictExpiredActivityTokens(now)
+			pairAttemptLimiter.sweepStale()
 		}
 	}()
 }
