@@ -191,11 +191,9 @@ public struct LancerHomeView: View {
                     .foregroundStyle(t.text3)
                     .lineLimit(1)
             }
-            if !isExpired {
-                DSButton("Review", variant: .quiet, size: .sm, mono: true) {
-                    Haptics.selection()
-                    reviewingApproval = approval
-                }
+            DSButton(isExpired ? "View" : "Review", variant: .quiet, size: .sm, mono: true) {
+                Haptics.selection()
+                reviewingApproval = approval
             }
         }
         .padding(14)
