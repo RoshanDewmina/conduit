@@ -69,35 +69,66 @@ public struct OnboardingRedesignView: View {
 
     private var current: OnboardingRedesignStep { steps[step] }
 
+    /// True while the account-creation gate is showing instead of the current step's
+    /// own content. Computed once and reused by both `content` and `footer` below so
+    /// the two can never disagree about which branch is active.
+    private var isAccountGateActive: Bool {
+        current.kind != .valuePair && accountSession != nil && accountSession?.mode == nil
+    }
+
     public var body: some View {
-        Group {
+        // Every onboarding screen — carousel steps, the account gate, SSH setup — renders
+        // through the same scaffold so the back chevron and step dots never disappear or
+        // shift between screens (previously the account gate and SSH setup each drew their
+        // own ad-hoc header with no back affordance at all).
+        OnboardingScaffold(
+            stepIndex: step,
+            totalSteps: steps.count,
+            leading: step > 0 ? .back : .none,
+            onLeading: {
+                guard step > 0 else { return }
+                withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step -= 1 }
+            }
+        ) {
             // Start with the product value + pairing, merged into one screen (no
             // forced "Continue" tap between value-prop and the actual connect
             // action). Account creation gates everything after that.
-            if current.kind != .valuePair, let accountSession, accountSession.mode == nil {
+            if isAccountGateActive, let accountSession {
                 AccountEntryView(account: accountSession, onComplete: advanceAfterAccount)
             } else if current.kind == .sshSetup {
-                // The optional SSH step renders its own header + CTAs (no shared
-                // hero/footer), so present it standalone like the account gate.
                 OnboardingSSHSetupScreen(
                     onAddHost: { finishOnboarding(routeToAddHost: true) },
                     onSkip: { finishOnboarding(routeToAddHost: false) }
                 )
             } else {
-                VStack(spacing: 0) {
-                    hero
-                    ScrollView(.vertical, showsIndicators: false) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Full-bleed — NOT inside the 560pt content constraint below, or
+                        // the hero stops spanning the full width on iPad/wide screens.
+                        OnboardingHeroBanner(eyebrow: current.eyebrow, title: current.title, subtitle: current.body)
                         primaryBlock
                             .frame(maxWidth: 560, alignment: .leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 24)
                             .padding(.bottom, 24)
                     }
-                    footer
+                }
+            }
+        } footer: {
+            // The account gate and SSH setup render their own CTAs inline as content
+            // (sign-in/sign-up buttons, Add a machine/Skip) — only the carousel steps
+            // use the scaffold's dedicated footer slot.
+            if !isAccountGateActive && current.kind != .sshSetup {
+                OnboardingFooter {
+                    DSButton(
+                        current.ctaArrow ? "\(current.primaryAction) →" : current.primaryAction,
+                        variant: .primary, size: .lg, fullWidth: true,
+                        action: advanceOrFinish
+                    )
+                    .accessibilityIdentifier("onboardingPrimary")
                 }
             }
         }
-        .background(t.bg.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .sheet(isPresented: $showDeviceBindingScanner) {
             OnboardingScanScreen(
@@ -120,91 +151,6 @@ public struct OnboardingRedesignView: View {
         }
     }
 
-    // MARK: Hero (terracotta editorial header — shared across steps)
-
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerRow
-                .padding(.horizontal, 26)
-                .padding(.top, 6)
-
-            VStack(alignment: .leading, spacing: 0) {
-                OnboardingBrandMark()
-                    .padding(.bottom, 18)
-                Text(current.eyebrow)
-                    .font(.dsEditorialPt(20))
-                    .foregroundStyle(OnboardingPalette.heroKicker)
-                Text(current.title)
-                    .font(.dsDisplayPt(34, weight: .heavy))
-                    .tracking(-1)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 5)
-                Text(current.body)
-                    .font(.dsSansPt(13))
-                    .lineSpacing(3)
-                    .foregroundStyle(.white.opacity(0.88))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 292, alignment: .leading)
-                    .padding(.top, 12)
-            }
-            .padding(.horizontal, 28)
-            .padding(.top, 22)
-        }
-        .padding(.bottom, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(heroBackground.ignoresSafeArea(edges: .top))
-    }
-
-    private var heroBackground: some View {
-        ZStack(alignment: .bottomTrailing) {
-            LinearGradient(colors: [t.accent, t.accentInk], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Canvas { ctx, size in
-                var y: CGFloat = 0
-                while y <= size.height {
-                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)),
-                             with: .color(.white.opacity(0.05)))
-                    y += 30
-                }
-            }
-            Circle()
-                .fill(.white.opacity(0.07))
-                .frame(width: 190, height: 190)
-                .offset(x: 34, y: 46)
-        }
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous))
-    }
-
-    private var headerRow: some View {
-        HStack(spacing: 9) {
-            Button {
-                guard step > 0 else { return }
-                withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step -= 1 }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 14)
-            }
-            .buttonStyle(.plain)
-            .opacity(step > 0 ? 1 : 0)
-            .disabled(step == 0)
-            .accessibilityLabel("Back")
-            .accessibilityIdentifier("onboardingBack")
-
-            ForEach(0..<steps.count, id: \.self) { i in
-                Capsule(style: .continuous)
-                    .fill(i <= step ? Color.white : Color.white.opacity(0.4))
-                    .frame(width: i == step ? 22 : 7, height: 7)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: step)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(height: 20)
-    }
 
     // MARK: Per-step primary block
 
@@ -326,46 +272,6 @@ public struct OnboardingRedesignView: View {
                 Haptics.error()
             }
         }
-    }
-}
-
-// MARK: - Shared palette (board sand-theme literals not in the semantic token set)
-
-private enum OnboardingPalette {
-    /// Peach kicker used over the terracotta hero (`heroKicker` #F6D8C5).
-    static let heroKicker = Color(.sRGB, red: 0.965, green: 0.847, blue: 0.773, opacity: 1)
-}
-
-// MARK: - Lavender pixel brand-mark
-
-private struct OnboardingBrandMark: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(
-                AngularGradient(
-                    colors: [
-                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1), // #8b6fb0
-                        Color(.sRGB, red: 0.690, green: 0.561, blue: 0.808, opacity: 1), // #b08fce
-                        Color(.sRGB, red: 0.435, green: 0.353, blue: 0.588, opacity: 1), // #6f5a96
-                        Color(.sRGB, red: 0.616, green: 0.498, blue: 0.753, opacity: 1), // #9d7fc0
-                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1)
-                    ],
-                    center: .center,
-                    angle: .degrees(45)
-                )
-            )
-            .overlay(
-                Canvas { ctx, size in
-                    var x: CGFloat = 0
-                    while x <= size.width { ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.12))); x += 11 }
-                    var y: CGFloat = 0
-                    while y <= size.height { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.12))); y += 11 }
-                }
-            )
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.85), lineWidth: 2))
-            .frame(width: 56, height: 56)
-            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 8)
-            .accessibilityHidden(true)
     }
 }
 
