@@ -93,6 +93,19 @@ func TestE2ERouterDispatchStarted(t *testing.T) {
 	srv := newServer(home)
 	defer srv.poller.stopForTest()
 
+	// Stub the launcher so this test doesn't depend on the "opencode" CLI
+	// actually being installed on PATH. newServer wires the real launcher
+	// (realLauncher), which shells out to exec.Command — on a machine that
+	// happens to have opencode installed (e.g. a dev's Homebrew PATH) the
+	// process spawns and the test passes, but on a bare CI runner (no
+	// opencode binary anywhere) cmd.Start() fails and dispatch() returns
+	// Status: "error" instead of "started". That made this test flaky
+	// across environments, not actually racy. TestE2ERouterContinue already
+	// stubs the launcher the same way for the same reason.
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+
 	// Install a permissive policy so dispatch proceeds.
 	doc := policy.Document{
 		Default: string(policy.EffectAllow),
