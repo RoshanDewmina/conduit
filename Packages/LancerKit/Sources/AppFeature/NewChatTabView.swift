@@ -8,6 +8,7 @@ import PersistenceKit
 import SSHTransport
 import LancerCore
 import InboxFeature
+import SecurityKit
 
 // MARK: - DispatchAgent
 
@@ -692,6 +693,7 @@ public struct NewChatTabView: View {
     @ViewBuilder
     private func inlineApprovalCard(for approval: Approval) -> some View {
         let summary = ApprovalSummary.derive(from: approval)
+        let isCritical = approval.risk >= .critical
         InboxApprovalCard(
             agentKey: agentKeyForSource(approval.agent),
             agentName: agentNameForSource(approval.agent),
@@ -700,7 +702,7 @@ public struct NewChatTabView: View {
             toolName: approval.toolName,
             args: approval.command ?? approval.toolInput,
             risk: approval.risk.rawValue,
-            isCritical: approval.risk >= .critical,
+            isCritical: isCritical,
             onDeny: {
                 Haptics.warning()
                 // Keep isAwaitingApproval set so the transcript swaps to the denied
@@ -708,9 +710,23 @@ public struct NewChatTabView: View {
                 onDecideApproval(approval.id, .rejected)
             },
             onApprove: {
-                Haptics.success()
-                isAwaitingApproval = false
-                onDecideApproval(approval.id, .approved)
+                // Critical approvals must clear biometric auth before committing, same
+                // gate InboxView's pendingCard/detailSheet already enforce — without this,
+                // this inline chat-thread card was a single-tap bypass of that gate for
+                // the same approval (it differs only in WHERE the user encounters it).
+                Task {
+                    if isCritical {
+                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
+                        catch {
+                            if let ce = error as? LancerCore.LancerError, case .cancelled = ce { return }
+                            Haptics.error()
+                            return
+                        }
+                    }
+                    Haptics.success()
+                    isAwaitingApproval = false
+                    onDecideApproval(approval.id, .approved)
+                }
             }
         )
         .frame(maxWidth: .infinity, alignment: .leading)
