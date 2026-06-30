@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,11 +12,29 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// resetHubForTest clears the shared relay hub between tests.
+// resetHubForTest clears the shared relay hub AND the shared pairing-attempt
+// rate limiter between tests. All httptest dials come from 127.0.0.1, so the
+// limiter must be reset too or later tests inherit earlier tests' attempt
+// counts and intermittently hit the 429 path.
 func resetHubForTest() {
 	hub.mu.Lock()
 	hub.pairs = make(map[string]*relayPair)
 	hub.mu.Unlock()
+
+	pairAttemptLimiter.mu.Lock()
+	pairAttemptLimiter.attempts = make(map[string][]time.Time)
+	pairAttemptLimiter.mu.Unlock()
+}
+
+// recvErr reads one frame expecting it to be a {"type":"error",...} message,
+// failing the test otherwise.
+func recvErr(t *testing.T, conn *websocket.Conn) map[string]interface{} {
+	t.Helper()
+	got := recvJSON(t, conn)
+	if got["type"] != "error" {
+		t.Fatalf("got type = %v, want error (full: %+v)", got["type"], got)
+	}
+	return got
 }
 
 // dialRelay opens a relay websocket for the given role/code, using the same
@@ -193,5 +212,186 @@ func TestRelayRejectsBrowserOrigin(t *testing.T) {
 	_, err := websocket.Dial(wsURL, "", "https://evil.example.com")
 	if err == nil {
 		t.Fatal("expected dial to be rejected for a browser Origin, but it succeeded")
+	}
+}
+
+// A legitimate peer reconnecting with the SAME key it used before (a daemon
+// restart, or the phone re-opening the app) must keep working — this is the
+// existing "newest-wins" behavior and key-pinning must not break it.
+func TestRelayAllowsReconnectWithSameKey(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "same01"
+	daemonKey := "daemon-pub-key"
+	phoneKey := "phone-pub-key"
+
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
+	}
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+	daemon.Close()
+
+	// Daemon reconnects with the SAME key (e.g. process restarted, key
+	// reloaded from relay-pairing.json) — must be accepted and re-paired.
+	daemon2 := dialRelay(t, srv, "daemon", code, daemonKey)
+	defer daemon2.Close()
+	rejoined := recvJSON(t, phone)
+	if rejoined["type"] != "peer_joined" || rejoined["peerPublicKey"] != daemonKey {
+		t.Fatalf("phone peer_joined on reconnect = %+v, want peerPublicKey=%s", rejoined, daemonKey)
+	}
+}
+
+// Security: once a role's key is pinned (first successful exchange), a LATER
+// connection on the same code presenting a DIFFERENT key for that role must
+// be rejected, not silently take over the slot. Without this, an attacker
+// who later guesses a 6-digit code could present a new key, win the
+// "newest connection" race, and the other side would silently derive a
+// session key with the attacker (MITM) — exactly the "six digits = permanent
+// trust" risk the locked pairing spec prohibits.
+func TestRelayRejectsKeyMismatchHijack(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "hijack"
+	daemonKey := "real-daemon-key"
+	phoneKey := "real-phone-key"
+
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	defer daemon.Close()
+	_ = recvJSON(t, daemon) // waiting
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+
+	// Attacker guesses the code and tries to take over the daemon slot with
+	// a DIFFERENT key, without ever having seen daemonKey.
+	attacker := dialRelay(t, srv, "daemon", code, "attacker-key")
+	defer attacker.Close()
+	errMsg := recvErr(t, attacker)
+	if errMsg["message"] == "" {
+		t.Fatalf("expected a non-empty rejection message, got %+v", errMsg)
+	}
+
+	// The legitimate daemon connection must still be intact — a hijack
+	// attempt must not have closed or replaced it. Prove this by sending a
+	// message daemon → phone and confirming it still arrives.
+	sendRelay(t, daemon, relayMessage{Type: "message", Target: "phone", Payload: "still-alive"})
+	fwd := recvJSON(t, phone)
+	if fwd["type"] != "message" || fwd["payload"] != "still-alive" {
+		t.Fatalf("legit daemon connection appears broken after hijack attempt: %+v", fwd)
+	}
+}
+
+// Security: a pairing code that nobody ever completed an initial key
+// exchange on (only one side, or neither side, ever connected) must stop
+// being redeemable after pairConfirmWindow — an abandoned or guessed-but-
+// unused code must not stay valid forever.
+func TestRelayExpiresUnconfirmedCode(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "stale1"
+	daemon := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon.Close()
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
+	}
+
+	// Backdate CreatedAt past the confirm window; PairedAt is still zero
+	// because the phone never joined.
+	hub.mu.Lock()
+	pair := hub.pairs[code]
+	pair.mu.Lock()
+	pair.CreatedAt = time.Now().Add(-pairConfirmWindow - time.Minute)
+	pair.mu.Unlock()
+	hub.mu.Unlock()
+
+	phone := dialRelay(t, srv, "phone", code, "phone-key")
+	defer phone.Close()
+	errMsg := recvErr(t, phone)
+	if errMsg["message"] == "" {
+		t.Fatalf("expected a non-empty expiry message, got %+v", errMsg)
+	}
+
+	hub.mu.RLock()
+	_, stillExists := hub.pairs[code]
+	hub.mu.RUnlock()
+	if stillExists {
+		t.Fatal("expired code should have been deleted from the hub")
+	}
+}
+
+// Security: an already-PAIRED code (both keys exchanged at least once) must
+// keep working past pairConfirmWindow — expiry only applies to codes that
+// never completed their first exchange. This is the ongoing-relay-channel
+// behavior the live product depends on; it must not regress.
+func TestRelayPairedCodeNeverExpires(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "stable"
+	daemonKey := "daemon-key"
+	phoneKey := "phone-key"
+
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	_ = recvJSON(t, daemon) // waiting
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+	daemon.Close()
+
+	// Backdate CreatedAt to look very old — PairedAt is non-zero now, so
+	// this must NOT trigger the expiry path.
+	hub.mu.Lock()
+	pair := hub.pairs[code]
+	pair.mu.Lock()
+	pair.CreatedAt = time.Now().Add(-24 * time.Hour)
+	pair.mu.Unlock()
+	hub.mu.Unlock()
+
+	daemon2 := dialRelay(t, srv, "daemon", code, daemonKey)
+	defer daemon2.Close()
+	rejoined := recvJSON(t, phone)
+	if rejoined["type"] != "peer_joined" {
+		t.Fatalf("expected reconnect to succeed for a paired code regardless of age, got %+v", rejoined)
+	}
+}
+
+// Security: the pairing code space is only 1e6 combinations and must be
+// rate-limited per source IP to block brute-force guessing within
+// pairConfirmWindow ("aggressive rate limiting" per the locked spec).
+func TestRelayRateLimitsPairingAttempts(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	var lastStatus int
+	for i := 0; i < pairAttemptMax+5; i++ {
+		code := fmt.Sprintf("%06d", i)
+		wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") +
+			"/ws/relay?role=phone&code=" + code + "&publicKey=guess-key"
+		_, err := websocket.Dial(wsURL, "", "http://localhost/")
+		if err != nil {
+			// http.Error before upgrade surfaces as a dial failure; capture
+			// whether we've crossed into the rate-limited regime.
+			if i >= pairAttemptMax {
+				lastStatus = http.StatusTooManyRequests
+			}
+			continue
+		}
+	}
+	if lastStatus != http.StatusTooManyRequests {
+		t.Fatalf("expected attempts beyond pairAttemptMax (%d) to be rate-limited, but dials kept succeeding", pairAttemptMax)
 	}
 }
