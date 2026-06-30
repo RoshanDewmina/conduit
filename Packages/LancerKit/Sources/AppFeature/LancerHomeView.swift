@@ -295,7 +295,7 @@ public struct LancerHomeView: View {
                     summary: ApprovalSummary.derive(from: capturedApproval).headline,
                     question: capturedApproval.question,
                     choices: capturedApproval.choices,
-                    toolName: capturedApproval.toolName,
+                    toolName: capturedApproval.toolName ?? capturedApproval.command,
                     args: capturedApproval.toolInput ?? capturedApproval.command,
                     command: capturedApproval.command,
                     risk: capturedApproval.risk.rawValue,
