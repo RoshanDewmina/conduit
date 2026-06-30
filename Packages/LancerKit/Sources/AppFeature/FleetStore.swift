@@ -149,6 +149,23 @@ public final class FleetStore {
         slots.reduce(0) { $0 + $1.inboxVM.approvals.filter(\.isPending).count }
     }
 
+    public var attentionItems: [AttentionItem] {
+        var items: [AttentionItem] = []
+        for slot in slots {
+            for approval in slot.inboxVM.approvals where approval.isPending || approval.decision == .expired {
+                items.append(AttentionItem(approval: approval))
+            }
+            if connectionState(for: slot) == .offline,
+               slot.inboxVM.approvals.contains(where: \.isPending) {
+                items.append(AttentionItem(offlineHost: slot.hostID, hostName: slot.hostName))
+            }
+        }
+        return items.sorted {
+            if $0.severity != $1.severity { return $0.severity > $1.severity }
+            return $0.createdAt < $1.createdAt
+        }
+    }
+
     /// Finds the slot whose inbox contains an approval with the given ID.
     /// Used by cross-session decision routing (e.g. Watch approve, lock-screen intent).
     public func slot(forApprovalID approvalID: ApprovalID) -> Slot? {

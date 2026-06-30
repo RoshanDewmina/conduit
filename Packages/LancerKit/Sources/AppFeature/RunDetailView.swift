@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import LancerCore
 import SSHTransport
 
 // MARK: - DaemonChannel conforms to RunControlling
@@ -27,6 +28,8 @@ public struct RunDetailView: View {
     private let pendingApprovalCount: Int
     private let onApprove: (() -> Void)?
     private let onReject: (() -> Void)?
+    private let replyStatus: ReplyDeliveryStatus?
+    private let onRetryDelivery: (() -> Void)?
 
     @Environment(\.lancerTokens) private var t
 
@@ -40,7 +43,9 @@ public struct RunDetailView: View {
         onSendFollowUp: ((String) -> Void)? = nil,
         pendingApprovalCount: Int = 0,
         onApprove: (() -> Void)? = nil,
-        onReject: (() -> Void)? = nil
+        onReject: (() -> Void)? = nil,
+        replyStatus: ReplyDeliveryStatus? = nil,
+        onRetryDelivery: (() -> Void)? = nil
     ) {
         _store = State(initialValue: RunControlStore(channel: channel, runId: runId, status: status))
         self.title = title
@@ -51,6 +56,8 @@ public struct RunDetailView: View {
         self.pendingApprovalCount = pendingApprovalCount
         self.onApprove = onApprove
         self.onReject = onReject
+        self.replyStatus = replyStatus
+        self.onRetryDelivery = onRetryDelivery
     }
 
     // MARK: - Derived state
@@ -191,6 +198,9 @@ public struct RunDetailView: View {
                 if let approve = onApprove, let reject = onReject, pendingApprovalCount > 0 {
                     DSApprovalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
                 }
+                if let status = replyStatus, pendingApprovalCount == 0 {
+                    replyStatusBanner(status)
+                }
                 if onSendFollowUp != nil {
                     followUpBar
                 }
@@ -279,6 +289,51 @@ public struct RunDetailView: View {
         .padding(.bottom, 12)
     }
 
+    // MARK: - Reply Status Banner
+
+    @ViewBuilder
+    private func replyStatusBanner(_ status: ReplyDeliveryStatus) -> some View {
+        HStack(spacing: 10) {
+            switch status {
+            case .sending:
+                ProgressView()
+                    .scaleEffect(0.8)
+                Text("Sending decision…")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text3)
+            case .delivered:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(t.ok)
+                Text("Decision sent ✓")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.ok)
+            case .failed(let reason):
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(t.warn)
+                Text("Failed to deliver — \(reason)")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.warn)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let onRetryDelivery {
+                    Spacer()
+                    DSButton("Retry", variant: .quiet, size: .sm, mono: true, action: onRetryDelivery)
+                }
+            case .expiredBeforeDelivery:
+                Image(systemName: "clock.badge.xmark")
+                    .foregroundStyle(t.text3)
+                Text("Approval expired before reply was sent")
+                    .font(.dsMonoPt(12))
+                    .foregroundStyle(t.text3)
+            case .idle:
+                EmptyView()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: - Follow-up Bar
 
     private var followUpBar: some View {
@@ -313,4 +368,49 @@ public struct RunDetailView: View {
         )
     }
 }
+
+#if DEBUG
+#Preview("Fixture 6 – Decision delivered") {
+    final class PreviewChannel: RunControlling, @unchecked Sendable {
+        func pauseRun(runId: String) async throws -> Bool { true }
+        func resumeRun(runId: String) async throws -> Bool { true }
+        func stopRun(runId: String) async throws -> Bool { true }
+        func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { true }
+        func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+            DispatchResult(runId: "r2", status: "started", decision: "allow", rule: nil, message: nil)
+        }
+    }
+    return NavigationStack {
+        RunDetailView(
+            channel: PreviewChannel(),
+            runId: "r1",
+            title: "Claude Code · lancer",
+            subtitle: "Dev VPS · claude-sonnet-4.6",
+            replyStatus: .delivered
+        )
+    }
+}
+
+#Preview("Fixture 7 – Delivery failed") {
+    final class PreviewChannel: RunControlling, @unchecked Sendable {
+        func pauseRun(runId: String) async throws -> Bool { true }
+        func resumeRun(runId: String) async throws -> Bool { true }
+        func stopRun(runId: String) async throws -> Bool { true }
+        func setRunBudget(runId: String, budgetUSD: Double) async throws -> Bool { true }
+        func continueRun(runId: String, prompt: String) async throws -> DispatchResult {
+            DispatchResult(runId: "r2", status: "started", decision: "allow", rule: nil, message: nil)
+        }
+    }
+    return NavigationStack {
+        RunDetailView(
+            channel: PreviewChannel(),
+            runId: "r1",
+            title: "Claude Code · lancer",
+            subtitle: "Dev VPS · claude-sonnet-4.6",
+            replyStatus: .failed(reason: "Relay connection lost"),
+            onRetryDelivery: { print("retry tapped") }
+        )
+    }
+}
+#endif
 #endif
