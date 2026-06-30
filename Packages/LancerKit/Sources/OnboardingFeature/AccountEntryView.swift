@@ -32,39 +32,35 @@ public struct AccountEntryView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("lancer")
-                    .font(.dsMonoPt(11, weight: .bold))
-                    .tracking(2)
-                    .foregroundStyle(t.text3)
-                Text(headline)
-                    .font(.dsDisplayPt(34, weight: .heavy))
-                    .foregroundStyle(t.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(subtitle)
-                    .font(.dsSansPt(14))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 0) {
+                // Same branded hero every other onboarding screen uses (see
+                // OnboardingHeroBanner) — this screen previously fell back to a flat
+                // background with a small mono wordmark, breaking the visual identity
+                // the carousel establishes right before it. Full-bleed, NOT inside the
+                // 560pt content constraint below, or it stops spanning full width on
+                // iPad/wide screens.
+                OnboardingHeroBanner(eyebrow: "lancer", title: headline, subtitle: subtitle)
 
-                switch route {
-                case .choice:  choiceCards
-                case .offline: offlineForm
-                default:       credentialsForm
-                }
+                VStack(alignment: .leading, spacing: 18) {
+                    switch route {
+                    case .choice:  choiceCards
+                    case .offline: offlineForm
+                    default:       credentialsForm
+                    }
 
-                if let message {
-                    Text(message)
-                        .font(.dsSansPt(13, weight: .medium))
-                        .foregroundStyle(messageIsError ? t.danger : t.ok)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityHint("Account status")
+                    if let message {
+                        Text(message)
+                            .font(.dsSansPt(13, weight: .medium))
+                            .foregroundStyle(messageIsError ? t.danger : t.ok)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityHint("Account status")
+                    }
                 }
+                .padding(24)
+                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: 560, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(t.bg.ignoresSafeArea())
         .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: route)
         .sheet(isPresented: $showPasswordReset) { passwordResetSheet }
         .onReceive(NotificationCenter.default.publisher(for: .lancerAuthCallback)) { note in
@@ -89,11 +85,11 @@ public struct AccountEntryView: View {
         case .choice:
             "Use an account for recovery, device management, and billing, or keep your existing account-free pairing setup completely offline."
         case .signUp:
-            "Email confirmation is required. Your password is never shared with lancerd."
+            "Email confirmation is required. Your password is never shared with your machines."
         case .signIn:
             "Use the email and password for your Lancer account."
         case .offline:
-            "Your name personalizes the app on this device. No account, no Supabase — you pair directly with your own host."
+            "Your name personalizes the app on this device. No account, no Supabase — you pair directly with your own machine."
         }
     }
 
@@ -121,7 +117,7 @@ public struct AccountEntryView: View {
             } label: {
                 accountChoiceCard(
                     title: "Self-hosted offline",
-                    detail: "Pair directly with your own host. No Supabase, recovery, device list, or hosted billing.",
+                    detail: "Pair directly with your own machine. No Supabase, recovery, device list, or hosted billing.",
                     icon: "lock.shield",
                     emphasized: false
                 )

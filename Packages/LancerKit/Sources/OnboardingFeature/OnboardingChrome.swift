@@ -180,4 +180,110 @@ public struct OnboardingFooter<Content: View>: View {
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 }
+
+// MARK: - Hero banner (shared branded header — content, not chrome)
+
+/// The orange/terracotta gradient branded header, extracted so the same visual identity
+/// (brand mark, eyebrow, title, body) persists on every onboarding screen instead of
+/// degrading to a flat background once you leave the value/pair/policy carousel. This is
+/// content rendered inside `OnboardingScaffold`'s `content` slot, NOT chrome — the back
+/// chevron and step dots live in the scaffold itself, once, so they never duplicate or drift.
+public struct OnboardingHeroBanner: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    @Environment(\.lancerTokens) private var t
+
+    public init(eyebrow: String, title: String, subtitle: String) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OnboardingBrandMark()
+                .padding(.bottom, 18)
+            Text(eyebrow)
+                .font(.dsEditorialPt(20))
+                .foregroundStyle(OnboardingHeroPalette.heroKicker)
+            Text(title)
+                .font(.dsDisplayPt(34, weight: .heavy))
+                .tracking(-1)
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 5)
+            Text(subtitle)
+                .font(.dsSansPt(13))
+                .lineSpacing(3)
+                .foregroundStyle(.white.opacity(0.88))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 292, alignment: .leading)
+                .padding(.top, 12)
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, 22)
+        .padding(.bottom, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(heroBackground.ignoresSafeArea(edges: .top))
+    }
+
+    private var heroBackground: some View {
+        ZStack(alignment: .bottomTrailing) {
+            LinearGradient(colors: [t.accent, t.accentInk], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Canvas { ctx, size in
+                var y: CGFloat = 0
+                while y <= size.height {
+                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)),
+                             with: .color(.white.opacity(0.05)))
+                    y += 30
+                }
+            }
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 190, height: 190)
+                .offset(x: 34, y: 46)
+        }
+        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous))
+    }
+}
+
+private enum OnboardingHeroPalette {
+    /// Peach kicker used over the terracotta hero (`heroKicker` #F6D8C5).
+    static let heroKicker = Color(.sRGB, red: 0.965, green: 0.847, blue: 0.773, opacity: 1)
+}
+
+private struct OnboardingBrandMark: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(
+                AngularGradient(
+                    colors: [
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1), // #8b6fb0
+                        Color(.sRGB, red: 0.690, green: 0.561, blue: 0.808, opacity: 1), // #b08fce
+                        Color(.sRGB, red: 0.435, green: 0.353, blue: 0.588, opacity: 1), // #6f5a96
+                        Color(.sRGB, red: 0.616, green: 0.498, blue: 0.753, opacity: 1), // #9d7fc0
+                        Color(.sRGB, red: 0.545, green: 0.435, blue: 0.690, opacity: 1)
+                    ],
+                    center: .center,
+                    angle: .degrees(45)
+                )
+            )
+            .overlay(
+                Canvas { ctx, size in
+                    var x: CGFloat = 0
+                    while x <= size.width { ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.12))); x += 11 }
+                    var y: CGFloat = 0
+                    while y <= size.height { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.12))); y += 11 }
+                }
+            )
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.85), lineWidth: 2))
+            .frame(width: 56, height: 56)
+            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 8)
+            .accessibilityHidden(true)
+    }
+}
 #endif

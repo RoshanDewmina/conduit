@@ -23,9 +23,15 @@ public struct OnboardingSSHSetupScreen: View {
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 28)
+                // Same branded hero every other onboarding screen uses (see
+                // OnboardingHeroBanner) — this screen previously had its own small
+                // icon+badge header with no shared identity or back affordance.
+                // Full-bleed, NOT inside the 560pt content constraint below.
+                OnboardingHeroBanner(
+                    eyebrow: "optional setup",
+                    title: "Enable SSH.",
+                    subtitle: "Turn on SSH so Lancer can open a live terminal on your Mac."
+                )
 
                 VStack(alignment: .leading, spacing: 22) {
                     OnboardingSSHStepRow(
@@ -65,16 +71,17 @@ public struct OnboardingSSHSetupScreen: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 28)
+                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 footerNote
                     .padding(.horizontal, 24)
                     .padding(.top, 26)
                     .padding(.bottom, 12)
+                    .frame(maxWidth: 560, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: 560, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(t.bg.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .safeAreaInset(edge: .bottom) {
             actions
@@ -82,37 +89,6 @@ public struct OnboardingSSHSetupScreen: View {
                 .padding(.top, 14)
                 .padding(.bottom, 16)
                 .background(t.bg.ignoresSafeArea(edges: .bottom))
-        }
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(t.accentSoft)
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "terminal.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(t.accent)
-                    )
-                Text("OPTIONAL SETUP")
-                    .font(.dsMonoPt(10, weight: .medium))
-                    .tracking(1.4)
-                    .foregroundStyle(t.text4)
-            }
-            Text("Enable SSH")
-                .font(.dsDisplayPt(28, weight: .heavy))
-                .foregroundStyle(t.text)
-                .padding(.top, 6)
-            Text("Turn on SSH so Lancer can open a live terminal on your Mac.")
-                .font(.dsSansPt(14))
-                .foregroundStyle(t.text3)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
         }
     }
 
@@ -124,7 +100,7 @@ public struct OnboardingSSHSetupScreen: View {
                 .font(.system(size: 13))
                 .foregroundStyle(t.text4)
                 .padding(.top, 1)
-            Text("You only need this for the live terminal. Approvals and agent runs already work over the relay without SSH.")
+            Text("You only need this for the live terminal. Approvals and agent runs already work without SSH.")
                 .font(.dsSansPt(12.5))
                 .foregroundStyle(t.text4)
                 .lineSpacing(2)
