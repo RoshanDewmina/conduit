@@ -45,7 +45,7 @@ Each relevant existing file is marked: **keep** / **modify** / **merge** / **del
 | `AppFeature/RunControls.swift` | **merge → SessionView** | Move Stop / Continue controls inline. |
 | `AppFeature/RunControlStore.swift` | **keep** | Logic stays; only the view changes. |
 | `AppFeature/RunOutputStore.swift` | **keep** | |
-| `AppFeature/SessionWorkspaceContainer.swift` | **modify** | Remove Work/Files/Diff/Preview tabs from default view. Terminal logs accessible via a "Logs" drawer only. |
+| `AppFeature/SessionWorkspaceContainer.swift` | **modify** | Remove Work/Files/Diff/Preview tabs from default view. No "Logs"/terminal drawer in V1 (corrected 2026-06-30 — see SessionFeature note below); Diff Review is the only sheet surfaced from Work Thread. |
 | `AppFeature/NewChatTabView.swift` | **modify** | Becomes the empty/new state of Work Thread (Start Work). Not a sidebar root. |
 | `AppFeature/ChatHistoryView.swift` | **keep** | Used for thread list in sidebar. |
 | `AppFeature/ChatArchiveView.swift` | **defer** | Not a primary V1 surface. |
@@ -77,10 +77,16 @@ Each relevant existing file is marked: **keep** / **modify** / **merge** / **del
 
 ### SessionFeature (Work Thread + approval actions)
 
+> **Terminal scope correction (2026-06-30):** V1 does not ship a full interactive terminal —
+> see `ARCHITECTURE.md` "Deferred to V2 — full interactive terminal" and `V1_PRODUCT_SPEC.md`'s
+> Work Thread rules. The rows below split into two groups: approval-loop / Work-Thread-activity
+> infra (actively built for V1) vs. raw-terminal-UI infra (code stays in tree, untouched, not
+> wired into V1 navigation — do not spend V1 effort here).
+
 | File | Disposition | Notes |
 |---|---|---|
-| `SessionFeature/SessionView.swift` | **modify** | This is the Work Thread. Add run status header (current step), inline approval card, activity log section. Composer is ChatInputBar. |
-| `SessionFeature/SessionViewModel.swift` | **keep** | SSH connection state machine — no changes. |
+| `SessionFeature/SessionView.swift` | **modify** | This is the Work Thread. Add run status header (current step), inline approval card, activity log section (read-only daemon/relay event log — not a terminal). Composer is ChatInputBar. |
+| `SessionFeature/SessionViewModel.swift` | **keep** | SSH connection state machine — no changes. Still used as the legacy/secondary transport and to drive the Machines "Connect" flow; not the same thing as the interactive-terminal UI below. |
 | `SessionFeature/ApprovalActionIntent.swift` | **modify** | Add `ReplyDeliveryStatus` enum; add offline-queue support (store decision locally when `ConnectionState == .offline`, send on reconnect). Idempotency key = `approvalID` (the UUID string already stable from `Approval.id`); make it explicit in the intent parameter rather than reconstructed from context. |
 | `SessionFeature/ApprovalRelay.swift` | **keep** | |
 | `SessionFeature/E2ERelayBridge.swift` | **keep** | |
@@ -88,13 +94,13 @@ Each relevant existing file is marked: **keep** / **modify** / **merge** / **del
 | `SessionFeature/Chat/ChatInputBar.swift` | **keep** | The composer — used in both Work Thread and Home. |
 | `SessionFeature/Chat/ChatTranscriptView.swift` | **keep** | Activity log base. |
 | `SessionFeature/Chat/ToolCardView.swift` | **keep** | Tool block display. |
-| `SessionFeature/LiveTerminalView.swift` | **modify** | Available only via Work Thread → "Logs" drawer. Not shown by default. |
+| `SessionFeature/LiveTerminalView.swift` | **defer** | No V1 entry point at all — not even a "Logs" drawer (correction from the earlier "modify" disposition, which had drifted back toward building terminal UI). Code stays in tree as a legacy/power-user path. |
 | `SessionFeature/PortForwardView.swift` | **defer** | |
-| `SessionFeature/SnippetPaletteSheet.swift` | **keep** | |
-| `SessionFeature/SSHConnectOverlay.swift` | **keep** | |
-| `SessionFeature/LivePromptInputView.swift` | **keep** | |
+| `SessionFeature/SnippetPaletteSheet.swift` | **defer** | Terminal-command-snippet UI; not part of the V1 approval-loop surface. |
+| `SessionFeature/SSHConnectOverlay.swift` | **keep** | Connection-establishment UI for the legacy SSH transport (Machines → reconnect). Not the interactive terminal itself; stays wired since it's how a live `FleetStore.Slot` gets established at all. |
+| `SessionFeature/LivePromptInputView.swift` | **defer** | Raw terminal command input — superseded in V1 by `ChatInputBar`. |
 | `SessionFeature/RecentPatch.swift` | **keep** | |
-| `SessionFeature/KeyboardAccessoryRail.swift` | **keep** | |
+| `SessionFeature/KeyboardAccessoryRail.swift` | **defer** | Terminal accessory keys (Esc/Tab/Ctrl/Tmux/arrows) — only meaningful inside the interactive terminal, which V1 doesn't surface. |
 | All other SessionFeature chat files | **keep** | |
 
 ---
@@ -154,8 +160,8 @@ Each relevant existing file is marked: **keep** / **modify** / **merge** / **del
 | `SettingsFeature/SyncStatusView.swift` | **keep** | |
 | `SettingsFeature/ProviderKeysView.swift` | **keep** | |
 | `SettingsFeature/SecretsView.swift` | **keep** | |
-| `SettingsFeature/TerminalSettingsView.swift` | **keep** | |
-| `SettingsFeature/ShortcutBarEditor.swift` | **keep** | |
+| `SettingsFeature/TerminalSettingsView.swift` | **defer** | Settings for the deferred interactive terminal (font/theme/keys). Keep file. |
+| `SettingsFeature/ShortcutBarEditor.swift` | **defer** | Editor for the deferred terminal accessory rail. Keep file. |
 | `SettingsFeature/PolicyPresetsView.swift` | **keep** | In Governance section. |
 | `SettingsFeature/PolicyEditorView.swift` | **defer** | Advanced — defer for V1. Keep file. |
 | `SettingsFeature/PolicyMatrixView.swift` | **defer** | |
@@ -276,6 +282,6 @@ For each step above, the gate is:
 - Parallel shadow models for `Approval`, `Session`, `Host` — adapt existing ones
 - Bottom tab bar (the old Tab enum is vestigial — do not reintroduce)
 - Side-by-side diff layout
-- Full terminal as a default Work Thread view
+- Full interactive terminal anywhere in V1, default or otherwise — not even behind a "Logs" drawer (corrected 2026-06-30; do not reintroduce `LiveTerminalView`/`KeyboardAccessoryRail`/`LivePromptInputView` into V1 navigation)
 - Inline billing / paywall during the core approval flow
 - `SidebarDestination` cases beyond the 4 roots + deep-link targets above

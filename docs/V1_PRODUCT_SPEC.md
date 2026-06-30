@@ -151,6 +151,7 @@ You: Also check the logout path
 - Diffs, logs, artifacts open as sheets — never the default view
 - Completed threads keep same layout; composer becomes "Ask a follow-up…"
 - Observed/bareMirror sessions (not started by Lancer): read-only transcript, no composer until "Take Control" is tapped AND adapter guarantees reliable control
+- **No interactive terminal in V1.** "Activity" is a read-only log of daemon/relay events (tool calls, file changes, run status) — not a live shell. There is no "Logs drawer" or other entry point into `LiveTerminalView`/the block terminal in V1. The full interactive SSH terminal is deferred to V2 (see "Deferred from V1" below); its code stays in tree as a legacy/power-user path, but V1 navigation never surfaces it.
 
 **States:**
 - Running → live current step, Stop available
@@ -370,7 +371,7 @@ Do not duplicate the underlying models. `AttentionItem` is a projection, not a s
 - Audit chain verification / export (AuditVerifyExportView)
 - Advanced policy builder (PolicyEditorView) — keep presets (PolicyPresetsView)
 - Apple Watch integration (WatchApprovalTransfer)
-- Full-screen terminal (LiveTerminalView visible only via Work Thread → Logs drawer)
+- **Full interactive terminal — entirely deferred to V2 (owner decision 2026-06-30), no V1 entry point at all.** `LiveTerminalView`, the unified-PTY block terminal, SFTP file browsing, and the preview proxy are not wired into V1 navigation in any form — not even behind a "Logs drawer." Code stays in tree as a legacy/power-user path; do not spend V1 implementation effort on it. V1 scope is exactly the governed attention/approval loop (Home/Work/Machines/Settings) discussed in the Codex research → ChatGPT synthesis that produced this spec — not terminal depth.
 - Port forward view (PortForwardView)
 - Diff side-by-side layout
 - Session history browse / ChatArchiveView as primary surface
