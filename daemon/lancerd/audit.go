@@ -71,11 +71,6 @@ func computeEntryHash(entry AuditEntry) string {
 	return encodeHex(h[:])
 }
 
-func computePrevHash(prevHash string) string {
-	h := sha256.Sum256([]byte(prevHash))
-	return encodeHex(h[:])
-}
-
 func encodeHex(b []byte) string {
 	const hexTable = "0123456789abcdef"
 	out := make([]byte, len(b)*2)

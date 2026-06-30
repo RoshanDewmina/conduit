@@ -90,8 +90,14 @@ public actor DaemonChannel {
                     let frame = DaemonFraming.frame(json)
                     try await writer.write(ByteBuffer(bytes: frame))
                 } catch {
-                    pendingRPC.removeValue(forKey: id)
-                    cont.resume(throwing: error)
+                    // Only resume if this continuation is still pending — a
+                    // concurrent `failPendingRPCs` (disconnect) may have already
+                    // resumed + removed it, and resuming a checked continuation
+                    // twice traps. `removeValue` returning non-nil is the
+                    // exactly-once token here.
+                    if pendingRPC.removeValue(forKey: id) != nil {
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }

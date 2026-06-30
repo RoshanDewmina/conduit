@@ -56,7 +56,7 @@ build_app() {
 }
 
 launch_session_harness() {
-  echo "--- Launching session harness ---"
+  echo "--- Launching live session regression seam ---"
 
   xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
   sleep 2
@@ -67,15 +67,16 @@ launch_session_harness() {
   PW=$(security find-generic-password -s "$LANCER_KEYCHAIN_SERVICE" -w)
 
   env \
-    SIMCTL_CHILD_LANCER_GALLERY=session \
+    SIMCTL_CHILD_LANCER_DAEMON_E2E=1 \
+    SIMCTL_CHILD_LANCER_DESTINATION=sessions \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
     SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
     SIMCTL_CHILD_LANCER_TEST_PW="$PW" \
-    SIMCTL_CHILD_LANCER_TEST_AUTOCMD='claude' \
+    SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted "$BUNDLE_ID"
 
-  echo "  App launched with gallery=session, AUTOCMD=claude"
-  echo "  Waiting ${SLEEP_AGENT}s for agent start + approval to appear..."
+  echo "  App launched with LANCER_DAEMON_E2E=1 and LANCER_DESTINATION=sessions"
+  echo "  Waiting ${SLEEP_AGENT}s for the localhost host to seed..."
   sleep "$SLEEP_AGENT"
   echo ""
 }

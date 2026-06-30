@@ -45,7 +45,6 @@ let package = Package(
         .library(name: "OnboardingFeature", targets: ["OnboardingFeature"]),
         .library(name: "DiffFeature",       targets: ["DiffFeature"]),
         .library(name: "FilesFeature",      targets: ["FilesFeature"]),
-        .library(name: "WorktreesFeature",  targets: ["WorktreesFeature"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
@@ -194,11 +193,6 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .target(
-            name: "WorktreesFeature",
-            dependencies: ["DesignSystem", "LancerCore"],
-            swiftSettings: swiftSettings
-        ),
-        .target(
             name: "SettingsFeature",
             dependencies: [
                 "LancerCore",
@@ -221,7 +215,6 @@ let package = Package(
                 "PersistenceKit",
                 "NotificationsKit",
                 "WorkspacesFeature",
-                "WorktreesFeature",
                 "SessionFeature",
                 "InboxFeature",
                 "OnboardingFeature",

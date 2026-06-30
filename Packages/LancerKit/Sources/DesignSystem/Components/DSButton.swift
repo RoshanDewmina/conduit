@@ -1,11 +1,12 @@
 import SwiftUI
 
 // MARK: - DSButton
-// BLOCKS: the single filled primary action is electric blue (accent). PRIMARY and ACCENT are both
-// the blue CTA; SECONDARY = 1px line border; DESTRUCTIVE = danger outline; GHOST = bare. Square corners.
+// The filled CTA renders on the warm-orange accent. NOTE: both PRIMARY and ACCENT
+// resolve to bg=accent / fg=accentFg (white) — they are visually identical filled
+// buttons; SECONDARY = 1px line border; DESTRUCTIVE = danger outline; GHOST = bare.
 
 public enum DSButtonVariant {
-    case primary      // bg=text (dark), fg=bg (light) — the design's default CTA
+    case primary      // bg=accent (warm orange), fg=accentFg (white) — same as .accent
     case accent       // bg=accent (warm orange), fg=white
     case secondary    // bg=surface, border=borderStrong, fg=text
     case ghost        // transparent, fg=text2, hover=surfaceSunk

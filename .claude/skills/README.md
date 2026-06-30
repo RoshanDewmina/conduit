@@ -12,7 +12,7 @@ from the Codex skill set (`~/.codex/skills/`) on 2026-06-18 and corrected to the
 | **vendor-cli-adapter-audit** | Changing/reviewing agent-CLI adapter behavior (Claude Code, Codex, OpenCode, Kimi) in `daemon/lancerd/dispatch.go` — launch/continue argv, stream parsing, hooks, gates. | `references/vendor-cli-matrix.md` |
 | **agent-session-history-reader** | Mining/summarizing prior local agent conversations (Claude/Codex/OpenCode/Kimi) read-only before plans/reports. | `references/session-stores.md`, `scripts/list-agent-sessions.sh` |
 | **lancer-ia-board-workflow** | Editing/verifying the IA design board or `docs/lancer-ui-prototype/`. **Lower priority** — the board is a design reference; the shipped sidebar/New Chat IA in code is canonical. | `references/board-map.md` |
-| **lancer-design-handoff** | Generating/regenerating the design handoff or screen inventory from current code (not a stale doc), screenshotting gallery routes, writing per-page descriptions. | — |
+| **lancer-design-handoff** | Generating/regenerating the design handoff or screen inventory from current code (not a stale doc), screenshotting real-app/debug-seam routes, writing per-page descriptions. | — |
 | **lancer-dead-view-sweep** | "Delete the old-design swift files, keep what the app uses now" — reachability-based detection of orphaned views + stale assets, delete on one confirm. | — |
 | **lancer-onboarding-smoke** | Live on-device first-run / onboarding / approval-loop / push smoke test. Encodes the ordered checklist (run lancerd *before* pairing). | — |
 

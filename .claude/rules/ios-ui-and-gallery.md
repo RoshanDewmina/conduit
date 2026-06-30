@@ -6,7 +6,7 @@ paths:
 # iOS UI: launch seams, screenshots, design system
 
 The only way to see Lancer UI is the iOS Simulator — there is no web renderer. The old
-`LANCER_GALLERY` / `DebugGalleryView` mock-gallery harness was **deleted**; the seams below replace it.
+The old mock-gallery harness was **deleted**; the seams below replace it.
 
 ## DEBUG launch seams (skip onboarding, seed state)
 

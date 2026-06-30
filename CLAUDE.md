@@ -13,7 +13,7 @@ the app home is a **sidebar / Command Home shell** with durable chat threads, **
 
 Area-specific detail lives in `.claude/rules/` and loads only when you open a matching file:
 
-- `ios-ui-and-gallery.md` — gallery harness, screenshots, design system (AppFeature / DesignSystem)
+- `ios-ui-and-gallery.md` — iOS UI/debug seams, screenshots, design system (AppFeature / DesignSystem)
 - `terminal-blocks.md` — unified-PTY → BlockRenderer pipeline + invariants (SessionFeature / TerminalEngine)
 - `go-daemon.md` — Go build/test + `dispatch.go` adapter rules (daemon/**)
 

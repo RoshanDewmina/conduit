@@ -29,9 +29,14 @@ public enum RelaySettings {
             defaults.removeObject(forKey: legacyOverrideKey)
         }
         if let env = ProcessInfo.processInfo.environment["LANCER_RELAY_URL"],
-           !env.isEmpty {
+           !env.isEmpty,
+           let parsed = URL(string: env),
+           let scheme = parsed.scheme?.lowercased(), scheme == "ws" || scheme == "wss",
+           parsed.host?.isEmpty == false {
             return env
         }
+        // Invalid or non-ws(s) override → fail-safe to the hosted default rather
+        // than stranding the device on an unusable endpoint (BUILD-2).
         return defaultURLString
     }
 

@@ -27,7 +27,7 @@ public final class PurchaseManager {
 
     public static let proProductID = "dev.lancer.mobile.pro"
     public static let stripeCustomerIDKey = "dev.lancer.stripeCustomerId"
-    public static let appAccountTokenKey = "dev.conduit.appAccountToken"
+    public static let appAccountTokenKey = "dev.lancer.appAccountToken"
     public static let clientTokenKey = "dev.lancer.clientToken"
 
     public var purchaseState: PurchaseState = .unknown

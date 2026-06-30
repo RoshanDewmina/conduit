@@ -95,6 +95,10 @@ public final class SessionViewModel {
     // is first; a timeout backstop guarantees connect never hangs.
     private var unifiedIntegrationReady = false
     private var integrationReadyWaiters: [CheckedContinuation<Void, Never>] = []
+    // Backstop timer that drains the readiness waiters if integration never
+    // signals. Tracked so it is cancelled once the waiters drain (ready, timeout,
+    // or teardown) instead of leaking one detached task per connect cycle (CONC-1).
+    private var integrationReadyTimeoutTask: Task<Void, Never>?
 
     /// Fired after a *re*-connect (auto or manual) completes successfully — never
     /// on the initial connect. AppRoot uses this to re-arm the approval pipeline
@@ -1007,7 +1011,8 @@ public final class SessionViewModel {
                 return
             }
             integrationReadyWaiters.append(cont)
-            Task { [weak self] in
+            integrationReadyTimeoutTask?.cancel()
+            integrationReadyTimeoutTask = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(3))
                 self?.drainIntegrationReadyWaiters()
             }
@@ -1025,6 +1030,11 @@ public final class SessionViewModel {
     /// the timeout backstop, and shell teardown). Runs on the actor, so the
     /// single drain prevents any double-resume of a continuation.
     private func drainIntegrationReadyWaiters() {
+        // The backstop has done its job (or is being torn down) — cancel it so it
+        // doesn't linger past the drain (CONC-1). Self-cancel from the timeout's
+        // own call is a harmless no-op.
+        integrationReadyTimeoutTask?.cancel()
+        integrationReadyTimeoutTask = nil
         guard !integrationReadyWaiters.isEmpty else { return }
         let waiters = integrationReadyWaiters
         integrationReadyWaiters.removeAll()

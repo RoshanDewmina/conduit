@@ -21,7 +21,7 @@ app can't reach is dead. Computing reachability removes the back-and-forth.
 - **Never auto-delete.** Produce the candidate list with evidence, get ONE confirmation, then delete.
 - **Reference = used.** A view whose type name appears in any non-test, non-preview source file
   other than its own definition is live. A view reachable only via a debug/deep-link seam
-  (`LANCER_DESTINATION` in `AppRoot.swift`) is still **live**. (The old `DebugGalleryView`
+  (`LANCER_DESTINATION` in `AppRoot.swift`) is still **live**. (The old mock-gallery view
   harness was deleted 2026-06-24 — don't expect a gallery.)
 - **Respect `git status`** — other agents' in-flight files are not "dead." Check before flagging.
 - This is the repo's own "no dead code / delete cleanly" rule (`agent-contract.md` §3) made executable.

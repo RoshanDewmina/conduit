@@ -105,7 +105,7 @@ Build green. 253 tests pass (251 pre-existing + 2 new from this review).
 | iCloud Keychain sync | **OK** — explicitly set to `false` in all write paths |
 | BiometricGate gates key ops | **OK** — `CredentialResolver.resolve()` always calls `BiometricGate.shared.unlock()` for Ed25519 keys |
 | TOFU prompt in production | **OK** — `TOFUHostKeyValidator` always prompts in production; auto-trust only in `#if DEBUG` harnesses |
-| Debug auto-trust in Release | **OK** — `DebugTerminalHarness`, `DebugSessionHarness`, `DebugGalleryView` all have `#if DEBUG` file-level guards |
+| Debug auto-trust in Release | **OK** — the terminal debug harnesses and seeded E2E seams are DEBUG-gated; production TOFU defaults remain prompting/fail-closed |
 | Host key re-verified on reconnect | **OK** — `SSHSession.attemptReconnect()` calls `connect(credential:hostKeyStore:)` which creates a new `TOFUHostKeyValidator` |
 | Transport cipher downgrade | **NOT AUDITED** — cipher/kex/MAC selection is delegated entirely to Citadel and swift-nio-ssh; no custom cipher list override found in source |
 | Pasteboard — key material | **OK** (LOW-1) — only public keys copied to pasteboard; PEM never written to pasteboard |

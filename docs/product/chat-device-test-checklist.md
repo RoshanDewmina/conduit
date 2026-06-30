@@ -65,7 +65,7 @@
 
 ## Simulator pre-verification (done 2026-06-22, before device pass)
 
-What was verified on the iPhone 17 Pro simulator (gallery routes), so the device pass can focus on
+What was verified on the iPhone 17 Pro simulator before the device pass, so the device pass can focus on
 real taps + the live loop:
 
 - **Builds/tests:** `swift build` + app-target `build_sim` SUCCEEDED; **419 LancerKit tests / 68

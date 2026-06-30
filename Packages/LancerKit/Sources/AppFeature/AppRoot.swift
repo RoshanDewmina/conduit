@@ -16,7 +16,6 @@ import OnboardingFeature
 import SettingsFeature
 import DesignSystem
 
-import DiffFeature
 import SyncKit
 
 /// The single composition root. The whole app graph is wired in `init`.
@@ -312,7 +311,17 @@ public struct AppRoot: View {
     }
 
     private var mainBody: some View {
-        mainContent
+        // Split into two modifier groups (ARCH-1): the Swift type-checker handles
+        // each generic helper as its own unit, so neither one re-exceeds the
+        // expression type-check limit the single 160-line chain used to hit.
+        relayEventModifiers(lifecycleModifiers(mainContent))
+    }
+
+    /// App-lifecycle modifiers: launch tasks, onboarding/notification setup,
+    /// scene-phase + app-lock handling, and the paywall sheet. Order within the
+    /// group is immaterial — these are independent tasks/observers and one sheet.
+    private func lifecycleModifiers(_ content: some View) -> some View {
+        content
         .task {
             if appLockEnabled {
                 await attemptUnlock()
@@ -373,6 +382,13 @@ public struct AppRoot: View {
                 isUnlocked = true
             }
         }
+    }
+
+    /// Notification/relay-event observers: lock-screen approval actions and the
+    /// E2E relay bridge's run-output/status/artifact/approval events, routed into
+    /// the inbox + run stores.
+    private func relayEventModifiers(_ content: some View) -> some View {
+        content
         // Route lock-screen Approve/Reject notification actions into the same
         // decision path the in-app Inbox uses. LancerNotificationDelegate posts
         // these names; without an observer the buttons were silently dead.

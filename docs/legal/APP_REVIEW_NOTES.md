@@ -64,27 +64,24 @@ The reviewer needs a macOS or Linux machine with SSH enabled and the
 `lancerd` daemon running. Follow the steps below to set up the demo
 environment.
 
-### Option A: Demo mode (recommended for review — no SSH required)
+### Option A: Seeded review mode (recommended for review — no SSH required)
 
-The app includes a built-in demo mode that shows all UI surfaces without
-requiring a live SSH connection or external hardware:
+The app includes DEBUG-only seeded review seams that show core UI surfaces
+without requiring a live SSH connection or external hardware:
 
 1. Launch the app on the simulator or device.
 2. The app will detect "no paired hosts" and offer onboarding.
-3. **Skip pairing** — the app's Debug Gallery can be activated for review
-   purposes:
-   - Set environment variable `SIMCTL_CHILD_LANCER_GALLERY=review` on
-     launch, OR
-   - The app shows the full UI flow with mock data: session list, approval
-     cards, transcript blocks, and settings.
+3. **Skip pairing** — for a reviewer build, launch with
+   `SIMCTL_CHILD_LANCER_UITEST_RESEED=1` and
+   `SIMCTL_CHILD_LANCER_DESTINATION=inbox` to show seeded approval cards
+   without a live daemon.
 4. Navigate: Session list → Tap a mock session → See approval UI →
    Approve / deny / edit flows → Settings for IAP display.
 5. The demo mode exhibits the app's full functionality for review.
 
-**Important for reviewer:** The debug gallery flag (`LANCER_GALLERY=review`)
-activates pre-seeded mock data so you can evaluate every screen without a
-remote host. All IAP products and restore flow are also testable in demo
-mode via the StoreKit configuration.
+**Important for reviewer:** These seeded seams are DEBUG-only and are not
+included in the Release build. All IAP products and restore flow are also
+testable via the StoreKit configuration.
 
 ### Option B: Live SSH connection (for thorough review)
 

@@ -258,6 +258,42 @@ public enum DebugSeeder {
                 decidedAt: Date(timeIntervalSinceNow: -295),
                 decision: .approved
             ),
+            Approval(
+                id: ApprovalID(),
+                sessionID: session,
+                agent: .claudeCode,
+                kind: .command,
+                command: "DROP DATABASE production",
+                patch: nil,
+                cwd: "/home/ubuntu/myapp",
+                risk: .critical,
+                createdAt: Date(timeIntervalSinceNow: -60)
+            ),
+            Approval(
+                id: ApprovalID(),
+                sessionID: session,
+                agent: .claudeCode,
+                kind: .askQuestion,
+                patch: nil,
+                cwd: "/home/ubuntu/myapp",
+                risk: .medium,
+                createdAt: Date(timeIntervalSinceNow: -90),
+                question: "Which approach should I use to fix the race condition in the worker pool?",
+                choices: ["Add a mutex", "Use a channel", "Ask me later"]
+            ),
+            Approval(
+                id: ApprovalID(),
+                sessionID: session,
+                agent: .claudeCode,
+                kind: .command,
+                command: "kubectl rollout restart deployment/api",
+                patch: nil,
+                cwd: "/home/ubuntu/myapp",
+                risk: .high,
+                createdAt: Date(timeIntervalSinceNow: -600),
+                decidedAt: Date(timeIntervalSinceNow: -540),
+                decision: .expired
+            ),
         ]
         for approval in approvals {
             try? await repo.upsert(approval)

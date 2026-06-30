@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh — lancerd installer
+# install.sh — lancerd installer (one command, fresh VPS to paired)
 #
-# Intended to be run via curl | sh:
-#   curl -fsSL https://github.com/RoshanDewmina/lancer/releases/latest/download/install.sh | sh
-#
-# Downloads a prebuilt lancerd binary for linux/macOS × amd64/arm64 from
-# GitHub Releases, verifies SHA256, installs to ~/.lancer/bin/lancerd,
-# and starts the pairing flow.
-#
-# Usage (canonical public GCS distribution bucket):
+# On a fresh Hetzner / DigitalOcean / any linux box (run as the user that will
+# own the agents; root is fine), this single command installs and pairs:
 #   curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh
 #   curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh -s -- --hooks claude
-# (Once a custom domain is set, a vanity URL like https://get.<domain>/install.sh can redirect here.)
+#
+# Downloads a prebuilt lancerd binary for linux/macOS × amd64/arm64 from the
+# public GCS distribution bucket (the source repo is private, so this is the
+# canonical channel — NOT GitHub Releases), verifies SHA256, installs to
+# ~/.lancer/bin/lancerd, registers the background service, and starts pairing.
+# (Once a custom domain is set, https://get.<domain>/install.sh can redirect here.)
 #
 # Flags:
 #   --hooks <mode>      Install agent hooks (none|claude|codex|both). Default: none
@@ -84,6 +83,19 @@ download_file() {
   fi
 }
 
+# Portable SHA-256: sha256sum (Linux/coreutils) or shasum (macOS). A minimal
+# Hetzner/Ubuntu image ships sha256sum but not always shasum.
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "ERROR: neither sha256sum nor shasum found — cannot verify download" >&2
+    exit 1
+  fi
+}
+
 if [[ "$FROM_SOURCE" == "true" ]]; then
   command -v go >/dev/null 2>&1 || { echo "ERROR: go is required for --from-source" >&2; exit 1; }
   echo "Building lancerd from source..."
@@ -128,7 +140,7 @@ else
     exit 1
   fi
 
-  ACTUAL="$(shasum -a 256 "$TARGET" | awk '{print $1}')"
+  ACTUAL="$(sha256_of "$TARGET")"
   if [[ "$ACTUAL" != "$EXPECTED" ]]; then
     fail_checksum "$EXPECTED" "$ACTUAL" "lancerd_${OS}_${ARCH}"
   fi

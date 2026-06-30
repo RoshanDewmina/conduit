@@ -14,8 +14,7 @@ public enum HostServiceError: Error, Sendable, Equatable {
 }
 
 /// JSON-RPC 2.0 client for `lancerd`'s local control socket
-/// (`~/.lancer/lancerd.sock`, falling back to the pre-rebrand
-/// `~/.conduit/conduitd.sock` while both daemons may be on disk).
+/// (`~/.lancer/lancerd.sock`).
 ///
 /// One actor instance owns one connection. Not reentrant-safe across
 /// reconnects — callers that need retry/backoff build it on top.
@@ -35,10 +34,9 @@ public actor HostServiceClient {
 
     /// - Parameters:
     ///   - socketPathOverride: explicit socket path, bypassing the
-    ///     `~/.lancer` / `~/.conduit` resolution. Used by tests.
+    ///     `~/.lancer` resolution. Used by tests.
     ///   - tokenOverride: explicit IPC token, bypassing the
-    ///     `~/.lancer/ipc-token` / `~/.conduit/ipc-token` resolution. Used by
-    ///     tests.
+    ///     `~/.lancer/ipc-token` resolution. Used by tests.
     public init(socketPathOverride: String? = nil, tokenOverride: String? = nil) {
         if let override = socketPathOverride {
             socketPath = override
@@ -58,34 +56,30 @@ public actor HostServiceClient {
         }
     }
 
-    private static func resolveSocketPath() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let lancerSock = home + "/.lancer/lancerd.sock"
-        if FileManager.default.fileExists(atPath: lancerSock) {
-            return lancerSock
-        }
-        let conduitSock = home + "/.conduit/conduitd.sock"
-        if FileManager.default.fileExists(atPath: conduitSock) {
-            return conduitSock
-        }
-        // Neither exists yet (daemon not installed/started) — prefer the
-        // current name so the resulting connect() failure points at the
-        // right path.
-        return lancerSock
+    /// The current user's home directory. `homeDirectoryForCurrentUser` is
+    /// macOS-only and returns the real home even when sandboxed — required for the
+    /// daemon socket path. iOS gets a sandbox-home fallback purely so the package
+    /// compiles for iOS test builds; HostControlKit is never used on iOS.
+    private static var homeDirectory: String {
+        #if os(macOS)
+        FileManager.default.homeDirectoryForCurrentUser.path
+        #else
+        NSHomeDirectory()
+        #endif
     }
 
-    /// Reads the local IPC auth token from `~/.lancer/ipc-token`, falling
-    /// back to the pre-rebrand `~/.conduit/ipc-token`. Returns an empty
-    /// string (never throws/crashes) if neither file exists — the daemon
-    /// will reject the empty token with -32001, which `connect()` surfaces
-    /// as `HostServiceError.rpc`.
+    private static func resolveSocketPath() -> String {
+        homeDirectory + "/.lancer/lancerd.sock"
+    }
+
+    /// Reads the local IPC auth token from `~/.lancer/ipc-token`. Returns an
+    /// empty string (never throws/crashes) if the file does not exist — the
+    /// daemon will reject the empty token with -32001, which `connect()`
+    /// surfaces as `HostServiceError.rpc`.
     private static func resolveToken() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let candidates = [home + "/.lancer/ipc-token", home + "/.conduit/ipc-token"]
-        for path in candidates {
-            if let raw = try? String(contentsOfFile: path, encoding: .utf8) {
-                return raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+        let tokenPath = homeDirectory + "/.lancer/ipc-token"
+        if let raw = try? String(contentsOfFile: tokenPath, encoding: .utf8) {
+            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return ""
     }

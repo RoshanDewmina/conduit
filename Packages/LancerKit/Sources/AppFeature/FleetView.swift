@@ -801,28 +801,6 @@ public struct FleetView: View {
         return nil
     }
 
-    /// Build a CI-event loader for a loop, sourced from the daemon channel of
-    /// the slot hosting it (or the first slot as a fallback). Returns nil when
-    /// the loop has no repo or no channel is available.
-    private func ciEventLoader(for loop: Loop) -> (@Sendable () async -> [CIEvent])? {
-        guard let repo = loop.repo, !repo.isEmpty else { return nil }
-        let slot = store.slots.first { $0.hostID.uuidString == loop.hostID } ?? store.slots.first
-        guard let channel = slot?.channel else { return nil }
-        return { (try? await channel.recentCIEvents(repo: repo)) ?? [] }
-    }
-
-    /// Build a GitStore for a loop's worktree so the Loop detail can review +
-    /// ship the agent's git work. Returns nil when the loop has no worktree path
-    /// or no host channel — the "Changes" section is then hidden.
-    private func gitStore(for loop: Loop) -> GitStore? {
-        // The worktree field carries the agent's actual on-host path; loop.repo is
-        // a slug ("owner/name"), not a workdir, so it can't seed git ops.
-        guard let workdir = loop.worktree, !workdir.isEmpty else { return nil }
-        let slot = store.slots.first { $0.hostID.uuidString == loop.hostID } ?? store.slots.first
-        guard let channel = slot?.channel else { return nil }
-        return GitStore(channel: channel, workdir: workdir)
-    }
-
     @MainActor
     private func refresh() async {
         await store.refreshBridgeStatus()

@@ -29,7 +29,7 @@ escalation path still exists but is **dormant**. Block card UI lives in
   (`agent-contract.md` §5).
 
 **Run the live SSH session in the simulator** (needs macOS Remote Login on + the login password in
-Keychain `lancer-localhost-ssh`). The old `LANCER_GALLERY=session` route is gone; the live session
+Keychain `lancer-localhost-ssh`). The old session gallery route is gone; the live session
 is now reached by seeding a localhost host (`LANCER_DAEMON_E2E=1`) and driving the real connect flow:
 
 ```bash

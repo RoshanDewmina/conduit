@@ -31,6 +31,7 @@ public struct LancerHomeView: View {
     @State private var collapsed: Set<String> = []
     @State private var observedSessions: [ObservedSession] = []
     @State private var sessionsLoading = true
+    @State private var reviewingApproval: Approval?
 
     public init(
         fleetStore: FleetStore,
@@ -68,8 +69,11 @@ public struct LancerHomeView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     topRow
                     greeting
-                    if pendingApprovalCount > 0 {
-                        waitingBand.padding(.horizontal, 22).padding(.top, 18)
+                    let items = fleetStore.attentionItems
+                    if !items.isEmpty {
+                        attentionSection(items: items)
+                            .padding(.horizontal, 22)
+                            .padding(.top, 18)
                     }
                     machinesSection.padding(.top, 26)
                 }
@@ -77,6 +81,9 @@ public struct LancerHomeView: View {
             }
         }
         .accessibilityIdentifier("commandHome")
+        .sheet(item: $reviewingApproval) { approval in
+            approvalReviewSheet(for: approval)
+        }
         .task {
             sessionsLoading = true
             observedSessions = await loadSessions()
@@ -125,40 +132,213 @@ public struct LancerHomeView: View {
         .padding(.top, 18)
     }
 
-    // MARK: Waiting band (board: eyebrow + big count + label + arrow)
+    // MARK: - Needs Attention section
 
-    private var waitingBand: some View {
-        Button {
-            Haptics.selection()
-            onOpenInbox()
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("WAITING ON YOU")
+    @ViewBuilder
+    private func attentionSection(items: [AttentionItem]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("NEEDS ATTENTION")
                     .font(.dsMonoPt(10, weight: .medium))
                     .tracking(1.0)
-                    .foregroundStyle(t.accentFg.opacity(0.82))
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(pendingApprovalCount)")
-                        .font(.dsDisplayPt(34, weight: .bold))
-                        .foregroundStyle(t.accentFg)
-                    Text(pendingApprovalCount == 1 ? "conversation blocked" : "conversations blocked")
-                        .font(.dsSansPt(13.5, weight: .medium))
-                        .foregroundStyle(t.accentFg.opacity(0.92))
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(t.accentFg.opacity(0.9))
+                    .foregroundStyle(t.text4)
+                Spacer()
+                if items.count > 2 {
+                    Button("See all") { onOpenInbox() }
+                        .font(.dsSansPt(13, weight: .medium))
+                        .foregroundStyle(t.accent)
+                        .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(t.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 8)
+            ForEach(items.prefix(2)) { item in
+                attentionCard(for: item)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(pendingApprovalCount) conversations blocked, waiting on you")
+    }
+
+    @ViewBuilder
+    private func attentionCard(for item: AttentionItem) -> some View {
+        switch item.kind {
+        case .approval(let approval):
+            approvalAttentionCard(approval: approval, isExpired: item.isExpired)
+        case .blockedRun(_, let hostName, _, let title):
+            blockedRunCard(hostName: hostName, title: title)
+        case .offlineMachine(_, let hostName):
+            offlineMachineCard(hostName: hostName)
+        }
+    }
+
+    private func approvalAttentionCard(approval: Approval, isExpired: Bool) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpired ? "clock.badge.xmark" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isExpired ? t.text3 : t.warn)
+                    Text(isExpired ? "Approval expired" : "Approval needed")
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(isExpired ? t.text3 : t.text)
+                    Spacer()
+                    Text(riskLabel(approval.risk))
+                        .font(.dsSansPt(11, weight: .semibold))
+                        .foregroundStyle(t.risk(approval.risk.rawValue))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(t.riskSoft(approval.risk.rawValue), in: Capsule())
+                }
+                Text(approvalSubtitle(approval))
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+            }
+            DSButton(isExpired ? "View" : "Review", variant: .quiet, size: .sm, mono: true) {
+                Haptics.selection()
+                reviewingApproval = approval
+            }
+        }
+        .padding(14)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                .strokeBorder(isExpired ? t.border.opacity(0.4) : t.border, lineWidth: 1)
+        )
+        .opacity(isExpired ? 0.6 : 1.0)
+    }
+
+    private func blockedRunCard(hostName: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "pause.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(t.warn)
+                    Text("Run paused")
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                }
+                Text("\(title) · \(hostName)")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+    }
+
+    private func offlineMachineCard(hostName: String) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 13))
+                        .foregroundStyle(t.text3)
+                    Text("Machine offline")
+                        .font(.dsSansPt(14, weight: .semibold))
+                        .foregroundStyle(t.text)
+                }
+                Text("\(hostName) · has pending approvals")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(t.surface)
+        .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .opacity(0.7)
+    }
+
+    // MARK: - Approval review sheet
+
+    @ViewBuilder
+    private func approvalReviewSheet(for capturedApproval: Approval) -> some View {
+        let slot = fleetStore.slot(forApprovalID: capturedApproval.id)
+        // Read the LIVE version from the observable inbox so remote resolution is detected
+        let live = slot?.inboxVM.approvals.first(where: { $0.id == capturedApproval.id }) ?? capturedApproval
+        let isOffline = slot.map { fleetStore.connectionState(for: $0) == .offline } ?? false
+        let resolvedDecision: Approval.Decision? = live.isPending ? nil : live.decision
+
+        DSReviewSheet("Review") {
+            VStack(spacing: 0) {
+                // Fixture 7: offline banner — decision will be queued and sent on reconnect
+                if isOffline {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 13))
+                            .foregroundStyle(t.text3)
+                        Text("Machine offline — your decision will be sent when reconnected")
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text3)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(t.surfaceSunk)
+                }
+
+                InboxApprovalDetail(
+                    agentKey: capturedApproval.agent.agentKey,
+                    agentName: capturedApproval.agent.displayName,
+                    hostLabel: slot?.hostName ?? capturedApproval.cwd,
+                    cwd: capturedApproval.cwd,
+                    sessionID: capturedApproval.agentSessionID,
+                    timeLabel: relativeTimeLabel(capturedApproval.createdAt),
+                    summary: ApprovalSummary.derive(from: capturedApproval).headline,
+                    question: capturedApproval.question,
+                    choices: capturedApproval.choices,
+                    toolName: capturedApproval.toolName ?? capturedApproval.command,
+                    args: capturedApproval.toolInput ?? capturedApproval.command,
+                    command: capturedApproval.command,
+                    risk: capturedApproval.risk.rawValue,
+                    isCritical: capturedApproval.risk == .critical,
+                    matchedRule: capturedApproval.blastRadius?.matchedRule,
+                    resolvedDecision: resolvedDecision,
+                    onDeny: {
+                        slot?.inboxVM.decide(capturedApproval.id, decision: .rejected)
+                        reviewingApproval = nil
+                    },
+                    onApprove: {
+                        slot?.inboxVM.decide(capturedApproval.id, decision: .approved)
+                        reviewingApproval = nil
+                    },
+                    onChoose: { idx in
+                        slot?.inboxVM.decide(capturedApproval.id, decision: .approved, choiceIndex: idx)
+                        reviewingApproval = nil
+                    }
+                )
+            }
+        }
+    }
+
+    // MARK: - Helpers for attention cards
+
+    private func riskLabel(_ risk: Approval.Risk) -> String {
+        switch risk {
+        case .low:      "Low"
+        case .medium:   "Medium"
+        case .high:     "High"
+        case .critical: "Critical"
+        }
+    }
+
+    private func approvalSubtitle(_ approval: Approval) -> String {
+        let tool = approval.toolName ?? approval.kind.rawValue
+        let host = fleetStore.slot(forApprovalID: approval.id)?.hostName ?? ""
+        return host.isEmpty ? tool : "\(tool) · \(host)"
+    }
+
+    private func relativeTimeLabel(_ date: Date) -> String {
+        let elapsed = -date.timeIntervalSinceNow
+        if elapsed < 60 { return "Just now" }
+        if elapsed < 3600 { return "\(Int(elapsed / 60))m ago" }
+        return "\(Int(elapsed / 3600))h ago"
     }
 
     // MARK: Machines → Projects → Sessions
@@ -602,6 +782,28 @@ private struct MachineTreeCard: View {
         if key.contains("kimi") { return "K" }
         if key.contains("opencode") || key.contains("open") { return "O" }
         return String((session.vendor ?? session.agentID).prefix(1)).uppercased()
+    }
+}
+
+private extension Approval.AgentSource {
+    var agentKey: AgentKey {
+        switch self {
+        case .claudeCode: .claudeCode
+        case .codex:      .codex
+        case .cursor:     .cursor
+        case .opencode:   .opencode
+        case .devin, .unknown: .unknown
+        }
+    }
+    var displayName: String {
+        switch self {
+        case .claudeCode: "Claude Code"
+        case .codex:      "Codex"
+        case .cursor:     "Cursor"
+        case .opencode:   "OpenCode"
+        case .devin:      "Devin"
+        case .unknown:    "Agent"
+        }
     }
 }
 #endif

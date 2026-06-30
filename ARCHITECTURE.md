@@ -2,7 +2,7 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-20 (editorial Command Home redesign and workspace refresh)
+Last updated: 2026-06-27 (lean cleanup sweep, live-loop/TestFlight reconciliation)
 Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
@@ -21,7 +21,7 @@ the reason for rejection.
 
 ---
 
-## 0.1 Current state snapshot (authoritative — 2026-06-19)
+## 0.1 Current state snapshot (authoritative — 2026-06-27)
 
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
@@ -42,7 +42,7 @@ the reason for rejection.
 **What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 21 SPM targets). **Sidebar / Command Home shell** (see §4.1).
+1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Sidebar / Command Home shell** (see §4.1).
 2. **`lancerd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/lancerd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
@@ -59,26 +59,30 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 > and cloud session-migration (Omnara) are largely **non-gaps** for Lancer — the phone was never the
 > session holder.
 
-### V1 scope (locked 2026-06-18; transport corrected 2026-06-19)
+### V1 scope (locked 2026-06-18; transport corrected 2026-06-19; terminal scope corrected 2026-06-30)
 - **V1 ships:** the sidebar/Command Home shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, machine detail (≤3 live sessions), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
 - **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
+- **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below) and reachable as a legacy/power-user path, but it is not a V1 surface. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is exactly what's in `docs/V1_PRODUCT_SPEC.md` / `docs/V1_STATE_AND_ACTION_MATRIX.md` / `docs/V1_IMPLEMENTATION_PLAN.md` (the Codex-research → ChatGPT-synthesis → locked-spec chain): the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
 - **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
+- **Governance home** merged into the sidebar shell: policy/audit/secrets/drift/doctor/usage routes now have one governance entry point instead of resurrecting a Control tab.
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
 - **lancerd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
 - **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, biometric gate + app-lock + audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop.
-- **V1 reach work (2026-06-19, code-complete; device verification pending):**
+- **V1 reach + device proof (2026-06-19 → 2026-06-23):**
   - **opencode approval gating** — lancerd-dispatched `opencode` runs now gate every tool call through the policy engine via a `LANCER_GATE=1`-guarded PreToolUse hook (the guard means the owner's interactive opencode sessions are unaffected). Live-verified against `~/.lancer/audit.log` (auto-allow + auto-deny, hash-chain intact). Closes the prior governance bypass where only Claude Code gated. `daemon/lancerd/dispatch.go` + `docs/opencode-lancer-hook.sh`.
   - **Push-driven Live Activity** — `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New `daemon/push-backend/liveactivity.go` ActivityKit sender with the strict APNs contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). **APNs payload privacy:** the alert body no longer carries the raw command (`body := ev.Command` removed) — redacted risk/tool summary only; full detail fetched in-app post-unlock.
   - **Cold-decision gate** — `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a killed-app Live Activity forwards to lancerd (previously the singleton creds were empty cold → decision dropped).
   - **Watch WCSession polish** — `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gains `.accessoryRectangular` + VoiceOver labels.
+  - **C2 physical-device live loop PASSED (2026-06-23):** app closed → gated action → APNs lock-screen push → approve from the lock screen → decision round-tripped to `lancerd` → agent resumed. The fixes covered bundle id, relay device registration, `/approval` auth, sandbox APNs fallback, and foreground re-registration. Evidence: `docs/test-runs/2026-06-22-full-device-test.md`.
+  - **TestFlight uploaded:** a TestFlight build has been uploaded; remaining release work is beta validation / App Review / owner-operated store metadata, not "make the app build."
 
 ### Partial / deployment- or device-gated (🔶)
 - **Chat artifacts and Fleet→thread routing:** `ChatArtifactCard`/`ChatArtifactDetailView` now render persisted run artifacts inside `NewChatTabView`, alongside live `InlineChatToolCard`s. Tapping a Fleet agent opens its matching active chat (including legacy titles) or falls back to that host's terminal when no related chat exists. The two card types remain complementary.
 - **Standard accounts and daemon binding:** the app has a Lancer-account vs. self-hosted-offline entry decision, Supabase email/password flow, deep-link recovery, Keychain session restore/sign-out, authenticated backend ownership checks, and QR bind/redeem contracts. A **device-management screen** (Settings → Connection → Devices, standard-account only) lists bound daemons and revokes them against `GET /v1/devices` + `POST /v1/devices/{id}/revoke`. Production Supabase URL, publishable key, JWT secret, and production SMTP are owner-configured deployment inputs; offline pairing remains account-free. JWT verification is **HS256-only** (`SUPABASE_JWT_SECRET`) — a JWKS/asymmetric path is needed if the chosen Supabase project signs with RS256.
-- **Structured tool_use richness** (full typed input end-to-end), **org email delivery**, and **live APNs device delivery** are not yet proven on a physical device (see `docs/LIVE_LOOP_RUNBOOK.md`). The Live Activity **push token → push-backend registration** is now wired in code: `LancerApp` posts `.lancerLiveActivityTokenReady`, `AppRoot.configureE2ERelayBridge` subscribes, and `startPushToStartMonitor(sessionID:)` runs after cloud-service setup. The remaining gap is physical-device proof, not a manual source edit.
+- **Structured tool_use richness** (full typed input end-to-end) and **org email delivery** remain thinner than the core governed-approval loop. Physical-device APNs for the app-closed approval path is proven; keep `docs/LIVE_LOOP_RUNBOOK.md` as the repeatable bring-up procedure, not as evidence that C2 is still unproven. The Live Activity **push token → push-backend registration** is wired in code: `LancerApp` posts `.lancerLiveActivityTokenReady`, `AppRoot.configureE2ERelayBridge` subscribes, and `startPushToStartMonitor(sessionID:)` runs after cloud-service setup.
 - **`continue`/follow-up:** implemented for all vendors in `dispatch.go` (`continueArgv`) — **in V1 scope.** Re-verify each vendor's argv with the `vendor-cli-adapter-audit` skill before trusting (CLI flags drift).
 
 ### Deferred to V2 — code retained, NOT deleted
@@ -91,12 +95,14 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 ### Deprecated / removed
 - **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — replaced by the sidebar shell (§4.1).
 - Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
+- Deleted dead files (2026-06-27 lean sweep): `WorktreesFeature` whole target, `RunnerSetupView`, `EditScheduleSheet`, `LoopDetailView`, `GitStore`, unused Go agent-status helpers, unused quota/secrets/policy/audit helpers, stale StoreKit Conduit metadata, and the one-time `scripts/rebrand-lancer.py`.
 - `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `LANCER_PROJECT_DOSSIER.md` → `docs/_archive/` (point-in-time, superseded).
+- `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, and root `ship-plan/` → `docs/_archive/` (tab/gallery-era or superseded planning).
 
 ### Current priorities (in order)
-1. **Close the live loop on a real device:** hook→policy→inbox→approve→audit + **APNs delivery while the app is closed** + relay dispatch round-trip, end-to-end (the #1 unverified gap). Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
-2. **App Store Connect setup + TestFlight** (the main external ship gate).
-3. Optional V1 polish: wire `ChatArtifactCard` + `FleetThreadMapper`; empty/error/a11y sweep; pixel polish.
+1. **Keep the live loop repeatable:** rerun the governed-approval path on physical devices before each external beta/release candidate. Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
+2. **External readiness:** TestFlight is uploaded; remaining gates are beta validation, App Review metadata, StoreKit sandbox proof, remote-host E2E, and owner-operated DNS/release publishing.
+3. Optional V1 polish: empty/error/a11y sweep, pixel polish, and daemon-side verification for audit "Verify chain" if it stays in V1.
 
 ---
 
