@@ -4,11 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
 
 	"golang.org/x/net/websocket"
+)
+
+// pairConfirmWindow bounds how long a freshly displayed pairing code stays
+// redeemable if nobody ever completes the initial key exchange (DaemonKey
+// and PhoneKey both set). A short code is a rendezvous identifier, not a
+// permanent credential -- an abandoned or guessed-but-unused code must not
+// stay valid forever. A code that HAS completed its first exchange
+// (PairedAt set) keeps working indefinitely for legitimate reconnects.
+const pairConfirmWindow = 10 * time.Minute
+
+const (
+	pairAttemptWindow = time.Minute
+	pairAttemptMax    = 20
 )
 
 type relayPair struct {
@@ -21,8 +35,74 @@ type relayPair struct {
 	LastUsed   time.Time
 	DaemonSeen time.Time
 	PhoneSeen  time.Time
-	Buffer     []relayMessage
-	mu         sync.Mutex
+	// PairedAt is set once, the first time both DaemonKey and PhoneKey are
+	// non-empty. Zero means the code never completed an initial key
+	// exchange and is still subject to pairConfirmWindow.
+	PairedAt time.Time
+	Buffer   []relayMessage
+	mu       sync.Mutex
+}
+
+// rateLimiter throttles relay connection attempts per source IP. The
+// pairing code is a 6-digit space (1e6 combinations); without a limit it
+// is brute-forceable in seconds. pairAttemptMax/min per IP is generous for
+// a real daemon/phone's own reconnect+ping traffic but bounds an
+// attacker's guess rate within pairConfirmWindow.
+type rateLimiter struct {
+	mu       sync.Mutex
+	attempts map[string][]time.Time
+}
+
+func (rl *rateLimiter) allow(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-pairAttemptWindow)
+	kept := rl.attempts[key][:0]
+	for _, t := range rl.attempts[key] {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) >= pairAttemptMax {
+		rl.attempts[key] = kept
+		return false
+	}
+	rl.attempts[key] = append(kept, time.Now())
+	return true
+}
+
+// sweepStale removes entries with no attempts left inside the current
+// window. Per-key pruning in allow() only runs when that same key is
+// queried again, so a key visited exactly once (e.g. an attacker rotating
+// source IPs, trivial over IPv6) would otherwise sit in this map forever —
+// unbounded growth that also weakens the limiter's effect for a
+// rotating-IP attacker. Called periodically by startRelayJanitor in main.go.
+func (rl *rateLimiter) sweepStale() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-pairAttemptWindow)
+	for key, times := range rl.attempts {
+		kept := times[:0]
+		for _, t := range times {
+			if t.After(cutoff) {
+				kept = append(kept, t)
+			}
+		}
+		if len(kept) == 0 {
+			delete(rl.attempts, key)
+		} else {
+			rl.attempts[key] = kept
+		}
+	}
+}
+
+var pairAttemptLimiter = &rateLimiter{attempts: make(map[string][]time.Time)}
+
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 type relayMessage struct {
@@ -62,6 +142,11 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !pairAttemptLimiter.allow(clientIP(r)) {
+		http.Error(w, "too many pairing attempts, try again later", http.StatusTooManyRequests)
+		return
+	}
+
 	websocket.Server{
 		Handler: func(conn *websocket.Conn) {
 		defer conn.Close()
@@ -69,6 +154,22 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 
 		hub.mu.Lock()
 		pair, ok := hub.pairs[code]
+		if ok {
+			pair.mu.Lock()
+			expired := pair.PairedAt.IsZero() && time.Since(pair.CreatedAt) > pairConfirmWindow
+			pair.mu.Unlock()
+			if expired {
+				// Nobody ever completed the initial key exchange on this code
+				// within pairConfirmWindow. Reject and free the slot rather than
+				// silently recycling it for whoever connects next, which would
+				// let a patient guesser claim an abandoned code later.
+				delete(hub.pairs, code)
+				hub.mu.Unlock()
+				log.Printf("relay: %s rejected, code %s expired unconfirmed", role, code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "message": "pairing code expired, generate a new one"})
+				return
+			}
+		}
 		if !ok {
 			// First peer for this code (either role). Create the pair, record
 			// this side, and hold the connection open until the peer joins.
@@ -88,13 +189,34 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
 			sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
 		} else {
-			// Second peer — must be the opposite role of whoever is already here.
+			// Second-or-later connection on an already-allocated code. Once a
+			// role's key has been recorded, it is PINNED: a reconnect must
+			// present that same key (a legitimate daemon/phone reconnecting
+			// with its persisted key) or it is rejected. Without this, an
+			// attacker who later guesses the code could present a new key,
+			// win the "newest connection" slot, and the other side would
+			// silently derive a session key with the attacker (MITM).
 			pair.mu.Lock()
-			// Newest-wins: a peer reconnecting on the same code (a daemon that
-			// restarted, or a phone re-opening pairing) reclaims its slot. Close
-			// the stale connection so the relay frees the slot instead of rejecting
-			// the newcomer — otherwise a restarted daemon is locked out until the
-			// dead TCP connection times out (minutes).
+			if role == "daemon" && pair.DaemonKey != "" && pair.DaemonKey != publicKey {
+				pair.mu.Unlock()
+				hub.mu.Unlock()
+				log.Printf("relay: daemon key mismatch for code %s, rejecting hijack attempt", code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "message": "key mismatch -- pairing already established with a different key"})
+				return
+			}
+			if role == "phone" && pair.PhoneKey != "" && pair.PhoneKey != publicKey {
+				pair.mu.Unlock()
+				hub.mu.Unlock()
+				log.Printf("relay: phone key mismatch for code %s, rejecting hijack attempt", code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "message": "key mismatch -- pairing already established with a different key"})
+				return
+			}
+			// Newest-wins: a peer reconnecting on the same code with the SAME
+			// pinned key (a daemon that restarted, or a phone re-opening
+			// pairing) reclaims its slot. Close the stale connection so the
+			// relay frees the slot instead of rejecting the newcomer —
+			// otherwise a restarted daemon is locked out until the dead TCP
+			// connection times out (minutes).
 			if role == "daemon" && pair.DaemonConn != nil {
 				_ = pair.DaemonConn.Close()
 				pair.DaemonConn = nil
@@ -110,6 +232,9 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 				pair.PhoneConn = conn
 				pair.PhoneKey = publicKey
 				pair.PhoneSeen = time.Now()
+			}
+			if pair.PairedAt.IsZero() && pair.DaemonKey != "" && pair.PhoneKey != "" {
+				pair.PairedAt = time.Now()
 			}
 			daemonConn := pair.DaemonConn
 			phoneConn := pair.PhoneConn
