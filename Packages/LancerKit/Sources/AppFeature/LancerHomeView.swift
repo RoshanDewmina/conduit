@@ -5,33 +5,46 @@ import DesignSystem
 import PersistenceKit
 import AgentKit
 
+/// A relay-paired host entry, as told to `LancerHomeView` from outside. Relay
+/// hosts aren't `fleetStore` slots (they're the E2E bridge), so Home must be told
+/// about them explicitly or they never appear here even while connected. One
+/// entry per known pairing (so a known host doesn't vanish during reconnect),
+/// with `connected` carrying whether that host's bridge is live right now
+/// (drives the status dot).
+public struct RelayHomeEntry: Sendable {
+    public let id: RelayMachineID
+    public let name: String
+    public let connected: Bool
+    public init(id: RelayMachineID, name: String, connected: Bool) {
+        self.id = id
+        self.name = name
+        self.connected = connected
+    }
+}
+
 public struct LancerHomeView: View {
     private let fleetStore: FleetStore
     private let recentThreads: [ChatConversation]
     private let pendingApprovalCount: Int
     private let profileEmail: String?
-    /// A relay-paired host, if any. Relay hosts aren't `fleetStore` slots (they're
-    /// the E2E bridge), so Home must be told about them explicitly or they never
-    /// appear here even while connected. Passed whenever a pairing is *stored* (so a
-    /// known host doesn't vanish during reconnect), with `relayHostConnected`
-    /// carrying whether the bridge is live right now (drives the status dot).
-    private let relayHostName: String?
-    private let relayHostConnected: Bool
+    /// Every relay-paired host currently known to the app (see `RelayHomeEntry`).
+    private let relayMachines: [RelayHomeEntry]
     private let onOpenSidebar: (() -> Void)?
     private let onNewChat: () -> Void
     private let onOpenInbox: () -> Void
     private let onOpenMachines: () -> Void
     private let onOpenThread: (String) -> Void
     private let onOpenObservedSession: (ObservedSession) -> Void
-    /// Fetches watch-only sessions discovered on the host (Claude Code, etc.) —
-    /// separate from `recentThreads`, which are Lancer-dispatched runs. Defaults to
-    /// `{ [] }` so previews/tests compile without a live daemon.
-    private let loadSessions: () async -> [ObservedSession]
+    /// Fetches watch-only sessions discovered on a given host (Claude Code, etc.) —
+    /// separate from `recentThreads`, which are Lancer-dispatched runs. Takes the
+    /// host name to query so it can be fanned out per live machine. Defaults to
+    /// `{ _ in [] }` so previews/tests compile without a live daemon.
+    private let loadSessions: @Sendable (String) async -> [ObservedSession]
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var collapsed: Set<String> = []
-    @State private var observedSessions: [ObservedSession] = []
+    @State private var observedSessionsByHost: [String: [ObservedSession]] = [:]
     @State private var sessionsLoading = true
     @State private var reviewingApproval: Approval?
 
@@ -40,22 +53,20 @@ public struct LancerHomeView: View {
         recentThreads: [ChatConversation],
         pendingApprovalCount: Int,
         profileEmail: String? = nil,
-        relayHostName: String? = nil,
-        relayHostConnected: Bool = false,
+        relayMachines: [RelayHomeEntry] = [],
         onOpenSidebar: (() -> Void)? = nil,
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
         onOpenMachines: @escaping () -> Void,
         onOpenThread: @escaping (String) -> Void,
         onOpenObservedSession: @escaping (ObservedSession) -> Void = { _ in },
-        loadSessions: @escaping () async -> [ObservedSession] = { [] }
+        loadSessions: @escaping @Sendable (String) async -> [ObservedSession] = { _ in [] }
     ) {
         self.fleetStore = fleetStore
         self.recentThreads = recentThreads
         self.pendingApprovalCount = pendingApprovalCount
         self.profileEmail = profileEmail
-        self.relayHostName = relayHostName
-        self.relayHostConnected = relayHostConnected
+        self.relayMachines = relayMachines
         self.onOpenSidebar = onOpenSidebar
         self.onNewChat = onNewChat
         self.onOpenInbox = onOpenInbox
@@ -91,17 +102,45 @@ public struct LancerHomeView: View {
             approvalReviewSheet(for: approval)
         }
         .task {
-            if let cached = ObservedSessionsCache.load() {
-                observedSessions = cached
+            if let cached = ObservedSessionsCache.loadByHost() {
+                observedSessionsByHost = cached
                 sessionsLoading = false
             } else {
                 sessionsLoading = true
             }
-            let fresh = await loadSessions()
-            observedSessions = fresh
+            let liveHosts = liveHostNames
+            guard !liveHosts.isEmpty else {
+                sessionsLoading = false
+                return
+            }
+            let fresh = await withTaskGroup(of: (String, [ObservedSession]).self) { group in
+                for host in liveHosts {
+                    group.addTask { (host, await loadSessions(host)) }
+                }
+                var results: [String: [ObservedSession]] = [:]
+                for await (host, sessions) in group {
+                    results[host] = sessions
+                }
+                return results
+            }
+            observedSessionsByHost = fresh
             sessionsLoading = false
-            ObservedSessionsCache.save(fresh)
+            ObservedSessionsCache.saveByHost(fresh)
         }
+    }
+
+    /// Host names currently live — either a connected/relay-paired fleet slot or
+    /// a relay entry reporting `connected == true`. Drives which hosts get a
+    /// `loadSessions(host:)` fan-out (dead/reconnecting hosts don't query).
+    private var liveHostNames: [String] {
+        let liveSlotHosts = fleetStore.slots
+            .filter { slot in
+                let state = fleetStore.connectionState(for: slot)
+                return state == .connected || state == .relayPaired
+            }
+            .map(\.hostName)
+        let liveRelayHosts = relayMachines.filter(\.connected).map(\.name)
+        return Array(Set(liveSlotHosts).union(liveRelayHosts))
     }
 
     // MARK: Top row — hamburger (glass) + new-chat (accent)
@@ -457,17 +496,17 @@ public struct LancerHomeView: View {
 
     // MARK: Derived model
 
-    /// Machines built from every paired fleet host, grouped host → project (cwd)
-    /// → session, enriched with recent threads and live connection state. Seeding
-    /// from `fleetStore.slots` (not just `recentThreads`) means a freshly paired
-    /// machine shows here immediately, before it has any chat history — matching
-    /// what the Machines page lists.
+    /// Machines built from every paired fleet host plus every known relay host,
+    /// grouped host → project (cwd) → session, enriched with recent threads and
+    /// live connection state. Seeding from `fleetStore.slots` (not just
+    /// `recentThreads`) means a freshly paired machine shows here immediately,
+    /// before it has any chat history — matching what the Machines page lists.
     private var machines: [HomeMachine] {
         let byHost = Dictionary(grouping: recentThreads, by: \.hostName)
         var allHosts = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
-        // Relay-paired hosts aren't fleet slots — fold the active one in so a
+        // Relay-paired hosts aren't fleet slots — fold every known one in so a
         // connected relay machine shows even before it has any chat history.
-        if let relayHostName { allHosts.insert(relayHostName) }
+        for entry in relayMachines { allHosts.insert(entry.name) }
         return allHosts
             .map { host -> HomeMachine in
                 let byProject = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)
@@ -479,18 +518,18 @@ public struct LancerHomeView: View {
                 var liveState = fleetStore.slots.first { $0.hostName == host }.map { fleetStore.connectionState(for: $0) }
                 // The relay host isn't a fleet slot, so derive its dot from the live
                 // bridge state instead: paired-and-live vs. known-but-reconnecting.
-                if liveState == nil, host == relayHostName {
-                    liveState = relayHostConnected ? .relayPaired : .connecting
+                if liveState == nil, let entry = relayMachines.first(where: { $0.name == host }) {
+                    liveState = entry.connected ? .relayPaired : .connecting
                 }
-                // `loadSessions()` queries whichever host is currently live (the
-                // connected SSH slot or the active relay bridge) — there's no
-                // per-host fan-out yet, so only that machine gets the observed list.
+                // `loadSessions(host:)` is fanned out per live host in `.task`, so
+                // every live machine (not just one implicit "the" live host) gets
+                // its own observed list now.
                 let isLiveHost = liveState == .connected || liveState == .relayPaired
                 return HomeMachine(
                     name: host,
                     projects: projects,
                     liveState: liveState,
-                    observedSessions: isLiveHost ? observedSessions : []
+                    observedSessions: isLiveHost ? (observedSessionsByHost[host] ?? []) : []
                 )
             }
             .sorted { ($0.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) > ($1.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) }

@@ -160,12 +160,22 @@ public struct TrustPrivacyView: View {
     // what's paired and how to revoke it, alongside the data-residency cards.
     private let accountSession: AccountSessionController?
     private let backendURL: String
-    private let e2eRelayClient: E2ERelayClient?
+    private let relayMachines: [RelayMachineRow]
+    private let onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void
+    private let onRelayUnpair: (RelayMachineID) -> Void
 
-    public init(accountSession: AccountSessionController? = nil, backendURL: String = "", e2eRelayClient: E2ERelayClient? = nil) {
+    public init(
+        accountSession: AccountSessionController? = nil,
+        backendURL: String = "",
+        relayMachines: [RelayMachineRow] = [],
+        onRelayPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in },
+        onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in }
+    ) {
         self.accountSession = accountSession
         self.backendURL = backendURL
-        self.e2eRelayClient = e2eRelayClient
+        self.relayMachines = relayMachines
+        self.onRelayPaired = onRelayPaired
+        self.onRelayUnpair = onRelayUnpair
     }
 
     public var body: some View {
@@ -297,7 +307,7 @@ public struct TrustPrivacyView: View {
         sectionHead("PAIRINGS & REVOCATION")
         card {
             NavigationLink {
-                E2ERelayPairingView(client: e2eRelayClient)
+                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair)
             } label: {
                 trustNavRow(icon: "lock.rotation", title: "Relay pairing",
                             detail: "End-to-end encrypted relay between this phone and your daemon.")
@@ -453,7 +463,9 @@ public struct SettingsView: View {
     let sshKeyStore: KeyStore?
     let bridgeActions: BridgeSessionActions
     let daemonChannel: DaemonChannel?
-    let e2eRelayClient: E2ERelayClient?
+    let relayMachines: [RelayMachineRow]
+    let onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void
+    let onRelayUnpair: (RelayMachineID) -> Void
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     public var onResetApp: (() -> Void)? = nil
@@ -482,7 +494,9 @@ public struct SettingsView: View {
         sshKeyStore: KeyStore? = nil,
         bridgeActions: BridgeSessionActions = BridgeSessionActions(),
         daemonChannel: DaemonChannel? = nil,
-        e2eRelayClient: E2ERelayClient? = nil,
+        relayMachines: [RelayMachineRow] = [],
+        onRelayPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in },
+        onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in },
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
@@ -502,7 +516,9 @@ public struct SettingsView: View {
         self.sshKeyStore = sshKeyStore
         self.bridgeActions = bridgeActions
         self.daemonChannel = daemonChannel
-        self.e2eRelayClient = e2eRelayClient
+        self.relayMachines = relayMachines
+        self.onRelayPaired = onRelayPaired
+        self.onRelayUnpair = onRelayUnpair
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
@@ -750,7 +766,13 @@ public struct SettingsView: View {
             }
             divider
             NavigationLink {
-                TrustPrivacyView(accountSession: accountSession, backendURL: backendURL, e2eRelayClient: e2eRelayClient)
+                TrustPrivacyView(
+                    accountSession: accountSession,
+                    backendURL: backendURL,
+                    relayMachines: relayMachines,
+                    onRelayPaired: onRelayPaired,
+                    onRelayUnpair: onRelayUnpair
+                )
             } label: {
                 settingsNavRow("Security & Trust", icon: "lock", detail: "pairings · revoke")
             }
@@ -784,7 +806,9 @@ public struct SettingsView: View {
     private var connectionSection: some View {
         sectionHead("CONNECTION")
         settingsCard {
-            NavigationLink { E2ERelayPairingView(client: e2eRelayClient) } label: {
+            NavigationLink {
+                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair)
+            } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
             }
             if accountSession?.isStandardAccount == true {

@@ -38,7 +38,6 @@ public final class AppEnvironment {
     public let quotaGuardStore: QuotaGuardStore
     public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
-    public let e2eRelayClient: E2ERelayClient
     public let accountSession: AccountSessionController
 
     public init() throws {
@@ -67,17 +66,9 @@ public final class AppEnvironment {
         self.loopStore = LoopStore(loopRepo: LoopRepository(database))
         self.quotaGuardStore = QuotaGuardStore()
         self.hostHealthStore = HostHealthStore()
-        // Start with the configured relay URL and a freshly generated, single-use
-        // pairing code. The pairing view regenerates the code per session and the
-        // relay URL can be overridden in Settings; the old hardcoded "000000" is
-        // gone (it could never actually pair).
-        self.e2eRelayClient = E2ERelayClient(
-            relayURL: RelaySettings.url(),
-            pairingCode: PairingCrypto.generatePairingCode()
-        )
-        if E2ERelayClient.hasStoredPairing {
-            e2eRelayClient.restoreStoredPairing()
-        }
+        // Relay machine hydration (migrate legacy pairing + restore each paired
+        // machine's client/bridge) now happens asynchronously after launch, from
+        // the machines index — see `AppRoot.hydrateRelayFleetStore`.
         self.accountSession = AccountSessionController(
             client: SupabaseAccountClient(configuration: .fromBundle())
         )
@@ -189,16 +180,16 @@ public struct AppRoot: View {
     @State private var paywallFeatureName = ""
     @State private var isShowingLiveSession = false
     @State private var showingRelayWorkspaceUnavailable = false
-    @State private var showingRelayFileBrowser = false
+    @State private var relayFileBrowserMachineID: RelayMachineID?
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
-    @State private var e2eBridge: E2ERelayBridge?
-    @State private var relayBridgeIsActive: Bool = false
-    @State private var relayHostName: String?
-    /// Vendor ids the host reports as installed (claude/codex/opencode/kimi). nil
-    /// until the relay reports — until then the relay picker shows all four so a
-    /// just-paired host isn't empty; once known, it's filtered to what's installed.
-    @State private var installedAgentVendors: [String]?
+    @State private var relayFleetStore = RelayFleetStore()
+    /// UI-test seam only: a fake relay entry seeded by `LANCER_FAKE_RELAY_HOST`,
+    /// shown in Home in place of `relayFleetStore.machines` (see `homeDestination`).
+    @State private var debugFakeRelayEntry: RelayHomeEntry?
+    /// Idempotency guard for `configureRelayFleetStore` — it used to check
+    /// `e2eBridge == nil`, but there's no single bridge anymore.
+    @State private var configuredRelayFleetStore = false
     @State private var sidebarState = SidebarShellState()
     @GestureState private var drawerDrag: CGFloat = 0
     @State private var coachTour = CoachmarkTourState(steps: AppRoot.coachmarkSteps)
@@ -272,11 +263,12 @@ public struct AppRoot: View {
             _sidebarState = State(initialValue: state)
         }
         // UI-test seam: simulate a paired, live relay host so Home's machine list can
-        // be verified without a live relay. `configureE2ERelayBridge` early-returns
+        // be verified without a live relay. `configureRelayFleetStore` early-returns
         // when this is set so the real bridge subscription doesn't clobber it.
         if let fakeRelayHost = ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] {
-            _relayHostName = State(initialValue: fakeRelayHost)
-            _relayBridgeIsActive = State(initialValue: true)
+            _debugFakeRelayEntry = State(initialValue: RelayHomeEntry(
+                id: RelayMachineID(), name: fakeRelayHost, connected: true
+            ))
         }
         #endif
     }
@@ -464,6 +456,12 @@ public struct AppRoot: View {
                 risk: Approval.Risk(rawValue: data.risk) ?? .medium,
                 toolName: data.toolName
             )
+            // Tag this approval with the machine it arrived from BEFORE inserting
+            // it into the inbox VM, so the eventual decision routes back to that
+            // specific machine's bridge (ApprovalRelay.forwardDecisionOnly step 0).
+            if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
+                ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
+            }
             let vm = activeInboxViewModel
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
                 vm.approvals.insert(approval, at: 0)
@@ -532,8 +530,8 @@ public struct AppRoot: View {
                         onboardingSeen = true
                         sidebarState.navigate(to: .home)
                     },
-                    relayClient: env.e2eRelayClient,
-                    accountSession: env.accountSession
+                    accountSession: env.accountSession,
+                    onPaired: { client, record in addRelayMachine(client: client, record: record, env: env) }
                 )
             }
         }
@@ -547,8 +545,11 @@ public struct AppRoot: View {
                 RelayWorkspaceUnavailableView(onConnectSSH: { drawerRoute = .addMachine })
             }
         }
-        .sheet(isPresented: $showingRelayFileBrowser) {
-            if let bridge = e2eBridge {
+        .sheet(isPresented: Binding(
+            get: { relayFileBrowserMachineID != nil },
+            set: { if !$0 { relayFileBrowserMachineID = nil } }
+        )) {
+            if let machineID = relayFileBrowserMachineID, let bridge = relayFleetStore.machine(machineID)?.bridge {
                 RelayFileBrowserView(bridge: bridge)
                     .environment(\.lancerTokens, tokens)
                     .preferredColorScheme(preferredScheme)
@@ -655,8 +656,8 @@ public struct AppRoot: View {
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
         }
-        .onChange(of: relayBridgeIsActive, initial: true) { _, active in
-            sidebarState.relayConnected = active
+        .onChange(of: relayFleetStore.machines.map(\.bridge.isActive), initial: true) { _, _ in
+            sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
         }
         // One-time interactive coach-mark tour. Overlay stays installed (cheap,
         // inert while inactive) but auto-start is OFF: on-device it mis-rendered
@@ -683,17 +684,28 @@ public struct AppRoot: View {
     /// control loop, but it does not become a shell or HTTP proxy — V1's Work
     /// Thread is a read-only activity log, so this never opens the live
     /// interactive terminal (`SessionView`), regardless of agent/host.
+    ///
+    /// `agent.hostID` is populated for relay agents with the owning machine's
+    /// `RelayMachineID` (see `dispatchAgents()`), so this now routes to the
+    /// correct machine's file browser instead of "the" single relay bridge. An
+    /// SSH agent's `hostID` is an SSH `HostID`, which never matches a relay
+    /// machine id — that falls through to "unavailable", same visible behavior
+    /// as before (Work Thread's terminal is deferred to V2 regardless of transport).
     private func openWorkspace(for agent: DispatchAgent?) {
-        presentRelayWorkspace()
+        guard let hostIDString = agent?.hostID, let uuid = UUID(uuidString: hostIDString) else {
+            showingRelayWorkspaceUnavailable = true
+            return
+        }
+        presentRelayWorkspace(machineID: RelayMachineID(uuid))
     }
 
     /// A relay-backed agent has no live SSH terminal, but a paired relay can still
     /// browse the host's files (read-only) over `agent.fs.ls`. Prefer that over the
-    /// dead-end "workspace unavailable" sheet when the bridge is active.
+    /// dead-end "workspace unavailable" sheet when the machine's bridge is active.
     @MainActor
-    private func presentRelayWorkspace() {
-        if relayBridgeIsActive, e2eBridge != nil {
-            showingRelayFileBrowser = true
+    private func presentRelayWorkspace(machineID: RelayMachineID) {
+        if relayFleetStore.machine(machineID)?.bridge.isActive == true {
+            relayFileBrowserMachineID = machineID
         } else {
             showingRelayWorkspaceUnavailable = true
         }
@@ -726,7 +738,12 @@ public struct AppRoot: View {
             }
         case .relayPairing:
             LancerDrawer(detents: [.large]) {
-                E2ERelayPairingView(client: env.e2eRelayClient)
+                E2ERelayPairingView(
+                    existingMachineCount: relayFleetStore.machines.count,
+                    onPaired: { client, record in
+                        addRelayMachine(client: client, record: record, env: env)
+                    }
+                )
             }
         case .addHost:
             LancerDrawer(detents: [.large]) {
@@ -858,11 +875,15 @@ public struct AppRoot: View {
                 )
             }
         }
-        if e2eBridge != nil {
+        // Each paired relay machine contributes its own agent set. The 3-part id
+        // ("relay|<machineID>|<agentID>") gives every machine a distinct hostID,
+        // which NewChatTabView's existing hostID-keyed grouping needs to show N
+        // separate machine sections in the picker.
+        for machine in relayFleetStore.machines {
             // Only offer agents the host actually has installed (reported over the
             // relay). Until that's known, show all four so a freshly-paired host
             // isn't empty.
-            let vendors = installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
+            let vendors = machine.installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
             for agentID in vendors {
                 let displayName: String
                 switch agentID {
@@ -872,15 +893,15 @@ public struct AppRoot: View {
                 default: displayName = "OpenCode"
                 }
                 agents.append(DispatchAgent(
-                    id: "relay|\(agentID)",
+                    id: "relay|\(machine.id.uuidString)|\(agentID)",
                     // Just the agent name — the picker groups by machine and shows
                     // the host name as the section header. "Relay" is the transport,
                     // not the machine's name, so it must never be the label.
                     name: displayName,
                     cwd: "~",
-                    isOffline: !relayBridgeIsActive,
-                    hostID: nil,
-                    hostName: relayHostName
+                    isOffline: !machine.bridge.isActive,
+                    hostID: machine.id.uuidString,
+                    hostName: machine.record.displayName
                 ))
             }
         }
@@ -899,7 +920,7 @@ public struct AppRoot: View {
            let cmds = try? await slot.channel.listCommands(cwd: cwd, vendor: vendor), !cmds.isEmpty {
             return cmds
         }
-        if let bridge = e2eBridge, relayBridgeIsActive {
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
             return (try? await bridge.relayListCommands(cwd: cwd, vendor: vendor)) ?? []
         }
         return []
@@ -924,8 +945,9 @@ public struct AppRoot: View {
             return ActiveChatRun(runId: newRunID, channel: slot.channel,
                                  title: conv.title, subtitle: prompt)
         }
-        // Fall back to the relay bridge (relay-paired host).
-        if let bridge = e2eBridge, relayBridgeIsActive {
+        // Fall back to the first active relay machine's bridge (interim
+        // limitation — see AppRoot's report on first-machine-only fallbacks).
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
             guard let result = try? await bridge.sendRunContinue(
                 runId: lastRunID, prompt: prompt,
                 agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
@@ -944,7 +966,7 @@ public struct AppRoot: View {
     /// Uses the relay bridge's read-only agent.fs.ls (the only fs-listing transport
     /// today). Dirs get a trailing "/". Returns [] if no relay is active.
     private func loadWorkspaceFiles(cwd: String) async -> [String] {
-        guard let bridge = e2eBridge, relayBridgeIsActive,
+        guard let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge,
               let listing = try? await bridge.relayListDir(cwd) else { return [] }
         return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
     }
@@ -953,14 +975,21 @@ public struct AppRoot: View {
         let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .blocked("Unknown agent.") }
 
-        // Relay-paired dispatch: send through the E2E relay bridge.
+        // Relay-paired dispatch: send through the owning machine's E2E relay
+        // bridge. The id is 3-part ("relay|<machineID>|<agentID>") so it can
+        // route to the exact machine (see `dispatchAgents()`).
         if parts[0] == "relay" {
-            guard let bridge = e2eBridge else {
+            let relayParts = agentID.split(separator: "|", maxSplits: 2).map(String.init)
+            guard relayParts.count == 3, let uuid = UUID(uuidString: relayParts[1]) else {
+                return .blocked("Unknown agent.")
+            }
+            guard let bridge = relayFleetStore.machine(RelayMachineID(uuid))?.bridge else {
                 return .blocked("Relay bridge not available.")
             }
+            let vendor = relayParts[2]
             do {
                 let result = try await bridge.sendDispatch(
-                    agent: parts[1], cwd: cwd, prompt: prompt,
+                    agent: vendor, cwd: cwd, prompt: prompt,
                     budgetUSD: budgetUSD, model: model
                 )
                 switch result.status {
@@ -972,7 +1001,7 @@ public struct AppRoot: View {
                     // Capture this run's agent/cwd/model so a follow-up continues even
                     // after the original process exits (a one-shot `claude -p` exits as
                     // soon as it answers, so the daemon no longer has the run in memory).
-                    let fbAgent = parts[1]
+                    let fbAgent = vendor
                     let channel = RelayRunControl(send: { runId, action in
                         await bridge.sendRunControl(runId: runId, action: action)
                     }, onContinue: { runId, prompt in
@@ -981,7 +1010,7 @@ public struct AppRoot: View {
                     return .started(ActiveChatRun(
                         runId: runId,
                         channel: channel,
-                        title: "Relay · \(parts[1])",
+                        title: "Relay · \(vendor)",
                         subtitle: prompt
                     ))
                 case "denied":
@@ -1277,10 +1306,11 @@ public struct AppRoot: View {
         )
     }
 
-    /// Human-readable labels for `installedAgentVendors`, same mapping/fallback as
-    /// the dispatch-agent picker (see the `agentID switch` above) so the Machines
-    /// relay card converges to real installed agents once the host reports them.
-    private var relayAgentDisplayLabels: [String] {
+    /// Human-readable labels for a machine's `installedAgentVendors`, same
+    /// mapping/fallback as the dispatch-agent picker (see the `agentID switch`
+    /// above) so the Machines relay card converges to real installed agents
+    /// once the host reports them.
+    private func relayAgentDisplayLabels(for installedAgentVendors: [String]?) -> [String] {
         let vendors = installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
         return vendors.map { agentID in
             switch agentID {
@@ -1311,13 +1341,15 @@ public struct AppRoot: View {
             onOpenThread: { id in
                 sidebarState.navigate(to: .thread(id: id))
             },
-            relayActive: relayBridgeIsActive,
-            relayHostName: relayHostName,
-            // Mirrors the dispatch-agent picker's own fallback (line ~893): show all
-            // four only until the host reports what's actually installed, instead of
-            // a permanent hardcoded list that never reflects the real host.
-            relayAgentLabels: relayBridgeIsActive ? relayAgentDisplayLabels : [],
-            onOpenRelayChat: { sidebarState.navigate(to: .newChat) }
+            relayMachines: relayFleetStore.machines.map {
+                FleetRelayMachine(
+                    id: $0.id,
+                    name: $0.record.displayName,
+                    isActive: $0.bridge.isActive,
+                    agentLabels: $0.bridge.isActive ? relayAgentDisplayLabels(for: $0.installedAgentVendors) : []
+                )
+            },
+            onOpenRelayChat: { _ in sidebarState.navigate(to: .newChat) }
         )
         .id(workspacesRevision)
     }
@@ -1329,9 +1361,9 @@ public struct AppRoot: View {
             for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
                 await slot.sessionViewModel.disconnect()
             }
-            if let bridge = e2eBridge, relayBridgeIsActive {
+            for machine in relayFleetStore.machines where machine.bridge.isActive {
                 for run in runOutputStore.runs.values where !run.isTerminal {
-                    _ = await bridge.sendRunControl(runId: run.runId, action: "stop")
+                    _ = await machine.bridge.sendRunControl(runId: run.runId, action: "stop")
                 }
             }
         }
@@ -1358,7 +1390,14 @@ public struct AppRoot: View {
             approvalRepository: approvalRepository,
             sshKeyStore: env.keyStore,
             daemonChannel: daemonChannel,
-            e2eRelayClient: env.e2eRelayClient,
+            relayMachines: relayFleetStore.machines.map {
+                RelayMachineRow(id: $0.id, displayName: $0.record.displayName, isConnected: $0.bridge.isActive)
+            },
+            onRelayPaired: { client, record in addRelayMachine(client: client, record: record, env: env) },
+            onRelayUnpair: { id in
+                ApprovalRelay.shared.relayBridges.removeValue(forKey: id)
+                relayFleetStore.remove(id)
+            },
             accountSession: env.accountSession,
             quotaGuardStore: env.quotaGuardStore,
             onResetApp: {
@@ -1457,12 +1496,9 @@ public struct AppRoot: View {
             recentThreads: sidebarState.recentThreads,
             pendingApprovalCount: fleetStore.attentionItems.count,
             profileEmail: env.accountSession.email,
-            // Show a paired relay host whenever a pairing is stored — not only while
-            // the bridge is momentarily `.paired` — so a known machine doesn't vanish
-            // from Home during reconnect/waiting-for-peer. The live dot is driven by
-            // `relayBridgeIsActive` via `relayHostConnected`.
-            relayHostName: (E2ERelayClient.hasStoredPairing || relayHostName != nil) ? (relayHostName ?? "Relay host") : nil,
-            relayHostConnected: relayBridgeIsActive,
+            relayMachines: debugFakeRelayEntry.map { [$0] } ?? relayFleetStore.machines.map {
+                RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: $0.bridge.isActive)
+            },
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
@@ -1472,26 +1508,31 @@ public struct AppRoot: View {
                 sidebarState.navigate(to: .observedSession(
                     sessionId: session.sessionId,
                     title: session.title,
-                    hostName: relayHostName ?? "Mac",
+                    // LancerHomeView's callback doesn't carry which host the session
+                    // came from (pre-existing gap, out of scope here) — first-machine
+                    // fallback, same class as the other interim limitations below.
+                    hostName: relayFleetStore.machines.first?.record.displayName ?? "Mac",
                     vendor: session.provider,
                     cwd: session.cwd
                 ))
             },
-            loadSessions: { await loadObservedSessions() }
+            loadSessions: { hostName in await loadObservedSessions(hostName: hostName) }
         )
     }
 
     /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
-    /// "Sessions on this Mac" section. Mirrors `loadAgentCommands`: prefers a
-    /// connected SSH slot's daemon channel, falls back to the relay bridge.
-    private func loadObservedSessions() async -> [ObservedSession] {
-        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first,
+    /// "Sessions on this Mac" section, for the given host name. Resolution order:
+    /// an SSH slot whose `hostName` matches (regardless of connection state,
+    /// matching the previous fallback-to-any-slot behavior but scoped to the
+    /// matching name), else a relay machine whose display name matches.
+    private func loadObservedSessions(hostName: String) async -> [ObservedSession] {
+        if let slot = fleetStore.slots.first(where: { $0.hostName == hostName }),
            let sessions = try? await slot.channel.listSessions() {
             return sessions
         }
-        if let bridge = e2eBridge, relayBridgeIsActive {
-            return (try? await bridge.relayListSessions()) ?? []
+        if let machine = relayFleetStore.machines.first(where: { $0.record.displayName == hostName }),
+           machine.bridge.isActive {
+            return (try? await machine.bridge.relayListSessions()) ?? []
         }
         return []
     }
@@ -1504,7 +1545,7 @@ public struct AppRoot: View {
            let result = try? await slot.channel.fetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
             return result
         }
-        if let bridge = e2eBridge, relayBridgeIsActive,
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge,
            let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
             return result
         }
@@ -1525,7 +1566,7 @@ public struct AppRoot: View {
                 return DispatchResult(status: "error", message: error.localizedDescription)
             }
         }
-        if let bridge = e2eBridge, relayBridgeIsActive {
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
             do {
                 return try await bridge.relayContinueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
             } catch {
@@ -1568,20 +1609,17 @@ public struct AppRoot: View {
         // Begin monitoring the push-to-start token now that the stable sessionID is
         // available — lets push-backend remotely START a Live Activity when an approval
         // arrives and none is running (app fully closed). Tokens flow out via the
-        // .lancerLiveActivityTokenReady subscriber in configureE2ERelayBridge.
+        // .lancerLiveActivityTokenReady subscriber in configureRelayFleetStore.
         if #available(iOS 17.2, *) {
             LancerLiveActivityManager.shared.startPushToStartMonitor(
                 sessionID: DeviceIdentity.sessionID()
             )
         }
-        configureE2ERelayBridge(env: env)
+        configureRelayFleetStore(env: env)
     }
 
-    /// Activate the E2E relay decision path. Builds a single `E2ERelayBridge`
-    /// over the app-wide `E2ERelayClient`, hands it to `ApprovalRelay` so paired
-    /// decisions route through E2E first, and mirrors the client's pairing /
-    /// connection state onto the selected fleet slot so `E2ERelayStatusBadge`
-    /// reflects live state. Idempotent — only the first call builds the bridge.
+    /// Activate the E2E relay decision path. Idempotent — only the first call
+    /// wires notification subscriptions/hydration.
     @MainActor
     /// Register this device's APNs token with whichever transport is live, so
     /// approvals can be pushed when the app is closed. Idempotent — safe to call on
@@ -1591,61 +1629,38 @@ public struct AppRoot: View {
         let backendURL = Self.pushBackendURL()
         guard !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex else { return }
         let sessionID = DeviceIdentity.sessionID()
-        if let bridge = e2eBridge, relayBridgeIsActive {
-            await bridge.registerDevice(apnsToken: token, sessionID: sessionID, pushBackendURL: backendURL)
+        for machine in relayFleetStore.machines where machine.bridge.isActive {
+            await machine.bridge.registerDevice(apnsToken: token, sessionID: sessionID, pushBackendURL: backendURL)
         }
         if let channel = daemonChannel {
             try? await channel.registerAPNSToken(hexToken: token, sessionID: sessionID, pushBackendURL: backendURL)
         }
     }
 
-    private func configureE2ERelayBridge(env: AppEnvironment) {
-        guard e2eBridge == nil else { return }
+    private func configureRelayFleetStore(env: AppEnvironment) {
+        guard !configuredRelayFleetStore else { return }
+        configuredRelayFleetStore = true
 #if DEBUG
         // Honor the UI-test relay seam: keep the seeded fake host/active state instead
-        // of letting the real (unpaired) bridge subscription reset them.
+        // of letting real hydration/bridge setup clobber it.
         if ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] != nil { return }
 #endif
-        let bridge = E2ERelayBridge(
-            relayClient: env.e2eRelayClient,
-            approvalRelay: ApprovalRelay.shared
-        )
-        bridge.start()
-        if E2ERelayClient.hasStoredPairing {
-            env.e2eRelayClient.connect()
-        }
-        ApprovalRelay.shared.e2eBridge = bridge
-        e2eBridge = bridge
-        Task { @MainActor in
-            for await active in bridge.$isActive.values {
-                relayBridgeIsActive = active
-                // When the relay goes live, ask the host which agent CLIs are
-                // actually installed so the picker only offers those.
-                if active {
-                    if let installed = try? await bridge.relayInstalledAgents(), !installed.isEmpty {
-                        installedAgentVendors = installed
-                    }
-                    // Register this device's APNs token over the relay so approvals
-                    // can be pushed when the app is closed (the relay path's
-                    // equivalent of the SSH channel.registerAPNSToken). Without this
-                    // the daemon never learns the token and push never fires.
-                    let backendURL = Self.pushBackendURL()
-                    if !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex {
-                        await bridge.registerDevice(
-                            apnsToken: token,
-                            sessionID: DeviceIdentity.sessionID(),
-                            pushBackendURL: backendURL
-                        )
-                    }
-                }
-            }
-        }
+        // Migrate the legacy single pairing (if any) and restore every known
+        // machine's client/bridge. Notification subscriptions below don't need
+        // to wait on this completing — a notification for a not-yet-hydrated
+        // machine simply won't find it in `relayFleetStore.machine(id)` and is
+        // dropped (same fail-closed spirit as everywhere else in this feature).
+        Task { await hydrateRelayFleetStore(env: env) }
+
+        // lancerE2EStatusUpdate is posted by every machine's bridge; route each
+        // to the machine it named via userInfo["machineID"].
         Task { @MainActor in
             for await notification in NotificationCenter.default.notifications(named: Notification.Name("lancerE2EStatusUpdate")) {
-                if let status = notification.userInfo?["status"] as? E2ERelayMessage.StatusData,
-                   let hn = status.hostName {
-                    relayHostName = hn
-                }
+                guard let machineID = notification.userInfo?["machineID"] as? RelayMachineID,
+                      let status = notification.userInfo?["status"] as? E2ERelayMessage.StatusData,
+                      let hostName = status.hostName
+                else { continue }
+                relayFleetStore.updateDisplayName(hostName, for: machineID)
             }
         }
 
@@ -1661,11 +1676,13 @@ public struct AppRoot: View {
                         pushBackendURL: backendURL
                     )
                 }
-                // Relay path: the token may arrive after the bridge is already active
-                // (the isActive handler covers the reverse order). Register over the
-                // relay so closed-app push works on relay-only devices.
-                if let bridge = self.e2eBridge, relayBridgeIsActive, !backendURL.isEmpty {
-                    await bridge.registerDevice(
+                // Relay path: the token may arrive after a bridge is already active
+                // (each machine's own isActive handler in `addRelayMachine` covers
+                // the reverse order). Register over every active machine's relay so
+                // closed-app push works on relay-only devices.
+                guard !backendURL.isEmpty else { continue }
+                for machine in self.relayFleetStore.machines where machine.bridge.isActive {
+                    await machine.bridge.registerDevice(
                         apnsToken: token,
                         sessionID: DeviceIdentity.sessionID(),
                         pushBackendURL: backendURL
@@ -1716,36 +1733,106 @@ public struct AppRoot: View {
         // manual-code path (client.pairingCode = code; connect()). Debug-only.
         if let code = ProcessInfo.processInfo.environment["LANCER_RELAY_CODE"],
            code.count == 6 {
+            let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: PairingCrypto.generatePairingCode())
             // Fresh keypair for this pairing (beginPairingSession also rotates the
             // code, so apply the daemon's code afterward). This avoids reusing a
             // restored keypair from a prior pairing, which — combined with the old
             // non-idempotent connect() — produced a stale session key the daemon's
             // frames couldn't decrypt. connect() is now idempotent, so this is the
             // single authoritative channel.
-            env.e2eRelayClient.beginPairingSession()
-            env.e2eRelayClient.pairingCode = code
-            env.e2eRelayClient.connect()
+            client.beginPairingSession()
+            client.pairingCode = code
+            client.connect()
+            Task { @MainActor in
+                for await state in client.$pairingState.values {
+                    if state == .paired {
+                        addRelayMachine(
+                            client: client,
+                            record: RelayMachineRecord(id: client.machineID, displayName: "Relay host"),
+                            env: env
+                        )
+                        break
+                    }
+                }
+            }
         }
         #endif
+    }
 
-        // These Tasks inherit @MainActor isolation, so client reads and the
-        // fleet mutation are already main-actor-confined.
-        let client = env.e2eRelayClient
-        let fleet = fleetStore
+    /// Migrates the legacy single relay pairing (if any) into the namespaced
+    /// index, then restores + wires every known machine's client/bridge. Called
+    /// once from `configureRelayFleetStore` via a detached `Task` — hydration is
+    /// async so it doesn't block the rest of that method's synchronous setup.
+    private func hydrateRelayFleetStore(env: AppEnvironment) async {
+        _ = await RelayMachineMigration.migrateLegacyIfNeeded()
+        let records = await RelayMachineMigration.readIndex()
+        for record in records {
+            let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
+            client.restoreNamespacedStoredPairing()
+            addRelayMachine(client: client, record: record, env: env)
+        }
+    }
+
+    /// Builds an `E2ERelayBridge` over `client`, registers it with
+    /// `ApprovalRelay` and `relayFleetStore`, and wires its per-bridge
+    /// subscriptions (installed-agents fetch + push-token registration on
+    /// activation, plus mirroring pairing/connection state into the fleet-wide
+    /// aggregate). Called from launch hydration, the pairing-UI callbacks, and
+    /// the `LANCER_RELAY_CODE` debug seam.
+    @MainActor
+    private func addRelayMachine(client: E2ERelayClient, record: RelayMachineRecord, env: AppEnvironment) {
+        let bridge = E2ERelayBridge(relayClient: client, approvalRelay: ApprovalRelay.shared, machineID: record.id)
+        bridge.start()
+        let machine = RelayFleetStore.Machine(record: record, client: client, bridge: bridge)
+        relayFleetStore.add(machine)
+        ApprovalRelay.shared.relayBridges[record.id] = bridge
         Task { @MainActor in
-            for await pairing in client.$pairingState.values {
-                fleet.setRelayStateOnAllSlots(
-                    Self.relayState(pairing: pairing, connection: client.connectionState)
-                )
+            for await active in bridge.$isActive.values {
+                // Recompute every derived aggregate that used to come from the
+                // single relayBridgeIsActive bool, now folded across ALL machines.
+                sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
+                fleetStore.setRelayStateOnAllSlots(aggregateRelayState())
+                if active {
+                    // When a relay machine goes live, ask the host which agent CLIs
+                    // are actually installed so the picker only offers those.
+                    if let installed = try? await bridge.relayInstalledAgents(), !installed.isEmpty {
+                        relayFleetStore.setInstalledAgentVendors(installed, for: record.id)
+                    }
+                    // Register this device's APNs token over the relay so approvals
+                    // can be pushed when the app is closed (the relay path's
+                    // equivalent of the SSH channel.registerAPNSToken). Without this
+                    // the daemon never learns the token and push never fires.
+                    let backendURL = Self.pushBackendURL()
+                    if !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex {
+                        await bridge.registerDevice(apnsToken: token, sessionID: DeviceIdentity.sessionID(), pushBackendURL: backendURL)
+                    }
+                }
             }
         }
-        Task { @MainActor in
-            for await connection in client.$connectionState.values {
-                fleet.setRelayStateOnAllSlots(
-                    Self.relayState(pairing: client.pairingState, connection: connection)
-                )
+        if E2ERelayClient.hasStoredPairing(machineID: record.id) {
+            client.connect()
+        }
+    }
+
+    /// Fleet-wide "most live wins" relay state, folded across every paired
+    /// machine's client pairing/connection state — mirrors what the single-bridge
+    /// `Self.relayState` used to compute for the one app-wide client. Ordering
+    /// (most → least live), matching `Session.RelayState`'s cases: paired >
+    /// degraded > connecting > error > none.
+    private func aggregateRelayState() -> Session.RelayState {
+        let states = relayFleetStore.machines.map {
+            Self.relayState(pairing: $0.client.pairingState, connection: $0.client.connectionState)
+        }
+        let rank: (Session.RelayState) -> Int = { state in
+            switch state {
+            case .paired: return 4
+            case .degraded: return 3
+            case .connecting: return 2
+            case .error: return 1
+            case .none: return 0
             }
         }
+        return states.max(by: { rank($0) < rank($1) }) ?? .none
     }
 
     /// Maps the E2E relay client's pairing + connection state onto the
@@ -2104,7 +2191,9 @@ private struct SettingsWithLibraryView: View {
     let approvalRepository: ApprovalRepository?
     var sshKeyStore: KeyStore? = nil
     var daemonChannel: DaemonChannel? = nil
-    var e2eRelayClient: E2ERelayClient? = nil
+    var relayMachines: [RelayMachineRow] = []
+    var onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in }
+    var onRelayUnpair: (RelayMachineID) -> Void = { _ in }
     let accountSession: AccountSessionController
     var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
@@ -2126,7 +2215,9 @@ private struct SettingsWithLibraryView: View {
             approvalRepository: approvalRepository,
             sshKeyStore: sshKeyStore,
             daemonChannel: daemonChannel,
-            e2eRelayClient: e2eRelayClient,
+            relayMachines: relayMachines,
+            onRelayPaired: onRelayPaired,
+            onRelayUnpair: onRelayUnpair,
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             onEmergencyStop: onEmergencyStop,

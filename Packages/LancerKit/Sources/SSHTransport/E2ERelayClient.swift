@@ -56,6 +56,7 @@ public final class E2ERelayClient: ObservableObject {
         public let payload: Data
     }
 
+    public let machineID: RelayMachineID
     public var relayURL: URL
     public var pairingCode: String
     private var keyPair: PairingCrypto.KeyPair
@@ -76,7 +77,8 @@ public final class E2ERelayClient: ObservableObject {
         messageStream
     }
 
-    public init(relayURL: URL, pairingCode: String) {
+    public init(relayURL: URL, pairingCode: String, machineID: RelayMachineID = RelayMachineID()) {
+        self.machineID = machineID
         self.relayURL = relayURL
         self.pairingCode = pairingCode
         self.keyPair = PairingCrypto.generateKeyPair()
@@ -172,33 +174,105 @@ public final class E2ERelayClient: ObservableObject {
         return result as? Data
     }
 
+    private static func keychainDelete(account: String) {
+        _ = SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: kcService,
+            kSecAttrAccount as String: account,
+        ] as CFDictionary)
+    }
+
     public static func storedRelayURL() -> String? {
         UserDefaults.standard.string(forKey: udPairingRelayURL)
     }
 
-    public func restoreStoredPairing() {
-        guard let code = Self.storedPairingCode(),
-              let privKeyBase64 = Self.storedPairingPrivKey(),
-              let relayURLString = Self.storedRelayURL()
+    // MARK: - Namespaced (multi-machine) stored pairing persistence
+    //
+    // Lane 0 of multi-machine relay support: per-machineID persistence,
+    // parallel to the singular static API above. Not yet wired into any live
+    // call site — a later lane rewires `AppRoot.swift` onto these and deletes
+    // the singular API once that rewiring lands.
+
+    /// Keychain account holding the JSON-encoded `[RelayMachineRecord]` index
+    /// of all paired machines. Not yet written/read by this lane except by
+    /// `RelayMachineMigration`.
+    public static let kcAccountMachinesIndex = "lancer.relay.machines.index"
+
+    private static func udMachineCodeKey(_ machineID: RelayMachineID) -> String {
+        "lancer.relay.machine.\(machineID.uuidString).code"
+    }
+
+    private static func udMachineURLKey(_ machineID: RelayMachineID) -> String {
+        "lancer.relay.machine.\(machineID.uuidString).url"
+    }
+
+    private static func kcMachinePrivKeyAccount(_ machineID: RelayMachineID) -> String {
+        "lancer.relay.machine.\(machineID.uuidString).privKey"
+    }
+
+    /// Writes this instance's pairing code, relay URL, and private key under
+    /// `self.machineID`-namespaced keys.
+    public func persistPairing() {
+        UserDefaults.standard.set(pairingCode, forKey: Self.udMachineCodeKey(machineID))
+        UserDefaults.standard.set(relayURL.absoluteString, forKey: Self.udMachineURLKey(machineID))
+        Self.keychainWrite(keyPair.privateKey.rawRepresentation, account: Self.kcMachinePrivKeyAccount(machineID))
+    }
+
+    public static func hasStoredPairing(machineID: RelayMachineID) -> Bool {
+        UserDefaults.standard.string(forKey: udMachineCodeKey(machineID)) != nil
+    }
+
+    public static func storedPairingCode(machineID: RelayMachineID) -> String? {
+        UserDefaults.standard.string(forKey: udMachineCodeKey(machineID))
+    }
+
+    public static func storedPairingPrivKey(machineID: RelayMachineID) -> String? {
+        guard let data = keychainRead(account: kcMachinePrivKeyAccount(machineID)) else { return nil }
+        return Base64URL.encode(data)
+    }
+
+    public static func storedRelayURL(machineID: RelayMachineID) -> String? {
+        UserDefaults.standard.string(forKey: udMachineURLKey(machineID))
+    }
+
+    /// Deletes all three namespaced entries for `machineID`.
+    public static func deleteStoredPairing(machineID: RelayMachineID) {
+        UserDefaults.standard.removeObject(forKey: udMachineCodeKey(machineID))
+        UserDefaults.standard.removeObject(forKey: udMachineURLKey(machineID))
+        keychainDelete(account: kcMachinePrivKeyAccount(machineID))
+    }
+
+    /// Same behavior as `restoreStoredPairing()` but reads the namespaced
+    /// keys for `self.machineID` instead of the global singular keys.
+    ///
+    /// Named distinctly from `restoreStoredPairing()` (rather than
+    /// overloading it) because that existing instance method already has the
+    /// identical `() -> Void` signature — Swift can't disambiguate two
+    /// methods that differ only in body, and the singular method must stay
+    /// until the later lane that rewires `AppRoot.swift` deletes it.
+    public func restoreNamespacedStoredPairing() {
+        guard let code = Self.storedPairingCode(machineID: machineID),
+              let privKeyBase64 = Self.storedPairingPrivKey(machineID: machineID),
+              let relayURLString = Self.storedRelayURL(machineID: machineID)
         else { return }
 
         guard let privKeyData = try? Base64URL.decode(privKeyBase64),
               let privateKey = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: privKeyData)
         else {
-            Self.logger.error("restoreStoredPairing: failed to decode stored private key")
+            Self.logger.error("restoreNamespacedStoredPairing: failed to decode stored private key")
             return
         }
 
         self.pairingCode = code
         self.keyPair = PairingCrypto.KeyPair(privateKey: privateKey)
         self.relayURL = URL(string: relayURLString) ?? self.relayURL
-        Self.logger.info("restoreStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
+        Self.logger.info("restoreNamespacedStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
     }
 
     public func connect() {
         Self.logger.info("connect() called, relayHost=\(self.relayURL.host ?? "", privacy: .public) code=\(self.pairingCode, privacy: .private)")
         // Idempotent: tear down any prior connection BEFORE starting a new one.
-        // Without this, a second connect() (e.g. restoreStoredPairing's reconnect
+        // Without this, a second connect() (e.g. a launch-time restore reconnect
         // followed by an explicit re-pair, or the debug auto-pair) leaked the old
         // webSocketTask — its one-shot receive loop kept re-arming on the shared
         // `webSocketTask` property, and the stale `sessionKey` from the abandoned
@@ -348,11 +422,11 @@ public final class E2ERelayClient: ObservableObject {
                 pairingState = .paired
                 reconnectDelay = 1.0
 
-                // Private key → Keychain (device-only). Pairing code + relay URL
-                // are non-secret routing data and stay in UserDefaults.
-                UserDefaults.standard.set(self.pairingCode, forKey: Self.udPairingCode)
-                Self.keychainWrite(self.keyPair.privateKey.rawRepresentation, account: Self.kcAccountPrivKey)
-                UserDefaults.standard.set(self.relayURL.absoluteString, forKey: Self.udPairingRelayURL)
+                // Namespaced under self.machineID — see persistPairing() below.
+                // The old global/singular keys here made every E2ERelayClient
+                // instance stomp on the same slot the instant it paired, which
+                // breaks as soon as more than one client can pair concurrently.
+                persistPairing()
 
             } catch {
                 Self.logger.error("handleMessage: key derivation failed: \(error.localizedDescription, privacy: .public)")

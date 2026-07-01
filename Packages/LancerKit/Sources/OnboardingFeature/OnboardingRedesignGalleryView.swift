@@ -18,6 +18,7 @@ import SSHTransport
 /// the actual product loop before asking the user to pair a machine.
 public struct OnboardingRedesignView: View {
     let onContinue: () -> Void
+    let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
 
     @StateObject private var client: E2ERelayClient
     private let accountSession: AccountSessionController?
@@ -39,13 +40,14 @@ public struct OnboardingRedesignView: View {
 
     public init(
         onContinue: @escaping () -> Void,
-        relayClient: E2ERelayClient? = nil,
         accountSession: AccountSessionController? = nil,
-        startStep: Int = 0
+        startStep: Int = 0,
+        onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil
     ) {
         self.onContinue = onContinue
         self.accountSession = accountSession
-        let resolved = relayClient ?? E2ERelayClient(
+        self.onPaired = onPaired
+        let resolved = E2ERelayClient(
             relayURL: RelaySettings.url(),
             pairingCode: PairingCrypto.generatePairingCode()
         )
@@ -134,6 +136,10 @@ public struct OnboardingRedesignView: View {
             }
         }
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        .onChange(of: client.pairingState) { _, state in
+            guard state == .paired, let onPaired else { return }
+            onPaired(client, RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now))
+        }
         .sheet(isPresented: $showDeviceBindingScanner) {
             OnboardingScanScreen(
                 onScan: { payload in

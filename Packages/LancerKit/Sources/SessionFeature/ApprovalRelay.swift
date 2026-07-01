@@ -69,8 +69,20 @@ public final class ApprovalRelay {
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
 
-    /// Optional E2E relay bridge — when paired, decisions route through E2E first.
-    public var e2eBridge: E2ERelayBridge?
+    /// Per-machine relay bridges, keyed by the machine that owns each bridge's
+    /// WebSocket. Populated by a later lane (AppRoot) as machines pair/unpair.
+    public var relayBridges: [RelayMachineID: E2ERelayBridge] = [:]
+
+    /// Maps an in-flight approval to the machine it arrived from, so its decision
+    /// routes back to exactly that machine's bridge — never a different one that
+    /// happens to be connected. Populated when an approval is ingested (a later
+    /// lane's AppRoot notification handler, using the machineID tag Lane A added
+    /// to lancerE2EApprovalReceived's userInfo); cleared once forwarded.
+    private var approvalMachineMap: [String: RelayMachineID] = [:]
+
+    public func registerRelayOrigin(approvalID: String, machineID: RelayMachineID) {
+        approvalMachineMap[approvalID] = machineID
+    }
 
     private var backendURL: String = ""
     private var sessionID: String = ""
@@ -163,12 +175,19 @@ public final class ApprovalRelay {
     ) async {
         deliveryTracker.recordPost(approvalID: approvalID, decision: decision)
 
-        // 1. Try E2E relay first (primary path when paired)
-        if let bridge = e2eBridge, await bridge.sendDecision(
-            approvalID: approvalID,
-            decision: DaemonChannel.decisionWireValue(for: decision),
-            editedToolInput: editedToolInput
-        ) {
+        // 0. Multi-machine relay routing: if this approval was tagged with the
+        //    machine it arrived from AND that machine still has a live bridge,
+        //    route the decision there specifically. Fail-closed: if either lookup
+        //    misses (never a relay approval, or the machine was unpaired since),
+        //    fall through — do NOT retry against some other relay bridge.
+        if let originMachineID = approvalMachineMap[approvalID],
+           let bridge = relayBridges[originMachineID],
+           await bridge.sendDecision(
+               approvalID: approvalID,
+               decision: DaemonChannel.decisionWireValue(for: decision),
+               editedToolInput: editedToolInput
+           ) {
+            approvalMachineMap.removeValue(forKey: approvalID)
             deliveryTracker.recordAcknowledgement(approvalID: approvalID)
             return
         }

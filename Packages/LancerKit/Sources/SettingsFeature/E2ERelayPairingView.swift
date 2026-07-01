@@ -1,36 +1,36 @@
 #if os(iOS)
 import SwiftUI
 import SSHTransport
+import LancerCore
 import SecurityKit
 import DesignSystem
 
 public struct E2ERelayPairingView: View {
+    let existingMachineCount: Int
+    let onPaired: (E2ERelayClient, RelayMachineRecord) -> Void
+
     @ObservedObject private var client: E2ERelayClient
-    @State private var ownedClient: E2ERelayClient?
     @State private var pairingCode: String = ""
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
-    /// Pair against an app-wide `E2ERelayClient` so the connection drives the
-    /// live `ApprovalRelay.e2eBridge`. When `client` is nil this falls back to a
-    /// self-owned client (no live bridge) — kept for standalone/preview use.
-    ///
-    /// The real flow is always one-directional: the daemon (`lancerd pair` on
-    /// the host) generates the code, the phone types it in. There is no mode
-    /// where the phone itself is "the host" — a prior "I'm on the host
-    /// (daemon)" toggle offered a code-generation mode that no real call site
-    /// ever used (every caller passes a live `client`), and it defaulted ON,
-    /// which is why opening this screen to pair a new machine showed a stale
-    /// leftover code from whatever was last paired instead of an empty field
-    /// ready for a fresh one.
-    public init(client: E2ERelayClient? = nil) {
-        let resolved = client ?? E2ERelayClient(
+    /// Always constructs a fresh, self-contained `E2ERelayClient` for exactly
+    /// one pairing attempt (a fresh random `machineID`, no ambient/app-wide
+    /// client). The real flow is always one-directional: the daemon
+    /// (`lancerd pair` on the host) generates the code, the phone types it in.
+    public init(existingMachineCount: Int, onPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void) {
+        self.existingMachineCount = existingMachineCount
+        self.onPaired = onPaired
+        let fresh = E2ERelayClient(
             relayURL: RelaySettings.url(),
             pairingCode: PairingCrypto.generatePairingCode()
         )
-        _client = ObservedObject(initialValue: resolved)
-        _ownedClient = State(initialValue: client == nil ? resolved : nil)
+        _client = ObservedObject(initialValue: fresh)
         _pairingCode = State(initialValue: "")
+    }
+
+    private var isAtCap: Bool {
+        existingMachineCount >= relayFleetMaxMachines
     }
 
     public var body: some View {
@@ -40,11 +40,15 @@ public struct E2ERelayPairingView: View {
                 VStack(spacing: 24) {
                     headerSection
                     relayURLSection
-                    pairingCodeSection
-                    statusSection
-                    connectButton
-                    if client.pairingState == .paired {
-                        disconnectButton
+                    if isAtCap {
+                        capReachedSection
+                    } else {
+                        pairingCodeSection
+                        statusSection
+                        connectButton
+                        if client.pairingState == .paired {
+                            disconnectButton
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -52,6 +56,17 @@ public struct E2ERelayPairingView: View {
             }
         }
         .navigationBarHidden(true)
+        .onChange(of: client.pairingState) { _, newValue in
+            guard newValue == .paired else { return }
+            let record = RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now)
+            onPaired(client, record)
+            dismiss()
+        }
+        .onDisappear {
+            if client.pairingState != .paired {
+                client.disconnect()
+            }
+        }
     }
 
     // MARK: - Header
@@ -106,6 +121,28 @@ public struct E2ERelayPairingView: View {
                 RoundedRectangle(cornerRadius: t.r3, style: .continuous)
                     .strokeBorder(t.border, lineWidth: 1)
             )
+        }
+    }
+
+    // MARK: - Cap reached
+
+    private var capReachedSection: some View {
+        VStack(spacing: 12) {
+            Text("You've paired \(relayFleetMaxMachines) machines — the maximum. Remove one in Settings to pair another.")
+                .font(.dsSansPt(14))
+                .foregroundStyle(t.text3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
+
+            DSButton(
+                "Maximum machines paired",
+                variant: .primary,
+                size: .lg,
+                mono: true,
+                fullWidth: true
+            ) {}
+            .disabled(true)
         }
     }
 
@@ -187,12 +224,10 @@ public struct E2ERelayPairingView: View {
     // MARK: - Actions
 
     private func connect() {
-        let url = RelaySettings.url()
         let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard code.count == 6 else { return }
 
-        client.disconnect()
-        client.relayURL = url
+        // A fresh client with no prior state — no need to disconnect() first.
         client.pairingCode = code
         client.connect()
     }

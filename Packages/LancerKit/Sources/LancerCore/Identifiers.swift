@@ -45,10 +45,12 @@ public enum BlockTag {}
 public enum ApprovalTag {}
 public enum SnippetTag {}
 public enum KeyTag {}
+public enum RelayMachineTag {}
 
-public typealias HostID     = TypedID<HostTag>
-public typealias SessionID  = TypedID<SessionTag>
-public typealias BlockID    = TypedID<BlockTag>
-public typealias ApprovalID = TypedID<ApprovalTag>
-public typealias SnippetID  = TypedID<SnippetTag>
-public typealias KeyID      = TypedID<KeyTag>
+public typealias HostID         = TypedID<HostTag>
+public typealias SessionID      = TypedID<SessionTag>
+public typealias BlockID        = TypedID<BlockTag>
+public typealias ApprovalID     = TypedID<ApprovalTag>
+public typealias SnippetID      = TypedID<SnippetTag>
+public typealias KeyID          = TypedID<KeyTag>
+public typealias RelayMachineID = TypedID<RelayMachineTag>

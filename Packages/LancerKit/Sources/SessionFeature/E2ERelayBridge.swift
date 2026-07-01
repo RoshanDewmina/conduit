@@ -9,6 +9,7 @@ import SSHTransport
 public final class E2ERelayBridge: ObservableObject {
 
     @Published public private(set) var isActive: Bool = false
+    public let machineID: RelayMachineID
     private let relayClient: E2ERelayClient
     private let approvalRelay: ApprovalRelay
     private var messageTask: Task<Void, Never>?
@@ -21,9 +22,10 @@ public final class E2ERelayBridge: ObservableObject {
     private var sessionsTranscriptContinuation: CheckedContinuation<(messages: [SessionMessage], nextLine: Int, resetRequired: Bool), Error>?
     private var sessionContinueContinuation: CheckedContinuation<DispatchResult, Error>?
 
-    public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
+    public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
         self.approvalRelay = approvalRelay
+        self.machineID = machineID
     }
 
     /// Start bridging E2E relay messages to the approval flow
@@ -299,7 +301,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EApprovalReceived"),
                 object: nil,
-                userInfo: ["approvalData": env.payload]
+                userInfo: ["approvalData": env.payload, "machineID": self.machineID]
             )
 
         case "agentStatus":
@@ -309,7 +311,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EStatusUpdate"),
                 object: nil,
-                userInfo: ["status": env.payload]
+                userInfo: ["status": env.payload, "machineID": self.machineID]
             )
 
         case "loopUpdate":
@@ -319,7 +321,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2ELoopUpdate"),
                 object: nil,
-                userInfo: ["loopData": env.payload]
+                userInfo: ["loopData": env.payload, "machineID": self.machineID]
             )
 
         case "dispatchResult":
@@ -350,7 +352,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2ERunOutput"),
                 object: nil,
-                userInfo: ["params": env.payload]
+                userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
         case "agentRunStatus":
@@ -360,7 +362,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2ERunStatus"),
                 object: nil,
-                userInfo: ["params": env.payload]
+                userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
         case "agentToolStart":
@@ -372,7 +374,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EToolStart"),
                 object: nil,
-                userInfo: ["params": env.payload]
+                userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
         case "commandsListResult":
@@ -448,7 +450,7 @@ public final class E2ERelayBridge: ObservableObject {
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EArtifact"),
                 object: nil,
-                userInfo: ["params": env.payload]
+                userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
         default:
