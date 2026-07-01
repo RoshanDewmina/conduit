@@ -197,6 +197,13 @@ public actor Notifications {
         }
     }
 
+    /// Whether the user has explicitly denied notifications at the OS level — distinct from
+    /// `.notDetermined` (never asked) or `.authorized`, so Settings can show a specific
+    /// "open iOS Settings" recovery row only when it's actually actionable.
+    public func isAuthorizationDenied() async -> Bool {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
+    }
+
     /// Schedule a local notification representing a pending approval. The
     /// notification body uses `userInfo` to deep-link into the Inbox tab.
     public func notifyPendingApproval(_ approval: Approval, hostName: String) async {

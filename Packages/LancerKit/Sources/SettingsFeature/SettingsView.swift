@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import Observation
 import AccountKit
 import LancerCore
@@ -9,6 +10,7 @@ import PersistenceKit
 import SecurityKit
 import SyncKit
 import SSHTransport
+import NotificationsKit
 
 @MainActor @Observable
 public final class SettingsViewModel {
@@ -523,7 +525,7 @@ public struct SettingsView: View {
                     profileCard
                     policyGovernanceSection
                     generalSection
-                    terminalSection
+                    keysSection
                     connectionSection
                     dataSection
                     resetSection
@@ -651,13 +653,16 @@ public struct SettingsView: View {
                 .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 16)
 
-            // Match the GENERAL section's 2-up cards so these primary governance
-            // controls read at the same weight, not as cramped list rows.
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)], spacing: 11) {
+            // Calm native grouped list instead of a 2-up card grid — matches the
+            // rest of Settings (terminal/connection/data/reset sections already
+            // use this settingsCard/settingsNavRow pattern).
+            settingsCard {
                 NavigationLink { AutonomyLevelView() } label: {
-                    settingsGridCard("Default autonomy", icon: "slider.horizontal.3", tint: t.accent, detail: autonomyLabel)
-                }.buttonStyle(.plain)
+                    settingsNavRow("Default autonomy", icon: "slider.horizontal.3", detail: autonomyLabel)
+                }
+                divider
                 NavigationLink {
                     PolicyHomeView(
                         hosts: ["All hosts"],
@@ -665,18 +670,20 @@ public struct SettingsView: View {
                         onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
                     )
                 } label: {
-                    settingsGridCard("Policy presets", icon: "checklist", tint: t.accent, detail: "rules · cross-provider matrix")
-                }.buttonStyle(.plain)
+                    settingsNavRow("Policy presets", icon: "checklist", detail: "rules · cross-provider matrix")
+                }
                 if let auditRepository {
+                    divider
                     NavigationLink {
                         AuditVerifyExportView(repository: auditRepository)
                     } label: {
-                        settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "verify & export the audit trail")
-                    }.buttonStyle(.plain)
+                        settingsNavRow("Enforcement log", icon: "list.bullet.clipboard", detail: "verify & export the audit trail")
+                    }
                 }
+                divider
                 NavigationLink { TeamRolesView() } label: {
-                    settingsGridCard("Team & roles", icon: "person.2", tint: t.text2, detail: "who can approve, edit, stop")
-                }.buttonStyle(.plain)
+                    settingsNavRow("Team & roles", icon: "person.2", detail: "who can approve, edit, stop")
+                }
             }
 
             // Emergency stop — the operator's panic button. Halts every running
@@ -709,9 +716,9 @@ public struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Emergency stop — halt all agents")
+                .padding(.horizontal, 16)
             }
         }
-        .padding(.horizontal, 16)
         .padding(.bottom, 16)
     }
 
@@ -725,26 +732,29 @@ public struct SettingsView: View {
     @ViewBuilder
     private var generalSection: some View {
         sectionHead("GENERAL")
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)], spacing: 11) {
+        settingsCard {
             NavigationLink { AppearanceSettingsView() } label: {
-                settingsGridCard("Appearance", icon: "circle.lefthalf.filled", tint: t.accent, detail: "Theme & mode")
-            }.buttonStyle(.plain)
+                settingsNavRow("Appearance", icon: "circle.lefthalf.filled", detail: "Theme & mode")
+            }
+            divider
             NavigationLink { AccentSettingsView() } label: {
-                settingsGridCard("Accent", icon: "paintpalette.fill", tint: t.accent, detail: "Brand color")
-            }.buttonStyle(.plain)
+                settingsNavRow("Accent", icon: "paintpalette.fill", detail: "Brand color")
+            }
+            divider
             NavigationLink { ProviderKeysView(viewModel: vm) } label: {
-                settingsGridCard("Provider keys", icon: "key.horizontal", tint: t.ok, detail: providerKeyDetail)
-            }.buttonStyle(.plain)
+                settingsNavRow("Provider keys", icon: "key.horizontal", detail: providerKeyDetail)
+            }
+            divider
             NavigationLink { NotificationsSettingsView() } label: {
-                settingsGridCard("Notifications", icon: "bell", tint: t.text2, detail: "Push severity")
-            }.buttonStyle(.plain)
+                settingsNavRow("Notifications", icon: "bell", detail: "Push severity")
+            }
+            divider
             NavigationLink {
                 TrustPrivacyView(accountSession: accountSession, backendURL: backendURL, e2eRelayClient: e2eRelayClient)
             } label: {
-                settingsGridCard("Security & Trust", icon: "lock", tint: t.warn, detail: "pairings · revoke · Face ID")
-            }.buttonStyle(.plain)
+                settingsNavRow("Security & Trust", icon: "lock", detail: "pairings · revoke")
+            }
         }
-        .padding(.horizontal, 16)
         .padding(.bottom, 16)
     }
 
@@ -753,46 +763,19 @@ public struct SettingsView: View {
         return n == 0 ? "Not set" : "\(n) connected"
     }
 
-    private func settingsGridCard(_ title: String, icon: String, tint: Color, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: icon)
-                .font(.dsSansPt(15, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background(t.surface2, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .padding(.bottom, 11)
-            Text(title)
-                .font(.dsSansPt(13.5, weight: .semibold))
-                .foregroundStyle(t.text)
-            Text(detail)
-                .font(.dsSansPt(11))
-                .foregroundStyle(t.text3)
-                .padding(.top, 1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(t.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(t.border, lineWidth: 1))
-        .contentShape(Rectangle())
-    }
-
-    // MARK: - TERMINAL & KEYS
+    // MARK: - KEYS
 
     @ViewBuilder
-    private var terminalSection: some View {
-        sectionHead("TERMINAL & KEYS")
-        settingsCard {
-            NavigationLink { TerminalSettingsView() } label: {
-                settingsNavRow("Terminal", icon: "terminal", detail: "font, scrollback, gestures")
-            }
-            if let sshKeyStore {
-                divider
+    private var keysSection: some View {
+        if let sshKeyStore {
+            sectionHead("KEYS")
+            settingsCard {
                 NavigationLink { SSHKeysView(keyStore: sshKeyStore) } label: {
                     settingsNavRow("SSH keys", icon: "key.horizontal.fill", detail: "generate, import, manage")
                 }
             }
+            .padding(.bottom, 16)
         }
-        .padding(.bottom, 16)
     }
 
     // MARK: - CONNECTION
@@ -1045,6 +1028,7 @@ private struct NotificationsSettingsView: View {
     @AppStorage("notif.quietEnd")    private var quietEnd    = "08:00"
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
+    @State private var notificationsDenied = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -1052,6 +1036,10 @@ private struct NotificationsSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     DSDetailHeader("notifications", onBack: { dismiss() })
+
+                    if notificationsDenied {
+                        deniedBanner
+                    }
 
                     sectionHead("PUSH WHEN AN ACTION IS")
                     card {
@@ -1102,6 +1090,36 @@ private struct NotificationsSettingsView: View {
             }
         }
         .navigationBarHidden(true)
+        .task { notificationsDenied = await Notifications.shared.isAuthorizationDenied() }
+    }
+
+    private var deniedBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bell.slash")
+                .font(.dsSansPt(15, weight: .semibold))
+                .foregroundStyle(t.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Notifications are off")
+                    .font(.dsSansPt(14, weight: .semibold))
+                    .foregroundStyle(t.text)
+                Text("Turn them on in iOS Settings to get approval alerts.")
+                    .font(.dsSansPt(12))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer(minLength: 0)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .font(.dsSansPt(12.5, weight: .semibold))
+            .foregroundStyle(t.accent)
+        }
+        .padding(14)
+        .background(t.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.warn.opacity(0.35), lineWidth: 1))
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
     }
 
     private func sectionHead(_ title: String) -> some View {
