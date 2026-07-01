@@ -207,13 +207,6 @@ public struct LancerSidebarView: View {
                 action: { onNavigate(.machines) }
             )
             .coachmarkAnchor("terminal")
-            SidebarNavRow(
-                icon: "checkmark.shield",
-                title: "Governance",
-                badge: nil,
-                selected: state.selectedDestination == .governance,
-                action: { onNavigate(.governance) }
-            )
         }
     }
 
@@ -307,10 +300,19 @@ public struct LancerSidebarView: View {
 
     // MARK: - Footer
 
+    private var footerText: String {
+        guard state.relayConnected else { return "Relay disconnected" }
+        switch state.fleetSlotCount {
+        case 0: return "Relay connected"
+        case 1: return "Relay connected · 1 host"
+        default: return "Relay connected · \(state.fleetSlotCount) hosts"
+        }
+    }
+
     private var relayFooter: some View {
         HStack(spacing: 7) {
-            DSStatusDot(tone: .ok, pulse: true, size: 6)
-            Text("Relay connected · 3 hosts")
+            DSStatusDot(tone: state.relayConnected ? .ok : .off, pulse: state.relayConnected, size: 6)
+            Text(footerText)
                 .font(.dsMonoPt(10.5))
                 .foregroundStyle(t.text4)
             Spacer(minLength: 0)
@@ -325,7 +327,7 @@ public struct LancerSidebarView: View {
                 .frame(height: 1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Relay connected, 3 hosts")
+        .accessibilityLabel(footerText)
     }
 }
 

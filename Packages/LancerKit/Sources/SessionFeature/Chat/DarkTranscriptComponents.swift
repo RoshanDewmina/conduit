@@ -163,6 +163,12 @@ public struct DarkTerminalBlockCard: View {
     private let command: String?
     private let output: String
     private let state: State
+    /// Whether this card is genuinely showing a shell/zsh invocation. When false,
+    /// the header drops the "zsh — host" window-chrome claim and traffic-light
+    /// dots — callers use this for non-shell tool calls (Read/Write/Edit/etc.) and
+    /// plain error output that never touched a shell, so the card never implies a
+    /// live terminal session that isn't real.
+    private let isShellSession: Bool
 
     /// Lines kept visible while collapsed.
     private let collapsedLineCount = 8
@@ -171,11 +177,24 @@ public struct DarkTerminalBlockCard: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(host: String, command: String?, output: String, state: State) {
+    public init(host: String, command: String?, output: String, state: State, isShellSession: Bool = true) {
         self.host = host
         self.command = command
         self.output = output
         self.state = state
+        self.isShellSession = isShellSession
+    }
+
+    /// Whether a tool name denotes a genuine shell/bash invocation, matching the
+    /// same normalization the daemon uses (`daemon/lancerd/hook.go`'s tool-kind
+    /// switch: "bash"/"Bash"/"shell"/"command" all mean the same thing across
+    /// Claude Code/Codex/OpenCode/Kimi). Callers use this to decide whether a tool
+    /// block earns terminal-window chrome, or renders as a plain tool call.
+    public static func isShellToolName(_ toolName: String) -> Bool {
+        switch toolName.lowercased() {
+        case "bash", "shell", "command": return true
+        default: return false
+        }
     }
 
     public var body: some View {
@@ -206,13 +225,15 @@ public struct DarkTerminalBlockCard: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            Circle().fill(t.termPrompt).frame(width: 9, height: 9)
-            Circle().fill(t.termText3.opacity(0.55)).frame(width: 9, height: 9)
-            Circle().fill(t.termText3.opacity(0.35)).frame(width: 9, height: 9)
-            Text("zsh — \(host)")
+            if isShellSession {
+                Circle().fill(t.termPrompt).frame(width: 9, height: 9)
+                Circle().fill(t.termText3.opacity(0.55)).frame(width: 9, height: 9)
+                Circle().fill(t.termText3.opacity(0.35)).frame(width: 9, height: 9)
+            }
+            Text(isShellSession ? "zsh — \(host)" : host)
                 .font(.dsMonoPt(11))
                 .foregroundStyle(t.termText3)
-                .padding(.leading, 4)
+                .padding(.leading, isShellSession ? 4 : 0)
             Spacer(minLength: 0)
             if state == .error {
                 Text("ERROR")

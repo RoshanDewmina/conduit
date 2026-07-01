@@ -379,6 +379,14 @@ func (s *server) runContinue(runID, prompt string, fb continueFallback) dispatch
 	return s.dispatcher.continueRun(runID, prompt, fb, s.policyEffect, s.auditEntry)
 }
 
+// runObservedSessionContinue sends a follow-up prompt into a session that was
+// started directly in a terminal on the host (never dispatched by Lancer),
+// targeted by its exact vendor session ID, re-passing the policy + budget
+// gates via the dispatcher (used by agent.observedSession.continue).
+func (s *server) runObservedSessionContinue(p observedSessionContinueParams) dispatchResult {
+	return s.dispatcher.resumeObservedSession(p, s.policyEffect, s.auditEntry)
+}
+
 // applyRunControl applies a relay-delivered run-control action to a dispatched
 // run, routing through the same dispatcher methods the local RPC path uses.
 func (s *server) applyRunControl(runID, action string) {
@@ -784,6 +792,15 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		fb := continueFallback{Agent: p.Agent, CWD: p.CWD, Model: p.Model, BudgetUSD: p.BudgetUSD}
 		s.writeResult(msg.ID, s.runContinue(p.RunID, p.Prompt, fb))
+
+	case "agent.observedSession.continue":
+		var p observedSessionContinueParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil ||
+			p.Vendor == "" || p.SessionID == "" || p.CWD == "" || p.Prompt == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		s.writeResult(msg.ID, s.runObservedSessionContinue(p))
 
 	case "agent.cancel":
 		var p struct {

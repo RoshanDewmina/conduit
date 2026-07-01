@@ -39,7 +39,6 @@ public enum DebugSeeder {
         }
         await seedHosts(env.hostRepo)
         NotificationCenter.default.post(name: .lancerSavedHostsDidChange, object: nil)
-        UserDefaults.standard.removeObject(forKey: "appLockEnabled")
         UserDefaults.standard.set(true, forKey: "onboardingSeen")
         UserDefaults.standard.set(true, forKey: seededKey)
     }

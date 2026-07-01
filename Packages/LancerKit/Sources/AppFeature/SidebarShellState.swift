@@ -10,13 +10,12 @@ public enum SidebarDestination: Hashable, Sendable {
     case needsAttention
     /// Machine Detail (Fleet) — a primary sidebar root, also reachable from a Home machine tap.
     case machines
-    /// Governance home — the policy/audit/drift/team/privacy dashboard (the wedge surface).
-    case governance
     case settings
-    /// A read-only transcript viewer for a session discovered on the host but not
-    /// dispatched by Lancer (watch-only, Phase 1). `title`/`hostName` travel with
-    /// the route since observed sessions aren't persisted in `recentThreads`.
-    case observedSession(sessionId: String, title: String, hostName: String)
+    /// A transcript viewer (+ follow-up composer when a direct daemon connection
+    /// is available) for a session discovered on the host but not dispatched by
+    /// Lancer. `title`/`hostName`/`vendor`/`cwd` travel with the route since
+    /// observed sessions aren't persisted in `recentThreads`.
+    case observedSession(sessionId: String, title: String, hostName: String, vendor: String, cwd: String)
 }
 
 public enum SidebarSection: Hashable, Sendable {
@@ -42,6 +41,7 @@ public final class SidebarShellState {
     public var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: SidebarShellState.pinnedKey) ?? [])
     public var pendingApprovalCount = 0
     public var fleetSlotCount = 0
+    public var relayConnected = false
 
     private var chatRepo: ChatConversationRepository?
 

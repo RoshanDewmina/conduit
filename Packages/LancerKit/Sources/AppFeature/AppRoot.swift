@@ -161,12 +161,10 @@ public struct AppRoot: View {
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
-    @State private var showingProvisioningWizard = false
     @State private var showingQuotaGuard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage(LancerAppearance.storageKey) private var colorSchemePref: String = LancerAppearance.light.rawValue
     @AppStorage(LancerAccentTheme.storageKey) private var accentPref: String = LancerAccentTheme.terracotta.rawValue
-    @AppStorage("appLockEnabled") private var appLockEnabled: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var systemScheme
@@ -184,7 +182,6 @@ public struct AppRoot: View {
     }
 
     @State private var scenePhaseObserver: ScenePhaseObserver?
-    @State private var isUnlocked: Bool = false
     @State private var watchConnector = PhoneWatchConnector()
     @State private var pm = PurchaseManager.shared
     @State private var agentStore: AgentStore?
@@ -264,7 +261,9 @@ public struct AppRoot: View {
             let state = SidebarShellState()
             switch destination {
             case "inbox": state.navigate(to: .needsAttention)
-            case "governance": state.navigate(to: .governance)
+            // Governance folded into Settings (no longer a standalone sidebar root);
+            // keep the launch seam value working by landing on Settings.
+            case "governance": state.navigate(to: .settings)
             case "machines": state.navigate(to: .machines)
             case "sessions": state.navigate(to: .home)
             case "settings": state.navigate(to: .settings)
@@ -292,21 +291,16 @@ public struct AppRoot: View {
     // separate (faster) units instead of one expression that exceeded the limit.
     @ViewBuilder
     private var mainContent: some View {
-        if appLockEnabled && !isUnlocked {
-            LaunchLockView(onUnlock: { await attemptUnlock() })
+        switch environment {
+        case .failure(let msg):
+            ContentUnavailableView(
+                "Failed to start",
+                systemImage: "exclamationmark.triangle",
+                description: Text(msg)
+            )
+        case .ready(let env):
+            readyRoot(env: env)
                 .preferredColorScheme(preferredScheme)
-        } else {
-            switch environment {
-            case .failure(let msg):
-                ContentUnavailableView(
-                    "Failed to start",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(msg)
-                )
-            case .ready(let env):
-                readyRoot(env: env)
-                    .preferredColorScheme(preferredScheme)
-            }
         }
     }
 
@@ -322,13 +316,6 @@ public struct AppRoot: View {
     /// group is immaterial — these are independent tasks/observers and one sheet.
     private func lifecycleModifiers(_ content: some View) -> some View {
         content
-        .task {
-            if appLockEnabled {
-                await attemptUnlock()
-            } else {
-                isUnlocked = true
-            }
-        }
         .task { watchConnector.activate() }
         .task { await pm.load() }
         .task {
@@ -357,11 +344,6 @@ public struct AppRoot: View {
             PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
-            // Re-engage the app lock when leaving the foreground so the lock
-            // screen is shown (and content hidden in the app switcher) on return.
-            if newPhase != .active && appLockEnabled {
-                isUnlocked = false
-            }
             if newPhase == .background, #available(iOS 16.2, *) {
                 Task { await LancerLiveActivityManager.shared.endAll() }
             }
@@ -375,11 +357,6 @@ public struct AppRoot: View {
             // dropped. Cheap idempotent POST; covers both transports.
             if newPhase == .active {
                 Task { @MainActor in await registerPushTokenForActiveTransport() }
-            }
-        }
-        .onChange(of: appLockEnabled) { _, enabled in
-            if !enabled {
-                isUnlocked = true
             }
         }
     }
@@ -536,15 +513,6 @@ public struct AppRoot: View {
         }
     }
 
-    private func attemptUnlock() async {
-        do {
-            try await BiometricGate.shared.unlock(reason: "Authenticate to open Lancer")
-            isUnlocked = true
-        } catch {
-            // User cancelled or biometrics failed — lock screen stays visible.
-        }
-    }
-
     @ViewBuilder
     private func readyRoot(env: AppEnvironment) -> some View {
         Group {
@@ -556,13 +524,6 @@ public struct AppRoot: View {
                         onboardingSeen = true
                         sidebarState.navigate(to: .home)
                     },
-                    onAlreadyUseLancer: {
-                        onboardingSeen = true
-                        sidebarState.navigate(to: .machines)
-                    },
-                    onSetupWorkspace: {
-                        showingProvisioningWizard = true
-                    },
                     onEnableSSH: {
                         // Optional SSH onboarding step → finish onboarding and land
                         // on Machines, where "Add a machine" lives (in-app keygen).
@@ -571,23 +532,6 @@ public struct AppRoot: View {
                     },
                     relayClient: env.e2eRelayClient,
                     accountSession: env.accountSession
-                )
-            }
-        }
-        .sheet(isPresented: $showingProvisioningWizard) {
-            LancerDrawer(detents: [.large]) {
-                ProvisioningWizard(
-                hostRepo: env.hostRepo,
-                onComplete: { host in
-                    showingProvisioningWizard = false
-                    onboardingSeen = true
-                    sidebarState.navigate(to: .machines)
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(250))
-                        openSession(host: host, env: env)
-                    }
-                },
-                onCancel: { showingProvisioningWizard = false }
                 )
             }
         }
@@ -692,7 +636,12 @@ public struct AppRoot: View {
         // it below its own title row — passed as statusHeaderAgents to every tab
         // view so placement is consistent. Hidden behind the live SessionView cover.
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
-        .onChange(of: activeInboxViewModel.approvals.filter(\.isPending).count, initial: true) { _, count in
+        // Single source of truth for "needs attention": fleetStore.attentionItems is
+        // also what Home's attention list renders from, so the headline/sidebar badge
+        // and the list can never disagree (previously this read activeInboxViewModel,
+        // a single-slot fallback chain that could report a nonzero count while the
+        // fleet-wide attention list rendered nothing).
+        .onChange(of: fleetStore.attentionItems.count, initial: true) { _, count in
             hudStore.pendingApprovals = count
             sidebarState.pendingApprovalCount = count
             // Keep the real Dynamic Island / lock-screen Live Activity badge
@@ -703,6 +652,9 @@ public struct AppRoot: View {
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
+        }
+        .onChange(of: relayBridgeIsActive, initial: true) { _, active in
+            sidebarState.relayConnected = active
         }
         // One-time interactive coach-mark tour. Overlay stays installed (cheap,
         // inert while inactive) but auto-start is OFF: on-device it mis-rendered
@@ -725,22 +677,12 @@ public struct AppRoot: View {
         selectedFleetSlot?.sessionViewModel ?? sessionViewModel
     }
 
-    /// A workspace is a direct SSH capability. Relay dispatch keeps its
-    /// governed control loop, but it intentionally does not become a shell or
-    /// HTTP proxy.
+    /// A workspace is a direct SSH capability. Relay dispatch keeps its governed
+    /// control loop, but it does not become a shell or HTTP proxy — V1's Work
+    /// Thread is a read-only activity log, so this never opens the live
+    /// interactive terminal (`SessionView`), regardless of agent/host.
     private func openWorkspace(for agent: DispatchAgent?) {
-        if let hostID = agent?.hostID,
-           let uuid = UUID(uuidString: hostID),
-           let slot = fleetStore.slots.first(where: { $0.hostID.uuidString == uuid.uuidString }) {
-            selectFleetSlot(slot.id)
-            isShowingLiveSession = true
-        } else if agent?.id.hasPrefix("e2e|") == true || agent?.hostID == nil {
-            presentRelayWorkspace()
-        } else if activeSessionViewModel != nil {
-            isShowingLiveSession = true
-        } else {
-            presentRelayWorkspace()
-        }
+        presentRelayWorkspace()
     }
 
     /// A relay-backed agent has no live SSH terminal, but a paired relay can still
@@ -1333,6 +1275,21 @@ public struct AppRoot: View {
         )
     }
 
+    /// Human-readable labels for `installedAgentVendors`, same mapping/fallback as
+    /// the dispatch-agent picker (see the `agentID switch` above) so the Machines
+    /// relay card converges to real installed agents once the host reports them.
+    private var relayAgentDisplayLabels: [String] {
+        let vendors = installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
+        return vendors.map { agentID in
+            switch agentID {
+            case "claudeCode": return "Claude Code"
+            case "codex": return "Codex"
+            case "kimi": return "Kimi"
+            default: return "OpenCode"
+            }
+        }
+    }
+
     private func fleetDestination(env: AppEnvironment) -> some View {
         FleetView(
             store: fleetStore,
@@ -1345,23 +1302,26 @@ public struct AppRoot: View {
             onReconnect: { host in openSession(host: host, env: env) },
             onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
             onQuotaGuard: { showingQuotaGuard = true },
-            onOpenTerminal: { slotID in
-                selectFleetSlot(slotID)
-                isShowingLiveSession = true
-            },
+            // V1's Work Thread/Machines are a read-only activity log — the live
+            // interactive terminal (SessionView) is deferred to V2 and intentionally
+            // not wired into nav here. FleetView hides/no-ops its terminal-drill-in
+            // affordances when this is nil.
             onOpenThread: { id in
                 sidebarState.navigate(to: .thread(id: id))
             },
             relayActive: relayBridgeIsActive,
             relayHostName: relayHostName,
-            relayAgentLabels: relayBridgeIsActive ? ["Claude Code", "Codex", "OpenCode", "Kimi"] : [],
+            // Mirrors the dispatch-agent picker's own fallback (line ~893): show all
+            // four only until the host reports what's actually installed, instead of
+            // a permanent hardcoded list that never reflects the real host.
+            relayAgentLabels: relayBridgeIsActive ? relayAgentDisplayLabels : [],
             onOpenRelayChat: { sidebarState.navigate(to: .newChat) }
         )
         .id(workspacesRevision)
     }
 
     /// Stop every running agent: disconnect SSH sessions and send a relay stop for
-    /// each non-terminal run. Shared by Settings and the Governance home.
+    /// each non-terminal run.
     private func performEmergencyStop() {
         Task {
             for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
@@ -1387,48 +1347,6 @@ public struct AppRoot: View {
         return lines.joined(separator: "\n")
     }
 
-    private func governanceDestination(env: AppEnvironment) -> some View {
-        let stats = GovernanceStats(
-            hostCount: fleetStore.slots.count,
-            policyActive: true,
-            auditCount: 0,
-            auditChainVerified: false,
-            presetNames: [],
-            providerCount: dispatchAgents().count,
-            roleLabel: "owner"
-        )
-        return GovernanceHomeView(
-            stats: stats,
-            onEmergencyStop: { performEmergencyStop() },
-            onOpenSidebar: openDrawer,
-            destination: { route in
-                switch route {
-                case .policy:
-                    return AnyView(PolicyHomeView(
-                        hosts: ["All hosts"],
-                        onApplyPreset: { preset, _ in
-                            let actions = bridgeSessionActions()
-                            Task { try? await actions.savePolicyYAML(preset.ruleYAML) }
-                        },
-                        onApplyNormalized: { policy in
-                            let actions = bridgeSessionActions()
-                            Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
-                        }
-                    ))
-                case .audit:
-                    return AnyView(AuditVerifyExportView(repository: env.auditRepo))
-                case .trust:
-                    return AnyView(TrustTeamView(
-                        relayEncrypted: relayBridgeIsActive,
-                        relayHost: relayHostName,
-                        onOpenDevices: { sidebarState.navigate(to: .settings) },
-                        onOpenRelay: { sidebarState.navigate(to: .settings) }
-                    ))
-                }
-            }
-        )
-    }
-
     private func settingsDestination(env: AppEnvironment) -> some View {
         SettingsWithLibraryView(
             viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
@@ -1447,7 +1365,6 @@ public struct AppRoot: View {
                     try? await db.wipeAll()
                     await MainActor.run {
                         UserDefaults.standard.removeObject(forKey: "dev.lancer.debugSeeded")
-                        appLockEnabled = false
                         sidebarState.navigate(to: .home)
                         onboardingSeen = false
                     }
@@ -1457,7 +1374,15 @@ public struct AppRoot: View {
             onAccountSignedOut: {
                 onboardingSeen = false
             },
-            sidebarShellState: sidebarState
+            sidebarShellState: sidebarState,
+            onApplyPolicyPreset: { preset, _ in
+                let actions = bridgeSessionActions()
+                Task { try? await actions.savePolicyYAML(preset.ruleYAML) }
+            },
+            onApplyNormalizedPolicy: { policy in
+                let actions = bridgeSessionActions()
+                Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
+            }
         )
     }
 
@@ -1506,16 +1431,19 @@ public struct AppRoot: View {
             inboxDestination(env: env)
         case .machines:
             fleetDestination(env: env)
-        case .governance:
-            governanceDestination(env: env)
         case .settings:
             settingsDestination(env: env)
-        case .observedSession(let sessionId, let title, let hostName):
+        case .observedSession(let sessionId, let title, let hostName, let vendor, let cwd):
             ObservedSessionView(
                 sessionId: sessionId,
                 title: title,
                 hostName: hostName,
+                vendor: vendor,
+                cwd: cwd,
                 loadTranscript: { sinceLine in await fetchObservedTranscript(sessionId: sessionId, sinceLine: sinceLine) },
+                onSendFollowUp: { prompt in
+                    await sendObservedSessionFollowUp(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
+                },
                 onBack: { sidebarState.navigate(to: .home) }
             )
         }
@@ -1525,7 +1453,7 @@ public struct AppRoot: View {
         LancerHomeView(
             fleetStore: fleetStore,
             recentThreads: sidebarState.recentThreads,
-            pendingApprovalCount: activeInboxViewModel.approvals.filter(\.isPending).count,
+            pendingApprovalCount: fleetStore.attentionItems.count,
             profileEmail: env.accountSession.email,
             // Show a paired relay host whenever a pairing is stored — not only while
             // the bridge is momentarily `.paired` — so a known machine doesn't vanish
@@ -1542,7 +1470,9 @@ public struct AppRoot: View {
                 sidebarState.navigate(to: .observedSession(
                     sessionId: session.sessionId,
                     title: session.title,
-                    hostName: relayHostName ?? "Mac"
+                    hostName: relayHostName ?? "Mac",
+                    vendor: session.provider,
+                    cwd: session.cwd
                 ))
             },
             loadSessions: { await loadObservedSessions() }
@@ -1552,7 +1482,6 @@ public struct AppRoot: View {
     /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
     /// "Sessions on this Mac" section. Mirrors `loadAgentCommands`: prefers a
     /// connected SSH slot's daemon channel, falls back to the relay bridge.
-    /// Read-only — Phase 1 has no send/stop control over these.
     private func loadObservedSessions() async -> [ObservedSession] {
         if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
                 ?? fleetStore.slots.first,
@@ -1578,6 +1507,24 @@ public struct AppRoot: View {
             return result
         }
         return ([], 0, false)
+    }
+
+    /// Sends a follow-up prompt into an observed (not Lancer-dispatched) session
+    /// by its exact vendor session id + cwd. Only wired over a direct daemon
+    /// connection (an SSH-connected fleet slot) for now — the relay path has no
+    /// equivalent RPC yet, so a relay-only setup surfaces as an honest "no
+    /// connection" error rather than silently no-op'ing.
+    private func sendObservedSessionFollowUp(vendor: String, sessionId: String, cwd: String, prompt: String) async -> DispatchResult {
+        guard let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first
+        else {
+            return DispatchResult(status: "error", message: "No direct connection to this machine.")
+        }
+        do {
+            return try await slot.channel.continueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
+        } catch {
+            return DispatchResult(status: "error", message: error.localizedDescription)
+        }
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {
@@ -2141,32 +2088,6 @@ private struct MachineConnectionChooser: View {
     }
 }
 
-private struct LaunchLockView: View {
-    let onUnlock: () async -> Void
-    @Environment(\.lancerTokens) private var t
-
-    var body: some View {
-        VStack(spacing: 28) {
-            Spacer()
-            PixelAvatar(seed: "lancer-lock", size: 64)
-                .opacity(0.7)
-            VStack(spacing: 8) {
-                Text("Lancer")
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(t.text1)
-                Text("Authenticate to continue")
-                    .font(.subheadline)
-                    .foregroundStyle(t.text3)
-            }
-            Button("Unlock") { Task { await onUnlock() } }
-                .buttonStyle(.borderedProminent)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(t.surf0)
-    }
-}
-
 private struct SettingsWithLibraryView: View {
     let viewModel: SettingsViewModel
     let syncEngine: SyncEngine?
@@ -2184,6 +2105,8 @@ private struct SettingsWithLibraryView: View {
     // Sidebar back navigation — use @Bindable so the mutation goes through the
     // observable directly, avoiding closure-capture staleness through deep view trees.
     @Bindable var sidebarShellState: SidebarShellState
+    var onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil
+    var onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
     @State private var showLimits = false
 
     var body: some View {
@@ -2204,7 +2127,9 @@ private struct SettingsWithLibraryView: View {
             // Settings is a top-level sidebar destination. The compact shell
             // provides the single glass navigation button, so suppress an
             // in-content back affordance here.
-            onBack: nil
+            onBack: nil,
+            onApplyPolicyPreset: onApplyPolicyPreset,
+            onApplyNormalizedPolicy: onApplyNormalizedPolicy
         )
         .sheet(isPresented: $showLimits) {
             if let store = quotaGuardStore {

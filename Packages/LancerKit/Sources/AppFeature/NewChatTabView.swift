@@ -8,7 +8,6 @@ import PersistenceKit
 import SSHTransport
 import LancerCore
 import InboxFeature
-import SecurityKit
 
 // MARK: - DispatchAgent
 
@@ -635,7 +634,8 @@ public struct NewChatTabView: View {
                             // The run's combined output stream isn't split per block;
                             // attach it to the last (most recent) command card.
                             output: index == run.blocks.count - 1 ? run.text : "",
-                            state: isLast && isErrorState ? .error : (block.status == .running ? .running : .done)
+                            state: isLast && isErrorState ? .error : (block.status == .running ? .running : .done),
+                            isShellSession: DarkTerminalBlockCard.isShellToolName(block.toolName)
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -693,16 +693,14 @@ public struct NewChatTabView: View {
     @ViewBuilder
     private func inlineApprovalCard(for approval: Approval) -> some View {
         let summary = ApprovalSummary.derive(from: approval)
-        let isCritical = approval.risk >= .critical
         InboxApprovalCard(
             agentKey: agentKeyForSource(approval.agent),
             agentName: agentNameForSource(approval.agent),
             timeLabel: approval.createdAt.formatted(date: .omitted, time: .shortened),
             question: approval.kind == .askQuestion ? approval.question : summary.headline,
             toolName: approval.toolName,
-            args: approval.command ?? approval.toolInput,
+            args: (approval.command ?? approval.toolInput).map { Redactor.shared.redact($0).redacted },
             risk: approval.risk.rawValue,
-            isCritical: isCritical,
             onDeny: {
                 Haptics.warning()
                 // Keep isAwaitingApproval set so the transcript swaps to the denied
@@ -710,23 +708,9 @@ public struct NewChatTabView: View {
                 onDecideApproval(approval.id, .rejected)
             },
             onApprove: {
-                // Critical approvals must clear biometric auth before committing, same
-                // gate InboxView's pendingCard/detailSheet already enforce — without this,
-                // this inline chat-thread card was a single-tap bypass of that gate for
-                // the same approval (it differs only in WHERE the user encounters it).
-                Task {
-                    if isCritical {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
-                        catch {
-                            if let ce = error as? LancerCore.LancerError, case .cancelled = ce { return }
-                            Haptics.error()
-                            return
-                        }
-                    }
-                    Haptics.success()
-                    isAwaitingApproval = false
-                    onDecideApproval(approval.id, .approved)
-                }
+                Haptics.success()
+                isAwaitingApproval = false
+                onDecideApproval(approval.id, .approved)
             }
         )
         .frame(maxWidth: .infinity, alignment: .leading)

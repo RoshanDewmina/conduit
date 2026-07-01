@@ -107,6 +107,61 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 	}
 }
 
+// resumeArgv builds an explicit, shell-free argv that resumes the EXACT vendor
+// session identified by sessionID (not "most recent in cwd", unlike
+// continueArgv) with a new prompt. This targets a session discovered on disk
+// by session_index.go's scan — started directly in a terminal, never
+// dispatched by Lancer — so a phone-initiated follow-up must land in that
+// precise session even when several terminal sessions share one project dir.
+// Mirrors agentArgv/continueArgv (same streaming flags + per-vendor gating).
+// ok=false means the agent is unknown or doesn't support resume-by-exact-id.
+//
+// Per-vendor resume-by-id flag confirmed against the locally installed CLI
+// 2026-06-30 (claude 2.1.197, codex-cli 0.135.0, opencode 1.17.11, kimi
+// 0.18.0 --help only — see continueRun's caller for the live-smoke caveat):
+//   - claude:   -r/--resume <sessionId>  (verified live: same session_id retained)
+//   - codex:    exec resume <SESSION_ID> [PROMPT]  (verified live: same thread_id retained)
+//   - opencode: run -s/--session <id>  (verified live: same sessionID retained)
+//   - kimi:     -S/--session <id>  (from --help only; kimi CLI errored on an
+//     unrelated account/billing check during this session, so resume-by-id was
+//     not live-smoke-tested — re-verify before relying on it in production)
+func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
+	switch normalizeAgentSource(agent) {
+	case "claudeCode":
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", sessionID, "-p", prompt}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
+	case "codex":
+		// codex exec resume <SESSION_ID> [PROMPT] resumes that exact conversation
+		// (positional session id, not a flag). Same headless-bypass gating as
+		// agentArgv/continueArgv — see docs/audit/CODEX_GATING.md.
+		argv := []string{"codex", "exec", "resume", sessionID, "--json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		if os.Getenv("LANCER_CODEX_UNSAFE") == "1" {
+			argv = append(argv, "--dangerously-bypass-approvals-and-sandbox")
+		}
+		return append(argv, prompt), true
+	case "kimi":
+		argv := []string{"kimi", "--session", sessionID, "--prompt", prompt, "--output-format", "stream-json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv, true
+	case "opencode":
+		argv := []string{"opencode", "run", "--session", sessionID, "--format", "json"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return append(argv, prompt), true
+	default:
+		return nil, false
+	}
+}
+
 type dispatchParams struct {
 	Agent     string  `json:"agent"`
 	CWD       string  `json:"cwd"`
@@ -1144,5 +1199,81 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 	d.runs[id] = &dispatchRun{ID: id, Agent: agent, Prompt: prompt, CWD: cwd, Model: model, Status: "running", BudgetUSD: budget, handle: handle}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "continue-launched", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule, ApprovalID: id})
+	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
+}
+
+// observedSessionContinueParams targets one specific on-disk vendor session —
+// discovered via session_index.go's scan (Source: "transcriptObserved" /
+// "providerManaged") and reported to the phone by agent.sessions.list — for a
+// phone-initiated follow-up prompt. Unlike continueRun's fallback (agent/cwd
+// recovered from the phone's persisted conversation, "--continue" = most
+// recent session in a directory), this always carries the EXACT sessionId +
+// cwd the phone already has from the session list, because a user can have
+// multiple terminal sessions open in the same project directory and "most
+// recent" would silently target the wrong one.
+type observedSessionContinueParams struct {
+	Vendor    string  `json:"vendor"`
+	SessionID string  `json:"sessionId"`
+	CWD       string  `json:"cwd"`
+	Prompt    string  `json:"prompt"`
+	Model     string  `json:"model"`
+	BudgetUSD float64 `json:"budgetUSD"`
+}
+
+// resumeObservedSession sends a follow-up prompt into a session that was
+// started directly in a terminal on the host — never dispatched by Lancer, so
+// the daemon has no in-memory dispatchRun for it — by its exact vendor session
+// ID. It re-passes the same policy + budget gates dispatch/continueRun use (a
+// phone-supplied follow-up prompt is new attacker-influenceable input) and,
+// once allowed, launches as a FRESH process under a NEW runId. From that point
+// the resumed turn is a normal Lancer-tracked run: output streams back under
+// the new runId exactly like dispatch/continueRun, and it can itself be
+// continued later via agent.run.continue.
+func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
+	argv, ok := resumeArgv(p.Vendor, p.SessionID, p.Prompt, p.Model)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "resume-by-id not supported for agent: " + p.Vendor}
+	}
+
+	// Budget gate (shared daily total vs this run's cap).
+	d.mu.Lock()
+	spent := d.spentUSD
+	d.mu.Unlock()
+	if p.BudgetUSD > 0 && spent >= p.BudgetUSD {
+		audit(AuditEntry{Action: "observed-continue-budget-exceeded", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt})
+		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
+	}
+
+	// Policy gate (same risk scoring as dispatch/continueRun).
+	event := ApprovalEvent{
+		ApprovalID: newUUID(),
+		Agent:      normalizeAgentSource(p.Vendor),
+		Kind:       "command",
+		Command:    "[observed-continue] " + strings.Join(argv, " "),
+		CWD:        p.CWD,
+		Risk:       d.launchRisk(argv),
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	effect, rule, fromDefault := evalFn(event)
+	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
+	switch effect {
+	case "deny":
+		audit(AuditEntry{Action: "observed-continue-denied", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
+	case "ask":
+		audit(AuditEntry{Action: "observed-continue-needs-approval", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+	}
+
+	id := newUUID()
+	handle, err := d.launch(argv, p.CWD, id, d.emit)
+	if err != nil {
+		audit(AuditEntry{Action: "observed-continue-error", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	d.mu.Lock()
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
+	d.mu.Unlock()
+	audit(AuditEntry{Action: "observed-continue-launched", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }

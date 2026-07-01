@@ -9,7 +9,7 @@ import VisionKit
 /// falls back to a raw `AVCaptureSession` + `AVCaptureMetadataOutput` pipeline
 /// on devices/OS where the data scanner is unavailable. The Simulator has no
 /// camera, so both paths report unavailable there — callers must offer a
-/// manual-code entry fallback (see `BridgePairingView`).
+/// manual-code entry fallback (see `OnboardingScanScreen`'s `onEnterCodeInstead`).
 struct QRScannerView: View {
     /// Called with the decoded QR string on the first successful scan.
     var onScan: (String) -> Void

@@ -10,7 +10,6 @@ public struct InboxApprovalCard: View {
     let toolName: String?
     let args: String?
     let risk: Int
-    let isCritical: Bool
     let onDeny: () -> Void
     let onApprove: () -> Void
     let onOpenDetails: () -> Void
@@ -26,7 +25,6 @@ public struct InboxApprovalCard: View {
         toolName: String? = nil,
         args: String? = nil,
         risk: Int,
-        isCritical: Bool = false,
         onDeny: @escaping () -> Void,
         onApprove: @escaping () -> Void,
         onOpenDetails: @escaping () -> Void = {}
@@ -38,7 +36,6 @@ public struct InboxApprovalCard: View {
         self.toolName = toolName
         self.args = args
         self.risk = risk
-        self.isCritical = isCritical
         self.onDeny = onDeny
         self.onApprove = onApprove
         self.onOpenDetails = onOpenDetails
@@ -69,12 +66,6 @@ public struct InboxApprovalCard: View {
                 .font(.dsSansPt(14))
                 .foregroundStyle(t.text2)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if isCritical {
-                Label("Face ID required to approve", systemImage: "faceid")
-                    .font(.dsSansPt(13, weight: .medium))
-                    .foregroundStyle(t.warn)
-            }
 
             if let commandPreview {
                 VStack(spacing: 0) {

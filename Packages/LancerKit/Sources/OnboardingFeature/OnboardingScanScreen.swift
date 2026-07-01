@@ -25,7 +25,7 @@ public struct OnboardingScanScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 32)
 
-                Text("SCAN TO PAIR")
+                Text("SCAN TO LINK THIS DEVICE")
                     .font(.dsMonoPt(10))
                     .tracking(10 * 0.12)
                     .foregroundStyle(t.text3)
@@ -48,7 +48,7 @@ public struct OnboardingScanScreen: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 20)
 
-                Text("Point at the QR code printed in your terminal")
+                Text("Point at the device-binding QR code from your account settings")
                     .font(.dsSansPt(13.5))
                     .foregroundStyle(t.text3)
                     .multilineTextAlignment(.center)

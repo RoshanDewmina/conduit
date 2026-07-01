@@ -379,11 +379,10 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: DriftReport.self)
     }
 
-    // MARK: - Observed sessions (watch-only)
+    // MARK: - Observed sessions
 
     /// Lists Claude Code (and other vendor) sessions the daemon knows about for
     /// this host — Lancer-dispatched, vendor-managed, or transcript-observed.
-    /// Read-only; Phase 1 has no send/stop control over these.
     public func listSessions() async throws -> [ObservedSession] {
         let data = try await sendRPC(method: "agent.sessions.list", params: [String: String]())
         return try Self.decodeResult(data, as: SessionsListResult.self, dateDecoding: .iso8601).sessions
@@ -406,6 +405,24 @@ public actor DaemonChannel {
         )
         let result = try Self.decodeResult(data, as: SessionsTranscriptResult.self, dateDecoding: .iso8601)
         return (result.messages, result.nextLine, result.resetRequired)
+    }
+
+    /// Sends a follow-up prompt into a session that was started directly in a
+    /// terminal on the host (never dispatched by Lancer) — targeted by its exact
+    /// vendor session ID + cwd, not "most recent in directory", because a host can
+    /// have multiple terminal sessions open in the same project dir. The daemon
+    /// resumes that exact session with the vendor CLI's resume-by-id flag under a
+    /// NEW runId; output then streams back under that runId via the existing
+    /// agent.run.output/agent.run.status path, same as `continueRun`.
+    public func continueObservedSession(
+        vendor: String, sessionId: String, cwd: String, prompt: String,
+        model: String? = nil, budgetUSD: Double? = nil
+    ) async throws -> DispatchResult {
+        var params: [String: Any] = ["vendor": vendor, "sessionId": sessionId, "cwd": cwd, "prompt": prompt]
+        if let model, !model.isEmpty { params["model"] = model }
+        if let budgetUSD { params["budgetUSD"] = budgetUSD }
+        let data = try await sendRPC(method: "agent.observedSession.continue", params: params)
+        return try Self.decodeResult(data, as: DispatchResult.self)
     }
 
     // MARK: - CI Events

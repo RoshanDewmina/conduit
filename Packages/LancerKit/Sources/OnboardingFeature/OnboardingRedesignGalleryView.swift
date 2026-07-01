@@ -16,12 +16,9 @@ import SSHTransport
 /// Visuals are a faithful reproduction of the `Lancer App.dc.html` onboarding board:
 /// a terracotta editorial hero (grid texture + lavender pixel mark, Instrument Serif
 /// italic kicker over a Bricolage display title), then a per-step block — value rows,
-/// pairing digit-boxes, or policy cards — with a black/orange CTA and an always-present
-/// "I've already set up Lancer" link.
+/// pairing digit-boxes, or policy cards — with a black/orange CTA.
 public struct OnboardingRedesignView: View {
     let onContinue: () -> Void
-    let onAlreadyUseLancer: () -> Void
-    let onSetupWorkspace: () -> Void
     /// Optional: finish onboarding and route the user to "Add a machine" (SSH).
     /// Provided by the app shell; when nil the SSH step's primary action just
     /// finishes onboarding like Skip.
@@ -47,16 +44,12 @@ public struct OnboardingRedesignView: View {
 
     public init(
         onContinue: @escaping () -> Void,
-        onAlreadyUseLancer: @escaping () -> Void = {},
-        onSetupWorkspace: @escaping () -> Void = {},
         onEnableSSH: (() -> Void)? = nil,
         relayClient: E2ERelayClient? = nil,
         accountSession: AccountSessionController? = nil,
         startStep: Int = 0
     ) {
         self.onContinue = onContinue
-        self.onAlreadyUseLancer = onAlreadyUseLancer
-        self.onSetupWorkspace = onSetupWorkspace
         self.onEnableSSH = onEnableSSH
         self.accountSession = accountSession
         let resolved = relayClient ?? E2ERelayClient(
@@ -202,6 +195,16 @@ public struct OnboardingRedesignView: View {
     // MARK: Actions
 
     private func advanceOrFinish() {
+        // "Pair & continue" previously advanced unconditionally, so a user could
+        // finish onboarding having never actually paired a machine — landing on an
+        // empty Home with no way back to the code field. First tap while unpaired
+        // shows a real warning (reusing `pairingMessage`, previously wired but never
+        // set) instead of silently proceeding; a second tap explicitly skips.
+        if current.kind == .valuePair, client.pairingState != .paired, pairingMessage == nil {
+            pairingMessage = "No machine paired yet. Tap Pair & continue again to skip for now — you can pair later from Settings."
+            Haptics.warning()
+            return
+        }
         if step < steps.count - 1 {
             Haptics.selection()
             withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step += 1 }
@@ -226,6 +229,7 @@ public struct OnboardingRedesignView: View {
     /// (retype) cleanly replaces the channel.
     private func applyPairingCode(_ code: String, relay: URL?) {
         guard code.count == 6 else { return }
+        pairingMessage = nil                // clear any stale skip-warning
         client.beginPairingSession()        // fresh keypair for this attempt
         client.relayURL = relay ?? RelaySettings.url()
         client.pairingCode = code
@@ -534,7 +538,7 @@ private struct OnboardingRedesignStep: Identifiable {
 }
 
 #Preview("Onboarding redesign") {
-    OnboardingRedesignView(onContinue: {}, onSetupWorkspace: {})
+    OnboardingRedesignView(onContinue: {})
         .environment(\.lancerTokens, .light)
 }
 #endif

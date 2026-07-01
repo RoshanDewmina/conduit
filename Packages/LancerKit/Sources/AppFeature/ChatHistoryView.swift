@@ -147,13 +147,15 @@ public struct ChatHistoryView: View {
         VStack(alignment: .leading, spacing: 6) {
             // History records prose only (no tool blocks are persisted), so a
             // recorded reply is a plain bubble. A failed turn keeps the dark
-            // terminal card so its error reads as terminal output.
+            // output card for visual consistency, but never claims shell chrome —
+            // history has no way to know whether the failure ever touched a shell.
             if turn.status == .failed {
                 DarkTerminalBlockCard(
                     host: hostName,
                     command: nil,
                     output: text.isEmpty ? "(no output recorded)" : text,
-                    state: .error
+                    state: .error,
+                    isShellSession: false
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {

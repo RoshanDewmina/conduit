@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import LocalAuthentication
 import LancerCore
 
 // MARK: - InboxApprovalDetail
@@ -22,7 +21,6 @@ public struct InboxApprovalDetail: View {
     let args: String?
     let command: String?
     let risk: Int
-    let isCritical: Bool
     let matchedRule: String?
     /// Non-nil when the approval is already resolved — show read-only history mode.
     let resolvedDecision: Approval.Decision?
@@ -50,7 +48,6 @@ public struct InboxApprovalDetail: View {
         args: String? = nil,
         command: String? = nil,
         risk: Int,
-        isCritical: Bool = false,
         matchedRule: String? = nil,
         resolvedDecision: Approval.Decision? = nil,
         onDeny: (() -> Void)? = nil,
@@ -72,7 +69,6 @@ public struct InboxApprovalDetail: View {
         self.args = args
         self.command = command
         self.risk = risk
-        self.isCritical = isCritical
         self.matchedRule = matchedRule
         self.resolvedDecision = resolvedDecision
         self.onDeny = onDeny
@@ -278,25 +274,6 @@ public struct InboxApprovalDetail: View {
             .tint(t.text3)
         }
 
-        // Biometric gate banner for CRITICAL — Approve triggers LAContext, not a static gate
-        if isCritical {
-            HStack(spacing: 8) {
-                Image(systemName: "faceid")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.orange)
-                Text("Face ID required to approve this action.")
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(.orange)
-            }
-            .padding(12)
-            .background(.orange.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(.orange.opacity(0.3), lineWidth: 1)
-            )
-        }
-
         // Action buttons — only shown when a question has no discrete choices
         let hasChoices = question != nil && !(choices ?? []).isEmpty
         if !hasChoices {
@@ -306,10 +283,10 @@ public struct InboxApprovalDetail: View {
                         DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
                     }
                     DSButton(
-                        isCritical ? "Authenticate to Approve" : "Approve",
+                        "Approve",
                         variant: .primary, size: .md, mono: true, fullWidth: true
                     ) {
-                        handleApprove()
+                        onApprove?()
                     }
                     .disabled(risk == Approval.Risk.medium.rawValue && !evidenceConfirmed)
                 }
@@ -324,32 +301,6 @@ public struct InboxApprovalDetail: View {
     }
 
     // MARK: - Helpers
-
-    private func handleApprove() {
-        guard let onApprove else { return }
-        if isCritical {
-            Task { @MainActor in
-                guard await authenticateWithBiometrics() else { return }
-                onApprove()
-            }
-        } else {
-            onApprove()
-        }
-    }
-
-    private func authenticateWithBiometrics() async -> Bool {
-        let ctx = LAContext()
-        var err: NSError?
-        guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) else {
-            return false
-        }
-        return await withCheckedContinuation { cont in
-            ctx.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: "Authenticate to approve this agent action"
-            ) { ok, _ in cont.resume(returning: ok) }
-        }
-    }
 
     private var evidenceCheckToggle: some View {
         HStack(spacing: 10) {
@@ -419,14 +370,13 @@ public struct InboxApprovalDetail: View {
         toolName: "str_replace_editor",
         args: "AuthView.swift",
         risk: 1,
-        isCritical: false,
         onDeny: {},
         onApprove: {}
     )
     .lancerTokens()
 }
 
-#Preview("Fixture 2 – Critical approval + biometric gate") {
+#Preview("Fixture 2 – Critical approval") {
     InboxApprovalDetail(
         agentKey: .claudeCode,
         agentName: "Claude Code",
@@ -437,9 +387,8 @@ public struct InboxApprovalDetail: View {
         toolName: "bash",
         args: "npm run migrate && rm -rf node_modules/.cache",
         risk: 3,
-        isCritical: true,
         onDeny: {},
-        onApprove: { /* fires only after LAContext.evaluatePolicy succeeds */ }
+        onApprove: {}
     )
     .lancerTokens()
 }
@@ -454,7 +403,6 @@ public struct InboxApprovalDetail: View {
         question: "Should I use async/await or completion handlers for the new API?",
         choices: ["async/await", "Completion handlers", "Ask me later"],
         risk: 0,
-        isCritical: false,
         onChoose: { idx in print("Choice \(idx) selected") }
     )
     .lancerTokens()
@@ -471,7 +419,6 @@ public struct InboxApprovalDetail: View {
         toolName: "str_replace_editor",
         args: "AuthView.swift",
         risk: 1,
-        isCritical: false,
         resolvedDecision: .approved
     )
     .lancerTokens()
@@ -488,7 +435,6 @@ public struct InboxApprovalDetail: View {
         toolName: "bash",
         args: "npm run migrate",
         risk: 2,
-        isCritical: false,
         resolvedDecision: .expired
     )
     .lancerTokens()

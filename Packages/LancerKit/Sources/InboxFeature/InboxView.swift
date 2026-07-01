@@ -6,7 +6,6 @@ import AgentKit
 import DesignSystem
 import DiffKit
 import DiffFeature
-import SecurityKit
 
 @MainActor @Observable
 public class InboxViewModel {
@@ -242,7 +241,6 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
-        let isCritical = approval.risk.rawValue >= 3
         InboxBoardCard(
             bandLabel: bandLabel(for: approval),
             agentInitial: agentInitial(approval.agent),
@@ -254,26 +252,12 @@ public struct InboxView: View {
             bodyLead: bodyLead(for: approval),
             codeFragment: codeFragment(for: approval),
             bodyTail: bodyTail(for: approval),
-            isCritical: isCritical,
             primaryLabel: approval.kind == .askQuestion ? "Answer" : "Approve",
             secondaryLabel: approval.kind == .patch ? "Review diff" : "Deny",
             secondaryVariant: approval.kind == .patch ? .secondary : .destructive,
             onPrimary: {
-                if isCritical {
-                    Task {
-                        do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
-                        catch {
-                            if let ce = error as? LancerCore.LancerError, case .cancelled = ce { return }
-                            Haptics.error()
-                            return
-                        }
-                        vm.decide(approval.id, decision: .approved)
-                        Haptics.success()
-                    }
-                } else {
-                    vm.decide(approval.id, decision: .approved)
-                    Haptics.success()
-                }
+                vm.decide(approval.id, decision: .approved)
+                Haptics.success()
             },
             onSecondary: {
                 // Patch review opens the detail sheet (with diff); everything else denies.
@@ -356,7 +340,10 @@ public struct InboxView: View {
         case .patch:
             return approval.toolName ?? "the working tree"
         default:
-            return approval.command ?? approval.toolName ?? summarizedToolInput(approval)
+            guard let command = approval.command else {
+                return approval.toolName ?? summarizedToolInput(approval)
+            }
+            return Redactor.shared.redact(command).redacted
         }
     }
 
@@ -374,7 +361,6 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func detailSheet(_ approval: Approval) -> some View {
-        let isCritical = approval.risk.rawValue >= 3
         let br = approval.blastRadius ?? ApprovalBlastRadius(matchedRule: "policy rule")
         VStack(spacing: 0) {
             InboxApprovalDetail(
@@ -386,11 +372,10 @@ public struct InboxView: View {
                 timeLabel: pendingTimeLabel(approval),
                 summary: ApprovalSummary.derive(from: approval).headline,
                 question: approval.kind == .askQuestion ? (approval.question ?? "What should I do next?") : nil,
-                toolName: approval.toolName ?? approval.command,
+                toolName: approval.toolName ?? approval.command.map { Redactor.shared.redact($0).redacted },
                 args: approval.kind != .askQuestion ? summarizedToolInput(approval) : nil,
                 command: approval.command,
                 risk: approval.risk.rawValue,
-                isCritical: isCritical,
                 matchedRule: br.matchedRule,
                 onDeny: {
                     vm.decide(approval.id, decision: .rejected)
@@ -402,38 +387,18 @@ public struct InboxView: View {
                     detailApproval = nil
                 } : nil,
                 onAllowAlways: {
-                    Task {
-                        if isCritical {
-                            do { try await BiometricGate.shared.unlock(reason: "Authenticate to create an allow-always rule") }
-                            catch {
-                                if let ce = error as? LancerCore.LancerError, case .cancelled = ce { return }
-                                Haptics.error()
-                                return
-                            }
-                        }
-                        detailApproval = nil
-                        scopeSheetApproval = approval
-                    }
+                    detailApproval = nil
+                    scopeSheetApproval = approval
                 },
                 onApprove: {
-                    Task {
-                        if isCritical {
-                            do { try await BiometricGate.shared.unlock(reason: "Authenticate to approve a critical action") }
-                            catch {
-                                if let ce = error as? LancerCore.LancerError, case .cancelled = ce { return }
-                                Haptics.error()
-                                return
-                            }
-                        }
-                        vm.decide(approval.id, decision: .approved)
-                        Haptics.success()
-                        detailApproval = nil
-                    }
+                    vm.decide(approval.id, decision: .approved)
+                    Haptics.success()
+                    detailApproval = nil
                 }
             )
 
             if approval.kind == .patch, let patch = approval.patch {
-                let diff = UnifiedDiffParser.parse(patch)
+                let diff = UnifiedDiffParser.parse(Redactor.shared.redact(patch).redacted)
                 if !diff.files.isEmpty {
                     DiffView(diff: diff)
                         .frame(maxHeight: 280)
@@ -521,9 +486,11 @@ public struct InboxView: View {
 
     private func summarizedToolInput(_ approval: Approval) -> String? {
         guard let toolInput = approval.toolInput, !toolInput.isEmpty else {
-            return approval.patch ?? approval.command
+            guard let fallback = approval.patch ?? approval.command else { return nil }
+            return Redactor.shared.redact(fallback).redacted
         }
-        return toolInput.count > 240 ? String(toolInput.prefix(240)) + "…" : toolInput
+        let capped = toolInput.count > 240 ? String(toolInput.prefix(240)) + "…" : toolInput
+        return Redactor.shared.redact(capped).redacted
     }
 
     private func editedToolInputJSON(for approval: Approval, editedText: String) -> String {
@@ -830,7 +797,6 @@ private struct InboxBoardCard: View {
     let bodyLead: String
     let codeFragment: String?
     let bodyTail: String?
-    let isCritical: Bool
     let primaryLabel: String
     let secondaryLabel: String
     var secondaryVariant: DSButtonVariant = .destructive
@@ -897,12 +863,6 @@ private struct InboxBoardCard: View {
             }
 
             bodyLine
-
-            if isCritical {
-                Label("Face ID required to approve", systemImage: "faceid")
-                    .font(.dsSansPt(12, weight: .medium))
-                    .foregroundStyle(t.warn)
-            }
 
             HStack(spacing: 9) {
                 DSButton(secondaryLabel, variant: secondaryVariant, size: .lg, fullWidth: true) {

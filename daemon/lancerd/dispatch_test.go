@@ -93,6 +93,99 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 	}
 }
 
+func TestResumeArgv(t *testing.T) {
+	claude, ok := resumeArgv("claudeCode", "sess-123", "next step", "")
+	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", "sess-123", "-p", "next step"}
+	if !ok || !reflect.DeepEqual(claude, want) {
+		t.Fatalf("claude resume argv mismatch:\n got %v (ok=%v)\nwant %v", claude, ok, want)
+	}
+	codex, ok := resumeArgv("codex", "sess-123", "next step", "")
+	wantCodex := []string{"codex", "exec", "resume", "sess-123", "--json", "next step"}
+	if !ok || !reflect.DeepEqual(codex, wantCodex) {
+		t.Fatalf("codex resume argv mismatch:\n got %v (ok=%v)\nwant %v", codex, ok, wantCodex)
+	}
+	oc, ok := resumeArgv("opencode", "sess-123", "next step", "gpt-5")
+	wantOC := []string{"opencode", "run", "--session", "sess-123", "--format", "json", "--model", "gpt-5", "next step"}
+	if !ok || !reflect.DeepEqual(oc, wantOC) {
+		t.Fatalf("opencode resume argv mismatch:\n got %v (ok=%v)\nwant %v", oc, ok, wantOC)
+	}
+	kimi, ok := resumeArgv("kimi", "sess-123", "next step", "")
+	wantKimi := []string{"kimi", "--session", "sess-123", "--prompt", "next step", "--output-format", "stream-json"}
+	if !ok || !reflect.DeepEqual(kimi, wantKimi) {
+		t.Fatalf("kimi resume argv mismatch:\n got %v (ok=%v)\nwant %v", kimi, ok, wantKimi)
+	}
+	if _, ok := resumeArgv("bogus", "sess-123", "x", ""); ok {
+		t.Fatal("unknown agent must be unsupported")
+	}
+}
+
+func TestResumeObservedSessionLaunchesNewRun(t *testing.T) {
+	var launchedArgv []string
+	var launchedCWD string
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launchedArgv = argv
+		launchedCWD = cwd
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor:    "claudeCode",
+		SessionID: "sess-abc",
+		CWD:       "/repo/observed",
+		Prompt:    "keep going",
+	}, allowEval, noAudit)
+	if res.Status != "started" || res.RunID == "" {
+		t.Fatalf("want started with a runId, got %+v", res)
+	}
+	if launchedCWD != "/repo/observed" {
+		t.Fatalf("want launch cwd /repo/observed, got %q", launchedCWD)
+	}
+	if len(launchedArgv) == 0 || launchedArgv[0] != "claude" {
+		t.Fatalf("want claude argv, got %v", launchedArgv)
+	}
+	found := false
+	for i, a := range launchedArgv {
+		if a == "--resume" && i+1 < len(launchedArgv) && launchedArgv[i+1] == "sess-abc" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want --resume sess-abc in argv, got %v", launchedArgv)
+	}
+	run := d.runs[res.RunID]
+	if run == nil || run.CWD != "/repo/observed" {
+		t.Fatalf("want a tracked run with CWD=/repo/observed, got %+v", run)
+	}
+}
+
+func TestResumeObservedSessionDeniedDoesNotLaunch(t *testing.T) {
+	launched := false
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launched = true
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-abc", CWD: "/repo", Prompt: "next",
+	}, denyEval, noAudit)
+	if res.Status != "denied" {
+		t.Fatalf("want denied, got %q", res.Status)
+	}
+	if launched {
+		t.Fatal("a policy-denied observed-session continue must NOT launch")
+	}
+}
+
+func TestResumeObservedSessionUnknownVendor(t *testing.T) {
+	d := newDispatcher()
+	res := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "bogus", SessionID: "sess-abc", CWD: "/repo", Prompt: "next",
+	}, allowEval, noAudit)
+	if res.Status != "error" {
+		t.Fatalf("want error for unsupported vendor, got %q (%s)", res.Status, res.Message)
+	}
+}
+
 func TestContinueRunUnknownRun(t *testing.T) {
 	d := newDispatcher()
 	if res := d.continueRun("nope", "x", continueFallback{}, allowEval, noAudit); res.Status != "error" {

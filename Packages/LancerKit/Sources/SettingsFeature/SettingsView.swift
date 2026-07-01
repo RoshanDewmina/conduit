@@ -153,7 +153,6 @@ public final class SettingsViewModel {
 public struct TrustPrivacyView: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("appLockEnabled") private var appLockEnabled = false
 
     // Live trust controls consolidated into this surface (the "trust center"):
     // what's paired and how to revoke it, alongside the data-residency cards.
@@ -245,25 +244,6 @@ public struct TrustPrivacyView: View {
                         connRow(active: false, title: "Self-hosted relay", detail: "Run the relay container yourself for full control.")
                         hairline
                         connRow(active: false, title: "Direct / same network", detail: "Skip the relay entirely when on the same LAN.")
-                    }
-
-                    sectionHead("APP LOCK")
-                    card {
-                        Toggle(isOn: $appLockEnabled) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Require Face ID on launch")
-                                    .font(.dsSansPt(15, weight: .semibold))
-                                    .foregroundStyle(t.text)
-                                Text("Lock Lancer when it leaves the foreground. Your device passcode remains the system fallback.")
-                                    .font(.dsSansPt(12))
-                                    .foregroundStyle(t.text3)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .tint(t.accent)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-                        .accessibilityLabel("Require Face ID on launch")
                     }
 
                     sectionHead("HOW IT COMPARES")
@@ -480,6 +460,10 @@ public struct SettingsView: View {
     public var onAccountSignedOut: (() -> Void)? = nil
     private let accountSession: AccountSessionController?
     public var onBack: (() -> Void)? = nil
+    /// Policy preset/matrix apply, threaded from AppRoot (via `bridgeSessionActions`)
+    /// the same way the former standalone Governance root wired them.
+    public var onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil
+    public var onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
     @AppStorage(LancerAppearance.storageKey) private var colorSchemePref: String = LancerAppearance.light.rawValue
     @State private var showResetConfirmation = false
     @State private var purchases = PurchaseManager.shared
@@ -504,7 +488,9 @@ public struct SettingsView: View {
         onEmergencyStop: (() -> Void)? = nil,
         accountSession: AccountSessionController? = nil,
         onAccountSignedOut: (() -> Void)? = nil,
-        onBack: (() -> Void)? = nil
+        onBack: (() -> Void)? = nil,
+        onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil,
+        onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -523,6 +509,8 @@ public struct SettingsView: View {
         self.accountSession = accountSession
         self.onAccountSignedOut = onAccountSignedOut
         self.onBack = onBack
+        self.onApplyPolicyPreset = onApplyPolicyPreset
+        self.onApplyNormalizedPolicy = onApplyNormalizedPolicy
     }
 
     public var body: some View {
@@ -629,7 +617,11 @@ public struct SettingsView: View {
         sectionHead("POLICY & GOVERNANCE")
         VStack(spacing: 11) {
             NavigationLink {
-                AutonomyLevelView()
+                PolicyHomeView(
+                    hosts: ["All hosts"],
+                    onApplyPreset: onApplyPolicyPreset ?? { _, _ in },
+                    onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
+                )
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -640,7 +632,10 @@ public struct SettingsView: View {
                         Spacer(minLength: 0)
                         DSStatusDot(tone: .ok, pulse: true, size: 9)
                     }
-                    Text("All clear")
+                    // Real state, not a static "All clear" — every autonomy preset
+                    // (including "Always ask") is an enforcing policy, so this always
+                    // names which one is active rather than a decorative claim.
+                    Text(autonomyLabel)
                         .font(.dsDisplayPt(22, weight: .bold))
                         .foregroundStyle(t.accentFg)
                     Text("Rules enforcing across your connected agents.")
@@ -663,13 +658,25 @@ public struct SettingsView: View {
                 NavigationLink { AutonomyLevelView() } label: {
                     settingsGridCard("Default autonomy", icon: "slider.horizontal.3", tint: t.accent, detail: autonomyLabel)
                 }.buttonStyle(.plain)
+                NavigationLink {
+                    PolicyHomeView(
+                        hosts: ["All hosts"],
+                        onApplyPreset: onApplyPolicyPreset ?? { _, _ in },
+                        onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
+                    )
+                } label: {
+                    settingsGridCard("Policy presets", icon: "checklist", tint: t.accent, detail: "rules · cross-provider matrix")
+                }.buttonStyle(.plain)
                 if let auditRepository {
                     NavigationLink {
-                        AuditView(viewModel: AuditViewModel(repository: auditRepository), daemonChannel: daemonChannel)
+                        AuditVerifyExportView(repository: auditRepository)
                     } label: {
-                        settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "approval & run history")
+                        settingsGridCard("Enforcement log", icon: "list.bullet.clipboard", tint: t.text2, detail: "verify & export the audit trail")
                     }.buttonStyle(.plain)
                 }
+                NavigationLink { TeamRolesView() } label: {
+                    settingsGridCard("Team & roles", icon: "person.2", tint: t.text2, detail: "who can approve, edit, stop")
+                }.buttonStyle(.plain)
             }
 
             // Emergency stop — the operator's panic button. Halts every running

@@ -375,7 +375,7 @@ public struct FleetView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Running now: \(loop.goal)")
-        .accessibilityHint(focusSlot != nil && onOpenTerminal != nil ? "Opens the live terminal" : "")
+        .accessibilityHint("")
     }
 
     private var loopProgressBar: some View {
@@ -415,7 +415,9 @@ public struct FleetView: View {
                     rowDivider
                 }
 
-                openTerminalRow
+                if onOpenTerminal != nil {
+                    openTerminalRow
+                }
             }
             .background(t.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(t.border, lineWidth: 1))

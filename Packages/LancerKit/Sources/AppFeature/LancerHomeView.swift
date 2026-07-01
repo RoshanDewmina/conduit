@@ -3,6 +3,7 @@ import SwiftUI
 import LancerCore
 import DesignSystem
 import PersistenceKit
+import AgentKit
 
 public struct LancerHomeView: View {
     private let fleetStore: FleetStore
@@ -293,11 +294,10 @@ public struct LancerHomeView: View {
                     summary: ApprovalSummary.derive(from: capturedApproval).headline,
                     question: capturedApproval.question,
                     choices: capturedApproval.choices,
-                    toolName: capturedApproval.toolName ?? capturedApproval.command,
-                    args: capturedApproval.toolInput ?? capturedApproval.command,
+                    toolName: capturedApproval.toolName ?? capturedApproval.command.map { Redactor.shared.redact($0).redacted },
+                    args: (capturedApproval.toolInput ?? capturedApproval.command).map { Redactor.shared.redact($0).redacted },
                     command: capturedApproval.command,
                     risk: capturedApproval.risk.rawValue,
-                    isCritical: capturedApproval.risk == .critical,
                     matchedRule: capturedApproval.blastRadius?.matchedRule,
                     resolvedDecision: resolvedDecision,
                     onDeny: {
