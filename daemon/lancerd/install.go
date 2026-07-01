@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func runInstall() error {
@@ -166,6 +169,30 @@ func installLaunchd(binary, home string) error {
 	if err := os.MkdirAll(filepath.Dir(plistPath), 0755); err != nil {
 		return err
 	}
+
+	// launchd jobs don't inherit the shell env that ran `lancerd install` — a
+	// persistent daemon only ever sees env vars we write into its own plist.
+	// APPROVAL_RELAY_SECRET is required for postApprovalPush (server.go) to
+	// authenticate to push-backend's Tier-1 /approval endpoint; without it the
+	// backend 401s and approval push notifications silently never reach the
+	// phone (Finding: 2026-06-22 device test, recurred 2026-07-01 device test).
+	relaySecret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET"))
+	envBlock := ""
+	if relaySecret != "" {
+		envBlock = fmt.Sprintf("  <key>EnvironmentVariables</key>\n  <dict>\n    <key>APPROVAL_RELAY_SECRET</key><string>%s</string>\n  </dict>\n", escapePlistString(relaySecret))
+	} else {
+		fmt.Fprintln(os.Stderr, "warning: APPROVAL_RELAY_SECRET is not set in this shell's environment.")
+		fmt.Fprintln(os.Stderr, "  Without it, the daemon's launchd job will have no way to authenticate to")
+		fmt.Fprintln(os.Stderr, "  push-backend's /approval endpoint — approval push notifications will")
+		fmt.Fprintln(os.Stderr, "  silently never reach your phone (only visible as HTTP 401 in")
+		fmt.Fprintf(os.Stderr, "  %s).\n", filepath.Join(home, ".lancer", "lancerd.stderr.log"))
+		fmt.Fprintln(os.Stderr, "  Fix: export APPROVAL_RELAY_SECRET=<value> in this shell and re-run")
+		fmt.Fprintln(os.Stderr, "  `lancerd install`, or add it by hand to the generated plist's")
+		fmt.Fprintf(os.Stderr, "  EnvironmentVariables dict (%s) and reload:\n", plistPath)
+		fmt.Fprintf(os.Stderr, "  launchctl unload %s 2>/dev/null || true\n", plistPath)
+		fmt.Fprintf(os.Stderr, "  launchctl load %s\n", plistPath)
+	}
+
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -178,11 +205,11 @@ func installLaunchd(binary, home string) error {
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>%s</string>
+%s  <key>StandardOutPath</key><string>%s</string>
   <key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
-`, binary, filepath.Join(home, ".lancer", "lancerd.stdout.log"), filepath.Join(home, ".lancer", "lancerd.stderr.log"))
+`, binary, envBlock, filepath.Join(home, ".lancer", "lancerd.stdout.log"), filepath.Join(home, ".lancer", "lancerd.stderr.log"))
 	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
 		return err
 	}
@@ -191,6 +218,15 @@ func installLaunchd(binary, home string) error {
 	fmt.Fprintf(os.Stderr, "  launchctl unload %s 2>/dev/null || true\n", plistPath)
 	fmt.Fprintf(os.Stderr, "  launchctl load %s\n", plistPath)
 	return nil
+}
+
+// escapePlistString XML-escapes a value for safe embedding inside a plist
+// <string> element. A secret shouldn't ever contain XML metacharacters, but
+// this defends against a weird value breaking the generated plist.
+func escapePlistString(s string) string {
+	var buf bytes.Buffer
+	_ = xml.EscapeText(&buf, []byte(s))
+	return buf.String()
 }
 
 func installSystemd(binary, home string) error {

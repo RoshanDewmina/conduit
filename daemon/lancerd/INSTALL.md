@@ -59,6 +59,27 @@ mv lancerd_darwin_arm64 ~/.lancer/bin/lancerd
 ~/.lancer/bin/lancerd install   # sets up launchd (macOS) or systemd (Linux)
 ```
 
+### `APPROVAL_RELAY_SECRET` — required for approval push notifications
+
+`lancerd install` on macOS writes a launchd job (`~/Library/LaunchAgents/dev.lancer.lancerd.plist`).
+launchd jobs do **not** inherit the shell environment that ran the installer, so if
+`APPROVAL_RELAY_SECRET` isn't exported *before* you run `lancerd install`, the persistent daemon
+will start with no way to authenticate to push-backend's `/approval` endpoint — approval push
+notifications will silently never reach your phone (visible only as `HTTP 401` in
+`~/.lancer/lancerd.stderr.log`).
+
+```bash
+export APPROVAL_RELAY_SECRET=<value>
+~/.lancer/bin/lancerd install
+```
+
+If you forget, `lancerd install` prints a warning to stderr explaining the gap and how to fix it
+(re-run with the var exported, or hand-edit the generated plist's `EnvironmentVariables` dict and
+`launchctl unload`/`load`).
+
+See `daemon/push-backend/SELF_HOST.md` and `daemon/push-backend/DEPLOY.md` for how the operator of
+a push-backend instance provisions/rotates this shared secret in the first place.
+
 ## Next steps after install
 
 1. Run `lancerd pair` to display a QR code
