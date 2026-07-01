@@ -3,6 +3,15 @@ import { ArrowRight } from "lucide-react"
 
 const SECTIONS = [
   {
+    title: "Onboarding",
+    description: "Current vs. proposed — value+pair hero, workflow 1 of the design-audit redesign pass",
+    variants: [
+      { label: "Compare — side by side", sub: "Current (shipped) next to the proposed direction", href: "/onboarding" },
+      { label: "Current", sub: "Abstract value rows, traced from the real shipped screenshot", href: "/onboarding/current" },
+      { label: "Proposed", sub: "Real product preview instead of abstract bullets, field-adjacent errors", href: "/onboarding/proposed" },
+    ],
+  },
+  {
     title: "Agent Inbox",
     description: "How the main notification list looks and feels",
     variants: [
@@ -54,6 +63,26 @@ export default function Home() {
             static variants below for screen-by-screen comparison.
           </p>
         </div>
+
+        <Link
+          href="/monetization"
+          className="group mb-6 flex items-center justify-between border border-orange-500/35 bg-orange-500/10 px-5 py-5 transition-all hover:bg-orange-500/15"
+        >
+          <div>
+            <span className="font-mono text-xs uppercase tracking-widest text-orange-300">
+              New · Research
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Monetization trigger timing
+            </h2>
+            <p className="mt-1 text-sm text-white/45">
+              When to show the paywall — Mobbin reference screens (Dropbox, Todoist,
+              Raycast, Claude, Vibecode) paired with wireframes of the Lancer
+              equivalent. Confirmed anti-patterns included.
+            </p>
+          </div>
+          <ArrowRight className="size-6 text-orange-300 transition-transform group-hover:translate-x-1" />
+        </Link>
 
         <Link
           href="/interactive"

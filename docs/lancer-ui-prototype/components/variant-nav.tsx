@@ -5,6 +5,18 @@ import { cn } from "@/lib/utils"
 
 const SCREENS = [
   {
+    label: "Monetization",
+    variants: [{ label: "Trigger timing", href: "/monetization" }],
+  },
+  {
+    label: "Onboarding",
+    variants: [
+      { label: "Compare", href: "/onboarding" },
+      { label: "Current", href: "/onboarding/current" },
+      { label: "Proposed", href: "/onboarding/proposed" },
+    ],
+  },
+  {
     label: "Inbox",
     variants: [
       { label: "A — Ops Center", href: "/inbox/a" },
