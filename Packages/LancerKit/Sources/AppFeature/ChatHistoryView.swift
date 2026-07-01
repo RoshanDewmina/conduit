@@ -401,7 +401,7 @@ private struct WorkThreadTurnBlock: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r1, style: .continuous))
                     }
                 }
 
@@ -465,8 +465,8 @@ private struct WorkThreadEventRow: View {
                 .font(.dsMonoPt(10, weight: .semibold))
                 .foregroundStyle(t.text4)
                 .frame(width: 30, height: 30)
-                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r1, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: t.r1, style: .continuous).strokeBorder(t.border, lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
