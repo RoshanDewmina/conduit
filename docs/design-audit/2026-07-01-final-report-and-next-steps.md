@@ -53,14 +53,18 @@ redesign direction has been implemented; both were explicitly deferred to
 keep the bug-fix pass scoped and mechanical. This is the work described as
 "one workflow at a time" going forward:
 
-| Workflow | Direction (both audits agree on the shape) | Approve/skip/revise call |
+| Workflow | Direction (both audits agree on the shape) | Status |
 |---|---|---|
-| 01 Onboarding/Pairing | Real product screenshot in the hero instead of abstract value rows; field-adjacent pairing errors | **Revise** — direction is sound, needs the CTA-gating + dead-code items folded in (now done as bug fixes; redesign itself untouched) |
-| 02 Home/Attention | (data bugs now fixed) — remaining: demote Inbox, resolve IA question below | **Partial** — bugs fixed, redesign direction on hold pending the IA call |
-| 03 Work Thread | Phase-grouped activity-log timeline instead of chat bubbles / fake terminal | **Approve direction**, two fast-follow bugs already fixed; full timeline redesign not started |
-| 04 Review/Approvals/Diff | One canonical approval-review anatomy reused across all entry points | **Approve direction**; redaction + biometric-gate fixes already done, the consolidation itself not started |
-| 05 Machines | Shared `DSMachineStatus` component with Home | **Approve direction**; hardcoded-metric fixes done, shared component not built |
-| 06 Settings | (Governance fold now done) — remaining: recapture broken screenshots, resolve duplicate-content risk if IA reverses | **Revise** — depends on the IA call below |
+| 01 Onboarding/Pairing | Real product screenshot in the hero instead of abstract value rows; field-adjacent pairing errors | **Done** — implemented + verified, commit `e0dca8a7` |
+| 02 Home/Attention | Unified attention data (headline/cards/badge), all-clear module, fold Inbox into Home | **Done** — implemented + verified, commit `cc1f6aff` (owner-reviewed via rendered comparison report first, `docs/design-audit/handoff-home-2026-07-01-report/`) |
+| 03 Work Thread | Phase-grouped activity-log timeline instead of chat bubbles / fake terminal | **Done** — implemented + verified, commit `64b00af8` |
+| 04 Review/Approvals/Diff | One canonical approval-review anatomy reused across all entry points | **Done** — implemented + verified, commit `da3a83a9` |
+| 05 Machines | Reframe as trusted-device/health surface, remove terminal drill-in | **Done** — implemented + verified, commit `490df047` |
+| 06 Settings | Calm native grouped list; Governance fold already done | **Done** — implemented + verified, commit `73bd66ed` (also cut an orphaned Terminal-prefs row + view, a stale Face ID caption, and added notification-denied recovery) |
+
+All six workflows in this redesign pass are complete as of 2026-07-01. The "Recommended order"
+section below is kept for historical record of how the pass was sequenced; there is no remaining
+queued work from this audit.
 
 ## One open decision before continuing
 
