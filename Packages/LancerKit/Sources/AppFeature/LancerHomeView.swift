@@ -29,6 +29,7 @@ public struct LancerHomeView: View {
     private let loadSessions: () async -> [ObservedSession]
 
     @Environment(\.lancerTokens) private var t
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var collapsed: Set<String> = []
     @State private var observedSessions: [ObservedSession] = []
     @State private var sessionsLoading = true
@@ -75,6 +76,10 @@ public struct LancerHomeView: View {
                         attentionSection(items: items)
                             .padding(.horizontal, 22)
                             .padding(.top, 18)
+                    } else {
+                        allClearRow
+                            .padding(.horizontal, 26)
+                            .padding(.top, 14)
                     }
                     machinesSection.padding(.top, 26)
                 }
@@ -135,6 +140,20 @@ public struct LancerHomeView: View {
 
     // MARK: - Needs Attention section
 
+    /// Shown instead of `attentionSection` whenever `fleetStore.attentionItems` is empty —
+    /// a calm confirmation line, not an illustrated empty state, per the Mobbin "all caught up"
+    /// references in the workflow-02 redesign report.
+    private var allClearRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 13))
+                .foregroundStyle(t.ok)
+            Text("You're caught up — nothing needs review.")
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text3)
+        }
+    }
+
     @ViewBuilder
     private func attentionSection(items: [AttentionItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -187,10 +206,17 @@ public struct LancerHomeView: View {
                         .padding(.vertical, 3)
                         .background(t.riskSoft(approval.risk.rawValue), in: Capsule())
                 }
-                Text(approvalSubtitle(approval))
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text3)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(approval.agent.initial)
+                        .font(.dsMonoPt(9.5, weight: .semibold))
+                        .foregroundStyle(t.text3)
+                        .frame(width: 22, height: 22)
+                        .background(t.surface2, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    Text(approvalSubtitle(approval))
+                        .font(.dsSansPt(13))
+                        .foregroundStyle(t.text3)
+                        .lineLimit(1)
+                }
             }
             DSButton(isExpired ? "View" : "Review", variant: .quiet, size: .sm, mono: true) {
                 Haptics.selection()
@@ -331,7 +357,14 @@ public struct LancerHomeView: View {
     private func approvalSubtitle(_ approval: Approval) -> String {
         let tool = approval.toolName ?? approval.kind.rawValue
         let host = fleetStore.slot(forApprovalID: approval.id)?.hostName ?? ""
-        return host.isEmpty ? tool : "\(tool) · \(host)"
+        let age = relativeTimeLabel(approval.createdAt)
+        let agent = approval.agent.displayName
+        // Host is the lowest-priority segment here — drop it first at large Dynamic Type
+        // sizes so the line stays readable instead of truncating mid-word.
+        if dynamicTypeSize >= .accessibility1 || host.isEmpty {
+            return "\(agent) · \(tool) · \(age)"
+        }
+        return "\(agent) · \(tool) · \(host) · \(age)"
     }
 
     private func relativeTimeLabel(_ date: Date) -> String {
@@ -803,6 +836,16 @@ private extension Approval.AgentSource {
         case .opencode:   "OpenCode"
         case .devin:      "Devin"
         case .unknown:    "Agent"
+        }
+    }
+    var initial: String {
+        switch self {
+        case .claudeCode: "C"
+        case .codex:      "Cx"
+        case .cursor:     "Cu"
+        case .opencode:   "O"
+        case .devin:      "D"
+        case .unknown:    "A"
         }
     }
 }

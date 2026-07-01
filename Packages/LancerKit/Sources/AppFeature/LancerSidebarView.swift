@@ -187,16 +187,9 @@ public struct LancerSidebarView: View {
             SidebarNavRow(
                 icon: "house",
                 title: "Home",
-                badge: nil,
+                badge: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount)" : nil,
                 selected: state.selectedDestination == .home,
                 action: { onNavigate(.home) }
-            )
-            SidebarNavRow(
-                icon: "sparkles",
-                title: "Inbox",
-                badge: state.pendingApprovalCount > 0 ? "\(state.pendingApprovalCount)" : nil,
-                selected: state.selectedDestination == .needsAttention,
-                action: { onNavigate(.needsAttention) }
             )
             .coachmarkAnchor("inbox")
             SidebarNavRow(
