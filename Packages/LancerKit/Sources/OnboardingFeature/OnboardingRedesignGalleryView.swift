@@ -13,10 +13,8 @@ import SSHTransport
 /// with a real 6-digit code); the chosen policy tier is persisted and pushed to the
 /// daemon on first connect via `OnboardingPolicy`.
 ///
-/// Visuals are a faithful reproduction of the `Lancer App.dc.html` onboarding board:
-/// a terracotta editorial hero (grid texture + lavender pixel mark, Instrument Serif
-/// italic kicker over a Bricolage display title), then a per-step block — value rows,
-/// pairing digit-boxes, or policy cards — with a black/orange CTA.
+/// Visuals follow the editorial onboarding board, but the first screen now proves
+/// the actual product loop before asking the user to pair a machine.
 public struct OnboardingRedesignView: View {
     let onContinue: () -> Void
     /// Optional: finish onboarding and route the user to "Add a machine" (SSH).
@@ -62,11 +60,19 @@ public struct OnboardingRedesignView: View {
 
     private var current: OnboardingRedesignStep { steps[step] }
 
+    private var pairingPresentation: PairingPresentationState {
+        PairingPresentationState(
+            pairing: client.pairingState,
+            connection: client.connectionState,
+            skipWarning: pairingMessage
+        )
+    }
+
     /// True while the account-creation gate is showing instead of the current step's
     /// own content. Computed once and reused by both `content` and `footer` below so
     /// the two can never disagree about which branch is active.
     private var isAccountGateActive: Bool {
-        current.kind != .valuePair && accountSession != nil && accountSession?.mode == nil
+        current.kind != .value && current.kind != .pair && accountSession != nil && accountSession?.mode == nil
     }
 
     public var body: some View {
@@ -78,14 +84,13 @@ public struct OnboardingRedesignView: View {
             stepIndex: step,
             totalSteps: steps.count,
             leading: step > 0 ? .back : .none,
+            topBarStyle: current.kind == .value ? .hero : .page,
             onLeading: {
                 guard step > 0 else { return }
                 withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step -= 1 }
             }
         ) {
-            // Start with the product value + pairing, merged into one screen (no
-            // forced "Continue" tap between value-prop and the actual connect
-            // action). Account creation gates everything after that.
+            // Account creation gates everything after the relay pairing step.
             if isAccountGateActive, let accountSession {
                 AccountEntryView(account: accountSession, onComplete: advanceAfterAccount)
             } else if current.kind == .sshSetup {
@@ -98,7 +103,12 @@ public struct OnboardingRedesignView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         // Full-bleed — NOT inside the 560pt content constraint below, or
                         // the hero stops spanning the full width on iPad/wide screens.
-                        OnboardingHeroBanner(eyebrow: current.eyebrow, title: current.title, subtitle: current.body)
+                        OnboardingHeroBanner(
+                            eyebrow: current.eyebrow,
+                            title: current.title,
+                            subtitle: current.body,
+                            compact: current.kind == .value || current.kind == .pair
+                        )
                         primaryBlock
                             .frame(maxWidth: 560, alignment: .leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -118,6 +128,7 @@ public struct OnboardingRedesignView: View {
                         variant: .primary, size: .lg, fullWidth: true,
                         action: advanceOrFinish
                     )
+                    .disabled(current.kind == .pair && pairingPresentation.disablesPrimaryAction)
                     .accessibilityIdentifier("onboardingPrimary")
                 }
             }
@@ -150,13 +161,18 @@ public struct OnboardingRedesignView: View {
     @ViewBuilder
     private var primaryBlock: some View {
         switch current.kind {
-        case .valuePair:
-            VStack(alignment: .leading, spacing: 28) {
-                OnboardingValueRows().padding(.horizontal, 28).padding(.top, 12)
+        case .value:
+            VStack(alignment: .leading, spacing: 0) {
+                OnboardingProductProofPreview()
+                    .padding(.horizontal, 24)
+                    .padding(.top, 2)
+            }
+        case .pair:
+            VStack(alignment: .leading, spacing: 18) {
                 OnboardingPairingBlock(
                     client: client,
                     manualCode: $manualCode,
-                    pairingMessage: pairingMessage,
+                    presentation: pairingPresentation,
                     onSubmitCode: { code in applyPairingCode(code, relay: nil) },
                     canBindAccountDevice: accountSession?.isStandardAccount == true,
                     deviceBindingMessage: deviceBindingMessage,
@@ -200,7 +216,7 @@ public struct OnboardingRedesignView: View {
         // empty Home with no way back to the code field. First tap while unpaired
         // shows a real warning (reusing `pairingMessage`, previously wired but never
         // set) instead of silently proceeding; a second tap explicitly skips.
-        if current.kind == .valuePair, client.pairingState != .paired, pairingMessage == nil {
+        if current.kind == .pair, client.pairingState != .paired, pairingMessage == nil {
             pairingMessage = "No machine paired yet. Tap Pair & continue again to skip for now — you can pair later from Settings."
             Haptics.warning()
             return
@@ -215,12 +231,12 @@ public struct OnboardingRedesignView: View {
 
     private func advanceAfterAccount() {
         Haptics.success()
-        // AccountEntry only appears once the user tries to move past the merged
-        // value+pair screen (step 0). Defensive no-op in the normal flow since step
+        // AccountEntry only appears once the user tries to move past relay pairing.
+        // Defensive no-op in the normal flow since step
         // is already wherever the user was heading; guards a fresh/resumed session
         // that could otherwise land here with step still at 0.
-        if step == 0 {
-            step = min(1, steps.count - 1)
+        if step < 2 {
+            step = min(2, steps.count - 1)
         }
     }
 
@@ -279,46 +295,164 @@ public struct OnboardingRedesignView: View {
     }
 }
 
-// MARK: - Step "valuePair" part 1 · value rows
+// MARK: - Step "value" · product proof
 
-private struct OnboardingValueRows: View {
+private struct OnboardingProductProofPreview: View {
     @Environment(\.lancerTokens) private var t
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            row(title: "Approve actions from afar", detail: "Allow or deny risky steps in a tap") {
-                Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)).foregroundStyle(t.accent)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("WHAT YOU'LL SEE")
+                    .font(.dsMonoPt(10, weight: .medium))
+                    .tracking(1.2)
+                    .foregroundStyle(t.text4)
+                Spacer()
+                Text("preview")
+                    .font(.dsSansPt(11, weight: .medium))
+                    .foregroundStyle(t.text4)
             }
-            row(title: "Watch the terminal stream live", detail: "Every command, as it runs") {
-                Text("›_").font(.dsMonoPt(15, weight: .semibold)).foregroundStyle(t.accent)
-            }
-            row(title: "Policy guardrails per machine", detail: "Rules apply to every machine") {
-                Image(systemName: "shield.fill").font(.system(size: 15)).foregroundStyle(t.accent)
-            }
-        }
-    }
 
-    private func row<Icon: View>(title: String, detail: String, @ViewBuilder icon: () -> Icon) -> some View {
-        HStack(spacing: 15) {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(t.surface2)
-                .frame(width: 44, height: 44)
-                .overlay(icon())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.dsSansPt(15, weight: .semibold)).foregroundStyle(t.text)
-                Text(detail).font(.dsSansPt(12.5)).foregroundStyle(t.text4)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(t.surface.opacity(0.72))
+                .aspectRatio(1.12, contentMode: .fit)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(t.borderStrong.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [7, 7]))
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    Text("5 sec loop")
+                        .font(.dsMonoPt(10, weight: .medium))
+                        .tracking(0.8)
+                        .foregroundStyle(t.text4)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(t.surface2, in: Capsule())
+                        .padding(14)
+                }
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.07), radius: 14, x: 0, y: 7)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Empty preview frame reserved for a five second onboarding animation.")
     }
 }
 
-// MARK: - Step "valuePair" part 2 · pairing
+// MARK: - Step "pair" · pairing
+
+private enum PairingMessageTone {
+    case neutral
+    case success
+    case warning
+    case error
+}
+
+private struct PairingPresentationState {
+    let title: String
+    let detail: String?
+    let tone: PairingMessageTone
+    let fieldTone: PairingMessageTone
+    let showsProgress: Bool
+    let disablesPrimaryAction: Bool
+
+    init(
+        pairing: E2ERelayClient.PairingState,
+        connection: E2ERelayClient.ConnectionState,
+        skipWarning: String?
+    ) {
+        if let skipWarning {
+            title = skipWarning
+            detail = "Pairing is still recommended. You can also pair later from Settings."
+            tone = .warning
+            fieldTone = .warning
+            showsProgress = false
+            disablesPrimaryAction = false
+            return
+        }
+
+        switch pairing {
+        case .paired:
+            title = "Paired."
+            detail = "This phone can now reach your machine over the encrypted relay."
+            tone = .success
+            fieldTone = .success
+            showsProgress = false
+            disablesPrimaryAction = false
+        case .waitingForPeer:
+            title = "Waiting for your desktop."
+            detail = "Keep `lancerd pair` open until the relay confirms both sides."
+            tone = .neutral
+            fieldTone = .neutral
+            showsProgress = true
+            disablesPrimaryAction = true
+        case .pairingFailed(let reason):
+            title = Self.failureMessage(for: reason)
+            detail = Self.failureRecovery(for: reason)
+            tone = .error
+            fieldTone = .error
+            showsProgress = false
+            disablesPrimaryAction = false
+        case .unpaired:
+            switch connection {
+            case .connecting, .reconnecting:
+                title = "Connecting to the relay."
+                detail = "Keep the code visible on your machine."
+                tone = .neutral
+                fieldTone = .neutral
+                showsProgress = true
+                disablesPrimaryAction = true
+            case .connected:
+                title = "Enter the code from your machine."
+                detail = nil
+                tone = .neutral
+                fieldTone = .neutral
+                showsProgress = false
+                disablesPrimaryAction = false
+            case .disconnected:
+                title = "Enter the code from your machine."
+                detail = nil
+                tone = .neutral
+                fieldTone = .neutral
+                showsProgress = false
+                disablesPrimaryAction = false
+            }
+        }
+    }
+
+    static func failureMessage(for reason: String) -> String {
+        let lower = reason.lowercased()
+        if lower.contains("expired") {
+            return "That code expired."
+        }
+        if lower.contains("mismatch") {
+            return "That code didn't match."
+        }
+        if lower.contains("too many") || lower.contains("rate limit") {
+            return "Too many attempts."
+        }
+        return "Couldn't connect to your machine."
+    }
+
+    static func failureRecovery(for reason: String) -> String {
+        let lower = reason.lowercased()
+        if lower.contains("expired") {
+            return "Run `lancerd pair` again and enter the new code."
+        }
+        if lower.contains("mismatch") {
+            return "Check the digits and try again. Your code stays here."
+        }
+        if lower.contains("too many") || lower.contains("rate limit") {
+            return "Wait a minute, then try the same flow again."
+        }
+        return "Check that your machine and phone are online, then try again."
+    }
+}
 
 private struct OnboardingPairingBlock: View {
     @ObservedObject var client: E2ERelayClient
     @Binding var manualCode: String
-    let pairingMessage: String?
+    let presentation: PairingPresentationState
     let onSubmitCode: (String) -> Void
     let canBindAccountDevice: Bool
     let deviceBindingMessage: String?
@@ -330,51 +464,44 @@ private struct OnboardingPairingBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // On your desktop, run `lancerd pair` — it prints a 6-digit code. Code-only:
-            // no QR path. A short code is simpler to communicate over a screen-share or
-            // a second monitor than "point your phone's camera at this terminal."
-            Text("ON YOUR DESKTOP, RUN  lancerd pair")
-                .font(.dsMonoPt(10, weight: .medium))
-                .tracking(1.2)
-                .foregroundStyle(t.text4)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("ON YOUR MACHINE")
+                    .font(.dsMonoPt(10, weight: .medium))
+                    .tracking(1.2)
+                    .foregroundStyle(t.text4)
 
-            TextField("000000", text: $manualCode)
-                .keyboardType(.numberPad)
-                .font(.dsDisplayPt(26, weight: .bold))
-                .multilineTextAlignment(.center)
-                .tracking(8)
-                .focused($codeFocused)
-                .onChange(of: manualCode) { _, v in
-                    let digits = String(v.filter(\.isNumber).prefix(6))
-                    if digits != v { manualCode = digits }
-                    if digits.count == 6 { codeFocused = false; onSubmitCode(digits) }
-                }
-                .padding(.vertical, 16)
-                .frame(maxWidth: .infinity)
-                .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(codeFocused ? t.accent : t.border, lineWidth: 1.5))
-                .accessibilityIdentifier("pairingCodeField")
+                Text("Run `lancerd pair`, then enter the 6-digit code it prints.")
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.text2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            // Plain-language framing of the relay's real server-enforced expiry
-            // (pairConfirmWindow, 10 minutes) — nothing told the user this before.
-            Text("This code expires in a few minutes and works once — don't share it.")
-                .font(.dsSansPt(11.5))
-                .foregroundStyle(t.text4)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Text(statusLabel)
-                .font(.dsSansPt(12))
-                .foregroundStyle(isPaired ? t.accent : t.text4)
-                .frame(maxWidth: .infinity, alignment: .center)
-
-            if let pairingMessage {
-                Text(pairingMessage)
-                    .font(.dsSansPt(12, weight: .medium))
-                    .foregroundStyle(t.danger)
+                TextField("000000", text: $manualCode)
+                    .keyboardType(.numberPad)
+                    .font(.dsDisplayPt(26, weight: .bold))
                     .multilineTextAlignment(.center)
+                    .tracking(8)
+                    .focused($codeFocused)
+                    .onChange(of: manualCode) { _, v in
+                        let digits = String(v.filter(\.isNumber).prefix(6))
+                        if digits != v { manualCode = digits }
+                        if digits.count == 6 { codeFocused = false; onSubmitCode(digits) }
+                    }
+                    .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
+                    .background(fieldFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(fieldBorder, lineWidth: 1.5))
+                    .accessibilityIdentifier("pairingCodeField")
+
+                inlineStatus
+
+                Text("Codes expire in a few minutes, work once, and should not be shared.")
+                    .font(.dsSansPt(11.5))
+                    .foregroundStyle(t.text4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(14)
+            .background(t.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(fieldGroupBorder, lineWidth: 1))
 
             if canBindAccountDevice {
                 Button(action: onBindAccountDevice) {
@@ -409,34 +536,79 @@ private struct OnboardingPairingBlock: View {
         }
     }
 
-    private var isPaired: Bool { client.pairingState == .paired }
-
-    private var statusLabel: String {
-        switch client.pairingState {
-        case .unpaired:        return client.connectionState == .disconnected ? "Enter your desktop's code to pair" : "Connecting…"
-        case .waitingForPeer:  return "Waiting for your desktop…"
-        case .paired:          return "Paired ✓"
-        case .pairingFailed(let reason): return Self.pairingFailureMessage(for: reason)
+    @ViewBuilder
+    private var inlineStatus: some View {
+        HStack(alignment: .top, spacing: 8) {
+            if presentation.showsProgress {
+                ProgressView()
+                    .controlSize(.small)
+                    .padding(.top, 1)
+            } else {
+                Image(systemName: statusSymbol)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(statusColor)
+                    .padding(.top, 2)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(presentation.title)
+                    .font(.dsSansPt(12.5, weight: .semibold))
+                    .foregroundStyle(statusColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail = presentation.detail {
+                    Text(detail)
+                        .font(.dsSansPt(11.5))
+                        .foregroundStyle(t.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 
-    /// The relay (see `daemon/push-backend/websocket_relay.go`) already returns a
-    /// distinct, real reason for each rejection — expired code, key mismatch
-    /// (hijack-attempt rejection), or a local/network failure short of that. Map
-    /// each to a plain-language message instead of one generic "failed, try again"
-    /// that doesn't tell the user which of three different problems occurred.
-    private static func pairingFailureMessage(for reason: String) -> String {
-        let lower = reason.lowercased()
-        if lower.contains("expired") {
-            return "That code's expired — get a new one from your machine."
+    private var statusSymbol: String {
+        switch presentation.tone {
+        case .success: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.circle.fill"
+        case .neutral: return "info.circle.fill"
         }
-        if lower.contains("mismatch") {
-            return "That code didn't match — check it and try again."
+    }
+
+    private var statusColor: Color {
+        switch presentation.tone {
+        case .success: return t.ok
+        case .warning: return t.warn
+        case .error: return t.danger
+        case .neutral: return t.text4
         }
-        if lower.contains("too many") || lower.contains("rate limit") {
-            return "Too many attempts — wait a minute and try again."
+    }
+
+    private var fieldBorder: Color {
+        if codeFocused { return t.accent }
+        switch presentation.fieldTone {
+        case .success: return t.ok
+        case .warning: return t.warn
+        case .error: return t.danger
+        case .neutral: return t.border
         }
-        return "Couldn't connect to your machine. Check your connection and try again."
+    }
+
+    private var fieldFill: Color {
+        switch presentation.fieldTone {
+        case .success: return t.okSoft
+        case .warning: return t.warnSoft
+        case .error: return t.dangerSoft
+        case .neutral: return t.surface
+        }
+    }
+
+    private var fieldGroupBorder: Color {
+        switch presentation.fieldTone {
+        case .success: return t.ok.opacity(0.5)
+        case .warning: return t.warn.opacity(0.55)
+        case .error: return t.danger.opacity(0.6)
+        case .neutral: return t.border
+        }
     }
 }
 
@@ -496,7 +668,7 @@ private struct OnboardingPolicyCards: View {
 // MARK: - Step model
 
 private struct OnboardingRedesignStep: Identifiable {
-    enum Kind { case valuePair, policy, sshSetup }
+    enum Kind { case value, pair, policy, sshSetup }
 
     let id: String
     let eyebrow: String
@@ -508,13 +680,22 @@ private struct OnboardingRedesignStep: Identifiable {
 
     static let all: [OnboardingRedesignStep] = [
         .init(
-            id: "valuePair",
-            eyebrow: "your machines,",
-            title: "in your pocket.",
-            body: "Lancer is mission control for the coding agents running on your own machines. Here's what you get:",
+            id: "value",
+            eyebrow: "lancer",
+            title: "Steer AI coding agents from your phone.",
+            body: "Pair this phone with your machine, review risky actions, and keep work moving without opening a laptop.",
+            primaryAction: "Continue",
+            ctaArrow: true,
+            kind: .value
+        ),
+        .init(
+            id: "pair",
+            eyebrow: "pair this phone",
+            title: "Connect to your machine.",
+            body: "Run one command on your machine, then enter the code here. Lancer keeps the relay encrypted end to end.",
             primaryAction: "Pair & continue",
             ctaArrow: false,
-            kind: .valuePair
+            kind: .pair
         ),
         .init(
             id: "policy",

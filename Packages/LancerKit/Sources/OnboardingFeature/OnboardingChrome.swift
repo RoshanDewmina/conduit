@@ -51,6 +51,11 @@ public enum OnboardingLeadingControl {
     case close     // ✕ (e.g. cancel QR scan)
 }
 
+public enum OnboardingTopBarStyle {
+    case page
+    case hero
+}
+
 // MARK: - Scaffold
 
 /// Consistent onboarding chrome: a fixed top bar (leading control top-left, page dots top-right)
@@ -60,6 +65,7 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
     let stepIndex: Int
     let totalSteps: Int
     let leading: OnboardingLeadingControl
+    let topBarStyle: OnboardingTopBarStyle
     let onLeading: () -> Void
     @ViewBuilder let content: () -> Body
     @ViewBuilder let footer: () -> Footer
@@ -70,6 +76,7 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
         stepIndex: Int,
         totalSteps: Int,
         leading: OnboardingLeadingControl,
+        topBarStyle: OnboardingTopBarStyle = .page,
         onLeading: @escaping () -> Void = {},
         @ViewBuilder content: @escaping () -> Body,
         @ViewBuilder footer: @escaping () -> Footer
@@ -77,6 +84,7 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
         self.stepIndex = stepIndex
         self.totalSteps = totalSteps
         self.leading = leading
+        self.topBarStyle = topBarStyle
         self.onLeading = onLeading
         self.content = content
         self.footer = footer
@@ -104,6 +112,12 @@ public struct OnboardingScaffold<Body: View, Footer: View>: View {
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        .background {
+            if topBarStyle == .hero {
+                OnboardingHeroBackground(clippedBottomCorners: false)
+                    .ignoresSafeArea(edges: .top)
+            }
+        }
     }
 
     @ViewBuilder
@@ -192,24 +206,28 @@ public struct OnboardingHeroBanner: View {
     let eyebrow: String
     let title: String
     let subtitle: String
+    let compact: Bool
 
     @Environment(\.lancerTokens) private var t
 
-    public init(eyebrow: String, title: String, subtitle: String) {
+    public init(eyebrow: String, title: String, subtitle: String, compact: Bool = false) {
         self.eyebrow = eyebrow
         self.title = title
         self.subtitle = subtitle
+        self.compact = compact
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OnboardingBrandMark()
-                .padding(.bottom, 18)
+                .scaleEffect(compact ? 0.68 : 1)
+                .frame(width: compact ? 38 : 56, height: compact ? 38 : 56)
+                .padding(.bottom, compact ? 8 : 18)
             Text(eyebrow)
                 .font(.dsEditorialPt(20))
                 .foregroundStyle(OnboardingHeroPalette.heroKicker)
             Text(title)
-                .font(.dsDisplayPt(34, weight: .heavy))
+                .font(.dsDisplayPt(compact ? 26 : 34, weight: .heavy))
                 .tracking(-1)
                 .foregroundStyle(.white)
                 .lineLimit(2)
@@ -222,16 +240,21 @@ public struct OnboardingHeroBanner: View {
                 .foregroundStyle(.white.opacity(0.88))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 292, alignment: .leading)
-                .padding(.top, 12)
+                .padding(.top, compact ? 6 : 12)
         }
         .padding(.horizontal, 28)
-        .padding(.top, 22)
-        .padding(.bottom, 28)
+        .padding(.top, compact ? 8 : 22)
+        .padding(.bottom, compact ? 12 : 28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(heroBackground.ignoresSafeArea(edges: .top))
+        .background(OnboardingHeroBackground(clippedBottomCorners: true).ignoresSafeArea(edges: .top))
     }
+}
 
-    private var heroBackground: some View {
+private struct OnboardingHeroBackground: View {
+    let clippedBottomCorners: Bool
+    @Environment(\.lancerTokens) private var t
+
+    var body: some View {
         ZStack(alignment: .bottomTrailing) {
             LinearGradient(colors: [t.accent, t.accentInk], startPoint: .topLeading, endPoint: .bottomTrailing)
             Canvas { ctx, size in
@@ -247,7 +270,11 @@ public struct OnboardingHeroBanner: View {
                 .frame(width: 190, height: 190)
                 .offset(x: 34, y: 46)
         }
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous))
+        .clipShape(
+            clippedBottomCorners
+            ? UnevenRoundedRectangle(bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous)
+            : UnevenRoundedRectangle(style: .continuous)
+        )
     }
 }
 
