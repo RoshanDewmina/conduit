@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home/Attention Redesign — Workflow 02</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #17171a;
+    --surface2: #1f1f23;
+    --border: #2c2c31;
+    --text: #f2f0eb;
+    --text2: #c9c6c0;
+    --text3: #96938d;
+    --text4: #6b6963;
+    --accent: #e0784a;
+    --ok: #5fae7a;
+    --warn: #d9a441;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .shot {
+    max-width: 260px;
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text3);
+  }
+  .tag.fixed { color: var(--ok); border-color: rgba(95,174,122,0.4); background: rgba(95,174,122,0.08); }
+  .tag.real  { color: var(--warn); border-color: rgba(217,164,65,0.4); background: rgba(217,164,65,0.08); }
+  .tag.oq    { color: var(--accent); border-color: rgba(224,120,74,0.4); background: rgba(224,120,74,0.08); }
+  a.link { color: var(--accent); text-decoration: underline; }
+  code, .code-inline {
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+    font-size: 0.85em;
+    color: var(--accent);
+  }
+  table.plan { width: 100%; border-collapse: collapse; }
+  table.plan th, table.plan td {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    font-size: 14px;
+  }
+  table.plan th { background: var(--surface2); color: var(--text3); font-weight: 600; }
+  h2 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .mobbin-card img { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: #fff; }
+</style>
+</head>
+<body class="max-w-6xl mx-auto px-6 py-10">
+
+  <!-- Header -->
+  <header class="mb-14">
+    <div class="tag mb-3">Workflow 02 of 6 — design-audit series</div>
+    <h1 class="text-4xl font-bold mb-4" style="color: var(--text)">Home/Attention Redesign — Workflow 02</h1>
+    <p class="max-w-3xl" style="color: var(--text2)">
+      Scope decided with the owner for this pass: <strong>(1)</strong> enrich Home's attention card
+      with an explicit agent name and relative age (fields the redesigned Inbox's
+      <code>InboxBoardCard</code> already has); <strong>(2)</strong> give the "all clear" state a
+      real, calm confirmation module instead of pure text; <strong>(3)</strong> fold Inbox into
+      Home — the existing "See all" button pushes the existing <code>InboxFeature/InboxView.swift</code>
+      full list, and Inbox stops being a persistent sidebar root. Explicitly
+      <strong>out of scope</strong>: a relay/SSH status strip at the top of Home, and a
+      "Recent decisions" audit feed below Machines — neither is proposed below.
+    </p>
+    <p class="mt-4 text-sm" style="color: var(--text4)">
+      Full audit doc:
+      <a class="link" href="../workflows/02-home-attention-overview.md">docs/design-audit/workflows/02-home-attention-overview.md</a>
+    </p>
+  </header>
+
+  <!-- Section 1: What we have now -->
+  <section class="mb-16">
+    <h2 class="text-2xl font-semibold mb-6">What we have now</h2>
+    <p class="mb-6" style="color: var(--text3)">
+      Freshly captured 2026-07-01, iPhone 17 Pro simulator, dark mode, dev build. The app was
+      uninstalled and rebuilt before capture 1 to guarantee a genuinely empty/fresh state.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="card p-4">
+        <img class="shot mx-auto" src="screenshots/current-all-clear.png" alt="All clear, no machines">
+        <div class="mt-3 font-semibold">1. All-clear, no machines</div>
+        <p class="text-sm mt-1" style="color: var(--text3)">
+          Fresh install, <code>LANCER_DESTINATION=sessions</code>, no reseed, no relay. Headline
+          "All clear tonight." + <code>connectMachineCard</code> ("Connect a machine") only.
+        </p>
+      </div>
+      <div class="card p-4">
+        <img class="shot mx-auto" src="screenshots/current-reseed-still-all-clear.png" alt="Reseed still shows all clear">
+        <div class="mt-3 font-semibold">2. Reseed (repo-only approvals)</div>
+        <p class="text-sm mt-1" style="color: var(--text3)">
+          Same state + <code>LANCER_UITEST_RESEED=1</code>. <strong>This is the important empirical
+          finding</strong> — see callout below.
+        </p>
+      </div>
+      <div class="card p-4">
+        <img class="shot mx-auto" src="screenshots/current-seeded-machine.png" alt="Seeded relay machine">
+        <div class="mt-3 font-semibold">3. Seeded relay machine</div>
+        <p class="text-sm mt-1" style="color: var(--text3)">
+          + <code>LANCER_FAKE_RELAY_HOST=hermes-box</code>. Machine tree renders (green dot,
+          "hermes-box", project count), headline still "All clear tonight."
+        </p>
+      </div>
+    </div>
+
+    <div class="card p-5 mb-8" style="border-color: rgba(95,174,122,0.35)">
+      <div class="font-semibold mb-2" style="color: var(--ok)">Already fixed (verified against current code + a fresh capture, not assumed from the doc)</div>
+      <ul class="list-disc list-inside text-sm space-y-1" style="color: var(--text2)">
+        <li>
+          <strong>Split-brain attention is fixed.</strong> <code>AppRoot.swift</code> lines 639–652
+          feed <code>hudStore.pendingApprovals</code>, <code>sidebarState.pendingApprovalCount</code>,
+          and the Live Activity badge all from the single
+          <code>fleetStore.attentionItems.count</code>. Empirically: the stale doc screenshot
+          (<code>home-command_pending-headline_iphone-17-pro_dark.png</code>, below) shows the old
+          bug — headline "4 agents need you" with <em>no</em> NEEDS ATTENTION cards on Home. Our
+          fresh capture #2 above, using the <em>same</em> <code>LANCER_UITEST_RESEED=1</code> recipe
+          against current code, shows "All clear tonight." instead — because
+          <code>FleetStore.attentionItems</code> (<code>FleetStore.swift</code> line 152) only
+          projects from live fleet slots, and reseed only seeds the local approval repo, not a fleet
+          slot. The headline and the (absent) card list now agree — no more disagreement, in
+          either direction.
+        </li>
+        <li>
+          <strong>Hardcoded sidebar footer is fixed.</strong> <code>LancerSidebarView.footerText</code>
+          (lines 303–310) now branches on <code>state.relayConnected</code> and
+          <code>state.fleetSlotCount</code> — no more fixed "Relay connected · 3 hosts" (visible as
+          the old bug in <code>approval-inbox_seeded-pending_iphone-17-pro_dark.png</code> below).
+        </li>
+        <li>
+          <strong>Governance is folded into Settings</strong> — no longer a competing 4th sidebar
+          root (confirmed absent in current <code>primaryNavigation</code>, lines 185–211).
+        </li>
+      </ul>
+    </div>
+
+    <div class="card p-5 mb-8" style="border-color: rgba(217,164,65,0.35)">
+      <div class="font-semibold mb-2" style="color: var(--warn)">Still real (this pass's actual scope)</div>
+      <ul class="list-disc list-inside text-sm space-y-1" style="color: var(--text2)">
+        <li>Attention card is missing agent name + relative age (row anatomy, item 1 in scope).</li>
+        <li>All-clear is text + an existing empty/paired machine card, no calm confirmation module (item 2 in scope).</li>
+        <li>Inbox is still a 3rd primary sidebar root with its own badge, duplicating Home's "See all" path (item 3 in scope).</li>
+        <li>
+          <strong>New limitation surfaced by this pass, not the original doc:</strong> because the
+          split-brain fix now makes <code>attentionItems</code> the sole source of truth, and it
+          only derives from live fleet slots, there is currently <em>no simulator-only way</em> to
+          screenshot a populated NEEDS ATTENTION card list on Home — it requires an actual live SSH
+          or relay session with pending approvals in that slot's inbox, not just repo-seeded data.
+          The original audit doc hit the same wall (its "Required States" table marks this row "No"
+          too). We used the existing Inbox row capture as the closest anatomy reference instead —
+          see <code>approval-inbox_seeded-pending_iphone-17-pro_dark.png</code>.
+        </li>
+      </ul>
+    </div>
+
+    <details class="card p-4">
+      <summary class="cursor-pointer font-semibold" style="color: var(--text3)">Reference captures (old doc screenshots, copied here for a dependency-free report)</summary>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <div>
+          <img class="shot" src="screenshots/home-command_pending-headline_iphone-17-pro_dark.png" alt="Old bug: split-brain headline">
+          <p class="text-xs mt-1" style="color: var(--text4)">Old capture — split-brain bug ("4 agents need you", no cards). Now fixed.</p>
+        </div>
+        <div>
+          <img class="shot" src="screenshots/approval-inbox_seeded-pending_iphone-17-pro_dark.png" alt="Inbox row anatomy + old sidebar bugs">
+          <p class="text-xs mt-1" style="color: var(--text4)">Inbox row anatomy reference (see Proposed Changes §1) + old hardcoded footer / Governance root, both now fixed.</p>
+        </div>
+        <div>
+          <img class="shot" src="screenshots/sidebar-drawer_open_iphone-17-pro_dark.png" alt="Sidebar drawer">
+          <p class="text-xs mt-1" style="color: var(--text4)">Sidebar drawer, current-ish (footer text will differ from live state).</p>
+        </div>
+        <div>
+          <img class="shot" src="screenshots/home-command_splitview_ipad-pro-11_dark.png" alt="iPad split view">
+          <p class="text-xs mt-1" style="color: var(--text4)">iPad split view — structure reference only, not refreshed this pass.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Section 2: Mobbin references -->
+  <section class="mb-16">
+    <h2 class="text-2xl font-semibold mb-2">Mobbin references</h2>
+    <p class="mb-6" style="color: var(--text3)">
+      Fresh Mobbin pass, 2026-07-01. All 7 references below returned real, renderable images from
+      the Mobbin MCP — nothing here is a placeholder or a guessed URL.
+    </p>
+
+    <h3 class="text-lg font-semibold mb-4">Attention/inbox row anatomy</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/xgC5CCwf" alt="Linear Mobile Inbox, dark">
+        <div class="mt-2 font-semibold text-sm">Linear Mobile — Inbox (dark)</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/22608a29-8c0c-4417-8eb6-d40ab684a3d3" target="_blank" rel="noopener">mobbin.com/screens/22608a29…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: icon/avatar tile → title → single subtitle line with actor + relative time,
+          right-aligned unread dot. Don't copy: Linear's issue-ID prefix convention.
+        </p>
+      </div>
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/XHREI2Vj" alt="Linear Mobile Inbox, light">
+        <div class="mt-2 font-semibold text-sm">Linear Mobile — Inbox (light)</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/0248e978-f201-4ecc-b2aa-19ff8c38e2e5" target="_blank" rel="noopener">mobbin.com/screens/0248e978…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: consistent avatar-tile sizing and left alignment across mixed row types
+          (bell icon vs. person-initial). Don't copy: notification-verb phrasing ("commented",
+          "mentioned you") — Lancer's rows are actions, not social notifications.
+        </p>
+      </div>
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/x8oezmoj" alt="GitHub Issues assigned list">
+        <div class="mt-2 font-semibold text-sm">GitHub — Issues (Assigned)</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/cc606c73-c741-4374-81b7-d796501f3a97" target="_blank" rel="noopener">mobbin.com/screens/cc606c73…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: status icon + colored label chips (maps directly to Lancer's risk badge) sitting
+          inline with the title, age at trailing edge. Don't copy: GitHub's repo/issue-number
+          taxonomy.
+        </p>
+      </div>
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/NnvjbU9g" alt="Jira Cloud dashboard activity stream">
+        <div class="mt-2 font-semibold text-sm">Jira Cloud — Dashboard (Activity Stream)</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/c655ea29-a5e0-4cdf-afcd-2b071a0d2205" target="_blank" rel="noopener">mobbin.com/screens/c655ea29…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: the "activity stream" row pattern — avatar, actor name, action text, then
+          object + timestamp on the same line — is the closest existing pattern to
+          "agent name · tool · host · age". Don't copy: Jira's dense multi-module dashboard chrome.
+        </p>
+      </div>
+    </div>
+
+    <h3 class="text-lg font-semibold mb-4">Calm "all clear" empty states</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/6dVNnCJG" alt="Notion all caught up">
+        <div class="mt-2 font-semibold text-sm">Notion — "You're all caught up"</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/d3e05919-e5ed-4e71-9f0e-f63bce8ee347" target="_blank" rel="noopener">mobbin.com/screens/d3e05919…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: small circular checkmark glyph + one confirmation line + one muted instructional
+          line, no illustration. Closest match to the "restraint" direction the owner wants.
+          Don't copy: Notion's floating action button placement (irrelevant here).
+        </p>
+      </div>
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/p2WjCiqJ" alt="Substack all caught up">
+        <div class="mt-2 font-semibold text-sm">Substack — "You're all caught up!"</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/a266592e-26ac-40e8-82f2-0b31a5ac7480" target="_blank" rel="noopener">mobbin.com/screens/a266592e…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: checkmark-in-circle at small scale, generous whitespace, no CTA button — the
+          state speaks for itself. Don't copy: Substack's tab bar / discovery framing underneath.
+        </p>
+      </div>
+
+      <div class="mobbin-card card p-3">
+        <img src="https://mobbin.com/api/mcp/short/svhtShM3" alt="Threads caught up">
+        <div class="mt-2 font-semibold text-sm">Threads — "You're caught up!"</div>
+        <a class="link text-xs" href="https://mobbin.com/screens/e9ea523d-3770-48ba-98cf-546ea863146a" target="_blank" rel="noopener">mobbin.com/screens/e9ea523d…</a>
+        <p class="text-xs mt-2" style="color: var(--text3)">
+          Adopt: single outlined check-circle icon, one line of copy, sits inline in the existing
+          layout rather than replacing it (matches Lancer's "row inserted below headline, machines
+          section stays" plan). Don't copy: Threads' segmented filter pills above it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Proposed changes -->
+  <section class="mb-16">
+    <h2 class="text-2xl font-semibold mb-6">Proposed changes</h2>
+
+    <div class="card p-6 mb-6">
+      <div class="flex items-center gap-3 mb-3">
+        <h3 class="text-lg font-semibold">1. Attention card row anatomy</h3>
+        <span class="tag oq">2 open questions</span>
+      </div>
+      <p class="text-sm mb-2" style="color: var(--text4)">Current: <code>LancerHomeView.swift</code> <code>approvalAttentionCard</code>, lines 172–208; <code>approvalSubtitle</code>, lines 331–335.</p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Current behavior:</strong> header line (icon + "Approval needed"/"Approval expired"
+        + risk badge, unchanged) followed by one subtitle line, <code>"&lt;tool&gt; · &lt;host&gt;"</code>,
+        then the Review/View button. No agent identity, no age.
+      </p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Proposed behavior (exact row anatomy, top to bottom):</strong>
+      </p>
+      <ol class="list-decimal list-inside text-sm space-y-1 mb-3" style="color: var(--text2)">
+        <li>Header line — unchanged: icon + title + risk badge trailing.</li>
+        <li><strong>New:</strong> small agent-initial tile (~22×22px) leading the subtitle line.</li>
+        <li>Subtitle line extended from 2 to 3 segments:
+          <code>"&lt;agent name&gt; · &lt;tool&gt; · &lt;host&gt; · &lt;relative age&gt;"</code>.
+          <code>agent.displayName</code> and <code>relativeTimeLabel(_:)</code> already exist in
+          this file (lines 798–807 and 337–342) — just not wired into this card today.</li>
+        <li>Review/View button — unchanged.</li>
+      </ol>
+      <p class="text-sm" style="color: var(--text3)">
+        Informed by: Linear Mobile Inbox (avatar-tile + single dense subtitle line) and GitHub
+        Issues (status/label/age on one line).
+      </p>
+      <p class="text-sm mt-3" style="color: var(--accent)">
+        Open questions: (a) exact wrap/truncation behavior when all 4 subtitle segments don't fit
+        at large Dynamic Type sizes — which segment truncates first? (b) is a 22×22 agent tile the
+        right size relative to the existing risk badge, or should it match Inbox's 30×30 exactly
+        for visual consistency across the two surfaces?
+      </p>
+    </div>
+
+    <div class="card p-6 mb-6">
+      <div class="flex items-center gap-3 mb-3">
+        <h3 class="text-lg font-semibold">2. All-clear module</h3>
+        <span class="tag oq">2 open questions</span>
+      </div>
+      <p class="text-sm mb-2" style="color: var(--text4)">Current: <code>LancerHomeView.swift</code> <code>homeHeadline</code>, lines 465–467; <code>connectMachineCard</code>, lines 384–411; <code>machinesSection</code>, lines 346–382.</p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Current behavior:</strong> headline says "All clear tonight." when
+        <code>pendingApprovalCount == 0</code>; below it, either <code>connectMachineCard</code>
+        (no machines paired) or the live machine tree (machine paired) — no acknowledgment of
+        "caught up" beyond the headline sentence.
+      </p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Proposed behavior (exact content):</strong> a single-line, low-emphasis confirmation
+        row inserted between the headline and <code>YOUR MACHINES</code>, shown whenever
+        <code>fleetStore.attentionItems.isEmpty</code>: small checkmark glyph (<code>t.ok</code>
+        tone) + copy — placeholder: <em>"You're caught up — nothing needs review."</em> No CTA on
+        this row; the machine card/tree below it already carries the next action (pair, or open a
+        machine). <code>connectMachineCard</code> itself is judged adequate as-is and does not need
+        a rebuild — the gap was specifically the "all-clear AND a machine already paired" case
+        (screenshot 3 above), which has zero acknowledgment today.
+      </p>
+      <p class="text-sm" style="color: var(--text3)">
+        Informed by: Notion / Substack / Threads "all caught up" states — small checkmark, one
+        line, no illustration, inserted inline rather than replacing the layout.
+      </p>
+      <p class="text-sm mt-3" style="color: var(--accent)">
+        Open questions: (a) exact copy for the confirmation line (placeholder above, not final);
+        (b) should this row appear only when a machine is already paired (to avoid redundancy with
+        "Connect a machine"'s own copy), or unconditionally whenever all-clear?
+      </p>
+    </div>
+
+    <div class="card p-6">
+      <div class="flex items-center gap-3 mb-3">
+        <h3 class="text-lg font-semibold">3. Fold Inbox into Home</h3>
+        <span class="tag oq">2 open questions</span>
+      </div>
+      <p class="text-sm mb-2" style="color: var(--text4)">Current: <code>LancerSidebarView.swift</code> <code>primaryNavigation</code>, lines 185–211; <code>AppRoot.swift</code> line 1466; <code>SidebarShellState.swift</code> line 10.</p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Current behavior:</strong> the sidebar's <code>primaryNavigation</code> renders
+        three rows — Home, Inbox (badge = <code>state.pendingApprovalCount</code>), Machines. Home's
+        "See all" button already exists (shows when <code>items.count &gt; 2</code>) and already
+        calls <code>onOpenInbox()</code>, which <code>AppRoot.swift</code> already wires to
+        <code>sidebarState.navigate(to: .needsAttention)</code> — the exact same destination the
+        sidebar's Inbox row navigates to. <code>.needsAttention</code> renders the existing,
+        already-redesigned <code>InboxFeature/InboxView.swift</code>.
+      </p>
+      <p class="mb-3" style="color: var(--text2)">
+        <strong>Proposed behavior:</strong> remove the Inbox <code>SidebarNavRow</code> block from
+        <code>primaryNavigation</code>, leaving Home and Machines as the two remaining primary
+        rows (Governance is already folded into Settings, so this yields Home / Machines / Settings
+        — a 3-root IA, not the 4-root IA the original audit doc proposed, since Inbox stops being a
+        root entirely rather than becoming a 4th one). <strong>No new navigation plumbing is
+        required</strong> — "See all" already pushes the correct existing destination and screen;
+        the only change is removing the sidebar's persistent entry point to it.
+      </p>
+      <p class="text-sm" style="color: var(--text3)">
+        Informed by: Linear/GitHub inbox-clarity direction from the original audit (still holds) —
+        the fold is a navigation-IA decision, not a new visual pattern to adopt from Mobbin.
+      </p>
+      <p class="text-sm mt-3" style="color: var(--accent)">
+        Open questions: (a) does any attention-count badge move to the Home row itself, or to the
+        hamburger/drawer affordance, now that Inbox is gone as a sidebar row — or does the badge
+        simply disappear from the sidebar entirely and live only on Home's own headline/cards? (b)
+        should <code>.needsAttention</code>, now reached only as a drill-in from Home, get an
+        explicit "back to Home" affordance instead of relying on generic <code>previousDestination</code>
+        back-navigation?
+      </p>
+    </div>
+  </section>
+
+  <!-- Section 4: File-level plan -->
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold mb-6">File-level plan</h2>
+    <p class="mb-4" style="color: var(--text3)">No code in this pass — plan only. Full detail (with rationale) also in <code>PLAN.md</code> alongside this file.</p>
+    <table class="plan">
+      <thead>
+        <tr><th style="width: 34%">File</th><th>Change</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">Packages/LancerKit/Sources/AppFeature/LancerHomeView.swift</td>
+          <td>Rework <code>approvalAttentionCard</code> (add agent-initial tile + extend
+            <code>approvalSubtitle</code> to 3 segments incl. relative age); add a new all-clear
+            confirmation row view, inserted between <code>greeting</code> and
+            <code>machinesSection</code> in <code>body</code> when
+            <code>fleetStore.attentionItems.isEmpty</code>; add a local agent-initial mapping
+            mirroring <code>InboxView</code>'s.</td>
+        </tr>
+        <tr>
+          <td class="mono">Packages/LancerKit/Sources/AppFeature/LancerSidebarView.swift</td>
+          <td>Remove the Inbox <code>SidebarNavRow</code> from <code>primaryNavigation</code>;
+            resolve the open question on where (if anywhere) an attention badge moves.</td>
+        </tr>
+        <tr>
+          <td class="mono">Packages/LancerKit/Sources/AppFeature/AppRoot.swift</td>
+          <td>No functional change expected — <code>onOpenInbox</code> already wires "See all" to
+            <code>.needsAttention</code>; re-verify reachability and badge wiring after the sidebar
+            row removal.</td>
+        </tr>
+        <tr>
+          <td class="mono">Packages/LancerKit/Sources/AppFeature/SidebarShellState.swift</td>
+          <td>No change expected — <code>.needsAttention</code> remains a valid destination, just no
+            longer a <code>SidebarSection</code> primary row.</td>
+        </tr>
+        <tr>
+          <td class="mono">Packages/LancerKit/Sources/InboxFeature/InboxView.swift</td>
+          <td>No change — already the correct full-list screen; confirm its own back-navigation
+            still reads correctly when reached only from Home.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-sm mt-4" style="color: var(--text4)">No daemon, push-backend, or agent-runner changes implied — Home/sidebar UI only.</p>
+  </section>
+
+  <footer class="text-xs text-center py-8" style="color: var(--text4)">
+    Generated 2026-07-01 · research/report only, no source files edited.
+  </footer>
+
+</body>
+</html>
