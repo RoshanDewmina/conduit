@@ -16,7 +16,8 @@ public struct FleetView: View {
     private let onReconnect: (Host) -> Void
     private let onDelete: (Host) -> Void
     private let onQuotaGuard: (() -> Void)?
-    /// Open the live block terminal for a given slot (Finding #5 drill-in).
+    /// Legacy direct-terminal callback. V1 Machines is a health and trusted-device
+    /// surface, so this view no longer renders terminal entry points.
     private let onOpenTerminal: ((UUID) -> Void)?
     private let onOpenThread: ((String) -> Void)?
     /// Relay-paired machine: the daemon is reachable over the blind relay rather
@@ -166,9 +167,10 @@ public struct FleetView: View {
                             }
                             actionButtons
                         } else {
-                            agentsSection
-
-                            statCardsRow
+                            if !store.slots.isEmpty {
+                                agentsSection
+                                statCardsRow
+                            }
 
                             if let onQuotaGuard, quotaGuardStore != nil {
                                 Button(action: onQuotaGuard) { quotaGuardEntry }
@@ -256,8 +258,7 @@ public struct FleetView: View {
 
     private var machineName: String {
         focusSlot?.hostName
-            ?? reconnectableHosts.first?.name
-            ?? (relayActive ? (relayHostName ?? "Relay machine") : "Machines")
+            ?? (relayActive ? (relayHostName ?? "Relay machine") : (reconnectableHosts.first?.name ?? "Machines"))
     }
 
     @ViewBuilder
@@ -287,27 +288,29 @@ public struct FleetView: View {
             Haptics.selection()
             onOpenRelayChat?()
         } label: {
-            HStack(spacing: 12) {
-                PixelAvatar(seed: host, size: 40)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(host)
-                            .font(.dsSansPt(16, weight: .semibold))
-                            .foregroundStyle(t.text)
+            VStack(alignment: .leading, spacing: 13) {
+                HStack(spacing: 12) {
+                    PixelAvatar(seed: host, size: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Text(host)
+                                .font(.dsSansPt(16, weight: .semibold))
+                                .foregroundStyle(t.text)
+                                .lineLimit(1)
+                            relayChip(.relayPaired)
+                        }
+                        Text(agentsLine)
+                            .font(.dsSansPt(13))
+                            .foregroundStyle(t.text3)
                             .lineLimit(1)
-                        relayChip(.relayPaired)
                     }
-                    Text(agentsLine)
-                        .font(.dsSansPt(13))
-                        .foregroundStyle(t.text3)
-                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    MachineHealthBadge(label: "Online", tone: t.ok)
                 }
-                Spacer(minLength: 8)
-                HStack(spacing: 5) {
-                    Circle().fill(t.ok).frame(width: 7, height: 7)
-                    Text("online")
-                        .font(.dsMonoPt(11, weight: .medium))
-                        .foregroundStyle(t.ok)
+
+                HStack(spacing: 8) {
+                    MachineFactPill(label: "Last seen now")
+                    MachineFactPill(label: "Relay handles dispatch and approvals")
                 }
             }
             .padding(14)
@@ -317,8 +320,8 @@ public struct FleetView: View {
             .contentShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(host), connected over relay")
-        .accessibilityHint("Opens a new chat on this machine")
+        .accessibilityLabel("\(host), online over relay")
+        .accessibilityHint("Opens work on this machine")
     }
 
     private func statusLine(_ state: Session.ConnectionState?) -> String {
@@ -344,7 +347,9 @@ public struct FleetView: View {
     private func runningNowBand(_ loop: Loop) -> some View {
         Button {
             Haptics.selection()
-            if let slot = focusSlot, let onOpenTerminal { onOpenTerminal(slot.id) }
+            if let slot = focusSlot {
+                openLatestThread(for: slot)
+            }
         } label: {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -375,7 +380,7 @@ public struct FleetView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Running now: \(loop.goal)")
-        .accessibilityHint("")
+        .accessibilityHint("Opens the latest work thread when available")
     }
 
     private var loopProgressBar: some View {
@@ -415,9 +420,6 @@ public struct FleetView: View {
                     rowDivider
                 }
 
-                if onOpenTerminal != nil {
-                    openTerminalRow
-                }
             }
             .background(t.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(t.border, lineWidth: 1))
@@ -470,7 +472,6 @@ public struct FleetView: View {
         guard let slot = focusSlot else { return }
         Haptics.selection()
         guard let chatRepo, let onOpenThread else {
-            onOpenTerminal?(slot.id)
             return
         }
         Task {
@@ -483,41 +484,9 @@ public struct FleetView: View {
             await MainActor.run {
                 if let conversation {
                     onOpenThread(conversation.id)
-                } else {
-                    onOpenTerminal?(slot.id)
                 }
             }
         }
-    }
-
-    /// Board's dark ">_" terminal tile + "Open terminal" + chevron.
-    private var openTerminalRow: some View {
-        Button {
-            Haptics.selection()
-            if let slot = focusSlot, let onOpenTerminal { onOpenTerminal(slot.id) }
-        } label: {
-            HStack(spacing: 11) {
-                Text(">_")
-                    .font(.dsMonoPt(12, weight: .semibold))
-                    .foregroundStyle(t.termOk)
-                    .frame(width: 28, height: 28)
-                    .background(t.termSurface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text("Open terminal")
-                    .font(.dsSansPt(13.5, weight: .semibold))
-                    .foregroundStyle(t.text)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(t.text4)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(focusSlot == nil || onOpenTerminal == nil)
-        .accessibilityLabel("Open terminal")
     }
 
     private func initialTile(_ name: String) -> some View {
@@ -730,16 +699,37 @@ public struct FleetView: View {
     }
 
     private var pendingApprovalAction: (() -> Void)? {
-        guard let slot = store.firstSlotWithPendingApprovals(), let onOpenTerminal else { return nil }
-        return { onOpenTerminal(slot.id) }
+        guard let slot = store.firstSlotWithPendingApprovals() else { return nil }
+        return { openLatestThread(for: slot) }
     }
 
     private var emptyState: some View {
         DSEmptyState(
             icon: .server,
-            title: "No agents connected",
-            subtitle: "Connect the SSH host where your agents work. Lancer will attach the approval bridge so risky actions pause on this phone."
+            title: "No machines paired",
+            subtitle: "Pair the machine where your agents run. Lancer will use the relay for dispatch, output, and approvals without turning this phone into a terminal."
         )
+    }
+
+    private func openLatestThread(for slot: FleetStore.Slot) {
+        guard let chatRepo, let onOpenThread else { return }
+        let agentID = slot.inboxVM.approvals.first(where: \.isPending)?.agent.rawValue
+            ?? slot.bridgeStatus?.agents.first?.agent
+            ?? "claudeCode"
+        Task {
+            let conversation = await FleetThreadMapper.findConversation(
+                hostName: slot.hostName,
+                agentID: agentID,
+                cwd: slot.sessionViewModel.cwd,
+                chatRepo: chatRepo
+            )
+            await MainActor.run {
+                if let conversation {
+                    Haptics.selection()
+                    onOpenThread(conversation.id)
+                }
+            }
+        }
     }
 
     private func savedHostsGroup(_ hosts: [Host]) -> some View {
@@ -832,6 +822,40 @@ public struct FleetView: View {
         case .devin:      "Devin"
         case .unknown:    "Agent"
         }
+    }
+}
+
+private struct MachineHealthBadge: View {
+    let label: String
+    let tone: Color
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(tone)
+                .frame(width: 7, height: 7)
+            Text(label.uppercased())
+                .font(.dsMonoPt(10, weight: .semibold))
+                .foregroundStyle(tone)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(tone.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct MachineFactPill: View {
+    let label: String
+    @Environment(\.lancerTokens) private var t
+
+    var body: some View {
+        Text(label)
+            .font(.dsMonoPt(10, weight: .medium))
+            .foregroundStyle(t.text4)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 }
 #endif
