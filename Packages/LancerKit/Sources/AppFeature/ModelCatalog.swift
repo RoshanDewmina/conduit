@@ -54,5 +54,14 @@ enum ModelCatalog {
         }
         return id
     }
+
+    /// The vendor a model id belongs to, if any — used to recover which agent a
+    /// persisted model selection maps to without a separate persisted agent id.
+    static func vendor(forModelID id: String) -> String? {
+        for vendor in ["claudeCode", "codex", "opencode", "kimi", "openrouter"] {
+            if models(for: vendor).contains(where: { $0.id == id }) { return vendor }
+        }
+        return nil
+    }
 }
 #endif

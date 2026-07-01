@@ -70,9 +70,7 @@ public struct NewChatTabView: View {
     /// project directory the user picked for this run (the Omnara "in [workspace]" slot).
     @State private var selectedCwd: String = ""
     @State private var customCwd: String = ""
-    @State private var showAgentPicker = false
-    @State private var showMachinePicker = false
-    @State private var showWorkspacePicker = false
+    @State private var showContextPicker = false
     @State private var showComposer = false
     @State private var showOptions = false
     @State private var selectedModel: String = ""
@@ -100,6 +98,11 @@ public struct NewChatTabView: View {
     /// Recently-used custom project paths, newest first, persisted so a path the
     /// user typed once is reusable from the picker instead of retyped each time.
     @AppStorage("lancer.recentProjectPaths") private var recentProjectPathsRaw: String = ""
+    /// Last-used machine / workspace / model, persisted so the next New Chat entry
+    /// resumes the prior context instead of always defaulting to "first online agent".
+    @AppStorage("lancer.newChat.lastMachine") private var lastMachineID: String = ""
+    @AppStorage("lancer.newChat.lastWorkspace") private var lastWorkspacePath: String = ""
+    @AppStorage("lancer.newChat.lastModel") private var lastModelID: String = ""
 
     // Persistence
     @State private var conversationID: String?
@@ -183,9 +186,9 @@ public struct NewChatTabView: View {
             prompt = ""
             switch cmd.name {
             case "/new", "/clear": prompt = ""
-            case "/model", "/budget": showComposer = true
-            case "/agent": showAgentPicker = true
-            case "/workspace": customCwd = ""; showWorkspacePicker = true
+            case "/budget": showComposer = true
+            case "/model", "/agent": showContextPicker = true
+            case "/workspace": customCwd = ""; showContextPicker = true
             default: break
             }
         } else {
@@ -255,11 +258,7 @@ public struct NewChatTabView: View {
         // Chat follows the app's light/dark scheme (inherits the parent's tokens);
         // terminal blocks keep their own terminal palette via term* tokens.
         .background(t.bg.ignoresSafeArea())
-        .onAppear {
-            if selectedAgentID.isEmpty, let first = agents.first(where: { !$0.isOffline }) {
-                selectedAgentID = first.id
-            }
-        }
+        .onAppear { restoreLastSelectionOrDefault() }
         .task(id: selectedAgentID) { await refreshCommands() }
         .onChange(of: showComposer) { _, open in
             if open { Task { await refreshCommands() } }
@@ -272,28 +271,12 @@ public struct NewChatTabView: View {
             Task { await loadArtifacts() }
         }
         .bottomDrawer(
-            isPresented: $showAgentPicker,
-            title: "Choose agent",
-            subtitle: "Pick which agent runs on \(machineLabel).",
+            isPresented: $showContextPicker,
+            title: "Chat context",
+            subtitle: "Choose the machine, workspace, and model for this run.",
             detents: [.medium, .large]
         ) {
-            agentPickerContent
-        }
-        .bottomDrawer(
-            isPresented: $showMachinePicker,
-            title: "Choose machine",
-            subtitle: "Pick where this work runs.",
-            detents: [.medium, .large]
-        ) {
-            machinePickerContent
-        }
-        .bottomDrawer(
-            isPresented: $showWorkspacePicker,
-            title: "Project",
-            subtitle: "Where this run works. Defaults to the agent's directory.",
-            detents: [.medium, .large]
-        ) {
-            workspacePickerContent
+            contextPickerContent
         }
         .bottomDrawer(
             isPresented: $showBudgetSheet,
@@ -311,11 +294,11 @@ public struct NewChatTabView: View {
         }
         .bottomDrawer(
             isPresented: $showComposer,
-            title: "Run settings",
-            subtitle: "Choose where this runs and which model to use.",
+            title: "Budget cap",
+            subtitle: "Set a spending cap for this run before you send.",
             detents: [.medium, .large]
         ) {
-            runSettingsContent
+            budgetOptionsContent
         }
         .sheet(item: $selectedArtifact) { artifact in
             ChatArtifactDetailView(artifact: artifact)
@@ -436,16 +419,17 @@ public struct NewChatTabView: View {
             .padding(.horizontal, 14)
 
             HStack(spacing: 8) {
-                Button { showAgentPicker = true } label: {
+                Button { showContextPicker = true } label: {
                     HStack(spacing: 5) {
                         DSStatusDot(tone: selectedAgent?.isOffline == true ? .off : .accent, size: 7)
-                        Text(agentLabel)
-                            .font(.dsSansPt(12.5, weight: .semibold))
-                            .foregroundStyle(t.text2)
-                        Text("· \(machineLabel)")
-                            .font(.dsSansPt(11.5))
-                            .foregroundStyle(t.text4)
-                            .lineLimit(1)
+                        ViewThatFits(in: .horizontal) {
+                            Text(contextPillFullText)
+                                .lineLimit(1)
+                            Text(contextPillCompactText)
+                                .lineLimit(1)
+                        }
+                        .font(.dsSansPt(12.5, weight: .semibold))
+                        .foregroundStyle(t.text2)
                     }
                     .padding(.horizontal, 11)
                     .padding(.vertical, 7)
@@ -454,14 +438,14 @@ public struct NewChatTabView: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
                 Button { showComposer = true } label: {
-                    Image(systemName: "slider.horizontal.3")
+                    Image(systemName: "dollarsign.circle")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(t.text3)
                         .frame(width: 32, height: 32)
                         .background(t.surface, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Options — model, budget, project")
+                .accessibilityLabel("Budget options")
             }
             .padding(.horizontal, 16)
         }
@@ -469,43 +453,15 @@ public struct NewChatTabView: View {
         .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
-    /// Config-only sheet opened by the composer's settings control: choose the
-    /// machine, agent, project directory, model, and budget for the run. The prompt
-    /// and Send live on the inline composer landing — this sheet never duplicates
-    /// them; it just configures where/how the next message runs and is dismissed.
-    private var runSettingsContent: some View {
+    /// Config-only sheet opened by the composer's budget control. Machine, workspace,
+    /// and model now live in `contextPickerContent` (one tap on the composer pill) —
+    /// this sheet is deliberately minimal, budget-only, since that's all that's left
+    /// once Model moved out. The prompt and Send live on the composer landing; this
+    /// sheet never duplicates them, it just sets the cap for the next dispatch.
+    private var budgetOptionsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    composerPill(
-                        title: machineLabel,
-                        subtitle: "Machine",
-                        icon: .server,
-                        tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
-                    ) {
-                        showMachinePicker = true
-                    }
-                    composerPill(
-                        title: agentLabel,
-                        subtitle: "Agent",
-                        icon: .sparkles,
-                        tone: selectedAgent?.isOffline == true ? t.text4 : t.accent
-                    ) {
-                        showAgentPicker = true
-                    }
-                }
-
-                composerPill(
-                    title: workspaceLabel,
-                    subtitle: "Project",
-                    icon: .folder,
-                    tone: t.text3
-                ) {
-                    customCwd = ""
-                    showWorkspacePicker = true
-                }
-
-                optionsPanel
+                budgetField
 
                 Button {
                     Haptics.selection()
@@ -519,53 +475,13 @@ public struct NewChatTabView: View {
                         .background(t.accent, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Done configuring the run")
+                .accessibilityLabel("Done setting the budget")
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
             .padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    // MARK: - Composer pill (Agent / Host control)
-
-    private func composerPill(
-        title: String,
-        subtitle: String,
-        icon: DSIcon,
-        tone: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                DSIconView(icon, size: 15, color: tone)
-                    .frame(width: 32, height: 32)
-                    .background(t.surface2, in: Circle())
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(subtitle)
-                        .font(.dsSansPt(11, weight: .medium))
-                        .foregroundStyle(t.text4)
-                    Text(title)
-                        .font(.dsSansPt(13, weight: .semibold))
-                        .foregroundStyle(t.text2)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(t.text4)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 56)
-            .frame(maxWidth: .infinity)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Conversation turns
@@ -876,6 +792,29 @@ public struct NewChatTabView: View {
         return p.isEmpty ? "~" : p
     }
 
+    private func lastPathComponent(_ path: String) -> String {
+        let shown = displayPath(path)
+        let last = (shown as NSString).lastPathComponent
+        return last.isEmpty ? shown : last
+    }
+
+    private var modelShortLabel: String {
+        selectedModel.isEmpty ? "Auto" : ModelCatalog.label(for: selectedModel)
+    }
+
+    /// The composer pill's full text: machine · workspace · model. Reads left to
+    /// right in priority order — if it doesn't fit, the workspace segment (the
+    /// middle one) drops first via `contextPillCompactText`, same truncation-priority
+    /// pattern as `LancerHomeView.approvalSubtitle` (which drops its lowest-priority
+    /// segment first), just driven by available width instead of Dynamic Type size.
+    private var contextPillFullText: String {
+        "\(machineLabel) · \(lastPathComponent(effectiveCwd)) · \(modelShortLabel)"
+    }
+
+    private var contextPillCompactText: String {
+        "\(machineLabel) · \(modelShortLabel)"
+    }
+
     /// Distinct known project directories across the connected agents, selected
     /// agent's cwd first — the quick-pick list in the Project drawer.
     private var projectDirs: [String] {
@@ -902,7 +841,7 @@ public struct NewChatTabView: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 // Agent chip
-                Button { showAgentPicker = true } label: {
+                Button { showContextPicker = true } label: {
                     HStack(spacing: 5) {
                         DSStatusDot(tone: .accent, size: 7)
                         Text(agentLabel)
@@ -916,7 +855,7 @@ public struct NewChatTabView: View {
                 .buttonStyle(.plain)
 
                 // Machine \u{00B7} dir chip
-                Button { showAgentPicker = true } label: {
+                Button { showContextPicker = true } label: {
                     Text(machineLabel)
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.text3)
@@ -955,6 +894,47 @@ public struct NewChatTabView: View {
             .padding(.vertical, 10)
             .background(t.bg.ignoresSafeArea(edges: .bottom))
         }
+    }
+
+    // MARK: - Resume last selection
+
+    /// Restores the last-used machine/workspace/model on New Chat entry instead of
+    /// always defaulting to "first online agent". Falls back to today's default
+    /// picking logic if the persisted machine/agent no longer exists or is offline.
+    private func restoreLastSelectionOrDefault() {
+        guard selectedAgentID.isEmpty else { return }
+        if let agent = restoreAgent(machineKey: lastMachineID, modelID: lastModelID) {
+            selectedAgentID = agent.id
+            if !lastModelID.isEmpty, ModelCatalog.vendor(forModelID: lastModelID) == agent.vendor {
+                selectedModel = lastModelID
+            }
+            if !lastWorkspacePath.isEmpty {
+                selectedCwd = lastWorkspacePath
+            }
+        } else if let first = agents.first(where: { !$0.isOffline }) {
+            selectedAgentID = first.id
+        }
+    }
+
+    /// Finds an online agent on the persisted machine, preferring the one whose
+    /// vendor matches the persisted model id (so a Codex model restores the Codex
+    /// agent, not just any agent on that host).
+    private func restoreAgent(machineKey: String, modelID: String) -> DispatchAgent? {
+        guard !machineKey.isEmpty else { return nil }
+        let candidates = agents.filter { ($0.hostID ?? $0.hostName ?? "") == machineKey && !$0.isOffline }
+        guard !candidates.isEmpty else { return nil }
+        if !modelID.isEmpty, let vendor = ModelCatalog.vendor(forModelID: modelID) {
+            return candidates.first(where: { $0.vendor == vendor }) ?? candidates.first
+        }
+        return candidates.first
+    }
+
+    /// Persists the current machine/workspace/model so the next New Chat entry
+    /// resumes this context.
+    private func persistSelection() {
+        lastMachineID = selectedAgent?.hostID ?? selectedAgent?.hostName ?? ""
+        lastWorkspacePath = selectedCwd
+        lastModelID = selectedModel
     }
 
     // MARK: - Actions
@@ -1103,48 +1083,23 @@ public struct NewChatTabView: View {
         return words.count > 6 ? truncatedWords + "\u{2026}" : truncatedWords
     }
 
-    // MARK: - Options panel (idle compose state only)
+    // MARK: - Budget field (idle compose state only)
 
-    private var optionsPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Model")
-                    .font(.dsSansPt(13, weight: .semibold))
-                    .foregroundStyle(t.text3)
-                Menu {
-                    Button("Auto (agent default)") { selectedModel = "" }
-                    ForEach(ModelCatalog.models(for: selectedAgent?.vendor ?? ""), id: \.id) { model in
-                        Button(model.label) { selectedModel = model.id }
-                    }
-                } label: {
-                    HStack {
-                        Text(selectedModel.isEmpty ? "Auto (agent default)" : ModelCatalog.label(for: selectedModel))
-                            .font(.dsSansPt(14, weight: .medium))
-                            .foregroundStyle(t.text2)
-                            .lineLimit(1)
-                        Spacer()
-                        DSIconView(.chevronDown, size: 12, color: t.text3)
-                    }
-                    .padding(.horizontal, 13)
-                    .frame(height: 46)
-                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                }
+    private var budgetField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Budget cap")
+                .font(.dsSansPt(13, weight: .semibold))
+                .foregroundStyle(t.text3)
+            HStack(spacing: 6) {
+                Text("$").font(.dsMonoPt(13)).foregroundStyle(t.text3)
+                TextField("None", text: $budgetText)
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .keyboardType(.decimalPad)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Budget cap")
-                    .font(.dsSansPt(13, weight: .semibold))
-                    .foregroundStyle(t.text3)
-                HStack(spacing: 6) {
-                    Text("$").font(.dsMonoPt(13)).foregroundStyle(t.text3)
-                    TextField("None", text: $budgetText)
-                        .font(.dsMonoPt(13))
-                        .foregroundStyle(t.text)
-                        .keyboardType(.decimalPad)
-                }
-                .padding(.horizontal, 13)
-                .frame(height: 46)
-                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            }
+            .padding(.horizontal, 13)
+            .frame(height: 46)
+            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         }
         .padding(14)
         .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
@@ -1162,70 +1117,226 @@ public struct NewChatTabView: View {
             .map { ($0.key, $0.value) }
     }
 
-    // MARK: - Workspace (project directory) picker
+    // MARK: - Context picker (Machine / Workspace / Model — one consolidated sheet)
 
-    private var workspacePickerContent: some View {
+    /// One combined sheet replacing the old separate Machine, Agent, and Model
+    /// pickers: three always-visible sections (never a stepped flow). Rows don't
+    /// auto-dismiss on tap — the user can adjust more than one section before
+    /// tapping Done, mirroring `chat-context/b/page.tsx`.
+    private var contextPickerContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if !projectDirs.isEmpty {
-                    VStack(spacing: 6) {
-                        ForEach(projectDirs, id: \.self) { dir in
-                            workspaceRow(dir)
+            VStack(alignment: .leading, spacing: 20) {
+                contextSection("Machine") {
+                    ForEach(groupedAgents, id: \.0) { machine, agentsOnMachine in
+                        contextRow(
+                            icon: .server,
+                            label: machine,
+                            sub: "\(agentsOnMachine.count) agent\(agentsOnMachine.count == 1 ? "" : "s")",
+                            isSelected: machine == machineLabel,
+                            isDisabled: agentsOnMachine.allSatisfy(\.isOffline)
+                        ) {
+                            selectMachine(machine, agentsOnMachine)
                         }
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Custom path")
-                        .font(.dsSansPt(13, weight: .semibold))
-                        .foregroundStyle(t.text3)
-                    HStack(spacing: 8) {
-                        TextField("~/projects/my-app", text: $customCwd)
-                            .font(.dsMonoPt(13))
-                            .foregroundStyle(t.text)
-                            .tint(t.accent)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.go)
-                            .onSubmit { useCustomCwd() }
-                            .padding(.horizontal, 12)
-                            .frame(height: 46)
-                            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                        DSButton("Use", variant: .secondary, size: .sm) { useCustomCwd() }
-                            .disabled(customCwd.trimmingCharacters(in: .whitespaces).isEmpty)
+                contextSection("Workspace") {
+                    ForEach(projectDirs, id: \.self) { dir in
+                        contextRow(
+                            icon: .folder,
+                            label: lastPathComponent(dir),
+                            sub: displayPath(dir),
+                            isSelected: dir == effectiveCwd,
+                            isDisabled: false
+                        ) {
+                            selectWorkspace(dir)
+                        }
+                    }
+                    customWorkspaceEntry
+                }
+
+                contextSection("Model") {
+                    ForEach(scopedAgentsForModel) { agent in
+                        modelAgentGroup(agent)
                     }
                 }
+
+                Button {
+                    Haptics.selection()
+                    showContextPicker = false
+                } label: {
+                    Text("Done")
+                        .font(.dsSansPt(16, weight: .semibold))
+                        .foregroundStyle(t.accentFg)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(t.accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Done configuring the run")
             }
             .padding(.horizontal, 20)
             .padding(.top, 6)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
-    private func workspaceRow(_ dir: String) -> some View {
-        let isSelected = dir == effectiveCwd
-        return Button {
+    private func contextSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.dsMonoPt(10.5, weight: .medium))
+                .tracking(1.2)
+                .foregroundStyle(t.text4)
+            VStack(spacing: 6) { content() }
+        }
+    }
+
+    /// Shared row style for all three sections: icon + label + sub-label + a
+    /// checkmark on the selected row. Offline/unavailable rows are `.disabled` AND
+    /// visibly dimmed — never just tappable-but-inert.
+    private func contextRow(
+        icon: DSIcon,
+        label: String,
+        sub: String?,
+        isSelected: Bool,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
             Haptics.selection()
-            selectedCwd = dir
-            showWorkspacePicker = false
+            action()
         } label: {
             HStack(spacing: 12) {
-                DSIconView(.folder, size: 15, color: isSelected ? t.accent : t.text3)
-                Text(displayPath(dir))
-                    .font(.dsMonoPt(12.5))
-                    .foregroundStyle(isSelected ? t.text : t.text2)
-                    .lineLimit(1)
+                DSIconView(icon, size: 15, color: isDisabled ? t.text4 : (isSelected ? t.accent : t.text3))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.dsSansPt(14, weight: .medium))
+                        .foregroundStyle(isDisabled ? t.text4 : t.text)
+                        .lineLimit(1)
+                    if let sub, !sub.isEmpty {
+                        Text(sub)
+                            .font(.dsMonoPt(11))
+                            .foregroundStyle(t.text4)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
                 if isSelected {
-                    DSIconView(.check, size: 15, color: t.accent)
+                    DSIconView(.check, size: 14, color: t.accent)
                 }
             }
             .padding(.horizontal, 14)
-            .frame(height: 52)
-            .background(isSelected ? t.surface2 : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .frame(height: sub == nil ? 48 : 56)
+            .background(isSelected ? t.accentSoft : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                    .strokeBorder(isSelected ? t.accent.opacity(0.6) : t.border.opacity(0.65), lineWidth: 1)
+            )
             .contentShape(Rectangle())
+            .opacity(isDisabled ? 0.55 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
+    }
+
+    /// One agent's model group within the Model section: an "Auto" row plus one
+    /// row per `ModelCatalog` model for that agent's vendor. Selecting any row here
+    /// sets both the model AND the agent — this is how Model absorbs the old Agent
+    /// picker's job instead of duplicating it as a fourth section.
+    private func modelAgentGroup(_ agent: DispatchAgent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(agent.name)
+                .font(.dsMonoPt(10.5, weight: .medium))
+                .tracking(0.6)
+                .foregroundStyle(t.text4)
+                .padding(.horizontal, 4)
+            VStack(spacing: 6) {
+                contextRow(
+                    icon: .sparkles,
+                    label: "Auto (agent default)",
+                    sub: nil,
+                    isSelected: agent.id == selectedAgentID && selectedModel.isEmpty,
+                    isDisabled: agent.isOffline
+                ) {
+                    selectModel(agent: agent, modelID: "")
+                }
+                ForEach(ModelCatalog.models(for: agent.vendor), id: \.id) { model in
+                    contextRow(
+                        icon: .sparkles,
+                        label: model.label,
+                        sub: nil,
+                        isSelected: agent.id == selectedAgentID && selectedModel == model.id,
+                        isDisabled: agent.isOffline
+                    ) {
+                        selectModel(agent: agent, modelID: model.id)
+                    }
+                }
+            }
+            .padding(6)
+            .background(t.surface.opacity(0.76), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                    .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
+            )
+        }
+    }
+
+    /// Agents to list in the Model section, scoped to the currently-selected
+    /// machine (mirrors the old agent picker's scoping). Falls back to every agent
+    /// if nothing is selected yet (shouldn't happen in practice — `onAppear`
+    /// always picks a default or restores one before the sheet can open).
+    private var scopedAgentsForModel: [DispatchAgent] {
+        groupedAgents.first { $0.0 == machineLabel }?.1 ?? agents
+    }
+
+    private func selectMachine(_ machine: String, _ agentsOnMachine: [DispatchAgent]) {
+        guard let pick = agentsOnMachine.first(where: { !$0.isOffline }) else { return }
+        selectedAgentID = pick.id
+        // A new machine invalidates both the workspace default and the model
+        // selection (models are vendor-specific) — reset both, same as today's
+        // machine-picker behavior for cwd.
+        selectedCwd = ""
+        selectedModel = ""
+        persistSelection()
+    }
+
+    private func selectWorkspace(_ dir: String) {
+        selectedCwd = dir
+        persistSelection()
+    }
+
+    private func selectModel(agent: DispatchAgent, modelID: String) {
+        selectedAgentID = agent.id
+        selectedModel = modelID
+        persistSelection()
+    }
+
+    private var customWorkspaceEntry: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Custom path")
+                .font(.dsSansPt(12, weight: .medium))
+                .foregroundStyle(t.text3)
+            HStack(spacing: 8) {
+                TextField("~/projects/my-app", text: $customCwd)
+                    .font(.dsMonoPt(13))
+                    .foregroundStyle(t.text)
+                    .tint(t.accent)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit { useCustomCwd() }
+                    .padding(.horizontal, 12)
+                    .frame(height: 46)
+                    .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                DSButton("Use", variant: .secondary, size: .sm) { useCustomCwd() }
+                    .disabled(customCwd.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(.top, 4)
     }
 
     private func useCustomCwd() {
@@ -1234,7 +1345,8 @@ public struct NewChatTabView: View {
         Haptics.selection()
         selectedCwd = trimmed
         rememberProjectPath(trimmed)
-        showWorkspacePicker = false
+        customCwd = ""
+        persistSelection()
     }
 
     /// Recently-used custom paths (newest first), persisted across launches.
@@ -1247,127 +1359,6 @@ public struct NewChatTabView: View {
         var recents = recentProjectPaths.filter { $0 != path }
         recents.insert(path, at: 0)
         recentProjectPathsRaw = recents.prefix(8).joined(separator: "\n")
-    }
-
-    /// Agent picker, scoped to the currently-selected machine: lists just that
-    /// host's agents. If no machine is selected yet, shows all (grouped by machine).
-    private var agentPickerContent: some View {
-        let groups = groupedAgents
-        let scoped = groups.first { $0.0 == machineLabel }.map { [$0] } ?? groups
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(scoped, id: \.0) { group in
-                    agentPickerGroup(machine: group.0, agents: group.1)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
-            .padding(.bottom, 28)
-        }
-    }
-
-    /// Machine picker: one row per connected host. Choosing a machine selects its
-    /// first available agent so the run is immediately dispatchable.
-    private var machinePickerContent: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                ForEach(groupedAgents, id: \.0) { machine, agents in
-                    let firstOnline = agents.first { !$0.isOffline } ?? agents.first
-                    let isSelected = machine == machineLabel
-                    Button {
-                        if let pick = firstOnline {
-                            selectedAgentID = pick.id
-                            selectedCwd = ""
-                        }
-                        showMachinePicker = false
-                    } label: {
-                        HStack(spacing: 12) {
-                            DSIconView(.server, size: 16, color: isSelected ? t.accent : t.text3)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(machine)
-                                    .font(.dsSansPt(15, weight: .semibold))
-                                    .foregroundStyle(t.text)
-                                Text("\(agents.count) agent\(agents.count == 1 ? "" : "s")")
-                                    .font(.dsMonoPt(11))
-                                    .foregroundStyle(t.text4)
-                            }
-                            Spacer(minLength: 0)
-                            if isSelected {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(t.accent)
-                            }
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(isSelected ? t.accentSoft : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                                .strokeBorder(isSelected ? t.accent : t.border, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
-            .padding(.bottom, 28)
-        }
-    }
-
-    private func agentPickerGroup(machine: String, agents: [DispatchAgent]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(machine)
-                .font(.dsSansPt(15, weight: .semibold))
-                .foregroundStyle(t.text2)
-                .padding(.horizontal, 4)
-            VStack(spacing: 6) {
-                ForEach(agents) { agent in
-                    agentPickerRow(agent)
-                }
-            }
-            .padding(6)
-            .background(t.surface.opacity(0.76), in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                    .strokeBorder(t.border.opacity(0.65), lineWidth: 1)
-            )
-        }
-    }
-
-    private func agentPickerRow(_ agent: DispatchAgent) -> some View {
-        let isSelected = agent.id == selectedAgentID
-        return Button {
-            guard !agent.isOffline else { return }
-            selectedAgentID = agent.id
-            selectedCwd = ""
-            showAgentPicker = false
-        } label: {
-            HStack(spacing: 12) {
-                DSStatusDot(tone: agent.isOffline ? .off : .ok, size: 8)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(agent.name)
-                        .font(.dsSansPt(16, weight: .semibold))
-                        .foregroundStyle(agent.isOffline ? t.text4 : t.text)
-                    Text(agent.vendor.isEmpty ? agent.cwd : "\(agent.vendor) · \(agent.cwd)")
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.text3)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if isSelected {
-                    DSIconView(.check, size: 15, color: t.accent)
-                        .frame(width: 30, height: 30)
-                        .background(t.accentSoft, in: Circle())
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 64)
-            .background(isSelected ? t.surface2 : t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(agent.isOffline)
     }
 }
 

@@ -17,6 +17,14 @@ const SCREENS = [
     ],
   },
   {
+    label: "Chat Context",
+    variants: [
+      { label: "A — Promoted pills", href: "/chat-context/a" },
+      { label: "B — Combined sheet", href: "/chat-context/b" },
+      { label: "C — Breadcrumb bar", href: "/chat-context/c" },
+    ],
+  },
+  {
     label: "Inbox",
     variants: [
       { label: "A — Ops Center", href: "/inbox/a" },
