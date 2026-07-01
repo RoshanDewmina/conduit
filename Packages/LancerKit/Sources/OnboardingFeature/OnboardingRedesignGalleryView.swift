@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import AccountKit
 import DesignSystem
 import LancerCore
@@ -17,10 +18,6 @@ import SSHTransport
 /// the actual product loop before asking the user to pair a machine.
 public struct OnboardingRedesignView: View {
     let onContinue: () -> Void
-    /// Optional: finish onboarding and route the user to "Add a machine" (SSH).
-    /// Provided by the app shell; when nil the SSH step's primary action just
-    /// finishes onboarding like Skip.
-    let onEnableSSH: (() -> Void)?
 
     @StateObject private var client: E2ERelayClient
     private let accountSession: AccountSessionController?
@@ -42,13 +39,11 @@ public struct OnboardingRedesignView: View {
 
     public init(
         onContinue: @escaping () -> Void,
-        onEnableSSH: (() -> Void)? = nil,
         relayClient: E2ERelayClient? = nil,
         accountSession: AccountSessionController? = nil,
         startStep: Int = 0
     ) {
         self.onContinue = onContinue
-        self.onEnableSSH = onEnableSSH
         self.accountSession = accountSession
         let resolved = relayClient ?? E2ERelayClient(
             relayURL: RelaySettings.url(),
@@ -93,11 +88,6 @@ public struct OnboardingRedesignView: View {
             // Account creation gates everything after the relay pairing step.
             if isAccountGateActive, let accountSession {
                 AccountEntryView(account: accountSession, onComplete: advanceAfterAccount)
-            } else if current.kind == .sshSetup {
-                OnboardingSSHSetupScreen(
-                    onAddHost: { finishOnboarding(routeToAddHost: true) },
-                    onSkip: { finishOnboarding(routeToAddHost: false) }
-                )
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -118,18 +108,28 @@ public struct OnboardingRedesignView: View {
                 }
             }
         } footer: {
-            // The account gate and SSH setup render their own CTAs inline as content
-            // (sign-in/sign-up buttons, Add a machine/Skip) — only the carousel steps
-            // use the scaffold's dedicated footer slot.
-            if !isAccountGateActive && current.kind != .sshSetup {
+            // The account gate renders its own CTA inline as content (sign-in/sign-up
+            // buttons) — only the carousel steps use the scaffold's dedicated footer slot.
+            if !isAccountGateActive {
                 OnboardingFooter {
-                    DSButton(
-                        current.ctaArrow ? "\(current.primaryAction) →" : current.primaryAction,
-                        variant: .primary, size: .lg, fullWidth: true,
-                        action: advanceOrFinish
-                    )
-                    .disabled(current.kind == .pair && pairingPresentation.disablesPrimaryAction)
-                    .accessibilityIdentifier("onboardingPrimary")
+                    VStack(spacing: 10) {
+                        DSButton(
+                            current.ctaArrow ? "\(current.primaryAction) →" : current.primaryAction,
+                            variant: .primary, size: .lg, fullWidth: true,
+                            action: advanceOrFinish
+                        )
+                        .disabled(current.kind == .pair && pairingPresentation.disablesPrimaryAction)
+                        .accessibilityIdentifier("onboardingPrimary")
+
+                        // A real, always-tappable skip — not just the warn-then-tap-again
+                        // path on the primary button above, which isn't discoverable.
+                        if current.kind == .pair, client.pairingState != .paired {
+                            Button("Skip for now", action: skipPairing)
+                                .font(.dsSansPt(13, weight: .medium))
+                                .foregroundStyle(t.text3)
+                                .accessibilityIdentifier("onboardingSkipPairing")
+                        }
+                    }
                 }
             }
         }
@@ -183,29 +183,7 @@ public struct OnboardingRedesignView: View {
             }
         case .policy:
             OnboardingPolicyCards(selectedLevel: $selectedLevel).padding(.horizontal, 24)
-        case .sshSetup:
-            // Rendered standalone from `body` (its own chrome); never shown here.
-            EmptyView()
         }
-    }
-
-    // MARK: Footer CTA
-
-    private var footer: some View {
-        VStack(spacing: 11) {
-            DSButton(
-                current.ctaArrow ? "\(current.primaryAction) →" : current.primaryAction,
-                variant: .primary,
-                size: .lg,
-                fullWidth: true,
-                action: advanceOrFinish
-            )
-            .accessibilityIdentifier("onboardingPrimary")
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 14)
-        .padding(.bottom, 16)
-        .background(t.bg.ignoresSafeArea(edges: .bottom))
     }
 
     // MARK: Actions
@@ -223,6 +201,19 @@ public struct OnboardingRedesignView: View {
         }
         if step < steps.count - 1 {
             Haptics.selection()
+            withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step += 1 }
+        } else {
+            finish()
+        }
+    }
+
+    /// A dedicated, always-visible "Skip for now" affordance for the pairing step —
+    /// tapping it already states the intent, so unlike `advanceOrFinish` it doesn't
+    /// need the warn-then-repeat-tap pattern first.
+    private func skipPairing() {
+        Haptics.selection()
+        pairingMessage = nil
+        if step < steps.count - 1 {
             withAnimation(LancerMotion.resolved(.smooth(duration: 0.28, extraBounce: 0), reduceMotion: reduceMotion)) { step += 1 }
         } else {
             finish()
@@ -254,18 +245,16 @@ public struct OnboardingRedesignView: View {
     }
 
     private func finish() {
-        finishOnboarding(routeToAddHost: false)
+        finishOnboarding()
     }
 
-    /// Persist the chosen policy tier and leave onboarding. When `routeToAddHost`
-    /// and the app shell supplied `onEnableSSH`, route the user straight to "Add a
-    /// machine"; otherwise just enter the app.
-    private func finishOnboarding(routeToAddHost: Bool) {
+    /// Persist the chosen policy tier and leave onboarding.
+    private func finishOnboarding() {
         storedPreset = selectedLevel.mappedPreset.rawValue
         // Push this tier's starter policy on the first daemon connect (see OnboardingPolicy).
         OnboardingPolicy.markPending(selectedLevel)
         Haptics.success()
-        if routeToAddHost, let onEnableSSH { onEnableSSH() } else { onContinue() }
+        onContinue()
     }
 
     private func bindAccountDevice(scannedPayload: String) {
@@ -385,7 +374,12 @@ private struct PairingPresentationState {
             tone = .neutral
             fieldTone = .neutral
             showsProgress = true
-            disablesPrimaryAction = true
+            // Not disabled: if the desktop side never confirms (stale code, wrong
+            // network, or — on a device that's paired before — a stale reconnect
+            // attempt using old credentials) the button must stay tappable so the
+            // existing warn-then-skip flow in advanceOrFinish() can run. A disabled
+            // button here was a dead end with no way back to Home.
+            disablesPrimaryAction = false
         case .pairingFailed(let reason):
             title = Self.failureMessage(for: reason)
             detail = Self.failureRecovery(for: reason)
@@ -401,7 +395,9 @@ private struct PairingPresentationState {
                 tone = .neutral
                 fieldTone = .neutral
                 showsProgress = true
-                disablesPrimaryAction = true
+                // See the .waitingForPeer case above — stays tappable so a stuck
+                // connection attempt never fully blocks the skip path.
+                disablesPrimaryAction = false
             case .connected:
                 title = "Enter the code from your machine."
                 detail = nil
@@ -461,6 +457,55 @@ private struct OnboardingPairingBlock: View {
 
     @Environment(\.lancerTokens) private var t
     @FocusState private var codeFocused: Bool
+    @State private var didCopyInstallCommand = false
+
+    private static let installCommand = "curl -fsSL https://storage.googleapis.com/conduit-dist-f1c2466d/install.sh | sh"
+    // Placeholder — swap for the real marketing/download page once it exists.
+    private static let downloadPageURL = URL(string: "https://lancersoftware.dev/download")!
+
+    // The pairing card assumes lancerd is already installed — a first-time user
+    // has no way to get it without leaving the app. This is the one V1 escape
+    // hatch: copy the real install one-liner (docs/daemon/lancerd/INSTALL.md)
+    // straight to the clipboard so they can paste it into Terminal.
+    private var installCommandRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Don't have lancerd yet?")
+                .font(.dsSansPt(11.5, weight: .semibold))
+                .foregroundStyle(t.text3)
+            Button {
+                UIPasteboard.general.string = Self.installCommand
+                Haptics.success()
+                didCopyInstallCommand = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    didCopyInstallCommand = false
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(Self.installCommand)
+                        .font(.dsMonoPt(10.5))
+                        .foregroundStyle(t.text2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    DSIconView(didCopyInstallCommand ? .check : .copy, size: 13, color: t.text3)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(t.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Copy lancerd install command")
+            Text(didCopyInstallCommand ? "Copied — paste into Terminal on your machine." : "Copies a one-line installer. Runs on macOS or Linux.")
+                .font(.dsSansPt(10.5))
+                .foregroundStyle(t.text4)
+            DSLink("or download from the website", size: 10.5) {
+                UIApplication.shared.open(Self.downloadPageURL)
+            }
+        }
+        .padding(.top, 4)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -498,6 +543,8 @@ private struct OnboardingPairingBlock: View {
                     .font(.dsSansPt(11.5))
                     .foregroundStyle(t.text4)
                     .fixedSize(horizontal: false, vertical: true)
+
+                installCommandRow
             }
             .padding(14)
             .background(t.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -668,7 +715,7 @@ private struct OnboardingPolicyCards: View {
 // MARK: - Step model
 
 private struct OnboardingRedesignStep: Identifiable {
-    enum Kind { case value, pair, policy, sshSetup }
+    enum Kind { case value, pair, policy }
 
     let id: String
     let eyebrow: String
@@ -705,15 +752,6 @@ private struct OnboardingRedesignStep: Identifiable {
             primaryAction: "Continue",
             ctaArrow: true,
             kind: .policy
-        ),
-        .init(
-            id: "sshSetup",
-            eyebrow: "optional",
-            title: "Enable SSH.",
-            body: "Turn on a live terminal on your Mac. You can skip this — approvals and agent runs already work without it.",
-            primaryAction: "Continue",
-            ctaArrow: true,
-            kind: .sshSetup
         ),
     ]
 }

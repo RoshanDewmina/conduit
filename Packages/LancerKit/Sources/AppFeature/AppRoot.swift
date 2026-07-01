@@ -524,12 +524,6 @@ public struct AppRoot: View {
                         onboardingSeen = true
                         sidebarState.navigate(to: .home)
                     },
-                    onEnableSSH: {
-                        // Optional SSH onboarding step → finish onboarding and land
-                        // on Machines, where "Add a machine" lives (in-app keygen).
-                        onboardingSeen = true
-                        sidebarState.navigate(to: .machines)
-                    },
                     relayClient: env.e2eRelayClient,
                     accountSession: env.accountSession
                 )
