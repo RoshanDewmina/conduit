@@ -19,6 +19,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var sessionsListContinuation: CheckedContinuation<[ObservedSession], Error>?
     private var installedAgentsContinuation: CheckedContinuation<[String], Error>?
     private var sessionsTranscriptContinuation: CheckedContinuation<(messages: [SessionMessage], nextLine: Int, resetRequired: Bool), Error>?
+    private var sessionContinueContinuation: CheckedContinuation<DispatchResult, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay) {
         self.relayClient = relayClient
@@ -252,6 +253,36 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Sends a follow-up prompt into an observed (not Lancer-dispatched) session on
+    /// the relay-paired host, targeting it by its exact vendor + sessionId + cwd
+    /// (mirrors `DaemonChannel.continueObservedSession` over SSH). The daemon
+    /// re-passes the same policy/budget gates as the SSH path via
+    /// `dispatcher.resumeObservedSession` and, once allowed, launches a fresh
+    /// process under a new runId — output then streams under that runId like any
+    /// other dispatch. Mirrors `relayFetchTranscript`'s bounded-wait shape.
+    public func relayContinueObservedSession(vendor: String, sessionId: String, cwd: String, prompt: String) async throws -> DispatchResult {
+        guard isActive else { throw E2EError.notPaired }
+        struct SessionContinueParams: Codable, Sendable { let vendor: String; let sessionId: String; let cwd: String; let prompt: String }
+        try await relayClient.send(
+            type: "agentSessionContinue",
+            payload: SessionContinueParams(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
+        )
+        // Bound the wait: if the `sessionContinueResult` reply never arrives the
+        // follow-up would otherwise spin forever (no terminal state).
+        sessionContinueContinuation?.resume(throwing: E2EError.superseded)
+        sessionContinueContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.sessionContinueContinuation?.resume(throwing: E2EError.timedOut)
+            self.sessionContinueContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.sessionContinueContinuation = c
+        }
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
@@ -400,6 +431,15 @@ public final class E2ERelayBridge: ObservableObject {
                 sessionsTranscriptContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             sessionsTranscriptContinuation = nil
+
+        case "sessionContinueResult":
+            let envelope = try? JSONDecoder().decode(E2ERelayMessage.RelayInnerEnvelope<DispatchResult>.self, from: message.payload)
+            if let result = envelope?.payload {
+                sessionContinueContinuation?.resume(returning: result)
+            } else {
+                sessionContinueContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            sessionContinueContinuation = nil
 
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(

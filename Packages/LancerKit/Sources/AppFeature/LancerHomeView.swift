@@ -91,9 +91,16 @@ public struct LancerHomeView: View {
             approvalReviewSheet(for: approval)
         }
         .task {
-            sessionsLoading = true
-            observedSessions = await loadSessions()
+            if let cached = ObservedSessionsCache.load() {
+                observedSessions = cached
+                sessionsLoading = false
+            } else {
+                sessionsLoading = true
+            }
+            let fresh = await loadSessions()
+            observedSessions = fresh
             sessionsLoading = false
+            ObservedSessionsCache.save(fresh)
         }
     }
 
@@ -541,6 +548,8 @@ private struct MachineTreeCard: View {
     let onOpenObservedSession: (ObservedSession) -> Void
 
     @Environment(\.lancerTokens) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var skeletonPulsing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -553,7 +562,7 @@ private struct MachineTreeCard: View {
                     if !machine.observedSessions.isEmpty {
                         observedSessionsBlock
                     } else if isLiveMachine && sessionsLoading {
-                        sessionsLoadingRow
+                        observedSessionsSkeletonBlock
                     }
                 }
                 .padding(.leading, 24)
@@ -620,17 +629,65 @@ private struct MachineTreeCard: View {
         machine.liveState == .connected || machine.liveState == .relayPaired
     }
 
-    // Scanning + titling the host's sessions can take many seconds; show a row
-    // instead of a blank gap so the section doesn't look empty/broken while loading.
-    private var sessionsLoadingRow: some View {
-        HStack(spacing: 8) {
-            ProgressView().scaleEffect(0.8)
-            Text("Loading sessions on this Mac…")
-                .font(.dsMonoPt(11))
+    // Shadcn-style pulsing skeleton, shown only on first-ever load (no cache yet)
+    // while sessions are fetched, so the section never looks empty/broken.
+    private var observedSessionsSkeletonBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SESSIONS ON THIS MAC")
+                .font(.dsMonoPt(9.5, weight: .medium))
+                .tracking(1.0)
                 .foregroundStyle(t.text4)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+            ForEach(0..<3, id: \.self) { _ in
+                observedSessionSkeletonRow
+            }
         }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 14)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(t.text4.opacity(0.4)).frame(width: 1.5)
+        }
+        .padding(.top, 4)
+        .onAppear {
+            guard !reduceMotion else { return }
+            skeletonPulsing = true
+        }
+    }
+
+    private var observedSessionSkeletonRow: some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(t.surface2)
+                .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(t.surface2)
+                    .frame(width: 130, height: 13)
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(t.surface2)
+                        .frame(width: 64, height: 10)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(t.surface2)
+                        .frame(width: 36, height: 10)
+                }
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 4) {
+                Capsule().fill(t.surface2).frame(width: 56, height: 14)
+                Capsule().fill(t.surface2).frame(width: 64, height: 14)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(t.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .foregroundStyle(t.border)
+        )
+        .opacity(skeletonPulsing ? 0.5 : 1.0)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: skeletonPulsing)
     }
 
     // Visually distinct from the dispatched-thread tree above (dashed rule, dimmer

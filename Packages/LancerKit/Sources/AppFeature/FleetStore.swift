@@ -86,6 +86,16 @@ public final class FleetStore {
     /// All currently active slots, in insertion order.
     public var slots: [Slot] { manager.slots }
 
+    /// Approvals delivered over a relay pairing — not a fleet slot (there's
+    /// no SSH session), so `attentionItems`'s per-slot loop below never sees
+    /// them on its own. AppRoot sets this to whichever inbox VM its
+    /// `lancerE2EApprovalReceived` handler inserts relay approvals into,
+    /// keeping it in sync automatically. Without this, a relay-only user —
+    /// V1's primary transport, SSH is legacy — would never see a pending
+    /// approval on Home: it would escalate, wait out the fail-closed
+    /// timeout, and deny, with nothing ever rendering on screen.
+    public var relayInboxVM: InboxViewModel?
+
     public init() {}
 
     /// Whether the store has reached capacity.
@@ -151,13 +161,26 @@ public final class FleetStore {
 
     public var attentionItems: [AttentionItem] {
         var items: [AttentionItem] = []
+        var seenApprovalIDs: Set<String> = []
         for slot in slots {
             for approval in slot.inboxVM.approvals where approval.isPending || approval.decision == .expired {
-                items.append(AttentionItem(approval: approval))
+                let item = AttentionItem(approval: approval)
+                items.append(item)
+                seenApprovalIDs.insert(item.id)
             }
             if connectionState(for: slot) == .offline,
                slot.inboxVM.approvals.contains(where: \.isPending) {
                 items.append(AttentionItem(offlineHost: slot.hostID, hostName: slot.hostName))
+            }
+        }
+        if let relayInboxVM {
+            for approval in relayInboxVM.approvals where approval.isPending || approval.decision == .expired {
+                let item = AttentionItem(approval: approval)
+                // Defensive: skip if a slot's own inbox somehow already
+                // surfaced the same approval, so a single pending decision
+                // can never count twice.
+                guard !seenApprovalIDs.contains(item.id) else { continue }
+                items.append(item)
             }
         }
         return items.sorted {

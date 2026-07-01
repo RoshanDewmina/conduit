@@ -189,5 +189,50 @@ struct FleetStoreTests {
         let result = store.slot(forApprovalID: ApprovalID())
         #expect(result == nil)
     }
+
+    /// Regression for a real bug found 2026-07-01: a relay-only pairing (no
+    /// SSH fleet slot) delivers approvals into a separate inbox VM that the
+    /// per-slot loop in `attentionItems` never saw, so Home's headline/cards/
+    /// badge — all sourced from `attentionItems` — never showed a pending
+    /// relay approval at all. It escalated, waited out the 120s fail-closed
+    /// timeout, and denied, invisibly. `relayInboxVM` closes that gap.
+    @Test("attentionItems includes a pending approval from relayInboxVM with zero slots")
+    func attentionItemsIncludesRelayOnlyApproval() {
+        let store = FleetStore()
+        #expect(store.slots.isEmpty)
+
+        let relayVM = InboxViewModel()
+        relayVM.approvals = [
+            Approval(sessionID: SessionID(), agent: .claudeCode, kind: .fileWrite, command: "write tc.txt", cwd: "/tmp", risk: .medium)
+        ]
+        store.relayInboxVM = relayVM
+
+        #expect(store.attentionItems.count == 1)
+    }
+
+    /// A decided (already approved/denied) relay approval must not linger as
+    /// an attention item — only pending or expired ones should surface.
+    @Test("attentionItems excludes a decided relayInboxVM approval")
+    func attentionItemsExcludesDecidedRelayApproval() {
+        let store = FleetStore()
+        var decided = Approval(sessionID: SessionID(), agent: .claudeCode, kind: .fileWrite, command: "write tc.txt", cwd: "/tmp", risk: .medium)
+        decided.decision = .approved
+        decided.decidedAt = .now
+
+        let relayVM = InboxViewModel()
+        relayVM.approvals = [decided]
+        store.relayInboxVM = relayVM
+
+        #expect(store.attentionItems.isEmpty)
+    }
+
+    /// With no relayInboxVM set at all (the pre-fix default state), attentionItems
+    /// must stay empty rather than crash on a nil reference.
+    @Test("attentionItems is empty when relayInboxVM is nil and there are no slots")
+    func attentionItemsEmptyWithoutRelayInboxVM() {
+        let store = FleetStore()
+        #expect(store.relayInboxVM == nil)
+        #expect(store.attentionItems.isEmpty)
+    }
 }
 #endif

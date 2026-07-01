@@ -23,6 +23,18 @@ public enum RelaySettings {
     // the daemon isn't on. Self-hosters use the LANCER_RELAY_URL env override.
     private static let legacyOverrideKey = "lancer.relayURL"
 
+#if DEBUG
+    // DEBUG-only persisted relay override. `LANCER_RELAY_URL` only lives as
+    // long as the specific process a debug tool (Xcode, devicectl) launched
+    // with that env var — a normal Home Screen tap launches a fresh process
+    // with no env var, silently falling back to the hosted default. Remembering
+    // the last env-var value here means a self-hosted relay chosen once (e.g.
+    // for a testing session) keeps working across ordinary launches too. Never
+    // compiled into a release build, so this can't affect real users — the
+    // "users never set this" invariant below still holds for shipped builds.
+    private static let debugPersistedOverrideKey = "lancer.debug.relayURL"
+#endif
+
     /// The relay URL string (env override → default). Users never set this.
     public static func urlString(defaults: UserDefaults = .standard) -> String {
         if defaults.object(forKey: legacyOverrideKey) != nil {
@@ -33,8 +45,20 @@ public enum RelaySettings {
            let parsed = URL(string: env),
            let scheme = parsed.scheme?.lowercased(), scheme == "ws" || scheme == "wss",
            parsed.host?.isEmpty == false {
+#if DEBUG
+            defaults.set(env, forKey: debugPersistedOverrideKey)
+#endif
             return env
         }
+#if DEBUG
+        if let stored = defaults.string(forKey: debugPersistedOverrideKey),
+           !stored.isEmpty,
+           let parsed = URL(string: stored),
+           let scheme = parsed.scheme?.lowercased(), scheme == "ws" || scheme == "wss",
+           parsed.host?.isEmpty == false {
+            return stored
+        }
+#endif
         // Invalid or non-ws(s) override → fail-safe to the hosted default rather
         // than stranding the device on an unusable endpoint (BUILD-2).
         return defaultURLString

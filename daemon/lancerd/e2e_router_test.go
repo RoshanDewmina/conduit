@@ -183,6 +183,104 @@ func TestE2ERouterContinue(t *testing.T) {
 	}
 }
 
+// TestE2ERouterSessionContinue verifies that an inbound agentSessionContinue
+// message reaches server.runObservedSessionContinue (the same core logic the
+// SSH transport's agent.observedSession.continue uses) and replies with
+// sessionContinueResult carrying a new runId.
+func TestE2ERouterSessionContinue(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAllow)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{
+		"vendor":    "claudeCode",
+		"sessionId": "sess-abc",
+		"cwd":       "/repo/observed",
+		"prompt":    "keep going",
+	})
+	router.handleMessage("agentSessionContinue", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "sessionContinueResult" {
+		t.Fatalf("expected sessionContinueResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	var result dispatchResult
+	if err := json.Unmarshal(env.Payload, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if result.Status != "started" || result.RunID == "" {
+		t.Fatalf("want started + runId, got %+v", result)
+	}
+}
+
+// TestE2ERouterSessionContinueDenied verifies a policy-denied
+// agentSessionContinue does not launch and replies with a denied result.
+func TestE2ERouterSessionContinueDenied(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+	launched := false
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launched = true
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectDeny)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{
+		"vendor":    "claudeCode",
+		"sessionId": "sess-abc",
+		"cwd":       "/repo/observed",
+		"prompt":    "keep going",
+	})
+	router.handleMessage("agentSessionContinue", payload)
+
+	if launched {
+		t.Fatal("a policy-denied agentSessionContinue must NOT launch")
+	}
+	msgType, data := client.lastMessage()
+	if msgType != "sessionContinueResult" {
+		t.Fatalf("expected sessionContinueResult, got %q", msgType)
+	}
+	var env struct {
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	var result dispatchResult
+	if err := json.Unmarshal(env.Payload, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if result.Status != "denied" {
+		t.Fatalf("want denied, got %+v", result)
+	}
+}
+
 // TestE2ERouterFsList verifies that an inbound agentFsList message reaches
 // server.fsList and replies with fsListResult carrying the home-folded path and
 // directory-first entries.

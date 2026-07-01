@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -394,6 +395,91 @@ func TestRelayRateLimitsPairingAttempts(t *testing.T) {
 	if lastStatus != http.StatusTooManyRequests {
 		t.Fatalf("expected attempts beyond pairAttemptMax (%d) to be rate-limited, but dials kept succeeding", pairAttemptMax)
 	}
+}
+
+// Regression: concurrent reconnects racing concurrent message relay must not
+// let two goroutines write to the same *websocket.Conn unsynchronized.
+//
+// Before the fix, the peer_joined sends (and buffered-message flush) for a
+// reconnecting peer ran AFTER pair.mu was unlocked, while the message-relay
+// loop's sendJSON call for an in-flight "message" holds pair.mu. Both paths
+// can target the same underlying conn (the peer that did NOT just reconnect)
+// at the same time, so pair.mu no longer actually serialized writes to it —
+// exactly the condition that preceded a live SIGSEGV in the deployed relay
+// (goroutine crash inside encoding/json's sync.Pool via sendJSON, both from
+// the locked ping/pong path and the then-unlocked peer_joined path). This
+// test hammers rapid daemon reconnects against a phone that is concurrently
+// relaying "message" traffic, under `go test -race`, so a reintroduced
+// unlocked-send window shows up as a detected data race rather than a rare,
+// hard-to-reproduce production crash.
+func TestRelayConcurrentReconnectAndMessageRelayNoRace(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "race01"
+	daemonKey := "daemon-pub-key"
+	phoneKey := "phone-pub-key"
+
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	defer daemon.Close()
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
+	}
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+
+	const rounds = 40
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine A: the phone keeps sending "message" traffic to the daemon —
+	// each send takes the message-loop's pair.mu.Lock() path.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < rounds; i++ {
+			_ = websocket.Message.Send(phone, mustJSON(relayMessage{
+				Type: "message", Target: "daemon", Payload: fmt.Sprintf("payload-%d", i),
+			}))
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	// Goroutine B: the daemon rapidly reconnects with the SAME pinned key —
+	// each reconnect exercises the "second-or-later connection" branch that
+	// sends peer_joined to both daemonConn and phoneConn.
+	go func() {
+		defer wg.Done()
+		var last *websocket.Conn
+		for i := 0; i < rounds; i++ {
+			c, err := websocket.Dial(
+				"ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/relay?role=daemon&code="+code+"&publicKey="+daemonKey,
+				"", "http://localhost/")
+			if err != nil {
+				continue
+			}
+			if last != nil {
+				_ = last.Close()
+			}
+			last = c
+			time.Sleep(time.Millisecond)
+		}
+		if last != nil {
+			_ = last.Close()
+		}
+	}()
+
+	wg.Wait()
+}
+
+func mustJSON(v interface{}) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
 }
 
 // Security: sweepStale must bound the rate limiter's memory under an

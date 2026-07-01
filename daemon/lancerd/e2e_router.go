@@ -295,6 +295,21 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("sessionsTranscriptResult", data)
 
+	case "agentSessionContinue":
+		var p observedSessionContinueParams
+		if err := json.Unmarshal(payload, &p); err != nil ||
+			p.Vendor == "" || p.SessionID == "" || p.CWD == "" || p.Prompt == "" {
+			log.Printf("e2e: unmarshal agentSessionContinue failed: %v", err)
+			return
+		}
+		// Mirrors the agentRunContinue arm: same core logic as the SSH transport's
+		// agent.observedSession.continue (runObservedSessionContinue re-passes the
+		// same policy/budget gates via dispatcher.resumeObservedSession).
+		result := r.server.runObservedSessionContinue(p)
+		msg := map[string]interface{}{"type": "sessionContinueResult", "payload": result}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("sessionContinueResult", data)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
 	}

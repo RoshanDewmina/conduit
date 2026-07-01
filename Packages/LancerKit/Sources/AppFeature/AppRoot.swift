@@ -468,6 +468,14 @@ public struct AppRoot: View {
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
                 vm.approvals.insert(approval, at: 0)
             }
+            // Only a true relay-only setup (no fleet/SSH slot) needs this —
+            // a slot's own inboxVM is already covered by FleetStore's
+            // per-slot loop, so pointing relayInboxVM at it too would be
+            // redundant (harmless, since attentionItems dedupes by approval
+            // id, but there's no reason to point it at slot state at all).
+            if selectedFleetSlot == nil {
+                fleetStore.relayInboxVM = vm
+            }
         }
     }
 
@@ -1292,7 +1300,7 @@ public struct AppRoot: View {
             loopStore: env.loopStore,
             quotaGuardStore: env.quotaGuardStore,
             hostHealthStore: env.hostHealthStore,
-            onConnectHost: { drawerRoute = .addMachine },
+            onConnectHost: { drawerRoute = .relayPairing },
             onReconnect: { host in openSession(host: host, env: env) },
             onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
             onQuotaGuard: { showingQuotaGuard = true },
@@ -1504,21 +1512,27 @@ public struct AppRoot: View {
     }
 
     /// Sends a follow-up prompt into an observed (not Lancer-dispatched) session
-    /// by its exact vendor session id + cwd. Only wired over a direct daemon
-    /// connection (an SSH-connected fleet slot) for now — the relay path has no
-    /// equivalent RPC yet, so a relay-only setup surfaces as an honest "no
-    /// connection" error rather than silently no-op'ing.
+    /// by its exact vendor session id + cwd. Mirrors `loadObservedSessions` /
+    /// `fetchObservedTranscript`: prefers a connected SSH fleet slot, falls back
+    /// to the relay bridge (`agentSessionContinue` / `sessionContinueResult`) so
+    /// a relay-only (V1) setup can continue an observed session too.
     private func sendObservedSessionFollowUp(vendor: String, sessionId: String, cwd: String, prompt: String) async -> DispatchResult {
-        guard let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first
-        else {
-            return DispatchResult(status: "error", message: "No direct connection to this machine.")
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first {
+            do {
+                return try await slot.channel.continueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
+            } catch {
+                return DispatchResult(status: "error", message: error.localizedDescription)
+            }
         }
-        do {
-            return try await slot.channel.continueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
-        } catch {
-            return DispatchResult(status: "error", message: error.localizedDescription)
+        if let bridge = e2eBridge, relayBridgeIsActive {
+            do {
+                return try await bridge.relayContinueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
+            } catch {
+                return DispatchResult(status: "error", message: error.localizedDescription)
+            }
         }
+        return DispatchResult(status: "error", message: "No direct connection to this machine.")
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {

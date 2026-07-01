@@ -242,7 +242,19 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			phoneKey := pair.PhoneKey
 			buffered := pair.Buffer
 			pair.Buffer = nil
-			pair.mu.Unlock()
+			// hub.mu only guards the hub.pairs map lookup above; it can be
+			// released now. pair.mu stays HELD through the sends below: the
+			// message-relay loop (the "message" case further down) also locks
+			// pair.mu before calling sendJSON on pair.DaemonConn/pair.PhoneConn.
+			// If this reconnect's peer_joined sends ran after unlocking (as they
+			// used to), a concurrent reconnect on the other role, or an
+			// in-flight message forward, could call sendJSON on the SAME
+			// *websocket.Conn at the same time this code has a stale local
+			// copy of it -- the two sendJSON calls are then not serialized by
+			// anything, defeating the point of pair.mu. Holding pair.mu across
+			// the sends closes that window; websocket.Message.Send's own
+			// per-conn lock (ws.wio) is a different mutex, so this can't
+			// deadlock.
 			hub.mu.Unlock()
 
 			// A pair entry persists across disconnects (cleanup only fires after
@@ -273,6 +285,7 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 				log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
 				sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
 			}
+			pair.mu.Unlock()
 		}
 
 		for {

@@ -8,13 +8,21 @@ public struct E2ERelayPairingView: View {
     @ObservedObject private var client: E2ERelayClient
     @State private var ownedClient: E2ERelayClient?
     @State private var pairingCode: String = ""
-    @State private var showGeneratedCode = false
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
 
     /// Pair against an app-wide `E2ERelayClient` so the connection drives the
     /// live `ApprovalRelay.e2eBridge`. When `client` is nil this falls back to a
     /// self-owned client (no live bridge) — kept for standalone/preview use.
+    ///
+    /// The real flow is always one-directional: the daemon (`lancerd pair` on
+    /// the host) generates the code, the phone types it in. There is no mode
+    /// where the phone itself is "the host" — a prior "I'm on the host
+    /// (daemon)" toggle offered a code-generation mode that no real call site
+    /// ever used (every caller passes a live `client`), and it defaulted ON,
+    /// which is why opening this screen to pair a new machine showed a stale
+    /// leftover code from whatever was last paired instead of an empty field
+    /// ready for a fresh one.
     public init(client: E2ERelayClient? = nil) {
         let resolved = client ?? E2ERelayClient(
             relayURL: RelaySettings.url(),
@@ -22,10 +30,7 @@ public struct E2ERelayPairingView: View {
         )
         _client = ObservedObject(initialValue: resolved)
         _ownedClient = State(initialValue: client == nil ? resolved : nil)
-        // Seed from the client's stable code so navigating back doesn't reset to "000000"
-        _pairingCode = State(initialValue: resolved.pairingCode)
-        // Default to showing the phone's code — the common flow is: see code → relay-attach on laptop
-        _showGeneratedCode = State(initialValue: true)
+        _pairingCode = State(initialValue: "")
     }
 
     public var body: some View {
@@ -44,12 +49,6 @@ public struct E2ERelayPairingView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 36)
-            }
-            .onAppear {
-                // Auto-start so user only needs to copy the code + run relay-attach
-                if client.connectionState == .disconnected {
-                    connect()
-                }
             }
         }
         .navigationBarHidden(true)
@@ -119,50 +118,23 @@ public struct E2ERelayPairingView: View {
                 .tracking(10 * 0.12)
                 .foregroundStyle(t.text3)
 
-            if showGeneratedCode {
-                Text(pairingCode)
-                    .font(.dsMonoPt(40, weight: .bold))
-                    .tracking(8)
-                    .foregroundStyle(t.text)
-                    .padding(16)
-                    .frame(maxWidth: .infinity)
-                    .background(t.surfaceSunk)
-                    .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 1)
-                    )
+            TextField("000000", text: $pairingCode)
+                .font(.dsMonoPt(40, weight: .bold))
+                .tracking(8)
+                .foregroundStyle(t.text)
+                .multilineTextAlignment(.center)
+                .padding(16)
+                .background(t.surfaceSunk)
+                .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r4, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
+                .keyboardType(.numberPad)
 
-                Text("Enter this code on your phone")
-                    .font(.dsSansPt(12))
-                    .foregroundStyle(t.text3)
-            } else {
-                TextField("000000", text: $pairingCode)
-                    .font(.dsMonoPt(40, weight: .bold))
-                    .tracking(8)
-                    .foregroundStyle(t.text)
-                    .multilineTextAlignment(.center)
-                    .padding(16)
-                    .background(t.surfaceSunk)
-                    .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 1)
-                    )
-                    .keyboardType(.numberPad)
-            }
-
-            Toggle(isOn: $showGeneratedCode) {
-                Text("I'm on the host (daemon)")
-                    .font(.dsSansPt(13))
-                    .foregroundStyle(t.text)
-            }
-            .tint(t.accent)
-            .onChange(of: showGeneratedCode) { _, show in
-                if show, pairingCode.isEmpty {
-                    pairingCode = generateCode()
-                }
-            }
+            Text("Run `lancerd pair` on your machine, then enter the 6-digit code it prints.")
+                .font(.dsSansPt(12))
+                .foregroundStyle(t.text3)
         }
     }
 
@@ -223,10 +195,6 @@ public struct E2ERelayPairingView: View {
         client.relayURL = url
         client.pairingCode = code
         client.connect()
-    }
-
-    private func generateCode() -> String {
-        String(format: "%06d", Int.random(in: 0...999999))
     }
 }
 
