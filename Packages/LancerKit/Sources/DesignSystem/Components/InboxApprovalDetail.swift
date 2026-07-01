@@ -151,59 +151,29 @@ public struct InboxApprovalDetail: View {
     // MARK: - Pending view
 
     private var pendingView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                pendingContent
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    pendingContent
+                }
+                .padding(16)
             }
-            .padding(16)
+            if !hasChoiceQuestion {
+                decisionBar
+            }
         }
         .background(t.bg)
     }
 
     @ViewBuilder
     private var pendingContent: some View {
-        // Header: Agent + Risk + Time
-        HStack(spacing: 6) {
-            AgentIdentityBadge(agent: agentKey, label: agentName)
-            RiskBadge(risk: risk)
-            Spacer()
-            Text(timeLabel)
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.text3)
-        }
+        reviewHeader
+        requestSection
+        scopeSection
 
-        // One-glance summary
-        if let summary, !summary.isEmpty {
-            Text(summary)
-                .font(.dsSansPt(15, weight: .semibold))
-                .foregroundStyle(t.text)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
-        // Content: question or tool call
-        if let question {
-            // Question block
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(t.accent)
-                    .frame(width: 2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("QUESTION")
-                        .font(.dsDisplayPt(9, weight: .semibold))
-                        .tracking(9 * 0.12)
-                        .foregroundStyle(t.accent)
-                    Text(question)
-                        .font(.dsMonoPt(13))
-                        .foregroundStyle(t.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.leading, 11)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // Discrete choice buttons (agent provided options — no Approve/Deny shown)
+        if question != nil {
             if let choices, !choices.isEmpty {
-                VStack(spacing: 8) {
+                ReviewSection(title: "Choose a reply") {
                     ForEach(Array(choices.enumerated()), id: \.offset) { idx, label in
                         DSButton(label, variant: .quiet, size: .md, mono: true, fullWidth: true) {
                             onChoose?(idx)
@@ -212,44 +182,12 @@ public struct InboxApprovalDetail: View {
                 }
             }
         } else if let toolName {
-            if summary == nil {
-                Text("Wants to run \(toolName)")
-                    .font(.dsSansPt(15, weight: .semibold))
-                    .foregroundStyle(t.text)
-            }
-
-            HStack(alignment: .top, spacing: 8) {
-                Text("$")
-                    .font(.dsMonoPt(13, weight: .semibold))
-                    .foregroundStyle(t.accent)
-                Text(args ?? toolName)
-                    .font(.dsMonoPt(13))
-                    .foregroundStyle(t.text)
-                    .lineLimit(8)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
-            )
-
-            Text("in \(displayCwd)")
-                .font(.dsSansPt(12.5))
-                .foregroundStyle(t.text3)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            if risk == Approval.Risk.medium.rawValue {
+            evidenceSection(toolName: toolName)
+            if requiresEvidenceConfirmation {
                 evidenceCheckToggle
             }
         }
 
-        // Details disclosure
         if hasExtraDetails {
             DisclosureGroup(isExpanded: $showDetails) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -273,31 +211,130 @@ public struct InboxApprovalDetail: View {
             }
             .tint(t.text3)
         }
+    }
 
-        // Action buttons — only shown when a question has no discrete choices
-        let hasChoices = question != nil && !(choices ?? []).isEmpty
-        if !hasChoices {
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    if let onDeny {
-                        DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
-                    }
-                    DSButton(
-                        "Approve",
-                        variant: .primary, size: .md, mono: true, fullWidth: true
-                    ) {
-                        onApprove?()
-                    }
-                    .disabled(risk == Approval.Risk.medium.rawValue && !evidenceConfirmed)
-                }
-                if let onEditAndRun {
-                    DSButton("Edit & run", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onEditAndRun)
-                }
-                if let onAllowAlways {
-                    DSButton("Allow always…", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onAllowAlways)
-                }
+    private var reviewHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                AgentIdentityBadge(agent: agentKey, label: agentName)
+                RiskBadge(risk: risk)
+                Spacer()
+                Text(timeLabel)
+                    .font(.dsMonoPt(11))
+                    .foregroundStyle(t.text3)
+            }
+
+            Text(summaryText)
+                .font(.dsSansPt(20, weight: .semibold))
+                .foregroundStyle(t.text)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(riskNarrative)
+                .font(.dsSansPt(13))
+                .foregroundStyle(t.text2)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var requestSection: some View {
+        if let question {
+            ReviewSection(title: "Request") {
+                Text(question)
+                    .font(.dsSansPt(14))
+                    .foregroundStyle(t.text)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        } else if let toolName {
+            ReviewSection(title: "Request") {
+                Text("Allow \(agentName) to use \(toolName).")
+                    .font(.dsSansPt(14, weight: .medium))
+                    .foregroundStyle(t.text)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private var scopeSection: some View {
+        ReviewSection(title: "Scope") {
+            VStack(spacing: 0) {
+                metadataRow("Agent", agentName)
+                Divider().overlay(t.border)
+                metadataRow("Project", displayCwd)
+                if let sessionID {
+                    Divider().overlay(t.border)
+                    metadataRow("Session", sessionID)
+                }
+                if let matchedRule, !matchedRule.isEmpty {
+                    Divider().overlay(t.border)
+                    metadataRow("Policy", matchedRule)
+                }
+            }
+            .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        }
+    }
+
+    private func evidenceSection(toolName: String) -> some View {
+        ReviewSection(title: "Evidence") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text("$")
+                        .font(.dsMonoPt(13, weight: .semibold))
+                        .foregroundStyle(t.accent)
+                    Text(args ?? command ?? toolName)
+                        .font(.dsMonoPt(13))
+                        .foregroundStyle(t.text)
+                        .lineLimit(10)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .background(t.surfaceSunk, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                        .strokeBorder(t.border.opacity(0.6), lineWidth: 1)
+                )
+
+                Text("The daemon paused this run because this action matched your approval policy.")
+                    .font(.dsSansPt(12.5))
+                    .foregroundStyle(t.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var decisionBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                if let onDeny {
+                    DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
+                }
+                DSButton(approveLabel, variant: .primary, size: .md, mono: true, fullWidth: true) {
+                    onApprove?()
+                }
+                .disabled(requiresEvidenceConfirmation && !evidenceConfirmed)
+            }
+            if let onEditAndRun {
+                DSButton("Edit & run", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onEditAndRun)
+            }
+            if let onAllowAlways {
+                DSButton("Allow always...", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onAllowAlways)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+        .background(t.bg.opacity(0.98))
+        .overlay(Rectangle().fill(t.border).frame(height: 1), alignment: .top)
     }
 
     // MARK: - Helpers
@@ -307,7 +344,7 @@ public struct InboxApprovalDetail: View {
             Image(systemName: evidenceConfirmed ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20))
                 .foregroundStyle(evidenceConfirmed ? t.ok : t.border)
-            Text("I've reviewed this action")
+            Text("I've reviewed the evidence")
                 .font(.dsSansPt(14, weight: .medium))
                 .foregroundStyle(evidenceConfirmed ? t.text : t.text3)
             Spacer()
@@ -328,7 +365,44 @@ public struct InboxApprovalDetail: View {
 
     /// Only show the collapsible Details when there's something non-redundant in it.
     private var hasExtraDetails: Bool {
-        (hostLabel != displayCwd) || (matchedRule.map { !$0.isEmpty } ?? false) || (sessionID != nil)
+        hostLabel != displayCwd
+    }
+
+    private var summaryText: String {
+        if let summary, !summary.isEmpty { return summary }
+        if let question, !question.isEmpty { return "Agent needs your direction" }
+        if let toolName, !toolName.isEmpty { return "Review \(toolName) before the agent continues" }
+        return "Review this action before the agent continues"
+    }
+
+    private var riskNarrative: String {
+        switch risk {
+        case Approval.Risk.low.rawValue:
+            return "Low-risk actions can be approved quickly, but the request stays auditable."
+        case Approval.Risk.medium.rawValue:
+            return "Medium-risk actions need an evidence check before approval."
+        case Approval.Risk.high.rawValue:
+            return "High-risk actions can change project state. Review the evidence before approving."
+        default:
+            return "Critical actions may affect credentials, infrastructure, or destructive state. Approve only after reviewing the evidence."
+        }
+    }
+
+    private var requiresEvidenceConfirmation: Bool {
+        risk >= Approval.Risk.medium.rawValue
+    }
+
+    private var hasChoiceQuestion: Bool {
+        question != nil && !(choices ?? []).isEmpty
+    }
+
+    private var approveLabel: String {
+        switch risk {
+        case Approval.Risk.low.rawValue: "Approve"
+        case Approval.Risk.medium.rawValue: "Approve after review"
+        case Approval.Risk.high.rawValue: "Approve high risk"
+        default: "Approve critical"
+        }
     }
 
     @ViewBuilder
@@ -355,6 +429,26 @@ public struct InboxApprovalDetail: View {
         case 2: "high"
         default: "critical"
         }
+    }
+}
+
+private struct ReviewSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+    @Environment(\.lancerTokens) private var t
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.dsMonoPt(10, weight: .semibold))
+                .foregroundStyle(t.text4)
+                .tracking(0.8)
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
     }
 }
 

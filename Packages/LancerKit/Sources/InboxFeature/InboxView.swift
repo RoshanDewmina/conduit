@@ -241,6 +241,7 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
+        let requiresFullReview = approval.risk > .low || approval.kind == .patch
         InboxBoardCard(
             bandLabel: bandLabel(for: approval),
             agentInitial: agentInitial(approval.agent),
@@ -252,12 +253,16 @@ public struct InboxView: View {
             bodyLead: bodyLead(for: approval),
             codeFragment: codeFragment(for: approval),
             bodyTail: bodyTail(for: approval),
-            primaryLabel: approval.kind == .askQuestion ? "Answer" : "Approve",
+            primaryLabel: approval.kind == .askQuestion ? "Answer" : requiresFullReview ? "Review" : "Approve",
             secondaryLabel: approval.kind == .patch ? "Review diff" : "Deny",
             secondaryVariant: approval.kind == .patch ? .secondary : .destructive,
             onPrimary: {
-                vm.decide(approval.id, decision: .approved)
-                Haptics.success()
+                if requiresFullReview {
+                    detailApproval = approval
+                } else {
+                    vm.decide(approval.id, decision: .approved)
+                    Haptics.success()
+                }
             },
             onSecondary: {
                 // Patch review opens the detail sheet (with diff); everything else denies.
@@ -405,7 +410,7 @@ public struct InboxView: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
 
