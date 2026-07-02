@@ -1092,7 +1092,7 @@ public struct NewChatTabView: View {
                     dispatchErrorMessage = result.message ?? "Couldn't continue the run."
                     return
                 }
-                runOutputStore.register(runId: newRunId)
+                runOutputStore.register(runId: newRunId, title: active.title)
                 let continued = ActiveChatRun(
                     runId: newRunId,
                     channel: active.channel,

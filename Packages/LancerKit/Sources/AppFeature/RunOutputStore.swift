@@ -48,13 +48,15 @@ public final class RunOutputStore {
 
     /// Pre-register a freshly dispatched run so the detail view has a slot to
     /// stream into before the first `agent.run.output` arrives. Also marks the
-    /// run active in `ActiveRunRegistry` so the Lancer app target's `PauseRunIntent`/
-    /// `StopRunIntent` (which cannot see this AppFeature-only store) know it exists.
-    public func register(runId: String, status: String = "running") {
+    /// run active in `ActiveRunRegistry` (with whatever display title the caller
+    /// already has on hand, e.g. `ActiveChatRun.title`) so the Lancer app
+    /// target's `PauseRunIntent`/`StopRunIntent`/`RunEntity` (which cannot see
+    /// this AppFeature-only store) can list and disambiguate it by name.
+    public func register(runId: String, title: String = "", status: String = "running") {
         if runs[runId] == nil {
             runs[runId] = Run(runId: runId, chunks: [], blocks: [], status: status, exitCode: nil)
         }
-        ActiveRunRegistry.shared.markActive(runId: runId)
+        ActiveRunRegistry.shared.markActive(runId: runId, title: title)
     }
 
     public func appendOutput(_ params: RunOutputParams) {

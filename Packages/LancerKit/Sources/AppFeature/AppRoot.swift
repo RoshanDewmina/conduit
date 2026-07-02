@@ -997,7 +997,7 @@ public struct AppRoot: View {
                 runId: lastRunID, prompt: prompt,
                 agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
                   result.status == "started", let newRunID = result.runId else { return nil }
-            runOutputStore.register(runId: newRunID)
+            runOutputStore.register(runId: newRunID, title: conv.title)
             return ActiveChatRun(runId: newRunID, channel: slot.channel,
                                  title: conv.title, subtitle: prompt, cwd: result.cwd ?? conv.cwd)
         }
@@ -1008,7 +1008,7 @@ public struct AppRoot: View {
                 runId: lastRunID, prompt: prompt,
                 agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
                   result.status == "started", let newRunID = result.runId else { return nil }
-            runOutputStore.register(runId: newRunID)
+            runOutputStore.register(runId: newRunID, title: conv.title)
             let channel = RelayRunControl(
                 send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
                 onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p) }
@@ -1053,7 +1053,7 @@ public struct AppRoot: View {
                     guard let runId = result.runId else {
                         return .blocked(result.message ?? "Couldn't start the run.")
                     }
-                    runOutputStore.register(runId: runId)
+                    runOutputStore.register(runId: runId, title: "Relay · \(vendor)")
                     // Capture this run's agent/cwd/model so a follow-up continues even
                     // after the original process exits (a one-shot `claude -p` exits as
                     // soon as it answers, so the daemon no longer has the run in memory).
@@ -1108,7 +1108,7 @@ public struct AppRoot: View {
                 guard let runId = result.runId else {
                     return .blocked(result.message ?? "Couldn't start the run.")
                 }
-                runOutputStore.register(runId: runId)
+                runOutputStore.register(runId: runId, title: "\(vendor) · \(slot.hostName)")
                 return .started(ActiveChatRun(
                     runId: runId,
                     channel: slot.channel,
