@@ -1,5 +1,5 @@
-#if os(iOS)
 import AppIntents
+import SessionFeature
 
 /// Registers Siri/Shortcuts/Spotlight phrases for the read-only and
 /// safety-reducing intents only. `ApprovalActionIntent` (approve/reject) is
@@ -7,6 +7,14 @@ import AppIntents
 /// visual, in-app or Live-Activity-tap action, not a voice command. This is an
 /// explicit product/security decision from the planning session, not an
 /// oversight — do not add a Siri-triggerable approve/allow-always phrase.
+///
+/// Lives in the `Lancer` app target, NOT a linked SPM library (SessionFeature) —
+/// `AppShortcutsProvider` is only discovered by Xcode's app-intents metadata
+/// merge step when it's reachable from the app's own compiled module. The
+/// individual `AppIntent` conformances below (`PauseRunIntent` etc.) merge fine
+/// from SessionFeature; only the shortcuts/phrases registration itself needs to
+/// live here — confirmed via the build log (`appintentsnltrainingprocessor:
+/// "No AppShortcuts found - Skipping"`) when this type lived in SessionFeature.
 @available(iOS 17.0, *)
 public struct LancerAppShortcuts: AppShortcutsProvider {
     public static var appShortcuts: [AppShortcut] {
@@ -56,4 +64,3 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
         )
     }
 }
-#endif

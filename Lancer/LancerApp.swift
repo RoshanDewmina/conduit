@@ -29,6 +29,16 @@ struct LancerApp: App {
     init() {
         DesignSystemFonts.register()
         configureSentry()
+        // Without a reference to LancerAppShortcuts from the app target itself,
+        // Xcode's app-intents metadata merge step silently drops it from the
+        // final Metadata.appintents ("No AppShortcuts found - Skipping" in the
+        // build log) even though it extracts correctly at the SessionFeature
+        // library level — the type is otherwise never reachable from Lancer's
+        // own linked binary. This call is also Apple's documented pattern for
+        // re-registering shortcuts after a locale/parameter change.
+        if #available(iOS 17.0, *) {
+            LancerAppShortcuts.updateAppShortcutParameters()
+        }
     }
 
     private func configureSentry() {
