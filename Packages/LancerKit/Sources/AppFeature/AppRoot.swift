@@ -336,9 +336,13 @@ public struct AppRoot: View {
             PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background, #available(iOS 16.2, *) {
-                Task { await LancerLiveActivityManager.shared.endAll() }
-            }
+            // Live Activities are NOT ended on background: `.end()` is a one-way,
+            // terminal ActivityKit call, and pushType: .token exists precisely so
+            // push-backend can keep updating the activity while the app is
+            // backgrounded or fully closed (ARCHITECTURE.md's documented
+            // push-driven lifecycle). Only end an activity when the underlying
+            // session/run actually terminates — see the LancerLiveActivityManager
+            // .end/.endAll call sites elsewhere in this file.
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
