@@ -380,8 +380,31 @@ public struct AppRoot: View {
             }
             if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .lancerOpenApproval)) { _ in
-            sidebarState.navigate(to: .needsAttention)
+        .onReceive(NotificationCenter.default.publisher(for: .lancerOpenApproval)) { note in
+            // Route to the specific thread the approval belongs to (where the
+            // in-chat approval card lives) rather than the generic Inbox list —
+            // a notification is about ONE actionable thing, not "browse everything."
+            // Inbox itself is unchanged and still reachable for browsing history.
+            guard case .ready(let env) = environment,
+                  let approvalIDString = note.userInfo?["approvalId"] as? String,
+                  let approval = activeInboxViewModel.approvals.first(where: { $0.id.uuidString.lowercased() == approvalIDString.lowercased() })
+            else {
+                sidebarState.navigate(to: .needsAttention)
+                return
+            }
+            let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
+            Task { @MainActor in
+                if let conversation = await FleetThreadMapper.findConversation(
+                    hostName: hostName,
+                    agentID: approval.agent.rawValue,
+                    cwd: approval.cwd,
+                    chatRepo: env.chatRepo
+                ) {
+                    sidebarState.navigate(to: .thread(id: conversation.id))
+                } else {
+                    sidebarState.navigate(to: .needsAttention)
+                }
+            }
         }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
