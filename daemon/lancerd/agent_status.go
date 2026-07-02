@@ -34,6 +34,20 @@ func collectAgentStatus(home string) AgentStatusResult {
 	return AgentStatusResult{Agents: out, CollectedAt: time.Now().UTC().Format(time.RFC3339)}
 }
 
+// queryAgentStatus collects agent status and feeds cumulative usage into the
+// quota guardrails, shared by the SSH agent.status RPC (server.go) and the E2E
+// relay's agentStatusQuery message (e2e_router.go) so both transports report
+// identical behavior — same collectAgentStatus, no per-transport business logic.
+func (s *server) queryAgentStatus(homeDir string) AgentStatusResult {
+	result := collectAgentStatus(homeDir)
+	for _, ag := range result.Agents {
+		if ag.UsageUSD != nil {
+			s.dispatcher.updateProviderSpend(ag.Agent, *ag.UsageUSD)
+		}
+	}
+	return result
+}
+
 func agentHomeDir() string {
 	if v := os.Getenv("LANCER_AGENT_HOME"); v != "" {
 		return v

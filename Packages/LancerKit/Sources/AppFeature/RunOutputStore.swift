@@ -2,6 +2,7 @@
 import Foundation
 import Observation
 import LancerCore
+import SessionFeature
 
 /// Accumulates streamed output + lifecycle status for dispatched agent runs,
 /// keyed by runId. Fed by `ApprovalIngest` from `agent.run.output` /
@@ -46,11 +47,14 @@ public final class RunOutputStore {
     public init() {}
 
     /// Pre-register a freshly dispatched run so the detail view has a slot to
-    /// stream into before the first `agent.run.output` arrives.
+    /// stream into before the first `agent.run.output` arrives. Also marks the
+    /// run active in `ActiveRunRegistry` so SessionFeature's `PauseRunIntent`/
+    /// `StopRunIntent` (which cannot see this AppFeature-only store) know it exists.
     public func register(runId: String, status: String = "running") {
         if runs[runId] == nil {
             runs[runId] = Run(runId: runId, chunks: [], blocks: [], status: status, exitCode: nil)
         }
+        ActiveRunRegistry.shared.markActive(runId: runId)
     }
 
     public func appendOutput(_ params: RunOutputParams) {
@@ -69,6 +73,9 @@ public final class RunOutputStore {
         run.status = params.status
         if let code = params.exitCode { run.exitCode = code }
         runs[params.runId] = run
+        if run.isTerminal {
+            ActiveRunRegistry.shared.markTerminal(runId: params.runId)
+        }
     }
 
     public func appendToolStart(_ params: ToolStartParams) {
@@ -90,6 +97,9 @@ public final class RunOutputStore {
 
     public func run(_ runId: String) -> Run? { runs[runId] }
 
-    public func clear(_ runId: String) { runs[runId] = nil }
+    public func clear(_ runId: String) {
+        runs[runId] = nil
+        ActiveRunRegistry.shared.markTerminal(runId: runId)
+    }
 }
 #endif

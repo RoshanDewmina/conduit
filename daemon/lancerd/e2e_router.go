@@ -241,6 +241,22 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		}
 		r.server.applyRunControl(p.RunID, p.Action)
 
+	case "agentStatusQuery":
+		// On-demand status for a relay-only phone (no SSH DaemonChannel), mirroring
+		// the SSH agent.status RPC (server.go). Uses the same s.queryAgentStatus so
+		// both transports report identical behavior — no new daemon business logic.
+		var p struct {
+			HomeDir string `json:"homeDir,omitempty"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			log.Printf("e2e: unmarshal agentStatusQuery failed: %v", err)
+			return
+		}
+		result := r.server.queryAgentStatus(p.HomeDir)
+		msg := map[string]interface{}{"type": "agentStatusQueryResult", "payload": result}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentStatusQueryResult", data)
+
 	case "agentRunContinue":
 		var p struct {
 			RunID     string  `json:"runId"`

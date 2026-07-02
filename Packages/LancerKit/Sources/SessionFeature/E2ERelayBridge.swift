@@ -28,6 +28,7 @@ public final class E2ERelayBridge: ObservableObject {
     /// approvals don't collide (unlike the single-slot continuations above,
     /// which only ever have one dispatch/list/etc. in flight at a time).
     private var pendingDecisionAcks: [String: CheckedContinuation<Bool, Never>] = [:]
+    private var statusQueryContinuation: CheckedContinuation<AgentStatusSnapshot, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
@@ -188,6 +189,32 @@ public final class E2ERelayBridge: ObservableObject {
             return true
         } catch {
             return false
+        }
+    }
+
+    /// Queries the daemon's on-demand agent status over the relay — mirrors
+    /// `DaemonChannel.fetchAgentStatus`'s SSH `agent.status` RPC. Unlike
+    /// `agentStatus`'s periodic push (`StatusData` / `lancerE2EStatusUpdate`),
+    /// this is a request/response round trip so a relay-only pairing (no SSH
+    /// `DaemonChannel`) can support the same on-demand refresh `CommandGateway`
+    /// needs for Siri's "how many agents are running" query.
+    public func sendStatusQuery(homeDir: String?) async throws -> AgentStatusSnapshot {
+        guard isActive else { throw E2EError.notPaired }
+        struct StatusQueryParams: Codable, Sendable { let homeDir: String? }
+        try await relayClient.send(type: "agentStatusQuery", payload: StatusQueryParams(homeDir: homeDir))
+        // A stale in-flight query must be resumed before we replace it — mirrors
+        // sendDispatch's supersede-then-bound-wait pattern.
+        statusQueryContinuation?.resume(throwing: E2EError.superseded)
+        statusQueryContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, !Task.isCancelled else { return }
+            self.statusQueryContinuation?.resume(throwing: E2EError.timedOut)
+            self.statusQueryContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.statusQueryContinuation = c
         }
     }
 
@@ -523,6 +550,17 @@ public final class E2ERelayBridge: ObservableObject {
                 E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.DeviceRegisteredData>.self, from: message.payload
             ) else { return }
             approvalRelay.setRelayToken(env.payload.relayToken)
+
+        case "agentStatusQueryResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<AgentStatusSnapshot>.self, from: message.payload
+            )
+            if let snap = envelope?.payload {
+                statusQueryContinuation?.resume(returning: snap)
+            } else {
+                statusQueryContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            statusQueryContinuation = nil
 
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(
