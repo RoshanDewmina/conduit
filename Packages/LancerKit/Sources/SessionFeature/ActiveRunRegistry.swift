@@ -6,8 +6,9 @@ import Foundation
 /// `RunOutputStore` (AppFeature) is the source of truth for a run's streamed
 /// output/status, but `SessionFeature` cannot depend on `AppFeature` (features
 /// don't depend on each other — `agent-contract.md` §1). AppIntents driven by
-/// `CommandGateway` (`PauseRunIntent`/`StopRunIntent`) live in `SessionFeature`
-/// and have no live view model in scope, so they need *some* way to know
+/// `CommandGateway` (`PauseRunIntent`/`StopRunIntent`, now in the `Lancer` app
+/// target — see `Lancer/RunControlIntents.swift`) have no live view model in
+/// scope, so they need *some* way to know
 /// "is anything running" without reaching into `AppFeature`. This registry is
 /// the minimal mirror of that one signal: `AppFeature`'s `RunOutputStore`
 /// reports into it as runs start/finish; `SessionFeature` only ever reads it.

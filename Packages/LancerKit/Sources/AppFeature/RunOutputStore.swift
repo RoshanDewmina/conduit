@@ -48,7 +48,7 @@ public final class RunOutputStore {
 
     /// Pre-register a freshly dispatched run so the detail view has a slot to
     /// stream into before the first `agent.run.output` arrives. Also marks the
-    /// run active in `ActiveRunRegistry` so SessionFeature's `PauseRunIntent`/
+    /// run active in `ActiveRunRegistry` so the Lancer app target's `PauseRunIntent`/
     /// `StopRunIntent` (which cannot see this AppFeature-only store) know it exists.
     public func register(runId: String, status: String = "running") {
         if runs[runId] == nil {

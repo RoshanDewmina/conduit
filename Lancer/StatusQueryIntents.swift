@@ -1,8 +1,19 @@
-#if os(iOS)
 import AppIntents
 import Foundation
 import LancerCore
 import PersistenceKit
+import SessionFeature
+
+// Lives in the `Lancer` app target, NOT SessionFeature (a linked SPM library) —
+// same reasoning as LancerAppShortcuts.swift: `LancerLiveActivityWidget` (the
+// widget extension) also links SessionFeature directly (for ApprovalActionIntent,
+// which its own UI legitimately needs), and having the SAME AppIntent type
+// compiled into two separate binaries (main app + extension) confuses the
+// system's execution-time AppIntents lookup — confirmed live via the unified
+// log: "Unable to run App Shortcut: Couldn't find AppShortcutsProvider" even
+// though static discovery (the Shortcuts app listing, compiled Metadata.appintents)
+// worked correctly. Static discovery and runtime execution are two different
+// lookups; only the latter breaks under dual-target compilation.
 
 /// "How many agents are running on Lancer?" — read-only, no in-app approval or
 /// mutation. Routes through `CommandGateway.execute(.queryStatus)`, which tries
@@ -55,4 +66,3 @@ public struct PendingApprovalsQueryIntent: AppIntent {
         return .result(dialog: "\(pending.count) approval\(pending.count == 1 ? "" : "s") waiting for your review.")
     }
 }
-#endif

@@ -1,8 +1,12 @@
-#if os(iOS)
 import AppIntents
 import Foundation
 import LancerCore
 import PersistenceKit
+import SessionFeature
+
+// Lives in the `Lancer` app target — see StatusQueryIntents.swift's header
+// comment for why (dual-target AppIntent compilation breaks runtime execution
+// lookup even though static Shortcuts discovery still works).
 
 /// "Deny the latest approval" — the one Siri-reachable approval decision, and
 /// deliberately the ONLY one: approve stays a visual, in-app/Live-Activity-tap
@@ -31,4 +35,3 @@ public struct DenyLatestApprovalIntent: AppIntent {
         }
     }
 }
-#endif

@@ -1,6 +1,10 @@
-#if os(iOS)
 import AppIntents
 import Foundation
+import SessionFeature
+
+// Lives in the `Lancer` app target — see StatusQueryIntents.swift's header
+// comment for why (dual-target AppIntent compilation breaks runtime execution
+// lookup even though static Shortcuts discovery still works).
 
 /// Resolves which run a bare "pause/stop the session" phrase applies to, without
 /// full `AppEntity`/`EntityQuery` disambiguation. `ActiveRunRegistry` only tracks
@@ -71,4 +75,3 @@ public struct StopRunIntent: AppIntent {
         }
     }
 }
-#endif
