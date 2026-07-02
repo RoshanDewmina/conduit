@@ -1,0 +1,85 @@
+{"competitor_id":"lancer","feature_id":"session-monitoring","support_level":"full","notes":"Sidebar Home + Fleet view","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"launch-resume","support_level":"full","notes":"dispatch.go continueArgv for all 4 vendors, new runId per turn","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"approvals","support_level":"full","notes":"hook->policy->inbox->approve->audit, fail-closed","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"terminal","support_level":"planned","notes":"code exists (unified-PTY block terminal) but explicitly unwired from V1 nav as of 2026-06-30/07-01 decision; Work Thread is read-only log","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"diffs","support_level":"partial","notes":"DiffFeature/DiffKit exist; depth not independently re-benchmarked this pass","confidence":"moderate"}
+{"competitor_id":"lancer","feature_id":"push-notifications","support_level":"full","notes":"APNs, verified live on physical device 2026-06-23","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"actionable-push","support_level":"full","notes":"C2 gate PASSED: approve from lock screen, app closed","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"live-activities","support_level":"full","notes":"push-driven Live Activity, updates while app closed","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"watch-support","support_level":"partial","notes":"PhoneWatchConnector pushes live state; full depth not re-audited","confidence":"moderate"}
+{"competitor_id":"lancer","feature_id":"multi-provider","support_level":"full","notes":"Claude Code, Codex, OpenCode, Kimi","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"multi-machine","support_level":"partial","notes":"Fleet view, capped at 3 active session slots in V1","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"policy-engine","support_level":"full","notes":"daemon/lancerd/policy/, deny>ask>allow, fail-closed default ask","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"policy-presets","support_level":"full","notes":"PolicyPresetsView.swift, PolicyPreset.swift","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"audit-log","support_level":"full","notes":"AuditView, AuditRepository","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"tamper-evident-audit","support_level":"full","notes":"hash-chained, audit.go PrevHash + chain verification, AuditVerification.swift, export/verify UI","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"true-e2ee","support_level":"full","notes":"blind relay, phone never holds plaintext SSH session in V1, e2e_crypto.go / E2ERelayClient.swift","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"self-hosting","support_level":"partial","notes":"daemon runs on user's own host; relay itself is hosted by Lancer (push-backend), not user-hostable as shipped","confidence":"moderate"}
+{"competitor_id":"lancer","feature_id":"managed-relay","support_level":"full","notes":"push-backend Cloud Run relay + APNs","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"emergency-stop","support_level":"partial","notes":"Watch deny/stop wired; full fleet-wide kill switch breadth not independently re-verified this pass","confidence":"moderate"}
+{"competitor_id":"lancer","feature_id":"drift-detection","support_level":"full","notes":"daemon/lancerd/drift.go, DriftRemediationView.swift, bounded host walk","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"device-revocation","support_level":"full","notes":"DeviceManagementView.swift, GET/POST /v1/devices","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"biometric-gate","support_level":"absent","notes":"REMOVED for V1 2026-07-01 owner decision; approvals commit on tap, no lock screen","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"risk-classification","support_level":"full","notes":"local risk bands low/medium/high/critical inform UI, never auto-reject","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"native-app","support_level":"full","notes":"true native SwiftUI iOS/iPadOS app","confidence":"strong"}
+{"competitor_id":"lancer","feature_id":"existing-session-attach","support_level":"partial","notes":"tmux/session resume exists in SSH transport; relay-transport equivalent not independently confirmed","confidence":"weak"}
+{"competitor_id":"lancer","feature_id":"voice","support_level":"absent","notes":"not in scope","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"session-monitoring","support_level":"full","notes":"chat-style dashboard","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"approvals","support_level":"partial","notes":"tap-continue informational approval; broke on Claude Code confirmation popup update (GH #276)","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"terminal","support_level":"absent","notes":"parsed CLI output/chat, not a live PTY","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"diffs","support_level":"full","notes":"live diffs in app; @file/copy-paste gaps reported","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"push-notifications","support_level":"partial","notes":"iOS push praised; Android does NOT raise real OS notifications per Play review","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"actionable-push","support_level":"unknown","notes":"not confirmed either way for iOS lock-screen approve","confidence":"weak"}
+{"competitor_id":"omnara","feature_id":"watch-support","support_level":"partial","notes":"listed, not independently tested","confidence":"weak"}
+{"competitor_id":"omnara","feature_id":"multi-provider","support_level":"full","notes":"Claude Code, Codex, n8n, GitHub Actions, custom via SDK/REST","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"multi-machine","support_level":"partial","notes":"cloud-sandbox continuity across machines when host offline","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"policy-engine","support_level":"absent","notes":"no hook->policy->audit pipeline per prior analysis","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"audit-log","support_level":"absent","notes":"no structured audit trail found","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"tamper-evident-audit","support_level":"absent","notes":"none found","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"true-e2ee","support_level":"absent","notes":"founder-admitted: 'we don't have true E2EE yet'; plaintext convos/diffs on Supabase","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"self-hosting","support_level":"absent","notes":"cloud-dependent architecture","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"managed-relay","support_level":"full","notes":"Omnara-hosted WebSocket relay","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"emergency-stop","support_level":"partial","notes":"stop button was explicitly MISSING at one point (GH issue #272); status since unclear","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"drift-detection","support_level":"absent","notes":"none found","confidence":"moderate"}
+{"competitor_id":"omnara","feature_id":"biometric-gate","support_level":"unknown","notes":"not documented","confidence":"weak"}
+{"competitor_id":"omnara","feature_id":"native-app","support_level":"full","notes":"native iOS + Android + web + desktop + Watch","confidence":"strong"}
+{"competitor_id":"omnara","feature_id":"voice","support_level":"full","notes":"headline two-way voice; mic discards text on screen lock (GH #270), demo-fragile","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"session-monitoring","support_level":"full","notes":"work from terminal+browser+phone simultaneously, synced","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"approvals","support_level":"full","notes":"approve permission prompts/answer questions from phone","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"terminal","support_level":"partial","notes":"full local env exposed remotely incl filesystem/MCP/tools/config","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"push-notifications","support_level":"full","notes":"push when Claude decides / push when actions required, v2.1.110+","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"actionable-push","support_level":"full","notes":"approve permission prompts from mobile+web","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"multi-provider","support_level":"absent","notes":"Claude Code only, by construction","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"multi-machine","support_level":"partial","notes":"up to 32 concurrent sessions server mode; not a fleet dashboard per se","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"policy-engine","support_level":"absent","notes":"Auto mode classifier reduces human-in-loop, not a configurable policy engine","confidence":"moderate"}
+{"competitor_id":"anthropic-remote-control","feature_id":"audit-log","support_level":"partial","notes":"transcript URLs + session sharing/archival; not a dedicated audit product","confidence":"moderate"}
+{"competitor_id":"anthropic-remote-control","feature_id":"tamper-evident-audit","support_level":"absent","notes":"none found","confidence":"moderate"}
+{"competitor_id":"anthropic-remote-control","feature_id":"true-e2ee","support_level":"unknown","notes":"outbound-only HTTPS no inbound ports, short-lived scoped creds — architecturally similar posture but E2EE-vs-TLS distinction not confirmed from docs","confidence":"moderate"}
+{"competitor_id":"anthropic-remote-control","feature_id":"self-hosting","support_level":"absent","notes":"Anthropic-hosted relay only","confidence":"strong"}
+{"competitor_id":"anthropic-remote-control","feature_id":"emergency-stop","support_level":"unknown","notes":"not explicitly documented; likely trivially addable per prior threat analysis","confidence":"weak"}
+{"competitor_id":"anthropic-remote-control","feature_id":"native-app","support_level":"full","notes":"Claude iOS/Android app","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"session-monitoring","support_level":"full","notes":"monitor tasks across laptops/devboxes/remote envs","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"approvals","support_level":"full","notes":"approve commands/file changes/network access with scoped permissions once/chat-level/broader","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"terminal","support_level":"partial","notes":"review terminal output on phone; plus Windows Computer Use = full desktop GUI automation, exceeds Lancer","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"diffs","support_level":"full","notes":"review diffs, test results, screenshots; inline line comments, /review","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"push-notifications","support_level":"full","notes":"notifications when task completes or needs attention","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"multi-provider","support_level":"absent","notes":"Codex only, by construction","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"multi-machine","support_level":"partial","notes":"multiple hosts controllable; 'portfolio of machines' framing, not a unified fleet dashboard","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"policy-engine","support_level":"partial","notes":"sandbox policy set per session (Seatbelt/bwrap/WSL2, domain allowlist)","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"tamper-evident-audit","support_level":"absent","notes":"none found","confidence":"moderate"}
+{"competitor_id":"openai-codex-mobile","feature_id":"true-e2ee","support_level":"unknown","notes":"secure relay, TLS; E2EE-vs-transport distinction not confirmed","confidence":"moderate"}
+{"competitor_id":"openai-codex-mobile","feature_id":"biometric-gate","support_level":"full","notes":"Face ID/device-passcode lock for Codex separately","confidence":"strong"}
+{"competitor_id":"openai-codex-mobile","feature_id":"native-app","support_level":"full","notes":"ChatGPT iOS/Android app","confidence":"strong"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"approvals","support_level":"full","notes":"approve/deny perms per tool/file/URL, steer midsession, review plans before implementation","confidence":"strong"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"terminal","support_level":"partial","notes":"streams a local CLI session incl non-GitHub repos/local dirs","confidence":"strong"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"multi-provider","support_level":"partial","notes":"Agent HQ rolling out third-party agents (Anthropic/OpenAI/Google/Cognition/xAI) over 'coming months' as of 2025-10 announcement","confidence":"moderate"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"multi-machine","support_level":"unknown","notes":"not explicitly confirmed","confidence":"weak"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"emergency-stop","support_level":"full","notes":"stop a session at any time","confidence":"strong"}
+{"competitor_id":"github-copilot-remote-agent-hq","feature_id":"native-app","support_level":"full","notes":"GitHub Mobile app","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"approvals","support_level":"partial","notes":"manual: type y/approve in the TUI, no structured gating","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"terminal","support_level":"full","notes":"real SSH/tmux terminal via Termius/Blink","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"policy-engine","support_level":"absent","notes":"none, fully manual","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"tamper-evident-audit","support_level":"absent","notes":"none","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"true-e2ee","support_level":"partial","notes":"Tailscale mesh is encrypted point-to-point (WireGuard) but is VPN-mesh trust, not app-layer E2EE with a blind relay","confidence":"moderate"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"self-hosting","support_level":"full","notes":"fully self-hosted by construction","confidence":"strong"}
+{"competitor_id":"diy-tailscale-tmux","feature_id":"emergency-stop","support_level":"partial","notes":"Ctrl-C / kill tmux pane, manual","confidence":"strong"}

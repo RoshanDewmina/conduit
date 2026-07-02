@@ -1,0 +1,37 @@
+{"id":"session-monitoring","name":"Session monitoring","category":"session","description":"View live status of a running agent session from mobile"}
+{"id":"launch-resume","name":"Launch and resume sessions","category":"session","description":"Start a new agent run or resume/continue an existing one from mobile"}
+{"id":"approvals","name":"Governed approvals","category":"approvals","description":"Approve/deny/edit agent tool-call requests from mobile with risk context"}
+{"id":"questions-plans","name":"Questions and plan review","category":"approvals","description":"Answer agent clarifying questions or review a plan before execution"}
+{"id":"terminal","name":"Live interactive terminal","category":"terminal","description":"Full PTY/shell access from mobile, not just structured events"}
+{"id":"files","name":"File browsing","category":"files","description":"Browse the remote filesystem from mobile"}
+{"id":"git","name":"Git status/operations","category":"git","description":"View git status, branches, commits from mobile"}
+{"id":"diffs","name":"Diff review","category":"diffs","description":"Review code diffs produced by the agent, ideally with inline comments"}
+{"id":"tests","name":"Test results","category":"tests","description":"View test run output/results from mobile"}
+{"id":"web-previews","name":"Live web preview","category":"web-previews","description":"Preview a running dev server's UI from mobile"}
+{"id":"push-notifications","name":"Push notifications","category":"push-notifications","description":"OS-level push notifications for agent events"}
+{"id":"actionable-push","name":"Actionable push (approve from lock screen)","category":"push-notifications","description":"Approve/deny directly from a push notification/lock screen without opening the app"}
+{"id":"live-activities","name":"Live Activities / Dynamic Island","category":"live-activities","description":"iOS Live Activity showing real-time run status"}
+{"id":"widgets","name":"Home screen widgets","category":"widgets","description":"iOS/Android widgets showing agent/queue status"}
+{"id":"watch-support","name":"Watch app support","category":"watch-support","description":"Apple Watch companion for status/approve/deny"}
+{"id":"multi-provider","name":"Multi-provider / cross-vendor support","category":"multi-provider","description":"Supports more than one agent vendor (e.g. Claude Code AND Codex AND others) in one app"}
+{"id":"multi-machine","name":"Multi-machine fleet view","category":"multi-machine","description":"One view across multiple hosts/machines the user owns"}
+{"id":"policy-engine","name":"Policy engine","category":"policy","description":"Configurable rules for what's auto-allowed vs needs approval vs blocked"}
+{"id":"policy-presets","name":"Policy presets/templates","category":"policy","description":"Pre-built policy templates (e.g. conservative/balanced/permissive)"}
+{"id":"audit-log","name":"Audit log","category":"audit","description":"Record of what actions were taken/approved/denied"}
+{"id":"tamper-evident-audit","name":"Tamper-evident audit (hash-chained or equivalent)","category":"audit","description":"Audit log that can cryptographically prove it hasn't been altered"}
+{"id":"identity","name":"User/device identity","category":"identity","description":"Account system, device pairing/identity"}
+{"id":"rbac","name":"Role-based access control","category":"rbac","description":"Different permission levels for different team members"}
+{"id":"true-e2ee","name":"True end-to-end encryption","category":"encryption","description":"Transport where the intermediary/server cannot read the content, not just TLS-in-transit"}
+{"id":"self-hosting","name":"Self-hosting","category":"self-hosting","description":"Can run the control plane / relay entirely on infrastructure the user controls"}
+{"id":"managed-relay","name":"Managed relay","category":"managed-relay","description":"Vendor-hosted relay/push infrastructure so the user doesn't need to self-host"}
+{"id":"usage-budgets","name":"Usage and cost/budget visibility","category":"usage-budgets","description":"Token/cost usage tracking and budget limits"}
+{"id":"teams","name":"Team features","category":"teams","description":"Multi-user org/team support, shared visibility"}
+{"id":"integrations","name":"Third-party integrations","category":"integrations","description":"Slack, Discord, Telegram, GitHub Actions, etc."}
+{"id":"emergency-stop","name":"Emergency stop / kill switch","category":"emergency-stop","description":"Immediately halt a running agent (or all agents) from mobile"}
+{"id":"drift-detection","name":"Setup/config drift detection","category":"drift-detection","description":"Detect when a host's environment/config has drifted from expected baseline"}
+{"id":"device-revocation","name":"Device revocation","category":"identity","description":"Revoke a paired device's access remotely"}
+{"id":"biometric-gate","name":"Biometric/passcode gate on sensitive actions","category":"security","description":"Require Face ID/Touch ID/passcode before approving or viewing sensitive content"}
+{"id":"risk-classification","name":"Command risk classification","category":"security","description":"Automatically classify proposed actions by risk level (low/medium/high/critical)"}
+{"id":"native-app","name":"Native mobile app (not PWA/web)","category":"platform","description":"True native iOS/Android app vs. an installable web app"}
+{"id":"existing-session-attach","name":"Attach to existing session","category":"session","description":"Discover and attach to an agent session already running, not just ones launched via this tool"}
+{"id":"voice","name":"Voice control","category":"integrations","description":"Two-way voice interaction with the agent"}
