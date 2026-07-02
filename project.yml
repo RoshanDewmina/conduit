@@ -2,7 +2,7 @@ name: Lancer
 options:
   bundleIdPrefix: dev.lancer
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "27.0"
   xcodeVersion: "27.0"
   createIntermediateGroups: true
   developmentLanguage: en
@@ -10,7 +10,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.2"
-    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     # Must stay YES: the Approve/Reject Live Activity & widget buttons are backed
@@ -44,7 +44,7 @@ targets:
   Lancer:
     type: application
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: Lancer
     resources:
@@ -212,7 +212,7 @@ targets:
   LancerLiveActivityWidget:
     type: app-extension
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: LancerLiveActivityWidget
     info:
@@ -228,7 +228,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.liveactivity
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 2
-        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
@@ -245,7 +245,7 @@ targets:
   LancerWidget:
     type: app-extension
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: LancerWidget
     info:
@@ -266,7 +266,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.widget
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 2
-        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
@@ -282,7 +282,7 @@ targets:
   LancerUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: LancerUITests
     settings:
