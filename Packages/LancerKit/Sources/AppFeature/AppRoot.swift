@@ -698,8 +698,12 @@ public struct AppRoot: View {
             sidebarState.pendingApprovalCount = count
             // Keep the real Dynamic Island / lock-screen Live Activity badge
             // live — this is the glanceable signal while Lancer is backgrounded.
+            // Carry the most severe risk among current attention items so the
+            // widget can visually distinguish a high/critical approval from a
+            // routine one instead of rendering them identically.
+            let highestRisk = fleetStore.attentionItems.map(\.severity.rawValue).max()
             if #available(iOS 16.2, *) {
-                Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count) }
+                Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count, highestRisk: highestRisk) }
             }
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in

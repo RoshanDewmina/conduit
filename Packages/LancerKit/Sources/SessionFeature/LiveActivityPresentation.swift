@@ -11,6 +11,17 @@ public enum LiveActivityPrimaryState: Equatable {
 
 public enum CostLevel: Equatable { case none, normal, warning, over }
 
+/// Risk tier of a pending approval, same 0…3 scale as the daemon
+/// (`riskToInt` in daemon/lancerd/hook.go and `Approval.Risk.rawValue`).
+/// `.high`/`.critical` are what the widget visually distinguishes per the Live
+/// Activities HIG guidance against rendering high-severity content identically
+/// to routine content.
+public enum LiveActivityRiskTier: Int, Equatable, Sendable {
+    case low = 0, medium = 1, high = 2, critical = 3
+
+    public var isElevated: Bool { self == .high || self == .critical }
+}
+
 /// Pure, UI-free resolution of a ContentState into the single primary state to
 /// render plus the cost overlay level. Keeps precedence logic out of the widget
 /// (which stays pure presentation) and makes it unit-testable without ActivityKit.
@@ -19,6 +30,9 @@ public struct LiveActivityPresentation: Equatable {
     public let primary: LiveActivityPrimaryState
     public let cost: Double?
     public let costLevel: CostLevel
+    /// Risk of the pending approval `primary` names in `.needsYou`; nil in every
+    /// other primary state, and nil for an out-of-range raw risk value.
+    public let riskTier: LiveActivityRiskTier?
 
     public static func resolve(
         _ state: LancerSessionAttributes.ContentState,
@@ -48,7 +62,14 @@ public struct LiveActivityPresentation: Equatable {
             level = .none
         }
 
-        return LiveActivityPresentation(primary: primary, cost: state.cost, costLevel: level)
+        let riskTier: LiveActivityRiskTier?
+        if case .needsYou = primary {
+            riskTier = state.pendingApprovalRisk.flatMap(LiveActivityRiskTier.init(rawValue:))
+        } else {
+            riskTier = nil
+        }
+
+        return LiveActivityPresentation(primary: primary, cost: state.cost, costLevel: level, riskTier: riskTier)
     }
 }
 #endif
