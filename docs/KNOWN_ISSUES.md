@@ -270,3 +270,29 @@ are now archived under `docs/_archive/`.
   redesign) is intentionally deferred — revisit when repo-scoped dispatch context is needed.
 - **Owner-gated (unchanged):** App Store Connect setup, physical-device APNs smoke test, live remote-host
   E2E, vanity domain/DNS — see `docs/PUBLISH_READINESS_CHECKLIST.md` §C/§D.
+- **P1 (found + fixed 2026-07-02):** relay machine pairing silently traps users at the 3-machine cap
+  with no way to tell why. Root cause: `RelayMachineMigration`'s machines-index lives in the iOS
+  **Keychain** (`RelayMachineMigration.swift`), which — unlike `UserDefaults`/app-container files —
+  **survives a full app uninstall + reinstall**. Repeated pairing attempts during physical-device
+  testing (stale/expired codes, reconnect races) each persisted a `RelayMachineRecord`, and even
+  uninstalling the app didn't clear them. Two compounding symptoms discovered live on-device:
+  1. `E2ERelayPairingView`'s cap check (`existingMachineCount >= relayFleetMaxMachines`) correctly
+     saw 3 stale/dead machines and refused new pairing ("You've paired 3 machines — the maximum"),
+     but gave no indication *those machines were themselves unreachable* — a user has no way to
+     know removing them is safe/expected.
+  2. Simultaneously, `FleetView`'s "Machines" tab rendered as if **zero** machines were paired
+     (`activeRelayMachines.isEmpty` — active-only filter) — directly contradicting the pairing
+     screen's "3 machines, at the max" message from the very same `relayFleetStore.machines` data.
+     A user hitting the cap had nowhere obvious to look, since the one screen that *would* show
+     stale entries with per-row offline indicators (Settings → Paired Machines,
+     `RelayMachinesListView`) isn't surfaced from the error message's dead end.
+  **Fix (commit pending):** `FleetView.emptyState` now takes `hasOfflinePairedMachines` and renders
+  "No machines reachable" (pointing at Settings → Paired Machines) instead of the misleading "No
+  machines paired" when `relayMachines` is non-empty but nothing is active
+  (`Packages/LancerKit/Sources/AppFeature/FleetView.swift`). The cap-reached message in
+  `E2ERelayPairingView.swift` now explicitly states offline/unreachable machines still count toward
+  the limit. Verified: `swift build` green. **Not yet fixed:** no in-app warning that pairing state
+  survives uninstall (Keychain is arguably correct behavior for real users re-installing, but was
+  never surfaced anywhere — worth a "Paired machines carry over after reinstall" note in onboarding
+  or the Paired Machines screen if this causes future confusion). No bulk "remove all offline
+  machines" action — user had to understand the cap error and navigate to Settings manually.

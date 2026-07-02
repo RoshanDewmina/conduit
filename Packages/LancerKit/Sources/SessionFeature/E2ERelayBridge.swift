@@ -510,6 +510,20 @@ public final class E2ERelayBridge: ObservableObject {
             }
             sessionContinueContinuation = nil
 
+        case "deviceRegistered":
+            // The daemon's reply to `deviceRegister` (see `registerDevice` below),
+            // carrying the per-session capability token `postDecisionToBackend`
+            // needs for its `Authorization: Bearer` header. Without capturing this,
+            // a relay-only pairing (no SSH channel — the only other place this
+            // token is ever learned) has no working fallback when the direct
+            // `approvalResponse` send doesn't get acked in time, and a decision
+            // silently parks in the redelivery queue until the daemon's 120s
+            // fail-closed timeout has already denied it.
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.DeviceRegisteredData>.self, from: message.payload
+            ) else { return }
+            approvalRelay.setRelayToken(env.payload.relayToken)
+
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(
                 E2ERelayMessage.RelayInnerEnvelope<AgentArtifactEvent>.self, from: message.payload

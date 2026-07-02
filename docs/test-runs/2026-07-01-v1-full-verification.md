@@ -382,3 +382,49 @@ The approve now lands ~5 s after escalation (human tap latency), not a +120 s ti
 The "Relay approval E2E simulator proof" FAIL earlier in this report is superseded: the full
 phone-tap → relay → daemon → hook-unblock loop is proven in the simulator against the
 production Cloud Run relay.
+
+## Follow-up (2026-07-02, morning): first physical-device pairing pass — 2 real bugs found + fixed
+
+Runner: Claude Sonnet 5, physical device (`Roshan's iPhone`, iOS 27.0), against the production
+GCP relay (`conduit-push-y4wpy6zeva-ts.a.run.app`, billing re-enabled by the owner).
+
+### Bug 1 — a leftover self-hosted relay was silently absorbing pairing attempts
+
+`hermes-box`'s `conduit-relay.service` (systemd user unit, from Codex's 2026-07-01 pivot testing,
+§"Follow-up: SSH hermes-box real-phone setup" above) was still `enabled` and `active`, 15+ hours
+after that investigation ended. Separately, the physical device's app had a **Debug-only persisted
+relay-URL override** (`Packages/LancerKit/Sources/SSHTransport/RelaySettings.swift`,
+`lancer.debug.relayURL` in `UserDefaults`) left over from that same pivot — every normal Home
+Screen launch on this device was silently dialing `hermes-box`, not GCP, while the resident
+`lancerd` daemon only ever listened on GCP. hermes-box's own log confirmed the phone hitting it
+repeatedly (`relay: phone connected with code 332193/851548 ...`) — proof the pairing attempts
+were reaching a dead end, not GCP.
+
+**Fix:** `ssh hermes-box 'systemctl --user stop conduit-relay.service && systemctl --user disable
+conduit-relay.service'` (service decommissioned; `~/.conduit` data/APNs key left in place,
+untouched). Relaunched the app once with `LANCER_RELAY_URL` forced to the GCP URL via
+XcodeBuildMCP's `launch_app_device(env:)`, which overwrites the persisted debug key going forward.
+Confirmed via `lancerd.stderr.log`: `paired with phone (code: 033519)`.
+
+### Bug 2 — Keychain-persisted machine index survives uninstall, silently hits the 3-machine cap
+
+See `docs/KNOWN_ISSUES.md` §6 for the full writeup (root cause, both symptom screens, and the
+code fix in `FleetView.swift` + `E2ERelayPairingView.swift`). Short version: repeated pairing
+attempts during this same session (each hitting expired/stale codes before the hermes-box bug was
+found) persisted 3 dead `RelayMachineRecord`s to the iOS Keychain — surviving even a full app
+uninstall/reinstall — silently maxing out `relayFleetMaxMachines` while the Machines tab rendered
+as if nothing were paired at all (active-only empty-state check). Fixed the misleading copy on
+both surfaces; the underlying fix for the user was simply removing the 3 stale entries from
+Settings → Paired Machines.
+
+### Result: clean pairing achieved
+
+After both fixes, a fresh pairing on the physical device succeeded and stayed stable:
+
+```text
+2026/07/02 08:12:14 e2e: connected to relay as daemon (code: 967943)
+2026/07/02 08:13:00 e2e: paired with phone (code: 967943)
+```
+
+No disconnects since. Next steps on this device: send a prompt, trigger a gated approval, then
+the closed/backgrounded-app APNs + lock-screen checks per `lancer-onboarding-smoke`.

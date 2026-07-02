@@ -18,6 +18,14 @@ public enum E2ERelayMessage: Codable, Sendable {
     /// from this client (e.g. the 120s fail-closed timeout fired) - sent
     /// daemon → phone, so a stale pending card can be cleared proactively.
     case approvalResolved(ResolvedData)
+    /// Ack for `deviceRegister` carrying the daemon's per-session capability
+    /// token - sent daemon → phone. The SSH channel's `registerDevice()` RPC
+    /// returns this token in its reply; the relay's `deviceRegister` message
+    /// used to be pure fire-and-forget, so a relay-only pairing (no SSH host)
+    /// never learned it and `ApprovalRelay.postDecisionToBackend` — the only
+    /// fallback when the direct `approvalResponse` send fails to get acked —
+    /// was permanently a silent no-op.
+    case deviceRegistered(DeviceRegisteredData)
     /// Ping/pong keepalive
     case ping
     case pong
@@ -71,6 +79,14 @@ public enum E2ERelayMessage: Codable, Sendable {
         public init(approvalID: String, decision: String) {
             self.approvalID = approvalID
             self.decision = decision
+        }
+    }
+
+    public struct DeviceRegisteredData: Codable, Sendable {
+        public let relayToken: String
+
+        public init(relayToken: String) {
+            self.relayToken = relayToken
         }
     }
 

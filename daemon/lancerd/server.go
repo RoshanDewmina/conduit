@@ -1196,22 +1196,23 @@ func (s *server) relayPaired() bool {
 // that is already in flight.
 const noClientGrace = 8 * time.Second
 
-// approvalTimeout is the fail-closed window a reachable client gets to answer
-// an escalation before auto-deny. Var (not const) so tests can shrink it
-// instead of blocking on a real 120s wait.
-var approvalTimeout = 120 * time.Second
-
 // handleHookWithNotify processes one PreToolUse approval over conn. clientReachable
 // reports whether a human can answer right now (attach client connected and/or a
 // push device registered). When it returns false on an escalation, the hook waits
 // only noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking
-// the full 120s — otherwise wiring the hook would stall normal on-host `claude`
+// indefinitely — otherwise wiring the hook would stall normal on-host `claude`
 // runs whenever no phone is attached (Finding #10; the host runs bypassPermissions,
-// so the hook is the only gate and must not hang). When a client IS reachable the
-// full 120s human-decision window applies, with fail-safe auto-deny on timeout.
+// so the hook is the only gate and must not hang). When a client IS reachable there
+// is no timeout at all: the escalation waits for an explicit human decision no
+// matter how long that takes (owner directive 2026-07-02 — a reachable approval
+// must pause, not auto-deny, on a slow tap). Only the no-reachable-client path
+// above is fail-closed-with-a-grace; a reachable client is never auto-denied.
 func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error, clientReachable func() bool) {
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(130 * time.Second))
+	// No hard deadline: a reachable client may take arbitrarily long to answer
+	// (see the wait below), and the no-client path bounds itself via
+	// noClientGrace on waitWithTimeout rather than the connection deadline.
+	conn.SetDeadline(time.Time{})
 
 	var event ApprovalEvent
 	if first != nil {
@@ -1329,24 +1330,16 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		return
 	}
 
-	result, received := waitWithTimeout(decisionCh, approvalTimeout)
+	// A reachable client gets no timeout at all: block until an explicit human
+	// decision arrives on decisionCh, however long that takes. Previously this
+	// used waitWithTimeout(decisionCh, approvalTimeout) and auto-denied after
+	// 120s; the owner hit that fail-closed default three times in live testing
+	// (tapped Approve, got a silent auto-deny 120s later anyway) and asked for
+	// it to just pause instead. There is deliberately no bound here — see the
+	// no-reachable-client branch above for the one path that still times out.
+	result := <-decisionCh
 	decision := result.decision
-	if !received {
-		// Timed out: no resolver (RPC or poll) recorded a decision. Audit the
-		// auto-deny here and retire the orphaned pending so a late relay decision
-		// can't re-resolve it (which would mis-audit an approve / write an
-		// always-rule after the agent was already denied). Fail-safe default-deny.
-		s.approvals.remove(event.ApprovalID)
-		s.recordHumanDecision(event, "deny")
-		decision = "deny"
-		// The phone may still be showing this as pending (it never got a chance
-		// to answer in time, or its decision never reached us). Push an explicit
-		// resolved notice so a live client can proactively drop the stale card
-		// instead of leaving it stuck until the user notices and re-opens it.
-		if s.e2e != nil {
-			s.e2e.sendApprovalResolved(event.ApprovalID, "deny")
-		}
-	} else if decision == "approveAlways" {
+	if decision == "approveAlways" {
 		// The resolver (applyDecision) already recorded the decision and wrote the
 		// always-policy; collapse to "approve" for the agent, which only
 		// understands approve/deny. Do NOT record again here (avoids a duplicate

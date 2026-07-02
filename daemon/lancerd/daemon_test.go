@@ -244,10 +244,10 @@ func TestHookFastAutoApprovesWithNoClient(t *testing.T) {
 }
 
 // TestHookWaitsWhenClientReachable confirms the fast-approve does NOT fire when a
-// client is reachable: with clientReachable=true the hook takes the full 120s
-// human-decision path, so a phone decision delivered after the grace window still
-// wins. We deliver an approve shortly AFTER noClientGrace to prove the short
-// window was not used.
+// client is reachable: with clientReachable=true the hook takes the unbounded
+// human-decision path (no timeout), so a phone decision delivered after the grace
+// window still wins. We deliver a deny shortly AFTER noClientGrace to prove the
+// short no-client window was not used.
 func TestHookWaitsWhenClientReachable(t *testing.T) {
 	withStateDir(t)
 	installTestPolicy(t)
@@ -287,18 +287,21 @@ func TestHookWaitsWhenClientReachable(t *testing.T) {
 	cli.Close()
 }
 
-// TestApprovalTimeoutSendsResolvedNotification confirms that when the 120s
-// (shrunk here for the test) fail-closed window elapses with no decision, the
-// daemon pushes an explicit "approvalResolved" notice over the E2E relay so a
-// live phone can drop the stale pending card instead of leaving it stuck
-// forever with no explanation.
-func TestApprovalTimeoutSendsResolvedNotification(t *testing.T) {
+// TestApprovalNeverAutoDeniesReachableClient is the regression test for the
+// owner's 2026-07-02 live-testing report: a reachable client that hasn't
+// answered yet must NEVER be auto-denied on a timeout — it must just keep
+// waiting. This replaces the old TestApprovalTimeoutSendsResolvedNotification,
+// which asserted the opposite (a shrunk approvalTimeout firing an auto-deny +
+// an approvalResolved push); that behavior is exactly what was removed.
+//
+// It proves the new behavior two ways: (1) the escalation is still pending
+// (no decision, no approvalResolved push) well past what used to be a
+// (test-shrunk) timeout window, and (2) once an explicit human decision does
+// arrive, the hook call returns it faithfully rather than having already
+// given up.
+func TestApprovalNeverAutoDeniesReachableClient(t *testing.T) {
 	withStateDir(t)
 	installTestPolicy(t)
-
-	saved := approvalTimeout
-	approvalTimeout = 50 * time.Millisecond
-	defer func() { approvalTimeout = saved }()
 
 	s := newServer(serverHome())
 	client := &fakeRelayClient{paired: true}
@@ -306,7 +309,7 @@ func TestApprovalTimeoutSendsResolvedNotification(t *testing.T) {
 
 	srv, cli := net.Pipe()
 	event := ApprovalEvent{
-		ApprovalID: "timeout-1",
+		ApprovalID: "never-timeout-1",
 		Agent:      "claudeCode",
 		Kind:       "fileWrite",
 		Command:    "notes.txt",
@@ -316,10 +319,43 @@ func TestApprovalTimeoutSendsResolvedNotification(t *testing.T) {
 	first, _ := json.Marshal(event)
 
 	done := make(chan struct{})
+	decisionArrived := make(chan struct{})
 	go func() {
 		s.handleHookWithNotify(srv, first, nil, func() bool { return true })
+		close(decisionArrived)
 		close(done)
 	}()
+
+	// Give the hook goroutine time to register the pending approval, then wait
+	// well past what used to be a shrunk test timeout (50ms) with no decision
+	// delivered. The escalation must still be pending — no auto-deny, no
+	// approvalResolved push — proving there is no timeout on this path anymore.
+	time.Sleep(200 * time.Millisecond)
+
+	select {
+	case <-decisionArrived:
+		t.Fatal("hook returned a decision with no human decision ever delivered — a timeout fired when it must not")
+	default:
+	}
+
+	found := false
+	for _, e := range s.approvals.pendingEvents() {
+		if e.ApprovalID == "never-timeout-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("approval was removed/resolved without an explicit decision — it must remain pending indefinitely")
+	}
+	if msgType, _ := client.lastMessage(); msgType == "approvalResolved" {
+		t.Fatal("no approvalResolved push should fire when there was never a timeout")
+	}
+
+	// Now deliver the real human decision and confirm the still-blocked hook
+	// call honors it rather than having already timed out.
+	if _, ok := s.applyDecision("never-timeout-1", "deny", ""); !ok {
+		t.Fatal("pending approval missing — hook did not keep waiting")
+	}
 
 	var decision ApprovalDecision
 	_ = cli.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -327,42 +363,10 @@ func TestApprovalTimeoutSendsResolvedNotification(t *testing.T) {
 		t.Fatalf("decode decision: %v", err)
 	}
 	if decision.Decision != "deny" {
-		t.Fatalf("timed-out escalation should fail-closed deny, got %q", decision.Decision)
+		t.Fatalf("reachable-client decision should honor the explicit human deny, got %q", decision.Decision)
 	}
 	cli.Close()
 	<-done
-
-	msgType, data := client.lastMessage()
-	if msgType != "approvalResolved" {
-		t.Fatalf("expected an approvalResolved push after timeout, last message was %q", msgType)
-	}
-	var payload struct {
-		Payload struct {
-			ApprovalID string `json:"approvalID"`
-			Decision   string `json:"decision"`
-		} `json:"payload"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
-		t.Fatalf("unmarshal approvalResolved payload: %v", err)
-	}
-	if payload.Payload.ApprovalID != "timeout-1" || payload.Payload.Decision != "deny" {
-		t.Fatalf("approvalResolved payload = %+v, want approvalID=timeout-1 decision=deny", payload.Payload)
-	}
-
-	// A late decision for the now-retired approval must not silently look like
-	// it worked — regression guard for the "silent ok" bug this whole fix
-	// closes on the SSH/attach RPC path.
-	s.emit = nil // force writeFramed onto a capturable path
-	var captured []byte
-	s.setEmitter(func(b []byte) error { captured = b; return nil })
-	s.handleMessage(&rpcMessage{ID: float64(1), Method: "agent.approval.response", Params: json.RawMessage(`{"approvalId":"timeout-1","decision":"approve"}`)})
-	var reply rpcMessage
-	if err := json.Unmarshal(captured, &reply); err != nil {
-		t.Fatalf("unmarshal captured reply: %v", err)
-	}
-	if reply.Error == nil {
-		t.Fatalf("expected an error reply for a decision on an already-resolved approval, got %+v", reply)
-	}
 }
 
 func TestServeAttachRelaysPing(t *testing.T) {

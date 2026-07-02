@@ -28,7 +28,7 @@ func runAgentHook(args []string) error {
 	command := fs.String("command", "", "command or path being executed")
 	cwd := fs.String("cwd", "", "current working directory")
 	risk := fs.String("risk", "low", "risk band: low|medium|high")
-	timeout := fs.Duration("timeout", 120*time.Second, "max wait for decision")
+	timeout := fs.Duration("timeout", 0, "max wait for decision (0 = wait indefinitely, matching lancerd's no-timeout reachable-client behavior)")
 	// Structured tool-use fields from Claude Code / Codex PreToolUse hooks.
 	toolName := fs.String("tool-name", "", "structured tool name from tool_use (e.g. bash, write_file)")
 	toolUseID := fs.String("tool-use-id", "", "tool_use_id from the agent session")
@@ -63,7 +63,15 @@ func runAgentHook(args []string) error {
 		return nil
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(*timeout + 10*time.Second))
+	// lancerd no longer auto-denies a reachable-client escalation on a timeout
+	// (it just waits for a real decision), so this CLI process must not impose
+	// its own deadline either — otherwise it would still time out client-side
+	// and exit non-zero (denying the tool call) regardless of the daemon's fix.
+	// --timeout remains available as an explicit opt-in bound for callers that
+	// want one.
+	if *timeout > 0 {
+		conn.SetDeadline(time.Now().Add(*timeout + 10*time.Second))
+	}
 
 	if err := json.NewEncoder(conn).Encode(event); err != nil {
 		return fmt.Errorf("send event: %w", err)

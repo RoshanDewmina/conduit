@@ -128,7 +128,7 @@ public struct E2ERelayPairingView: View {
 
     private var capReachedSection: some View {
         VStack(spacing: 12) {
-            Text("You've paired \(relayFleetMaxMachines) machines — the maximum. Remove one in Settings to pair another.")
+            Text("You've paired \(relayFleetMaxMachines) machines — the maximum. Offline or unreachable machines still count toward this limit. Remove one from Paired Machines in Settings to pair another.")
                 .font(.dsSansPt(14))
                 .foregroundStyle(t.text3)
                 .multilineTextAlignment(.center)

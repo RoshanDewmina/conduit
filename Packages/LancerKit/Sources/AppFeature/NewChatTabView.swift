@@ -239,6 +239,20 @@ public struct NewChatTabView: View {
             .max { ($0.decidedAt ?? .distantPast) < ($1.decidedAt ?? .distantPast) }
     }
 
+    /// Count of pending approvals visible to this VM — read purely as an
+    /// `.onChange` trigger. `isAwaitingApproval` used to flip on ONLY from the
+    /// synchronous dispatch/continueRun "needsApproval" reply, so a mid-run
+    /// PreToolUse-hook escalation (delivered async: daemon → relay →
+    /// `lancerE2EApprovalReceived` → `inboxViewModel.approvals`, no synchronous
+    /// reply involved at all) never turned the inline card on — the run just sat
+    /// there with a typing dot while the daemon's 120s fail-closed timeout ran out
+    /// with no way for the human to see or answer the gate. Approvals carry no
+    /// runId (see AppRoot's relay-approval ingestion), so this is the same
+    /// best-effort "most recent pending" scoping `pendingApproval` already used.
+    private var pendingApprovalCount: Int {
+        inboxViewModel?.approvals.filter(\.isPending).count ?? 0
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             if activeRun != nil {
@@ -265,6 +279,15 @@ public struct NewChatTabView: View {
         }
         .onChange(of: prompt) { _, _ in
             Task { await refreshFilesIfMentioning() }
+        }
+        // Catches a mid-run escalation the instant it lands in `inboxViewModel`,
+        // instead of only reacting to a synchronous dispatch/continueRun reply
+        // (see `pendingApprovalCount`'s doc comment). `initial: true` also covers
+        // reopening this thread while an approval that arrived in the background
+        // is still pending.
+        .onChange(of: pendingApprovalCount, initial: true) { _, count in
+            guard activeRun != nil, !runIsTerminal, count > 0 else { return }
+            isAwaitingApproval = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
@@ -529,50 +552,71 @@ public struct NewChatTabView: View {
         // Only the LAST turn is "live" (drives the HUD/streaming + error chrome);
         // earlier turns render their final text statically.
         let isLast = activeRun?.runId == turn.runId
-        if isLast && isErrorState {
-            DSTypedErrorCard(error: .runFailed(""), onPrimary: nil, onSecondary: nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else if let run, !run.text.isEmpty || !run.blocks.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                // A turn with command/tool blocks is a terminal turn: its streamed
-                // output (run.text) belongs in the dark macOS-window card, one per
-                // command. A turn with no blocks is a plain reply — show its prose
-                // as a normal left-aligned bubble.
-                if run.blocks.isEmpty {
-                    if !run.text.isEmpty {
-                        DarkAssistantBubble(run.text, author: agentLabel)
+        // Read these UNCONDITIONALLY (not nested inside an else-if a populated
+        // `run` would short-circuit) for two reasons: (1) an escalation almost
+        // always happens mid-run, after the agent has already streamed some
+        // output, so gating the card on "no output yet" meant it could never
+        // show for a real conversation; (2) `@Observable` only re-renders this
+        // view for properties actually read during body evaluation — a branch
+        // that's never reached never subscribes, so `inboxViewModel.approvals`
+        // updating later wouldn't even trigger a re-render. Appending the card
+        // below existing output (instead of being mutually exclusive with it)
+        // fixes both: the transcript keeps what already streamed AND shows the
+        // gate the instant it appears.
+        let livePendingApproval = (isLast && isAwaitingApproval) ? pendingApproval : nil
+        let liveDeniedApproval = (isLast && isAwaitingApproval && livePendingApproval == nil) ? deniedApproval : nil
+
+        VStack(alignment: .leading, spacing: 10) {
+            if isLast && isErrorState {
+                DSTypedErrorCard(error: .runFailed(""), onPrimary: nil, onSecondary: nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let run, !run.text.isEmpty || !run.blocks.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    // A turn with command/tool blocks is a terminal turn: its streamed
+                    // output (run.text) belongs in the dark macOS-window card, one per
+                    // command. A turn with no blocks is a plain reply — show its prose
+                    // as a normal left-aligned bubble.
+                    if run.blocks.isEmpty {
+                        if !run.text.isEmpty {
+                            DarkAssistantBubble(run.text, author: agentLabel)
+                        }
+                    } else {
+                        ForEach(Array(run.blocks.enumerated()), id: \.element.id) { index, block in
+                            DarkTerminalBlockCard(
+                                host: selectedAgent?.hostName ?? "My machine",
+                                command: blockCommand(block),
+                                // The run's combined output stream isn't split per block;
+                                // attach it to the last (most recent) command card.
+                                output: index == run.blocks.count - 1 ? run.text : "",
+                                state: isLast && isErrorState ? .error : (block.status == .running ? .running : .done),
+                                isShellSession: DarkTerminalBlockCard.isShellToolName(block.toolName)
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                } else {
-                    ForEach(Array(run.blocks.enumerated()), id: \.element.id) { index, block in
-                        DarkTerminalBlockCard(
-                            host: selectedAgent?.hostName ?? "My machine",
-                            command: blockCommand(block),
-                            // The run's combined output stream isn't split per block;
-                            // attach it to the last (most recent) command card.
-                            output: index == run.blocks.count - 1 ? run.text : "",
-                            state: isLast && isErrorState ? .error : (block.status == .running ? .running : .done),
-                            isShellSession: DarkTerminalBlockCard.isShellToolName(block.toolName)
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    persistedArtifacts(for: turn.runId)
                 }
-                persistedArtifacts(for: turn.runId)
+                .transition(.opacity)
+            } else if livePendingApproval == nil && liveDeniedApproval == nil {
+                // No output yet and no gate to show — the agent is working. Calm
+                // typing indicator instead of the old pixel-grid box; it morphs
+                // into the reply when text lands.
+                DarkTypingIndicator()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
             }
-            .transition(.opacity)
-        } else if isLast, isAwaitingApproval, let approval = pendingApproval {
-            inlineApprovalCard(for: approval)
-                .transition(.opacity)
-        } else if isLast, isAwaitingApproval, let denied = deniedApproval {
-            // The user denied this action — show it plainly instead of a typing dot
-            // that reads as "still working". The agent was stopped server-side.
-            deniedCard(for: denied)
-                .transition(.opacity)
-        } else {
-            // No output yet — the agent is working. Calm typing indicator instead
-            // of the old pixel-grid box; it morphs into the reply when text lands.
-            DarkTypingIndicator()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.opacity)
+
+            // Appended below whatever the run already produced, so an escalation
+            // that fires after output has started streaming is never hidden.
+            if let approval = livePendingApproval {
+                inlineApprovalCard(for: approval)
+                    .transition(.opacity)
+            } else if let denied = liveDeniedApproval {
+                // The user denied this action — show it plainly instead of a typing
+                // dot that reads as "still working". The agent was stopped server-side.
+                deniedCard(for: denied)
+                    .transition(.opacity)
+            }
         }
     }
 

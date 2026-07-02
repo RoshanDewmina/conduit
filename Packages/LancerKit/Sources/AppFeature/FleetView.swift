@@ -180,7 +180,7 @@ public struct FleetView: View {
                             // also no relay machine above; either way keep the
                             // action buttons so the user can still add a machine.
                             if activeRelayMachines.isEmpty {
-                                emptyState
+                                emptyState(hasOfflinePairedMachines: !relayMachines.isEmpty)
                                     .padding(.top, 4)
                             }
                             actionButtons
@@ -723,11 +723,20 @@ public struct FleetView: View {
         return { openLatestThread(for: slot) }
     }
 
-    private var emptyState: some View {
+    /// `hasOfflinePairedMachines` distinguishes "never paired anything" from
+    /// "paired machines exist but none are reachable right now" — these read
+    /// identically from `activeRelayMachines` (both empty) but are very
+    /// different situations for the user to act on. Conflating them produced
+    /// a real support confusion: a device with 3 stale/offline paired slots
+    /// (still counting against the pairing cap in Settings) rendered this
+    /// screen exactly like a fresh, never-paired install.
+    private func emptyState(hasOfflinePairedMachines: Bool) -> some View {
         DSEmptyState(
             icon: .server,
-            title: "No machines paired",
-            subtitle: "Pair the machine where your agents run. Lancer will use the relay for dispatch, output, and approvals without turning this phone into a terminal."
+            title: hasOfflinePairedMachines ? "No machines reachable" : "No machines paired",
+            subtitle: hasOfflinePairedMachines
+                ? "Your paired machines are offline or unreachable. Check Settings > Paired Machines — stale pairings still count toward the 3-machine limit and may need to be removed before pairing a new one."
+                : "Pair the machine where your agents run. Lancer will use the relay for dispatch, output, and approvals without turning this phone into a terminal."
         )
     }
 

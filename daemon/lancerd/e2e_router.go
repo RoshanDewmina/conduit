@@ -297,6 +297,21 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 				go srv.postDeviceTokenRegistration(p.PushBackendURL, p.SessionID, p.APNSToken)
 			}
 		}
+		// Tell the phone the relayToken it just caused us to (re)generate, so its
+		// own decision-POST fallback (ApprovalRelay.postDecisionToBackend) can
+		// authenticate. Without this reply the relay-only path (no SSH channel,
+		// which is the only other place the phone ever learns this token) never
+		// receives it, so `forwardDecisionOnly`'s backend-POST fallback is a
+		// silent, permanent no-op — the direct bridge send (`approvalResponse`)
+		// becomes the ONLY delivery path, with no safety net if it ever misses
+		// its ack (stale bridge after a re-pair, a dropped frame, a slow relay
+		// hop) — the daemon's 120s fail-closed timeout then denies the approval
+		// with the phone never having had a working way to answer.
+		ackPayload := map[string]interface{}{"relayToken": relayToken}
+		ackMsg := map[string]interface{}{"type": "deviceRegistered", "payload": ackPayload}
+		if data, err := json.Marshal(ackMsg); err == nil {
+			_ = r.client.sendMessage("deviceRegistered", data)
+		}
 
 	case "agentAgentsInstalled":
 		payloadOut := map[string]interface{}{"agents": installedAgents(exec.LookPath)}
