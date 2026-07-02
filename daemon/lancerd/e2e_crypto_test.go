@@ -107,3 +107,85 @@ func TestE2ECryptoWrongPeerKeyFails(t *testing.T) {
 		t.Fatal("frame decrypted under the wrong session key")
 	}
 }
+
+// TestE2EReplayedFrameRejected is the item-3 regression: the AEAD alone
+// happily decrypts a captured/replayed frame a second time (it has no notion
+// of "already seen"), so replay resistance must come from the seq envelope +
+// replaySequencer layered on top. A frame that decrypts successfully twice
+// must still only be ACCEPTED once by the sequencer.
+func TestE2EReplayedFrameRejected(t *testing.T) {
+	priv, _, err := generateKeyPair()
+	if err != nil {
+		t.Fatalf("generateKeyPair: %v", err)
+	}
+	_, peer, err := generateKeyPair()
+	if err != nil {
+		t.Fatalf("generateKeyPair peer: %v", err)
+	}
+	key, err := deriveSessionKey(priv, base64URLEncode(peer[:]), "helper", "hk", "ak")
+	if err != nil {
+		t.Fatalf("deriveSessionKey: %v", err)
+	}
+
+	wrapped0, err := wrapSeq(0, []byte(`{"type":"approval","payload":{}}`))
+	if err != nil {
+		t.Fatalf("wrapSeq: %v", err)
+	}
+	frame, err := encryptFrame(wrapped0, key)
+	if err != nil {
+		t.Fatalf("encryptFrame: %v", err)
+	}
+
+	var seq replaySequencer
+
+	// First delivery: decrypts and is accepted.
+	plaintext, err := decryptFrame(frame, key)
+	if err != nil {
+		t.Fatalf("decryptFrame (first delivery): %v", err)
+	}
+	gotSeq, _, err := unwrapSeq(plaintext)
+	if err != nil {
+		t.Fatalf("unwrapSeq: %v", err)
+	}
+	if !seq.accept(gotSeq) {
+		t.Fatal("first delivery of seq=0 must be accepted")
+	}
+
+	// Replay: the identical captured frame decrypts successfully again (AEAD
+	// has no memory), but the sequencer must reject it as already-seen.
+	replayPlaintext, err := decryptFrame(frame, key)
+	if err != nil {
+		t.Fatalf("decryptFrame (replay) unexpectedly failed: %v", err)
+	}
+	replaySeq, _, err := unwrapSeq(replayPlaintext)
+	if err != nil {
+		t.Fatalf("unwrapSeq (replay): %v", err)
+	}
+	if seq.accept(replaySeq) {
+		t.Fatal("a replayed frame (same seq) must be rejected, not accepted a second time")
+	}
+
+	// A genuinely new, higher sequence is still accepted.
+	wrapped1, _ := wrapSeq(1, []byte(`{"type":"approval","payload":{}}`))
+	frame1, err := encryptFrame(wrapped1, key)
+	if err != nil {
+		t.Fatalf("encryptFrame seq=1: %v", err)
+	}
+	plaintext1, err := decryptFrame(frame1, key)
+	if err != nil {
+		t.Fatalf("decryptFrame seq=1: %v", err)
+	}
+	gotSeq1, _, err := unwrapSeq(plaintext1)
+	if err != nil {
+		t.Fatalf("unwrapSeq seq=1: %v", err)
+	}
+	if !seq.accept(gotSeq1) {
+		t.Fatal("a strictly-increasing new sequence must be accepted")
+	}
+
+	// reset() (a new pairing generation) allows seq=0 again.
+	seq.reset()
+	if !seq.accept(0) {
+		t.Fatal("after reset(), seq=0 must be acceptable again (new generation)")
+	}
+}

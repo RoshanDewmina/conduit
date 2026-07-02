@@ -40,13 +40,16 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 	msg := map[string]interface{}{
 		"type": "approvalPending",
 		"payload": map[string]interface{}{
-			"approvalID": ev.ApprovalID,
-			"agent":      ev.Agent,
-			"kind":       ev.Kind,
-			"command":    ev.Command,
-			"risk":       ev.Risk,
-			"cwd":        ev.CWD,
-			"toolName":   ev.ToolName,
+			"approvalID":  ev.ApprovalID,
+			"agent":       ev.Agent,
+			"kind":        ev.Kind,
+			"command":     ev.Command,
+			"patch":       ev.Patch,
+			"risk":        ev.Risk,
+			"cwd":         ev.CWD,
+			"toolName":    ev.ToolName,
+			"toolInput":   ev.ToolInput,
+			"contentHash": ev.ContentHash,
 		},
 	}
 
@@ -120,19 +123,20 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			ApprovalID      string `json:"approvalID"`
 			Decision        string `json:"decision"`
 			EditedToolInput string `json:"editedToolInput,omitempty"`
+			ContentHash     string `json:"contentHash,omitempty"`
 		}
 		if err := json.Unmarshal(payload, &decision); err != nil {
 			log.Printf("e2e: unmarshal approval response failed: %v", err)
 			return
 		}
-		_, ok := r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		_, ok := r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
 		// Every other phone-initiated message in this switch replies with a
 		// typed …Result so the caller has a real round trip to await. This one
 		// never did — the phone treated a successful *outgoing* send as proof
 		// of delivery, with no way to learn the daemon actually processed it
-		// (dropped frame, decrypt failure, already-resolved approval all looked
-		// identical to "it worked"). Send an explicit ack so it doesn't have to
-		// guess.
+		// (dropped frame, decrypt failure, already-resolved approval, or a
+		// content-hash mismatch all looked identical to "it worked"). Send an
+		// explicit ack so it doesn't have to guess.
 		ackMsg := map[string]interface{}{
 			"type": "approvalResponseAck",
 			"payload": map[string]interface{}{

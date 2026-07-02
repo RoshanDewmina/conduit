@@ -1037,14 +1037,16 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 
 	// Policy gate. A dispatched run defaults to medium risk so the bundled policy
 	// escalates it unless a rule explicitly allows — fail-closed by default.
+	command := "[dispatch] " + strings.Join(argv, " ")
 	event := ApprovalEvent{
-		ApprovalID: newUUID(),
-		Agent:      normalizeAgentSource(p.Agent),
-		Kind:       "command",
-		Command:    "[dispatch] " + strings.Join(argv, " "),
-		CWD:        p.CWD,
-		Risk:       d.launchRisk(argv),
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		ApprovalID:  newUUID(),
+		Agent:       normalizeAgentSource(p.Agent),
+		Kind:        "command",
+		Command:     command,
+		CWD:         p.CWD,
+		Risk:        d.launchRisk(argv),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		ContentHash: computeContentHash(command, "", p.CWD, ""),
 	}
 	effect, rule, fromDefault := evalFn(event)
 	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
@@ -1174,15 +1176,17 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 
 	// Policy gate (same risk scoring as dispatch: low for a hook-wired agent whose
 	// tools are gated per-action, medium otherwise).
+	continueCommand := "[continue] " + strings.Join(argv, " ")
 	event := ApprovalEvent{
-		ApprovalID: newUUID(),
-		Agent:      normalizeAgentSource(agent),
-		Kind:       "command",
-		Command:    "[continue] " + strings.Join(argv, " "),
-		CWD:        cwd,
-		Risk:       d.launchRisk(argv),
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		RunID:      runID,
+		ApprovalID:  newUUID(),
+		Agent:       normalizeAgentSource(agent),
+		Kind:        "command",
+		Command:     continueCommand,
+		CWD:         cwd,
+		Risk:        d.launchRisk(argv),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		RunID:       runID,
+		ContentHash: computeContentHash(continueCommand, "", cwd, ""),
 	}
 	effect, rule, fromDefault := evalFn(event)
 	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
@@ -1251,14 +1255,16 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	}
 
 	// Policy gate (same risk scoring as dispatch/continueRun).
+	resumeCommand := "[observed-continue] " + strings.Join(argv, " ")
 	event := ApprovalEvent{
-		ApprovalID: newUUID(),
-		Agent:      normalizeAgentSource(p.Vendor),
-		Kind:       "command",
-		Command:    "[observed-continue] " + strings.Join(argv, " "),
-		CWD:        p.CWD,
-		Risk:       d.launchRisk(argv),
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		ApprovalID:  newUUID(),
+		Agent:       normalizeAgentSource(p.Vendor),
+		Kind:        "command",
+		Command:     resumeCommand,
+		CWD:         p.CWD,
+		Risk:        d.launchRisk(argv),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		ContentHash: computeContentHash(resumeCommand, "", p.CWD, ""),
 	}
 	effect, rule, fromDefault := evalFn(event)
 	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)

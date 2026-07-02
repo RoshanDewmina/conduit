@@ -336,9 +336,13 @@ public struct AppRoot: View {
             PaywallSheet(featureName: paywallFeatureName)
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background, #available(iOS 16.2, *) {
-                Task { await LancerLiveActivityManager.shared.endAll() }
-            }
+            // Live Activities are NOT ended on background: `.end()` is a one-way,
+            // terminal ActivityKit call, and pushType: .token exists precisely so
+            // push-backend can keep updating the activity while the app is
+            // backgrounded or fully closed (ARCHITECTURE.md's documented
+            // push-driven lifecycle). Only end an activity when the underlying
+            // session/run actually terminates — see the LancerLiveActivityManager
+            // .end/.endAll call sites elsewhere in this file.
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
@@ -694,8 +698,12 @@ public struct AppRoot: View {
             sidebarState.pendingApprovalCount = count
             // Keep the real Dynamic Island / lock-screen Live Activity badge
             // live — this is the glanceable signal while Lancer is backgrounded.
+            // Carry the most severe risk among current attention items so the
+            // widget can visually distinguish a high/critical approval from a
+            // routine one instead of rendering them identically.
+            let highestRisk = fleetStore.attentionItems.map(\.severity.rawValue).max()
             if #available(iOS 16.2, *) {
-                Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count) }
+                Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count, highestRisk: highestRisk) }
             }
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
@@ -1748,19 +1756,36 @@ public struct AppRoot: View {
         // posts .lancerLiveActivityTokenReady when ActivityKit issues/refreshes a
         // per-activity or push-to-start token. Without this the push-driven Live
         // Activity has no registered token and can never receive a push.
+        //
+        // Registers over BOTH transports (mirrors registerPushTokenForActiveTransport):
+        // the SSH daemonChannel when present, AND every active relay machine's bridge.
+        // Previously this was gated on `let channel = self.daemonChannel` alone, so a
+        // relay-only pairing (no SSH host — V1's primary configuration) silently never
+        // registered its Live Activity token at all.
         Task { @MainActor in
             for await notification in NotificationCenter.default.notifications(named: .lancerLiveActivityTokenReady) {
                 guard let sessionID = notification.userInfo?["sessionID"] as? String,
                       let activityToken = notification.userInfo?["activityToken"] as? String,
-                      let isPushToStart = notification.userInfo?["isPushToStart"] as? Bool,
-                      let channel = self.daemonChannel
+                      let isPushToStart = notification.userInfo?["isPushToStart"] as? Bool
                 else { continue }
-                try? await channel.registerActivityToken(
-                    activityToken: activityToken,
-                    sessionID: sessionID,
-                    isPushToStart: isPushToStart,
-                    pushBackendURL: Self.pushBackendURL()
-                )
+                let backendURL = Self.pushBackendURL()
+                if let channel = self.daemonChannel {
+                    try? await channel.registerActivityToken(
+                        activityToken: activityToken,
+                        sessionID: sessionID,
+                        isPushToStart: isPushToStart,
+                        pushBackendURL: backendURL
+                    )
+                }
+                guard !backendURL.isEmpty else { continue }
+                for machine in self.relayFleetStore.machines where machine.bridge.isActive {
+                    await machine.bridge.registerActivityToken(
+                        sessionID: sessionID,
+                        activityToken: activityToken,
+                        isPushToStart: isPushToStart,
+                        pushBackendURL: backendURL
+                    )
+                }
             }
         }
 

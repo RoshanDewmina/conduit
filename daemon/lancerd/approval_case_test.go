@@ -16,7 +16,7 @@ func TestApprovalResolveCaseInsensitive(t *testing.T) {
 	lower := "cace8588-685d-4c34-8081-231fef1f974d"
 	ch := s.add(ApprovalEvent{ApprovalID: lower})
 
-	event, ok := s.resolve(strings.ToUpper(lower), "approve", "")
+	event, ok := s.resolve(strings.ToUpper(lower), "approve", "", "")
 	if !ok {
 		t.Fatalf("resolve with UPPERCASE id must match the lowercase-stored pending")
 	}

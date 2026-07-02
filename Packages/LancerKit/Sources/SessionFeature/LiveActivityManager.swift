@@ -50,6 +50,13 @@ public struct LancerSessionAttributes: ActivityAttributes {
         public var pendingApprovals: Int
         public var agentName: String?       // "Claude Code" when an agent is running
         public var pendingApprovalID: String?
+        /// Risk of the pending approval named by `pendingApprovalID`, using the same
+        /// 0…3 scale as the daemon (`riskToInt` in daemon/lancerd/hook.go and
+        /// `Approval.Risk.rawValue`): 0=low, 1=medium, 2=high, 3=critical. nil when
+        /// there's no pending approval. Lets the widget visually distinguish a
+        /// high/critical approval from a routine one instead of rendering them
+        /// identically.
+        public var pendingApprovalRisk: Int?
         public var isStreaming: Bool        // agent is actively executing (drives the blue glyph)
         public var cost: Double?            // accumulated cost in USD
         /// Transient confirmation of a just-resolved decision: "approved" / "rejected" / nil.
@@ -63,6 +70,7 @@ public struct LancerSessionAttributes: ActivityAttributes {
             pendingApprovals: Int = 0,
             agentName: String? = nil,
             pendingApprovalID: String? = nil,
+            pendingApprovalRisk: Int? = nil,
             isStreaming: Bool = false,
             cost: Double? = nil,
             lastDecision: String? = nil,
@@ -72,6 +80,7 @@ public struct LancerSessionAttributes: ActivityAttributes {
             self.pendingApprovals = pendingApprovals
             self.agentName = agentName
             self.pendingApprovalID = pendingApprovalID
+            self.pendingApprovalRisk = pendingApprovalRisk
             self.isStreaming = isStreaming
             self.cost = cost
             self.lastDecision = lastDecision
@@ -158,7 +167,8 @@ public final class LancerLiveActivityManager {
         status: String = "connected",
         agentName: String? = nil,
         pendingApprovals: Int = 0,
-        pendingApprovalID: String? = nil
+        pendingApprovalID: String? = nil,
+        pendingApprovalRisk: Int? = nil
     ) async {
         guard isEnabled else { return }
 
@@ -167,6 +177,7 @@ public final class LancerLiveActivityManager {
             pendingApprovals: pendingApprovals,
             agentName: agentName,
             pendingApprovalID: pendingApprovalID,
+            pendingApprovalRisk: pendingApprovalRisk,
             cost: lastContent[activityKey]?.cost
         )
 
@@ -213,7 +224,8 @@ public final class LancerLiveActivityManager {
         status: String,
         agentName: String? = nil,
         pendingApprovals: Int = 0,
-        pendingApprovalID: String? = nil
+        pendingApprovalID: String? = nil,
+        pendingApprovalRisk: Int? = nil
     ) async {
         guard let activity = activities[activityKey] else { return }
         let content = LancerSessionAttributes.ContentState(
@@ -221,6 +233,7 @@ public final class LancerLiveActivityManager {
             pendingApprovals: pendingApprovals,
             agentName: agentName,
             pendingApprovalID: pendingApprovalID,
+            pendingApprovalRisk: pendingApprovalRisk,
             cost: lastContent[activityKey]?.cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
@@ -236,7 +249,12 @@ public final class LancerLiveActivityManager {
     /// every session's activity (even ones with zero approvals of their own)
     /// shows the same number. Attributing approvals to a specific session/host
     /// is a separate, bigger change — not solved here.
-    public func updatePendingApprovals(_ count: Int) async {
+    ///
+    /// - Parameter highestRisk: the most severe risk (0…3, same scale as
+    ///   `ContentState.pendingApprovalRisk`) among the current fleet-wide
+    ///   pending approvals, or nil when `count` is 0. Same fleet-wide caveat
+    ///   as `count` above — not attributed to a specific session/host.
+    public func updatePendingApprovals(_ count: Int, highestRisk: Int? = nil) async {
         for (activityKey, activity) in activities {
             guard let base = lastContent[activityKey] else { continue }
             // Construct a fresh value (not a mutated copy of stored actor state)
@@ -252,6 +270,7 @@ public final class LancerLiveActivityManager {
                 pendingApprovals: count,
                 agentName: base.agentName,
                 pendingApprovalID: count > 0 ? base.pendingApprovalID : nil,
+                pendingApprovalRisk: count > 0 ? highestRisk : nil,
                 isStreaming: base.isStreaming,
                 cost: base.cost
             )

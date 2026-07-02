@@ -26,6 +26,15 @@ public enum E2ERelayMessage: Codable, Sendable {
     /// fallback when the direct `approvalResponse` send fails to get acked —
     /// was permanently a silent no-op.
     case deviceRegistered(DeviceRegisteredData)
+    /// Forwards a Live Activity (ActivityKit) push or push-to-start token to the
+    /// relay-paired daemon so it can register it with push-backend on the
+    /// phone's behalf - sent phone → daemon. Mirrors `deviceRegister`
+    /// (APNs device tokens): the relay-only path had no equivalent for Live
+    /// Activity tokens, so `AppRoot`'s `.lancerLiveActivityTokenReady`
+    /// subscriber only ever forwarded them over `DaemonChannel` (SSH), which
+    /// doesn't exist for a relay-only pairing — closed-app push-driven Live
+    /// Activity updates never worked on relay-only devices.
+    case activityTokenRegister(ActivityTokenRegisterData)
     /// Ping/pong keepalive
     case ping
     case pong
@@ -35,18 +44,26 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let agent: String
         public let kind: String
         public let command: String?
+        public let patch: String?
         public let risk: Int
         public let cwd: String?
         public let toolName: String?
+        public let toolInput: String?
+        /// The daemon's `computeContentHash` over (command, patch, cwd, toolInput)
+        /// at approval-creation time — see `Approval.computeContentHash`.
+        public let contentHash: String?
 
-        public init(approvalID: String, agent: String, kind: String, command: String?, risk: Int, cwd: String?, toolName: String?) {
+        public init(approvalID: String, agent: String, kind: String, command: String?, patch: String? = nil, risk: Int, cwd: String?, toolName: String?, toolInput: String? = nil, contentHash: String? = nil) {
             self.approvalID = approvalID
             self.agent = agent
             self.kind = kind
             self.command = command
+            self.patch = patch
             self.risk = risk
             self.cwd = cwd
             self.toolName = toolName
+            self.toolInput = toolInput
+            self.contentHash = contentHash
         }
     }
 
@@ -54,11 +71,15 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let approvalID: String
         public let decision: String
         public let editedToolInput: String?
+        /// Echoed back from the `ApprovalData.contentHash` this decision was
+        /// made on; lancerd's approvalStore.resolve rejects a mismatch.
+        public let contentHash: String?
 
-        public init(approvalID: String, decision: String, editedToolInput: String?) {
+        public init(approvalID: String, decision: String, editedToolInput: String?, contentHash: String? = nil) {
             self.approvalID = approvalID
             self.decision = decision
             self.editedToolInput = editedToolInput
+            self.contentHash = contentHash
         }
     }
 
@@ -87,6 +108,22 @@ public enum E2ERelayMessage: Codable, Sendable {
 
         public init(relayToken: String) {
             self.relayToken = relayToken
+        }
+    }
+
+    /// Params for `activityTokenRegister` - mirrors `DaemonChannel.registerActivityToken`'s
+    /// `lancer.device.register.activity` RPC params, sent over the relay instead of SSH.
+    public struct ActivityTokenRegisterData: Codable, Sendable {
+        public let sessionId: String
+        public let activityToken: String
+        public let isPushToStart: Bool
+        public let pushBackendURL: String
+
+        public init(sessionId: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String) {
+            self.sessionId = sessionId
+            self.activityToken = activityToken
+            self.isPushToStart = isPushToStart
+            self.pushBackendURL = pushBackendURL
         }
     }
 

@@ -15,9 +15,18 @@ type decisionRecord struct {
 	ApprovalID      string `json:"approvalId"`
 	Decision        string `json:"decision"` // approve | approveAlways | deny
 	EditedToolInput string `json:"editedToolInput,omitempty"`
-	SessionID       string `json:"sessionId"`
-	CreatedAt       int64  `json:"createdAt"`
+	// ContentHash is opaque here — push-backend never sees the pending
+	// ApprovalEvent or the E2E session key, it just carries this value from the
+	// phone's POST through to lancerd's poll, which verifies it against the
+	// approval it has pending (see approvalStore.resolve in daemon/lancerd).
+	ContentHash string `json:"contentHash,omitempty"`
+	SessionID   string `json:"sessionId"`
+	CreatedAt   int64  `json:"createdAt"`
 }
+
+// maxContentHashLen bounds the hex-SHA-256 ContentHash field (64 chars); the
+// slack allows for a future longer digest without another size-constant PR.
+const maxContentHashLen = 128
 
 const (
 	// decisionTTL bounds how long an un-polled decision is retained. lancerd's
@@ -90,7 +99,8 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(rec.ApprovalID) > maxApprovalIDLen ||
 		len(rec.SessionID) > maxSessionIDLen ||
-		len(rec.EditedToolInput) > maxEditedToolInputLen {
+		len(rec.EditedToolInput) > maxEditedToolInputLen ||
+		len(rec.ContentHash) > maxContentHashLen {
 		http.Error(w, "field too large", http.StatusBadRequest)
 		return
 	}

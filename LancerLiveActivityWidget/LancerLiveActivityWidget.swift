@@ -37,8 +37,8 @@ struct LancerSessionLiveActivity: Widget {
 
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.pendingApprovals > 0 {
-                        Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
-                            .foregroundStyle(.orange)
+                        Label("\(context.state.pendingApprovals)", systemImage: approvalBadgeSymbol(for: context.state))
+                            .foregroundStyle(approvalBadgeColor(for: context.state))
                     } else if let cost = context.state.cost, cost > 0 {
                         Text(formatCost(cost))
                             .font(.caption.monospaced())
@@ -125,9 +125,9 @@ struct LancerSessionLiveActivity: Widget {
 
             // Pending approval badge
             if context.state.pendingApprovals > 0 {
-                Label("\(context.state.pendingApprovals)", systemImage: "bell.badge.fill")
+                Label("\(context.state.pendingApprovals)", systemImage: approvalBadgeSymbol(for: context.state))
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(approvalBadgeColor(for: context.state))
                     .font(.caption.weight(.semibold))
             }
         }
@@ -169,7 +169,7 @@ struct LancerSessionLiveActivity: Widget {
         if context.state.pendingApprovals > 0 {
             Text("\(context.state.pendingApprovals)")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(approvalBadgeColor(for: context.state))
         } else {
             Text(shortStatus(for: context.state))
                 .font(.caption2)
@@ -216,13 +216,30 @@ struct LancerSessionLiveActivity: Widget {
         .font(.caption)
     }
 
+    // MARK: - Risk-tiered approval badge (Gap #2: a high/critical approval must
+    // not render identically to a routine one — see LiveActivityPresentation.riskTier)
+
+    private func approvalBadgeSymbol(for state: LancerSessionAttributes.ContentState) -> String {
+        LiveActivityPresentation.resolve(state, budget: nil).riskTier?.isElevated == true
+            ? "exclamationmark.triangle.fill"
+            : "bell.badge.fill"
+    }
+
+    private func approvalBadgeColor(for state: LancerSessionAttributes.ContentState) -> Color {
+        LiveActivityPresentation.resolve(state, budget: nil).riskTier?.isElevated == true
+            ? Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (high/critical)
+            : .orange // routine
+    }
+
     // MARK: - Status Colors (ok=green, warn=amber, danger=red)
 
     private func statusColor(for state: LancerSessionAttributes.ContentState) -> Color {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
         case .needsYou:
-            return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (warn)
+            return p.riskTier?.isElevated == true
+                ? Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (high/critical)
+                : Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (routine)
         case .decisionLanded(let approved):
             return approved
                 ? Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1)  // green (approved)
@@ -242,7 +259,13 @@ struct LancerSessionLiveActivity: Widget {
     private func statusLabel(for state: LancerSessionAttributes.ContentState) -> String {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
-        case .needsYou(let count): return count == 1 ? "1 pending" : "\(count) pending"
+        case .needsYou(let count):
+            let base = count == 1 ? "1 pending" : "\(count) pending"
+            switch p.riskTier {
+            case .critical: return base + " · critical"
+            case .high:     return base + " · high risk"
+            default:        return base
+            }
         case .decisionLanded(let approved): return approved ? "Approved ✓" : "Rejected ✓"
         case .running: return "streaming"
         case .idle:
@@ -334,6 +357,23 @@ extension LancerSessionAttributes.ContentState {
             pendingApprovalID: "preview-approval-id", isStreaming: true, cost: 2.05
         )
     }
+    /// Contrast case for Gap #2: same shape as `needsApproval` (routine, amber
+    /// bell) but risk 2 (high) — must render with the red warning-triangle badge
+    /// and "· high risk" label instead of looking identical.
+    fileprivate static var needsApprovalHighRisk: Self {
+        .init(
+            status: "connected", pendingApprovals: 1, agentName: "Claude Code",
+            pendingApprovalID: "preview-approval-id", pendingApprovalRisk: 2,
+            isStreaming: true, cost: 1.18
+        )
+    }
+    fileprivate static var needsApprovalCritical: Self {
+        .init(
+            status: "connected", pendingApprovals: 1, agentName: "Claude Code",
+            pendingApprovalID: "preview-approval-id", pendingApprovalRisk: 3,
+            isStreaming: false, cost: 3.40
+        )
+    }
     fileprivate static var approved: Self {
         .init(status: "connected", agentName: "Claude Code", cost: 1.18, lastDecision: "approved")
     }
@@ -352,6 +392,8 @@ extension LancerSessionAttributes.ContentState {
     LancerSessionAttributes.ContentState.connected
     LancerSessionAttributes.ContentState.streaming
     LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.needsApprovalHighRisk
+    LancerSessionAttributes.ContentState.needsApprovalCritical
     LancerSessionAttributes.ContentState.multipleApprovals
     LancerSessionAttributes.ContentState.approved
     LancerSessionAttributes.ContentState.reconnecting
@@ -365,6 +407,8 @@ extension LancerSessionAttributes.ContentState {
     LancerSessionAttributes.ContentState.connected
     LancerSessionAttributes.ContentState.streaming
     LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.needsApprovalHighRisk
+    LancerSessionAttributes.ContentState.needsApprovalCritical
     LancerSessionAttributes.ContentState.multipleApprovals
     LancerSessionAttributes.ContentState.overBudget
 }
@@ -376,6 +420,7 @@ extension LancerSessionAttributes.ContentState {
     LancerSessionAttributes.ContentState.connected
     LancerSessionAttributes.ContentState.streaming
     LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.needsApprovalHighRisk
     LancerSessionAttributes.ContentState.multipleApprovals
 }
 

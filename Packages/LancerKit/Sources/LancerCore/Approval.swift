@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct Approval: Identifiable, Sendable, Hashable {
@@ -21,6 +22,13 @@ public struct Approval: Identifiable, Sendable, Hashable {
     public var toolInput: String?
     public let blastRadius: ApprovalBlastRadius?
     public let lastStateChangeAt: Date?
+    /// SHA-256 over (command, patch, cwd, toolInput) as computed by the daemon
+    /// when this approval was created (`computeContentHash` in
+    /// `daemon/lancerd/approval.go`) — echoed back verbatim in the decision
+    /// payload so lancerd can verify the phone decided on the exact content it
+    /// is holding pending, not a stale or substituted copy. `nil` only for
+    /// approvals synthesized entirely on-device before ever reaching the wire.
+    public let contentHash: String?
 
     public enum AgentSource: String, Sendable, Hashable, Codable {
         case claudeCode, codex, opencode, cursor, devin, unknown
@@ -59,7 +67,8 @@ public struct Approval: Identifiable, Sendable, Hashable {
         agentSessionID: String? = nil,
         toolInput: String? = nil,
         blastRadius: ApprovalBlastRadius? = nil,
-        lastStateChangeAt: Date? = nil
+        lastStateChangeAt: Date? = nil,
+        contentHash: String? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -81,7 +90,20 @@ public struct Approval: Identifiable, Sendable, Hashable {
         self.toolInput = toolInput
         self.blastRadius = blastRadius
         self.lastStateChangeAt = lastStateChangeAt
+        self.contentHash = contentHash
     }
 
     public var isPending: Bool { decision == nil }
+
+    /// Canonicalizes (command, patch, cwd, toolInput) into the same SHA-256
+    /// digest `computeContentHash` produces in `daemon/lancerd/approval.go` —
+    /// fields joined with \u{1F} (ASCII unit separator), which cannot occur in
+    /// any of them, so concatenation stays unambiguous across a field boundary
+    /// without a length-prefixed encoding. The two implementations are kept in
+    /// sync by shared test vectors, not by sharing code across languages.
+    public static func computeContentHash(command: String?, patch: String?, cwd: String, toolInput: String?) -> String {
+        let joined = [command ?? "", patch ?? "", cwd, toolInput ?? ""].joined(separator: "\u{1F}")
+        let digest = SHA256.hash(data: Data(joined.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
 }
