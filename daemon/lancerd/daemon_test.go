@@ -135,6 +135,11 @@ func TestHookQueuesWithoutAttachDrainsOnAttach(t *testing.T) {
 		_ = json.NewDecoder(conn).Decode(&hookDecision)
 	}()
 
+	// handleHookWithNotify computes event.ContentHash server-side from the
+	// content fields above; the decision below must echo the same value or
+	// resolve() rejects it as a mismatch.
+	wantHash := computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+
 	time.Sleep(100 * time.Millisecond)
 
 	qPath, _ := queuePath()
@@ -170,7 +175,7 @@ func TestHookQueuesWithoutAttachDrainsOnAttach(t *testing.T) {
 		t.Fatal("attach client did not receive agent.approval.pending")
 	}
 
-	params, _ := json.Marshal(ApprovalDecision{ApprovalID: "hook-1", Decision: "approve"})
+	params, _ := json.Marshal(ApprovalDecision{ApprovalID: "hook-1", Decision: "approve", ContentHash: wantHash})
 	resp, _ := json.Marshal(rpcMessage{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -272,7 +277,8 @@ func TestHookWaitsWhenClientReachable(t *testing.T) {
 	// removed the pending, so this resolve would be a no-op and the decode below
 	// would read a fast-approve instead of our explicit deny.
 	time.Sleep(noClientGrace + 500*time.Millisecond)
-	if _, ok := s.applyDecision("reachable-1", "deny", ""); !ok {
+	wantHash := computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+	if _, ok := s.applyDecision("reachable-1", "deny", "", wantHash); !ok {
 		t.Fatal("pending approval missing — hook did not keep waiting past the grace window")
 	}
 

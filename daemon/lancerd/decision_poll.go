@@ -13,14 +13,16 @@ type backendDecision struct {
 	ApprovalID      string `json:"approvalId"`
 	Decision        string `json:"decision"`
 	EditedToolInput string `json:"editedToolInput,omitempty"`
+	ContentHash     string `json:"contentHash,omitempty"`
 }
 
 // decisionPoller pulls phone-posted decisions from push-backend and applies the
 // matching pending approvals — the path that works when no SSH client is attached.
 // apply is wired to server.applyDecision so poll-delivered decisions persist
-// audit + approveAlways policy identically to the live-SSH respond path.
+// audit + approveAlways policy identically to the live-SSH respond path, and are
+// verified against the pending approval's ContentHash identically too.
 type decisionPoller struct {
-	apply               func(id, decision, edited string) (ApprovalEvent, bool)
+	apply               func(id, decision, edited, contentHash string) (ApprovalEvent, bool)
 	pollIntervalForTest time.Duration
 
 	mu         sync.Mutex
@@ -29,7 +31,7 @@ type decisionPoller struct {
 	stop       chan struct{}
 }
 
-func newDecisionPoller(apply func(id, decision, edited string) (ApprovalEvent, bool)) *decisionPoller {
+func newDecisionPoller(apply func(id, decision, edited, contentHash string) (ApprovalEvent, bool)) *decisionPoller {
 	return &decisionPoller{apply: apply}
 }
 
@@ -95,7 +97,7 @@ func (p *decisionPoller) loop(backendURL, sessionID, relayToken string, stop cha
 			}
 			resp.Body.Close()
 			for _, d := range body.Decisions {
-				p.apply(d.ApprovalID, d.Decision, d.EditedToolInput)
+				p.apply(d.ApprovalID, d.Decision, d.EditedToolInput, d.ContentHash)
 			}
 		}
 	}

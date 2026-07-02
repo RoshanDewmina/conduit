@@ -26,7 +26,7 @@ func TestDecisionPollerResolves(t *testing.T) {
 	defer srv.Close()
 
 	got := make(chan [3]string, 1)
-	resolve := func(id, decision, edited string) (ApprovalEvent, bool) {
+	resolve := func(id, decision, edited, contentHash string) (ApprovalEvent, bool) {
 		got <- [3]string{id, decision, edited}
 		return ApprovalEvent{}, true
 	}
@@ -60,7 +60,7 @@ func TestDecisionPollerSendsBearerToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newDecisionPoller(func(id, decision, edited string) (ApprovalEvent, bool) {
+	p := newDecisionPoller(func(id, decision, edited, contentHash string) (ApprovalEvent, bool) {
 		return ApprovalEvent{}, false
 	})
 	p.pollIntervalForTest = 20 * time.Millisecond
@@ -74,5 +74,46 @@ func TestDecisionPollerSendsBearerToken(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("poller did not poll in time")
+	}
+}
+
+// TestDecisionPollerThreadsContentHash is the item-1 REST-fallback regression:
+// the poller must carry a poll-delivered decision's contentHash through to
+// apply() unmodified, so the push-backend path is verified identically to the
+// live-SSH/relay paths (approvalStore.resolve) rather than a weaker path that
+// skips the check.
+func TestDecisionPollerThreadsContentHash(t *testing.T) {
+	served := int32(0)
+	const wantHash = "deadbeefcafe"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if atomic.AddInt32(&served, 1) == 1 {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"decisions": []map[string]string{
+					{"approvalId": "a-2", "decision": "approve", "contentHash": wantHash},
+				},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"decisions": []any{}})
+	}))
+	defer srv.Close()
+
+	got := make(chan string, 1)
+	p := newDecisionPoller(func(id, decision, edited, contentHash string) (ApprovalEvent, bool) {
+		got <- contentHash
+		return ApprovalEvent{}, true
+	})
+	p.pollIntervalForTest = 20 * time.Millisecond
+	p.ensureRunning(srv.URL, "sess-B", "tok-B")
+	defer p.stopForTest()
+
+	select {
+	case h := <-got:
+		if h != wantHash {
+			t.Fatalf("contentHash = %q, want %q", h, wantHash)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("poller did not resolve the decision in time")
 	}
 }

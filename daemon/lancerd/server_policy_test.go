@@ -27,7 +27,7 @@ func TestApplyDecisionApproveAlwaysPersistsPolicyAndAudit(t *testing.T) {
 	}
 	_ = s.approvals.add(event)
 
-	if _, ok := s.applyDecision("appr-poll-1", "approveAlways", ""); !ok {
+	if _, ok := s.applyDecision("appr-poll-1", "approveAlways", "", ""); !ok {
 		t.Fatal("applyDecision did not resolve a pending approval")
 	}
 
@@ -66,7 +66,7 @@ func TestApplyDecisionApproveAuditedNoPolicy(t *testing.T) {
 	event := ApprovalEvent{ApprovalID: "appr-poll-2", Agent: "codex", Kind: "command", Command: "ls", CWD: home}
 	_ = s.approvals.add(event)
 
-	if _, ok := s.applyDecision("appr-poll-2", "approve", ""); !ok {
+	if _, ok := s.applyDecision("appr-poll-2", "approve", "", ""); !ok {
 		t.Fatal("applyDecision did not resolve")
 	}
 	if _, err := os.Stat(policy.AlwaysPolicyPath(home)); !os.IsNotExist(err) {

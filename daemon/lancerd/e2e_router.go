@@ -40,13 +40,16 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 	msg := map[string]interface{}{
 		"type": "approvalPending",
 		"payload": map[string]interface{}{
-			"approvalID": ev.ApprovalID,
-			"agent":      ev.Agent,
-			"kind":       ev.Kind,
-			"command":    ev.Command,
-			"risk":       ev.Risk,
-			"cwd":        ev.CWD,
-			"toolName":   ev.ToolName,
+			"approvalID":  ev.ApprovalID,
+			"agent":       ev.Agent,
+			"kind":        ev.Kind,
+			"command":     ev.Command,
+			"patch":       ev.Patch,
+			"risk":        ev.Risk,
+			"cwd":         ev.CWD,
+			"toolName":    ev.ToolName,
+			"toolInput":   ev.ToolInput,
+			"contentHash": ev.ContentHash,
 		},
 	}
 
@@ -91,12 +94,13 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			ApprovalID      string `json:"approvalID"`
 			Decision        string `json:"decision"`
 			EditedToolInput string `json:"editedToolInput,omitempty"`
+			ContentHash     string `json:"contentHash,omitempty"`
 		}
 		if err := json.Unmarshal(payload, &decision); err != nil {
 			log.Printf("e2e: unmarshal approval response failed: %v", err)
 			return
 		}
-		r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
 
 	case "agentDispatch":
 		var params struct {

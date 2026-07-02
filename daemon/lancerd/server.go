@@ -263,8 +263,8 @@ func newServer(home string) *server {
 // It writes the human-decision audit entry and, for approveAlways, the
 // always-policy. FAIL-SAFE: a failed policy write is logged, never fatal — a
 // dropped always-rule only means more prompting later, never an unintended allow.
-func (s *server) applyDecision(id, decision, editedToolInput string) (ApprovalEvent, bool) {
-	event, ok := s.approvals.resolve(id, decision, editedToolInput)
+func (s *server) applyDecision(id, decision, editedToolInput, contentHash string) (ApprovalEvent, bool) {
+	event, ok := s.approvals.resolve(id, decision, editedToolInput, contentHash)
 	if !ok {
 		return ApprovalEvent{}, false
 	}
@@ -559,7 +559,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
 		s.writeResult(msg.ID, "ok")
 
 	case "agent.doctor":
@@ -1212,6 +1212,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		fmt.Fprintf(conn, `{"error":"bad request"}`)
 		return
 	}
+	event.ContentHash = computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
 
 	eval := s.policy.evaluate(event)
 	switch eval.Effect {
