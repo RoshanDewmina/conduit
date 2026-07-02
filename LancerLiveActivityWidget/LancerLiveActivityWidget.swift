@@ -148,6 +148,24 @@ struct LancerSessionLiveActivity: Widget {
 
     @ViewBuilder
     private func compactTrailingView(context: ActivityViewContext<LancerSessionAttributes>) -> some View {
+        if #available(iOS 27.0, *) {
+            DynamicIslandWidthReader { isLimitedWidth in
+                if isLimitedWidth {
+                    // Landscape Dynamic Island has no spare width for the
+                    // numeric/text badge — drop it and rely on the leading
+                    // dot's color alone (see compactLeadingView).
+                    EmptyView()
+                } else {
+                    compactTrailingBadge(context: context)
+                }
+            }
+        } else {
+            compactTrailingBadge(context: context)
+        }
+    }
+
+    @ViewBuilder
+    private func compactTrailingBadge(context: ActivityViewContext<LancerSessionAttributes>) -> some View {
         if context.state.pendingApprovals > 0 {
             Text("\(context.state.pendingApprovals)")
                 .font(.caption2.weight(.semibold))
@@ -260,4 +278,111 @@ struct LancerSessionLiveActivity: Widget {
         if cost < 0.01 { return "<$0.01" }
         return String(format: "$%.2f", cost)
     }
+}
+
+// MARK: - Dynamic Island landscape width detection
+//
+// `isDynamicIslandLimitedInWidth` (WidgetKit, iOS 27+) reports whether the
+// Dynamic Island's compact/minimal presentation is currently constrained by
+// landscape width. It's an `EnvironmentValues` key, so it must be read from
+// inside a `View`'s `body` — this small reader lets call sites consume it
+// without promoting every helper into its own `View` type.
+@available(iOS 27.0, *)
+private struct DynamicIslandWidthReader<Content: View>: View {
+    @Environment(\.isDynamicIslandLimitedInWidth) private var isDynamicIslandLimitedInWidth
+    @ViewBuilder let content: (Bool) -> Content
+
+    var body: some View {
+        content(isDynamicIslandLimitedInWidth)
+    }
+}
+
+// MARK: - Previews
+//
+// Renders Lock Screen and every Dynamic Island presentation (expanded,
+// compact, minimal) directly in Xcode's canvas via `#Preview(as:)` — no
+// simulator navigation (home screen, lock screen, notification center)
+// needed to see how a real state looks. Use `mcp__xcode__RenderPreview`
+// with `previewCanvasControlOverrides.timelineIndex` to step through the
+// `contentStates` below, and `.dynamicIsland(...)`/`.content` for the
+// `as:` parameter to pick which presentation renders.
+
+@available(iOS 16.2, *)
+extension LancerSessionAttributes {
+    fileprivate static var preview: LancerSessionAttributes {
+        LancerSessionAttributes(hostName: "Roshan's Mac", hostID: "preview-host")
+    }
+}
+
+@available(iOS 16.2, *)
+extension LancerSessionAttributes.ContentState {
+    fileprivate static var connected: Self {
+        .init(status: "connected", agentName: "Claude Code")
+    }
+    fileprivate static var streaming: Self {
+        .init(status: "connected", agentName: "Claude Code", isStreaming: true, cost: 0.42)
+    }
+    fileprivate static var needsApproval: Self {
+        .init(
+            status: "connected", pendingApprovals: 1, agentName: "Claude Code",
+            pendingApprovalID: "preview-approval-id", isStreaming: true, cost: 1.18
+        )
+    }
+    fileprivate static var multipleApprovals: Self {
+        .init(
+            status: "connected", pendingApprovals: 3, agentName: "Codex",
+            pendingApprovalID: "preview-approval-id", isStreaming: true, cost: 2.05
+        )
+    }
+    fileprivate static var approved: Self {
+        .init(status: "connected", agentName: "Claude Code", cost: 1.18, lastDecision: "approved")
+    }
+    fileprivate static var reconnecting: Self {
+        .init(status: "reconnecting", agentName: "Claude Code")
+    }
+    fileprivate static var overBudget: Self {
+        .init(status: "connected", agentName: "Claude Code", isStreaming: true, cost: 24.87)
+    }
+}
+
+@available(iOS 16.2, *)
+#Preview("Lock Screen", as: .content, using: LancerSessionAttributes.preview) {
+    LancerSessionLiveActivity()
+} contentStates: {
+    LancerSessionAttributes.ContentState.connected
+    LancerSessionAttributes.ContentState.streaming
+    LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.multipleApprovals
+    LancerSessionAttributes.ContentState.approved
+    LancerSessionAttributes.ContentState.reconnecting
+    LancerSessionAttributes.ContentState.overBudget
+}
+
+@available(iOS 16.2, *)
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: LancerSessionAttributes.preview) {
+    LancerSessionLiveActivity()
+} contentStates: {
+    LancerSessionAttributes.ContentState.connected
+    LancerSessionAttributes.ContentState.streaming
+    LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.multipleApprovals
+    LancerSessionAttributes.ContentState.overBudget
+}
+
+@available(iOS 16.2, *)
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: LancerSessionAttributes.preview) {
+    LancerSessionLiveActivity()
+} contentStates: {
+    LancerSessionAttributes.ContentState.connected
+    LancerSessionAttributes.ContentState.streaming
+    LancerSessionAttributes.ContentState.needsApproval
+    LancerSessionAttributes.ContentState.multipleApprovals
+}
+
+@available(iOS 16.2, *)
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: LancerSessionAttributes.preview) {
+    LancerSessionLiveActivity()
+} contentStates: {
+    LancerSessionAttributes.ContentState.connected
+    LancerSessionAttributes.ContentState.needsApproval
 }
