@@ -85,6 +85,11 @@ public struct NewChatTabView: View {
     /// Activity, mirroring how `SessionViewModel` keys its activity by the
     /// whole session's id, not by each individual command run within it.
     @State private var liveActivityKey: String?
+    /// Pending delayed-end for the Live Activity — see `runIsTerminal`'s
+    /// `onChange` handler. A turn's underlying process exiting isn't the same
+    /// as the user being done with this chat, so ending is deferred by a grace
+    /// window and cancelled if a follow-up arrives first.
+    @State private var endActivityTask: Task<Void, Never>?
     @State private var controlStore: RunControlStore?
     @State private var chatTitle: String = "new chat"
     // One conversation = an ordered list of (prompt, runId) turns. The first is the
@@ -295,13 +300,22 @@ public struct NewChatTabView: View {
             guard activeRun != nil, !runIsTerminal, count > 0 else { return }
             isAwaitingApproval = true
         }
-        // Ends this thread's Live Activity when the run finishes — AppRoot's
-        // updatePendingApprovals broadcast already keeps the approval count
-        // fresh on every active activity app-wide, so only start/end/status
-        // are this view's own responsibility.
+        // A turn's underlying process reaching "exited" only means THIS turn is
+        // done streaming — it does not mean the user is done with the chat, and
+        // a follow-up is the common case, not the exception. Don't end the
+        // Live Activity immediately; give the user a grace window to reply
+        // (which cancels this and calls .update() on the same key instead).
+        // AppRoot's updatePendingApprovals broadcast already keeps the approval
+        // count fresh on every active activity app-wide, so only start/end/
+        // status are this view's own responsibility.
         .onChange(of: runIsTerminal) { _, terminal in
+            endActivityTask?.cancel()
             guard terminal, let key = liveActivityKey else { return }
-            Task { await LancerLiveActivityManager.shared.end(activityKey: key) }
+            endActivityTask = Task {
+                try? await Task.sleep(for: .seconds(90))
+                guard !Task.isCancelled else { return }
+                await LancerLiveActivityManager.shared.end(activityKey: key)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
@@ -1092,7 +1106,11 @@ public struct NewChatTabView: View {
                 // Reflect the new turn on the SAME continuous Live Activity — keyed
                 // by the thread's original liveActivityKey, not the new runId, so a
                 // multi-turn conversation stays one Activity instead of spawning a
-                // new one per follow-up.
+                // new one per follow-up. Cancel any pending delayed-end from the
+                // previous turn's runIsTerminal flip — this follow-up IS the
+                // "user isn't done yet" signal that grace window was waiting for.
+                endActivityTask?.cancel()
+                endActivityTask = nil
                 if #available(iOS 16.2, *), let key = liveActivityKey {
                     Task { await LancerLiveActivityManager.shared.update(activityKey: key, status: "running") }
                 }
