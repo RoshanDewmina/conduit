@@ -481,7 +481,8 @@ public struct AppRoot: View {
                 command: data.command,
                 cwd: data.cwd ?? "",
                 risk: Approval.Risk(rawValue: data.risk) ?? .medium,
-                toolName: data.toolName
+                toolName: data.toolName,
+                contentHash: data.contentHash
             )
             // Tag this approval with the machine it arrived from BEFORE inserting
             // it into the inbox VM, so the eventual decision routes back to that
@@ -847,7 +848,7 @@ public struct AppRoot: View {
     private func configureGlobalInbox(env: AppEnvironment) {
         guard liveInboxVM == nil else { return }
         let approvalRepo = ApprovalRepository(env.database)
-        let liveVM = LiveInboxViewModel(repository: approvalRepo) { id, decision, edited in
+        let liveVM = LiveInboxViewModel(repository: approvalRepo) { id, decision, edited, contentHash in
             // Prefer the channel of the slot that owns this approval (multi-slot
             // correct). On a dead/absent channel fall back to the relay's single
             // forwarding chokepoint (backend POST + SSH-drain queue) rather than
@@ -859,7 +860,8 @@ public struct AppRoot: View {
                     try await slot.channel.respond(
                         approvalId: id.uuidString,
                         decision: decision,
-                        editedToolInput: edited
+                        editedToolInput: edited,
+                        contentHash: contentHash
                     )
                     return
                 } catch {
@@ -869,7 +871,8 @@ public struct AppRoot: View {
             await ApprovalRelay.shared.forwardDecisionOnly(
                 approvalID: id.uuidString,
                 decision: decision,
-                editedToolInput: edited
+                editedToolInput: edited,
+                contentHash: contentHash
             )
         }
         approvalRepository = approvalRepo
@@ -1792,12 +1795,13 @@ public struct AppRoot: View {
         // Route the relay/default inbox's decisions to the daemon. Without this the
         // base InboxViewModel only updated local UI state, so approving a relay-
         // delivered approval never released the daemon's blocked hook.
-        inboxVM.decisionSink = { id, decision, editedToolInput in
+        inboxVM.decisionSink = { id, decision, editedToolInput, contentHash in
             Task {
                 await ApprovalRelay.shared.forwardDecisionOnly(
                     approvalID: id.uuidString,
                     decision: decision,
-                    editedToolInput: editedToolInput
+                    editedToolInput: editedToolInput,
+                    contentHash: contentHash
                 )
             }
         }
@@ -2009,7 +2013,7 @@ public struct AppRoot: View {
             let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore, chatPersistenceSink: chatSink)
             let liveVM = LiveInboxViewModel(
                 repository: approvalRepo,
-                onDecision: { id, decision, editedToolInput in
+                onDecision: { id, decision, editedToolInput, contentHash in
                     try? await env.auditRepo.record(
                         hostID: host.id,
                         type: .approval,
@@ -2026,7 +2030,8 @@ public struct AppRoot: View {
                     await ApprovalRelay.shared.forwardDecisionOnly(
                         approvalID: id.uuidString,
                         decision: decision,
-                        editedToolInput: editedToolInput
+                        editedToolInput: editedToolInput,
+                        contentHash: contentHash
                     )
                 },
                 onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, approvalID in
@@ -2067,10 +2072,16 @@ public struct AppRoot: View {
                                 "source": "watch",
                             ]
                         )
+                        // The Watch has no in-memory Approval row to read a
+                        // contentHash off (its onDecision signature is (id, decision)
+                        // only) — fetch the just-decided row back from the DB so the
+                        // forwarded decision still echoes the hash lancerd verifies.
+                        let contentHash = (try? await approvalRepo.find(id: id))?.contentHash
                         await ApprovalRelay.shared.forwardDecisionOnly(
                             approvalID: id.uuidString,
                             decision: decision,
-                            editedToolInput: nil
+                            editedToolInput: nil,
+                            contentHash: contentHash
                         )
                     }
                 )

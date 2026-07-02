@@ -70,11 +70,17 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public let touchesNetwork: Bool?
     public let matchedRule: String?
 
+    /// The daemon's `computeContentHash` over (command, patch, cwd, toolInput),
+    /// echoed verbatim in the decision so `approvalStore.resolve` can verify it —
+    /// mirrors `ApprovalEvent.ContentHash` (`daemon/lancerd/approval.go`).
+    public let contentHash: String?
+
     enum CodingKeys: String, CodingKey {
         case id, sessionId, agent, kind, command, patch, cwd, risk, runId
         case toolName, toolUseID, toolInput
         case agentSessionID = "agentSessionID"
         case files, touchesGit, touchesNetwork, matchedRule
+        case contentHash
     }
 
     public var approvalRisk: Approval.Risk {
@@ -90,6 +96,7 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public var approvalToolUseID: String? { toolUseID }
     public var approvalAgentSessionID: String? { agentSessionID }
     public var approvalToolInput: String? { toolInput }
+    public var approvalContentHash: String? { contentHash }
     public var blastRadius: ApprovalBlastRadius {
         ApprovalBlastRadius(
             files: files,

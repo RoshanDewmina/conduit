@@ -37,4 +37,27 @@ import Foundation
         let decoded = try JSONDecoder().decode(E2ERelayMessage.DeviceRegisteredData.self, from: data)
         #expect(decoded.relayToken == original.relayToken)
     }
+
+    // Content-hash binding: the phone's decision must echo back the same
+    // contentHash the daemon stamped on the pending ApprovalData, so
+    // approvalStore.resolve (daemon/lancerd/approval.go) can verify it. This
+    // pins that DecisionData actually carries the field through encode/decode
+    // over the relay wire.
+    @Test("DecisionData round-trips contentHash through encode/decode")
+    func decisionDataRoundTripsContentHash() throws {
+        let original = E2ERelayMessage.DecisionData(
+            approvalID: "appr-1", decision: "approve", editedToolInput: nil,
+            contentHash: "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3"
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(E2ERelayMessage.DecisionData.self, from: data)
+        #expect(decoded.contentHash == original.contentHash)
+        #expect(decoded.approvalID == original.approvalID)
+    }
+
+    @Test("DecisionData contentHash defaults to nil when omitted")
+    func decisionDataContentHashDefaultsNil() {
+        let d = E2ERelayMessage.DecisionData(approvalID: "appr-2", decision: "deny", editedToolInput: nil)
+        #expect(d.contentHash == nil)
+    }
 }

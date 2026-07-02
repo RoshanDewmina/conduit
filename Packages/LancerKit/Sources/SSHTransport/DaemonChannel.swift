@@ -170,7 +170,8 @@ public actor DaemonChannel {
     public static func responseEnvelope(
         approvalId: String,
         decision: Approval.Decision,
-        editedToolInput: String? = nil
+        editedToolInput: String? = nil,
+        contentHash: String? = nil
     ) -> [String: Any] {
         var params: [String: Any] = [
             "approvalId": approvalId,
@@ -178,6 +179,9 @@ public actor DaemonChannel {
         ]
         if let editedToolInput, !editedToolInput.isEmpty {
             params["editedToolInput"] = editedToolInput
+        }
+        if let contentHash, !contentHash.isEmpty {
+            params["contentHash"] = contentHash
         }
         return [
             "jsonrpc": "2.0",
@@ -189,7 +193,8 @@ public actor DaemonChannel {
     public func respond(
         approvalId: String,
         decision: Approval.Decision,
-        editedToolInput: String? = nil
+        editedToolInput: String? = nil,
+        contentHash: String? = nil
     ) async throws {
         // Throw (don't silently return) when the channel is dead/stopped — a
         // reconnect nils `stdinWriter`. Callers treat the throw as "not delivered"
@@ -198,7 +203,8 @@ public actor DaemonChannel {
         let envelope = Self.responseEnvelope(
             approvalId: approvalId,
             decision: decision,
-            editedToolInput: editedToolInput
+            editedToolInput: editedToolInput,
+            contentHash: contentHash
         )
         guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
         try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))

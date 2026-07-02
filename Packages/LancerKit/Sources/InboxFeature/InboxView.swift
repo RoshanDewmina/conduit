@@ -16,7 +16,10 @@ public class InboxViewModel {
     /// Optional sink fired after a decision mutates a pending row. The base VM only
     /// mutates local state; the relay/default inbox sets this to forward the decision
     /// to the daemon (LiveInboxViewModel has its own repository-backed onDecision).
-    public var decisionSink: ((ApprovalID, Approval.Decision, String?) -> Void)?
+    /// The 4th param is the resolved approval's `contentHash`, echoed back so
+    /// lancerd's `approvalStore.resolve` can verify the decision was made on the
+    /// exact content shown — `nil` for approvals that never carried one.
+    public var decisionSink: ((ApprovalID, Approval.Decision, String?, String?) -> Void)?
 
     public init(approvals: [Approval] = []) {
         self.approvals = approvals
@@ -29,6 +32,7 @@ public class InboxViewModel {
         editedToolInput: String? = nil
     ) {
         if let idx = approvals.firstIndex(where: { $0.id == id }) {
+            let contentHash = approvals[idx].contentHash
             approvals[idx].decision = decision
             approvals[idx].decidedAt = .now
             if let ci = choiceIndex { approvals[idx].answeredChoice = ci }
@@ -39,7 +43,7 @@ public class InboxViewModel {
                 persistAllowAlwaysRule(for: approvals[idx])
             }
             Haptics.selection()
-            decisionSink?(id, decision, editedToolInput)
+            decisionSink?(id, decision, editedToolInput, contentHash)
         }
     }
 }

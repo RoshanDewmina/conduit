@@ -48,7 +48,8 @@ extension Approval: FetchableRecord {
             toolUseID: row["tool_use_id"],
             agentSessionID: row["agent_session_id"],
             toolInput: row["tool_input"],
-            blastRadius: blastRadius
+            blastRadius: blastRadius,
+            contentHash: row["content_hash"]
         )
     }
 }
@@ -84,6 +85,7 @@ extension Approval: PersistableRecord {
             .flatMap { try? JSONEncoder().encode($0) }
             .flatMap { String(data: $0, encoding: .utf8) }
         container["answered_choice"] = answeredChoice
+        container["content_hash"] = contentHash
     }
 }
 
@@ -121,6 +123,19 @@ public actor ApprovalRepository {
                 sql: "SELECT EXISTS(SELECT 1 FROM approvals WHERE id = ?)",
                 arguments: [id.uuidString]
             ) ?? false
+        }
+    }
+
+    /// Fetch a single approval row by id, or `nil` if none exists. Used by
+    /// callers that only hold an `ApprovalID` (no in-memory `Approval` in
+    /// scope, e.g. the Watch/Siri decision paths) and need to read a field —
+    /// such as `contentHash` — off the persisted row before forwarding a decision.
+    public func find(id: ApprovalID) async throws -> Approval? {
+        try await db.dbWriter.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM approvals WHERE id = ?", arguments: [id.uuidString]) else {
+                return nil
+            }
+            return try Approval(row: row)
         }
     }
 

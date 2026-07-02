@@ -309,6 +309,17 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Content-hash binding (security audit): persists the daemon's
+        // `computeContentHash` over (command, patch, cwd, toolInput) so it
+        // survives the DB round-trip and can be echoed back with a decision —
+        // without this column, every approval read via observe()/all() loses
+        // contentHash and lancerd's approvalStore.resolve rejects the decision.
+        m.registerMigration("v11") { db in
+            try db.alter(table: "approvals") { t in
+                t.add(column: "content_hash", .text)
+            }
+        }
+
         return m
     }
 }
