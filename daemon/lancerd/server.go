@@ -283,15 +283,19 @@ func (s *server) policyEffect(event ApprovalEvent) (string, string, bool) {
 	return string(res.Effect), res.MatchedRule, res.FromDefault
 }
 
-// hookWiredForAgent reports whether a per-action PreToolUse hook is verifiably
-// installed for the given agent binary, gating relaxLaunchEscalation. Only Claude
-// has a wiring we can confirm today; OpenCode's hook install is still a TODO (see
-// install.go) and Codex/Kimi have no per-action hook, so those stay fail-closed.
+// hookWiredForAgent reports whether a per-action PreToolUse-equivalent gate is
+// verifiably installed for the given agent binary, gating relaxLaunchEscalation.
+// Claude checks its hooks.json wiring; OpenCode checks its tool.execute.before
+// plugin (see opencode_plugin_install.go — the old hooks.json-based mechanism
+// this used to point at was never real OpenCode config, found 2026-07-01/02).
+// Codex/Kimi have no per-action hook, so those stay fail-closed.
 func hookWiredForAgent(home string) func(string) bool {
 	return func(bin string) bool {
 		switch bin {
 		case "claude":
 			return claudeHookWired(claudeSettingsPath(home))
+		case "opencode":
+			return opencodeGateWired(home)
 		default:
 			return false
 		}

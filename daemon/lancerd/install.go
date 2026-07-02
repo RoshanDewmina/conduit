@@ -50,9 +50,13 @@ func runInstall() error {
 		fmt.Fprintf(os.Stderr, "warning: could not install shim wrappers: %v\n", err)
 	}
 	fmt.Fprintln(os.Stderr, "Claude approvals apply only to runs started by Lancer; your normal Claude sessions are unchanged.")
-	// TODO(opencode): wire the OpenCode PreToolUse hook (docs/opencode-hooks.json,
-	// ~/.config/opencode/hooks/lancer-hook.sh) the same way once OpenCode
-	// settings-merge is in scope. Finding #10 covers the Claude path above.
+
+	if err := installOpencodeGate(home); err != nil {
+		// Best-effort, same as the Claude hook above: a failure here must not
+		// abort the daemon install.
+		fmt.Fprintf(os.Stderr, "warning: could not wire OpenCode tool.execute.before gate: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/opencode-lancer-gate-plugin.js")
+	}
 
 	switch runtime.GOOS {
 	case "darwin":

@@ -26,9 +26,11 @@ func TestRelaxLaunchEscalation(t *testing.T) {
 	if got := relaxLaunchEscalation("ask", true, []string{"claude", "-p", "hi"}, claudeWired); got != "allow" {
 		t.Errorf("claude default-ask + wired → %q, want allow", got)
 	}
-	// Hook NOT wired (e.g. OpenCode TODO, or Claude not installed) → stays ask.
+	// Hook NOT wired for this agent under the given predicate → stays ask.
+	// (claudeWired here only recognizes "claude"; opencode has its own
+	// real predicate — opencodeGateWired, tested separately below.)
 	if got := relaxLaunchEscalation("ask", true, []string{"opencode", "run"}, claudeWired); got != "ask" {
-		t.Errorf("opencode default-ask (hook not wired) → %q, want ask", got)
+		t.Errorf("opencode default-ask (hook not wired under claudeWired) → %q, want ask", got)
 	}
 	if got := relaxLaunchEscalation("ask", true, []string{"claude", "-p", "hi"}, nil); got != "ask" {
 		t.Errorf("claude with nil hookWired → %q, want ask (fail-closed)", got)
