@@ -1555,6 +1555,7 @@ public struct AppRoot: View {
     private func homeDestination(env: AppEnvironment) -> some View {
         LancerHomeView(
             fleetStore: fleetStore,
+            defaultInboxVM: activeInboxViewModel,
             recentThreads: sidebarState.recentThreads,
             pendingApprovalCount: fleetStore.attentionItems.count,
             profileEmail: env.accountSession.email,

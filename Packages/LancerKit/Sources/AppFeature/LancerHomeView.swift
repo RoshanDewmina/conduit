@@ -4,6 +4,7 @@ import LancerCore
 import DesignSystem
 import PersistenceKit
 import AgentKit
+import InboxFeature
 
 /// A relay-paired host entry, as told to `LancerHomeView` from outside. Relay
 /// hosts aren't `fleetStore` slots (they're the E2E bridge), so Home must be told
@@ -24,6 +25,12 @@ public struct RelayHomeEntry: Sendable {
 
 public struct LancerHomeView: View {
     private let fleetStore: FleetStore
+    /// The relay-only fallback inbox VM — `fleetStore.slot(forApprovalID:)` only
+    /// resolves for legacy SSH-connected hosts (`FleetStore.Slot` is created solely
+    /// in `AppRoot`'s SSH-connect flow); a relay-only approval (V1's primary
+    /// transport, no SSH session ever held) has no matching slot, so the review
+    /// sheet must fall back to this VM or its decide() calls silently no-op.
+    private let defaultInboxVM: InboxViewModel
     private let recentThreads: [ChatConversation]
     private let pendingApprovalCount: Int
     private let profileEmail: String?
@@ -50,6 +57,7 @@ public struct LancerHomeView: View {
 
     public init(
         fleetStore: FleetStore,
+        defaultInboxVM: InboxViewModel,
         recentThreads: [ChatConversation],
         pendingApprovalCount: Int,
         profileEmail: String? = nil,
@@ -63,6 +71,7 @@ public struct LancerHomeView: View {
         loadSessions: @escaping @Sendable (String) async -> [ObservedSession] = { _ in [] }
     ) {
         self.fleetStore = fleetStore
+        self.defaultInboxVM = defaultInboxVM
         self.recentThreads = recentThreads
         self.pendingApprovalCount = pendingApprovalCount
         self.profileEmail = profileEmail
@@ -333,8 +342,12 @@ public struct LancerHomeView: View {
     @ViewBuilder
     private func approvalReviewSheet(for capturedApproval: Approval) -> some View {
         let slot = fleetStore.slot(forApprovalID: capturedApproval.id)
+        // No fleet slot exists for a relay-only approval (see defaultInboxVM's doc
+        // comment) — fall back to it so decide() below actually forwards the
+        // decision instead of silently no-oping on a nil slot.
+        let resolvedVM = slot?.inboxVM ?? defaultInboxVM
         // Read the LIVE version from the observable inbox so remote resolution is detected
-        let live = slot?.inboxVM.approvals.first(where: { $0.id == capturedApproval.id }) ?? capturedApproval
+        let live = resolvedVM.approvals.first(where: { $0.id == capturedApproval.id }) ?? capturedApproval
         let isOffline = slot.map { fleetStore.connectionState(for: $0) == .offline } ?? false
         let resolvedDecision: Approval.Decision? = live.isPending ? nil : live.decision
 
@@ -373,15 +386,15 @@ public struct LancerHomeView: View {
                     matchedRule: capturedApproval.blastRadius?.matchedRule,
                     resolvedDecision: resolvedDecision,
                     onDeny: {
-                        slot?.inboxVM.decide(capturedApproval.id, decision: .rejected)
+                        resolvedVM.decide(capturedApproval.id, decision: .rejected)
                         reviewingApproval = nil
                     },
                     onApprove: {
-                        slot?.inboxVM.decide(capturedApproval.id, decision: .approved)
+                        resolvedVM.decide(capturedApproval.id, decision: .approved)
                         reviewingApproval = nil
                     },
                     onChoose: { idx in
-                        slot?.inboxVM.decide(capturedApproval.id, decision: .approved, choiceIndex: idx)
+                        resolvedVM.decide(capturedApproval.id, decision: .approved, choiceIndex: idx)
                         reviewingApproval = nil
                     }
                 )
