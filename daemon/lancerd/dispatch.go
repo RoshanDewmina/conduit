@@ -176,6 +176,12 @@ type dispatchResult struct {
 	Decision string `json:"decision,omitempty"` // allow | ask | deny
 	Rule     string `json:"rule,omitempty"`
 	Message  string `json:"message,omitempty"`
+	// CWD is the ~-expanded absolute path the run actually launched in — set
+	// only on a successful "started" result. The phone persists this (not the
+	// raw cwd it sent, which may be the literal "~") so a phone-dispatched
+	// conversation and a terminal session in the same real directory group
+	// together instead of silently diverging on string comparison.
+	CWD string `json:"cwd,omitempty"`
 }
 
 // procHandle controls a launched agent process. Injectable for tests.
@@ -1063,7 +1069,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
-	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
+	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
 }
 
 func (d *dispatcher) cancel(runID string) bool {

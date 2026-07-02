@@ -1005,9 +1005,13 @@ public struct NewChatTabView: View {
             // Persist conversation + turn
             if let chatRepo {
                 Task {
+                    // Persist the daemon-resolved absolute cwd (run.cwd), not the raw
+                    // local `cwd` — a fresh relay dispatch's local value may still be
+                    // the literal "~", which would silently fail to group/continue as
+                    // the same project as a terminal session in the same real directory.
                     let conv = try? await chatRepo.createConversation(
                         title: chatTitle, agentID: agent.vendor.isEmpty ? agent.name : agent.vendor,
-                        hostName: agent.hostName ?? agent.name, hostID: agent.hostID, cwd: cwd
+                        hostName: agent.hostName ?? agent.name, hostID: agent.hostID, cwd: run.cwd
                     )
                     conversationID = conv?.id
                     _ = try? await chatRepo.appendTurn(
@@ -1044,7 +1048,8 @@ public struct NewChatTabView: View {
                     runId: newRunId,
                     channel: active.channel,
                     title: active.title,
-                    subtitle: trimmed
+                    subtitle: trimmed,
+                    cwd: result.cwd ?? active.cwd
                 )
                 activeRun = continued
                 turns.append(ChatTurn(prompt: trimmed, runId: newRunId))

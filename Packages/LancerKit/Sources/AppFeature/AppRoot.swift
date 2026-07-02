@@ -988,7 +988,7 @@ public struct AppRoot: View {
                   result.status == "started", let newRunID = result.runId else { return nil }
             runOutputStore.register(runId: newRunID)
             return ActiveChatRun(runId: newRunID, channel: slot.channel,
-                                 title: conv.title, subtitle: prompt)
+                                 title: conv.title, subtitle: prompt, cwd: result.cwd ?? conv.cwd)
         }
         // Fall back to the first active relay machine's bridge (interim
         // limitation — see AppRoot's report on first-machine-only fallbacks).
@@ -1002,7 +1002,7 @@ public struct AppRoot: View {
                 send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
                 onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p) }
             )
-            return ActiveChatRun(runId: newRunID, channel: channel, title: conv.title, subtitle: prompt)
+            return ActiveChatRun(runId: newRunID, channel: channel, title: conv.title, subtitle: prompt, cwd: result.cwd ?? conv.cwd)
         }
         return nil
     }
@@ -1046,17 +1046,21 @@ public struct AppRoot: View {
                     // Capture this run's agent/cwd/model so a follow-up continues even
                     // after the original process exits (a one-shot `claude -p` exits as
                     // soon as it answers, so the daemon no longer has the run in memory).
+                    // Use the daemon-resolved absolute cwd, not the raw local one (which
+                    // may be the literal "~") — same reasoning as ActiveChatRun.cwd below.
                     let fbAgent = vendor
+                    let resolvedCwd = result.cwd ?? cwd
                     let channel = RelayRunControl(send: { runId, action in
                         await bridge.sendRunControl(runId: runId, action: action)
                     }, onContinue: { runId, prompt in
-                        try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: fbAgent, cwd: cwd, model: model)
+                        try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: fbAgent, cwd: resolvedCwd, model: model)
                     })
                     return .started(ActiveChatRun(
                         runId: runId,
                         channel: channel,
                         title: "Relay · \(vendor)",
-                        subtitle: prompt
+                        subtitle: prompt,
+                        cwd: resolvedCwd
                     ))
                 case "denied":
                     return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
@@ -1098,7 +1102,8 @@ public struct AppRoot: View {
                     runId: runId,
                     channel: slot.channel,
                     title: "\(vendor) · \(slot.hostName)",
-                    subtitle: prompt
+                    subtitle: prompt,
+                    cwd: result.cwd ?? cwd
                 ))
             case "denied":
                 return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
@@ -2439,6 +2444,11 @@ public struct ActiveChatRun: Identifiable {
     public let channel: any RunControlling
     public let title: String
     public let subtitle: String
+    /// The daemon-resolved, ~-expanded absolute cwd the run actually launched
+    /// in — persist THIS into `ChatConversation.cwd`, not the raw string the
+    /// composer sent (which may be the literal "~" for a fresh relay dispatch).
+    /// See `DispatchResult.cwd`.
+    public let cwd: String
     public var id: String { runId }
 }
 

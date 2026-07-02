@@ -165,13 +165,25 @@ public struct DispatchResult: Codable, Sendable, Hashable {
     public let decision: String?
     public let rule: String?
     public let message: String?
+    /// The daemon's `~`-expanded absolute cwd the run actually launched in — the
+    /// authoritative value to persist into `ChatConversation.cwd`, NOT the raw
+    /// string the phone sent. Relay-dispatched agents default that raw string to
+    /// the literal `"~"` (see `AppRoot.dispatchAgents()`), which only the daemon
+    /// (the machine that actually has a home directory) can resolve. Without this,
+    /// a phone-dispatched conversation and a terminal session in the exact same
+    /// real directory silently fail to group/continue as the same project, since
+    /// nothing else in the codebase normalizes cwd strings before comparing them.
+    /// `nil` when talking to an older daemon build that doesn't send it yet —
+    /// callers must fall back to the raw cwd they sent.
+    public let cwd: String?
 
-    public init(runId: String? = nil, status: String, decision: String? = nil, rule: String? = nil, message: String? = nil) {
+    public init(runId: String? = nil, status: String, decision: String? = nil, rule: String? = nil, message: String? = nil, cwd: String? = nil) {
         self.runId = runId
         self.status = status
         self.decision = decision
         self.rule = rule
         self.message = message
+        self.cwd = cwd
     }
 
     /// The runId of a genuinely *started* run, or `nil` otherwise. A usable run

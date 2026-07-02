@@ -514,16 +514,24 @@ public struct LancerHomeView: View {
         // though the Machines tab (keyed by id) correctly listed both.
         var rows: [(key: String, name: String, relayID: RelayMachineID?)] =
             sshHostNames.map { (key: $0, name: $0, relayID: nil) }
-        var claimedNames = sshHostNames
+        // Tracks which names have already been given to a relay machine —
+        // separate from `sshHostNames` itself, because a name can pre-exist
+        // there (chat history) before ANY relay entry is processed. Only the
+        // FIRST relay machine to claim a given name may fold into that
+        // pre-existing row; every subsequent one (e.g. a second machine still
+        // carrying the same unrenamed default name) must get its own row.
+        var relayClaimedNames = Set<String>()
         for entry in relayMachines {
-            if claimedNames.contains(entry.name) {
-                // First relay machine to report an already-known name folds
-                // into that existing SSH/thread-history row (the common
-                // single-real-machine case — a relay host isn't a fleet slot,
-                // so this is how it shows before it has any chat history).
-                continue
+            if !relayClaimedNames.contains(entry.name) {
+                relayClaimedNames.insert(entry.name)
+                if sshHostNames.contains(entry.name) {
+                    // Folds into the existing SSH/thread-history row (the
+                    // common single-real-machine case — a relay host isn't a
+                    // fleet slot, so this is how it shows before it has any
+                    // chat history of its own).
+                    continue
+                }
             }
-            claimedNames.insert(entry.name)
             rows.append((key: "relay:\(entry.id.uuidString)", name: entry.name, relayID: entry.id))
         }
 
