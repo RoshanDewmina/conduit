@@ -10,6 +10,14 @@ public enum E2ERelayMessage: Codable, Sendable {
     case agentStatus(StatusData)
     /// Loop progress update - sent daemon → phone
     case loopUpdate(LoopData)
+    /// Explicit ack that the daemon processed (or failed to process) a decision
+    /// - sent daemon → phone, in reply to approvalResponse. A successful outgoing
+    /// send is not proof of delivery; this closes that gap.
+    case approvalResponseAck(DecisionAckData)
+    /// The daemon resolved a pending approval without ever receiving a decision
+    /// from this client (e.g. the 120s fail-closed timeout fired) - sent
+    /// daemon → phone, so a stale pending card can be cleared proactively.
+    case approvalResolved(ResolvedData)
     /// Ping/pong keepalive
     case ping
     case pong
@@ -43,6 +51,26 @@ public enum E2ERelayMessage: Codable, Sendable {
             self.approvalID = approvalID
             self.decision = decision
             self.editedToolInput = editedToolInput
+        }
+    }
+
+    public struct DecisionAckData: Codable, Sendable {
+        public let approvalID: String
+        public let ok: Bool
+
+        public init(approvalID: String, ok: Bool) {
+            self.approvalID = approvalID
+            self.ok = ok
+        }
+    }
+
+    public struct ResolvedData: Codable, Sendable {
+        public let approvalID: String
+        public let decision: String
+
+        public init(approvalID: String, decision: String) {
+            self.approvalID = approvalID
+            self.decision = decision
         }
     }
 

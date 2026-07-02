@@ -23,6 +23,8 @@ type e2eRelayClient struct {
 	paired         bool
 	messageHandler func(msgType string, payload []byte)
 	stopCh         chan struct{}
+	stopOnce       sync.Once
+	wg             sync.WaitGroup
 	reconnectDelay time.Duration
 }
 
@@ -59,19 +61,46 @@ func newE2ERelayClientWithKey(relayURL, pairingCode string, handler func(msgType
 }
 
 func (c *e2eRelayClient) start() {
-	go c.connectLoop()
-	go c.keepaliveLoop()
+	c.wg.Add(2)
+	go func() {
+		defer c.wg.Done()
+		c.connectLoop()
+	}()
+	go func() {
+		defer c.wg.Done()
+		c.keepaliveLoop()
+	}()
 }
 
+// stop tears down the client and blocks until connectLoop and keepaliveLoop
+// have both fully exited, so a caller that immediately starts a replacement
+// client (e.g. the relay-pairing watcher reconnecting on a config change)
+// never races the old client's goroutines for the relay's per-code daemon
+// connection slot. Idempotent — safe to call more than once.
 func (c *e2eRelayClient) stop() {
-	close(c.stopCh)
-	c.mu.Lock()
-	if c.conn != nil {
-		c.conn.Close()
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+		c.mu.Lock()
+		if c.conn != nil {
+			c.conn.Close()
+		}
+		c.connected = false
+		c.paired = false
+		c.mu.Unlock()
+	})
+	c.wg.Wait()
+}
+
+// sleepOrStop waits for d, or returns early (reporting false) if stop() is
+// called in the meantime. Used to back off between reconnect attempts without
+// delaying shutdown.
+func (c *e2eRelayClient) sleepOrStop(d time.Duration) bool {
+	select {
+	case <-c.stopCh:
+		return false
+	case <-time.After(d):
+		return true
 	}
-	c.connected = false
-	c.paired = false
-	c.mu.Unlock()
 }
 
 func (c *e2eRelayClient) connectLoop() {
@@ -85,7 +114,9 @@ func (c *e2eRelayClient) connectLoop() {
 		err := c.connect()
 		if err != nil {
 			log.Printf("e2e: connect failed: %v (retry in %v)", err, c.reconnectDelay)
-			time.Sleep(c.reconnectDelay)
+			if !c.sleepOrStop(c.reconnectDelay) {
+				return
+			}
 			if c.reconnectDelay < 30*time.Second {
 				c.reconnectDelay *= 2
 			}
@@ -93,6 +124,22 @@ func (c *e2eRelayClient) connectLoop() {
 		}
 		c.reconnectDelay = 1 * time.Second
 		c.messageLoop()
+
+		// messageLoop returns either because stop() closed stopCh (in which
+		// case exit immediately) or because the connection dropped on its own
+		// (network blip, relay-side hiccup). For the latter, back off briefly
+		// before redialing instead of hammering the relay with an instant
+		// reconnect — without this, a single dropped connection can produce
+		// several rapid daemon-role connects for the same pairing code within
+		// a couple of seconds.
+		select {
+		case <-c.stopCh:
+			return
+		default:
+		}
+		if !c.sleepOrStop(1 * time.Second) {
+			return
+		}
 	}
 }
 

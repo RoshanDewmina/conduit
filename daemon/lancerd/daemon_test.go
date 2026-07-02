@@ -287,6 +287,84 @@ func TestHookWaitsWhenClientReachable(t *testing.T) {
 	cli.Close()
 }
 
+// TestApprovalTimeoutSendsResolvedNotification confirms that when the 120s
+// (shrunk here for the test) fail-closed window elapses with no decision, the
+// daemon pushes an explicit "approvalResolved" notice over the E2E relay so a
+// live phone can drop the stale pending card instead of leaving it stuck
+// forever with no explanation.
+func TestApprovalTimeoutSendsResolvedNotification(t *testing.T) {
+	withStateDir(t)
+	installTestPolicy(t)
+
+	saved := approvalTimeout
+	approvalTimeout = 50 * time.Millisecond
+	defer func() { approvalTimeout = saved }()
+
+	s := newServer(serverHome())
+	client := &fakeRelayClient{paired: true}
+	s.setE2ERouter(&e2eRouter{client: client, server: s})
+
+	srv, cli := net.Pipe()
+	event := ApprovalEvent{
+		ApprovalID: "timeout-1",
+		Agent:      "claudeCode",
+		Kind:       "fileWrite",
+		Command:    "notes.txt",
+		CWD:        "/tmp",
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	first, _ := json.Marshal(event)
+
+	done := make(chan struct{})
+	go func() {
+		s.handleHookWithNotify(srv, first, nil, func() bool { return true })
+		close(done)
+	}()
+
+	var decision ApprovalDecision
+	_ = cli.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewDecoder(cli).Decode(&decision); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if decision.Decision != "deny" {
+		t.Fatalf("timed-out escalation should fail-closed deny, got %q", decision.Decision)
+	}
+	cli.Close()
+	<-done
+
+	msgType, data := client.lastMessage()
+	if msgType != "approvalResolved" {
+		t.Fatalf("expected an approvalResolved push after timeout, last message was %q", msgType)
+	}
+	var payload struct {
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+			Decision   string `json:"decision"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("unmarshal approvalResolved payload: %v", err)
+	}
+	if payload.Payload.ApprovalID != "timeout-1" || payload.Payload.Decision != "deny" {
+		t.Fatalf("approvalResolved payload = %+v, want approvalID=timeout-1 decision=deny", payload.Payload)
+	}
+
+	// A late decision for the now-retired approval must not silently look like
+	// it worked — regression guard for the "silent ok" bug this whole fix
+	// closes on the SSH/attach RPC path.
+	s.emit = nil // force writeFramed onto a capturable path
+	var captured []byte
+	s.setEmitter(func(b []byte) error { captured = b; return nil })
+	s.handleMessage(&rpcMessage{ID: float64(1), Method: "agent.approval.response", Params: json.RawMessage(`{"approvalId":"timeout-1","decision":"approve"}`)})
+	var reply rpcMessage
+	if err := json.Unmarshal(captured, &reply); err != nil {
+		t.Fatalf("unmarshal captured reply: %v", err)
+	}
+	if reply.Error == nil {
+		t.Fatalf("expected an error reply for a decision on an already-resolved approval, got %+v", reply)
+	}
+}
+
 func TestServeAttachRelaysPing(t *testing.T) {
 	withStateDir(t)
 	startResident(t)

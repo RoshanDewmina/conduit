@@ -14,8 +14,8 @@ set -uo pipefail
 # this is the relay path, not SSH.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
-RELAY_BASE="wss://conduit-push-y4wpy6zeva-ts.a.run.app"
-BACKEND="https://conduit-push-y4wpy6zeva-ts.a.run.app"
+RELAY_BASE="${LANCER_RELAY_URL:-wss://conduit-push-y4wpy6zeva-ts.a.run.app}"
+BACKEND="${LANCER_PUSH_BACKEND_URL:-https://conduit-push-y4wpy6zeva-ts.a.run.app}"
 CODE="${LANCER_RELAY_CODE:-314159}"
 ISO="/tmp/lancer-relay-e2e/home"
 LOG="/tmp/lancer-relay-e2e/daemon.log"
@@ -51,7 +51,7 @@ echo "=== clean app inbox state (uninstall so no stale pending cards) ==="
 xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
 
 echo "=== start resident daemon (isolated HOME, production relay) ==="
-HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" "$LANCERD" daemon >"$LOG" 2>&1 &
+HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" APPROVAL_RELAY_SECRET="${APPROVAL_RELAY_SECRET:-}" "$LANCERD" daemon >"$LOG" 2>&1 &
 DAEMON_PID=$!
 sleep 2
 HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" "$LANCERD" relay-attach "$CODE" >/dev/null 2>&1
@@ -97,7 +97,7 @@ echo "=== wait for the XCUITest to finish ==="
 wait "$XCB_PID"; XCB_RC=$?
 
 echo "=== wait for the hook to return (decision rode the relay back) ==="
-for i in $(seq 1 30); do kill -0 "$HOOK_PID" 2>/dev/null || break; sleep 1; done
+for i in $(seq 1 150); do kill -0 "$HOOK_PID" 2>/dev/null || break; sleep 1; done
 HOOK_RC="(still blocking)"
 if ! kill -0 "$HOOK_PID" 2>/dev/null; then wait "$HOOK_PID"; HOOK_RC=$?; fi
 

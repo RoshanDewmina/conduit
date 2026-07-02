@@ -516,6 +516,119 @@ func TestE2ERouterHandleApprovalResponse(t *testing.T) {
 	}
 }
 
+// TestE2ERouterHandleApprovalResponseSendsAck verifies a successful decision
+// gets an explicit approvalResponseAck{ok:true} reply — the phone previously
+// had no way to distinguish "the daemon processed this" from "the frame went
+// nowhere," which was the root cause of decisions silently vanishing.
+func TestE2ERouterHandleApprovalResponseSendsAck(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	srv.approvals.add(ApprovalEvent{ApprovalID: "appr-ack-ok", Command: "test"})
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{
+		"approvalID": "appr-ack-ok",
+		"decision":   "approve",
+	})
+	router.handleMessage("approvalResponse", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "approvalResponseAck" {
+		t.Fatalf("expected approvalResponseAck, got %q", msgType)
+	}
+	var ack struct {
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+			OK         bool   `json:"ok"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &ack); err != nil {
+		t.Fatalf("unmarshal ack: %v", err)
+	}
+	if ack.Payload.ApprovalID != "appr-ack-ok" || !ack.Payload.OK {
+		t.Fatalf("ack payload = %+v, want approvalID=appr-ack-ok ok=true", ack.Payload)
+	}
+}
+
+// TestE2ERouterHandleApprovalResponseAckFailure verifies a decision for an
+// unknown/already-resolved approval gets ok:false rather than being silently
+// dropped or (worse) implicitly treated as success.
+func TestE2ERouterHandleApprovalResponseAckFailure(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+	// Note: no approvals.add — "appr-missing" was never pending (or already
+	// resolved by the timeout path, which behaves identically from here).
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{
+		"approvalID": "appr-missing",
+		"decision":   "approve",
+	})
+	router.handleMessage("approvalResponse", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "approvalResponseAck" {
+		t.Fatalf("expected approvalResponseAck, got %q", msgType)
+	}
+	var ack struct {
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+			OK         bool   `json:"ok"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &ack); err != nil {
+		t.Fatalf("unmarshal ack: %v", err)
+	}
+	if ack.Payload.OK {
+		t.Fatalf("expected ok=false for a decision on a never-pending approval, got %+v", ack.Payload)
+	}
+}
+
+// TestE2ERouterSendApprovalResolved verifies the resolved-notification sender
+// respects pairing state (no-op when unpaired) and emits the right shape when
+// paired.
+func TestE2ERouterSendApprovalResolved(t *testing.T) {
+	t.Run("unpaired is a no-op", func(t *testing.T) {
+		client := &fakeRelayClient{paired: false}
+		router := &e2eRouter{client: client}
+		router.sendApprovalResolved("appr-x", "deny")
+		if msgType, _ := client.lastMessage(); msgType != "" {
+			t.Fatalf("expected no message sent while unpaired, got %q", msgType)
+		}
+	})
+
+	t.Run("paired sends the resolved notice", func(t *testing.T) {
+		client := &fakeRelayClient{paired: true}
+		router := &e2eRouter{client: client}
+		router.sendApprovalResolved("appr-y", "deny")
+		msgType, data := client.lastMessage()
+		if msgType != "approvalResolved" {
+			t.Fatalf("expected approvalResolved, got %q", msgType)
+		}
+		var msg struct {
+			Payload struct {
+				ApprovalID string `json:"approvalID"`
+				Decision   string `json:"decision"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if msg.Payload.ApprovalID != "appr-y" || msg.Payload.Decision != "deny" {
+			t.Fatalf("payload = %+v, want approvalID=appr-y decision=deny", msg.Payload)
+		}
+	})
+}
+
 // TestMethodToRelayType verifies the JSON-RPC method → relay type mapping.
 func TestMethodToRelayType(t *testing.T) {
 	cases := []struct {

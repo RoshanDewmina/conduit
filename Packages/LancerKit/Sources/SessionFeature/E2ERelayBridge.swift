@@ -1,12 +1,15 @@
 #if os(iOS)
 import Foundation
 import LancerCore
+import OSLog
 import SSHTransport
 
 /// Bridges E2E relay messages to the approval flow and dispatch.
 /// When the relay is paired, approvals and dispatch go through E2E instead of SSH.
 @MainActor
 public final class E2ERelayBridge: ObservableObject {
+
+    private nonisolated static let logger = Logger(subsystem: "dev.lancer.mobile", category: "E2ERelayBridge")
 
     @Published public private(set) var isActive: Bool = false
     public let machineID: RelayMachineID
@@ -21,6 +24,10 @@ public final class E2ERelayBridge: ObservableObject {
     private var installedAgentsContinuation: CheckedContinuation<[String], Error>?
     private var sessionsTranscriptContinuation: CheckedContinuation<(messages: [SessionMessage], nextLine: Int, resetRequired: Bool), Error>?
     private var sessionContinueContinuation: CheckedContinuation<DispatchResult, Error>?
+    /// Keyed by approvalID so concurrent in-flight decisions for different
+    /// approvals don't collide (unlike the single-slot continuations above,
+    /// which only ever have one dispatch/list/etc. in flight at a time).
+    private var pendingDecisionAcks: [String: CheckedContinuation<Bool, Never>] = [:]
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
@@ -41,7 +48,16 @@ public final class E2ERelayBridge: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             for await state in self.relayClient.$pairingState.values {
+                let wasActive = self.isActive
                 self.isActive = (state == .paired)
+                // A machine coming back online may have decisions sitting in
+                // ApprovalRelay's queue that failed to send while it was down
+                // (the queue's SSH-attach drain never fires for a relay-only
+                // pairing) — retry them now instead of leaving them stuck
+                // until the daemon's 120s timeout auto-denies them.
+                if self.isActive && !wasActive {
+                    await self.approvalRelay.machineBridgeReconnected(self.machineID, bridge: self)
+                }
             }
         }
     }
@@ -50,13 +66,26 @@ public final class E2ERelayBridge: ObservableObject {
         messageTask?.cancel()
         messageTask = nil
         isActive = false
+        for (_, continuation) in pendingDecisionAcks {
+            continuation.resume(returning: false)
+        }
+        pendingDecisionAcks.removeAll()
     }
 
-    /// Send an approval decision through the E2E relay.
-    /// Returns true if the message was sent, false if the relay is not active.
+    /// Send an approval decision through the E2E relay and wait for the
+    /// daemon's explicit ack. Returns true only once the daemon confirms it
+    /// actually processed the decision — a successful *outgoing* send is not
+    /// proof of delivery (the frame can be dropped, fail to decrypt, or land
+    /// on an approval the daemon already resolved via timeout), and treating
+    /// it as such is exactly how decisions used to vanish silently with no
+    /// fallback ever triggering.
     @discardableResult
     public func sendDecision(approvalID: String, decision: String, editedToolInput: String?) async -> Bool {
-        guard isActive else { return false }
+        guard isActive else {
+            Self.logger.warning("sendDecision: bridge INACTIVE (machine=\(self.machineID.uuidString, privacy: .public)) — dropping approvalID=\(approvalID, privacy: .public)")
+            return false
+        }
+        Self.logger.info("sendDecision: approvalID=\(approvalID, privacy: .public) decision=\(decision, privacy: .public) connection=\(self.relayClient.connectionState.description, privacy: .public) pairing=\(self.relayClient.pairingState.description, privacy: .public)")
         // Send the raw DecisionData as the payload (NOT the E2ERelayMessage enum):
         // send() already wraps it as {type, payload}, and the daemon handler
         // unmarshals the typed params directly from payload. Passing the enum
@@ -67,10 +96,27 @@ public final class E2ERelayBridge: ObservableObject {
         )
         do {
             try await relayClient.send(type: "approvalResponse", payload: decisionData)
-            return true
         } catch {
+            Self.logger.error("sendDecision: relay send FAILED for approvalID=\(approvalID, privacy: .public): \(error.localizedDescription, privacy: .public) connection=\(self.relayClient.connectionState.description, privacy: .public)")
             return false
         }
+
+        // A stale in-flight wait for the same approvalID (e.g. a fast double-tap)
+        // must be resumed before we replace it — CheckedContinuation traps if
+        // dropped unresumed.
+        pendingDecisionAcks[approvalID]?.resume(returning: false)
+        let timeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, !Task.isCancelled else { return }
+            self.pendingDecisionAcks[approvalID]?.resume(returning: false)
+            self.pendingDecisionAcks[approvalID] = nil
+        }
+        defer { timeoutTask.cancel() }
+        let acked = await withCheckedContinuation { c in
+            self.pendingDecisionAcks[approvalID] = c
+        }
+        Self.logger.info("sendDecision: ack for approvalID=\(approvalID, privacy: .public) → \(acked ? "ok" : "FAILED (daemon nack or 5s ack timeout)", privacy: .public)")
+        return acked
     }
 
     /// Register this device's APNs token with the relay-paired daemon so that
@@ -322,6 +368,27 @@ public final class E2ERelayBridge: ObservableObject {
                 name: Notification.Name("lancerE2ELoopUpdate"),
                 object: nil,
                 userInfo: ["loopData": env.payload, "machineID": self.machineID]
+            )
+
+        case "approvalResponseAck":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.DecisionAckData>.self, from: message.payload
+            ) else { return }
+            pendingDecisionAcks[env.payload.approvalID]?.resume(returning: env.payload.ok)
+            pendingDecisionAcks[env.payload.approvalID] = nil
+
+        case "approvalResolved":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.ResolvedData>.self, from: message.payload
+            ) else { return }
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerE2EApprovalResolved"),
+                object: nil,
+                userInfo: [
+                    "approvalID": env.payload.approvalID,
+                    "decision": env.payload.decision,
+                    "machineID": self.machineID,
+                ]
             )
 
         case "dispatchResult":

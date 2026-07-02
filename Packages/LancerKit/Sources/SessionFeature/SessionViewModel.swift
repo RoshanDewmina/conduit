@@ -328,7 +328,8 @@ public final class SessionViewModel {
                 await LancerLiveActivityManager.shared.start(
                     hostID: host.id.uuidString,
                     hostName: host.name,
-                    sessionID: DeviceIdentity.sessionID(),
+                    activityKey: sessionID.uuidString,
+                    deviceSessionID: DeviceIdentity.sessionID(),
                     status: "connected",
                     agentName: liveAgentName,
                     pendingApprovals: livePendingApprovals,
@@ -435,9 +436,9 @@ public final class SessionViewModel {
         try? await auditRepo?.record(hostID: host.id, type: .disconnect)
         await transitionStatus(.disconnected)
         applyScreenSleepPolicy(connected: false)
-        // Tier 1.5.1: dismiss the lock-screen Live Activity for this host.
+        // Tier 1.5.1: dismiss the lock-screen Live Activity for this session.
         if #available(iOS 16.2, *) {
-            await LancerLiveActivityManager.shared.end(hostID: host.id.uuidString)
+            await LancerLiveActivityManager.shared.end(activityKey: sessionID.uuidString)
         }
     }
 
@@ -592,7 +593,7 @@ public final class SessionViewModel {
         guard snapshot != lastLiveActivitySnapshot else { return }
         lastLiveActivitySnapshot = snapshot
         await LancerLiveActivityManager.shared.update(
-            hostID: host.id.uuidString,
+            activityKey: sessionID.uuidString,
             status: snapshot.status,
             agentName: snapshot.agentName,
             pendingApprovals: snapshot.pendingApprovals,

@@ -38,6 +38,28 @@ import Foundation
         #expect(true, "forwardDecisionOnly must return, not hang, when the registered machine has no bridge")
     }
 
+    /// Guards the live-relay decision return path (mirrors the daemon's
+    /// `TestApprovalResolveCaseInsensitive` in approval_case_test.go): lancerd
+    /// registers the origin with its lowercase approval ID, but every iOS
+    /// decision path forwards Swift's `UUID.uuidString` (UPPERCASE). A
+    /// case-sensitive map lookup made every relay decision skip the bridge
+    /// route and park in the redelivery queue with a nil machine tag, so the
+    /// host hook always hit its 120s fail-closed deny.
+    @Test("relay origin lookup is case-insensitive (daemon lowercase vs UUID.uuidString UPPERCASE)")
+    func relayOriginLookupIsCaseInsensitive() async throws {
+        let relay = ApprovalRelay()
+        relay.credentialKeychain = Keychain(service: "test.relayCreds.multiMachine4", inMemory: true)
+
+        let machine = RelayMachineID()
+        let daemonLowercaseID = "f8c34d42-095b-4b9f-9250-19379d681976"
+        relay.registerRelayOrigin(approvalID: daemonLowercaseID, machineID: machine)
+
+        let iosUppercaseID = UUID(uuidString: daemonLowercaseID)!.uuidString
+        #expect(iosUppercaseID != daemonLowercaseID, "precondition: uuidString must differ in case from the wire ID")
+        #expect(relay.relayOrigin(forApprovalID: iosUppercaseID) == machine,
+                "an UPPERCASE uuidString decision must route to the origin registered under the daemon's lowercase ID")
+    }
+
     @Test("registered origin with an inactive bridge falls through without misrouting to a different bridge")
     func registeredOriginWithMismatchedBridgeFallsThrough() async throws {
         let relay = ApprovalRelay()

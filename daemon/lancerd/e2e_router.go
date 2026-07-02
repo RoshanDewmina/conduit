@@ -61,6 +61,35 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 	}
 }
 
+// sendApprovalResolved tells the phone a pending approval it may still be
+// showing has been resolved server-side without a decision ever arriving from
+// this client (the 120s fail-closed timeout fired). Lets a live client drop
+// the stale card proactively instead of leaving it stuck until the user
+// notices and re-opens it.
+func (r *e2eRouter) sendApprovalResolved(approvalID, decision string) {
+	if r.client == nil || !r.client.isPaired() {
+		return
+	}
+
+	msg := map[string]interface{}{
+		"type": "approvalResolved",
+		"payload": map[string]interface{}{
+			"approvalID": approvalID,
+			"decision":   decision,
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("e2e: marshal approvalResolved failed: %v", err)
+		return
+	}
+
+	if err := r.client.sendMessage("approvalResolved", data); err != nil {
+		log.Printf("e2e: send approvalResolved failed: %v", err)
+	}
+}
+
 // sendStatusUpdate sends agent status through the E2E relay.
 func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, spend float64, hostName string) {
 	if r.client == nil || !r.client.isPaired() {
@@ -96,7 +125,29 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			log.Printf("e2e: unmarshal approval response failed: %v", err)
 			return
 		}
-		r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		_, ok := r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		// Every other phone-initiated message in this switch replies with a
+		// typed …Result so the caller has a real round trip to await. This one
+		// never did — the phone treated a successful *outgoing* send as proof
+		// of delivery, with no way to learn the daemon actually processed it
+		// (dropped frame, decrypt failure, already-resolved approval all looked
+		// identical to "it worked"). Send an explicit ack so it doesn't have to
+		// guess.
+		ackMsg := map[string]interface{}{
+			"type": "approvalResponseAck",
+			"payload": map[string]interface{}{
+				"approvalID": decision.ApprovalID,
+				"ok":         ok,
+			},
+		}
+		ackData, err := json.Marshal(ackMsg)
+		if err != nil {
+			log.Printf("e2e: marshal approvalResponseAck failed: %v", err)
+			return
+		}
+		if err := r.client.sendMessage("approvalResponseAck", ackData); err != nil {
+			log.Printf("e2e: send approvalResponseAck failed: %v", err)
+		}
 
 	case "agentDispatch":
 		var params struct {

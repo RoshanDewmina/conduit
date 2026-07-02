@@ -559,7 +559,13 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput)
+		if _, ok := s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput); !ok {
+			// Already resolved (timeout beat us here, or a duplicate/late
+			// delivery) or never existed — tell the client rather than lying
+			// with a blanket "ok" it would otherwise treat as delivered.
+			s.writeError(msg.ID, -32001, "approval already resolved or not found")
+			return
+		}
 		s.writeResult(msg.ID, "ok")
 
 	case "agent.doctor":
@@ -1186,6 +1192,11 @@ func (s *server) relayPaired() bool {
 // that is already in flight.
 const noClientGrace = 8 * time.Second
 
+// approvalTimeout is the fail-closed window a reachable client gets to answer
+// an escalation before auto-deny. Var (not const) so tests can shrink it
+// instead of blocking on a real 120s wait.
+var approvalTimeout = 120 * time.Second
+
 // handleHookWithNotify processes one PreToolUse approval over conn. clientReachable
 // reports whether a human can answer right now (attach client connected and/or a
 // push device registered). When it returns false on an escalation, the hook waits
@@ -1314,7 +1325,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		return
 	}
 
-	result, received := waitWithTimeout(decisionCh, 120*time.Second)
+	result, received := waitWithTimeout(decisionCh, approvalTimeout)
 	decision := result.decision
 	if !received {
 		// Timed out: no resolver (RPC or poll) recorded a decision. Audit the
@@ -1324,6 +1335,13 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		s.approvals.remove(event.ApprovalID)
 		s.recordHumanDecision(event, "deny")
 		decision = "deny"
+		// The phone may still be showing this as pending (it never got a chance
+		// to answer in time, or its decision never reached us). Push an explicit
+		// resolved notice so a live client can proactively drop the stale card
+		// instead of leaving it stuck until the user notices and re-opens it.
+		if s.e2e != nil {
+			s.e2e.sendApprovalResolved(event.ApprovalID, "deny")
+		}
 	} else if decision == "approveAlways" {
 		// The resolver (applyDecision) already recorded the decision and wrote the
 		// always-policy; collapse to "approve" for the agent, which only

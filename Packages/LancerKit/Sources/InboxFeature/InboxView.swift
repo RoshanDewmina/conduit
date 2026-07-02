@@ -873,9 +873,11 @@ private struct InboxBoardCard: View {
                 DSButton(secondaryLabel, variant: secondaryVariant, size: .lg, fullWidth: true) {
                     Haptics.selection(); onSecondary()
                 }
+                .accessibilityIdentifier("board.secondary")
                 DSButton(primaryLabel, variant: .accent, size: .lg, fullWidth: true) {
                     Haptics.selection(); onPrimary()
                 }
+                .accessibilityIdentifier("board.primary")
             }
         }
         .padding(.horizontal, 15)

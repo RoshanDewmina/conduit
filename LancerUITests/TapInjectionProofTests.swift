@@ -208,29 +208,41 @@ final class TapInjectionProofTests: XCTestCase {
         app.launchEnvironment["LANCER_RELAY_CODE"] = env["LANCER_RELAY_CODE"] ?? ""
         app.launchEnvironment["LANCER_PUSH_BACKEND_URL"] = env["LANCER_PUSH_BACKEND_URL"] ?? ""
         app.launchEnvironment["LANCER_DESTINATION"] = "inbox"
+        addUIInterruptionMonitor(withDescription: "Notification permission") { alert in
+            let allow = alert.buttons["Allow"]
+            if allow.exists {
+                allow.tap()
+                return true
+            }
+            return false
+        }
 
-        // Cold-start quirk: a just-installed app does NOT pair on its very first
-        // launch (the relay client / store finish initializing only after the
-        // first run — the daemon sees the socket drop, then a clean reconnect).
-        // Launch once to initialize, then relaunch to actually pair. Verified
-        // manually: 1st launch no pair, 2nd launch pairs in ~4s.
+        // Launch once for this pairing code. Relaunching after a successful pair
+        // rotates the phone key while the daemon remains connected under the same
+        // code, which the relay correctly rejects as a key-mismatch hijack.
         app.launch()
-        sleep(8)
-        app.terminate()
-        app.launch()
+        app.tap()
         defer { app.terminate() }
 
-        // The host fires the escalation a few seconds after the app pairs; wait
-        // generously for the relay-delivered APPROVE control to surface.
-        let approve = app.buttons["Approve"].firstMatch
-        XCTAssertTrue(approve.waitForExistence(timeout: 120),
-                      "A relay-delivered escalation should surface an Approve button in the Inbox")
+        // The host fires a medium-risk fileWrite escalation, which the Inbox
+        // board card renders as "Review" (not "Approve") — medium+ risk always
+        // routes through the detail sheet (see InboxView.pendingCard's
+        // requiresFullReview). Wait for that board card, open the sheet, then
+        // wait for the sheet's actual approve control.
+        let boardPrimary = app.buttons["board.primary"].firstMatch
+        XCTAssertTrue(boardPrimary.waitForExistence(timeout: 120),
+                      "A relay-delivered escalation should surface a board card in the Inbox")
+        boardPrimary.tap()
+
+        let approve = app.buttons["approval.approve"].firstMatch
+        XCTAssertTrue(approve.waitForExistence(timeout: 15),
+                      "Opening the medium-risk board card should surface the sheet's approve button")
         approve.tap()
 
         // The decision rides the relay back to the daemon; the card should leave
         // PENDING (its Approve control disappears). The host script independently
         // asserts the hook unblocked (exit 0) and audit recorded `approve`.
-        let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Approve"))
+        let approveButtons = app.buttons.matching(identifier: "approval.approve")
         let deadline = Date().addingTimeInterval(15)
         while approveButtons.count > 0 && Date() < deadline { usleep(300_000) }
         XCTAssertEqual(approveButtons.count, 0,

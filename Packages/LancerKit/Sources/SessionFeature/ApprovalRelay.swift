@@ -1,6 +1,7 @@
 #if os(iOS)
 import Foundation
 import LancerCore
+import OSLog
 import PersistenceKit
 import SSHTransport
 import NotificationsKit
@@ -63,8 +64,15 @@ public struct DecisionDeliveryTracker: Sendable {
 public final class ApprovalRelay {
     public static let shared = ApprovalRelay()
 
-    // Decisions waiting to be forwarded to lancerd.
-    private var queue: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?)] = []
+    private nonisolated static let logger = Logger(subsystem: "dev.lancer.mobile", category: "ApprovalRelay")
+
+    // Decisions waiting to be forwarded to lancerd. machineID is set when the
+    // decision's approval was tagged with a relay origin (see
+    // registerRelayOrigin) so a machine reconnecting only retries decisions
+    // that were actually meant for it (machineBridgeReconnected below) — an
+    // untagged entry (nil) is an SSH-origin decision, drained only by
+    // drainQueue(through:) on the next SSH attach, same as before.
+    private var queue: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
 
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
@@ -80,8 +88,25 @@ public final class ApprovalRelay {
     /// to lancerE2EApprovalReceived's userInfo); cleared once forwarded.
     private var approvalMachineMap: [String: RelayMachineID] = [:]
 
+    /// Approval IDs cross the Swift↔Go boundary in BOTH cases: lancerd generates
+    /// them lowercase (`hex.EncodeToString`, hook.go), but every iOS decision path
+    /// forwards `UUID.uuidString`, which is UPPERCASE. The daemon's store already
+    /// normalizes (`normID`, approval.go) for exactly this reason; the origin-
+    /// routing map must too, or every relay decision misses the bridge route in
+    /// `forwardDecisionOnly` and parks in the redelivery queue until the daemon's
+    /// 120s fail-closed timeout denies the gate.
+    private static func normalizeApprovalID(_ id: String) -> String {
+        id.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
     public func registerRelayOrigin(approvalID: String, machineID: RelayMachineID) {
-        approvalMachineMap[approvalID] = machineID
+        approvalMachineMap[Self.normalizeApprovalID(approvalID)] = machineID
+    }
+
+    /// The machine an approval's decision would route back to (case-insensitive,
+    /// same normalization as `forwardDecisionOnly`'s routing lookup).
+    func relayOrigin(forApprovalID approvalID: String) -> RelayMachineID? {
+        approvalMachineMap[Self.normalizeApprovalID(approvalID)]
     }
 
     private var backendURL: String = ""
@@ -174,22 +199,32 @@ public final class ApprovalRelay {
         editedToolInput: String?
     ) async {
         deliveryTracker.recordPost(approvalID: approvalID, decision: decision)
+        Self.logger.info("forwardDecisionOnly: approvalID=\(approvalID, privacy: .public) decision=\(decision.rawValue, privacy: .public) registeredOrigins=[\(self.approvalMachineMap.keys.joined(separator: ","), privacy: .public)] bridges=\(self.relayBridges.count, privacy: .public)")
 
         // 0. Multi-machine relay routing: if this approval was tagged with the
         //    machine it arrived from AND that machine still has a live bridge,
         //    route the decision there specifically. Fail-closed: if either lookup
         //    misses (never a relay approval, or the machine was unpaired since),
         //    fall through — do NOT retry against some other relay bridge.
-        if let originMachineID = approvalMachineMap[approvalID],
-           let bridge = relayBridges[originMachineID],
-           await bridge.sendDecision(
-               approvalID: approvalID,
-               decision: DaemonChannel.decisionWireValue(for: decision),
-               editedToolInput: editedToolInput
-           ) {
-            approvalMachineMap.removeValue(forKey: approvalID)
-            deliveryTracker.recordAcknowledgement(approvalID: approvalID)
-            return
+        let originKey = Self.normalizeApprovalID(approvalID)
+        if let originMachineID = approvalMachineMap[originKey] {
+            if let bridge = relayBridges[originMachineID] {
+                if await bridge.sendDecision(
+                    approvalID: approvalID,
+                    decision: DaemonChannel.decisionWireValue(for: decision),
+                    editedToolInput: editedToolInput
+                ) {
+                    Self.logger.info("forwardDecisionOnly: bridge DELIVERED approvalID=\(approvalID, privacy: .public) to machine=\(originMachineID.uuidString, privacy: .public)")
+                    approvalMachineMap.removeValue(forKey: originKey)
+                    deliveryTracker.recordAcknowledgement(approvalID: approvalID)
+                    return
+                }
+                Self.logger.warning("forwardDecisionOnly: bridge send FAILED for approvalID=\(approvalID, privacy: .public) machine=\(originMachineID.uuidString, privacy: .public) — falling through")
+            } else {
+                Self.logger.warning("forwardDecisionOnly: origin machine=\(originMachineID.uuidString, privacy: .public) has NO bridge (bridges=\(self.relayBridges.count, privacy: .public)) — falling through")
+            }
+        } else {
+            Self.logger.warning("forwardDecisionOnly: NO relay origin registered for approvalID=\(approvalID, privacy: .public) — falling through (registered: [\(self.approvalMachineMap.keys.joined(separator: ","), privacy: .public)])")
         }
 
         // 2. Fall back to live SSH channel
@@ -201,6 +236,7 @@ public final class ApprovalRelay {
             } catch {
                 // Attached-but-dead channel (stopped / mid-reconnect) — fall through
                 // to the backend relay rather than silently dropping the decision.
+                Self.logger.warning("forwardDecisionOnly: SSH channel respond failed for approvalID=\(approvalID, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
 
@@ -210,9 +246,46 @@ public final class ApprovalRelay {
         if delivered {
             deliveryTracker.recordAcknowledgement(approvalID: approvalID)
         } else {
-            // 4. Queue for next SSH attach
-            queue.append((approvalID: approvalID, decision: decision, editedToolInput: editedToolInput))
+            // 4. Queue for redelivery — tag with the origin machine (if any) so
+            //    machineBridgeReconnected can retry it the moment that specific
+            //    bridge comes back, rather than only ever draining on the next
+            //    SSH attach (which never happens for a relay-only pairing).
+            let originTag = approvalMachineMap[originKey]
+            Self.logger.warning("forwardDecisionOnly: QUEUED approvalID=\(approvalID, privacy: .public) for redelivery (originTag=\(originTag?.uuidString ?? "nil", privacy: .public)) — decision is parked until that bridge reconnects")
+            queue.append((
+                approvalID: approvalID,
+                decision: decision,
+                editedToolInput: editedToolInput,
+                machineID: originTag
+            ))
         }
+    }
+
+    /// Called when a relay machine's bridge (re)connects. Retries any queued
+    /// decisions tagged as originating from that specific machine — mirrors
+    /// drainQueue(through:)'s SSH-reconnect drain, but keyed by machine so a
+    /// decision destined for machine A is never retried against machine B's
+    /// bridge (same fail-closed principle as the routing step in
+    /// forwardDecisionOnly above: no cross-machine substitution, ever).
+    public func machineBridgeReconnected(_ machineID: RelayMachineID, bridge: E2ERelayBridge) async {
+        let toRetry = queue.filter { $0.machineID == machineID }
+        guard !toRetry.isEmpty else { return }
+        queue.removeAll { $0.machineID == machineID }
+        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
+        for item in toRetry {
+            let ok = await bridge.sendDecision(
+                approvalID: item.approvalID,
+                decision: DaemonChannel.decisionWireValue(for: item.decision),
+                editedToolInput: item.editedToolInput
+            )
+            if ok {
+                approvalMachineMap.removeValue(forKey: Self.normalizeApprovalID(item.approvalID))
+                deliveryTracker.recordAcknowledgement(approvalID: item.approvalID)
+            } else {
+                stillPending.append(item)
+            }
+        }
+        queue.append(contentsOf: stillPending)
     }
 
     /// Attach (or replace) the active `DaemonChannel` and drain any decisions
@@ -318,12 +391,18 @@ public final class ApprovalRelay {
     private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?) async -> Bool {
         guard !backendURL.isEmpty, !sessionID.isEmpty,
               let url = URL(string: backendURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/approval/decision")
-        else { return false }
+        else {
+            Self.logger.warning("postDecisionToBackend: SKIPPED for approvalID=\(approvalID, privacy: .public) — backendURL/sessionID not configured (backendURL empty: \(self.backendURL.isEmpty, privacy: .public), sessionID empty: \(self.sessionID.isEmpty, privacy: .public))")
+            return false
+        }
         // Tier-2 capability: the backend requires `Authorization: Bearer <relayToken>`.
         // Without it the POST would 401 with no side effects, so don't bother —
         // rely on the SSH drain when a channel re-attaches + lancerd's timeout
         // auto-deny backstop.
-        guard !relayToken.isEmpty else { return false }
+        guard !relayToken.isEmpty else {
+            Self.logger.warning("postDecisionToBackend: SKIPPED for approvalID=\(approvalID, privacy: .public) — no relay token")
+            return false
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -331,11 +410,19 @@ public final class ApprovalRelay {
         req.httpBody = Self.backendDecisionBody(
             approvalID: approvalID, decision: decision, sessionID: sessionID, editedToolInput: editedToolInput
         )
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode)
-        else { return false }
-        return true
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse else { return false }
+            guard (200..<300).contains(http.statusCode) else {
+                Self.logger.warning("postDecisionToBackend: HTTP \(http.statusCode, privacy: .public) for approvalID=\(approvalID, privacy: .public)")
+                return false
+            }
+            Self.logger.info("postDecisionToBackend: DELIVERED approvalID=\(approvalID, privacy: .public)")
+            return true
+        } catch {
+            Self.logger.warning("postDecisionToBackend: transport error for approvalID=\(approvalID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 
     private func drainQueue(through ch: DaemonChannel) async {
@@ -344,7 +431,7 @@ public final class ApprovalRelay {
         queue.removeAll()
         // Re-queue anything the (possibly still-stale) channel couldn't deliver,
         // so we don't lose a decision by clearing it before it's confirmed sent.
-        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?)] = []
+        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
         for item in pending {
             do {
                 try await ch.respond(approvalId: item.approvalID, decision: item.decision, editedToolInput: item.editedToolInput)

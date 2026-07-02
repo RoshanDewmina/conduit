@@ -105,7 +105,9 @@ public struct InboxApprovalCard: View {
 
             HStack(spacing: 10) {
                 DSButton("Deny", variant: .destructive, size: .lg, fullWidth: true, action: onDeny)
+                    .accessibilityIdentifier("approval.deny")
                 DSButton("Approve", variant: .accent, size: .lg, fullWidth: true, action: onApprove)
+                    .accessibilityIdentifier("approval.approve")
             }
 
             Button(action: onOpenDetails) {

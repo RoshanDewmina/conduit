@@ -32,7 +32,6 @@ public struct InboxApprovalDetail: View {
 
     @Environment(\.lancerTokens) private var t
     @State private var showDetails = false
-    @State private var evidenceConfirmed = false
 
     public init(
         agentKey: AgentKey,
@@ -183,9 +182,6 @@ public struct InboxApprovalDetail: View {
             }
         } else if let toolName {
             evidenceSection(toolName: toolName)
-            if requiresEvidenceConfirmation {
-                evidenceCheckToggle
-            }
         }
 
         if hasExtraDetails {
@@ -317,17 +313,20 @@ public struct InboxApprovalDetail: View {
             HStack(spacing: 8) {
                 if let onDeny {
                     DSButton("Deny", variant: .destructive, size: .md, mono: true, fullWidth: true, action: onDeny)
+                        .accessibilityIdentifier("approval.deny")
                 }
                 DSButton(approveLabel, variant: .primary, size: .md, mono: true, fullWidth: true) {
                     onApprove?()
                 }
-                .disabled(requiresEvidenceConfirmation && !evidenceConfirmed)
+                .accessibilityIdentifier("approval.approve")
             }
             if let onEditAndRun {
                 DSButton("Edit & run", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onEditAndRun)
+                    .accessibilityIdentifier("approval.editAndRun")
             }
             if let onAllowAlways {
                 DSButton("Allow always...", variant: .quiet, size: .md, mono: true, fullWidth: true, action: onAllowAlways)
+                    .accessibilityIdentifier("approval.allowAlways")
             }
         }
         .padding(.horizontal, 16)
@@ -338,25 +337,6 @@ public struct InboxApprovalDetail: View {
     }
 
     // MARK: - Helpers
-
-    private var evidenceCheckToggle: some View {
-        HStack(spacing: 10) {
-            Image(systemName: evidenceConfirmed ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20))
-                .foregroundStyle(evidenceConfirmed ? t.ok : t.border)
-            Text("I've reviewed the evidence")
-                .font(.dsSansPt(14, weight: .medium))
-                .foregroundStyle(evidenceConfirmed ? t.text : t.text3)
-            Spacer()
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.15)) { evidenceConfirmed = true }
-        }
-        .accessibilityLabel("Mark evidence as reviewed")
-        .accessibilityAddTraits(.isButton)
-    }
 
     /// cwd with the home prefix collapsed to `~` so the context line stays short.
     private var displayCwd: String {
@@ -386,10 +366,6 @@ public struct InboxApprovalDetail: View {
         default:
             return "Critical actions may affect credentials, infrastructure, or destructive state. Approve only after reviewing the evidence."
         }
-    }
-
-    private var requiresEvidenceConfirmation: Bool {
-        risk >= Approval.Risk.medium.rawValue
     }
 
     private var hasChoiceQuestion: Bool {

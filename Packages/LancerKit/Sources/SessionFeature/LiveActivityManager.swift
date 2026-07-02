@@ -9,6 +9,11 @@
 //   • ApprovalRepository.upserts → manager.updatePendingApprovals(_:)
 //   • SessionViewModel.disconnect() / app shutdown → manager.endAll()
 //
+// Keying: one Live Activity per active *session* (SessionViewModel.sessionID),
+// not per host — two concurrent chat tabs connected to the same host each get
+// their own Activity, so neither one's lock-screen progress silently overwrites
+// the other's.
+//
 // Push-driven (Phase 1):
 //   • Activity is requested with pushType: .token so iOS can update it
 //     while the app is away. pushTokenUpdates delivers the per-activity
@@ -92,8 +97,11 @@ public typealias ActivityTokenRegistration = @Sendable (
 ) async -> Void
 
 /// Thin wrapper around ActivityKit for Lancer's session activities. One
-/// activity per active host; calling `start(...)` again for an existing host
-/// updates its content rather than creating a duplicate.
+/// activity per active *session* (keyed by `SessionViewModel.sessionID`, not
+/// `hostID`), so two concurrent sessions against the same host each get their
+/// own Activity instead of the second silently overwriting the first's
+/// content. Calling `start(...)` again for an existing `activityKey` updates
+/// its content rather than creating a duplicate.
 ///
 /// Push path: activities are requested with pushType: .token so iOS delivers
 /// APNs content-state updates even when the app is suspended. The caller
@@ -105,10 +113,10 @@ public final class LancerLiveActivityManager {
     public static let shared = LancerLiveActivityManager()
 
     private var activities: [String: Activity<LancerSessionAttributes>] = [:]
-    // Last content pushed per host, so partial updates (e.g. approval count
-    // only) can preserve the other fields instead of resetting them.
+    // Last content pushed per activityKey, so partial updates (e.g. approval
+    // count only) can preserve the other fields instead of resetting them.
     private var lastContent: [String: LancerSessionAttributes.ContentState] = [:]
-    // Token-monitoring tasks keyed by hostID so they're cancelled on end().
+    // Token-monitoring tasks keyed by activityKey so they're cancelled on end().
     private var tokenTasks: [String: Task<Void, Never>] = [:]
     // Push-to-start token monitor (one per app lifetime).
     private var pushToStartTask: Task<Void, Never>?
@@ -132,12 +140,21 @@ public final class LancerLiveActivityManager {
         ActivityAuthorizationInfo().frequentPushesEnabled
     }
 
-    /// Start a Live Activity for a host, or update its content if one is
-    /// already running.
+    /// Start a Live Activity for a session, or update its content if one is
+    /// already running for that session.
+    ///
+    /// - Parameters:
+    ///   - activityKey: Per-session dictionary key (stringified
+    ///     `SessionViewModel.sessionID`). Distinct concurrent sessions against
+    ///     the same host must pass distinct keys so each gets its own Activity.
+    ///   - deviceSessionID: The device/app-level id (`DeviceIdentity.sessionID()`)
+    ///     used only to register push tokens with push-backend — unrelated to
+    ///     `activityKey`.
     public func start(
         hostID: String,
         hostName: String,
-        sessionID: String,
+        activityKey: String,
+        deviceSessionID: String,
         status: String = "connected",
         agentName: String? = nil,
         pendingApprovals: Int = 0,
@@ -150,12 +167,12 @@ public final class LancerLiveActivityManager {
             pendingApprovals: pendingApprovals,
             agentName: agentName,
             pendingApprovalID: pendingApprovalID,
-            cost: lastContent[hostID]?.cost
+            cost: lastContent[activityKey]?.cost
         )
 
-        if let existing = activities[hostID] {
+        if let existing = activities[activityKey] {
             await existing.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
-            lastContent[hostID] = content
+            lastContent[activityKey] = content
             return
         }
 
@@ -166,9 +183,9 @@ public final class LancerLiveActivityManager {
                 content: .init(state: content, staleDate: Date().addingTimeInterval(1800)),
                 pushType: .token
             )
-            activities[hostID] = activity
-            lastContent[hostID] = content
-            startTokenMonitor(for: activity, hostID: hostID, sessionID: sessionID)
+            activities[activityKey] = activity
+            lastContent[activityKey] = content
+            startTokenMonitor(for: activity, activityKey: activityKey, deviceSessionID: deviceSessionID)
         } catch {
             // ActivityKit refuses (off in Settings, system busy, etc.) —
             // silent failure is correct; the in-app inbox still works.
@@ -190,33 +207,38 @@ public final class LancerLiveActivityManager {
     }
 
     /// Update an existing activity's content. No-ops if no activity is
-    /// running for the given host.
+    /// running for the given session.
     public func update(
-        hostID: String,
+        activityKey: String,
         status: String,
         agentName: String? = nil,
         pendingApprovals: Int = 0,
         pendingApprovalID: String? = nil
     ) async {
-        guard let activity = activities[hostID] else { return }
+        guard let activity = activities[activityKey] else { return }
         let content = LancerSessionAttributes.ContentState(
             status: status,
             pendingApprovals: pendingApprovals,
             agentName: agentName,
             pendingApprovalID: pendingApprovalID,
-            cost: lastContent[hostID]?.cost
+            cost: lastContent[activityKey]?.cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
-        lastContent[hostID] = content
+        lastContent[activityKey] = content
     }
 
     /// Update the pending-approval count on every running activity, preserving
     /// each one's other fields. This is the glanceable signal the Dynamic Island
     /// exists for, so it must stay live while the app is backgrounded. No-ops
     /// when no activities are running.
+    ///
+    /// KNOWN FOLLOW-UP: `count` is the fleet-wide pending-approval count, so
+    /// every session's activity (even ones with zero approvals of their own)
+    /// shows the same number. Attributing approvals to a specific session/host
+    /// is a separate, bigger change — not solved here.
     public func updatePendingApprovals(_ count: Int) async {
-        for (hostID, activity) in activities {
-            guard let base = lastContent[hostID] else { continue }
+        for (activityKey, activity) in activities {
+            guard let base = lastContent[activityKey] else { continue }
             // Construct a fresh value (not a mutated copy of stored actor state)
             // so it forms its own isolation region and is safe to send.
             //
@@ -234,15 +256,15 @@ public final class LancerLiveActivityManager {
                 cost: base.cost
             )
             await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
-            lastContent[hostID] = content
+            lastContent[activityKey] = content
         }
     }
 
-    /// Reflect whether the agent is actively executing on a host, preserving the
-    /// activity's other fields. Drives the island glyph's blue "streaming" tint.
-    /// No-ops when no activity is running for the host.
-    public func updateStreaming(hostID: String, isStreaming: Bool) async {
-        guard let activity = activities[hostID], let base = lastContent[hostID] else { return }
+    /// Reflect whether the agent is actively executing on a session, preserving
+    /// the activity's other fields. Drives the island glyph's blue "streaming"
+    /// tint. No-ops when no activity is running for the session.
+    public func updateStreaming(activityKey: String, isStreaming: Bool) async {
+        guard let activity = activities[activityKey], let base = lastContent[activityKey] else { return }
         guard base.isStreaming != isStreaming else { return }
         let content = LancerSessionAttributes.ContentState(
             status: base.status,
@@ -252,13 +274,13 @@ public final class LancerLiveActivityManager {
             cost: base.cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
-        lastContent[hostID] = content
+        lastContent[activityKey] = content
     }
 
-    /// Update the accumulated cost for a host's activity. No-ops when no activity
-    /// is running for the host.
-    public func updateCost(hostID: String, cost: Double?) async {
-        guard let activity = activities[hostID], let base = lastContent[hostID] else { return }
+    /// Update the accumulated cost for a session's activity. No-ops when no
+    /// activity is running for the session.
+    public func updateCost(activityKey: String, cost: Double?) async {
+        guard let activity = activities[activityKey], let base = lastContent[activityKey] else { return }
         let content = LancerSessionAttributes.ContentState(
             status: base.status,
             pendingApprovals: base.pendingApprovals,
@@ -268,25 +290,25 @@ public final class LancerLiveActivityManager {
             cost: cost
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
-        lastContent[hostID] = content
+        lastContent[activityKey] = content
     }
 
-    /// End the activity for a single host (e.g. user disconnected).
-    public func end(hostID: String) async {
-        guard let activity = activities[hostID] else { return }
+    /// End the activity for a single session (e.g. user disconnected).
+    public func end(activityKey: String) async {
+        guard let activity = activities[activityKey] else { return }
         await activity.end(nil, dismissalPolicy: .immediate)
-        activities.removeValue(forKey: hostID)
-        lastContent.removeValue(forKey: hostID)
-        tokenTasks[hostID]?.cancel()
-        tokenTasks.removeValue(forKey: hostID)
+        activities.removeValue(forKey: activityKey)
+        lastContent.removeValue(forKey: activityKey)
+        tokenTasks[activityKey]?.cancel()
+        tokenTasks.removeValue(forKey: activityKey)
     }
 
     /// End every activity (e.g. app entering termination).
     public func endAll() async {
-        for (id, activity) in activities {
+        for (activityKey, activity) in activities {
             await activity.end(nil, dismissalPolicy: .immediate)
-            activities.removeValue(forKey: id)
-            tokenTasks[id]?.cancel()
+            activities.removeValue(forKey: activityKey)
+            tokenTasks[activityKey]?.cancel()
         }
         tokenTasks.removeAll()
         lastContent.removeAll()
@@ -296,14 +318,14 @@ public final class LancerLiveActivityManager {
 
     private func startTokenMonitor(
         for activity: Activity<LancerSessionAttributes>,
-        hostID: String,
-        sessionID: String
+        activityKey: String,
+        deviceSessionID: String
     ) {
-        tokenTasks[hostID]?.cancel()
-        tokenTasks[hostID] = Task { [weak self] in
+        tokenTasks[activityKey]?.cancel()
+        tokenTasks[activityKey] = Task { [weak self] in
             for await tokenData in activity.pushTokenUpdates {
                 let hexToken = tokenData.map { String(format: "%02x", $0) }.joined()
-                await self?.tokenRegistration?(sessionID, hexToken, false)
+                await self?.tokenRegistration?(deviceSessionID, hexToken, false)
             }
         }
     }

@@ -475,6 +475,28 @@ public struct AppRoot: View {
                 fleetStore.relayInboxVM = vm
             }
         }
+        // The daemon resolved a pending approval without ever hearing back from
+        // this client (its 120s fail-closed timeout fired). Mark it expired so
+        // the stale card drops out of Home's pending list instead of sitting
+        // there forever with no explanation — attentionItems already renders
+        // .expired as a distinct, read-only state.
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EApprovalResolved"))) { note in
+            guard let approvalIDString = note.userInfo?["approvalID"] as? String,
+                  let uuid = UUID(uuidString: approvalIDString)
+            else { return }
+            let id = ApprovalID(uuid)
+            for slot in fleetStore.slots {
+                if let idx = slot.inboxVM.approvals.firstIndex(where: { $0.id == id }), slot.inboxVM.approvals[idx].isPending {
+                    slot.inboxVM.approvals[idx].decision = .expired
+                    slot.inboxVM.approvals[idx].decidedAt = .now
+                }
+            }
+            if let vm = fleetStore.relayInboxVM,
+               let idx = vm.approvals.firstIndex(where: { $0.id == id }), vm.approvals[idx].isPending {
+                vm.approvals[idx].decision = .expired
+                vm.approvals[idx].decidedAt = .now
+            }
+        }
     }
 
     /// Applies an Approve/Reject decision delivered from a notification action
@@ -1742,7 +1764,6 @@ public struct AppRoot: View {
             // single authoritative channel.
             client.beginPairingSession()
             client.pairingCode = code
-            client.connect()
             Task { @MainActor in
                 for await state in client.$pairingState.values {
                     if state == .paired {
@@ -1755,6 +1776,7 @@ public struct AppRoot: View {
                     }
                 }
             }
+            client.connect()
         }
         #endif
     }
@@ -1770,6 +1792,15 @@ public struct AppRoot: View {
             let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
             client.restoreNamespacedStoredPairing()
             addRelayMachine(client: client, record: record, env: env)
+            // Only this restore-from-disk path needs to actively dial out — every
+            // other addRelayMachine caller (debug seam, real pairing-UI callbacks)
+            // already has a client that just live-paired moments ago, and calling
+            // connect() again here tore down that fresh connection out from under
+            // it (the client's own just-written credentials made hasStoredPairing
+            // true immediately, so this used to fire on every single pairing).
+            if E2ERelayClient.hasStoredPairing(machineID: record.id) {
+                client.connect()
+            }
         }
     }
 
@@ -1808,9 +1839,6 @@ public struct AppRoot: View {
                     }
                 }
             }
-        }
-        if E2ERelayClient.hasStoredPairing(machineID: record.id) {
-            client.connect()
         }
     }
 
