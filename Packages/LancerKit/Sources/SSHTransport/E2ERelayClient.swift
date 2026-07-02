@@ -67,6 +67,21 @@ public final class E2ERelayClient: ObservableObject {
     private var messageContinuation: AsyncStream<ReceivedMessage>.Continuation?
     private var reconnectDelay: TimeInterval = 1.0
 
+    /// Incremented on every `connect()`. `URLSessionWebSocketTask.receive`'s
+    /// completion-handler callback isn't torn down synchronously by
+    /// `webSocketTask?.cancel()` — a message already in flight on a stale
+    /// socket can still fire its callback and hop back via `Task { @MainActor
+    /// in ... }` AFTER a subsequent `connect()` has already overwritten
+    /// `sessionKey` with a new session's key. Without this guard, that stale
+    /// callback decrypts using the WRONG (newer) key and fails, which the
+    /// daemon logs as "chacha20poly1305: message authentication failed" even
+    /// though the current connection's key is perfectly correct — this is
+    /// cooperative Task cancellation not actually stopping in-flight
+    /// completion-handler-based work, not a real crypto bug. Every receive
+    /// callback captures the generation it was armed under and is dropped if
+    /// it no longer matches by the time it fires.
+    private var connectGeneration: Int = 0
+
     private lazy var messageStream: AsyncStream<ReceivedMessage> = {
         AsyncStream { continuation in
             self.messageContinuation = continuation
@@ -287,13 +302,16 @@ public final class E2ERelayClient: ObservableObject {
         sessionKey = nil
         pairingState = .unpaired
         connectionState = .connecting
+        connectGeneration += 1
+        let generation = connectGeneration
         reconnectTask = Task { [weak self] in
-            await self?.doConnect()
+            await self?.doConnect(generation: generation)
         }
     }
 
     public func disconnect() {
         Self.logger.info("disconnect() called")
+        connectGeneration += 1
         reconnectTask?.cancel()
         reconnectTask = nil
         keepaliveTask?.cancel()
@@ -332,7 +350,11 @@ public final class E2ERelayClient: ObservableObject {
 
     // MARK: - Private
 
-    private func doConnect() async {
+    private func doConnect(generation: Int) async {
+        guard generation == connectGeneration else {
+            Self.logger.info("doConnect: superseded before starting (generation=\(generation, privacy: .public), current=\(self.connectGeneration, privacy: .public)) — skipping")
+            return
+        }
         var components = URLComponents(url: relayURL, resolvingAgainstBaseURL: false)!
         // The relay endpoint lives at /ws/relay; relayURL is a base with no path
         // (matches the daemon's `<base>/ws/relay` and the relay's registered route).
@@ -361,11 +383,11 @@ public final class E2ERelayClient: ObservableObject {
         connectionState = .connected
         pairingState = .waitingForPeer
 
-        listenForMessages()
+        listenForMessages(generation: generation)
         startKeepalive()
     }
 
-    private func listenForMessages() {
+    private func listenForMessages(generation: Int) {
         webSocketTask?.receive { [weak self] result in
             guard let self else { return }
 
@@ -382,10 +404,21 @@ public final class E2ERelayClient: ObservableObject {
                 }
 
                 Task { @MainActor in
+                    // This closure is armed by a specific connect() generation's
+                    // socket. Cooperative Task cancellation doesn't stop an
+                    // already in-flight completion-handler receive — a message
+                    // that arrived on a since-superseded socket must not be
+                    // decrypted against `sessionKey`, which a newer connect()
+                    // may have already overwritten. See connectGeneration's doc
+                    // comment for the full failure mode this prevents.
+                    guard generation == self.connectGeneration else {
+                        Self.logger.info("listenForMessages: dropping message from superseded generation=\(generation, privacy: .public), current=\(self.connectGeneration, privacy: .public)")
+                        return
+                    }
                     self.handleMessage(text)
                     // URLSessionWebSocketTask.receive is one-shot — re-arm to
                     // read the next frame (e.g. peer_joined after waiting).
-                    self.listenForMessages()
+                    self.listenForMessages(generation: generation)
                 }
 
             case .failure(let error):
@@ -397,6 +430,7 @@ public final class E2ERelayClient: ObservableObject {
                     Self.logger.error("receive failed: \(error.localizedDescription, privacy: .public)")
                 }
                 Task { @MainActor in
+                    guard generation == self.connectGeneration else { return }
                     if let code = self.webSocketTask?.closeCode, code != .invalid {
                         Self.logger.error("receive: ws closeCode=\(code.rawValue, privacy: .public)")
                     }
@@ -474,13 +508,15 @@ public final class E2ERelayClient: ObservableObject {
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 30)
 
+        connectGeneration += 1
+        let generation = connectGeneration
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard let self, Task.isCancelled == false else { return }
             if self.connectionState == .disconnected {
                 self.connectionState = .reconnecting(attempt: Int(delay))
-                await self.doConnect()
+                await self.doConnect(generation: generation)
             }
         }
     }
