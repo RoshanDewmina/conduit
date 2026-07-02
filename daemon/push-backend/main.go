@@ -85,6 +85,19 @@ type runCompleteEvent struct {
 	HostName  string `json:"hostName"`
 }
 
+// runStartEvent is the body for POST /run-start — lancerd's integration point
+// for originating a Live Activity via push-to-start when a relay dispatch
+// starts a run and the phone has no locally-running Activity for the session
+// (see pushLiveActivityStart's no-op heuristic in liveactivity.go).
+type runStartEvent struct {
+	SessionID       string  `json:"sessionId"`
+	HostID          string  `json:"hostId"`
+	HostName        string  `json:"hostName"`
+	Agent           *string `json:"agent,omitempty"`
+	ApprovalID      *string `json:"approvalId,omitempty"`
+	RedactedSummary string  `json:"redactedSummary,omitempty"`
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/relay", handleWebSocketRelay)
@@ -92,6 +105,7 @@ func main() {
 	mux.HandleFunc("POST /register-activity-token", handleRegisterActivityToken)
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
+	mux.HandleFunc("POST /run-start", handleRunStart)
 	mux.HandleFunc("/approval/decision", handlePostDecision)
 	mux.HandleFunc("/decisions", handlePollDecisions)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -293,6 +307,36 @@ func handleRunComplete(w http.ResponseWriter, r *http.Request) {
 
 	if err := pushRunComplete(token, ev); err != nil {
 		log.Printf("APNs run-complete push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRunStart: POST /run-start. Guarded by the same Tier-1 control-plane
+// secret as /approval and /run-complete. Fires a Live Activity push-to-start
+// when a relay dispatch starts a run and the session has a push-to-start
+// token on file — see pushLiveActivityStart's no-op heuristic (missing token,
+// or an activity token already on file) for when this is skipped.
+func handleRunStart(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var ev runStartEvent
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" || ev.HostID == "" || ev.HostName == "" {
+		http.Error(w, "sessionId, hostId and hostName required", http.StatusBadRequest)
+		return
+	}
+	if len(ev.SessionID) > maxSessionIDLen || len(ev.HostID) > maxSessionIDLen {
+		http.Error(w, "field too large", http.StatusBadRequest)
+		return
+	}
+
+	if err := pushLiveActivityStart(ev.SessionID, ev.HostID, ev.HostName, ev.Agent, ev.ApprovalID, ev.RedactedSummary); err != nil {
+		log.Printf("push-to-start Live Activity push failed: %v", err)
 		http.Error(w, "push failed", http.StatusInternalServerError)
 		return
 	}

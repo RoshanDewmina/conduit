@@ -143,6 +143,29 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Register a Live Activity (ActivityKit) push or push-to-start token with the
+    /// relay-paired daemon so it can forward it to push-backend on the phone's
+    /// behalf (the app never holds APPROVAL_RELAY_SECRET) — the relay-only
+    /// equivalent of `DaemonChannel.registerActivityToken` (SSH), which doesn't
+    /// exist for a relay-only pairing. Mirrors `registerDevice` above: fire-and-
+    /// forget, no ack expected. The daemon-side `activityTokenRegister` relay
+    /// handler (mirroring e2e_router.go's `deviceRegister` case) is a required
+    /// follow-up to complete the round trip to push-backend.
+    @discardableResult
+    public func registerActivityToken(
+        sessionID: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String
+    ) async -> Bool {
+        guard isActive else { return false }
+        do {
+            try await relayClient.send(type: "activityTokenRegister", payload: E2ERelayMessage.ActivityTokenRegisterData(
+                sessionId: sessionID, activityToken: activityToken, isPushToStart: isPushToStart, pushBackendURL: pushBackendURL
+            ))
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Dispatch an agent run through the E2E relay.
     /// Returns the dispatch result, or nil if the relay is not active.
     public func sendDispatch(agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?) async throws -> DispatchResult {

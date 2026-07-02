@@ -231,6 +231,35 @@ struct LiveActivityContentStateTests {
         #expect(back.lastDecision == "approved")
     }
 
+    // MARK: - pendingApprovalRisk (Gap #2)
+
+    @available(iOS 16.2, *)
+    @Test func pendingApprovalRiskDefaultsNilAndRoundTrips() throws {
+        let noRisk = LancerSessionAttributes.ContentState(status: "connected")
+        #expect(noRisk.pendingApprovalRisk == nil)
+
+        let critical = LancerSessionAttributes.ContentState(
+            status: "connected", pendingApprovals: 1, pendingApprovalID: "appr-risk-test",
+            pendingApprovalRisk: 3
+        )
+        let data = try JSONEncoder().encode(critical)
+        let decoded = try JSONDecoder().decode(LancerSessionAttributes.ContentState.self, from: data)
+        #expect(decoded.pendingApprovalRisk == 3)
+    }
+
+    @available(iOS 16.2, *)
+    @Test("pendingApprovalRisk key matches Go liveActivityContentState JSON tag")
+    func pendingApprovalRiskJSONKeyName() throws {
+        let state = LancerSessionAttributes.ContentState(
+            status: "connected", pendingApprovals: 1, pendingApprovalRisk: 2
+        )
+        let data = try JSONEncoder().encode(state)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw TestError("JSON parse failed")
+        }
+        #expect(json["pendingApprovalRisk"] as? Int == 2)
+    }
+
 #endif // os(iOS)
 }
 

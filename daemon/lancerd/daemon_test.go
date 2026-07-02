@@ -359,7 +359,8 @@ func TestApprovalNeverAutoDeniesReachableClient(t *testing.T) {
 
 	// Now deliver the real human decision and confirm the still-blocked hook
 	// call honors it rather than having already timed out.
-	if _, ok := s.applyDecision("never-timeout-1", "deny", ""); !ok {
+	wantHash := computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+	if _, ok := s.applyDecision("never-timeout-1", "deny", "", wantHash); !ok {
 		t.Fatal("pending approval missing — hook did not keep waiting")
 	}
 
