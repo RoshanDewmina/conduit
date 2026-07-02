@@ -333,6 +333,28 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			_ = r.client.sendMessage("deviceRegistered", data)
 		}
 
+	case "activityTokenRegister":
+		// Forwards a Live Activity (ActivityKit) push or push-to-start token to
+		// push-backend on the phone's behalf — mirrors deviceRegister above, but
+		// for the Live Activity token instead of the APNs device token. Without
+		// this handler the phone's activityTokenRegister sends were silently
+		// dropped ("unhandled message type"), so a relay-only pairing's Live
+		// Activity tokens never reached push-backend and closed-app push-driven
+		// updates never worked, regardless of the client-side lifecycle fix.
+		var ap struct {
+			SessionID      string `json:"sessionId"`
+			ActivityToken  string `json:"activityToken"`
+			IsPushToStart  bool   `json:"isPushToStart"`
+			PushBackendURL string `json:"pushBackendURL"`
+		}
+		if err := json.Unmarshal(payload, &ap); err != nil || ap.SessionID == "" || ap.ActivityToken == "" {
+			log.Printf("e2e: unmarshal activityTokenRegister failed: %v", err)
+			return
+		}
+		if ap.PushBackendURL != "" {
+			go r.server.postActivityTokenRegistration(ap.PushBackendURL, ap.SessionID, ap.ActivityToken, ap.IsPushToStart)
+		}
+
 	case "agentAgentsInstalled":
 		payloadOut := map[string]interface{}{"agents": installedAgents(exec.LookPath)}
 		data, _ := json.Marshal(map[string]interface{}{"type": "agentsInstalledResult", "payload": payloadOut})
