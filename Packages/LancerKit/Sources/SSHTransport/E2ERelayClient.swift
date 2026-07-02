@@ -66,6 +66,15 @@ public final class E2ERelayClient: ObservableObject {
     private var messageContinuation: AsyncStream<ReceivedMessage>.Continuation?
     private var reconnectDelay: TimeInterval = 1.0
 
+    /// Per-direction replay-resistance sequence for the current pairing
+    /// generation — see `SeqFrame`/`ReplaySequencer` below. `sendSeq` is this
+    /// client's own outgoing counter; `recv` tracks the highest sequence
+    /// accepted from the daemon. Both reset on every new pairing (a fresh
+    /// session key = a fresh generation), mirroring the Go daemon's
+    /// `e2eRelayClient.sendSeq`/`recv` reset on `peer_joined`.
+    private var sendSeq: UInt64 = 0
+    private var recv = ReplaySequencer()
+
     private lazy var messageStream: AsyncStream<ReceivedMessage> = {
         AsyncStream { continuation in
             self.messageContinuation = continuation
@@ -211,6 +220,8 @@ public final class E2ERelayClient: ObservableObject {
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
         sessionKey = nil
+        sendSeq = 0
+        recv.reset()
         pairingState = .unpaired
         connectionState = .connecting
         reconnectTask = Task { [weak self] in
@@ -229,6 +240,8 @@ public final class E2ERelayClient: ObservableObject {
         connectionState = .disconnected
         pairingState = .unpaired
         sessionKey = nil
+        sendSeq = 0
+        recv.reset()
     }
 
     /// Send an encrypted message to the daemon through the relay.
@@ -243,7 +256,11 @@ public final class E2ERelayClient: ObservableObject {
         let innerMessage = E2EInnerMessage(type: type, payload: payload)
         let innerData = try JSONEncoder().encode(innerMessage)
 
-        let encrypted = try PairingCrypto.encrypt(innerData, using: key)
+        let seq = sendSeq
+        sendSeq += 1
+        let wrapped = try SeqFrame.wrap(seq: seq, body: innerData)
+
+        let encrypted = try PairingCrypto.encrypt(wrapped, using: key)
         let encryptedData = try JSONEncoder().encode(encrypted)
         let encryptedString = String(data: encryptedData, encoding: .utf8) ?? ""
 
@@ -370,8 +387,13 @@ public final class E2ERelayClient: ObservableObject {
                 let frameData = Data(payload.utf8)
                 let frame = try JSONDecoder().decode(PairingCrypto.EncryptedFrame.self, from: frameData)
                 let plaintext = try PairingCrypto.decrypt(frame, using: key)
-                let inner = try JSONDecoder().decode(E2EInnerMessageDecoded.self, from: plaintext)
-                messageContinuation?.yield(ReceivedMessage(type: inner.type, payload: plaintext))
+                let (seq, body) = try SeqFrame.unwrap(plaintext)
+                guard recv.accept(seq) else {
+                    Self.logger.error("relay message rejected: replayed or out-of-order sequence \(seq, privacy: .public)")
+                    return
+                }
+                let inner = try JSONDecoder().decode(E2EInnerMessageDecoded.self, from: body)
+                messageContinuation?.yield(ReceivedMessage(type: inner.type, payload: body))
             } catch {
                 Self.logger.error("relay message decode failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -395,6 +417,8 @@ public final class E2ERelayClient: ObservableObject {
         connectionState = .disconnected
         pairingState = .unpaired
         sessionKey = nil
+        sendSeq = 0
+        recv.reset()
         webSocketTask = nil
 
         let delay = reconnectDelay
@@ -475,6 +499,64 @@ struct E2EInnerMessage<T: Codable>: Codable {
 // (the payload object) are ignored, so decoding just `type` is correct and robust.
 struct E2EInnerMessageDecoded: Codable {
     let type: String
+}
+
+// MARK: - Replay resistance (E2E relay)
+
+/// Wraps a relay message body with a monotonically increasing per-direction
+/// sequence number BEFORE encryption, so the daemon's AEAD tag covers the
+/// counter but the relay (which only ever sees ciphertext) never observes
+/// it — a relay-side attacker who can't decrypt still can't selectively
+/// drop-and-replay based on a visible sequence. MUST match the Go daemon's
+/// `seqFrame`/`wrapSeq`/`unwrapSeq` in `daemon/lancerd/e2e_crypto.go` exactly:
+/// a JSON object with `seq` (number) and `body` (the embedded raw JSON
+/// message), constructed via `JSONSerialization` rather than `Codable` so
+/// `body` round-trips as an embedded JSON value, not a base64 string.
+enum SeqFrame {
+    enum Error: Swift.Error { case malformedEnvelope }
+
+    static func wrap(seq: UInt64, body: Data) throws -> Data {
+        let bodyObject = try JSONSerialization.jsonObject(with: body)
+        let envelope: [String: Any] = ["seq": seq, "body": bodyObject]
+        return try JSONSerialization.data(withJSONObject: envelope)
+    }
+
+    static func unwrap(_ data: Data) throws -> (seq: UInt64, body: Data) {
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let seqNumber = obj["seq"] as? NSNumber,
+              let bodyObject = obj["body"]
+        else {
+            throw Error.malformedEnvelope
+        }
+        let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
+        return (seqNumber.uint64Value, bodyData)
+    }
+}
+
+/// Rejects a decrypted frame whose sequence number is not strictly greater
+/// than the last one accepted for the current pairing generation — the
+/// minimum-viable fix for AEAD-with-AAD replay resistance (a WireGuard-style
+/// sliding-window bitmap is the fuller version; a bounded reconnect window
+/// doesn't need one on top of this). `reset()` is called on every new pairing
+/// (a fresh session key = a fresh generation). MUST mirror the Go daemon's
+/// `replaySequencer` in `daemon/lancerd/e2e_crypto.go`.
+final class ReplaySequencer {
+    private var last: UInt64 = 0
+    private var initialized = false
+
+    func reset() {
+        last = 0
+        initialized = false
+    }
+
+    func accept(_ seq: UInt64) -> Bool {
+        if initialized, seq <= last {
+            return false
+        }
+        last = seq
+        initialized = true
+        return true
+    }
 }
 
 // MARK: - Errors
