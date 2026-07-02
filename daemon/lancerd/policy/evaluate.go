@@ -52,6 +52,16 @@ func Evaluate(doc Document, req Request) Result {
 	}
 }
 
+// PermitsNoClientGrace reports whether risk is low enough for the no-client
+// grace-then-auto-approve fallback (lancerd's handleHookWithNotify). An
+// unreachable approver is evidence of reduced trust in the environment, not
+// evidence the action is safe — so high/critical risk is never eligible for
+// this fast path, matching the blast-radius tiering already used to classify
+// escalations everywhere else in this package.
+func PermitsNoClientGrace(risk int) bool {
+	return riskOrder(RiskLabel(risk)) < riskOrder("high")
+}
+
 // EvaluateDocuments merges multiple policy files; strictest effect across all docs wins.
 func EvaluateDocuments(docs []Document, req Request) Result {
 	if len(docs) == 0 {

@@ -258,7 +258,15 @@ func TestE2ELoopbackThroughBlindRelay(t *testing.T) {
 		},
 	}
 	respJSON, _ := json.Marshal(resp)
-	respFrame, err := encryptFrame(respJSON, phoneKey)
+	// The daemon now requires every frame's plaintext to be a seq envelope
+	// (see wrapSeq/unwrapSeq, e2e_crypto.go) — a real phone client wraps this
+	// automatically; the simulated phone here must do the same or the daemon's
+	// unwrapSeq/replaySequencer check silently drops the frame.
+	respWrapped, err := wrapSeq(0, respJSON)
+	if err != nil {
+		t.Fatalf("phone wrapSeq: %v", err)
+	}
+	respFrame, err := encryptFrame(respWrapped, phoneKey)
 	if err != nil {
 		t.Fatalf("phone encryptFrame: %v", err)
 	}

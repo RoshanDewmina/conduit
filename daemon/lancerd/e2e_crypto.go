@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
@@ -126,4 +128,58 @@ func base64URLEncode(data []byte) string {
 
 func base64URLDecode(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
+}
+
+// seqFrame wraps a relay message body with a monotonically increasing
+// per-direction sequence number BEFORE encryption, so the counter is covered
+// by the AEAD tag but never visible to the relay itself — a relay-side
+// attacker who can't decrypt still can't selectively drop-and-replay based on
+// a visible sequence. This is the replay-resistance envelope for the E2E
+// relay channel (see replaySequencer below for the receive-side check).
+type seqFrame struct {
+	Seq  uint64          `json:"seq"`
+	Body json.RawMessage `json:"body"`
+}
+
+func wrapSeq(seq uint64, body []byte) ([]byte, error) {
+	return json.Marshal(seqFrame{Seq: seq, Body: body})
+}
+
+func unwrapSeq(plaintext []byte) (uint64, []byte, error) {
+	var f seqFrame
+	if err := json.Unmarshal(plaintext, &f); err != nil {
+		return 0, nil, err
+	}
+	return f.Seq, f.Body, nil
+}
+
+// replaySequencer rejects a decrypted frame whose sequence number is not
+// strictly greater than the last one accepted for the current pairing
+// generation — the minimum-viable fix for AEAD-with-AAD replay resistance
+// (WireGuard-style counters are the fuller version; a bounded reconnect
+// window doesn't need a sliding bitmap on top of that). reset() is called on
+// every new `peer_joined` (a fresh session key = a fresh generation), mirroring
+// the connectGeneration idiom already used for the Swift-side stale-socket fix.
+type replaySequencer struct {
+	mu          sync.Mutex
+	last        uint64
+	initialized bool
+}
+
+func (r *replaySequencer) reset() {
+	r.mu.Lock()
+	r.last = 0
+	r.initialized = false
+	r.mu.Unlock()
+}
+
+func (r *replaySequencer) accept(seq uint64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.initialized && seq <= r.last {
+		return false
+	}
+	r.last = seq
+	r.initialized = true
+	return true
 }

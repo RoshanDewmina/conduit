@@ -35,18 +35,26 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let agent: String
         public let kind: String
         public let command: String?
+        public let patch: String?
         public let risk: Int
         public let cwd: String?
         public let toolName: String?
+        public let toolInput: String?
+        /// The daemon's `computeContentHash` over (command, patch, cwd, toolInput)
+        /// at approval-creation time — see `Approval.computeContentHash`.
+        public let contentHash: String?
 
-        public init(approvalID: String, agent: String, kind: String, command: String?, risk: Int, cwd: String?, toolName: String?) {
+        public init(approvalID: String, agent: String, kind: String, command: String?, patch: String? = nil, risk: Int, cwd: String?, toolName: String?, toolInput: String? = nil, contentHash: String? = nil) {
             self.approvalID = approvalID
             self.agent = agent
             self.kind = kind
             self.command = command
+            self.patch = patch
             self.risk = risk
             self.cwd = cwd
             self.toolName = toolName
+            self.toolInput = toolInput
+            self.contentHash = contentHash
         }
     }
 
@@ -54,11 +62,15 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let approvalID: String
         public let decision: String
         public let editedToolInput: String?
+        /// Echoed back from the `ApprovalData.contentHash` this decision was
+        /// made on; lancerd's approvalStore.resolve rejects a mismatch.
+        public let contentHash: String?
 
-        public init(approvalID: String, decision: String, editedToolInput: String?) {
+        public init(approvalID: String, decision: String, editedToolInput: String?, contentHash: String? = nil) {
             self.approvalID = approvalID
             self.decision = decision
             self.editedToolInput = editedToolInput
+            self.contentHash = contentHash
         }
     }
 

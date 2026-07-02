@@ -263,8 +263,8 @@ func newServer(home string) *server {
 // It writes the human-decision audit entry and, for approveAlways, the
 // always-policy. FAIL-SAFE: a failed policy write is logged, never fatal — a
 // dropped always-rule only means more prompting later, never an unintended allow.
-func (s *server) applyDecision(id, decision, editedToolInput string) (ApprovalEvent, bool) {
-	event, ok := s.approvals.resolve(id, decision, editedToolInput)
+func (s *server) applyDecision(id, decision, editedToolInput, contentHash string) (ApprovalEvent, bool) {
+	event, ok := s.approvals.resolve(id, decision, editedToolInput, contentHash)
 	if !ok {
 		return ApprovalEvent{}, false
 	}
@@ -563,11 +563,12 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		if _, ok := s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput); !ok {
+		if _, ok := s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash); !ok {
 			// Already resolved (timeout beat us here, or a duplicate/late
-			// delivery) or never existed — tell the client rather than lying
-			// with a blanket "ok" it would otherwise treat as delivered.
-			s.writeError(msg.ID, -32001, "approval already resolved or not found")
+			// delivery), never existed, or the echoed content hash didn't match
+			// the pending approval — tell the client rather than lying with a
+			// blanket "ok" it would otherwise treat as delivered.
+			s.writeError(msg.ID, -32001, "approval already resolved, not found, or content hash mismatch")
 			return
 		}
 		s.writeResult(msg.ID, "ok")
@@ -1185,20 +1186,27 @@ func (s *server) relayPaired() bool {
 // noClientGrace is how long an escalated approval waits for a client to appear
 // when none is currently reachable. Short enough that a host's normal `claude`
 // runs are not stalled (Finding #10), long enough to absorb a phone reconnect
-// that is already in flight.
+// that is already in flight. Only risk tiers policy.PermitsNoClientGrace allows
+// (low/medium) get this fast-approve fallback — see handleHookWithNotify.
 const noClientGrace = 8 * time.Second
 
 // handleHookWithNotify processes one PreToolUse approval over conn. clientReachable
 // reports whether a human can answer right now (attach client connected and/or a
-// push device registered). When it returns false on an escalation, the hook waits
-// only noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking
+// push device registered). When it returns false on an escalation AND the event's
+// risk tier is low/medium (policy.PermitsNoClientGrace), the hook waits only
+// noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking
 // indefinitely — otherwise wiring the hook would stall normal on-host `claude`
 // runs whenever no phone is attached (Finding #10; the host runs bypassPermissions,
-// so the hook is the only gate and must not hang). When a client IS reachable there
-// is no timeout at all: the escalation waits for an explicit human decision no
-// matter how long that takes (owner directive 2026-07-02 — a reachable approval
-// must pause, not auto-deny, on a slow tap). Only the no-reachable-client path
-// above is fail-closed-with-a-grace; a reachable client is never auto-denied.
+// so the hook is the only gate and must not hang). A high/critical-risk event with
+// no reachable client is NOT eligible for that grace: an unreachable approver is
+// evidence of reduced trust in the environment, not evidence the action is safe to
+// auto-approve, so it falls through to the same no-timeout-at-all wait a reachable
+// client gets below — it just keeps waiting for an explicit human decision,
+// however long that takes. Only the low/medium no-reachable-client path above is
+// fail-closed-with-a-grace; neither a reachable client nor a high/critical-risk
+// unreachable one is ever auto-denied or auto-approved on a timeout (owner
+// directive 2026-07-02 — a pending approval must pause, never silently resolve,
+// on a slow or absent tap).
 func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error, clientReachable func() bool) {
 	defer conn.Close()
 	// No hard deadline: a reachable client may take arbitrarily long to answer
@@ -1220,6 +1228,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		fmt.Fprintf(conn, `{"error":"bad request"}`)
 		return
 	}
+	event.ContentHash = computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
 
 	eval := s.policy.evaluate(event)
 	switch eval.Effect {
@@ -1291,9 +1300,11 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	}
 
 	// No reachable client (no attach + no registered push device): nobody can
-	// answer. Wait only a short grace in case one is mid-reconnect, then fail OPEN
-	// (auto-approve) so the host's normal `claude` runs aren't stalled for 120s.
-	if clientReachable != nil && !clientReachable() {
+	// answer. For a risk tier that permits it, wait only a short grace in case one
+	// is mid-reconnect, then fail OPEN (auto-approve) so the host's normal `claude`
+	// runs aren't stalled for 120s. High/critical risk skips this fast path
+	// entirely and falls through to the general wait below.
+	if clientReachable != nil && !clientReachable() && policy.PermitsNoClientGrace(event.Risk) {
 		result, received := waitWithTimeout(decisionCh, noClientGrace)
 		if !received {
 			s.approvals.remove(event.ApprovalID)

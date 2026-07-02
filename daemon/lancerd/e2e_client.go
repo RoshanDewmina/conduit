@@ -26,6 +26,12 @@ type e2eRelayClient struct {
 	stopOnce       sync.Once
 	wg             sync.WaitGroup
 	reconnectDelay time.Duration
+
+	// sendSeq/recv track the per-direction replay-resistance sequence for the
+	// current pairing generation (see seqFrame/replaySequencer in
+	// e2e_crypto.go). Both reset on every new peer_joined session key.
+	sendSeq uint64
+	recv    replaySequencer
 }
 
 func newE2ERelayClient(relayURL, pairingCode string, handler func(msgType string, payload []byte)) *e2eRelayClient {
@@ -223,7 +229,9 @@ func (c *e2eRelayClient) messageLoop() {
 			}
 			c.sessionKey = key
 			c.paired = true
+			c.sendSeq = 0
 			c.mu.Unlock()
+			c.recv.reset()
 
 			log.Printf("e2e: paired with phone (code: %s)", c.pairingCode)
 
@@ -248,11 +256,21 @@ func (c *e2eRelayClient) messageLoop() {
 				continue
 			}
 
+			seq, body, err := unwrapSeq(plaintext)
+			if err != nil {
+				log.Printf("e2e: seq envelope unmarshal failed: %v", err)
+				continue
+			}
+			if !c.recv.accept(seq) {
+				log.Printf("e2e: rejecting replayed or out-of-order frame (seq=%d)", seq)
+				continue
+			}
+
 			var inner struct {
 				Type    string          `json:"type"`
 				Payload json.RawMessage `json:"payload"`
 			}
-			if err := json.Unmarshal(plaintext, &inner); err != nil {
+			if err := json.Unmarshal(body, &inner); err != nil {
 				log.Printf("e2e: inner unmarshal failed: %v", err)
 				continue
 			}
@@ -299,13 +317,20 @@ func (c *e2eRelayClient) sendMessage(msgType string, payload []byte) error {
 	conn := c.conn
 	key := c.sessionKey
 	paired := c.paired
+	seq := c.sendSeq
+	c.sendSeq++
 	c.mu.Unlock()
 
 	if conn == nil || !paired || key == nil {
 		return fmt.Errorf("e2e: not connected or paired")
 	}
 
-	frame, err := encryptFrame(payload, key)
+	wrapped, err := wrapSeq(seq, payload)
+	if err != nil {
+		return fmt.Errorf("e2e: seq envelope failed: %w", err)
+	}
+
+	frame, err := encryptFrame(wrapped, key)
 	if err != nil {
 		return fmt.Errorf("e2e: encrypt failed: %w", err)
 	}
