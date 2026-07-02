@@ -7,7 +7,7 @@
 // Lifecycle:
 //   • SessionViewModel.connect() success → LancerLiveActivityManager.start(...)
 //   • ApprovalRepository.upserts → manager.updatePendingApprovals(_:)
-//   • SessionViewModel.disconnect() / app shutdown → manager.endAll()
+//   • SessionViewModel.disconnect() → manager.end(activityKey:) for that session only
 //
 // Keying: one Live Activity per active *session* (SessionViewModel.sessionID),
 // not per host — two concurrent chat tabs connected to the same host each get
@@ -320,17 +320,6 @@ public final class LancerLiveActivityManager {
         lastContent.removeValue(forKey: activityKey)
         tokenTasks[activityKey]?.cancel()
         tokenTasks.removeValue(forKey: activityKey)
-    }
-
-    /// End every activity (e.g. app entering termination).
-    public func endAll() async {
-        for (activityKey, activity) in activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-            activities.removeValue(forKey: activityKey)
-            tokenTasks[activityKey]?.cancel()
-        }
-        tokenTasks.removeAll()
-        lastContent.removeAll()
     }
 
     // MARK: - Push token monitoring

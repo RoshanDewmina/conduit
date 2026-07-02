@@ -342,7 +342,7 @@ public struct AppRoot: View {
             // backgrounded or fully closed (ARCHITECTURE.md's documented
             // push-driven lifecycle). Only end an activity when the underlying
             // session/run actually terminates — see the LancerLiveActivityManager
-            // .end/.endAll call sites elsewhere in this file.
+            // .end(activityKey:) call sites elsewhere in this file.
             if let observer = scenePhaseObserver {
                 Task { await observer.scenePhaseChanged(to: newPhase) }
             }
