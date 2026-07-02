@@ -1183,17 +1183,23 @@ func (s *server) relayPaired() bool {
 // noClientGrace is how long an escalated approval waits for a client to appear
 // when none is currently reachable. Short enough that a host's normal `claude`
 // runs are not stalled (Finding #10), long enough to absorb a phone reconnect
-// that is already in flight.
+// that is already in flight. Only risk tiers policy.PermitsNoClientGrace allows
+// (low/medium) get this fast-approve fallback — see handleHookWithNotify.
 const noClientGrace = 8 * time.Second
 
 // handleHookWithNotify processes one PreToolUse approval over conn. clientReachable
 // reports whether a human can answer right now (attach client connected and/or a
-// push device registered). When it returns false on an escalation, the hook waits
-// only noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking
-// the full 120s — otherwise wiring the hook would stall normal on-host `claude`
-// runs whenever no phone is attached (Finding #10; the host runs bypassPermissions,
-// so the hook is the only gate and must not hang). When a client IS reachable the
-// full 120s human-decision window applies, with fail-safe auto-deny on timeout.
+// push device registered). When it returns false on an escalation AND the event's
+// risk tier is low/medium (policy.PermitsNoClientGrace), the hook waits only
+// noClientGrace before FAST AUTO-APPROVING (fail-open) rather than blocking the
+// full 120s — otherwise wiring the hook would stall normal on-host `claude` runs
+// whenever no phone is attached (Finding #10; the host runs bypassPermissions, so
+// the hook is the only gate and must not hang). A high/critical-risk event with no
+// reachable client is NOT eligible for that grace: an unreachable approver is
+// evidence of reduced trust in the environment, not evidence the action is safe to
+// auto-approve, so it falls through to the same 120s wait + fail-safe auto-deny a
+// reachable client gets below — still bounded, but never auto-*approved* just
+// because nobody was around to answer.
 func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(ApprovalEvent) error, clientReachable func() bool) {
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(130 * time.Second))
@@ -1284,9 +1290,11 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	}
 
 	// No reachable client (no attach + no registered push device): nobody can
-	// answer. Wait only a short grace in case one is mid-reconnect, then fail OPEN
-	// (auto-approve) so the host's normal `claude` runs aren't stalled for 120s.
-	if clientReachable != nil && !clientReachable() {
+	// answer. For a risk tier that permits it, wait only a short grace in case one
+	// is mid-reconnect, then fail OPEN (auto-approve) so the host's normal `claude`
+	// runs aren't stalled for 120s. High/critical risk skips this fast path
+	// entirely and falls through to the general wait below.
+	if clientReachable != nil && !clientReachable() && policy.PermitsNoClientGrace(event.Risk) {
 		result, received := waitWithTimeout(decisionCh, noClientGrace)
 		if !received {
 			s.approvals.remove(event.ApprovalID)

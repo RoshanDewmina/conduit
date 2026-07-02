@@ -293,6 +293,73 @@ func TestHookWaitsWhenClientReachable(t *testing.T) {
 	cli.Close()
 }
 
+// TestHookHighRiskNoClientDoesNotAutoApprove is the item-2 regression: a
+// high/critical-risk escalation with no reachable client must NOT take the
+// noClientGrace fast-approve path — an unreachable approver is evidence of
+// reduced trust, not evidence the action is safe. It must still be pending
+// well past noClientGrace, then honor whatever decision eventually arrives.
+func TestHookHighRiskNoClientDoesNotAutoApprove(t *testing.T) {
+	withStateDir(t)
+	installTestPolicy(t) // fileWrite → ask (escalate)
+
+	s := newServer(serverHome())
+	srv, cli := net.Pipe()
+
+	event := ApprovalEvent{
+		ApprovalID: "noclient-high-1",
+		Agent:      "claudeCode",
+		Kind:       "fileWrite",
+		Command:    "notes.txt",
+		CWD:        "/tmp",
+		Risk:       2, // high
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	first, _ := json.Marshal(event)
+
+	done := make(chan struct{})
+	go func() {
+		// clientReachable=false → no attach client and no registered push device.
+		s.handleHookWithNotify(srv, first, nil, func() bool { return false })
+		close(done)
+	}()
+
+	// Give the hook goroutine time to register the pending approval, then wait
+	// well past noClientGrace with no decision delivered. A regression to the
+	// blanket fast-approve would have already resolved and closed `done` here.
+	time.Sleep(noClientGrace + 500*time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("high-risk no-client escalation auto-approved — it must fail closed, not fast-approve")
+	default:
+	}
+	found := false
+	for _, e := range s.approvals.pendingEvents() {
+		if e.ApprovalID == "noclient-high-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("approval was resolved without an explicit decision — high risk must not auto-approve on no-client")
+	}
+
+	// Deliver the real decision and confirm the still-blocked hook honors it.
+	wantHash := computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+	if _, ok := s.applyDecision("noclient-high-1", "deny", "", wantHash); !ok {
+		t.Fatal("pending approval missing — hook did not keep waiting for an explicit decision")
+	}
+
+	var decision ApprovalDecision
+	_ = cli.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewDecoder(cli).Decode(&decision); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if decision.Decision != "deny" {
+		t.Fatalf("decision = %q, want deny", decision.Decision)
+	}
+	cli.Close()
+	<-done
+}
+
 func TestServeAttachRelaysPing(t *testing.T) {
 	withStateDir(t)
 	startResident(t)
