@@ -5,6 +5,14 @@ import { cn } from "@/lib/utils"
 
 const SCREENS = [
   {
+    label: "Live Activity",
+    variants: [{ label: "Design companion", href: "/live-activity" }],
+  },
+  {
+    label: "Siri Readiness",
+    variants: [{ label: "Full plan", href: "/siri-readiness" }],
+  },
+  {
     label: "Monetization",
     variants: [{ label: "Trigger timing", href: "/monetization" }],
   },

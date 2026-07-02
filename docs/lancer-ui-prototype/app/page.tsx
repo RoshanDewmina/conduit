@@ -65,6 +65,46 @@ export default function Home() {
         </div>
 
         <Link
+          href="/live-activity"
+          className="group mb-6 flex items-center justify-between border border-emerald-500/35 bg-emerald-500/10 px-5 py-5 transition-all hover:bg-emerald-500/15"
+        >
+          <div>
+            <span className="font-mono text-xs uppercase tracking-widest text-emerald-300">
+              New · In progress
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Live Activity &amp; Dynamic Island
+            </h2>
+            <p className="mt-1 text-sm text-white/45">
+              Current implementation reproduced state-by-state, Mobbin references (Granola,
+              Flighty, DoorDash, Apple Fitness...), and an A/B/C comparison for the cost-vs-budget
+              progress affordance.
+            </p>
+          </div>
+          <ArrowRight className="size-6 text-emerald-300 transition-transform group-hover:translate-x-1" />
+        </Link>
+
+        <Link
+          href="/siri-readiness"
+          className="group mb-6 flex items-center justify-between border border-purple-500/35 bg-purple-500/10 px-5 py-5 transition-all hover:bg-purple-500/15"
+        >
+          <div>
+            <span className="font-mono text-xs uppercase tracking-widest text-purple-300">
+              New · Planning
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              Siri &amp; App Intents readiness
+            </h2>
+            <p className="mt-1 text-sm text-white/45">
+              WWDC26 primitives (App Schemas, View Annotations, OwnershipProvidingEntity) mapped
+              against the action-layer plan — entities to model, screens to annotate, snippets to
+              design, and a build order.
+            </p>
+          </div>
+          <ArrowRight className="size-6 text-purple-300 transition-transform group-hover:translate-x-1" />
+        </Link>
+
+        <Link
           href="/monetization"
           className="group mb-6 flex items-center justify-between border border-orange-500/35 bg-orange-500/10 px-5 py-5 transition-all hover:bg-orange-500/15"
         >

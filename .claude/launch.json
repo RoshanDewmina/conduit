@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lancer-ui-prototype",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd docs/lancer-ui-prototype && bun run dev"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}
