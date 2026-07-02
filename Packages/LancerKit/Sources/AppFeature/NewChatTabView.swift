@@ -79,6 +79,12 @@ public struct NewChatTabView: View {
     // Inline conversation state — set once a dispatch starts; nil shows the
     // compose screen.
     @State private var activeRun: ActiveChatRun?
+    /// Stable Live Activity key for this whole chat thread — set once, from the
+    /// FIRST dispatched run's id, and reused across follow-up turns (each of
+    /// which mints its own new `runId`). One thread = one continuous Live
+    /// Activity, mirroring how `SessionViewModel` keys its activity by the
+    /// whole session's id, not by each individual command run within it.
+    @State private var liveActivityKey: String?
     @State private var controlStore: RunControlStore?
     @State private var chatTitle: String = "new chat"
     // One conversation = an ordered list of (prompt, runId) turns. The first is the
@@ -288,6 +294,14 @@ public struct NewChatTabView: View {
         .onChange(of: pendingApprovalCount, initial: true) { _, count in
             guard activeRun != nil, !runIsTerminal, count > 0 else { return }
             isAwaitingApproval = true
+        }
+        // Ends this thread's Live Activity when the run finishes — AppRoot's
+        // updatePendingApprovals broadcast already keeps the approval count
+        // fresh on every active activity app-wide, so only start/end/status
+        // are this view's own responsibility.
+        .onChange(of: runIsTerminal) { _, terminal in
+            guard terminal, let key = liveActivityKey else { return }
+            Task { await LancerLiveActivityManager.shared.end(activityKey: key) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             guard let cid = note.userInfo?["conversationID"] as? String, cid == conversationID else { return }
@@ -1002,6 +1016,27 @@ public struct NewChatTabView: View {
             selectedModel = ""
             budgetText = ""
             showOptions = false
+            // Surface this run on the Lock Screen / Dynamic Island, mirroring
+            // SessionViewModel's SSH-connect flow (SessionViewModel.swift ~328) —
+            // this is the relay-dispatch path (V1's primary transport; "the phone
+            // never holds an SSH session in V1" per ARCHITECTURE.md §0.1), which
+            // previously never started a Live Activity at all, so every relay-
+            // dispatched chat was invisible on the Lock Screen/Island regardless
+            // of Live Activities being otherwise fully implemented and working.
+            if #available(iOS 16.2, *) {
+                let key = run.runId
+                liveActivityKey = key
+                Task {
+                    await LancerLiveActivityManager.shared.start(
+                        hostID: agent.hostID ?? agent.id,
+                        hostName: agent.hostName ?? agent.name,
+                        activityKey: key,
+                        deviceSessionID: DeviceIdentity.sessionID(),
+                        status: "running",
+                        agentName: agent.vendor.isEmpty ? agent.name : agent.vendor
+                    )
+                }
+            }
             // Persist conversation + turn
             if let chatRepo {
                 Task {
@@ -1054,6 +1089,13 @@ public struct NewChatTabView: View {
                 activeRun = continued
                 turns.append(ChatTurn(prompt: trimmed, runId: newRunId))
                 controlStore = RunControlStore(channel: continued.channel, runId: newRunId)
+                // Reflect the new turn on the SAME continuous Live Activity — keyed
+                // by the thread's original liveActivityKey, not the new runId, so a
+                // multi-turn conversation stays one Activity instead of spawning a
+                // new one per follow-up.
+                if #available(iOS 16.2, *), let key = liveActivityKey {
+                    Task { await LancerLiveActivityManager.shared.update(activityKey: key, status: "running") }
+                }
                 // Persist follow-up turn
                 if let chatRepo, let convID = conversationID {
                     Task {
