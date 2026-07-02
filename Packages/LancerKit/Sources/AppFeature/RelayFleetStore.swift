@@ -45,11 +45,15 @@ public final class RelayFleetStore {
         machines[i].installedAgentVendors = vendors
     }
 
-    /// Updates the display name reported by the host (e.g. from a status
-    /// update carrying its `hostName`). No-op if the machine isn't in the store.
+    /// Updates the display name — either reported by the host (e.g. from a
+    /// status update carrying its `hostName`) or set by the user renaming a
+    /// paired machine. No-op if the machine isn't in the store. Persists to
+    /// the Keychain-backed index so the name survives relaunch/hydration.
     public func updateDisplayName(_ name: String, for id: RelayMachineID) {
         guard let i = machines.firstIndex(where: { $0.id == id }) else { return }
         machines[i].record.displayName = name
+        let records = machines.map(\.record)
+        Task { await RelayMachineMigration.writeIndex(records) }
     }
 
     /// Adds a machine. No-op if the store is already at the cap — callers

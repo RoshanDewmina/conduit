@@ -28,18 +28,23 @@ public struct RelayMachinesListView: View {
     let machines: [RelayMachineRow]
     let onPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     let onUnpair: (RelayMachineID) -> Void
+    let onRename: (RelayMachineID, String) -> Void
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
+    @State private var renamingMachine: RelayMachineRow?
+    @State private var renameText: String = ""
 
     public init(
         machines: [RelayMachineRow],
         onPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void,
-        onUnpair: @escaping (RelayMachineID) -> Void
+        onUnpair: @escaping (RelayMachineID) -> Void,
+        onRename: @escaping (RelayMachineID, String) -> Void = { _, _ in }
     ) {
         self.machines = machines
         self.onPaired = onPaired
         self.onUnpair = onUnpair
+        self.onRename = onRename
     }
 
     public var body: some View {
@@ -72,6 +77,20 @@ public struct RelayMachinesListView: View {
             }
         }
         .navigationBarHidden(true)
+        .alert("Rename Machine", isPresented: Binding(
+            get: { renamingMachine != nil },
+            set: { if !$0 { renamingMachine = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingMachine = nil }
+            Button("Rename") {
+                if let machine = renamingMachine {
+                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty { onRename(machine.id, trimmed) }
+                }
+                renamingMachine = nil
+            }
+        }
     }
 
     // MARK: - Rows
@@ -88,6 +107,18 @@ public struct RelayMachinesListView: View {
                 .lineLimit(1)
 
             Spacer(minLength: 8)
+
+            Button {
+                renameText = machine.displayName
+                renamingMachine = machine
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rename \(machine.displayName)")
 
             Button(role: .destructive) {
                 onUnpair(machine.id)

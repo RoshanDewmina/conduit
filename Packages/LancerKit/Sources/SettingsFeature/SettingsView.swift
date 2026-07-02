@@ -466,6 +466,7 @@ public struct SettingsView: View {
     let relayMachines: [RelayMachineRow]
     let onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     let onRelayUnpair: (RelayMachineID) -> Void
+    let onRelayRename: (RelayMachineID, String) -> Void
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     public var onResetApp: (() -> Void)? = nil
@@ -497,6 +498,7 @@ public struct SettingsView: View {
         relayMachines: [RelayMachineRow] = [],
         onRelayPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in },
         onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in },
+        onRelayRename: @escaping (RelayMachineID, String) -> Void = { _, _ in },
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
@@ -519,6 +521,7 @@ public struct SettingsView: View {
         self.relayMachines = relayMachines
         self.onRelayPaired = onRelayPaired
         self.onRelayUnpair = onRelayUnpair
+        self.onRelayRename = onRelayRename
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
@@ -807,7 +810,7 @@ public struct SettingsView: View {
         sectionHead("CONNECTION")
         settingsCard {
             NavigationLink {
-                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair)
+                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair, onRename: onRelayRename)
             } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
             }

@@ -503,12 +503,33 @@ public struct LancerHomeView: View {
     /// before it has any chat history — matching what the Machines page lists.
     private var machines: [HomeMachine] {
         let byHost = Dictionary(grouping: recentThreads, by: \.hostName)
-        var allHosts = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
-        // Relay-paired hosts aren't fleet slots — fold every known one in so a
-        // connected relay machine shows even before it has any chat history.
-        for entry in relayMachines { allHosts.insert(entry.name) }
-        return allHosts
-            .map { host -> HomeMachine in
+        let sshHostNames = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
+
+        // Rows are keyed by hostName for SSH/thread-history hosts (no relay
+        // identity), but by RelayMachineID for relay-paired ones. Two relay
+        // machines must never collapse into one row just because they share
+        // a display name — every newly-paired machine defaults to the same
+        // name ("Relay host") until renamed, and a plain name-keyed Set here
+        // silently merged distinct machines into a single Home card even
+        // though the Machines tab (keyed by id) correctly listed both.
+        var rows: [(key: String, name: String, relayID: RelayMachineID?)] =
+            sshHostNames.map { (key: $0, name: $0, relayID: nil) }
+        var claimedNames = sshHostNames
+        for entry in relayMachines {
+            if claimedNames.contains(entry.name) {
+                // First relay machine to report an already-known name folds
+                // into that existing SSH/thread-history row (the common
+                // single-real-machine case — a relay host isn't a fleet slot,
+                // so this is how it shows before it has any chat history).
+                continue
+            }
+            claimedNames.insert(entry.name)
+            rows.append((key: "relay:\(entry.id.uuidString)", name: entry.name, relayID: entry.id))
+        }
+
+        return rows
+            .map { row -> HomeMachine in
+                let host = row.name
                 let byProject = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)
                 let projects = byProject
                     .map { path, sessions in
@@ -518,7 +539,9 @@ public struct LancerHomeView: View {
                 var liveState = fleetStore.slots.first { $0.hostName == host }.map { fleetStore.connectionState(for: $0) }
                 // The relay host isn't a fleet slot, so derive its dot from the live
                 // bridge state instead: paired-and-live vs. known-but-reconnecting.
-                if liveState == nil, let entry = relayMachines.first(where: { $0.name == host }) {
+                let relayEntry = row.relayID.flatMap { id in relayMachines.first { $0.id == id } }
+                    ?? relayMachines.first { $0.name == host }
+                if liveState == nil, let entry = relayEntry {
                     liveState = entry.connected ? .relayPaired : .connecting
                 }
                 // `loadSessions(host:)` is fanned out per live host in `.task`, so
@@ -526,6 +549,7 @@ public struct LancerHomeView: View {
                 // its own observed list now.
                 let isLiveHost = liveState == .connected || liveState == .relayPaired
                 return HomeMachine(
+                    id: row.key,
                     name: host,
                     projects: projects,
                     liveState: liveState,
@@ -562,11 +586,11 @@ public struct LancerHomeView: View {
 // MARK: - Tree model
 
 private struct HomeMachine: Identifiable {
+    let id: String
     let name: String
     let projects: [HomeProject]
     let liveState: Session.ConnectionState?
     let observedSessions: [ObservedSession]
-    var id: String { name }
 }
 
 private struct HomeProject: Identifiable {

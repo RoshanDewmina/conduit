@@ -1443,6 +1443,7 @@ public struct AppRoot: View {
                 ApprovalRelay.shared.relayBridges.removeValue(forKey: id)
                 relayFleetStore.remove(id)
             },
+            onRelayRename: { id, name in relayFleetStore.updateDisplayName(name, for: id) },
             accountSession: env.accountSession,
             quotaGuardStore: env.quotaGuardStore,
             onResetApp: {
@@ -2245,6 +2246,7 @@ private struct SettingsWithLibraryView: View {
     var relayMachines: [RelayMachineRow] = []
     var onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in }
     var onRelayUnpair: (RelayMachineID) -> Void = { _ in }
+    var onRelayRename: (RelayMachineID, String) -> Void = { _, _ in }
     let accountSession: AccountSessionController
     var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
@@ -2269,6 +2271,7 @@ private struct SettingsWithLibraryView: View {
             relayMachines: relayMachines,
             onRelayPaired: onRelayPaired,
             onRelayUnpair: onRelayUnpair,
+            onRelayRename: onRelayRename,
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             onEmergencyStop: onEmergencyStop,
