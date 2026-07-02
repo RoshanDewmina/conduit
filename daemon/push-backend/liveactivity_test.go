@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -259,5 +262,149 @@ func TestContentStateLastDecisionOmittedWhenNil(t *testing.T) {
 	b2, _ := json.Marshal(cs)
 	if !strings.Contains(string(b2), `"lastDecision":"approved"`) {
 		t.Fatalf("set lastDecision must serialize, got: %s", b2)
+	}
+}
+
+// TestLiveActivityStartPayloadShape asserts the push-to-start payload carries
+// the fields Apple's ActivityKit push doc requires ONLY on "start" (unlike
+// "update"/"end"): attributes-type, attributes, and an alert — see
+// "Construct the payload that starts a Live Activity" in
+// https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications.
+// Constructs the payload directly (not via pushLiveActivityStart, which would
+// hit mustEnv/APNs) — same discipline as TestLiveActivityPayloadShape above.
+func TestLiveActivityStartPayloadShape(t *testing.T) {
+	approvalID := "appr-start-1"
+	agent := "Claude Code"
+	contentState := liveActivityContentState{
+		Status:            "connected",
+		PendingApprovals:  1,
+		AgentName:         &agent,
+		PendingApprovalID: &approvalID,
+		IsStreaming:       true,
+		LastUpdate:        float64(time.Now().UnixNano()) / 1e9,
+	}
+	stale := time.Now().Add(30 * time.Minute).Unix()
+	payload := liveActivityPayload{
+		APS: liveActivityAPS{
+			Timestamp:      time.Now().Unix(),
+			Event:          "start",
+			ContentState:   contentState,
+			StaleDate:      &stale,
+			AttributesType: "LancerSessionAttributes",
+			Attributes:     &liveActivityAttrs{HostName: "devbox", HostID: "host-1"},
+			Alert:          &liveActivityAlert{Title: "Lancer · devbox", Body: "Agent run started", Sound: "default"},
+		},
+	}
+
+	buf, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	aps, ok := decoded["aps"].(map[string]any)
+	if !ok {
+		t.Fatal("aps key missing or wrong type")
+	}
+	if event, _ := aps["event"].(string); event != "start" {
+		t.Errorf("aps.event = %q, want %q", event, "start")
+	}
+	if at, _ := aps["attributes-type"].(string); at != "LancerSessionAttributes" {
+		t.Errorf("aps.attributes-type = %q, want %q", at, "LancerSessionAttributes")
+	}
+	attrs, ok := aps["attributes"].(map[string]any)
+	if !ok {
+		t.Fatal("aps.attributes missing or wrong type — required on a start push")
+	}
+	if hn, _ := attrs["hostName"].(string); hn != "devbox" {
+		t.Errorf("attributes.hostName = %q, want %q", hn, "devbox")
+	}
+	if hid, _ := attrs["hostID"].(string); hid != "host-1" {
+		t.Errorf("attributes.hostID = %q, want %q", hid, "host-1")
+	}
+	alert, ok := aps["alert"].(map[string]any)
+	if !ok {
+		t.Fatal("aps.alert missing or wrong type — required on a start push")
+	}
+	if title, _ := alert["title"].(string); title == "" {
+		t.Error("aps.alert.title must not be empty on a start push")
+	}
+	if body, _ := alert["body"].(string); strings.Contains(body, "rm -rf") {
+		t.Errorf("aps.alert.body must never carry raw command text, got: %q", body)
+	}
+}
+
+// TestPushLiveActivityStartNoOpsWithoutSession asserts pushLiveActivityStart
+// returns nil (no error, no network call) for a session with no registry
+// entry at all. If this test hangs/crashes the binary instead of passing
+// quickly, the no-op guard regressed and the call fell through to mustEnv.
+func TestPushLiveActivityStartNoOpsWithoutSession(t *testing.T) {
+	liveActivityRegistry.Lock()
+	delete(liveActivityRegistry.sessions, "sess-p2s-none")
+	liveActivityRegistry.Unlock()
+
+	if err := pushLiveActivityStart("sess-p2s-none", "host-1", "devbox", nil, nil, ""); err != nil {
+		t.Fatalf("expected nil (silent no-op), got: %v", err)
+	}
+}
+
+// TestPushLiveActivityStartNoOpsWithoutPushToStartToken asserts a session
+// with only an activity (update) token registered — no push-to-start token —
+// is a no-op: there's nothing to originate a NEW Activity with.
+func TestPushLiveActivityStartNoOpsWithoutPushToStartToken(t *testing.T) {
+	liveActivityRegistry.Lock()
+	liveActivityRegistry.sessions["sess-p2s-no-token"] = &liveActivityRecord{
+		activityToken: "some-activity-token", seen: time.Now().Unix(),
+	}
+	liveActivityRegistry.Unlock()
+
+	if err := pushLiveActivityStart("sess-p2s-no-token", "host-1", "devbox", nil, nil, ""); err != nil {
+		t.Fatalf("expected nil (silent no-op), got: %v", err)
+	}
+}
+
+// TestPushLiveActivityStartNoOpsWhenAlreadyRunning asserts the "don't
+// duplicate the Lock Screen card" heuristic: a session with BOTH a
+// push-to-start token and an existing activity (update) token is treated as
+// already having a locally-running Activity, so push-to-start is skipped.
+func TestPushLiveActivityStartNoOpsWhenAlreadyRunning(t *testing.T) {
+	liveActivityRegistry.Lock()
+	liveActivityRegistry.sessions["sess-p2s-running"] = &liveActivityRecord{
+		activityToken: "existing-activity-token", pushToStartToken: "p2s-token", seen: time.Now().Unix(),
+	}
+	liveActivityRegistry.Unlock()
+
+	if err := pushLiveActivityStart("sess-p2s-running", "host-1", "devbox", nil, nil, ""); err != nil {
+		t.Fatalf("expected nil (silent no-op), got: %v", err)
+	}
+}
+
+// TestHandleRunStartRejectsMissingFields asserts the /run-start handler's
+// input validation, without ever reaching pushLiveActivityStart / mustEnv.
+func TestHandleRunStartRejectsMissingFields(t *testing.T) {
+	body, _ := json.Marshal(runStartEvent{HostID: "host-1", HostName: "devbox"}) // SessionID missing
+	rec := httptest.NewRecorder()
+	handleRunStart(rec, httptest.NewRequest(http.MethodPost, "/run-start", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+// TestHandleRunStartNoOpsForUnregisteredSession asserts an unrecognized
+// session (no push-to-start token on file) still responds 204 — the no-op is
+// silent by design (pushLiveActivityStart), matching the existing
+// pushLiveActivityApproval/Decision "missing token" contract.
+func TestHandleRunStartNoOpsForUnregisteredSession(t *testing.T) {
+	liveActivityRegistry.Lock()
+	delete(liveActivityRegistry.sessions, "sess-run-start-ghost")
+	liveActivityRegistry.Unlock()
+
+	body, _ := json.Marshal(runStartEvent{SessionID: "sess-run-start-ghost", HostID: "host-1", HostName: "devbox"})
+	rec := httptest.NewRecorder()
+	handleRunStart(rec, httptest.NewRequest(http.MethodPost, "/run-start", bytes.NewReader(body)))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
 	}
 }

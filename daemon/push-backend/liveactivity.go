@@ -98,11 +98,34 @@ type liveActivityPayload struct {
 
 type liveActivityAPS struct {
 	Timestamp    int64                    `json:"timestamp"`
-	Event        string                   `json:"event"` // "update" or "end"
+	Event        string                   `json:"event"` // "start", "update", or "end"
 	ContentState liveActivityContentState `json:"content-state"`
 	// StaleDate is optional: unix timestamp after which the Live Activity is
 	// considered stale. We set it 30 min ahead — same as the local update path.
 	StaleDate *int64 `json:"stale-date,omitempty"`
+	// AttributesType/Attributes/Alert are required by APNs only on "start" —
+	// see "Construct the payload that starts a Live Activity" in Apple's
+	// ActivityKit push notification doc. Omitted (empty) on "update"/"end".
+	AttributesType string             `json:"attributes-type,omitempty"`
+	Attributes     *liveActivityAttrs `json:"attributes,omitempty"`
+	Alert          *liveActivityAlert `json:"alert,omitempty"`
+}
+
+// liveActivityAttrs is the Go mirror of LancerSessionAttributes' fixed
+// (non-content-state) fields — required on a "start" push so the system knows
+// which host the new Activity belongs to.
+type liveActivityAttrs struct {
+	HostName string `json:"hostName"`
+	HostID   string `json:"hostID"`
+}
+
+// liveActivityAlert makes a push-to-start notification highlight the device —
+// Apple's doc requires an alert on "start" pushes so a person isn't surprised
+// by a Live Activity appearing with no accompanying notification.
+type liveActivityAlert struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Sound string `json:"sound,omitempty"`
 }
 
 // pushLiveActivityApproval sends a Live Activity content-state update via APNs
@@ -181,6 +204,73 @@ func pushLiveActivityDecision(sessionID, decision string) error {
 		},
 	}
 	return sendLiveActivityPush(activityToken, payload, 10)
+}
+
+// pushLiveActivityStart originates a NEW Live Activity purely from a server
+// push, via the registered push-to-start token — the only way to start one
+// when the app is fully closed and no local daemon connection exists (relay-
+// only V1 architecture; see docs/wwdc26-lancer-opportunity-audit/04-live-
+// activities-and-dynamic-island.md Gap #3).
+//
+// No-ops (returns nil) when there's no push-to-start token on file for the
+// session, or when an activity update token IS on file — a heuristic for "a
+// local Activity is probably already running," since starting a second one
+// for the same session would just duplicate the Lock Screen card. This is a
+// best-effort signal, not a guarantee: the registry has no explicit "the app
+// ended its local Activity" event, so a stale activityToken can suppress a
+// start this heuristic should have allowed. Reusing the existing per-session
+// registry (rather than adding a new store) keeps this consistent with
+// pushLiveActivityApproval/pushLiveActivityDecision above.
+//
+// PRIVACY: content-state and the alert body carry only the redacted summary,
+// never the raw command — same contract as pushLiveActivityApproval.
+func pushLiveActivityStart(sessionID, hostID, hostName string, agentName *string, approvalID *string, redactedSummary string) error {
+	liveActivityRegistry.RLock()
+	rec, ok := liveActivityRegistry.sessions[sessionID]
+	var pushToStartToken, existingActivityToken string
+	if ok {
+		pushToStartToken = rec.pushToStartToken
+		existingActivityToken = rec.activityToken
+	}
+	liveActivityRegistry.RUnlock()
+
+	if !ok || pushToStartToken == "" || existingActivityToken != "" {
+		return nil
+	}
+
+	stale := time.Now().Add(30 * time.Minute).Unix()
+	pending := 0
+	if approvalID != nil {
+		pending = 1
+	}
+	contentState := liveActivityContentState{
+		Status:            "connected",
+		PendingApprovals:  pending,
+		AgentName:         agentName,
+		PendingApprovalID: approvalID,
+		IsStreaming:       true,
+		LastUpdate:        float64(time.Now().UnixNano()) / 1e9,
+	}
+
+	title := fmt.Sprintf("Lancer · %s", hostName)
+	body := redactedSummary
+	if body == "" {
+		body = "Agent run started"
+	}
+
+	payload := liveActivityPayload{
+		APS: liveActivityAPS{
+			Timestamp:      time.Now().Unix(),
+			Event:          "start",
+			ContentState:   contentState,
+			StaleDate:      &stale,
+			AttributesType: "LancerSessionAttributes",
+			Attributes:     &liveActivityAttrs{HostName: hostName, HostID: hostID},
+			Alert:          &liveActivityAlert{Title: title, Body: body, Sound: "default"},
+		},
+	}
+
+	return sendLiveActivityPush(pushToStartToken, payload, 10)
 }
 
 // sendLiveActivityPush delivers a Live Activity APNs push with the strict headers.
