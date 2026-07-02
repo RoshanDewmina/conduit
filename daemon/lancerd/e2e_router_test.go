@@ -86,6 +86,45 @@ func TestE2ERouterDispatch(t *testing.T) {
 	}
 }
 
+// TestE2ERouterStatusQuery verifies that an inbound agentStatusQuery message
+// through the E2E router calls the same s.queryAgentStatus the SSH agent.status
+// RPC uses and replies with agentStatusQueryResult — the relay transport a
+// relay-only phone (no SSH DaemonChannel) needs for an on-demand status refresh.
+func TestE2ERouterStatusQuery(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]interface{}{"homeDir": home})
+	router.handleMessage("agentStatusQuery", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentStatusQueryResult" {
+		t.Fatalf("expected agentStatusQueryResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	var result AgentStatusResult
+	if err := json.Unmarshal(env.Payload, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if len(result.Agents) == 0 {
+		t.Fatalf("expected at least one agent vendor status, got none")
+	}
+	if result.CollectedAt == "" {
+		t.Fatalf("expected a non-empty CollectedAt timestamp")
+	}
+}
+
 // TestE2ERouterDispatchStarted verifies a dispatch that passes policy starts
 // the run and returns a runId.
 func TestE2ERouterDispatchStarted(t *testing.T) {

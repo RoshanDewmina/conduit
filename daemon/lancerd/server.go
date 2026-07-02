@@ -661,15 +661,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 				return
 			}
 		}
-		result := collectAgentStatus(params.HomeDir)
-		// Feed cumulative usage into quota guardrails so the spend/burn-rate
-		// dashboard shows real data rather than empty cards.
-		for _, ag := range result.Agents {
-			if ag.UsageUSD != nil {
-				s.dispatcher.updateProviderSpend(ag.Agent, *ag.UsageUSD)
-			}
-		}
-		s.writeResult(msg.ID, result)
+		s.writeResult(msg.ID, s.queryAgentStatus(params.HomeDir))
 
 	case "agent.host.health":
 		health := collectHostHealth()
