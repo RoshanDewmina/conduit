@@ -75,6 +75,61 @@ struct GovernanceContextPersistenceTests {
     }
 }
 
+@Suite("Content-hash binding — persistence round-trip")
+struct ContentHashPersistenceTests {
+
+    @Test("contentHash survives the DB round-trip")
+    func contentHashRoundTrips() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+
+        let hash = Approval.computeContentHash(command: "rm -rf build", patch: nil, cwd: "/repo", toolInput: nil)
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "rm -rf build",
+            cwd: "/repo",
+            risk: .high,
+            contentHash: hash
+        )
+        try await repo.upsert(approval)
+
+        let read = try #require(try await repo.all().first)
+        #expect(read.contentHash == hash)
+
+        let found = try await repo.find(id: approval.id)
+        #expect(found?.contentHash == hash)
+    }
+
+    @Test("an approval with no contentHash decodes to nil (legacy / on-device-only rows)")
+    func contentHashNilWhenAbsent() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .codex,
+            kind: .command,
+            command: "ls",
+            cwd: "/tmp",
+            risk: .low
+        )
+        try await repo.upsert(approval)
+
+        let read = try #require(try await repo.all().first)
+        #expect(read.contentHash == nil)
+    }
+
+    @Test("find(id:) returns nil for an id with no row")
+    func findReturnsNilForMissingRow() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+        let found = try await repo.find(id: ApprovalID())
+        #expect(found == nil)
+    }
+}
+
 @Suite("M8 — stable device identity")
 struct DeviceIdentityTests {
 

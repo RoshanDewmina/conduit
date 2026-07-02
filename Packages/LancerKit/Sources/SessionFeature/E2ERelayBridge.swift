@@ -81,7 +81,7 @@ public final class E2ERelayBridge: ObservableObject {
     /// it as such is exactly how decisions used to vanish silently with no
     /// fallback ever triggering.
     @discardableResult
-    public func sendDecision(approvalID: String, decision: String, editedToolInput: String?) async -> Bool {
+    public func sendDecision(approvalID: String, decision: String, editedToolInput: String?, contentHash: String? = nil) async -> Bool {
         guard isActive else {
             Self.logger.warning("sendDecision: bridge INACTIVE (machine=\(self.machineID.uuidString, privacy: .public)) — dropping approvalID=\(approvalID, privacy: .public)")
             return false
@@ -93,7 +93,7 @@ public final class E2ERelayBridge: ObservableObject {
         // double-nests it as {"approvalResponse":{…}}, which the daemon can't read —
         // mirror sendDispatch, which passes its raw DispatchParams struct.
         let decisionData = E2ERelayMessage.DecisionData(
-            approvalID: approvalID, decision: decision, editedToolInput: editedToolInput
+            approvalID: approvalID, decision: decision, editedToolInput: editedToolInput, contentHash: contentHash
         )
         do {
             try await relayClient.send(type: "approvalResponse", payload: decisionData)

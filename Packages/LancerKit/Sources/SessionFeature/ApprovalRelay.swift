@@ -72,7 +72,7 @@ public final class ApprovalRelay {
     // that were actually meant for it (machineBridgeReconnected below) — an
     // untagged entry (nil) is an SSH-origin decision, drained only by
     // drainQueue(through:) on the next SSH attach, same as before.
-    private var queue: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
+    private var queue: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?, contentHash: String?)] = []
 
     /// The active daemon channel — set by AppRoot after SSH connect, cleared on disconnect.
     public weak var channel: DaemonChannel?
@@ -149,6 +149,11 @@ public final class ApprovalRelay {
         //    banner tap on an already-resolved gate is a no-op here.
         let approvalRepo = ApprovalRepository(db)
         let auditRepo = AuditRepository(db)
+        // Populated from the persisted row below (this call has no in-memory
+        // Approval in scope — it's reached from an AppIntent/Live Activity tap,
+        // not a live view model) so the forwarded decision echoes back the same
+        // contentHash lancerd's approvalStore.resolve verifies against.
+        var contentHash: String?
         if let uuid = UUID(uuidString: approvalID) {
             let id = ApprovalID(uuid)
             let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
@@ -165,6 +170,7 @@ public final class ApprovalRelay {
             } else {
                 Notifications.shared.clearDeliveredApproval(id: approvalID)
             }
+            contentHash = (try? await approvalRepo.find(id: id))?.contentHash
         }
         let hostUUID = UUID(uuidString: hostID) ?? UUID()
         try? await auditRepo.record(
@@ -183,7 +189,7 @@ public final class ApprovalRelay {
         await hydrateCredentialsIfNeeded()
 
         // 3. Forward to lancerd (live SSH channel → backend relay → SSH-drain queue).
-        await forwardDecisionOnly(approvalID: approvalID, decision: decision, editedToolInput: nil)
+        await forwardDecisionOnly(approvalID: approvalID, decision: decision, editedToolInput: nil, contentHash: contentHash)
     }
 
     /// Forward a decision the caller has ALREADY persisted + audited. Tries the
@@ -196,7 +202,8 @@ public final class ApprovalRelay {
     public func forwardDecisionOnly(
         approvalID: String,
         decision: Approval.Decision,
-        editedToolInput: String?
+        editedToolInput: String?,
+        contentHash: String? = nil
     ) async {
         deliveryTracker.recordPost(approvalID: approvalID, decision: decision)
         Self.logger.info("forwardDecisionOnly: approvalID=\(approvalID, privacy: .public) decision=\(decision.rawValue, privacy: .public) registeredOrigins=[\(self.approvalMachineMap.keys.joined(separator: ","), privacy: .public)] bridges=\(self.relayBridges.count, privacy: .public)")
@@ -212,7 +219,8 @@ public final class ApprovalRelay {
                 if await bridge.sendDecision(
                     approvalID: approvalID,
                     decision: DaemonChannel.decisionWireValue(for: decision),
-                    editedToolInput: editedToolInput
+                    editedToolInput: editedToolInput,
+                    contentHash: contentHash
                 ) {
                     Self.logger.info("forwardDecisionOnly: bridge DELIVERED approvalID=\(approvalID, privacy: .public) to machine=\(originMachineID.uuidString, privacy: .public)")
                     approvalMachineMap.removeValue(forKey: originKey)
@@ -230,7 +238,7 @@ public final class ApprovalRelay {
         // 2. Fall back to live SSH channel
         if let ch = channel {
             do {
-                try await ch.respond(approvalId: approvalID, decision: decision, editedToolInput: editedToolInput)
+                try await ch.respond(approvalId: approvalID, decision: decision, editedToolInput: editedToolInput, contentHash: contentHash)
                 deliveryTracker.recordAcknowledgement(approvalID: approvalID)
                 return
             } catch {
@@ -242,7 +250,7 @@ public final class ApprovalRelay {
 
         // 3. Try backend relay (hydrate credentials if still empty from cold launch)
         await hydrateCredentialsIfNeeded()
-        let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput)
+        let delivered = await postDecisionToBackend(approvalID: approvalID, decision: decision, editedToolInput: editedToolInput, contentHash: contentHash)
         if delivered {
             deliveryTracker.recordAcknowledgement(approvalID: approvalID)
         } else {
@@ -256,7 +264,8 @@ public final class ApprovalRelay {
                 approvalID: approvalID,
                 decision: decision,
                 editedToolInput: editedToolInput,
-                machineID: originTag
+                machineID: originTag,
+                contentHash: contentHash
             ))
         }
     }
@@ -271,12 +280,13 @@ public final class ApprovalRelay {
         let toRetry = queue.filter { $0.machineID == machineID }
         guard !toRetry.isEmpty else { return }
         queue.removeAll { $0.machineID == machineID }
-        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
+        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?, contentHash: String?)] = []
         for item in toRetry {
             let ok = await bridge.sendDecision(
                 approvalID: item.approvalID,
                 decision: DaemonChannel.decisionWireValue(for: item.decision),
-                editedToolInput: item.editedToolInput
+                editedToolInput: item.editedToolInput,
+                contentHash: item.contentHash
             )
             if ok {
                 approvalMachineMap.removeValue(forKey: Self.normalizeApprovalID(item.approvalID))
@@ -323,7 +333,8 @@ public final class ApprovalRelay {
         approvalID: String,
         decision: Approval.Decision,
         sessionID: String,
-        editedToolInput: String?
+        editedToolInput: String?,
+        contentHash: String? = nil
     ) -> Data {
         var obj: [String: Any] = [
             "approvalId": approvalID,
@@ -331,6 +342,7 @@ public final class ApprovalRelay {
             "sessionId": sessionID,
         ]
         if let edited = editedToolInput, !edited.isEmpty { obj["editedToolInput"] = edited }
+        if let contentHash, !contentHash.isEmpty { obj["contentHash"] = contentHash }
         return (try? JSONSerialization.data(withJSONObject: obj)) ?? Data()
     }
 
@@ -388,7 +400,7 @@ public final class ApprovalRelay {
     /// SSH re-delivery. Fail-safe: a missing token or any non-2xx / transport
     /// error returns `false` (never assume the gate was resolved).
     @discardableResult
-    private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?) async -> Bool {
+    private func postDecisionToBackend(approvalID: String, decision: Approval.Decision, editedToolInput: String?, contentHash: String? = nil) async -> Bool {
         guard !backendURL.isEmpty, !sessionID.isEmpty,
               let url = URL(string: backendURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/approval/decision")
         else {
@@ -408,7 +420,7 @@ public final class ApprovalRelay {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(relayToken)", forHTTPHeaderField: "Authorization")
         req.httpBody = Self.backendDecisionBody(
-            approvalID: approvalID, decision: decision, sessionID: sessionID, editedToolInput: editedToolInput
+            approvalID: approvalID, decision: decision, sessionID: sessionID, editedToolInput: editedToolInput, contentHash: contentHash
         )
         do {
             let (_, resp) = try await URLSession.shared.data(for: req)
@@ -431,10 +443,10 @@ public final class ApprovalRelay {
         queue.removeAll()
         // Re-queue anything the (possibly still-stale) channel couldn't deliver,
         // so we don't lose a decision by clearing it before it's confirmed sent.
-        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?)] = []
+        var stillPending: [(approvalID: String, decision: Approval.Decision, editedToolInput: String?, machineID: RelayMachineID?, contentHash: String?)] = []
         for item in pending {
             do {
-                try await ch.respond(approvalId: item.approvalID, decision: item.decision, editedToolInput: item.editedToolInput)
+                try await ch.respond(approvalId: item.approvalID, decision: item.decision, editedToolInput: item.editedToolInput, contentHash: item.contentHash)
                 deliveryTracker.recordAcknowledgement(approvalID: item.approvalID)
             } catch {
                 stillPending.append(item)

@@ -235,4 +235,65 @@ struct FleetStoreTests {
         #expect(store.attentionItems.isEmpty)
     }
 }
+
+/// Content-hash binding (WWDC26 security audit): `InboxViewModel.decide` must
+/// echo the resolved approval's `contentHash` back through `decisionSink` so
+/// every phone-side decide path can forward it to lancerd's
+/// `approvalStore.resolve`, which rejects a decision whose hash doesn't match.
+/// Without this, every real approval a user taps on device would be denied.
+@Suite("InboxViewModel — decisionSink content-hash threading")
+@MainActor
+struct InboxViewModelContentHashTests {
+
+    @Test("decide passes the approval's contentHash through decisionSink")
+    func decidePassesContentHash() throws {
+        let hash = Approval.computeContentHash(command: "rm -rf build", patch: nil, cwd: "/repo", toolInput: nil)
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "rm -rf build",
+            cwd: "/repo",
+            risk: .high,
+            contentHash: hash
+        )
+        let vm = InboxViewModel(approvals: [approval])
+
+        var captured: (ApprovalID, Approval.Decision, String?, String?)?
+        vm.decisionSink = { id, decision, editedToolInput, contentHash in
+            captured = (id, decision, editedToolInput, contentHash)
+        }
+
+        vm.decide(approval.id, decision: .approved)
+
+        let (id, decision, editedToolInput, contentHash) = try #require(captured)
+        #expect(id == approval.id)
+        #expect(decision == .approved)
+        #expect(editedToolInput == nil)
+        #expect(contentHash == hash)
+    }
+
+    @Test("decide passes nil contentHash when the approval never carried one")
+    func decidePassesNilContentHashWhenAbsent() {
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .codex,
+            kind: .command,
+            command: "ls",
+            cwd: "/tmp",
+            risk: .low
+        )
+        let vm = InboxViewModel(approvals: [approval])
+
+        var capturedHash: String??
+        vm.decisionSink = { _, _, _, contentHash in
+            capturedHash = contentHash
+        }
+
+        vm.decide(approval.id, decision: .rejected)
+
+        #expect(capturedHash != nil, "decisionSink must fire")
+        #expect((capturedHash ?? nil) == nil)
+    }
+}
 #endif

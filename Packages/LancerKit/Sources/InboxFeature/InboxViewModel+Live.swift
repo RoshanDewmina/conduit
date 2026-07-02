@@ -8,13 +8,15 @@ import NotificationsKit
 @MainActor @Observable
 public final class LiveInboxViewModel: InboxViewModel {
     private let repository: ApprovalRepository
-    private let onDecision: (@Sendable (ApprovalID, Approval.Decision, String?) async -> Void)?
+    /// The 4th param is the resolved approval's `contentHash` (nil if the row
+    /// never carried one) — see `InboxViewModel.decisionSink`'s doc comment.
+    private let onDecision: (@Sendable (ApprovalID, Approval.Decision, String?, String?) async -> Void)?
     private let onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)?
     @ObservationIgnored nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,
-        onDecision: (@Sendable (ApprovalID, Approval.Decision, String?) async -> Void)? = nil,
+        onDecision: (@Sendable (ApprovalID, Approval.Decision, String?, String?) async -> Void)? = nil,
         onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)? = nil
     ) {
         self.repository = repository
@@ -51,9 +53,11 @@ public final class LiveInboxViewModel: InboxViewModel {
         // First-decision-wins: ignore a tap on an already-resolved gate (stale
         // row still visible, or a double-tap) so we never flip a decided
         // approval or double-send to lancerd.
-        if let existing = approvals.first(where: { $0.id == id }), !existing.isPending {
+        let existing = approvals.first(where: { $0.id == id })
+        if let existing, !existing.isPending {
             return
         }
+        let contentHash = existing?.contentHash
         super.decide(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
         Task {
             // The DB UPDATE is guarded on `decision IS NULL`; only forward to the
@@ -63,7 +67,7 @@ public final class LiveInboxViewModel: InboxViewModel {
             let changed = (try? await repository.decide(id: id, decision: decision)) ?? false
             guard changed else { return }
             Notifications.shared.clearDeliveredApproval(id: id.uuidString)
-            await onDecision?(id, decision, editedToolInput)
+            await onDecision?(id, decision, editedToolInput, contentHash)
         }
     }
 

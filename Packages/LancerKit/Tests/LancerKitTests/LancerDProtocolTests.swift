@@ -19,6 +19,33 @@ struct LancerDProtocolTests {
         }
     }
 
+    @Test("approval pending decode carries the daemon's contentHash")
+    func approvalPendingDecodeContentHash() throws {
+        let json = """
+        {"jsonrpc":"2.0","method":"agent.approval.pending","params":{"id":"00000000-0000-0000-0000-000000000001","agent":"claudeCode","kind":"command","command":"rm -rf /","cwd":"/home/user","risk":3,"contentHash":"c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3"}}
+        """.data(using: .utf8)!
+        let event = DaemonEvent.decode(from: json)
+        if case .approvalPending(let p) = event {
+            #expect(p.contentHash == "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3")
+            #expect(p.approvalContentHash == p.contentHash)
+        } else {
+            Issue.record("Expected .approvalPending")
+        }
+    }
+
+    @Test("approval pending decode tolerates a missing contentHash (legacy daemon)")
+    func approvalPendingDecodeMissingContentHash() throws {
+        let json = """
+        {"jsonrpc":"2.0","method":"agent.approval.pending","params":{"id":"00000000-0000-0000-0000-000000000001","agent":"claudeCode","kind":"command","command":"rm -rf /","cwd":"/home/user","risk":3}}
+        """.data(using: .utf8)!
+        let event = DaemonEvent.decode(from: json)
+        if case .approvalPending(let p) = event {
+            #expect(p.contentHash == nil)
+        } else {
+            Issue.record("Expected .approvalPending")
+        }
+    }
+
     @Test("unknown method returns unknown event")
     func unknownMethod() {
         let json = """
