@@ -313,17 +313,28 @@ func (c *e2eRelayClient) keepaliveLoop() {
 }
 
 func (c *e2eRelayClient) sendMessage(msgType string, payload []byte) error {
+	// The whole seq-assign → wrap → encrypt → send sequence must be one
+	// critical section. Splitting it (assign seq under one lock, send under a
+	// second one later) let two concurrent sends race: whichever finished
+	// encryption first won the wire, regardless of which got the lower
+	// sequence number — an out-of-order arrival the phone's replaySequencer
+	// then silently rejects (its accept() requires strictly increasing), which
+	// is exactly what broke chat/dispatch output streaming (many rapid
+	// agentRunOutput sends from concurrent callback contexts) while the
+	// single-message approval-decision path never exercised the race.
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	conn := c.conn
 	key := c.sessionKey
 	paired := c.paired
-	seq := c.sendSeq
-	c.sendSeq++
-	c.mu.Unlock()
 
 	if conn == nil || !paired || key == nil {
 		return fmt.Errorf("e2e: not connected or paired")
 	}
+
+	seq := c.sendSeq
+	c.sendSeq++
 
 	wrapped, err := wrapSeq(seq, payload)
 	if err != nil {
@@ -348,9 +359,7 @@ func (c *e2eRelayClient) sendMessage(msgType string, payload []byte) error {
 
 	msgData, _ := json.Marshal(msg)
 
-	c.mu.Lock()
 	err = websocket.Message.Send(c.conn, string(msgData))
-	c.mu.Unlock()
 
 	return err
 }
