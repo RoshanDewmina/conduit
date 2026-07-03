@@ -424,6 +424,56 @@ public actor ChatConversationRepository {
         }
     }
 
+    /// Ledger-backed conversations (`syncState != .localOnly`) whose metadata
+    /// has changed since it was last pushed to CloudKit — i.e. never
+    /// uploaded, or `updated_at` has moved past `cloud_modified_at`.
+    /// `ConversationSyncEngine` (Task 8) drives its push cycle from this.
+    public func conversationsNeedingCloudPush() async throws -> [ChatConversation] {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM chat_conversations
+                WHERE sync_state != 'localOnly'
+                  AND (cloud_uploaded_at IS NULL OR cloud_modified_at IS NULL OR updated_at > cloud_modified_at)
+                ORDER BY updated_at ASC
+            """)
+            return rows.compactMap(Self.decodeConversation)
+        }
+    }
+
+    /// Finished turns (never `running` — a turn's transcript isn't final
+    /// until then) that have no CloudKit record yet. Turn chunks are
+    /// immutable once uploaded, so this only ever returns each turn once.
+    public func turnsNeedingCloudPush(conversationID: String) async throws -> [ChatTurn] {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM chat_turns
+                WHERE conversation_id = ? AND cloud_record_name IS NULL AND status != 'running'
+                ORDER BY ordinal ASC
+            """, arguments: [conversationID])
+            return rows.compactMap(Self.decodeTurn)
+        }
+    }
+
+    /// Records that a turn's immutable event-chunk record has been pushed to
+    /// CloudKit, so it is never re-uploaded by a later push cycle.
+    public func markTurnCloudUploaded(turnID: String, recordName: String) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: "UPDATE chat_turns SET cloud_record_name = ? WHERE id = ?", arguments: [recordName, turnID])
+        }
+    }
+
+    /// Applies a CloudKit-side deletion of a conversation's metadata record
+    /// (e.g. removed via the CloudKit dashboard) as a local archive rather
+    /// than a hard delete, so any already-mirrored turns/events are kept.
+    public func applyCloudArchive(conversationID: String) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                UPDATE chat_conversations SET status = 'archived', archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)
+                WHERE id = ?
+            """, arguments: [conversationID])
+        }
+    }
+
     // MARK: - Drafts (offline sends — never auto-sent, see ChatDraft's doc comment)
 
     public func saveDraft(conversationID: String, text: String) async throws {

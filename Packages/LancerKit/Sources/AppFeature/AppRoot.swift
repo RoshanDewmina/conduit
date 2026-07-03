@@ -31,6 +31,10 @@ public final class AppEnvironment {
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
+    /// CloudKit private-database mirror for the conversation ledger's
+    /// already host-confirmed rows (Task 8) — separate zone and cadence
+    /// from `syncEngine`'s Hosts/Snippets sync; see `ConversationSyncEngine`.
+    public let conversationSyncEngine: ConversationSyncEngine
     public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
@@ -68,6 +72,10 @@ public final class AppEnvironment {
             snippetRepo: SnippetRepository(db: database),
             tombstoneRepo: SyncTombstoneRepository(database),
             keyStore: ks
+        )
+        self.conversationSyncEngine = ConversationSyncEngine(
+            cloudSync: cloudSync,
+            chatRepo: chatRepo
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
@@ -678,6 +686,7 @@ public struct AppRoot: View {
                 )
             }
             await env.syncEngine.start()
+            await env.conversationSyncEngine.start()
         }
         .task {
 #if DEBUG
@@ -1591,6 +1600,7 @@ public struct AppRoot: View {
         SettingsWithLibraryView(
             viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
             syncEngine: env.syncEngine,
+            conversationSyncEngine: env.conversationSyncEngine,
             backendURL: Self.pushBackendURL(),
             auditRepository: env.auditRepo,
             approvalRepository: approvalRepository,
@@ -2496,6 +2506,7 @@ private struct MachineConnectionChooser: View {
 private struct SettingsWithLibraryView: View {
     let viewModel: SettingsViewModel
     let syncEngine: SyncEngine?
+    var conversationSyncEngine: ConversationSyncEngine? = nil
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
@@ -2521,6 +2532,7 @@ private struct SettingsWithLibraryView: View {
         SettingsView(
             viewModel: viewModel,
             syncEngine: syncEngine,
+            conversationSyncEngine: conversationSyncEngine,
             backendURL: backendURL,
             auditRepository: auditRepository,
             approvalRepository: approvalRepository,

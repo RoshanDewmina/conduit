@@ -456,6 +456,65 @@ struct ChatConversationRepositoryTests {
         #expect(read?.cloudUploadedAt != nil)
     }
 
+    @Test("conversationsNeedingCloudPush excludes localOnly and already-current rows")
+    func mirrorConversationsNeedingCloudPush() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+
+        let legacy = ChatConversation(id: "conv-legacy", title: "Legacy", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(legacy, lastHostSeq: 0, syncState: .localOnly)
+
+        let neverPushed = ChatConversation(id: "conv-new", title: "New", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(neverPushed, lastHostSeq: 1, syncState: .synced)
+
+        let upToDate = ChatConversation(id: "conv-current", title: "Current", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(upToDate, lastHostSeq: 1, syncState: .synced)
+        try await repo.markCloudUploaded(conversationID: "conv-current", recordName: "ck-current", modifiedAt: Date().addingTimeInterval(3600))
+
+        let candidates = try await repo.conversationsNeedingCloudPush()
+        #expect(candidates.map(\.id) == ["conv-new"])
+    }
+
+    @Test("turnsNeedingCloudPush only returns finished, not-yet-uploaded turns")
+    func mirrorTurnsNeedingCloudPush() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp")
+
+        let running = try await repo.appendTurn(conversationID: conv.id, prompt: "still going", runID: "run-running")
+        let finished = try await repo.appendTurn(conversationID: conv.id, prompt: "done", runID: "run-done")
+        try await repo.updateTurnOutput(runID: "run-done", assistantText: "ok", status: .completed)
+        let alreadyUploaded = try await repo.appendTurn(conversationID: conv.id, prompt: "uploaded", runID: "run-uploaded")
+        try await repo.updateTurnOutput(runID: "run-uploaded", assistantText: "ok", status: .completed)
+        try await repo.markTurnCloudUploaded(turnID: alreadyUploaded.id, recordName: "ck-turn-1")
+
+        let candidates = try await repo.turnsNeedingCloudPush(conversationID: conv.id)
+        #expect(candidates.map(\.id) == [finished.id])
+        _ = running
+    }
+
+    @Test("markTurnCloudUploaded persists the CloudKit record name")
+    func mirrorMarksTurnCloudUploaded() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp")
+        let turn = try await repo.appendTurn(conversationID: conv.id, prompt: "hi", runID: "run-1")
+        try await repo.markTurnCloudUploaded(turnID: turn.id, recordName: "ck-turn-9")
+        let turns = try await repo.turns(conversationID: conv.id)
+        #expect(turns.first?.cloudRecordName == "ck-turn-9")
+    }
+
+    @Test("applyCloudArchive marks a conversation archived without clobbering an existing archivedAt")
+    func mirrorAppliesCloudArchive() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp")
+        try await repo.applyCloudArchive(conversationID: conv.id)
+        let read = try await repo.conversation(id: conv.id)
+        #expect(read?.status == .archived)
+        #expect(read?.archivedAt != nil)
+    }
+
     @Test("saveDraft / localDraft / clearDraft round-trip a single draft per conversation")
     func mirrorDraftLifecycle() async throws {
         let db = try AppDatabase.inMemory()
