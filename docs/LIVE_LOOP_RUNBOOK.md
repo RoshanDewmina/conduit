@@ -279,9 +279,10 @@ own machine, and completes one approve-from-lock-screen loop (Phase 5c) end-to-e
 Prereqs: Phase 1 build, Phase 2 daemon up, both devices paired to the same host (relay or SSH).
 
 1. **Start on A, appears on B.** New Chat on device A, send a prompt, let it complete. On device B, open
-   the sidebar's Recent list (pull to refresh, or background/foreground B to trigger `ConversationSyncEngine.syncNow()`
-   — there's no `CKDatabaseSubscription` push yet, see §11.2 "Known gaps") and confirm the conversation and its
-   turns appear.
+   the sidebar's Recent list (pull to refresh, background/foreground B to trigger
+   `ConversationSyncEngine.syncNow()`, or wait for the best-effort `CKDatabaseSubscription` silent-push
+   path) and confirm the conversation and its turns appear. Silent-push delivery is not yet hardware-proven,
+   so capture whether the update arrived automatically or required a manual refresh.
 2. **Follow-up from B while host is online.** From B, open that same thread and send a follow-up. Confirm
    it dispatches through the host (not a local-only echo) and streams a real reply.
 3. **Kill + reinstall A.** Force-quit and delete the app on A, reinstall, sign back into the same
@@ -316,7 +317,7 @@ green from a simulator-only run, same rule as APNs (Phase 5c).
 | **D.** Everything holds (exit 1) | fail-closed: daemon unreachable | socket present? launchd loaded? |
 | **E.** No push on device | APNs env not set / token not registered / sessionId mismatch | `push-backend` secrets (5a); `registerDeviceToken` actually called; backend token map keyed by the same `sessionId`. |
 | **F.** `continue` errors for a vendor | argv/flag drift | `continueArgv` in `dispatch.go`; re-run `which`/`--version`/`--help`; `vendor-cli-adapter-audit`. |
-| **G.** A conversation started on device A never appears on device B | no `CKDatabaseSubscription` yet — B only pulls on foreground/`syncNow()` (§11.2 "Known gaps"); or B isn't signed into the same iCloud account | force a foreground/pull-to-refresh on B; confirm both devices' iCloud account; `ConversationSyncEngine.syncNow()` / `SyncStatusView`'s "Sync now". |
+| **G.** A conversation started on device A never appears on device B | silent-push delivery for the `CKDatabaseSubscription` is not hardware-proven yet; B may still need foreground/`syncNow()`; or B isn't signed into the same iCloud account | force a foreground/pull-to-refresh on B; confirm both devices' iCloud account; `ConversationSyncEngine.syncNow()` / `SyncStatusView`'s "Sync now"; collect device console logs for CloudKit notification routing. |
 | **H.** Concurrent sends from two devices both appear to succeed instead of one conflicting | `baseSeq` compare didn't run, or the coordinator swallowed the conflict response | `conversationsAppend` in `conversation_rpc.go` (status must be `"conflict"` on stale `baseSeq`); `ConversationSyncCoordinator`'s `case "conflict"` handling. |
 
 ---

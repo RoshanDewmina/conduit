@@ -2,6 +2,7 @@ import Foundation
 import LancerCore
 import PersistenceKit
 import NotificationsKit
+import os
 
 #if os(iOS)
 import CloudKit
@@ -19,6 +20,8 @@ import CloudKit
 /// restore conversation history from iCloud before it next talks to a host.
 /// It never originates a turn or drives dispatch.
 public actor ConversationSyncEngine {
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "ConversationSyncEngine")
+
     public static let zoneName = "LancerConversations"
     /// Stable across launches/upserts — `CKModifySubscriptionsOperation` treats a
     /// re-save of the same ID as an update, and the AppDelegate-delivered
@@ -52,7 +55,10 @@ public actor ConversationSyncEngine {
     /// notifications, matching `SyncEngine.start()`.
     public func start() async {
         let status = try? await cloudSync.accountStatus()
-        guard status == .available else { return }
+        guard status == .available else {
+            Self.logger.info("start: CloudKit account not available (status=\(String(describing: status), privacy: .public)) — engine idle")
+            return
+        }
 
         await performSync()
         // Best-effort: a build without the full CloudKit entitlement (or a
@@ -60,7 +66,12 @@ public actor ConversationSyncEngine {
         // record read/write still works. Don't let that block startup — it
         // just means this device falls back to foreground/pull-to-refresh
         // sync, the pre-existing behavior.
-        try? await cloudSync.ensureDatabaseSubscriptionExists(subscriptionID: Self.backgroundSubscriptionID)
+        do {
+            try await cloudSync.ensureDatabaseSubscriptionExists(subscriptionID: Self.backgroundSubscriptionID)
+            Self.logger.info("start: background subscription registered (id=\(Self.backgroundSubscriptionID, privacy: .public))")
+        } catch {
+            Self.logger.error("start: background subscription registration failed: \(error.localizedDescription, privacy: .public) — falling back to foreground/pull-to-refresh sync")
+        }
 
         #if os(iOS)
         notificationTask = Task { [weak self] in
@@ -99,7 +110,11 @@ public actor ConversationSyncEngine {
     /// strict concurrency's region-isolation check.
     @discardableResult
     public func handleRemoteNotification(subscriptionID: String?) async -> Bool {
-        guard subscriptionID == Self.backgroundSubscriptionID else { return false }
+        guard subscriptionID == Self.backgroundSubscriptionID else {
+            Self.logger.info("handleRemoteNotification: ignoring notification for unrelated subscription=\(subscriptionID ?? "nil", privacy: .public)")
+            return false
+        }
+        Self.logger.info("handleRemoteNotification: silent push received for our subscription — triggering sync")
         await performSync()
         return true
     }
@@ -113,17 +128,23 @@ public actor ConversationSyncEngine {
     // MARK: - Core sync cycle
 
     private func performSync() async {
-        guard !isSyncing else { return }
+        guard !isSyncing else {
+            Self.logger.info("performSync: skipped, a cycle is already in flight")
+            return
+        }
         isSyncing = true
         defer { isSyncing = false }
+        Self.logger.info("performSync: cycle starting")
         do {
             try await cloudSync.ensureZoneExists(zoneName: Self.zoneName)
             try await pull()
             try await push()
             lastSyncDate = .now
             syncError = nil
+            Self.logger.info("performSync: cycle completed")
         } catch {
             syncError = error.localizedDescription
+            Self.logger.error("performSync: cycle failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -156,6 +177,7 @@ public actor ConversationSyncEngine {
         if let newToken {
             defaults.set(newToken, forKey: Self.changeTokenDefaultsKey)
         }
+        Self.logger.info("pull: merged \(records.count, privacy: .public) record(s), archived \(deletedNames.count, privacy: .public) deletion(s)")
     }
 
     private func mergeConversation(_ wrapper: CKRecordWrapper) async throws {
@@ -197,6 +219,7 @@ public actor ConversationSyncEngine {
 
     private func push() async throws {
         let candidates = try await chatRepo.conversationsNeedingCloudPush()
+        Self.logger.info("push: \(candidates.count, privacy: .public) conversation(s) needing upload")
         for conversation in candidates {
             try await pushConversation(conversation)
             try await pushTurns(conversationID: conversation.id)

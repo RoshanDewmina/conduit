@@ -108,6 +108,12 @@ public final class E2ERelayClient: ObservableObject {
         self.keyPair = PairingCrypto.generateKeyPair()
     }
 
+    private static func isValidPairingCode(_ code: String) -> Bool {
+        code.utf8.count == 6 && code.utf8.allSatisfy { byte in
+            byte >= 48 && byte <= 57
+        }
+    }
+
     /// The phone's current ephemeral public key (Base64URL). This is the key the
     /// relay forwards to the daemon as `peerPublicKey`; it must be the same key
     /// encoded into the QR the daemon scans, so callers should read this *after*
@@ -165,7 +171,8 @@ public final class E2ERelayClient: ObservableObject {
 
     private static let kcService = "dev.lancer.relay"
 
-    private static func keychainWrite(_ data: Data, account: String) {
+    @discardableResult
+    private static func keychainWrite(_ data: Data, account: String) -> Bool {
         _ = SecItemDelete([
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: kcService,
@@ -182,7 +189,9 @@ public final class E2ERelayClient: ObservableObject {
         let status = SecItemAdd(attrs as CFDictionary, nil)
         if status != errSecSuccess {
             logger.error("keychainWrite failed: OSStatus \(status, privacy: .public)")
+            return false
         }
+        return true
     }
 
     private static func keychainRead(account: String) -> Data? {
@@ -194,8 +203,33 @@ public final class E2ERelayClient: ObservableObject {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ] as CFDictionary, &result)
-        guard status == errSecSuccess else { return nil }
+        guard status == errSecSuccess else {
+            // -25300 = errSecItemNotFound (item truly absent), -25308 =
+            // errSecInteractionNotAllowed (device locked, WhenUnlocked class
+            // key unavailable), -34018 = missing entitlement. The three have
+            // completely different fixes — never conflate them.
+            logger.error("keychainRead(\(account, privacy: .public)) failed: OSStatus \(status, privacy: .public)")
+            print("[E2ERelayClient] keychainRead(\(account)) failed: OSStatus \(status)")
+            return nil
+        }
         return result as? Data
+    }
+
+    /// Diagnostic: every account stored under this app's relay Keychain
+    /// service, so an incomplete-pairing state can show whether the private
+    /// key exists under a DIFFERENT account (stale machineID) or not at all.
+    private static func keychainListAccounts() -> [String] {
+        var result: AnyObject?
+        let status = SecItemCopyMatching([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: kcService,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ] as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            return ["<list failed: OSStatus \(status)>"]
+        }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
     }
 
     private static func keychainDelete(account: String) {
@@ -235,15 +269,27 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     /// Writes this instance's pairing code, relay URL, and private key under
-    /// `self.machineID`-namespaced keys.
+    /// `self.machineID`-namespaced keys. All-or-nothing: the private key
+    /// (Keychain) is written FIRST, and the code/URL (UserDefaults) only if it
+    /// succeeded — a key-write failure with the code/URL left behind produces
+    /// a machine that hydrates but can never reconnect (seen live on-device
+    /// 2026-07-03: code+URL present, key absent, permanent reconnect loop).
     public func persistPairing() {
+        guard Self.isValidPairingCode(pairingCode) else {
+            Self.logger.error("persistPairing: invalid pairing code shape for machine=\(self.machineID.uuidString, privacy: .public) — NOT persisting pairing")
+            return
+        }
+        guard Self.keychainWrite(keyPair.privateKey.rawRepresentation, account: Self.kcMachinePrivKeyAccount(machineID)) else {
+            Self.logger.error("persistPairing: private-key Keychain write failed for machine=\(self.machineID.uuidString, privacy: .public) — NOT persisting code/URL; pairing will not survive relaunch")
+            return
+        }
         UserDefaults.standard.set(pairingCode, forKey: Self.udMachineCodeKey(machineID))
         UserDefaults.standard.set(relayURL.absoluteString, forKey: Self.udMachineURLKey(machineID))
-        Self.keychainWrite(keyPair.privateKey.rawRepresentation, account: Self.kcMachinePrivKeyAccount(machineID))
     }
 
     public static func hasStoredPairing(machineID: RelayMachineID) -> Bool {
-        UserDefaults.standard.string(forKey: udMachineCodeKey(machineID)) != nil
+        guard let code = UserDefaults.standard.string(forKey: udMachineCodeKey(machineID)) else { return false }
+        return isValidPairingCode(code)
     }
 
     public static func storedPairingCode(machineID: RelayMachineID) -> String? {
@@ -274,26 +320,64 @@ public final class E2ERelayClient: ObservableObject {
     /// identical `() -> Void` signature — Swift can't disambiguate two
     /// methods that differ only in body, and the singular method must stay
     /// until the later lane that rewires `AppRoot.swift` deletes it.
-    public func restoreNamespacedStoredPairing() {
-        guard let code = Self.storedPairingCode(machineID: machineID),
-              let privKeyBase64 = Self.storedPairingPrivKey(machineID: machineID),
-              let relayURLString = Self.storedRelayURL(machineID: machineID)
-        else { return }
+    /// Returns true only when ALL THREE pieces (code, private key, relay URL)
+    /// were present and valid — the only state in which `connect()` can ever
+    /// succeed. Callers MUST gate `connect()` on this: the three pieces have
+    /// historically diverged on real devices (the machines index + private
+    /// keys live in the Keychain and survive an app uninstall; the code + URL
+    /// live in UserDefaults and don't — and a Keychain write can fail while
+    /// the UserDefaults writes stick). Dialing after a partial restore sent an
+    /// EMPTY pairing code and a freshly generated keypair to the relay, which
+    /// 400-rejected it in an infinite reconnect loop the UI showed as a
+    /// permanently disconnected machine (found live on-device 2026-07-03).
+    @discardableResult
+    public func restoreNamespacedStoredPairing() -> Bool {
+        let storedCode = Self.storedPairingCode(machineID: machineID)
+        let storedKey = Self.storedPairingPrivKey(machineID: machineID)
+        let storedURL = Self.storedRelayURL(machineID: machineID)
+        guard let code = storedCode, let privKeyBase64 = storedKey, let relayURLString = storedURL
+        else {
+            let detail = "code=\(storedCode != nil) privKey=\(storedKey != nil) url=\(storedURL != nil)"
+            Self.logger.error("restoreNamespacedStoredPairing: INCOMPLETE stored pairing for machine=\(self.machineID.uuidString, privacy: .public) — \(detail, privacy: .public); re-pair required")
+            print("[E2ERelayClient] INCOMPLETE stored pairing machine=\(machineID.uuidString) \(detail) keychainAccounts=\(Self.keychainListAccounts())")
+            return false
+        }
+
+        guard Self.isValidPairingCode(code) else {
+            Self.logger.error("restoreNamespacedStoredPairing: invalid stored pairing code shape for machine=\(self.machineID.uuidString, privacy: .public); re-pair required")
+            print("[E2ERelayClient] INVALID stored pairing code shape machine=\(machineID.uuidString); re-pair required")
+            return false
+        }
 
         guard let privKeyData = try? Base64URL.decode(privKeyBase64),
               let privateKey = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: privKeyData)
         else {
             Self.logger.error("restoreNamespacedStoredPairing: failed to decode stored private key")
-            return
+            print("[E2ERelayClient] stored private key UNDECODABLE machine=\(machineID.uuidString); re-pair required")
+            return false
+        }
+
+        guard let restoredURL = URL(string: relayURLString) else {
+            Self.logger.error("restoreNamespacedStoredPairing: invalid stored relay URL for machine=\(self.machineID.uuidString, privacy: .public); re-pair required")
+            return false
         }
 
         self.pairingCode = code
         self.keyPair = PairingCrypto.KeyPair(privateKey: privateKey)
-        self.relayURL = URL(string: relayURLString) ?? self.relayURL
+        self.relayURL = restoredURL
         Self.logger.info("restoreNamespacedStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
+        return true
     }
 
     public func connect() {
+        // The relay hard-rejects (HTTP 400) any dial without a code, and the
+        // client would just retry-loop on it forever. An empty code here means
+        // a caller skipped the pairing/restore flow — fail loudly instead.
+        guard Self.isValidPairingCode(pairingCode) else {
+            Self.logger.error("connect() refused: invalid pairing code shape (machine=\(self.machineID.uuidString, privacy: .public)) — pair or restore first")
+            print("[E2ERelayClient] connect() REFUSED: invalid pairing code shape machine=\(machineID.uuidString)")
+            return
+        }
         Self.logger.info("connect() called, relayHost=\(self.relayURL.host ?? "", privacy: .public) code=\(self.pairingCode, privacy: .private)")
         // Idempotent: tear down any prior connection BEFORE starting a new one.
         // Without this, a second connect() (e.g. a launch-time restore reconnect

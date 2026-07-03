@@ -313,12 +313,39 @@ are now archived under `docs/_archive/`.
   `bridge.$isActive` and re-assigns `machines[i] = machines[i]` through the `@Observable`-synthesized
   setter on each emission — bridging the Combine publisher into `Observation` tracking, the standard
   pattern for this. `remove()` tears the subscription down. Builds clean, full 551-test suite green.
-  **NOT confirmed to resolve the symptom**: rebuilt and reinstalled to a real physical device twice
-  (once with an ~1hr gap before rechecking) and the dot was still orange both times. Either the fix
-  is necessary-but-not-sufficient (a second bug exists in the reconnect/pairing-restore path), or the
-  underlying `bridge.isActive` was genuinely, correctly `false` at those moments for a reason
-  unrelated to UI staleness (e.g. the relay pairing needing a fuller re-establish after a fresh
-  reinstall than was observed) — not distinguished due to no device console log access this session.
-  Full writeup: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md` Part 7. Blocks
-  live verification of the Observed-Session-import flow (that report's Part 6) since
-  `observedSessionsBlock` only renders for a host the UI considers live.
+  **RESOLVED 2026-07-03 (second bug found + fixed, root cause proven on-device):** the Observable
+  fix above was real but orthogonal. Device console (`devicectl launch --console` + added
+  diagnostics) showed the indexed machine's Keychain **private key is genuinely absent**
+  (`SecItemCopyMatching` → OSStatus **-25300** `errSecItemNotFound`; four *orphaned* privKeys for
+  other machineIDs still present) while its UserDefaults code + relay URL survive. The old code
+  compounded that corrupt state: `restoreNamespacedStoredPairing()` silently no-op'd on its
+  all-three guard (never applying the stored code), but `hydrateRelayFleetStore` gated `connect()`
+  on `hasStoredPairing` — which checks **only the UserDefaults code** — so the client dialed the
+  relay with an **empty pairing code and a freshly generated keypair**. Cloud Run logs confirmed
+  the loop: `GET /ws/relay?role=phone&code=&publicKey=<fresh-each-launch>` → HTTP 400, every few
+  seconds, forever. `pairingState` never left `.unpaired` → `bridge.isActive` correctly false →
+  permanent orange dot, regardless of the daemon's own (healthy) hourly reconnects.
+  **Fix (on `feat/cross-device-conversation-sync`):** `restoreNamespacedStoredPairing()` now
+  returns `Bool` and logs exactly which piece is missing; hydration gates `connect()` on the full
+  restore succeeding (un-restorable machines stay listed but offline instead of hammering the
+  relay); `connect()` refuses an empty pairing code outright; `persistPairing()` is now
+  all-or-nothing (Keychain key written first, code/URL only on success) so this split state can't
+  be re-created. 3 regression tests added (`E2ERelayClientRestoreTests`); full suite 554/554 green;
+  verified live on-device: fixed build logs the INCOMPLETE state and makes **zero** relay dials
+  (Cloud Run shows no new phone 400s post-fix).
+  **Re-pair completed 2026-07-03 (evening session):** owner removed machine `14FBE4E8` and
+  re-paired on the physical iPhone against a fresh build with this fix. Confirmed via
+  `lancerd.stderr.log` (`e2e: paired with phone (code: 873026)`) and the device UI directly
+  ("online · healthy", ONLINE badge, green dot on Home) — the orange-dot bug is closed on the
+  owner's real device. Composer send through the real UI over this relay connection was also
+  proven live (real dispatch + streamed reply, not a local echo) — see
+  `docs/test-runs/2026-07-03-cross-device-sync-release-gate.md` §6.
+  **Still open, follow-ups (not release-blocking):** (a) 4 orphaned
+  `lancer.relay.machine.*.privKey` Keychain items linger on that device (harmless, but a cleanup
+  sweep on hydrate would be tidy — not implemented, judged not worth the risk this session);
+  (b) no UI yet distinguishes "paired but needs re-pair" from "paired, host offline" — the log
+  does, the dot doesn't; (c) the historical writer of the corrupt state (key deleted vs.
+  `SecItemAdd` failed during pairing) was not identified — `persistPairing` atomicity + the new
+  OSStatus logging make any recurrence self-diagnosing.
+  Full investigation record: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md`
+  Part 7 (superseded by this entry's root cause).

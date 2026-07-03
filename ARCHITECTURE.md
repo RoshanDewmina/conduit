@@ -65,7 +65,7 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is exactly what's in `docs/V1_PRODUCT_SPEC.md` / `docs/V1_STATE_AND_ACTION_MATRIX.md` / `docs/V1_IMPLEMENTATION_PLAN.md` (the Codex-research → ChatGPT-synthesis → locked-spec chain): the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
-- **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior is unverified on physical hardware** and `CKDatabaseSubscription`-driven background pull is not yet implemented — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
+- **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior and `CKDatabaseSubscription` silent-push delivery remain unverified on physical hardware** — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
 - **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
 - **Governance folded into Settings** (2026-07-01, reversing the 2026-06-24 standalone-root promotion): policy presets/matrix, the audit trail, and team & roles live under Settings' "Policy & Governance" section — one entry point, not a 5th sidebar root, keeping the locked four-root IA (Home/Work/Machines/Settings) accurate.
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
@@ -891,14 +891,14 @@ nor raw terminal scrollback:
   Lancer-conversation transcripts (chat turns, tool-call/artifact
   summaries) go through the mirror above.
 
-**Known gaps (not yet closed):** `ConversationSyncEngine` only pulls on
-`start()`/explicit `syncNow()` — there is no `CKDatabaseSubscription`
-yet, so a second device only sees a fresh conversation on next
-foreground/pull-to-refresh, not on a background push. Two-device
-CloudKit behavior (start on device A, appears on device B; kill/reinstall
-A, restores from CloudKit) has not been verified on physical hardware —
-`CloudSync`/`ConversationSyncEngine` are simulator no-ops by design, so
-this is an open gate before external release; see
+**Known gaps (not yet closed):** `ConversationSyncEngine` now registers a
+best-effort `CKDatabaseSubscription` for background pull, and
+`LancerApp` routes CloudKit remote notifications into the engine, but
+actual silent-push delivery has not been observed on physical hardware.
+Two-device CloudKit behavior (start on device A, appears on device B;
+kill/reinstall A, restores from CloudKit) has not been verified on
+physical hardware — `CloudSync`/`ConversationSyncEngine` are simulator
+no-ops by design, so this is an open gate before external release; see
 `docs/LIVE_LOOP_RUNBOOK.md`.
 
 ### 11.3 Session continuity

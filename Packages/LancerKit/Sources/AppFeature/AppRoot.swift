@@ -15,6 +15,7 @@ import InboxFeature
 import OnboardingFeature
 import SettingsFeature
 import DesignSystem
+import os
 
 import SyncKit
 
@@ -1131,6 +1132,8 @@ public struct AppRoot: View {
     /// contract. Uniqueness (not the exact device-id prefix format) is what
     /// matters: it only needs to let a replayed append map back to the same
     /// turn instead of creating a duplicate.
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "AppRoot")
+
     private static func newClientTurnID() -> String {
         "\(DeviceIdentity.sessionID()):\(UUID().uuidString)"
     }
@@ -1739,7 +1742,7 @@ public struct AppRoot: View {
                     await sendObservedSessionFollowUp(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
                 },
                 onImportToLancer: vendor.isEmpty ? nil : {
-                    await importObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd)
+                    await importObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, env: env)
                 },
                 onImported: { conversationID in sidebarState.navigate(to: .thread(id: conversationID)) },
                 onBack: { sidebarState.navigate(to: .home) }
@@ -1778,16 +1781,7 @@ public struct AppRoot: View {
             onOpenMachines: { sidebarState.navigate(to: .machines) },
             onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
             onOpenObservedSession: { session in
-                sidebarState.navigate(to: .observedSession(
-                    sessionId: session.sessionId,
-                    title: session.title,
-                    // LancerHomeView's callback doesn't carry which host the session
-                    // came from (pre-existing gap, out of scope here) — first-machine
-                    // fallback, same class as the other interim limitations below.
-                    hostName: relayFleetStore.machines.first?.record.displayName ?? "Mac",
-                    vendor: session.provider,
-                    cwd: session.cwd
-                ))
+                Task { await openObservedSessionAutoImporting(session, env: env) }
             },
             onOpenWorkspace: { ref in
                 sidebarState.navigate(to: .workspace(
@@ -1883,15 +1877,69 @@ public struct AppRoot: View {
         return DispatchResult(status: "error", message: "No direct connection to this machine.")
     }
 
+    /// Tapping a session in Home's "Sessions on this Mac" list used to land on
+    /// a read-only `.observedSession` view with a separate, explicit "Import
+    /// to Lancer" action before the session became a real, continuable
+    /// conversation — two steps for what's a single decision the tap already
+    /// made. Every mainstream chat app (ChatGPT/Codex, Telegram, LINE, Manus)
+    /// treats a list tap as "open this conversation," full stop, and relies on
+    /// swipe/long-press Archive or Delete for cleanup rather than a separate
+    /// "make this real" gate — `attachObservedSession` is already idempotent
+    /// (re-tapping the same session returns the same conversation, no
+    /// duplicates) and imported conversations are ordinary `ChatConversation`
+    /// rows, archivable/deletable the same way as any other thread. So: tap
+    /// now auto-imports and opens the real thread directly. Falls back to the
+    /// old read-only view only if the import itself fails (host unreachable,
+    /// etc.) — that view can still show the transcript and the error.
+    private func openObservedSessionAutoImporting(_ session: ObservedSession, env: AppEnvironment) async {
+        let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
+        let result = await importObservedSession(vendor: session.provider, sessionId: session.sessionId, cwd: session.cwd, env: env)
+        switch result {
+        case .success(let summary):
+            sidebarState.navigate(to: .thread(id: summary.conversationId))
+        case .failure:
+            sidebarState.navigate(to: .observedSession(
+                sessionId: session.sessionId,
+                title: session.title,
+                hostName: hostName,
+                vendor: session.provider,
+                cwd: session.cwd
+            ))
+        }
+    }
+
     /// Imports an observed session's transcript into a durable, cross-device
     /// Lancer conversation via `agent.conversations.attachObservedSession`.
     /// Same transport-selection order as `sendObservedSessionFollowUp`.
-    private func importObservedSession(vendor: String, sessionId: String, cwd: String) async -> Result<ObservedSessionImportSummary, ObservedSessionImportError> {
+    ///
+    /// `attachObservedSession` creates the conversation server-side only —
+    /// unlike `startConversation`/`continueConversation`, nothing writes a
+    /// local mirror row for it. `onImported` navigates straight to
+    /// `.thread(id:)` by conversation ID, so without an explicit pull here the
+    /// thread view finds no local row and renders its "brand new empty
+    /// conversation" empty state even though the host already has the full
+    /// transcript (found live 2026-07-03: import created a real ledger row
+    /// with 87 events, but the phone showed "No activity in this work thread
+    /// yet"). Mirror the same `refreshConversation` pull `resolveTransport`
+    /// callers use elsewhere in this file — `refreshConversationMirror` can't
+    /// be reused as-is because it resolves the transport FROM an existing
+    /// local `ChatConversation` row, which is exactly what doesn't exist yet.
+    private func importObservedSession(vendor: String, sessionId: String, cwd: String, env: AppEnvironment) async -> Result<ObservedSessionImportSummary, ObservedSessionImportError> {
         let request = ConversationAttachObservedSessionRequest(provider: vendor, sessionId: sessionId, cwd: cwd)
         if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
                 ?? fleetStore.slots.first {
             do {
                 let response = try await slot.channel.attachObservedSession(request)
+                let channel = slot.channel
+                await hydrateImportedConversationMirror(
+                    conversationID: response.conversationId,
+                    transport: ConversationTransport(
+                        append: { try await channel.appendConversation($0) },
+                        fetch: { try await channel.fetchConversation($0) },
+                        archive: { try await channel.archiveConversation($0) }
+                    ),
+                    env: env
+                )
                 return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
             } catch {
                 return .failure(ObservedSessionImportError(error.localizedDescription))
@@ -1900,12 +1948,35 @@ public struct AppRoot: View {
         if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
             do {
                 let response = try await bridge.relayAttachObservedSession(request)
+                await hydrateImportedConversationMirror(
+                    conversationID: response.conversationId,
+                    transport: ConversationTransport(
+                        append: { try await bridge.relayAppendConversation($0) },
+                        fetch: { try await bridge.relayFetchConversation($0) },
+                        archive: { try await bridge.relayArchiveConversation($0) }
+                    ),
+                    env: env
+                )
                 return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
             } catch {
                 return .failure(ObservedSessionImportError(error.localizedDescription))
             }
         }
         return .failure(ObservedSessionImportError("No direct connection to this machine."))
+    }
+
+    /// Pulls a just-imported observed session's full transcript into the
+    /// local mirror before `onImported` navigates to it. Best-effort: a
+    /// failure here doesn't undo the import (the host-side row is already
+    /// real and durable) — it just means the thread view falls back to its
+    /// existing on-open refresh path, if any, instead of showing content
+    /// immediately.
+    private func hydrateImportedConversationMirror(conversationID: String, transport: ConversationTransport, env: AppEnvironment) async {
+        do {
+            _ = try await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
+        } catch {
+            Self.logger.error("hydrateImportedConversationMirror: refresh failed for conversation=\(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {
@@ -2118,15 +2189,18 @@ public struct AppRoot: View {
         let records = await RelayMachineMigration.readIndex()
         for record in records {
             let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
-            client.restoreNamespacedStoredPairing()
+            let restored = client.restoreNamespacedStoredPairing()
             addRelayMachine(client: client, record: record, env: env)
             // Only this restore-from-disk path needs to actively dial out — every
             // other addRelayMachine caller (debug seam, real pairing-UI callbacks)
             // already has a client that just live-paired moments ago, and calling
             // connect() again here tore down that fresh connection out from under
-            // it (the client's own just-written credentials made hasStoredPairing
-            // true immediately, so this used to fire on every single pairing).
-            if E2ERelayClient.hasStoredPairing(machineID: record.id) {
+            // it. Gate on the FULL restore succeeding, not just the UserDefaults
+            // code existing: the index (Keychain) can outlive the private key, and
+            // dialing with a partial pairing spams the relay with unfixable 400s
+            // while the UI shows the machine as forever-disconnected. An
+            // un-restorable machine stays listed but offline; it needs a re-pair.
+            if restored {
                 client.connect()
             }
         }
