@@ -1,3 +1,7 @@
+// iOS 26 launch lane — AppEntity types for Siri/Shortcuts disambiguation.
+// iOS 27-only APIs (AppIntentsTesting, IndexedEntityQuery, IntentExecutionTargets)
+// live in docs/wwdc26-lancer-opportunity-audit/ios27-fast-follow.md.
+
 import AppIntents
 import Foundation
 import PersistenceKit
@@ -6,10 +10,8 @@ import PersistenceKit
 
 @available(iOS 17.0, *)
 public struct MachineEntity: AppEntity, Identifiable {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Machine")
-    }
-    public static var defaultQuery: MachineEntityQuery { MachineEntityQuery() }
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Machine")
+    public static let defaultQuery = MachineEntityQuery()
 
     public let id: String
     public let displayName: String
@@ -62,10 +64,8 @@ public struct MachineEntityQuery: EntityQuery, EntityStringQuery {
 
 @available(iOS 17.0, *)
 public struct RunEntity: AppEntity, Identifiable {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Agent Run")
-    }
-    public static var defaultQuery: RunEntityQuery { RunEntityQuery() }
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Agent Run")
+    public static let defaultQuery = RunEntityQuery()
 
     public let id: String
     public let title: String
@@ -123,10 +123,8 @@ public struct RunEntityQuery: EntityQuery, EntityStringQuery {
 
 @available(iOS 17.0, *)
 public struct ApprovalEntity: AppEntity, Identifiable {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Approval")
-    }
-    public static var defaultQuery: ApprovalEntityQuery { ApprovalEntityQuery() }
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Approval")
+    public static let defaultQuery = ApprovalEntityQuery()
 
     public let id: String
     public let headline: String
@@ -174,10 +172,8 @@ public struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
 
 @available(iOS 17.0, *)
 public struct ConversationEntity: AppEntity, Identifiable {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Conversation")
-    }
-    public static var defaultQuery: ConversationEntityQuery { ConversationEntityQuery() }
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Conversation")
+    public static let defaultQuery = ConversationEntityQuery()
 
     public let id: String
     public let title: String
@@ -231,10 +227,8 @@ public struct ConversationEntityQuery: EntityQuery, EntityStringQuery {
 
 @available(iOS 17.0, *)
 public struct WorkspaceEntity: AppEntity, Identifiable {
-    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Workspace")
-    }
-    public static var defaultQuery: WorkspaceEntityQuery { WorkspaceEntityQuery() }
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Workspace")
+    public static let defaultQuery = WorkspaceEntityQuery()
 
     public let id: String
     public let name: String

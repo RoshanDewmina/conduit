@@ -295,6 +295,24 @@ targets:
       - target: Lancer
       - sdk: AppIntents.framework
 
+  LancerAppIntentsTests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: LancerAppIntentsTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.appintents-tests
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        GENERATE_INFOPLIST_FILE: "YES"
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
+    dependencies:
+      - target: Lancer
+      - sdk: AppIntents.framework
+      - sdk: AppIntentsTesting.framework
+
   LancerMac:
     type: application
     platform: macOS
@@ -329,6 +347,7 @@ schemes:
       targets:
         Lancer: all
         LancerUITests: [test]
+        LancerAppIntentsTests: [test]
     run:
       config: Debug
       storeKitConfiguration: Lancer/Lancer.storekit
@@ -336,6 +355,7 @@ schemes:
       config: Debug
       targets:
         - LancerUITests
+        - LancerAppIntentsTests
     archive:
       config: Release
 

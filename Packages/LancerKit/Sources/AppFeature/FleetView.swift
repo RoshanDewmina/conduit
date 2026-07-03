@@ -43,6 +43,9 @@ public struct FleetView: View {
     /// connected machine here, not just the first.
     private let relayMachines: [FleetRelayMachine]
     private let onOpenRelayChat: ((RelayMachineID) -> Void)?
+    /// Siri "open machine" one-shot focus — matched relay card sorts first.
+    private let preferredFocusMachineID: String?
+    private let onFocusMachineConsumed: (() -> Void)?
     @State private var summary = FleetSummary(snapshots: [])
     @State private var savedHosts: [Host] = []
     @State private var showingDriftFindings = false
@@ -56,6 +59,8 @@ public struct FleetView: View {
         loopStore: LoopStore? = nil,
         quotaGuardStore: QuotaGuardStore? = nil,
         hostHealthStore: HostHealthStore? = nil,
+        preferredFocusMachineID: String? = nil,
+        onFocusMachineConsumed: (() -> Void)? = nil,
         onConnectHost: @escaping () -> Void,
         onReconnect: @escaping (Host) -> Void,
         onDelete: @escaping (Host) -> Void,
@@ -81,12 +86,17 @@ public struct FleetView: View {
         self.onOpenThread = onOpenThread
         self.relayMachines = relayMachines
         self.onOpenRelayChat = onOpenRelayChat
+        self.preferredFocusMachineID = preferredFocusMachineID
+        self.onFocusMachineConsumed = onFocusMachineConsumed
     }
 
-    /// The relay machines currently live. Used to gate the relay card(s) and
-    /// the empty-state suppression — cleaner than repeating the filter.
+    /// The relay machines currently live.
     private var activeRelayMachines: [FleetRelayMachine] {
-        relayMachines.filter(\.isActive)
+        let active = relayMachines.filter(\.isActive)
+        guard let focusID = preferredFocusMachineID?.lowercased() else { return active }
+        let focused = active.filter { $0.id.uuidString.lowercased() == focusID }
+        let rest = active.filter { $0.id.uuidString.lowercased() != focusID }
+        return focused + rest
     }
 
     private var reconnectableHosts: [Host] {
@@ -233,6 +243,11 @@ public struct FleetView: View {
         // an already-mounted Machines view never gets stuck on its empty state.
         .onReceive(NotificationCenter.default.publisher(for: .lancerSavedHostsDidChange)) { _ in
             Task { await refresh() }
+        }
+        .onAppear {
+            if preferredFocusMachineID != nil {
+                onFocusMachineConsumed?()
+            }
         }
     }
 

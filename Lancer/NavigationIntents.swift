@@ -9,15 +9,16 @@ import Foundation
 public struct SearchLancerIntent: AppIntent {
     public static let title: LocalizedStringResource = "Search Lancer"
     public static let description = IntentDescription("Search your Lancer conversations.")
+    public static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Query")
-    public var query: String
+    public var searchText: String
 
     public init() {}
-    public init(query: String) { self.query = query }
+    public init(searchText: String) { self.searchText = searchText }
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return .result(dialog: "What should I search for?")
         }
@@ -33,6 +34,7 @@ public struct SearchLancerIntent: AppIntent {
 public struct OpenConversationIntent: AppIntent {
     public static let title: LocalizedStringResource = "Open Conversation"
     public static let description = IntentDescription("Open a Lancer conversation.")
+    public static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Conversation")
     public var conversation: ConversationEntity
@@ -54,6 +56,7 @@ public struct OpenConversationIntent: AppIntent {
 public struct OpenMachineIntent: AppIntent {
     public static let title: LocalizedStringResource = "Open Machine"
     public static let description = IntentDescription("Open a paired machine in Lancer.")
+    public static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Machine")
     public var machine: MachineEntity
@@ -76,6 +79,7 @@ public struct OpenMachineIntent: AppIntent {
 public struct OpenApprovalIntent: AppIntent {
     public static let title: LocalizedStringResource = "Open Approval"
     public static let description = IntentDescription("Open a pending approval for review in Lancer.")
+    public static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Approval")
     public var approval: ApprovalEntity
@@ -97,6 +101,7 @@ public struct OpenApprovalIntent: AppIntent {
 public struct ContinueConversationIntent: AppIntent {
     public static let title: LocalizedStringResource = "Continue Conversation"
     public static let description = IntentDescription("Open a conversation so you can continue work in Lancer.")
+    public static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Conversation")
     public var conversation: ConversationEntity

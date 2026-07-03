@@ -39,12 +39,19 @@ enum SiriIntentSupport {
         approvalId: String? = nil,
         searchQuery: String? = nil
     ) {
-        var info: [String: Any] = [SiriNavigationUserInfoKey.action: action.rawValue]
-        if let conversationId { info[SiriNavigationUserInfoKey.conversationId] = conversationId }
-        if let machineId { info[SiriNavigationUserInfoKey.machineId] = machineId }
-        if let approvalId { info[SiriNavigationUserInfoKey.approvalId] = approvalId }
-        if let searchQuery { info[SiriNavigationUserInfoKey.searchQuery] = searchQuery }
-        NotificationCenter.default.post(name: .lancerSiriNavigation, object: nil, userInfo: info)
+        let payload = SiriNavigationPayload(
+            action: action,
+            conversationId: conversationId,
+            machineId: machineId,
+            approvalId: approvalId,
+            searchQuery: searchQuery
+        )
+        SiriNavigationBuffer.shared.record(payload)
+        NotificationCenter.default.post(
+            name: .lancerSiriNavigation,
+            object: nil,
+            userInfo: payload.userInfo
+        )
     }
 
     static func machineConnectivityLabel(_ machine: IntentMachineRecord) -> String {
@@ -72,6 +79,18 @@ enum SiriIntentSupport {
 
     static func conversationDialogSubject(_ conversation: IntentConversationRecord) -> String {
         "\(conversation.title) on \(conversation.hostName)"
+    }
+
+    static func relayMachineUUID(from machineRecordID: String) -> String? {
+        if machineRecordID.hasPrefix("relay:") {
+            return String(machineRecordID.dropFirst("relay:".count))
+        }
+        return UUID(uuidString: machineRecordID).map(\.uuidString)
+    }
+
+    static func promptExcerpt(_ prompt: String, maxLength: Int = 80) -> String {
+        if prompt.count <= maxLength { return prompt }
+        return String(prompt.prefix(maxLength)) + "…"
     }
 }
 

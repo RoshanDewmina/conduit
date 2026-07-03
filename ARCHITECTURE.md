@@ -3,7 +3,7 @@
 > *Phone-native cockpit for remote AI coding workspaces.*
 
 Last updated: 2026-06-27 (lean cleanup sweep, live-loop/TestFlight reconciliation)
-Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
+Target platform: **iOS 26.0** launch deployment (`project.yml` and `Package.swift`); built with Xcode 27 / iOS 27 SDK (Swift 6.2, strict concurrency on). iOS 27-only Siri/Search/testing APIs are fast-follow — see `docs/wwdc26-lancer-opportunity-audit/ios27-fast-follow.md`.
 Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
 
 ---
@@ -156,7 +156,7 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Lancer
 - **Bundle ID:** `dev.lancer.mobile` (app), `dev.lancer.kit` (frameworks)
-- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target (launch lane), tested on iOS 26/27 simulators and physical devices. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred. iOS 27 fast-follow lane: `docs/wwdc26-lancer-opportunity-audit/ios27-fast-follow.md`.
 - **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.

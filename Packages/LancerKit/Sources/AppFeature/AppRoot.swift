@@ -166,6 +166,8 @@ public struct AppRoot: View {
     /// next unrelated New Chat entry.
     @State private var pendingNewChatMachineKey: String?
     @State private var pendingNewChatCwd: String?
+    /// One-shot machine focus for Siri "open machine" routing into FleetView.
+    @State private var pendingFleetFocusMachineID: String?
     @State private var allWorkspaces: [Workspace] = []
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
@@ -432,7 +434,20 @@ public struct AppRoot: View {
                   let approvalIDString = note.userInfo?["approvalId"] as? String,
                   let approval = activeInboxViewModel.approvals.first(where: { $0.id.uuidString.lowercased() == approvalIDString.lowercased() })
             else {
+                if let approvalIDString = note.userInfo?["approvalId"] as? String {
+                    OpenApprovalBuffer.shared.record(approvalID: approvalIDString)
+                }
                 sidebarState.navigate(to: .needsAttention)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    if let approvalIDString = note.userInfo?["approvalId"] as? String {
+                        NotificationCenter.default.post(
+                            name: .lancerOpenApproval,
+                            object: nil,
+                            userInfo: ["approvalId": approvalIDString]
+                        )
+                    }
+                }
                 return
             }
             let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
@@ -591,31 +606,42 @@ public struct AppRoot: View {
     }
 
     private func handleSiriNavigation(_ note: Notification) {
-        guard let actionRaw = note.userInfo?[SiriNavigationUserInfoKey.action] as? String,
-              let action = SiriNavigationAction(rawValue: actionRaw)
-        else { return }
+        guard let payload = SiriNavigationPayload(userInfo: note.userInfo ?? [:]) else { return }
+        applySiriNavigation(payload)
+    }
 
-        switch action {
+    private func applySiriNavigation(_ payload: SiriNavigationPayload) {
+        switch payload.action {
         case .search:
-            if let query = note.userInfo?[SiriNavigationUserInfoKey.searchQuery] as? String {
+            if let query = payload.searchQuery {
                 sidebarState.searchQuery = query
                 Task { await sidebarState.performSearch() }
             }
             sidebarState.navigate(to: .home)
             sidebarState.isDrawerOpen = true
         case .openConversation, .continueConversation:
-            if let id = note.userInfo?[SiriNavigationUserInfoKey.conversationId] as? String {
+            if let id = payload.conversationId {
                 sidebarState.navigate(to: .thread(id: id))
+                UserDefaults.standard.set(id, forKey: SiriSurfaceDefaultsKey.recentConversationID)
+                NotificationCenter.default.post(name: .lancerSiriSurfaceRefresh, object: nil)
             }
         case .openMachine:
+            if let id = payload.machineId {
+                pendingFleetFocusMachineID = id
+            }
             sidebarState.navigate(to: .machines)
         case .openApproval:
-            if let id = note.userInfo?[SiriNavigationUserInfoKey.approvalId] as? String {
-                NotificationCenter.default.post(
-                    name: .lancerOpenApproval,
-                    object: nil,
-                    userInfo: ["approvalId": id]
-                )
+            if let id = payload.approvalId {
+                OpenApprovalBuffer.shared.record(approvalID: id)
+                sidebarState.navigate(to: .needsAttention)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    NotificationCenter.default.post(
+                        name: .lancerOpenApproval,
+                        object: nil,
+                        userInfo: ["approvalId": id]
+                    )
+                }
             } else {
                 sidebarState.navigate(to: .needsAttention)
             }
@@ -736,6 +762,37 @@ public struct AppRoot: View {
                     userInfo: ["approvalId": approvalID]
                 )
             }
+            for navPayload in SiriNavigationBuffer.shared.drain() {
+                applySiriNavigation(navPayload)
+            }
+            RunDispatchService.shared.setHandler { machineID, vendor, cwd, prompt, budgetUSD, model, _ in
+                let agentID = "relay|\(machineID)|\(vendor)"
+                let outcome = await performDispatch(
+                    agentID: agentID, cwd: cwd, prompt: prompt,
+                    budgetUSD: budgetUSD, model: model, env: env
+                )
+                switch outcome {
+                case .started(let run):
+                    ActiveRunRegistry.shared.markActive(runId: run.runId)
+                    let agentLabel: String
+                    switch vendor {
+                    case "claudeCode": agentLabel = "Claude Code"
+                    case "codex": agentLabel = "Codex"
+                    case "kimi": agentLabel = "Kimi"
+                    default: agentLabel = "OpenCode"
+                    }
+                    let summary = "Started \(agentLabel). \(run.subtitle.isEmpty ? "Check Lancer for status." : run.subtitle)"
+                    return .started(
+                        runId: run.runId,
+                        conversationId: run.conversationID,
+                        summary: summary
+                    )
+                case .blocked(let message):
+                    return message.isEmpty
+                        ? .blocked("Couldn't start the run.")
+                        : .blocked(message)
+                }
+            }
             await env.syncEngine.start()
             await env.conversationSyncEngine.start()
         }
@@ -781,6 +838,7 @@ public struct AppRoot: View {
             if #available(iOS 16.2, *) {
                 Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count, highestRisk: highestRisk) }
             }
+            NotificationCenter.default.post(name: .lancerSiriSurfaceRefresh, object: nil)
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
@@ -1598,6 +1656,8 @@ public struct AppRoot: View {
             loopStore: env.loopStore,
             quotaGuardStore: env.quotaGuardStore,
             hostHealthStore: env.hostHealthStore,
+            preferredFocusMachineID: pendingFleetFocusMachineID,
+            onFocusMachineConsumed: { pendingFleetFocusMachineID = nil },
             onConnectHost: { drawerRoute = .relayPairing },
             onReconnect: { host in openSession(host: host, env: env) },
             onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },

@@ -40,6 +40,7 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             intent: SearchLancerIntent(),
             phrases: [
                 "Search \(.applicationName)",
+                "Search my conversations in \(.applicationName)",
             ],
             shortTitle: "Search Lancer",
             systemImageName: "magnifyingglass"
@@ -49,18 +50,10 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             phrases: [
                 "Open \(\.$conversation) in \(.applicationName)",
                 "Show conversation \(\.$conversation) in \(.applicationName)",
+                "Continue \(\.$conversation) in \(.applicationName)",
             ],
             shortTitle: "Open Conversation",
             systemImageName: "bubble.left.and.bubble.right"
-        )
-        AppShortcut(
-            intent: ContinueConversationIntent(),
-            phrases: [
-                "Continue \(\.$conversation) in \(.applicationName)",
-                "Keep working on \(\.$conversation) in \(.applicationName)",
-            ],
-            shortTitle: "Continue Conversation",
-            systemImageName: "arrow.turn.up.right"
         )
         AppShortcut(
             intent: OpenMachineIntent(),
@@ -114,6 +107,16 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Deny Approval",
             systemImageName: "xmark.shield"
+        )
+        AppShortcut(
+            intent: StartAgentRunIntent(),
+            phrases: [
+                "Start an agent run in \(.applicationName)",
+                "Start \(\.$agent) in \(.applicationName)",
+                "Start a run on \(\.$machine) in \(.applicationName)",
+            ],
+            shortTitle: "Start Agent Run",
+            systemImageName: "play.circle"
         )
     }
 }

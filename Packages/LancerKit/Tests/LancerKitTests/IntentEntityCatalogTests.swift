@@ -131,4 +131,79 @@ struct IntentEntityCatalogTests {
         let pending = try await catalog.pendingApprovals()
         #expect(pending.count == 2)
     }
+
+    @Test("no machines when catalog and relay are empty")
+    func noMachines() async throws {
+        let db = try AppDatabase.inMemory()
+        let catalog = IntentEntityCatalog(db)
+        let machines = try await catalog.machines(relayMachines: [])
+        #expect(machines.isEmpty)
+    }
+
+    @Test("offline machine has stale lastConnectedAt label path")
+    func offlineMachine() async throws {
+        let stale = Date().addingTimeInterval(-3600)
+        let relay = [
+            IntentRelayMachineSnapshot(id: UUID().uuidString, displayName: "Offline Mac", lastConnectedAt: stale),
+        ]
+        let catalog = IntentEntityCatalog(try AppDatabase.inMemory())
+        let machines = try await catalog.machines(relayMachines: relay)
+        #expect(machines.count == 1)
+        #expect(machines[0].lastConnectedAt == stale)
+    }
+
+    @Test("two active runs resolve independently")
+    func twoActiveRuns() async throws {
+        let db = try AppDatabase.inMemory()
+        let chatRepo = ChatConversationRepository(db)
+        let convA = try await chatRepo.createConversation(title: "Run A", agentID: "claude", hostName: "mac", hostID: nil, cwd: "/a")
+        let convB = try await chatRepo.createConversation(title: "Run B", agentID: "codex", hostName: "mac", hostID: nil, cwd: "/b")
+        _ = try await chatRepo.appendTurn(conversationID: convA.id, prompt: "a", runID: "run-a")
+        _ = try await chatRepo.appendTurn(conversationID: convB.id, prompt: "b", runID: "run-b")
+        let catalog = IntentEntityCatalog(db)
+        let runs = try await catalog.activeRuns(activeRunIDs: ["run-a", "run-b"])
+        #expect(runs.count == 2)
+        #expect(Set(runs.map(\.id)) == ["run-a", "run-b"])
+    }
+
+    @Test("deleted conversation lookup returns nil")
+    func deletedConversation() async throws {
+        let db = try AppDatabase.inMemory()
+        let chatRepo = ChatConversationRepository(db)
+        let conv = try await chatRepo.createConversation(title: "Gone", agentID: "claude", hostName: "mac", hostID: nil, cwd: "/x")
+        try await chatRepo.deleteConversation(conv.id)
+        let catalog = IntentEntityCatalog(db)
+        let found = try await catalog.conversation(id: conv.id)
+        #expect(found == nil)
+    }
+
+    @Test("resolved approval is not in pending list after decision")
+    func deletedApproval() async throws {
+        let db = try AppDatabase.inMemory()
+        let approvalRepo = ApprovalRepository(db)
+        let approval = Approval(sessionID: SessionID(), agent: .codex, kind: .command, command: "rm -rf", cwd: "/tmp", risk: .high)
+        try await approvalRepo.upsert(approval)
+        try await approvalRepo.decide(id: approval.id, decision: .rejected)
+        let catalog = IntentEntityCatalog(db)
+        let pending = try await catalog.pendingApprovals()
+        #expect(pending.contains { $0.id == approval.id.uuidString } == false)
+    }
+
+    @Test("matcher handles duplicate display names via recency")
+    func duplicateNames() {
+        struct Item: Identifiable { let id: String; let title: String; let when: Date }
+        let now = Date()
+        let items = [
+            Item(id: "1", title: "Mac Studio", when: now.addingTimeInterval(-120)),
+            Item(id: "2", title: "Mac Studio", when: now),
+        ]
+        let matches = IntentEntityMatcher.matchString(
+            items,
+            query: "studio",
+            title: { $0.title },
+            recency: { $0.when }
+        )
+        #expect(matches.count == 2)
+        #expect(matches[0].id == "2")
+    }
 }

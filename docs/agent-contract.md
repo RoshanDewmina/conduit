@@ -25,13 +25,14 @@ be corrected.
 
 ## 2. Platform contract
 
-- Deployment target: **iOS 27.0** (`project.yml` and `Package.swift`).
+- Deployment target: **iOS 26.0** (`project.yml` and `Package.swift`) — launch lane.
 - Toolchain: Xcode 27.x, Swift 6.2, SwiftPM-first.
 - Strict concurrency and existential-any are on by default — do not add
   upcoming-feature flags for them.
-- iOS 27-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
-  modifiers, `BGContinuedProcessingTask`, Foundation Models, etc.) can be
-  used without `#available` gating once the rest of the file requires iOS 27.
+- iOS 27-only APIs (`AppIntentsTesting`, `IndexedEntityQuery`,
+  `IntentExecutionTargets`, semantic Spotlight indexing) belong in the
+  fast-follow lane (`docs/wwdc26-lancer-opportunity-audit/ios27-fast-follow.md`).
+  Gate with `#available(iOS 27.0, *)` if referenced from the iOS 26 lane.
 
 ## 3. Code change rules
 
