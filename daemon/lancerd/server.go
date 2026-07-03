@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1477,7 +1478,15 @@ func (s *server) writeError(id interface{}, code int, message string) {
 // emitNotification marshals a JSON-RPC notification (no id) and writes it on the
 // serialized writeFramed path, so concurrent run-output goroutines are safe.
 // When the E2E relay is active it also fans out the notification over the relay.
+//
+// persistConversationEvent runs FIRST, before either send path below, but it is
+// strictly best-effort (see its doc comment) — a nil store or a failed ledger
+// write can never prevent or delay the phone-facing writeFramed/relay fan-out,
+// which must behave EXACTLY as it did before Task 4 (cross-device sync build
+// handoff) regardless of ledger persistence outcome.
 func (s *server) emitNotification(method string, params any) {
+	s.persistConversationEvent(method, params)
+
 	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 	if err != nil {
 		return
@@ -1488,6 +1497,153 @@ func (s *server) emitNotification(method string, params any) {
 	if s.e2e != nil {
 		s.e2e.sendRelayNotification(method, params)
 	}
+}
+
+// persistConversationEvent mirrors a subset of live run notifications
+// (agent.run.output / agent.run.status / agent.artifact) into the host
+// conversation ledger (conversation_store.go), so a conversation-ledger-backed
+// run's output/status/artifacts survive daemon restarts and are visible via
+// agent.conversations.fetch. See the cross-device sync build handoff's Task 4.
+//
+// STRICTLY BEST-EFFORT: a nil store, an unrecognized method, a malformed
+// params shape, or any store error is swallowed here — logged once (no dedup)
+// via logConversationPersistError, never returned, never allowed to panic past
+// this function's own recover(). A run whose runID has no ledger turn (every
+// ordinary agent.dispatch/agent.run.continue/agent.observedSession.continue
+// run — see dispatcher.wrapEmitForRun's ledgerBacked flag — is the
+// overwhelmingly common case) is a SILENT no-op, not a logged error, because
+// logging it would spam stderr on every ordinary chat message.
+func (s *server) persistConversationEvent(method string, params any) {
+	if s.conversations == nil {
+		return
+	}
+	// Defense in depth: emitNotification is the shared fanout point for every
+	// dispatched run's stdout/stderr/status — a panic here must never take
+	// live phone streaming down with it.
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "persistConversationEvent: recovered panic persisting %s: %v\n", method, r)
+		}
+	}()
+
+	switch method {
+	case "agent.run.output", "agent.run.status", "agent.artifact":
+	default:
+		return
+	}
+
+	m, ok := params.(map[string]any)
+	if !ok {
+		return
+	}
+	runID := stringParam(m, "runId", "runID")
+	if runID == "" {
+		return
+	}
+
+	// Resolve the ledger turn once, up front. errNoLedgerTurn means this runID
+	// has no conversation-ledger row — an ordinary non-ledger-backed run, the
+	// overwhelmingly common case — so every case below is a silent no-op. Any
+	// OTHER lookup failure (e.g. the store's connection is closed/unavailable)
+	// is a genuine failure and gets logged, per the "log it, don't crash"
+	// contract.
+	conversationID, turnID, err := s.conversations.turnByRunID(runID)
+	if err != nil {
+		if !errors.Is(err, errNoLedgerTurn) {
+			logConversationPersistError("turnByRunID", runID, err)
+		}
+		return
+	}
+
+	switch method {
+	case "agent.run.output":
+		seq, ok := intParam(m, "seq")
+		if !ok {
+			return
+		}
+		stream := stringParam(m, "stream")
+		chunk := stringParam(m, "chunk")
+		if err := s.conversations.appendRunOutput(runID, stream, chunk, seq); err != nil {
+			logConversationPersistError("appendRunOutput", runID, err)
+		}
+
+	case "agent.run.status":
+		status := stringParam(m, "status")
+		var exitCode *int
+		if v, ok := intParam(m, "exitCode"); ok {
+			exitCode = &v
+		}
+		if err := s.conversations.appendRunStatus(runID, status, exitCode); err != nil {
+			logConversationPersistError("appendRunStatus", runID, err)
+		}
+
+	case "agent.artifact":
+		// The live "agent.artifact" event (dispatch.go's emitToolArtifact) only
+		// carries runID/artifactID identity, not conversationId/turnId — those
+		// are resolved above via turnByRunID rather than expected on the wire.
+		event := map[string]any{
+			"id":             stringParam(m, "artifactID", "artifactId", "artifact_id"),
+			"conversationId": conversationID,
+			"turnId":         turnID,
+			"runId":          runID,
+			"kind":           stringParam(m, "kind"),
+			"title":          stringParam(m, "title"),
+			"payloadJson":    stringParam(m, "payloadJSON", "payloadJson"),
+			"status":         stringParam(m, "status"),
+		}
+		if err := s.conversations.upsertArtifact(event); err != nil {
+			logConversationPersistError("upsertArtifact", runID, err)
+		}
+	}
+}
+
+// logConversationPersistError logs a genuine ledger-write failure (as opposed
+// to the silent no-turn-found no-op above) exactly once per occurrence — no
+// dedup/rate-limiting needed per the Task 4 spec, since these are expected to
+// be rare (store unavailable, disk error) rather than a per-message event.
+func logConversationPersistError(op, runID string, err error) {
+	fmt.Fprintf(os.Stderr, "conversation_store: %s failed for run %s: %v\n", op, runID, err)
+}
+
+// stringParam reads the first present, non-nil, string-typed value among keys
+// from a notification params map. Multiple keys accommodate the inconsistent
+// camelCase/ID-casing already present across existing emit call sites (e.g.
+// "runId" from streamOutput vs "runID" from emitToolArtifact).
+func stringParam(m map[string]any, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// intParam reads the first present, non-nil, numeric-typed value among keys.
+// The in-process emit calls in dispatch.go construct these as native Go int,
+// but float64/int64/json.Number are also accepted defensively in case a value
+// ever arrives via a JSON-decoded path instead.
+func intParam(m map[string]any, keys ...string) (int, bool) {
+	for _, k := range keys {
+		v, ok := m[k]
+		if !ok || v == nil {
+			continue
+		}
+		switch n := v.(type) {
+		case int:
+			return n, true
+		case int64:
+			return int(n), true
+		case float64:
+			return int(n), true
+		case json.Number:
+			if i, err := n.Int64(); err == nil {
+				return int(i), true
+			}
+		}
+	}
+	return 0, false
 }
 
 func (s *server) writeFramed(data []byte) {

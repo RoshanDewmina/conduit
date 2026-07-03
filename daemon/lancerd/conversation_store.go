@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,17 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+// errNoLedgerTurn is the sentinel turnByRunID wraps its "no rows" case around.
+// It lets a caller (server.persistConversationEvent, Task 4 of the cross-device
+// sync build handoff) distinguish "this runID simply has no conversation-ledger
+// turn" — the expected, silent-no-op case for every non-conversation-ledger-
+// backed run (plain dispatch/continueRun/resumeObservedSession) — from a
+// genuine lookup failure (e.g. the store's connection is closed/unavailable),
+// which should still be logged. errors.Is(err, errNoLedgerTurn) is how callers
+// tell the two apart; the wrapped message text is unchanged from before this
+// sentinel was added.
+var errNoLedgerTurn = errors.New("conversation_store: no turn found for run")
 
 // conversation_store.go — the daemon's host-owned conversation ledger.
 //
@@ -1041,7 +1053,7 @@ func (s *conversationStore) turnByRunID(runID string) (conversationID, turnID st
 	err = s.db.QueryRow(`SELECT conversation_id, id FROM conversation_turns WHERE run_id = ?`, runID).
 		Scan(&conversationID, &turnID)
 	if err == sql.ErrNoRows {
-		return "", "", fmt.Errorf("conversation_store: no turn found for run %q", runID)
+		return "", "", fmt.Errorf("%w %q", errNoLedgerTurn, runID)
 	}
 	return conversationID, turnID, err
 }
