@@ -36,7 +36,7 @@ public final class AppDatabase: Sendable {
     /// cleared independently so a not-yet-migrated table cannot abort the wipe.
     public func wipeAll() async throws {
         try await dbWriter.write { db in
-            for table in ["chat_artifacts", "chat_turns", "chat_conversations",
+            for table in ["chat_events", "chat_drafts", "chat_artifacts", "chat_turns", "chat_conversations",
                           "approvals", "blocks", "patches", "session_snapshots",
                           "sync_tombstones", "audit_events", "loops",
                           "snippets", "hosts", "workspaces"] {
@@ -336,6 +336,64 @@ public final class AppDatabase: Sendable {
             }
             try db.create(index: "idx_workspaces_machine", on: "workspaces", columns: ["machine_id"])
             try db.create(index: "idx_workspaces_last_used", on: "workspaces", columns: ["last_used_at"])
+        }
+
+        // Cross-device conversation sync (Task 6, build handoff): extends the
+        // local chat tables into a mirror of the host-owned conversation
+        // ledger instead of the sole source of truth. Existing rows default
+        // to sync_state='localOnly' (pre-sync conversations, or ones never
+        // bound to a host ledger row) so nothing already on-device is
+        // reinterpreted as host-backed until it is actually re-fetched.
+        m.registerMigration("v13") { db in
+            try db.alter(table: "chat_conversations") { t in
+                t.add(column: "source_host_id", .text)
+                t.add(column: "source_host_name", .text)
+                t.add(column: "last_host_seq", .integer).notNull().defaults(to: 0)
+                t.add(column: "sync_state", .text).notNull().defaults(to: "localOnly")
+                t.add(column: "cloud_record_name", .text)
+                t.add(column: "cloud_uploaded_at", .datetime)
+                t.add(column: "cloud_modified_at", .datetime)
+                t.add(column: "archived_at", .datetime)
+            }
+            try db.create(index: "idx_chat_conv_sync_state", on: "chat_conversations", columns: ["sync_state"])
+
+            try db.alter(table: "chat_turns") { t in
+                t.add(column: "client_turn_id", .text)
+                t.add(column: "vendor_session_id", .text)
+                t.add(column: "host_seq_start", .integer)
+                t.add(column: "host_seq_end", .integer)
+                t.add(column: "cloud_record_name", .text)
+            }
+            try db.create(index: "idx_chat_turn_vendor_session", on: "chat_turns", columns: ["vendor_session_id"])
+
+            // Append-only mirror of the host's conversation_events log.
+            // Primary key (conversation_id, seq) makes re-fetching an
+            // overlapping range idempotent (INSERT OR IGNORE at the
+            // repository layer) instead of duplicating rows.
+            try db.create(table: "chat_events") { t in
+                t.column("conversation_id", .text).notNull()
+                t.column("seq",             .integer).notNull()
+                t.column("turn_id",         .text)
+                t.column("run_id",          .text)
+                t.column("kind",            .text).notNull()
+                t.column("role",            .text)
+                t.column("stream",          .text)
+                t.column("text",            .text)
+                t.column("payload_json",    .text)
+                t.column("created_at",      .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.primaryKey(["conversation_id", "seq"])
+                t.foreignKey(["conversation_id"], references: "chat_conversations", onDelete: .cascade)
+            }
+
+            // One unsent local draft per conversation — explicit, never
+            // auto-sent (product semantics #5: no silent offline execution
+            // queue). Saving a new draft overwrites the prior one.
+            try db.create(table: "chat_drafts") { t in
+                t.column("conversation_id", .text).primaryKey()
+                t.column("text",            .text).notNull()
+                t.column("saved_at",        .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.foreignKey(["conversation_id"], references: "chat_conversations", onDelete: .cascade)
+            }
         }
 
         return m

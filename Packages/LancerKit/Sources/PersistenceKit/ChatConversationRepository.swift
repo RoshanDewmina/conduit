@@ -263,6 +263,193 @@ public actor ChatConversationRepository {
         }
     }
 
+    // MARK: - Cross-device sync mirror (Task 6)
+    //
+    // These APIs are the ONLY way UI/sync code should write host-authoritative
+    // conversation/turn/event state locally — see the build handoff's
+    // "Existing Code Surfaces" note: "Add mirror/upsert APIs. Do not make UI
+    // code write host-authoritative rows directly except drafts." Mapping
+    // from the wire types (ConversationSummary etc.) into these calls' plain
+    // Swift/Foundation parameters happens in the sync coordinator (Task 7),
+    // keeping this repository free of LancerDProtocol's ISO8601-string dates.
+
+    /// Creates or updates a conversation's mirror row from host-fetched data.
+    /// Upserts by `id` — a host-backed conversation never changes ID once
+    /// created (`beginTurn` mints it once). `lastHostSeq`/`syncState` are
+    /// always overwritten (they reflect the freshest state this device has
+    /// observed); other fields fall back to their current value on conflict
+    /// only where the caller passes `nil`, so a partial refresh cannot
+    /// silently blank out data (e.g. title) it didn't fetch.
+    @discardableResult
+    public func upsertConversationMirror(
+        _ conversation: ChatConversation,
+        lastHostSeq: Int,
+        syncState: ChatConversation.SyncState
+    ) async throws -> ChatConversation {
+        let merged: ChatConversation = {
+            var c = conversation
+            c.lastHostSeq = lastHostSeq
+            c.syncState = syncState
+            return c
+        }()
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                INSERT INTO chat_conversations
+                    (id, title, agent_id, vendor, host_name, host_id, cwd, model, budget_usd,
+                     status, created_at, updated_at, last_activity_at,
+                     source_host_id, source_host_name, last_host_seq, sync_state,
+                     cloud_record_name, cloud_uploaded_at, cloud_modified_at, archived_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    status = excluded.status,
+                    updated_at = excluded.updated_at,
+                    last_activity_at = excluded.last_activity_at,
+                    source_host_id = excluded.source_host_id,
+                    source_host_name = excluded.source_host_name,
+                    last_host_seq = excluded.last_host_seq,
+                    sync_state = excluded.sync_state,
+                    archived_at = excluded.archived_at
+            """, arguments: [
+                merged.id, merged.title, merged.agentID, merged.vendor,
+                merged.hostName, merged.hostID, merged.cwd, merged.model, merged.budgetUSD,
+                merged.status.rawValue, merged.createdAt, merged.updatedAt, merged.lastActivityAt,
+                merged.sourceHostID, merged.sourceHostName, merged.lastHostSeq, merged.syncState.rawValue,
+                merged.cloudRecordName, merged.cloudUploadedAt, merged.cloudModifiedAt, merged.archivedAt,
+            ])
+            try Self.syncFTS(db, conversationID: merged.id)
+        }
+        return merged
+    }
+
+    /// Creates or updates a turn's mirror row keyed by `id` (the host's
+    /// `conversationTurn.id`, not the runID `chat_turns` was historically
+    /// keyed toward locally — a host-backed turn always has both).
+    @discardableResult
+    public func upsertTurnMirror(
+        _ turn: ChatTurn,
+        vendorSessionID: String?,
+        hostSeqStart: Int?,
+        hostSeqEnd: Int?
+    ) async throws -> ChatTurn {
+        let merged: ChatTurn = {
+            var t = turn
+            t.vendorSessionID = vendorSessionID
+            t.hostSeqStart = hostSeqStart
+            t.hostSeqEnd = hostSeqEnd
+            return t
+        }()
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                INSERT INTO chat_turns
+                    (id, conversation_id, ordinal, prompt, run_id, transport_kind,
+                     status, assistant_text, error_message, created_at, completed_at,
+                     client_turn_id, vendor_session_id, host_seq_start, host_seq_end, cloud_record_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status = excluded.status,
+                    assistant_text = excluded.assistant_text,
+                    error_message = excluded.error_message,
+                    completed_at = excluded.completed_at,
+                    vendor_session_id = excluded.vendor_session_id,
+                    host_seq_start = excluded.host_seq_start,
+                    host_seq_end = excluded.host_seq_end
+            """, arguments: [
+                merged.id, merged.conversationID, merged.ordinal, merged.prompt,
+                merged.runID, merged.transportKind, merged.status.rawValue,
+                merged.assistantText, merged.errorMessage, merged.createdAt, merged.completedAt,
+                merged.clientTurnID, merged.vendorSessionID, merged.hostSeqStart, merged.hostSeqEnd,
+                merged.cloudRecordName,
+            ])
+            try db.execute(sql: """
+                UPDATE chat_conversations SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?
+            """, arguments: [merged.conversationID])
+            try Self.syncFTS(db, conversationID: merged.conversationID)
+        }
+        return merged
+    }
+
+    /// Appends host-ledger events into the local mirror. Idempotent by
+    /// `(conversationID, seq)` — re-fetching an overlapping range (e.g. after
+    /// a retried `fetch` call) is always safe to call again.
+    public func appendEventsMirror(conversationID: String, events: [ChatEvent]) async throws {
+        guard !events.isEmpty else { return }
+        try await db.dbWriter.write { db in
+            for event in events {
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO chat_events
+                        (conversation_id, seq, turn_id, run_id, kind, role, stream, text, payload_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, arguments: [
+                    conversationID, event.seq, event.turnID, event.runID,
+                    event.kind, event.role, event.stream, event.text,
+                    event.payloadJSON, event.createdAt,
+                ])
+            }
+        }
+    }
+
+    /// Events mirrored locally for a conversation, strictly after `sinceSeq`,
+    /// ordered ascending — the same paging contract as the host's
+    /// `agent.conversations.fetch`.
+    public func events(conversationID: String, sinceSeq: Int = 0, limit: Int = 2000) async throws -> [ChatEvent] {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM chat_events
+                WHERE conversation_id = ? AND seq > ?
+                ORDER BY seq ASC LIMIT ?
+            """, arguments: [conversationID, sinceSeq, limit])
+            return rows.compactMap(Self.decodeEvent)
+        }
+    }
+
+    public func updateSyncState(conversationID: String, state: ChatConversation.SyncState) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                UPDATE chat_conversations SET sync_state = ? WHERE id = ?
+            """, arguments: [state.rawValue, conversationID])
+        }
+    }
+
+    /// Records that this conversation's mirror row has been pushed to
+    /// CloudKit (Task 8) as `recordName`, so the sync engine's next pull
+    /// cycle can tell its own prior push apart from a genuine remote change.
+    public func markCloudUploaded(conversationID: String, recordName: String, modifiedAt: Date?) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                UPDATE chat_conversations SET
+                    cloud_record_name = ?, cloud_uploaded_at = CURRENT_TIMESTAMP, cloud_modified_at = ?
+                WHERE id = ?
+            """, arguments: [recordName, modifiedAt, conversationID])
+        }
+    }
+
+    // MARK: - Drafts (offline sends — never auto-sent, see ChatDraft's doc comment)
+
+    public func saveDraft(conversationID: String, text: String) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: """
+                INSERT INTO chat_drafts (conversation_id, text, saved_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(conversation_id) DO UPDATE SET text = excluded.text, saved_at = CURRENT_TIMESTAMP
+            """, arguments: [conversationID, text])
+        }
+    }
+
+    public func localDraft(conversationID: String) async throws -> ChatDraft? {
+        try await db.dbWriter.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM chat_drafts WHERE conversation_id = ?", arguments: [conversationID]) else {
+                return nil
+            }
+            return ChatDraft(conversationID: row["conversation_id"], text: row["text"] ?? "", savedAt: row["saved_at"] ?? .now)
+        }
+    }
+
+    public func clearDraft(conversationID: String) async throws {
+        try await db.dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM chat_drafts WHERE conversation_id = ?", arguments: [conversationID])
+        }
+    }
+
     // MARK: - Recent + Search
 
     public func recent(limit: Int = 50, offset: Int = 0) async throws -> [ChatConversation] {
@@ -345,7 +532,13 @@ public actor ChatConversationRepository {
             budgetUSD: row["budget_usd"],
             status: ChatConversation.Status(rawValue: row["status"] ?? "active") ?? .active,
             createdAt: row["created_at"] ?? .now, updatedAt: row["updated_at"] ?? .now,
-            lastActivityAt: row["last_activity_at"] ?? .now
+            lastActivityAt: row["last_activity_at"] ?? .now,
+            sourceHostID: row["source_host_id"], sourceHostName: row["source_host_name"],
+            lastHostSeq: row["last_host_seq"] ?? 0,
+            syncState: ChatConversation.SyncState(rawValue: row["sync_state"] ?? "localOnly") ?? .localOnly,
+            cloudRecordName: row["cloud_record_name"],
+            cloudUploadedAt: row["cloud_uploaded_at"], cloudModifiedAt: row["cloud_modified_at"],
+            archivedAt: row["archived_at"]
         )
     }
 
@@ -356,7 +549,19 @@ public actor ChatConversationRepository {
             runID: row["run_id"] ?? "", transportKind: row["transport_kind"] ?? "ssh",
             status: ChatTurn.Status(rawValue: row["status"] ?? "running") ?? .running,
             assistantText: row["assistant_text"] ?? "", errorMessage: row["error_message"],
-            createdAt: row["created_at"] ?? .now, completedAt: row["completed_at"]
+            createdAt: row["created_at"] ?? .now, completedAt: row["completed_at"],
+            clientTurnID: row["client_turn_id"], vendorSessionID: row["vendor_session_id"],
+            hostSeqStart: row["host_seq_start"], hostSeqEnd: row["host_seq_end"],
+            cloudRecordName: row["cloud_record_name"]
+        )
+    }
+
+    private static func decodeEvent(_ row: Row) -> ChatEvent? {
+        ChatEvent(
+            conversationID: row["conversation_id"] ?? "", seq: row["seq"] ?? 0,
+            turnID: row["turn_id"], runID: row["run_id"], kind: row["kind"] ?? "",
+            role: row["role"], stream: row["stream"], text: row["text"],
+            payloadJSON: row["payload_json"], createdAt: row["created_at"] ?? .now
         )
     }
 
