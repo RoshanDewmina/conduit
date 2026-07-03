@@ -162,6 +162,56 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 	}
 }
 
+// conversationLaunchParams carries what buildConversationArgv/
+// launchConversationTurn need to dispatch a conversation-ledger turn (see
+// conversation_rpc.go's conversationsAppend, the cross-device sync build
+// handoff's Task 3). Agent/CWD/Model/BudgetUSD are already resolved by the
+// caller — defaulted from the conversation's own row for a follow-up whose
+// request omitted them, mirroring conversation_store.go's
+// appendFollowUpTurn resolution — so the dispatched process's cwd/provider
+// always match what the ledger recorded.
+type conversationLaunchParams struct {
+	Agent           string
+	CWD             string
+	Prompt          string
+	Model           string
+	BudgetUSD       float64
+	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
+	IsNew           bool   // true ⇒ first turn of a brand-new conversation
+}
+
+// buildConversationArgv selects which per-vendor argv to launch for a
+// conversation-ledger-backed turn and reports the resume confidence the
+// caller must surface in the agent.conversations.append response (see the
+// cross-device sync build handoff's Task 3 and RPC Contract):
+//
+//   - IsNew (fresh conversation): agentArgv, resumeMode "new".
+//   - Follow-up with a VendorSessionID already bound from a prior turn (via
+//     bindVendorSession): resumeArgv targeting that EXACT session, resumeMode
+//     "exact" — never "continue latest in cwd", which could silently land in
+//     the wrong session when several sessions share a cwd.
+//   - Follow-up with no bound VendorSessionID yet (the CLI hasn't emitted one,
+//     or this vendor doesn't expose one): continueArgv (most-recent-in-cwd),
+//     resumeMode "latestInCwdFallback" — degraded resume confidence, reported
+//     to the caller rather than silently claimed as exact.
+//
+// ok=false (agent unknown / unsupported) mirrors agentArgv/continueArgv/
+// resumeArgv's own ok semantics; resumeMode is still returned in that case so
+// the caller can report it even though it's carrying no launchable argv.
+func buildConversationArgv(p conversationLaunchParams) (argv []string, resumeMode string, ok bool) {
+	switch {
+	case p.IsNew:
+		argv, ok = agentArgv(p.Agent, p.Prompt, p.Model)
+		return argv, "new", ok
+	case p.VendorSessionID != "":
+		argv, ok = resumeArgv(p.Agent, p.VendorSessionID, p.Prompt, p.Model)
+		return argv, "exact", ok
+	default:
+		argv, ok = continueArgv(p.Agent, p.Prompt, p.Model)
+		return argv, "latestInCwdFallback", ok
+	}
+}
+
 type dispatchParams struct {
 	Agent     string  `json:"agent"`
 	CWD       string  `json:"cwd"`
@@ -478,6 +528,20 @@ func emitToolArtifact(emit emitFunc, runID, toolID, toolName, inputJSON string) 
 	})
 }
 
+// emitVendorSession reports the vendor CLI's exact session/thread id, once
+// extracted from structured stdout, as an internal-only notification — it is
+// never forwarded to the phone (see dispatcher.wrapEmitForRun, which
+// intercepts this specific method name). A conversation-ledger-backed launch
+// binds the id via conversationStore.bindVendorSession so a later follow-up
+// can resume this EXACT session (resumeArgv) instead of falling back to
+// "continue latest in cwd" — see the cross-device sync build handoff's Task 3.
+func emitVendorSession(emit emitFunc, runID, vendorSessionID string) {
+	if emit == nil || vendorSessionID == "" {
+		return
+	}
+	emit("agent.run.vendorSession", map[string]any{"runId": runID, "vendorSessionId": vendorSessionID})
+}
+
 func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done *sync.WaitGroup) {
 	defer done.Done()
 	if emit == nil {
@@ -495,6 +559,12 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 	}
 	var pending *toolAccum
 
+	// sessionCaptured latches once the first vendor session/thread id is
+	// found — "the FIRST available" id is all the ledger needs (see
+	// conversation_store.bindVendorSession), and re-emitting on every
+	// subsequent line would be redundant churn.
+	var sessionCaptured bool
+
 	for sc.Scan() {
 		line := sc.Text()
 
@@ -509,6 +579,27 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			})
 			continue
 		}
+
+		// OpenCode carries its session id as a top-level "sessionID" field on
+		// EVERY event (step_start/text/tool/step_finish/...) — verified live
+		// 2026-07-02 against opencode 1.17.11 ("run --format json"). Kimi's
+		// exact prompt-mode stream-json shape could not be live-verified this
+		// session (the installed kimi CLI hit an unrelated account/billing
+		// check before emitting any stdout — see resumeArgv's doc comment for
+		// the same caveat); "sessionId" is a best-effort guess consistent with
+		// kimi's own camelCase convention elsewhere in this codebase
+		// (session_index.jsonl's "sessionId" field) — re-verify against a live
+		// run before relying on it in production.
+		if !sessionCaptured {
+			if sid, ok := obj["sessionID"].(string); ok && sid != "" {
+				emitVendorSession(emit, runID, sid)
+				sessionCaptured = true
+			} else if sid, ok := obj["sessionId"].(string); ok && sid != "" {
+				emitVendorSession(emit, runID, sid)
+				sessionCaptured = true
+			}
+		}
+
 		typ, _ := obj["type"].(string)
 		switch typ {
 		case "stream_event":
@@ -558,9 +649,22 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 					pending = nil
 				}
 			}
-		case "system", "assistant", "result":
+		case "system":
+			// Claude: {"type":"system","subtype":"init","session_id":"..."} is
+			// the session-establishment event — the exact id `--resume` takes
+			// (verified live 2026-07-02 against claude 2.1.198). No text is
+			// emitted from ANY system event (init or otherwise), same as
+			// before this capture was added.
+			if !sessionCaptured {
+				if subtype, _ := obj["subtype"].(string); subtype == "init" {
+					if sid, _ := obj["session_id"].(string); sid != "" {
+						emitVendorSession(emit, runID, sid)
+						sessionCaptured = true
+					}
+				}
+			}
+		case "assistant", "result":
 			// Recognised types we do not emit text from:
-			//   system   – session init (reserved for future resume).
 			//   assistant – whole-message fallback (superseded by deltas).
 			//   result   – run completion metadata.
 		case "text":
@@ -625,7 +729,18 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 					})
 				}
 			}
-		case "thread.started", "turn.started", "turn.completed",
+		case "thread.started":
+			// Codex: {"type":"thread.started","thread_id":"..."} — the exact
+			// id `codex exec resume <id>` takes (verified live 2026-07-02
+			// against codex-cli 0.135.0). No text emitted (metadata only,
+			// same suppression as before this capture was added).
+			if !sessionCaptured {
+				if tid, _ := obj["thread_id"].(string); tid != "" {
+					emitVendorSession(emit, runID, tid)
+					sessionCaptured = true
+				}
+			}
+		case "turn.started", "turn.completed",
 			"step_start", "step_finish", "tool", "tool_result",
 			"session_event", "message_start", "message_stop":
 			// lifecycle/metadata events (opencode + codex) — suppress
@@ -752,6 +867,14 @@ type dispatcher struct {
 	// for the given agent binary (argv[0]). Nil ⇒ treat as not wired (fail-closed:
 	// launches escalate). Set by the server from the real install state.
 	hookWired func(string) bool
+	// bindVendorSession persists a run's extracted vendor session/thread id to
+	// the conversation ledger (conversationStore.bindVendorSession). Nil when
+	// no conversation store is available (e.g. it failed to open at startup) —
+	// wrapEmitForRun checks for nil before calling it. Only invoked for
+	// conversation-ledger-backed launches (launchConversationTurn); plain
+	// dispatch/continueRun/resumeObservedSession runs have no ledger turn to
+	// bind against.
+	bindVendorSession func(runID, vendorSessionID string) error
 }
 
 func newDispatcher() *dispatcher {
@@ -768,6 +891,48 @@ func newDispatcher() *dispatcher {
 func (d *dispatcher) emitAudit(e AuditEntry) {
 	if d.audit != nil {
 		d.audit(e)
+	}
+}
+
+// wrapEmitForRun wraps the dispatcher's shared emit sink for one launched
+// run so the internal "agent.run.vendorSession" event (emitted at most once
+// by streamJSONOutput, when it extracts a vendor CLI's session/thread id from
+// structured stdout — see emitVendorSession) updates dispatchRun.SessionID
+// for this run and — when ledgerBacked — also persists the id via
+// d.bindVendorSession so a later agent.conversations.append follow-up on the
+// same conversation gets resumeMode "exact" instead of "latestInCwdFallback"
+// (see buildConversationArgv). Every other method name passes straight
+// through to d.emit unchanged; the vendorSession event itself is NEVER
+// forwarded further — it is an internal signal, not a phone-facing
+// notification.
+//
+// ledgerBacked is false for plain dispatch/continueRun/resumeObservedSession
+// launches (no conversation ledger row exists for their runID, so calling
+// bindVendorSession would just fail with "no turn found" on every ordinary
+// chat message) and true only for launchConversationTurn, whose runID always
+// has a ledger turn already persisted by conversationStore.beginTurn before
+// the process launches.
+func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
+	return func(method string, params any) {
+		if method == "agent.run.vendorSession" {
+			m, _ := params.(map[string]any)
+			vendorSessionID, _ := m["vendorSessionId"].(string)
+			if vendorSessionID == "" {
+				return
+			}
+			d.mu.Lock()
+			if run := d.runs[runID]; run != nil {
+				run.SessionID = vendorSessionID
+			}
+			d.mu.Unlock()
+			if ledgerBacked && d.bindVendorSession != nil {
+				_ = d.bindVendorSession(runID, vendorSessionID)
+			}
+			return
+		}
+		if d.emit != nil {
+			d.emit(method, params)
+		}
 	}
 }
 
@@ -1062,7 +1227,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	// Allocate the runId before launch so streamed output/status events can be
 	// tagged with it from the first byte.
 	id := newUUID()
-	handle, err := d.launch(argv, p.CWD, id, d.emit)
+	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
@@ -1200,7 +1365,7 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 	}
 
 	id := newUUID()
-	handle, err := d.launch(argv, cwd, id, d.emit)
+	handle, err := d.launch(argv, cwd, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		audit(AuditEntry{Action: "continue-error", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
@@ -1278,7 +1443,7 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	}
 
 	id := newUUID()
-	handle, err := d.launch(argv, p.CWD, id, d.emit)
+	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		audit(AuditEntry{Action: "observed-continue-error", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
@@ -1288,4 +1453,66 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "observed-continue-launched", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
+}
+
+// launchConversationTurn is agent.conversations.append's dispatch integration
+// (cross-device sync build handoff, Task 3): it selects new/exact/fallback
+// argv via buildConversationArgv, re-passes the SAME budget + policy gates
+// dispatch/continueRun/resumeObservedSession use, and — once allowed —
+// launches under runID (the caller-assigned id of the ledger turn already
+// persisted by conversationStore.beginTurn) rather than minting a new one, so
+// streamed output/status and the vendor-session-id capture route back to the
+// right ledger turn via conversationStore.appendRunOutput/appendRunStatus/
+// bindVendorSession (all keyed by run_id). The caller (conversationsAppend)
+// is responsible for never invoking this twice for the same ledger turn (an
+// idempotent clientTurnId replay must not double-launch).
+func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
+	argv, _, ok := buildConversationArgv(p)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
+	}
+
+	// Budget gate (shared daily total vs this conversation's cap).
+	d.mu.Lock()
+	spent := d.spentUSD
+	d.mu.Unlock()
+	if p.BudgetUSD > 0 && spent >= p.BudgetUSD {
+		audit(AuditEntry{Action: "conversation-append-budget-exceeded", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
+		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
+	}
+
+	// Policy gate (same risk scoring as dispatch/continueRun/resumeObservedSession).
+	command := "[conversation-append] " + strings.Join(argv, " ")
+	event := ApprovalEvent{
+		ApprovalID:  newUUID(),
+		Agent:       normalizeAgentSource(p.Agent),
+		Kind:        "command",
+		Command:     command,
+		CWD:         p.CWD,
+		Risk:        d.launchRisk(argv),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		RunID:       runID,
+		ContentHash: computeContentHash(command, "", p.CWD, ""),
+	}
+	effect, rule, fromDefault := evalFn(event)
+	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
+	switch effect {
+	case "deny":
+		audit(AuditEntry{Action: "conversation-append-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
+	case "ask":
+		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+	}
+
+	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
+	if err != nil {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	d.mu.Lock()
+	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
+	d.mu.Unlock()
+	audit(AuditEntry{Action: "conversation-append-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: runID})
+	return dispatchResult{RunID: runID, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
 }

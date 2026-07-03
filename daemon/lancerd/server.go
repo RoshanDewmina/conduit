@@ -210,6 +210,12 @@ type server struct {
 	// git runs git/gh subcommands for the agent.git.* / agent.worktree.* RPCs.
 	// nil ⇒ realGitRunner; injectable in tests.
 	git gitRunner
+	// conversations is the host-owned conversation ledger (conversation_store.go)
+	// backing the agent.conversations.* RPCs. nil only if openConversationStore
+	// failed at startup (logged to stderr); the conversation RPC methods
+	// (conversation_rpc.go) then return a clear "conversation store
+	// unavailable" error instead of panicking on a nil pointer.
+	conversations *conversationStore
 }
 
 type loopState struct {
@@ -241,6 +247,22 @@ func newServer(home string) *server {
 		loopsPath:  filepath.Join(home, ".lancer", "loops.json"),
 	}
 	s.loadLoops()
+	// The conversation ledger opens its own SQLite file under <home>/.lancer —
+	// same host-local-state pattern as policy/audit/secrets/scheduler above. A
+	// failure here (e.g. unwritable home) is logged, not fatal: the daemon still
+	// starts, and agent.conversations.* RPCs simply report the store as
+	// unavailable rather than crashing the whole process.
+	if conversations, err := openConversationStore(home); err != nil {
+		fmt.Fprintf(os.Stderr, "conversation_store: open failed, agent.conversations.* RPCs will error: %v\n", err)
+	} else {
+		s.conversations = conversations
+		// Lets a conversation-ledger-backed launch (launchConversationTurn)
+		// persist the vendor session/thread id it captures from stdout, so the
+		// NEXT follow-up on this conversation gets exact resume instead of
+		// falling back to "continue latest in cwd". nil-safe: wrapEmitForRun
+		// checks d.bindVendorSession != nil before calling it.
+		s.dispatcher.bindVendorSession = conversations.bindVendorSession
+	}
 	// The poller applies poll-delivered decisions through applyDecision so they
 	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
 	// policy) — not via a bare resolve that skips both.
@@ -731,6 +753,73 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		result, err := loadSessionTranscript("", params.SessionID, params.SinceLine)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "agent.conversations.list":
+		var req conversationListRequest
+		if len(msg.Params) > 0 {
+			if err := json.Unmarshal(msg.Params, &req); err != nil {
+				s.writeError(msg.ID, -32602, "invalid params")
+				return
+			}
+		}
+		result, err := s.conversationsList(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "agent.conversations.fetch":
+		var req conversationFetchRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.conversationsFetch(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "agent.conversations.append":
+		var req conversationAppendRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.conversationsAppend(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "agent.conversations.archive":
+		var req conversationArchiveRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.conversationsArchive(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "agent.conversations.attachObservedSession":
+		var req conversationAttachObservedSessionRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.conversationsAttachObservedSession(req)
 		if err != nil {
 			s.writeError(msg.ID, -32000, err.Error())
 			return

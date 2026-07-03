@@ -70,6 +70,93 @@ func TestFsListReportsParent(t *testing.T) {
 	}
 }
 
+func TestFsReadReturnsContent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	mustWrite(t, filepath.Join(home, "notes.txt"))
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	res, err := s.fsRead("~/notes.txt")
+	if err != nil {
+		t.Fatalf("fsRead: %v", err)
+	}
+	if res.Content != "x" {
+		t.Errorf("content = %q, want %q", res.Content, "x")
+	}
+	if res.Path != "~/notes.txt" {
+		t.Errorf("path = %q, want ~/notes.txt", res.Path)
+	}
+	if res.Truncated {
+		t.Error("truncated = true for a 1-byte file, want false")
+	}
+}
+
+func TestFsReadRejectsEscapeOutsideHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	if _, err := s.fsRead("~/../../etc/passwd"); err == nil {
+		t.Error("expected error for path outside home, got nil")
+	}
+	if _, err := s.fsRead("/etc/passwd"); err == nil {
+		t.Error("expected error for absolute path outside home, got nil")
+	}
+}
+
+func TestFsReadRejectsDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	mustMkdir(t, filepath.Join(home, "projects"))
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	if _, err := s.fsRead("~/projects"); err == nil {
+		t.Error("expected error reading a directory as a file, got nil")
+	}
+}
+
+func TestFsReadRejectsBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, "bin.dat"), []byte{0x00, 0x01, 0x02}, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	if _, err := s.fsRead("~/bin.dat"); err == nil {
+		t.Error("expected error reading a binary file, got nil")
+	}
+}
+
+func TestFsReadTruncatesLargeFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	big := make([]byte, fsReadMaxBytes+1024)
+	for i := range big {
+		big[i] = 'a'
+	}
+	if err := os.WriteFile(filepath.Join(home, "big.txt"), big, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	res, err := s.fsRead("~/big.txt")
+	if err != nil {
+		t.Fatalf("fsRead: %v", err)
+	}
+	if !res.Truncated {
+		t.Error("truncated = false for an over-cap file, want true")
+	}
+	if len(res.Content) != fsReadMaxBytes {
+		t.Errorf("content length = %d, want %d", len(res.Content), fsReadMaxBytes)
+	}
+}
+
 func TestValidateRepoURL(t *testing.T) {
 	ok := []string{
 		"https://github.com/owner/repo.git",

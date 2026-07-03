@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,6 +93,69 @@ func (s *server) fsList(path string) (fsListResult, error) {
 		res.Parent = foldHome(home, filepath.Dir(resolved))
 	}
 	return res, nil
+}
+
+type fsReadResult struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
+// fsReadMaxBytes caps what a single file preview pulls over the relay — this
+// is a chat/inspection viewer, not a file transfer tool.
+const fsReadMaxBytes = 512 * 1024
+
+// fsRead returns a file's content, confined to the user's home and capped at
+// fsReadMaxBytes. Binary files (a NUL byte in the read window) are rejected
+// rather than dumped as garbage into the preview.
+func (s *server) fsRead(path string) (fsReadResult, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fsReadResult{}, err
+	}
+
+	resolved := expandHome(path)
+	if resolved == "" {
+		return fsReadResult{}, fmt.Errorf("no path given")
+	}
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(home, resolved)
+	}
+	resolved = filepath.Clean(resolved)
+
+	if !withinHome(home, resolved) {
+		return fsReadResult{}, fmt.Errorf("path is outside the home directory")
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return fsReadResult{}, err
+	}
+	if info.IsDir() {
+		return fsReadResult{}, fmt.Errorf("not a file")
+	}
+
+	f, err := os.Open(resolved)
+	if err != nil {
+		return fsReadResult{}, err
+	}
+	defer f.Close()
+
+	buf := make([]byte, fsReadMaxBytes+1)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return fsReadResult{}, err
+	}
+	truncated := n > fsReadMaxBytes
+	if truncated {
+		n = fsReadMaxBytes
+	}
+	data := buf[:n]
+	if bytes.IndexByte(data, 0) >= 0 {
+		return fsReadResult{}, fmt.Errorf("file appears to be binary")
+	}
+
+	return fsReadResult{Path: foldHome(home, resolved), Content: string(data), Truncated: truncated}, nil
 }
 
 // withinHome reports whether target is home or a descendant of it.
