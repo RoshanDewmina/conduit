@@ -291,9 +291,17 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 39HM2X8GS6
         GENERATE_INFOPLIST_FILE: "YES"
+        # AppIntentsTesting (iOS 27+) ships under Developer/Library/Frameworks,
+        # like XCTest — not inside the SDK proper — so it needs an explicit
+        # framework search path rather than a plain `sdk:` dependency.
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PLATFORM_DIR)/Developer/Library/Frameworks"
     dependencies:
       - target: Lancer
       - sdk: AppIntents.framework
+      - framework: "$(PLATFORM_DIR)/Developer/Library/Frameworks/AppIntentsTesting.framework"
+        embed: false
 
   LancerMac:
     type: application
