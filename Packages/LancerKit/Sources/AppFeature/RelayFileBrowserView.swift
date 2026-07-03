@@ -2,6 +2,8 @@
 import SwiftUI
 import DesignSystem
 import SessionFeature
+import FilesFeature
+import LancerCore
 
 /// Read-only host directory browser over the E2E relay. Mirrors `AgentFilesView`
 /// (the SSH file browser) visually, but lists through `E2ERelayBridge.relayListDir`
@@ -9,8 +11,10 @@ import SessionFeature
 /// browser can never escape the user's home directory — an out-of-home path comes
 /// back as an error state.
 ///
-/// Browse-only: tapping a folder lists into it; files are inert (no open/preview —
-/// pulling file bytes over the relay is out of scope, like the terminal/PTY tunnel).
+/// Tapping a folder lists into it; tapping a file fetches its content through
+/// `E2ERelayBridge.relayReadFile` (home-confined, size-capped, binary-rejecting,
+/// same fail-closed posture as the directory listing) and shows it in
+/// `FilePreviewView`.
 struct RelayFileBrowserView: View {
     let bridge: E2ERelayBridge
     let initialPath: String
@@ -23,6 +27,11 @@ struct RelayFileBrowserView: View {
     @State private var entries: [RelayDirEntry] = []
     @State private var loading = false
     @State private var errorText: String?
+    @State private var previewFilename: String?
+    @State private var previewContent: String?
+    @State private var previewPath: String?
+    @State private var isPreviewPresented = false
+    @State private var fileLoadErrorText: String?
 
     init(bridge: E2ERelayBridge, initialPath: String = "~") {
         self.bridge = bridge
@@ -41,6 +50,24 @@ struct RelayFileBrowserView: View {
         }
         .navigationBarHidden(true)
         .task(id: path) { await load() }
+        .filePreviewDrawer(
+            filename: previewFilename,
+            content: previewContent,
+            path: previewPath,
+            isPresented: $isPreviewPresented
+        )
+        .alert(
+            "Couldn’t open file",
+            isPresented: Binding(
+                get: { fileLoadErrorText != nil },
+                set: { if !$0 { fileLoadErrorText = nil } }
+            ),
+            presenting: fileLoadErrorText
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
     }
 
     private var pathBar: some View {
@@ -121,15 +148,34 @@ struct RelayFileBrowserView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!entry.isDir || loading)
+        .disabled(loading)
     }
 
     // MARK: - Actions
 
     private func handleTap(_ entry: RelayDirEntry) {
-        guard entry.isDir, !loading else { return }
-        errorText = nil
-        path = childPath(of: path, name: entry.name)
+        guard !loading else { return }
+        if entry.isDir {
+            errorText = nil
+            path = childPath(of: path, name: entry.name)
+        } else {
+            Task { await loadFilePreview(entry) }
+        }
+    }
+
+    private func loadFilePreview(_ entry: RelayDirEntry) async {
+        loading = true
+        defer { loading = false }
+        let fullPath = childPath(of: path, name: entry.name)
+        do {
+            let file = try await bridge.relayReadFile(fullPath)
+            previewFilename = entry.name
+            previewContent = file.content
+            previewPath = file.path
+            isPreviewPresented = true
+        } catch {
+            fileLoadErrorText = error.localizedDescription
+        }
     }
 
     private func goUp() {

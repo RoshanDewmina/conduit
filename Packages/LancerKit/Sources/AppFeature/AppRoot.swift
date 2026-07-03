@@ -15,6 +15,7 @@ import InboxFeature
 import OnboardingFeature
 import SettingsFeature
 import DesignSystem
+import os
 
 import SyncKit
 
@@ -31,6 +32,10 @@ public final class AppEnvironment {
     public let aiKeyStore: any AIKeyStoring
     public let hostKeyStore: HostKeyStore
     public let syncEngine: SyncEngine
+    /// CloudKit private-database mirror for the conversation ledger's
+    /// already host-confirmed rows (Task 8) — separate zone and cadence
+    /// from `syncEngine`'s Hosts/Snippets sync; see `ConversationSyncEngine`.
+    public let conversationSyncEngine: ConversationSyncEngine
     public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
@@ -38,7 +43,13 @@ public final class AppEnvironment {
     public let quotaGuardStore: QuotaGuardStore
     public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
+    public let workspaceRepo: WorkspaceRepository
     public let accountSession: AccountSessionController
+    /// Host-mediated conversation turn orchestration (Task 7) — the only place
+    /// that should call `agent.conversations.append`/`.fetch` for UI-driven
+    /// turns. Lives on the environment (not `AppRoot`, a `View` struct) so its
+    /// per-conversation sync-state subscriptions survive view re-creation.
+    public let conversationSyncCoordinator: ConversationSyncCoordinator
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -47,6 +58,8 @@ public final class AppEnvironment {
         self.blockRepo = BlockRepository(database)
         self.snapshotRepo = SessionSnapshotRepository(database)
         self.chatRepo = ChatConversationRepository(database)
+        self.workspaceRepo = WorkspaceRepository(database)
+        self.conversationSyncCoordinator = ConversationSyncCoordinator(chatRepo: chatRepo)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
@@ -60,6 +73,10 @@ public final class AppEnvironment {
             snippetRepo: SnippetRepository(db: database),
             tombstoneRepo: SyncTombstoneRepository(database),
             keyStore: ks
+        )
+        self.conversationSyncEngine = ConversationSyncEngine(
+            cloudSync: cloudSync,
+            chatRepo: chatRepo
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
@@ -143,6 +160,13 @@ public struct AppRoot: View {
     @State private var sessionViewModel: SessionViewModel?
     @State private var drawerRoute: AppDrawerRoute?
     @State private var workspacesRevision = UUID()
+    /// One-shot hint set by Home's "+ New workspace" / a workspace screen's
+    /// "New chat here" — consumed by `NewChatTabView.restoreLastSelectionOrDefault()`
+    /// via `onMachineHintConsumed`, then cleared so it doesn't leak into the
+    /// next unrelated New Chat entry.
+    @State private var pendingNewChatMachineKey: String?
+    @State private var pendingNewChatCwd: String?
+    @State private var allWorkspaces: [Workspace] = []
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
@@ -235,6 +259,21 @@ public struct AppRoot: View {
         case failure(String)
     }
 
+    /// UI-audit hook: skip the system notification-permission prompt. On this
+    /// Xcode-beta/iOS27 headless simulator, that system alert doesn't respond
+    /// to HID taps at all (idb `ui_tap`, XcodeBuildMCP `tap`/`key_press` all
+    /// no-op on it — a known limitation, see the 2026-07-02 Device Hub matrix
+    /// report), permanently blocking automated screenshot/UI passes on any
+    /// freshly-installed simulator. Gated `#if DEBUG` like the other launch
+    /// seams in `init()` below — never compiled into a release build.
+    static var skipNotificationPromptForUITesting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["LANCER_SKIP_NOTIFICATION_PROMPT"] == "1"
+        #else
+        false
+        #endif
+    }
+
     public init() {
         do {
             let env = try AppEnvironment()
@@ -321,13 +360,13 @@ public struct AppRoot: View {
             }
         }
         .task {
-            if onboardingSeen {
+            if onboardingSeen && !Self.skipNotificationPromptForUITesting {
                 Notifications.shared.registerCategories()
                 _ = await Notifications.shared.requestAuthorization()
             }
         }
         .onChange(of: onboardingSeen) { _, seen in
-            if seen {
+            if seen && !Self.skipNotificationPromptForUITesting {
                 Notifications.shared.registerCategories()
                 Task { _ = await Notifications.shared.requestAuthorization() }
             }
@@ -663,6 +702,7 @@ public struct AppRoot: View {
                 )
             }
             await env.syncEngine.start()
+            await env.conversationSyncEngine.start()
         }
         .task {
 #if DEBUG
@@ -709,9 +749,6 @@ public struct AppRoot: View {
         }
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
-        }
-        .onChange(of: relayFleetStore.machines.map(\.bridge.isActive), initial: true) { _, _ in
-            sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
         }
         // One-time interactive coach-mark tour. Overlay stays installed (cheap,
         // inert while inactive) but auto-start is OFF: on-device it mis-rendered
@@ -878,6 +915,19 @@ public struct AppRoot: View {
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
+        // Wire Home's attention feed to the SAME live-observed VM immediately,
+        // not only after the first live relay approval notification arrives
+        // (the previous behavior — see the narrower reassignment in the
+        // .lancerE2EApprovalReceived handler below). LiveInboxViewModel starts
+        // observing the persisted approvals table the instant it's created, so
+        // any approval that existed BEFORE this app launch (e.g. the app was
+        // killed with one pending, or it was written while fully backgrounded)
+        // was already visible in the real Inbox screen but invisible to Home's
+        // "attentionItems"/headline until a brand-new live notification
+        // happened to fire — a user could see "All clear tonight" while a
+        // real, already-pending high-risk approval sat unreviewed. Safe to set
+        // unconditionally per the dedupe-by-id note at the other call site.
+        fleetStore.relayInboxVM = liveVM
     }
 
     /// Bridge RPC actions for the selected (or first) fleet slot.
@@ -982,15 +1032,65 @@ public struct AppRoot: View {
         return []
     }
 
-    /// Continue a persisted conversation from History. Resolves the conversation's
-    /// host channel (a connected SSH slot, else the relay bridge), continues the run
-    /// under a new runId, registers it for streaming, and returns the ActiveChatRun.
-    /// Returns nil if no live transport can reach the host.
-    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String) async -> ActiveChatRun? {
-        // Continue from the conversation's persisted context (agent/cwd/model) as a
-        // fallback, so a reopened chat still continues after the daemon forgot the
-        // run (process ended or daemon restarted) instead of "no longer has this run".
-        // Prefer the SSH slot that owns this host.
+    /// Continue a persisted conversation from History. A ledger-backed conversation
+    /// (Task 6/7 — `syncState != .localOnly`) appends through the host's conversation
+    /// ledger so another device sees the turn too; a legacy pre-ledger conversation
+    /// falls back to continuing directly via the run's channel. Returns nil if no
+    /// live transport can reach the conversation's host.
+    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String, env: AppEnvironment) async -> ActiveChatRun? {
+        if conv.syncState != .localOnly {
+            // Ledger conversations live on ONE host's SQLite ledger — unlike the
+            // legacy fallback below, there's no safe "any active machine" retry
+            // if the exact owning host (SSH slot, else the paired relay machine)
+            // isn't reachable.
+            if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
+               let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
+                let channel = slot.channel
+                let transport = ConversationTransport(
+                    append: { try await channel.appendConversation($0) },
+                    fetch: { try await channel.fetchConversation($0) },
+                    archive: { try await channel.archiveConversation($0) }
+                )
+                let outcome = await env.conversationSyncCoordinator.continueConversation(
+                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
+                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
+                    hostName: slot.hostName, hostID: slot.hostID.uuidString, transport: transport
+                )
+                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: slot.channel, title: conv.title) {
+                    return run
+                }
+                return nil
+            }
+            if let sourceHostID = conv.sourceHostID, let uuid = UUID(uuidString: sourceHostID),
+               let machine = relayFleetStore.machine(RelayMachineID(uuid)) {
+                let bridge = machine.bridge
+                let transport = ConversationTransport(
+                    append: { try await bridge.relayAppendConversation($0) },
+                    fetch: { try await bridge.relayFetchConversation($0) },
+                    archive: { try await bridge.relayArchiveConversation($0) }
+                )
+                let channel = RelayRunControl(
+                    send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
+                    onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p, agent: conv.agentID, cwd: conv.cwd, model: conv.model) }
+                )
+                let outcome = await env.conversationSyncCoordinator.continueConversation(
+                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
+                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
+                    hostName: machine.record.displayName, hostID: uuid.uuidString, transport: transport
+                )
+                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: channel, title: conv.title) {
+                    return run
+                }
+                return nil
+            }
+            return nil
+        }
+
+        // Legacy (pre-ledger) conversation: continue from the persisted context
+        // (agent/cwd/model) directly via the run's channel, so a reopened chat
+        // still continues after the daemon forgot the run (process ended or
+        // daemon restarted) instead of "no longer has this run". Prefer the SSH
+        // slot that owns this host.
         if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
            let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
             guard let result = try? await slot.channel.continueRun(
@@ -1027,106 +1127,185 @@ public struct AppRoot: View {
         return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
     }
 
-    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
-        let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return .blocked("Unknown agent.") }
+    /// A fresh idempotency key for one `agent.conversations.append` call —
+    /// `stable-device-id:random`, per the build handoff's `clientTurnId`
+    /// contract. Uniqueness (not the exact device-id prefix format) is what
+    /// matters: it only needs to let a replayed append map back to the same
+    /// turn instead of creating a duplicate.
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "AppRoot")
 
-        // Relay-paired dispatch: send through the owning machine's E2E relay
-        // bridge. The id is 3-part ("relay|<machineID>|<agentID>") so it can
-        // route to the exact machine (see `dispatchAgents()`).
+    private static func newClientTurnID() -> String {
+        "\(DeviceIdentity.sessionID()):\(UUID().uuidString)"
+    }
+
+    /// Maps a `ConversationSyncCoordinator.TurnOutcome` to the `ChatDispatchOutcome`
+    /// NewChatTabView already knows how to render, registering the run for
+    /// streaming and attaching the ledger's `conversationID`/`nextBaseSeq` so
+    /// follow-ups can continue through the ledger too (see `continueConversationTurn`).
+    private func chatDispatchOutcome(
+        from outcome: ConversationSyncCoordinator.TurnOutcome, channel: any RunControlling, title: String
+    ) -> ChatDispatchOutcome {
+        switch outcome {
+        case .started(let started):
+            guard !started.runID.isEmpty else { return .blocked("Couldn't start the run.") }
+            runOutputStore.register(runId: started.runID)
+            return .started(ActiveChatRun(
+                runId: started.runID,
+                channel: channel,
+                title: title,
+                subtitle: "",
+                cwd: started.cwd,
+                conversationID: started.conversationID,
+                nextBaseSeq: started.baseSeqForNextTurn
+            ))
+        case .blocked(let message):
+            return .blocked(message)
+        }
+    }
+
+    /// A transport + run-control channel resolved for one agent id, shared by
+    /// both the initial dispatch and every follow-up continuation so a thread
+    /// never has to re-derive "which bridge/slot owns this conversation".
+    private struct ResolvedAgentTransport {
+        let transport: ConversationTransport
+        let hostName: String
+        let hostID: String?
+        let channel: any RunControlling
+        let title: String
+    }
+
+    /// `resolveAgentTransport`'s outcome — a plain success/failure enum (not
+    /// `Result<_, Error>`) since the failure side is just a user-facing message,
+    /// not a thrown error.
+    private enum ResolvedAgentTransportOutcome {
+        case success(ResolvedAgentTransport)
+        case failure(String)
+    }
+
+    /// Resolves `agentID` (either "relay|<machineID>|<vendor>" or "<slotUUID>|<vendor>",
+    /// see `dispatchAgents()`) to the transport + run-control channel the
+    /// `ConversationSyncCoordinator` and `ActiveChatRun` need. `cwd`/`model` are
+    /// only used to build the relay channel's `onContinue` fallback closure (the
+    /// pre-sync path for the rare case a mirror write silently failed).
+    private func resolveAgentTransport(agentID: String, cwd: String, model: String?) -> ResolvedAgentTransportOutcome {
+        let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return .failure("Unknown agent.") }
+
+        // Relay-paired: the id is 3-part ("relay|<machineID>|<agentID>") so it
+        // can route to the exact machine (see `dispatchAgents()`).
         if parts[0] == "relay" {
             let relayParts = agentID.split(separator: "|", maxSplits: 2).map(String.init)
             guard relayParts.count == 3, let uuid = UUID(uuidString: relayParts[1]) else {
-                return .blocked("Unknown agent.")
+                return .failure("Unknown agent.")
             }
-            guard let bridge = relayFleetStore.machine(RelayMachineID(uuid))?.bridge else {
-                return .blocked("Relay bridge not available.")
+            guard let machine = relayFleetStore.machine(RelayMachineID(uuid)) else {
+                return .failure("Relay bridge not available.")
             }
+            let bridge = machine.bridge
             let vendor = relayParts[2]
-            do {
-                let result = try await bridge.sendDispatch(
-                    agent: vendor, cwd: cwd, prompt: prompt,
-                    budgetUSD: budgetUSD, model: model
-                )
-                switch result.status {
-                case "started":
-                    guard let runId = result.runId else {
-                        return .blocked(result.message ?? "Couldn't start the run.")
-                    }
-                    runOutputStore.register(runId: runId)
-                    // Capture this run's agent/cwd/model so a follow-up continues even
-                    // after the original process exits (a one-shot `claude -p` exits as
-                    // soon as it answers, so the daemon no longer has the run in memory).
-                    // Use the daemon-resolved absolute cwd, not the raw local one (which
-                    // may be the literal "~") — same reasoning as ActiveChatRun.cwd below.
-                    let fbAgent = vendor
-                    let resolvedCwd = result.cwd ?? cwd
-                    let channel = RelayRunControl(send: { runId, action in
-                        await bridge.sendRunControl(runId: runId, action: action)
-                    }, onContinue: { runId, prompt in
-                        try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: fbAgent, cwd: resolvedCwd, model: model)
-                    })
-                    return .started(ActiveChatRun(
-                        runId: runId,
-                        channel: channel,
-                        title: "Relay · \(vendor)",
-                        subtitle: prompt,
-                        cwd: resolvedCwd
-                    ))
-                case "denied":
-                    return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
-                case "needsApproval":
-                    return .blocked("Awaiting your approval — check the Inbox.")
-                case "budgetExceeded":
-                    return .blocked(result.message ?? "Daily budget cap reached.")
-                default:
-                    return .blocked(result.message ?? "Couldn't start the run.")
-                }
-            } catch {
-                // A superseded request means a newer send replaced this one — benign,
-                // so return an empty block the composer ignores (no scary alert).
-                if case E2EError.superseded = error { return .blocked("") }
-                return .blocked("Relay dispatch failed: \(error.localizedDescription)")
-            }
+            let transport = ConversationTransport(
+                append: { try await bridge.relayAppendConversation($0) },
+                fetch: { try await bridge.relayFetchConversation($0) },
+                archive: { try await bridge.relayArchiveConversation($0) }
+            )
+            let channel = RelayRunControl(send: { runId, action in
+                await bridge.sendRunControl(runId: runId, action: action)
+            }, onContinue: { runId, prompt in
+                try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: vendor, cwd: cwd, model: model)
+            })
+            return .success(ResolvedAgentTransport(
+                transport: transport, hostName: machine.record.displayName, hostID: uuid.uuidString,
+                channel: channel, title: "Relay · \(vendor)"
+            ))
         }
 
-        // SSH dispatch: route through the fleet slot's daemon channel.
+        // SSH: route through the fleet slot's daemon channel.
         guard let slotUUID = UUID(uuidString: parts[0]),
               let slot = fleetStore.slots.first(where: { $0.id == slotUUID })
-        else { return .blocked("Host is no longer connected.") }
+        else { return .failure("Host is no longer connected.") }
         let vendor = parts[1]
-        do {
-            let result = try await slot.channel.dispatchAgent(
-                agent: vendor,
-                cwd: cwd,
-                prompt: prompt,
-                budgetUSD: budgetUSD ?? 0,
-                model: model
+        let channel = slot.channel
+        let transport = ConversationTransport(
+            append: { try await channel.appendConversation($0) },
+            fetch: { try await channel.fetchConversation($0) },
+            archive: { try await channel.archiveConversation($0) }
+        )
+        return .success(ResolvedAgentTransport(
+            transport: transport, hostName: slot.hostName, hostID: slot.hostID.uuidString,
+            channel: slot.channel, title: "\(vendor) · \(slot.hostName)"
+        ))
+    }
+
+    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil, env: AppEnvironment) async -> ChatDispatchOutcome {
+        let vendor = agentID.split(separator: "|").last.map(String.init) ?? agentID
+        switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
+        case .failure(let message):
+            return .blocked(message)
+        case .success(let resolved):
+            let outcome = await env.conversationSyncCoordinator.startConversation(
+                agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                hostName: resolved.hostName, hostID: resolved.hostID,
+                clientTurnID: Self.newClientTurnID(), transport: resolved.transport
             )
-            switch result.status {
-            case "started":
-                guard let runId = result.runId else {
-                    return .blocked(result.message ?? "Couldn't start the run.")
-                }
-                runOutputStore.register(runId: runId)
-                return .started(ActiveChatRun(
-                    runId: runId,
-                    channel: slot.channel,
-                    title: "\(vendor) · \(slot.hostName)",
-                    subtitle: prompt,
-                    cwd: result.cwd ?? cwd
-                ))
-            case "denied":
-                return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
-            case "needsApproval":
-                return .blocked("Awaiting your approval — check the Inbox.")
-            case "budgetExceeded":
-                return .blocked(result.message ?? "Daily budget cap reached.")
-            default:
-                return .blocked(result.message ?? "Couldn't start the run.")
-            }
-        } catch {
-            return .blocked("Dispatch failed: \(error.localizedDescription)")
+            return chatDispatchOutcome(from: outcome, channel: resolved.channel, title: resolved.title)
+        }
+    }
+
+    /// Resolves just the `ConversationTransport` (no run-control channel) for a
+    /// persisted conversation's ledger host, by its `hostID` (SSH slot) or
+    /// `sourceHostID` (paired relay machine) — used for refresh-only calls
+    /// (the sync banner's Refresh action, streaming-handoff polling) that
+    /// don't start or continue a run. `nil` if neither host is reachable.
+    private func resolveTransport(forConversation conv: ChatConversation) -> ConversationTransport? {
+        if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
+           let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
+            let channel = slot.channel
+            return ConversationTransport(
+                append: { try await channel.appendConversation($0) },
+                fetch: { try await channel.fetchConversation($0) },
+                archive: { try await channel.archiveConversation($0) }
+            )
+        }
+        if let sourceHostID = conv.sourceHostID, let uuid = UUID(uuidString: sourceHostID),
+           let machine = relayFleetStore.machine(RelayMachineID(uuid)) {
+            let bridge = machine.bridge
+            return ConversationTransport(
+                append: { try await bridge.relayAppendConversation($0) },
+                fetch: { try await bridge.relayFetchConversation($0) },
+                archive: { try await bridge.relayArchiveConversation($0) }
+            )
+        }
+        return nil
+    }
+
+    /// Re-pulls a conversation from its host ledger and merges it into the
+    /// mirror — shared by `NewChatTabView`'s and `ChatHistoryView`'s sync
+    /// banners (Refresh/Resend) and by streaming-handoff polling. Returns the
+    /// fresh `nextSeq`, or `nil` if the conversation or its host transport
+    /// can't be resolved.
+    private func refreshConversationMirror(conversationID: String, env: AppEnvironment) async -> Int? {
+        guard let conv = try? await env.chatRepo.conversation(id: conversationID),
+              let transport = resolveTransport(forConversation: conv)
+        else { return nil }
+        return try? await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
+    }
+
+    /// Appends a follow-up turn to an existing ledger-backed conversation —
+    /// `NewChatTabView.sendFollowUp`'s ledger path, used whenever the active
+    /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
+    private func performContinueConversation(
+        conversationID: String, baseSeq: Int, prompt: String, agentID: String, cwd: String, model: String?, env: AppEnvironment
+    ) async -> ChatDispatchOutcome {
+        switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
+        case .failure(let message):
+            return .blocked(message)
+        case .success(let resolved):
+            let outcome = await env.conversationSyncCoordinator.continueConversation(
+                conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
+                clientTurnID: Self.newClientTurnID(), model: model,
+                hostName: resolved.hostName, hostID: resolved.hostID, transport: resolved.transport
+            )
+            return chatDispatchOutcome(from: outcome, channel: resolved.channel, title: resolved.title)
         }
     }
 
@@ -1349,13 +1528,6 @@ public struct AppRoot: View {
         }
     }
 
-    private func jumpToUnreadLiveSession() {
-        guard let slot = fleetStore.firstSlotWithPendingApprovals() else { return }
-        selectFleetSlot(slot.id)
-        sidebarState.navigate(to: .needsAttention)
-        isShowingLiveSession = true
-    }
-
     private func inboxDestination(env: AppEnvironment) -> some View {
         let actions = bridgeSessionActions()
         return InboxView(
@@ -1446,6 +1618,7 @@ public struct AppRoot: View {
         SettingsWithLibraryView(
             viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
             syncEngine: env.syncEngine,
+            conversationSyncEngine: env.conversationSyncEngine,
             backendURL: Self.pushBackendURL(),
             auditRepository: env.auditRepo,
             approvalRepository: approvalRepository,
@@ -1499,9 +1672,26 @@ public struct AppRoot: View {
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
                 chatRepo: env.chatRepo,
+                workspaceRepo: env.workspaceRepo,
                 fleetStore: fleetStore,
+                conversationSyncCoordinator: env.conversationSyncCoordinator,
+                preferredMachineKey: pendingNewChatMachineKey,
+                preferredCwd: pendingNewChatCwd,
+                onMachineHintConsumed: {
+                    pendingNewChatMachineKey = nil
+                    pendingNewChatCwd = nil
+                },
                 onDispatch: { agentID, cwd, prompt, budget, model in
-                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model, env: env)
+                },
+                onContinueConversation: { conversationID, baseSeq, prompt, agentID, cwd, model in
+                    await performContinueConversation(
+                        conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
+                        agentID: agentID, cwd: cwd, model: model, env: env
+                    )
+                },
+                onRefreshConversation: { conversationID in
+                    await refreshConversationMirror(conversationID: conversationID, env: env)
                 },
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
@@ -1523,10 +1713,14 @@ public struct AppRoot: View {
                 conversationID: id,
                 chatRepo: env.chatRepo,
                 runOutputStore: runOutputStore,
+                conversationSyncCoordinator: env.conversationSyncCoordinator,
                 onBack: { sidebarState.navigate(to: .home) },
                 onNewChat: { sidebarState.navigate(to: .newChat) },
                 onContinue: { conv, lastRunID, prompt in
-                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt)
+                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt, env: env)
+                },
+                onRefreshConversation: { conversationID in
+                    await refreshConversationMirror(conversationID: conversationID, env: env)
                 }
             )
             .id(id)
@@ -1547,6 +1741,24 @@ public struct AppRoot: View {
                 onSendFollowUp: { prompt in
                     await sendObservedSessionFollowUp(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
                 },
+                onImportToLancer: vendor.isEmpty ? nil : {
+                    await importObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, env: env)
+                },
+                onImported: { conversationID in sidebarState.navigate(to: .thread(id: conversationID)) },
+                onBack: { sidebarState.navigate(to: .home) }
+            )
+        case .workspace(let machineKey, let machineName, let path, let displayName, _):
+            WorkspaceDetailView(
+                machineName: machineName,
+                path: path,
+                displayName: displayName,
+                sessions: sidebarState.recentThreads.filter { $0.hostName == machineName && $0.cwd == path },
+                onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
+                onNewChatHere: {
+                    pendingNewChatMachineKey = machineKey
+                    pendingNewChatCwd = path
+                    sidebarState.navigate(to: .newChat)
+                },
                 onBack: { sidebarState.navigate(to: .home) }
             )
         }
@@ -1562,25 +1774,51 @@ public struct AppRoot: View {
             relayMachines: debugFakeRelayEntry.map { [$0] } ?? relayFleetStore.machines.map {
                 RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: $0.bridge.isActive)
             },
+            workspaces: allWorkspaces,
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
             onOpenMachines: { sidebarState.navigate(to: .machines) },
             onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
             onOpenObservedSession: { session in
-                sidebarState.navigate(to: .observedSession(
-                    sessionId: session.sessionId,
-                    title: session.title,
-                    // LancerHomeView's callback doesn't carry which host the session
-                    // came from (pre-existing gap, out of scope here) — first-machine
-                    // fallback, same class as the other interim limitations below.
-                    hostName: relayFleetStore.machines.first?.record.displayName ?? "Mac",
-                    vendor: session.provider,
-                    cwd: session.cwd
+                Task { await openObservedSessionAutoImporting(session, env: env) }
+            },
+            onOpenWorkspace: { ref in
+                sidebarState.navigate(to: .workspace(
+                    machineKey: ref.machineKey,
+                    machineName: ref.machineName,
+                    path: ref.path,
+                    displayName: ref.displayName,
+                    workspaceID: ref.workspaceID
                 ))
+            },
+            onCreateWorkspace: { machineKey in
+                pendingNewChatMachineKey = machineKey
+                pendingNewChatCwd = nil
+                sidebarState.navigate(to: .newChat)
             },
             loadSessions: { hostName in await loadObservedSessions(hostName: hostName) }
         )
+        // Refreshes every time Home is (re)entered — e.g. after creating a new
+        // workspace from New Chat and navigating back — matching the simple
+        // reload-on-appear approach `LancerHomeView`'s own `.task` already uses
+        // for observed sessions, rather than a more invasive change-notification.
+        .task(id: sidebarState.selectedDestination) {
+            await loadAllWorkspaces(env: env)
+        }
+    }
+
+    /// Every persisted `Workspace` across every currently-paired relay machine,
+    /// for `LancerHomeView`'s workspace cards. Best-effort per machine so one
+    /// unreachable host's repo query doesn't blank out every other machine's list.
+    private func loadAllWorkspaces(env: AppEnvironment) async {
+        var all: [Workspace] = []
+        for machine in relayFleetStore.machines {
+            if let list = try? await env.workspaceRepo.list(machineID: machine.id) {
+                all.append(contentsOf: list)
+            }
+        }
+        allWorkspaces = all
     }
 
     /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
@@ -1637,6 +1875,108 @@ public struct AppRoot: View {
             }
         }
         return DispatchResult(status: "error", message: "No direct connection to this machine.")
+    }
+
+    /// Tapping a session in Home's "Sessions on this Mac" list used to land on
+    /// a read-only `.observedSession` view with a separate, explicit "Import
+    /// to Lancer" action before the session became a real, continuable
+    /// conversation — two steps for what's a single decision the tap already
+    /// made. Every mainstream chat app (ChatGPT/Codex, Telegram, LINE, Manus)
+    /// treats a list tap as "open this conversation," full stop, and relies on
+    /// swipe/long-press Archive or Delete for cleanup rather than a separate
+    /// "make this real" gate — `attachObservedSession` is already idempotent
+    /// (re-tapping the same session returns the same conversation, no
+    /// duplicates) and imported conversations are ordinary `ChatConversation`
+    /// rows, archivable/deletable the same way as any other thread. So: tap
+    /// now auto-imports and opens the real thread directly. Falls back to the
+    /// old read-only view only if the import itself fails (host unreachable,
+    /// etc.) — that view can still show the transcript and the error.
+    private func openObservedSessionAutoImporting(_ session: ObservedSession, env: AppEnvironment) async {
+        let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
+        let result = await importObservedSession(vendor: session.provider, sessionId: session.sessionId, cwd: session.cwd, env: env)
+        switch result {
+        case .success(let summary):
+            sidebarState.navigate(to: .thread(id: summary.conversationId))
+        case .failure:
+            sidebarState.navigate(to: .observedSession(
+                sessionId: session.sessionId,
+                title: session.title,
+                hostName: hostName,
+                vendor: session.provider,
+                cwd: session.cwd
+            ))
+        }
+    }
+
+    /// Imports an observed session's transcript into a durable, cross-device
+    /// Lancer conversation via `agent.conversations.attachObservedSession`.
+    /// Same transport-selection order as `sendObservedSessionFollowUp`.
+    ///
+    /// `attachObservedSession` creates the conversation server-side only —
+    /// unlike `startConversation`/`continueConversation`, nothing writes a
+    /// local mirror row for it. `onImported` navigates straight to
+    /// `.thread(id:)` by conversation ID, so without an explicit pull here the
+    /// thread view finds no local row and renders its "brand new empty
+    /// conversation" empty state even though the host already has the full
+    /// transcript (found live 2026-07-03: import created a real ledger row
+    /// with 87 events, but the phone showed "No activity in this work thread
+    /// yet"). Mirror the same `refreshConversation` pull `resolveTransport`
+    /// callers use elsewhere in this file — `refreshConversationMirror` can't
+    /// be reused as-is because it resolves the transport FROM an existing
+    /// local `ChatConversation` row, which is exactly what doesn't exist yet.
+    private func importObservedSession(vendor: String, sessionId: String, cwd: String, env: AppEnvironment) async -> Result<ObservedSessionImportSummary, ObservedSessionImportError> {
+        let request = ConversationAttachObservedSessionRequest(provider: vendor, sessionId: sessionId, cwd: cwd)
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first {
+            do {
+                let response = try await slot.channel.attachObservedSession(request)
+                let channel = slot.channel
+                await hydrateImportedConversationMirror(
+                    conversationID: response.conversationId,
+                    transport: ConversationTransport(
+                        append: { try await channel.appendConversation($0) },
+                        fetch: { try await channel.fetchConversation($0) },
+                        archive: { try await channel.archiveConversation($0) }
+                    ),
+                    env: env
+                )
+                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
+            } catch {
+                return .failure(ObservedSessionImportError(error.localizedDescription))
+            }
+        }
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+            do {
+                let response = try await bridge.relayAttachObservedSession(request)
+                await hydrateImportedConversationMirror(
+                    conversationID: response.conversationId,
+                    transport: ConversationTransport(
+                        append: { try await bridge.relayAppendConversation($0) },
+                        fetch: { try await bridge.relayFetchConversation($0) },
+                        archive: { try await bridge.relayArchiveConversation($0) }
+                    ),
+                    env: env
+                )
+                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
+            } catch {
+                return .failure(ObservedSessionImportError(error.localizedDescription))
+            }
+        }
+        return .failure(ObservedSessionImportError("No direct connection to this machine."))
+    }
+
+    /// Pulls a just-imported observed session's full transcript into the
+    /// local mirror before `onImported` navigates to it. Best-effort: a
+    /// failure here doesn't undo the import (the host-side row is already
+    /// real and durable) — it just means the thread view falls back to its
+    /// existing on-open refresh path, if any, instead of showing content
+    /// immediately.
+    private func hydrateImportedConversationMirror(conversationID: String, transport: ConversationTransport, env: AppEnvironment) async {
+        do {
+            _ = try await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
+        } catch {
+            Self.logger.error("hydrateImportedConversationMirror: refresh failed for conversation=\(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {
@@ -1849,15 +2189,18 @@ public struct AppRoot: View {
         let records = await RelayMachineMigration.readIndex()
         for record in records {
             let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
-            client.restoreNamespacedStoredPairing()
+            let restored = client.restoreNamespacedStoredPairing()
             addRelayMachine(client: client, record: record, env: env)
             // Only this restore-from-disk path needs to actively dial out — every
             // other addRelayMachine caller (debug seam, real pairing-UI callbacks)
             // already has a client that just live-paired moments ago, and calling
             // connect() again here tore down that fresh connection out from under
-            // it (the client's own just-written credentials made hasStoredPairing
-            // true immediately, so this used to fire on every single pairing).
-            if E2ERelayClient.hasStoredPairing(machineID: record.id) {
+            // it. Gate on the FULL restore succeeding, not just the UserDefaults
+            // code existing: the index (Keychain) can outlive the private key, and
+            // dialing with a partial pairing spams the relay with unfixable 400s
+            // while the UI shows the machine as forever-disconnected. An
+            // un-restorable machine stays listed but offline; it needs a re-pair.
+            if restored {
                 client.connect()
             }
         }
@@ -1881,6 +2224,7 @@ public struct AppRoot: View {
                 // Recompute every derived aggregate that used to come from the
                 // single relayBridgeIsActive bool, now folded across ALL machines.
                 sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
+                if active { sidebarState.relayLastConnectedAt = Date() }
                 fleetStore.setRelayStateOnAllSlots(aggregateRelayState())
                 if active {
                     // When a relay machine goes live, ask the host which agent CLIs
@@ -2280,6 +2624,7 @@ private struct MachineConnectionChooser: View {
 private struct SettingsWithLibraryView: View {
     let viewModel: SettingsViewModel
     let syncEngine: SyncEngine?
+    var conversationSyncEngine: ConversationSyncEngine? = nil
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
@@ -2305,6 +2650,7 @@ private struct SettingsWithLibraryView: View {
         SettingsView(
             viewModel: viewModel,
             syncEngine: syncEngine,
+            conversationSyncEngine: conversationSyncEngine,
             backendURL: backendURL,
             auditRepository: auditRepository,
             approvalRepository: approvalRepository,
@@ -2486,6 +2832,24 @@ public struct ActiveChatRun: Identifiable {
     /// composer sent (which may be the literal "~" for a fresh relay dispatch).
     /// See `DispatchResult.cwd`.
     public let cwd: String
+    /// The host ledger conversation this run belongs to, once `performDispatch`
+    /// routed the initial turn through `agent.conversations.append` (Task 7).
+    /// `nil` only if the mirror write itself failed (best-effort) — callers
+    /// should treat that as "can't continue via the ledger", not as a hard
+    /// error, and fall back to `channel.continueRun` for follow-ups.
+    public let conversationID: String?
+    /// The `nextSeq` the host returned for this turn — the `baseSeq` the next
+    /// follow-up's `agent.conversations.append` call must send.
+    public let nextBaseSeq: Int
+    public init(runId: String, channel: any RunControlling, title: String, subtitle: String, cwd: String, conversationID: String? = nil, nextBaseSeq: Int = 0) {
+        self.runId = runId
+        self.channel = channel
+        self.title = title
+        self.subtitle = subtitle
+        self.cwd = cwd
+        self.conversationID = conversationID
+        self.nextBaseSeq = nextBaseSeq
+    }
     public var id: String { runId }
 }
 

@@ -206,3 +206,83 @@ import CryptoKit
         #expect(await legacyPrivKeyExists() == false)
     }
 }
+
+// MARK: - Namespaced pairing restore (incomplete-state regression)
+//
+// Regression for the 2026-07-03 on-device finding: a machine whose Keychain
+// private key was gone — while its UserDefaults code + URL survived — passed
+// the old `hasStoredPairing` gate, so launch hydration called `connect()` on
+// a client whose restore had silently no-op'd: it dialed the relay with an
+// EMPTY pairing code and a freshly generated keypair, got HTTP 400 forever,
+// and the UI showed the machine as permanently disconnected. These tests pin
+// the two behaviors that close that hole. Real UserDefaults + real Keychain
+// (same accepted tradeoff as RelayMachineMigrationTests above); state is
+// namespaced per fresh machineID, so no cross-test races.
+
+@MainActor
+@Suite struct E2ERelayClientRestoreTests {
+
+    private func udCodeKey(_ id: RelayMachineID) -> String { "lancer.relay.machine.\(id.uuidString).code" }
+    private func udURLKey(_ id: RelayMachineID) -> String { "lancer.relay.machine.\(id.uuidString).url" }
+
+    @Test("complete persisted pairing restores and reports true")
+    func completeRestore() {
+        let relayURL = URL(string: "https://relay.example.com")!
+        let client = E2ERelayClient(relayURL: relayURL, pairingCode: "222333")
+        defer { E2ERelayClient.deleteStoredPairing(machineID: client.machineID) }
+        client.persistPairing()
+
+        let restored = E2ERelayClient(relayURL: URL(string: "https://other.example.com")!, pairingCode: "", machineID: client.machineID)
+        #expect(restored.restoreNamespacedStoredPairing() == true)
+        #expect(restored.pairingCode == "222333")
+        #expect(restored.relayURL == relayURL)
+    }
+
+    @Test("code+URL without a Keychain private key reports false and restores nothing")
+    func missingPrivKey() {
+        let id = RelayMachineID()
+        UserDefaults.standard.set("444555", forKey: udCodeKey(id))
+        UserDefaults.standard.set("https://relay.example.com", forKey: udURLKey(id))
+        defer { E2ERelayClient.deleteStoredPairing(machineID: id) }
+
+        let client = E2ERelayClient(relayURL: URL(string: "https://original.example.com")!, pairingCode: "", machineID: id)
+        #expect(client.restoreNamespacedStoredPairing() == false)
+        #expect(client.pairingCode.isEmpty)
+        #expect(client.relayURL.host == "original.example.com")
+    }
+
+    @Test("invalid stored pairing code reports false and restores nothing")
+    func invalidStoredCode() {
+        let relayURL = URL(string: "https://relay.example.com")!
+        let client = E2ERelayClient(relayURL: relayURL, pairingCode: "123456")
+        defer { E2ERelayClient.deleteStoredPairing(machineID: client.machineID) }
+        client.persistPairing()
+
+        UserDefaults.standard.set("123", forKey: udCodeKey(client.machineID))
+        #expect(E2ERelayClient.hasStoredPairing(machineID: client.machineID) == false)
+
+        let restored = E2ERelayClient(relayURL: URL(string: "https://original.example.com")!, pairingCode: "", machineID: client.machineID)
+        #expect(restored.restoreNamespacedStoredPairing() == false)
+        #expect(restored.pairingCode.isEmpty)
+        #expect(restored.relayURL.host == "original.example.com")
+    }
+
+    @Test("persistPairing refuses invalid pairing code shape")
+    func invalidCodeNotPersisted() {
+        let client = E2ERelayClient(relayURL: URL(string: "https://relay.example.com")!, pairingCode: "123")
+        defer { E2ERelayClient.deleteStoredPairing(machineID: client.machineID) }
+
+        client.persistPairing()
+
+        #expect(E2ERelayClient.storedPairingCode(machineID: client.machineID) == nil)
+        #expect(E2ERelayClient.hasStoredPairing(machineID: client.machineID) == false)
+    }
+
+    @Test("connect() with an invalid pairing code is refused, not dialed")
+    func invalidCodeConnectRefused() {
+        let client = E2ERelayClient(relayURL: URL(string: "https://relay.example.com")!, pairingCode: "123")
+        client.connect()
+        #expect(client.connectionState == .disconnected)
+        #expect(client.pairingState == .unpaired)
+    }
+}

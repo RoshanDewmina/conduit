@@ -14,8 +14,8 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 
 | Layer | Result | Evidence |
 |---|---|---|
-| LancerKit (SPM) build + tests | ✅ **449 Swift Testing tests / 75 suites + 13 HostControlKit tests + 8 XCTest tests pass** | `cd Packages/LancerKit && swift build && swift test` exit 0 |
-| lancerd + policy (Go) | ✅ pass | `go test ./...` exit 0 |
+| LancerKit (SPM) build + tests | ✅ **548 Swift Testing tests / 91 suites + 13 HostServiceClient/VerificationPhrase tests pass** (2026-07-03, includes the new cross-device conversation sync suites) | `cd Packages/LancerKit && swift build && swift test` exit 0 |
+| lancerd + policy (Go) | ✅ pass, incl. host conversation ledger + `attachObservedSession` import | `go test ./...` exit 0 |
 | push-backend (Go) | ✅ pass | `go test ./...` exit 0 |
 | agent-runner (Go) | ✅ pass | `go test ./...` exit 0 |
 | Chat persistence + FTS search | ✅ v10 migrations, `ChatConversationRepository` with 18 tests | `ChatConversationRepositoryTests.swift` |
@@ -48,6 +48,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [ ] **B6 — Reconcile the push-backend WIP.** Divergent security design parked in stash.
 - [ ] **B7 — Feature-wiring audit.** Confirm policy editor, audit feed, usage dashboard, composer reachable from real navigation.
 - [ ] **B8 — Empty/error/loading + a11y sweep.** Every surface: empty/loading/error states, Dynamic Type, VoiceOver, light+dark.
+- [x] **B9 — Cross-device conversation sync: add `CKDatabaseSubscription` for background pull.** ✅ DONE 2026-07-03. `CloudSync.ensureDatabaseSubscriptionExists` registers a `CKDatabaseSubscription` (idempotent, `shouldSendContentAvailable`); `ConversationSyncEngine.start()` registers it after the first sync (best-effort — entitlement issues fall back to the pre-existing foreground-only behavior); `AppDelegate.didReceiveRemoteNotification` now distinguishes a CloudKit push from an APNs approval push and routes to `ConversationSyncEngine.handleRemoteNotification(subscriptionID:)`. Registration + routing are code-complete and unit-tested; actual silent-push delivery is still unverified on hardware — see C7.
 
 ---
 
@@ -56,16 +57,17 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [ ] **C1 — Live E2E on a real *remote* host.** Only localhost-sim subset done. Needs a real SSH host. ⏸ owner-gated.
 - [x] **C2 — Physical-device APNs, app *closed*. ✅ PASSED 2026-06-23.** Background app → gated action → APNs lock-screen push → tapped Approve on lock screen (app never foregrounded) → decision round-tripped → agent ran. Proof: audit `escalate→approve`, file created, run completed. Required fixing a 5-bug chain (bundle id, relay device-registration, /approval auth, sandbox APNs fallback, foreground re-registration) — see `docs/test-runs/2026-06-22-full-device-test.md` Phase 4.
 - [ ] **C3 — Expand the app-target UI suite.** Add: onboarding completeness, StoreKit IAP purchase, approve-from-lockscreen tests.
-- [ ] **C4 — Reconnect / session-loss hardening as tests.** Background, network switch, daemon restart.
+- [ ] **C4 — Reconnect / session-loss hardening as tests.** Background, network switch, daemon restart. Partial: daemon-restart durability for the conversation ledger specifically was live-verified 2026-07-03 (9 real conversations across 3 vendors, full turn/event/vendor-session data, survived a complete `lancerd` process restart byte-for-byte; dispatch resumed working immediately after) — see `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md`. iOS-side background/network-switch/reconnect behavior remains untested.
 - [ ] **C5 — StoreKit IAP purchase verified in TestFlight** (sandbox account). ⏸ owner-gated.
 - [ ] **C6 — Security review closure + semgrep triage.** Work `docs/SECURITY-REVIEW.md`.
+- [ ] **C7 — Cross-device conversation sync: two-device CloudKit QA.** Host-ledger behavior (append, conflict, offline, observed-session import) is covered by `go test ./...` + LancerKit tests, but the CloudKit private-mirror propagation itself (start on A → appears on B; kill/reinstall A → restores from CloudKit) is unverified on physical hardware — `CloudSync`/`ConversationSyncEngine` are simulator no-ops by design. Run `docs/LIVE_LOOP_RUNBOOK.md` Phase 7 on two devices signed into the same iCloud account. ⏸ owner-gated (needs a second physical Apple device).
 
 ---
 
 ## D. Owner-gated — App Store / external (one human action away)
 
 - [x] **D1 — Confirm APNs secrets on the *running* backend.** ✅ Set on Cloud Run `lancer-push` (australia-southeast1) + hermes-box `relay.env`. `APPROVAL_RELAY_SECRET` enforced.
-- [ ] **D2 — App Store Connect setup.** App record, Push + CloudKit + App Groups entitlements, IAP `dev.lancer.mobile.pro` Non-Consumable $14.99, privacy nutrition label, screenshots, reviewer notes.
+- [ ] **D2 — App Store Connect setup.** App record, Push + CloudKit + App Groups entitlements, IAP `dev.lancer.mobile.pro` Non-Consumable $14.99, privacy nutrition label, screenshots, reviewer notes. **CloudKit schema note (added 2026-07-03):** the cross-device conversation sync feature adds a custom private-DB zone (`LancerConversations`) with two new record types (`Conversation`, `ConversationTurnChunk` — see `ARCHITECTURE.md` §11.2 and `SyncKit/ConversationCloudRecords.swift`). These are auto-created in the **Development** CloudKit environment the first time the app runs against it; before the App Store build ships, promote the schema from Development to **Production** in the CloudKit Dashboard (Container → Schema → Deploy Schema Changes) or new-device users will fail to sync conversations against a container that only knows the old (Hosts/Snippets) record types.
 - [x] **D3 — Physical-device validation** (= C2). ✅ PASSED 2026-06-23.
 - [ ] **D4 — Vanity domain + DNS.** Repoint `LANCER_PUSH_BACKEND_URL` off `sslip.io` to `push.conduit.dev`.
 - [x] **D5 — Archive → TestFlight upload.** ✅ TestFlight build uploaded; release/App Review remains owner-gated after beta validation.

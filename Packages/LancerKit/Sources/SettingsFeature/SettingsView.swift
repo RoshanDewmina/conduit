@@ -457,6 +457,7 @@ public struct TrustPrivacyView: View {
 public struct SettingsView: View {
     @State private var vm: SettingsViewModel
     let syncEngine: SyncEngine?
+    let conversationSyncEngine: ConversationSyncEngine?
     let backendURL: String
     let auditRepository: AuditRepository?
     let approvalRepository: ApprovalRepository?
@@ -489,6 +490,7 @@ public struct SettingsView: View {
     public init(
         viewModel: SettingsViewModel,
         syncEngine: SyncEngine? = nil,
+        conversationSyncEngine: ConversationSyncEngine? = nil,
         backendURL: String = "",
         auditRepository: AuditRepository? = nil,
         approvalRepository: ApprovalRepository? = nil,
@@ -512,6 +514,7 @@ public struct SettingsView: View {
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
+        self.conversationSyncEngine = conversationSyncEngine
         self.backendURL = backendURL
         self.auditRepository = auditRepository
         self.approvalRepository = approvalRepository
@@ -836,7 +839,7 @@ public struct SettingsView: View {
             sectionHead("DATA")
             VStack(spacing: 11) {
                 if let syncEngine {
-                    SyncStatusView(engine: syncEngine)
+                    SyncStatusView(engine: syncEngine, conversationEngine: conversationSyncEngine)
                         .padding(.horizontal, 16)
                 }
                 if let daemonChannel {

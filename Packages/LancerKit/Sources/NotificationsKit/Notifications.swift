@@ -26,6 +26,12 @@ public extension Notification.Name {
     /// button) to REVIEW an approval. userInfo: ["approvalId": String]. Distinct
     /// from lancerApprovalAction, which decides. Opens the detail sheet.
     static let lancerOpenApproval = Notification.Name("dev.lancer.openApproval")
+    /// Posted when a background remote push is identified as a CloudKit database
+    /// change notification (Task 8 / B9 background pull), rather than an APNs
+    /// approval push. userInfo: the raw remote-notification userInfo dictionary,
+    /// forwarded so `ConversationSyncEngine` can re-derive the `CKNotification`
+    /// and confirm it owns this subscription before triggering a sync.
+    static let lancerCloudKitRemoteNotification = Notification.Name("dev.lancer.cloudKitRemoteNotification")
 }
 
 // MARK: - Cold-launch approval action buffer (MAJOR-6)

@@ -46,8 +46,29 @@ public struct NewChatTabView: View {
     let agents: [DispatchAgent]
     let runOutputStore: RunOutputStore
     let chatRepo: ChatConversationRepository?
+    /// Persisted, machine-scoped project directories — the Machine → Workspace →
+    /// Chat middle layer. `nil` in previews/tests, same as `chatRepo`.
+    let workspaceRepo: WorkspaceRepository?
     let fleetStore: FleetStore
+    /// Shared sync orchestrator (Task 7) — drives the inline `ConversationSyncBanner`
+    /// and resolves conflict/offline follow-ups. `nil` in previews/tests, same as
+    /// `chatRepo`; the banner and its actions simply don't appear without it.
+    let conversationSyncCoordinator: ConversationSyncCoordinator?
+    let preferredMachineKey: String?
+    let preferredCwd: String?
+    let onMachineHintConsumed: () -> Void
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
+    /// Appends a follow-up through the host ledger (`agent.conversations.append`)
+    /// instead of the legacy `channel.continueRun` — used whenever the active
+    /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
+    /// Defaults to a hard failure so existing previews/tests that don't wire it
+    /// simply fall back to the legacy path (nil `conversationID` never calls this).
+    let onContinueConversation: (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome
+    /// Re-pulls the conversation from its host ledger and merges it into the
+    /// mirror (the sync banner's Refresh/Resend actions) — returns the fresh
+    /// `nextSeq` to use as the next `baseSeq`, or `nil` if the host couldn't
+    /// be reached. Defaults to a no-op so existing previews/tests compile.
+    var onRefreshConversation: (_ conversationID: String) async -> Int? = { _ in nil }
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
     var onOpenSidebar: () -> Void = {}
@@ -106,9 +127,11 @@ public struct NewChatTabView: View {
     /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
     /// so a second tap can't fire a duplicate run (the "superseded" cause).
     @State private var isSending = false
-    /// Recently-used custom project paths, newest first, persisted so a path the
-    /// user typed once is reusable from the picker instead of retyped each time.
-    @AppStorage("lancer.recentProjectPaths") private var recentProjectPathsRaw: String = ""
+    /// Persisted workspaces for the currently-selected machine (loaded via
+    /// `workspaceRepo`), most-recently-used first. Replaces the old flat,
+    /// unscoped `lancer.recentProjectPaths` AppStorage cache — every entry here
+    /// is a real, named, per-machine record, not a bare typed string.
+    @State private var machineWorkspaces: [Workspace] = []
     /// Last-used machine / workspace / model, persisted so the next New Chat entry
     /// resumes the prior context instead of always defaulting to "first online agent".
     @AppStorage("lancer.newChat.lastMachine") private var lastMachineID: String = ""
@@ -117,6 +140,10 @@ public struct NewChatTabView: View {
 
     // Persistence
     @State private var conversationID: String?
+    /// Live sync status for `conversationID`, observed from `conversationSyncCoordinator`
+    /// — drives the inline `ConversationSyncBanner`. Always `.synced` (no banner)
+    /// for a legacy pre-ledger conversation, since it's never registered there.
+    @State private var syncState: ConversationSyncUIState = .synced
     @State private var artifactsByRun: [String: [ChatArtifact]] = [:]
     @State private var selectedArtifact: ChatArtifact?
     @FocusState private var composeFocused: Bool
@@ -128,8 +155,21 @@ public struct NewChatTabView: View {
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
         chatRepo: ChatConversationRepository? = nil,
+        workspaceRepo: WorkspaceRepository? = nil,
         fleetStore: FleetStore,
+        conversationSyncCoordinator: ConversationSyncCoordinator? = nil,
+        /// One-shot machine preselection — set when entering New Chat via a
+        /// "+ New workspace" tap on a specific machine's Home card, so the
+        /// composer opens with that machine already picked instead of the
+        /// default/last-used one. `onMachineHintConsumed` fires once the hint
+        /// has been applied, so the caller can clear its own state and this
+        /// preselection doesn't stick around for the next unrelated New Chat.
+        preferredMachineKey: String? = nil,
+        preferredCwd: String? = nil,
+        onMachineHintConsumed: @escaping () -> Void = {},
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
+        onContinueConversation: @escaping (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome = { _, _, _, _, _, _ in .blocked("Ledger continuation not wired.") },
+        onRefreshConversation: @escaping (_ conversationID: String) async -> Int? = { _ in nil },
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         onOpenSidebar: @escaping () -> Void = {},
@@ -142,8 +182,15 @@ public struct NewChatTabView: View {
         self.agents = agents
         self.runOutputStore = runOutputStore
         self.chatRepo = chatRepo
+        self.workspaceRepo = workspaceRepo
         self.fleetStore = fleetStore
+        self.conversationSyncCoordinator = conversationSyncCoordinator
+        self.preferredMachineKey = preferredMachineKey
+        self.preferredCwd = preferredCwd
+        self.onMachineHintConsumed = onMachineHintConsumed
         self.onDispatch = onDispatch
+        self.onContinueConversation = onContinueConversation
+        self.onRefreshConversation = onRefreshConversation
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
@@ -268,6 +315,11 @@ public struct NewChatTabView: View {
         VStack(spacing: 0) {
             if activeRun != nil {
                 darkChatHeader
+                ConversationSyncBanner(
+                    state: syncState,
+                    onRefresh: { Task { await refreshSync() } },
+                    onResend: { Task { await refreshSync(); await sendFollowUp(followUpText) } }
+                )
                 ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
                     VStack(alignment: .leading, spacing: 18) {
                         ForEach(turns) { turn in
@@ -283,8 +335,10 @@ public struct NewChatTabView: View {
         // Chat follows the app's light/dark scheme (inherits the parent's tokens);
         // terminal blocks keep their own terminal palette via term* tokens.
         .background(t.bg.ignoresSafeArea())
+        .task(id: activeRun?.conversationID) { await observeSyncState() }
         .onAppear { restoreLastSelectionOrDefault() }
         .task(id: selectedAgentID) { await refreshCommands() }
+        .task(id: selectedAgentID) { await loadWorkspaces() }
         .onChange(of: showComposer) { _, open in
             if open { Task { await refreshCommands() } }
         }
@@ -887,8 +941,10 @@ public struct NewChatTabView: View {
         "\(machineLabel) · \(modelShortLabel)"
     }
 
-    /// Distinct known project directories across the connected agents, selected
-    /// agent's cwd first — the quick-pick list in the Project drawer.
+    /// Distinct known project directories reported live by the connected
+    /// agents on the selected machine, selected agent's cwd first — a
+    /// zero-setup quick-pick shown above the persisted `machineWorkspaces`
+    /// list in the Workspace section.
     private var projectDirs: [String] {
         var seen = Set<String>()
         var ordered: [String] = []
@@ -898,11 +954,39 @@ public struct NewChatTabView: View {
         for agent in agents where !agent.cwd.isEmpty {
             if seen.insert(agent.cwd).inserted { ordered.append(agent.cwd) }
         }
-        // Saved custom paths the user typed before — reusable without retyping.
-        for path in recentProjectPaths where seen.insert(path).inserted {
-            ordered.append(path)
-        }
         return ordered
+    }
+
+    /// `projectDirs` minus any path already saved as a persisted `Workspace` on
+    /// this machine, so the Workspace section never shows the same directory
+    /// twice (once as a named record, once as a bare live quick-pick).
+    private var projectDirsExcludingSaved: [String] {
+        let saved = Set(machineWorkspaces.map(\.path))
+        return projectDirs.filter { !saved.contains($0) }
+    }
+
+    /// The selected agent's machine, as the opaque UUID `Workspace` records are
+    /// scoped by. `DispatchAgent.hostID` already unifies two UUID spaces — an
+    /// SSH host's `HostID` and a paired relay host's `RelayMachineID` — into one
+    /// plain string (see `AppRoot.dispatchAgents()`), so reusing `RelayMachineID`
+    /// as the workspace scoping key here covers both transports without a new
+    /// type. `nil` when no agent is selected or its hostID isn't a UUID.
+    private var currentMachineID: RelayMachineID? {
+        guard let raw = selectedAgent?.hostID, let uuid = UUID(uuidString: raw) else { return nil }
+        return RelayMachineID(uuid)
+    }
+
+    /// Loads the persisted workspaces for the currently-selected machine. Called
+    /// whenever `selectedAgentID` changes (via `.task(id:)`) and after any
+    /// create/rename/delete so the picker reflects the latest state. No-op
+    /// (clears the list) if there's no resolvable machine or no repo wired.
+    private func loadWorkspaces() async {
+        guard let repo = workspaceRepo, let machineID = currentMachineID else {
+            await MainActor.run { machineWorkspaces = [] }
+            return
+        }
+        let workspaces = (try? await repo.list(machineID: machineID)) ?? []
+        await MainActor.run { machineWorkspaces = workspaces }
     }
 
     private var canSend: Bool {
@@ -975,6 +1059,18 @@ public struct NewChatTabView: View {
     /// picking logic if the persisted machine/agent no longer exists or is offline.
     private func restoreLastSelectionOrDefault() {
         guard selectedAgentID.isEmpty else { return }
+        // A one-shot "+ New workspace"/"New chat in this workspace" hint wins
+        // over the persisted last-used machine — the user just told us which
+        // machine (and, from inside a workspace, which path) they want.
+        if let hint = preferredMachineKey, !hint.isEmpty,
+           let agent = restoreAgent(machineKey: hint, modelID: lastModelID) {
+            selectedAgentID = agent.id
+            if let cwd = preferredCwd, !cwd.isEmpty {
+                selectedCwd = cwd
+            }
+            onMachineHintConsumed()
+            return
+        }
         if let agent = restoreAgent(machineKey: lastMachineID, modelID: lastModelID) {
             selectedAgentID = agent.id
             if !lastModelID.isEmpty, ModelCatalog.vendor(forModelID: lastModelID) == agent.vendor {
@@ -986,6 +1082,7 @@ public struct NewChatTabView: View {
         } else if let first = agents.first(where: { !$0.isOffline }) {
             selectedAgentID = first.id
         }
+        if preferredMachineKey != nil { onMachineHintConsumed() }
     }
 
     /// Finds an online agent on the persisted machine, preferring the one whose
@@ -1051,8 +1148,14 @@ public struct NewChatTabView: View {
                     )
                 }
             }
-            // Persist conversation + turn
-            if let chatRepo {
+            // Persist conversation + turn. A ledger-backed run (Task 7) already had
+            // its mirror row written by `ConversationSyncCoordinator.startConversation`
+            // — just adopt its id. Only fall back to the legacy direct-mirror write
+            // when the run has no `conversationID` (the mirror write itself failed,
+            // best-effort, or this call site hasn't been migrated to the coordinator).
+            if let convID = run.conversationID {
+                conversationID = convID
+            } else if let chatRepo {
                 Task {
                     // Persist the daemon-resolved absolute cwd (run.cwd), not the raw
                     // local `cwd` — a fresh relay dispatch's local value may still be
@@ -1074,8 +1177,17 @@ public struct NewChatTabView: View {
         }
     }
 
-    /// Continue the conversation: re-launch under a NEW runId via the run's channel,
-    /// re-passing the daemon's policy + budget gates, then append the continued turn.
+    /// The exact message `ConversationSyncCoordinator.append` returns for a
+    /// host "needsApproval" reply — matched here (rather than adding a
+    /// structured reason to `ChatDispatchOutcome`) so a ledger-backed
+    /// follow-up shows the same inline approval card as the legacy path
+    /// instead of a generic error alert.
+    private static let needsApprovalMessage = "Awaiting your approval — check the Inbox."
+
+    /// Continue the conversation: re-launch under a NEW runId, either through the
+    /// host conversation ledger (`onContinueConversation`, Task 7 — preferred,
+    /// keeps other devices in sync) or, for a pre-ledger run whose mirror write
+    /// failed at start, the legacy `channel.continueRun`.
     private func sendFollowUp(_ followUp: String) async {
         let trimmed = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isSending, let active = activeRun else { return }
@@ -1084,6 +1196,35 @@ public struct NewChatTabView: View {
         followUpText = ""
         // Fresh turn — clear any prior awaiting/denied state from the last approval.
         isAwaitingApproval = false
+
+        if let convID = active.conversationID {
+            let model = selectedModel.isEmpty ? nil : selectedModel
+            let outcome = await onContinueConversation(convID, active.nextBaseSeq, trimmed, selectedAgentID, effectiveCwd, model)
+            switch outcome {
+            case .started(let run):
+                activeRun = run
+                turns.append(ChatTurn(prompt: trimmed, runId: run.runId))
+                controlStore = RunControlStore(channel: run.channel, runId: run.runId)
+                endActivityTask?.cancel()
+                endActivityTask = nil
+                if #available(iOS 16.2, *), let key = liveActivityKey {
+                    Task { await LancerLiveActivityManager.shared.update(activityKey: key, status: "running") }
+                }
+            case .blocked(let message):
+                if message == Self.needsApprovalMessage {
+                    isAwaitingApproval = true
+                } else if await conversationSyncCoordinator?.currentSyncState(convID) == .conflict {
+                    // The sync banner already surfaces this with Refresh/Resend
+                    // (see `body`'s onResend) — restore the prompt so Resend has
+                    // something to send instead of also popping an alert.
+                    followUpText = trimmed
+                } else if !message.isEmpty {
+                    dispatchErrorMessage = message
+                }
+            }
+            return
+        }
+
         do {
             let result = try await active.channel.continueRun(runId: active.runId, prompt: trimmed)
             switch result.status {
@@ -1136,6 +1277,33 @@ public struct NewChatTabView: View {
             if case E2EError.superseded = error { return }
             dispatchErrorMessage = "Follow-up failed: \(error.localizedDescription)"
         }
+    }
+
+    /// Subscribes to the coordinator's live sync-state stream for the active
+    /// ledger-backed conversation — cancelled automatically (via `.task(id:)`)
+    /// whenever `activeRun?.conversationID` changes, e.g. a new thread starts.
+    private func observeSyncState() async {
+        guard let coordinator = conversationSyncCoordinator, let convID = activeRun?.conversationID else {
+            syncState = .synced
+            return
+        }
+        for await state in await coordinator.observeSyncState(conversationID: convID) {
+            syncState = state
+        }
+    }
+
+    /// The sync banner's Refresh action: re-pulls the conversation from its
+    /// host ledger and adopts the fresh `nextSeq` as this thread's `baseSeq`,
+    /// so a stale/conflicted `ActiveChatRun` can send again without refetching
+    /// the whole thread from scratch.
+    private func refreshSync() async {
+        guard let active = activeRun, let convID = active.conversationID,
+              let newBaseSeq = await onRefreshConversation(convID)
+        else { return }
+        activeRun = ActiveChatRun(
+            runId: active.runId, channel: active.channel, title: active.title, subtitle: active.subtitle,
+            cwd: active.cwd, conversationID: convID, nextBaseSeq: newBaseSeq
+        )
     }
 
     /// Regenerate the last response: re-run the most recent prompt as a fresh turn
@@ -1250,7 +1418,24 @@ public struct NewChatTabView: View {
                 }
 
                 contextSection("Workspace") {
-                    ForEach(projectDirs, id: \.self) { dir in
+                    // Persisted, named workspaces for this machine first (the
+                    // real Machine → Workspace → Chat records) — a checkmark on
+                    // "Use" below saves whatever's in the custom-path field as
+                    // one of these instead of a bare string.
+                    ForEach(machineWorkspaces) { workspace in
+                        contextRow(
+                            icon: .folder,
+                            label: workspace.name,
+                            sub: displayPath(workspace.path),
+                            isSelected: workspace.path == effectiveCwd,
+                            isDisabled: false
+                        ) {
+                            selectPersistedWorkspace(workspace)
+                        }
+                    }
+                    // Live quick-picks reported by connected agents that aren't
+                    // already saved as a workspace.
+                    ForEach(projectDirsExcludingSaved, id: \.self) { dir in
                         contextRow(
                             icon: .folder,
                             label: lastPathComponent(dir),
@@ -1407,7 +1592,8 @@ public struct NewChatTabView: View {
         selectedAgentID = pick.id
         // A new machine invalidates both the workspace default and the model
         // selection (models are vendor-specific) — reset both, same as today's
-        // machine-picker behavior for cwd.
+        // machine-picker behavior for cwd. `selectedAgentID` changing also
+        // re-triggers `loadWorkspaces()` via `.task(id: selectedAgentID)`.
         selectedCwd = ""
         selectedModel = ""
         persistSelection()
@@ -1416,6 +1602,18 @@ public struct NewChatTabView: View {
     private func selectWorkspace(_ dir: String) {
         selectedCwd = dir
         persistSelection()
+    }
+
+    /// Picks a persisted `Workspace` from the machine-scoped list, and bumps its
+    /// `lastUsedAt` so it stays sorted by recency next time the picker opens.
+    private func selectPersistedWorkspace(_ workspace: Workspace) {
+        selectedCwd = workspace.path
+        persistSelection()
+        guard let repo = workspaceRepo else { return }
+        Task {
+            try? await repo.touch(workspace.id)
+            await loadWorkspaces()
+        }
     }
 
     private func selectModel(agent: DispatchAgent, modelID: String) {
@@ -1448,26 +1646,33 @@ public struct NewChatTabView: View {
         .padding(.top, 4)
     }
 
+    /// The "Use" action on the custom-path field: selects the path for this run
+    /// AND persists it as a named `Workspace` scoped to the current machine
+    /// (named after the path's last component), so it survives relaunch and
+    /// reappears in the machine's own list next time — replacing the old
+    /// behavior of only caching the raw string in a flat, unscoped AppStorage
+    /// MRU list.
     private func useCustomCwd() {
         let trimmed = customCwd.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         Haptics.selection()
         selectedCwd = trimmed
-        rememberProjectPath(trimmed)
         customCwd = ""
         persistSelection()
+        Task { await persistAsWorkspace(path: trimmed) }
     }
 
-    /// Recently-used custom paths (newest first), persisted across launches.
-    private var recentProjectPaths: [String] {
-        recentProjectPathsRaw.split(separator: "\n").map(String.init)
-    }
-
-    /// Save a custom path to the front of the recents (deduped, capped at 8).
-    private func rememberProjectPath(_ path: String) {
-        var recents = recentProjectPaths.filter { $0 != path }
-        recents.insert(path, at: 0)
-        recentProjectPathsRaw = recents.prefix(8).joined(separator: "\n")
+    /// Creates (or, if the path is already a known workspace on this machine,
+    /// just re-touches) a persisted `Workspace` record for `path`. No-op if
+    /// there's no resolvable machine or no repo wired (previews/tests).
+    private func persistAsWorkspace(path: String) async {
+        guard let repo = workspaceRepo, let machineID = currentMachineID else { return }
+        if let existing = machineWorkspaces.first(where: { $0.path == path }) {
+            try? await repo.touch(existing.id)
+        } else {
+            _ = try? await repo.create(name: lastPathComponent(path), machineID: machineID, path: path)
+        }
+        await loadWorkspaces()
     }
 }
 

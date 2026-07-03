@@ -216,6 +216,32 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("fsListResult", data)
 
+	case "agentFsRead":
+		var params struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(payload, &params); err != nil {
+			log.Printf("e2e: unmarshal agentFsRead failed: %v", err)
+			return
+		}
+		// Mirror the agentFsList arm: marshal the result (or an error string)
+		// under {type, payload} and let r.client.sendMessage encrypt/wrap it.
+		res, err := r.server.fsRead(params.Path)
+		payloadOut := map[string]interface{}{
+			"path":      res.Path,
+			"content":   res.Content,
+			"truncated": res.Truncated,
+		}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{
+			"type":    "fsReadResult",
+			"payload": payloadOut,
+		}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("fsReadResult", data)
+
 	case "agentCommandsList":
 		var params struct {
 			Cwd    string `json:"cwd"`
@@ -418,9 +444,97 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("sessionContinueResult", data)
 
+	case "agentConversationsList":
+		var req conversationListRequest
+		if len(payload) > 0 {
+			if err := json.Unmarshal(payload, &req); err != nil {
+				log.Printf("e2e: unmarshal agentConversationsList failed: %v", err)
+				return
+			}
+		}
+		// Mirrors the SSH agent.conversations.list arm (server.go) exactly — same
+		// r.server.conversationsList call — so both transports return an
+		// identical payload shape by construction, not by convention.
+		result, err := r.server.conversationsList(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "agentConversationsListResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentConversationsListResult", data)
+
+	case "agentConversationsFetch":
+		var req conversationFetchRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal agentConversationsFetch failed: %v", err)
+			return
+		}
+		result, err := r.server.conversationsFetch(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "agentConversationsFetchResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentConversationsFetchResult", data)
+
+	case "agentConversationsAppend":
+		var req conversationAppendRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal agentConversationsAppend failed: %v", err)
+			return
+		}
+		// Mirrors the SSH agent.conversations.append arm. This DOES dispatch/
+		// launch the vendor CLI process (via s.conversations.beginTurn +
+		// dispatcher.launchConversationTurn inside conversationsAppend) — both
+		// transports call the exact same r.server.conversationsAppend, so a
+		// relay-only pairing gets identical dispatch behavior to SSH.
+		result, err := r.server.conversationsAppend(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "agentConversationsAppendResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentConversationsAppendResult", data)
+
+	case "agentConversationsArchive":
+		var req conversationArchiveRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal agentConversationsArchive failed: %v", err)
+			return
+		}
+		result, err := r.server.conversationsArchive(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "agentConversationsArchiveResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentConversationsArchiveResult", data)
+
+	case "agentConversationsAttachObservedSession":
+		var req conversationAttachObservedSessionRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal agentConversationsAttachObservedSession failed: %v", err)
+			return
+		}
+		// See conversation_rpc.go's package doc comment: imports the observed
+		// session's on-disk transcript into the ledger as one completed turn.
+		result, err := r.server.conversationsAttachObservedSession(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "agentConversationsAttachObservedSessionResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentConversationsAttachObservedSessionResult", data)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
 	}
+}
+
+// conversationRelayPayload flattens a conversation RPC result struct into a
+// map and adds an "error" key when err is non-nil — mirrors the
+// agentFsList/agentFsRead convention above: a relay caller gets the same
+// fields a successful response would have, plus "error" on failure, instead
+// of a separate error envelope shape.
+func conversationRelayPayload(result any, err error) map[string]interface{} {
+	payload := map[string]interface{}{}
+	if data, marshalErr := json.Marshal(result); marshalErr == nil {
+		_ = json.Unmarshal(data, &payload)
+	}
+	if err != nil {
+		payload["error"] = err.Error()
+	}
+	return payload
 }
 
 // sendRelayNotification forwards a JSON-RPC-style notification through the E2E

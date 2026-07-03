@@ -121,6 +121,150 @@ public actor CloudSync {
         #endif
     }
 
+    // MARK: - Custom zones (Task 8: conversation mirror)
+    //
+    // Hosts/Snippets live in the default zone with a full re-fetch each cycle
+    // (see `fetchChanges(recordType:)` above); the conversation mirror uses
+    // its own zone with a persisted per-zone change token so a large
+    // transcript history doesn't get re-downloaded on every sync cycle.
+
+    /// Creates the named custom zone if it doesn't already exist. Safe to
+    /// call every cycle — CloudKit zone creation is idempotent.
+    public func ensureZoneExists(zoneName: String) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db else { return }
+        let zone = CKRecordZone(zoneName: zoneName)
+        let operation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifyRecordZonesResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
+    /// Deletes records by name from a specific custom zone (the plain
+    /// `delete(recordIDs:)` above assumes the default zone).
+    public func deleteRecords(recordNames: [String], zoneName: String) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db, !recordNames.isEmpty else { return }
+        let zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
+        let ckIDs = recordNames.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
+        let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: ckIDs)
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
+    /// Incrementally fetches every record type's changes in a custom zone
+    /// since `previousChangeToken` (opaque, persisted by the caller). Returns
+    /// the new token to persist for next time, or `nil` if nothing changed.
+    public func fetchZoneChanges(
+        zoneName: String,
+        previousChangeToken: Data?
+    ) async throws -> (records: [CKRecordWrapper], deletedRecordNames: [String], changeToken: Data?) {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db else { return ([], [], nil) }
+        let zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
+        var config = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
+        if let previousChangeToken, let token = Self.decodeChangeToken(previousChangeToken) {
+            config.previousServerChangeToken = token
+        }
+        let operation = CKFetchRecordZoneChangesOperation()
+        operation.recordZoneIDs = [zoneID]
+        operation.configurationsByRecordZoneID = [zoneID: config]
+
+        let acc = CKAccumulator()
+        var newTokenData: Data?
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.recordWasChangedBlock = { _, result in
+                if case .success(let record) = result {
+                    acc.results.append(CKRecordWrapper(record: record))
+                }
+            }
+            operation.recordWithIDWasDeletedBlock = { recordID, _ in
+                acc.deletedIDs.append(recordID.recordName)
+            }
+            operation.recordZoneFetchResultBlock = { _, result in
+                if case .success(let (token, _, _)) = result {
+                    newTokenData = Self.encodeChangeToken(token)
+                }
+            }
+            operation.fetchRecordZoneChangesResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        return (acc.results, acc.deletedIDs, newTokenData)
+        #else
+        return ([], [], nil)
+        #endif
+    }
+
+    // MARK: - Background pull (Task 8 / B9: CKDatabaseSubscription)
+
+    /// Registers a `CKDatabaseSubscription` on the private database so a
+    /// silent push (`content-available`) arrives whenever any record changes
+    /// server-side — the missing piece that made `ConversationSyncEngine`
+    /// pull-only-on-foreground before this. Safe to call on every launch:
+    /// `CKModifySubscriptionsOperation` with a stable subscription ID is an
+    /// idempotent upsert, not a duplicate-create.
+    ///
+    /// Deliberately database-wide (not zone-scoped to `LancerConversations`)
+    /// because this is, as of this change, the app's *only* CloudKit push
+    /// subscription — `SyncEngine` (Hosts/Snippets, default zone) still polls
+    /// on foreground/account-change only. A database subscription covers
+    /// both; the extra wake for an unrelated Hosts/Snippets change is a
+    /// no-op sync cycle, not a correctness issue.
+    public func ensureDatabaseSubscriptionExists(subscriptionID: String) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db else { return }
+        let subscription = CKDatabaseSubscription(subscriptionID: subscriptionID)
+        let notificationInfo = CKSubscription.NotificationInfo()
+        notificationInfo.shouldSendContentAvailable = true
+        subscription.notificationInfo = notificationInfo
+
+        let operation = CKModifySubscriptionsOperation(
+            subscriptionsToSave: [subscription],
+            subscriptionIDsToDelete: nil
+        )
+        operation.qualityOfService = .utility
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifySubscriptionsResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
+    #if os(iOS) && !targetEnvironment(simulator)
+    private static func encodeChangeToken(_ token: CKServerChangeToken) -> Data? {
+        try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
+    }
+
+    private static func decodeChangeToken(_ data: Data) -> CKServerChangeToken? {
+        try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: data)
+    }
+    #endif
+
     #if os(iOS) && !targetEnvironment(simulator)
     private static func debugLog(
         hypothesisId: String,
@@ -169,12 +313,14 @@ public struct CKRecordWrapper: @unchecked Sendable {
     public let record: CKRecord
     public init(record: CKRecord) { self.record = record }
     public var recordName: String { record.recordID.recordName }
+    public var recordType: String { record.recordType }
     /// Server-set timestamp of when this record was last saved to CloudKit.
     /// Used as the authoritative LWW timestamp on pull.
     public var modificationDate: Date? { record.modificationDate }
     public subscript(key: String) -> (any CKRecordValueProtocol)? { record[key] }
     #else
     public var recordName: String { "" }
+    public var recordType: String { "" }
     public var modificationDate: Date? { nil }
     public init() {}
     #endif

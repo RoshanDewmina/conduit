@@ -1,4 +1,4 @@
-// swift-tools-version: 6.4
+// swift-tools-version: 6.2
 // LancerKit — modular engines + features for the Lancer iOS app.
 // Engines are platform-agnostic (no UIKit/SwiftUI). Features depend on engines.
 
@@ -127,7 +127,7 @@ let package = Package(
         ),
         .target(
             name: "SyncKit",
-            dependencies: ["LancerCore", "PersistenceKit", "SecurityKit"],
+            dependencies: ["LancerCore", "PersistenceKit", "SecurityKit", "NotificationsKit"],
             swiftSettings: swiftSettings
         ),
         .target(

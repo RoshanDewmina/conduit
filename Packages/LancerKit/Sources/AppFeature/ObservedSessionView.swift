@@ -5,6 +5,28 @@ import SessionFeature
 import SecurityKit
 import LancerCore
 
+/// Outcome of importing an Observed Session into a Lancer conversation via
+/// `agent.conversations.attachObservedSession` — see `ObservedSessionView.onImportToLancer`.
+public struct ObservedSessionImportSummary: Sendable {
+    public let conversationId: String
+    /// True when this session was already imported by an earlier attach call
+    /// (idempotent re-attach) rather than freshly imported by this one.
+    public let alreadyAttached: Bool
+
+    public init(conversationId: String, alreadyAttached: Bool) {
+        self.conversationId = conversationId
+        self.alreadyAttached = alreadyAttached
+    }
+}
+
+/// A human-readable import failure message, wrapped so it can populate the
+/// `Error` side of `ObservedSessionView.onImportToLancer`'s `Result`.
+public struct ObservedSessionImportError: Error, LocalizedError, Sendable {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+    public var errorDescription: String? { message }
+}
+
 /// Transcript viewer + composer for a session discovered on the host (Claude
 /// Code, etc.) but not dispatched by Lancer. Watch-only when `onSendFollowUp`
 /// is nil (no composer shown); otherwise the phone can send a follow-up prompt
@@ -31,6 +53,15 @@ public struct ObservedSessionView: View {
     /// equivalent relay call). nil disables the composer — the view stays
     /// read-only, matching the original Phase 1 behavior.
     let onSendFollowUp: ((_ prompt: String) async -> DispatchResult)?
+    /// Imports this observed session's transcript into a durable Lancer
+    /// conversation via `agent.conversations.attachObservedSession`. AppRoot
+    /// resolves this to the connected SSH slot's `DaemonChannel.attachObservedSession`
+    /// (or the relay bridge's `relayAttachObservedSession`). nil hides the
+    /// "Import to Lancer" affordance — matching `onSendFollowUp`'s nil-disables pattern.
+    let onImportToLancer: (() async -> Result<ObservedSessionImportSummary, ObservedSessionImportError>)?
+    /// Called after a successful import (or a re-attach of an already-imported
+    /// session) so the caller can navigate to the resulting Lancer conversation.
+    let onImported: (_ conversationId: String) -> Void
     let onBack: () -> Void
 
     @State private var messages: [SessionMessage] = []
@@ -39,6 +70,8 @@ public struct ObservedSessionView: View {
     @State private var nextLine = 0
     @State private var followUpText = ""
     @State private var sendNotice: String?
+    @State private var isImporting = false
+    @State private var importError: String?
 
     @Environment(\.lancerTokens) private var t
 
@@ -50,6 +83,8 @@ public struct ObservedSessionView: View {
         cwd: String = "",
         loadTranscript: @escaping (_ sinceLine: Int) async -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool),
         onSendFollowUp: ((_ prompt: String) async -> DispatchResult)? = nil,
+        onImportToLancer: (() async -> Result<ObservedSessionImportSummary, ObservedSessionImportError>)? = nil,
+        onImported: @escaping (_ conversationId: String) -> Void = { _ in },
         onBack: @escaping () -> Void
     ) {
         self.sessionId = sessionId
@@ -59,6 +94,8 @@ public struct ObservedSessionView: View {
         self.cwd = cwd
         self.loadTranscript = loadTranscript
         self.onSendFollowUp = onSendFollowUp
+        self.onImportToLancer = onImportToLancer
+        self.onImported = onImported
         self.onBack = onBack
     }
 
@@ -70,10 +107,16 @@ public struct ObservedSessionView: View {
                 isLive: false,
                 onBack: { Haptics.selection(); onBack() },
                 onWorkspace: { Haptics.selection(); onBack() },
-                shareText: { transcriptText() }
+                shareText: { transcriptText() },
+                onImportToLancer: onImportToLancer == nil || isImporting ? nil : { Haptics.selection(); Task { await performImport() } }
             )
             .overlay(alignment: .topTrailing) {
                 watchingBadge.padding(.top, 8).padding(.trailing, 64)
+            }
+            if isImporting {
+                importingBanner
+            } else if let importError {
+                importErrorBanner(importError)
             }
             content
             Spacer(minLength: 0)
@@ -116,6 +159,46 @@ public struct ObservedSessionView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    private var importingBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("Importing to Lancer…")
+                .font(.dsMonoPt(12))
+                .foregroundStyle(t.text3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    private func importErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            DSIconView(.alertTri, size: 13, color: t.danger)
+            Text("Couldn't import: \(message)")
+                .font(.dsMonoPt(12))
+                .foregroundStyle(t.danger)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    private func performImport() async {
+        guard let onImportToLancer else { return }
+        isImporting = true
+        importError = nil
+        let outcome = await onImportToLancer()
+        isImporting = false
+        switch outcome {
+        case .success(let summary):
+            Haptics.success()
+            onImported(summary.conversationId)
+        case .failure(let error):
+            Haptics.error()
+            importError = error.message
+        }
     }
 
     private var watchingBadge: some View {

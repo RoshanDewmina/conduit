@@ -184,3 +184,21 @@ public enum E2ERelayMessage: Codable, Sendable {
         }
     }
 }
+
+/// A file's content returned by the daemon's `fsRead` over the relay. Keys
+/// mirror the Go `fsReadResult` JSON (`path`, `content`, `truncated`), plus an
+/// optional `error` the router sets when the home-confined `fsRead` fails
+/// (path escape, directory, or binary content).
+public struct RelayFileContent: Codable, Sendable {
+    public let path: String
+    public let content: String
+    public let truncated: Bool
+    public let error: String?
+
+    public init(path: String, content: String, truncated: Bool = false, error: String? = nil) {
+        self.path = path
+        self.content = content
+        self.truncated = truncated
+        self.error = error
+    }
+}

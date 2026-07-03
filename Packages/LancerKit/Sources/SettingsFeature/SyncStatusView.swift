@@ -3,19 +3,38 @@ import SwiftUI
 import SyncKit
 import DesignSystem
 
-/// Embeddable iCloud sync card for SettingsView.
+/// Embeddable iCloud sync card for SettingsView. Reports combined status for
+/// both `SyncEngine` (Hosts/Snippets, default zone) and `ConversationSyncEngine`
+/// (conversation mirror, Task 8, `LancerConversations` zone) — two engines,
+/// one card, since from the user's point of view it's all "iCloud Sync".
 public struct SyncStatusView: View {
     let engine: SyncEngine
+    let conversationEngine: ConversationSyncEngine?
     @State private var lastSync: Date?
     @State private var error: String?
     @State private var isSyncing = false
     @State private var conflictCount = 0
+    @State private var conversationLastSync: Date?
+    @State private var conversationError: String?
+    @State private var conversationIsSyncing = false
     @State private var showScope = false
     @Environment(\.lancerTokens) private var t
 
-    public init(engine: SyncEngine) {
+    public init(engine: SyncEngine, conversationEngine: ConversationSyncEngine? = nil) {
         self.engine = engine
+        self.conversationEngine = conversationEngine
     }
+
+    private var combinedIsSyncing: Bool { isSyncing || conversationIsSyncing }
+    private var combinedLastSync: Date? {
+        switch (lastSync, conversationLastSync) {
+        case let (a?, b?): return max(a, b)
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        case (nil, nil): return nil
+        }
+    }
+    private var combinedError: String? { error ?? conversationError }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -28,10 +47,10 @@ public struct SyncStatusView: View {
                     .font(.dsSansPt(15))
                     .foregroundStyle(t.text)
                 Spacer()
-                if isSyncing {
+                if combinedIsSyncing {
                     ProgressView().scaleEffect(0.8)
-                } else if let lastSync {
-                    Text(lastSync.formatted(date: .omitted, time: .shortened))
+                } else if let combinedLastSync {
+                    Text(combinedLastSync.formatted(date: .omitted, time: .shortened))
                         .font(.dsSansPt(13))
                         .foregroundStyle(t.text3)
                 } else {
@@ -44,9 +63,9 @@ public struct SyncStatusView: View {
             .padding(.vertical, 12)
 
             // Error banner
-            if let error {
+            if let combinedError {
                 t.border.frame(height: 0.5).padding(.horizontal, 16)
-                Text(error)
+                Text(combinedError)
                     .font(.dsSansPt(12))
                     .foregroundStyle(t.danger)
                     .padding(.horizontal, 16)
@@ -74,6 +93,7 @@ public struct SyncStatusView: View {
             // Sync now button
             Button {
                 isSyncing = true
+                conversationIsSyncing = conversationEngine != nil
                 Task {
                     try? await engine.syncNow()
                     lastSync      = await engine.lastSyncDate
@@ -81,15 +101,23 @@ public struct SyncStatusView: View {
                     conflictCount = await engine.conflictCount
                     isSyncing = false
                 }
+                if let conversationEngine {
+                    Task {
+                        try? await conversationEngine.syncNow()
+                        conversationLastSync = await conversationEngine.lastSyncDate
+                        conversationError    = await conversationEngine.syncError
+                        conversationIsSyncing = false
+                    }
+                }
             } label: {
                 Text("Sync now")
                     .font(.dsSansPt(14))
-                    .foregroundStyle(isSyncing ? t.text3 : t.accent)
+                    .foregroundStyle(combinedIsSyncing ? t.text3 : t.accent)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 11)
             }
             .buttonStyle(.plain)
-            .disabled(isSyncing)
+            .disabled(combinedIsSyncing)
 
             // Scope disclosure
             t.border.frame(height: 0.5).padding(.horizontal, 16)
@@ -119,6 +147,10 @@ public struct SyncStatusView: View {
                     syncRow(icon: "checkmark.circle", label: "SSH host fingerprints (TOFU)", color: t.ok)
                     syncRow(icon: "xmark.circle",     label: "SSH private keys (device-local only)", color: t.text3)
                     syncRow(icon: "info.circle",      label: "Key hint (fingerprint) syncs so you know which key to import on a new device", color: t.accent)
+                    if conversationEngine != nil {
+                        syncRow(icon: "checkmark.circle", label: "Conversation history (title, transcript, status) across your Apple devices", color: t.ok)
+                        syncRow(icon: "info.circle",      label: "The host you're connected to always has the current, authoritative copy — iCloud only restores history to a new device", color: t.accent)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -129,6 +161,11 @@ public struct SyncStatusView: View {
             error         = await engine.syncError
             conflictCount = await engine.conflictCount
             isSyncing     = await engine.isSyncing
+            if let conversationEngine {
+                conversationLastSync  = await conversationEngine.lastSyncDate
+                conversationError     = await conversationEngine.syncError
+                conversationIsSyncing = await conversationEngine.isSyncing
+            }
         }
     }
 

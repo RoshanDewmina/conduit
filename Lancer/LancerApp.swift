@@ -12,6 +12,9 @@ import Sentry
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(CloudKit)
+import CloudKit
+#endif
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -160,6 +163,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        // A CloudKit database-change push (Task 8 / B9 background pull) and an
+        // APNs approval/run-complete push both arrive through this one
+        // delegate method — route by payload shape rather than assuming.
+        // `ConversationSyncEngine` re-derives the `CKNotification` itself and
+        // confirms the subscription ID before acting, so forwarding the raw
+        // dictionary here (rather than trying to interpret it) can't
+        // misroute an approval push as a CloudKit one or vice versa.
+        #if canImport(CloudKit)
+        if CKNotification(fromRemoteNotificationDictionary: userInfo) != nil {
+            NotificationCenter.default.post(
+                name: .lancerCloudKitRemoteNotification,
+                object: nil,
+                userInfo: userInfo
+            )
+            completionHandler(.newData)
+            return
+        }
+        #endif
         // Broadcast so the Inbox can refresh approval/run-complete state in background.
         NotificationCenter.default.post(
             name: .lancerRemoteApprovalReceived,

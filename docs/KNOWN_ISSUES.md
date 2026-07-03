@@ -296,3 +296,56 @@ are now archived under `docs/_archive/`.
   never surfaced anywhere — worth a "Paired machines carry over after reinstall" note in onboarding
   or the Paired Machines screen if this causes future confusion). No bulk "remove all offline
   machines" action — user had to understand the cap error and navigate to Settings manually.
+- **P1 (found + partially fixed, NOT confirmed resolved, 2026-07-03):** the Home screen's per-machine
+  connection dot (and by extension `FleetRelayMachine`/`RelayMachineRow` everywhere else
+  `relayFleetStore.machines` feeds a UI) can show a paired relay machine as disconnected/orange long
+  after it has actually reconnected. Root cause: `RelayFleetStore` (`@Observable`) held each
+  machine's `E2ERelayBridge` (`ObservableObject`, `@Published private(set) var isActive`) as a plain
+  stored reference — `@Observable`'s macro only tracks direct mutations on the object itself, so a
+  `@Published` flip inside the referenced bridge never told SwiftUI to re-render. A view could
+  capture `isActive == false` once early in the connection lifecycle and never be re-invoked again
+  except by an unrelated state change. Distinct from a similar-sounding, already-fixed issue in
+  `SidebarShellState.relayConnected` (the sidebar footer), which has its own working live-update
+  loop in `AppRoot.addRelayMachine` — this bug is specifically in `RelayFleetStore`, reached only via
+  the Home/Fleet/Settings machine-list code paths.
+  **Fix applied** (`Packages/LancerKit/Sources/AppFeature/RelayFleetStore.swift`, commit `61d02b8a`
+  on `feat/cross-device-conversation-sync`): `add()` now subscribes to the new machine's
+  `bridge.$isActive` and re-assigns `machines[i] = machines[i]` through the `@Observable`-synthesized
+  setter on each emission — bridging the Combine publisher into `Observation` tracking, the standard
+  pattern for this. `remove()` tears the subscription down. Builds clean, full 551-test suite green.
+  **RESOLVED 2026-07-03 (second bug found + fixed, root cause proven on-device):** the Observable
+  fix above was real but orthogonal. Device console (`devicectl launch --console` + added
+  diagnostics) showed the indexed machine's Keychain **private key is genuinely absent**
+  (`SecItemCopyMatching` → OSStatus **-25300** `errSecItemNotFound`; four *orphaned* privKeys for
+  other machineIDs still present) while its UserDefaults code + relay URL survive. The old code
+  compounded that corrupt state: `restoreNamespacedStoredPairing()` silently no-op'd on its
+  all-three guard (never applying the stored code), but `hydrateRelayFleetStore` gated `connect()`
+  on `hasStoredPairing` — which checks **only the UserDefaults code** — so the client dialed the
+  relay with an **empty pairing code and a freshly generated keypair**. Cloud Run logs confirmed
+  the loop: `GET /ws/relay?role=phone&code=&publicKey=<fresh-each-launch>` → HTTP 400, every few
+  seconds, forever. `pairingState` never left `.unpaired` → `bridge.isActive` correctly false →
+  permanent orange dot, regardless of the daemon's own (healthy) hourly reconnects.
+  **Fix (on `feat/cross-device-conversation-sync`):** `restoreNamespacedStoredPairing()` now
+  returns `Bool` and logs exactly which piece is missing; hydration gates `connect()` on the full
+  restore succeeding (un-restorable machines stay listed but offline instead of hammering the
+  relay); `connect()` refuses an empty pairing code outright; `persistPairing()` is now
+  all-or-nothing (Keychain key written first, code/URL only on success) so this split state can't
+  be re-created. 3 regression tests added (`E2ERelayClientRestoreTests`); full suite 554/554 green;
+  verified live on-device: fixed build logs the INCOMPLETE state and makes **zero** relay dials
+  (Cloud Run shows no new phone 400s post-fix).
+  **Re-pair completed 2026-07-03 (evening session):** owner removed machine `14FBE4E8` and
+  re-paired on the physical iPhone against a fresh build with this fix. Confirmed via
+  `lancerd.stderr.log` (`e2e: paired with phone (code: 873026)`) and the device UI directly
+  ("online · healthy", ONLINE badge, green dot on Home) — the orange-dot bug is closed on the
+  owner's real device. Composer send through the real UI over this relay connection was also
+  proven live (real dispatch + streamed reply, not a local echo) — see
+  `docs/test-runs/2026-07-03-cross-device-sync-release-gate.md` §6.
+  **Still open, follow-ups (not release-blocking):** (a) 4 orphaned
+  `lancer.relay.machine.*.privKey` Keychain items linger on that device (harmless, but a cleanup
+  sweep on hydrate would be tidy — not implemented, judged not worth the risk this session);
+  (b) no UI yet distinguishes "paired but needs re-pair" from "paired, host offline" — the log
+  does, the dot doesn't; (c) the historical writer of the corrupt state (key deleted vs.
+  `SecItemAdd` failed during pairing) was not identified — `persistPairing` atomicity + the new
+  OSStatus logging make any recurrence self-diagnosing.
+  Full investigation record: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md`
+  Part 7 (superseded by this entry's root cause).
