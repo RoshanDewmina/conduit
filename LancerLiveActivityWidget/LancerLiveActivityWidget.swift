@@ -193,6 +193,12 @@ struct LancerSessionLiveActivity: Widget {
 
     @ViewBuilder
     private func compactTrailingView(context: ActivityViewContext<LancerSessionAttributes>) -> some View {
+        // `isDynamicIslandLimitedInWidth` doesn't exist in the iOS 26 SDK at
+        // all (not just runtime-unavailable) — `if #available` alone can't
+        // gate this because Swift still type-checks the branch under any
+        // SDK. `#if swift(>=6.4)` additionally excludes it from compilation
+        // entirely when building with a toolchain/SDK that predates iOS 27.
+        #if swift(>=6.4)
         if #available(iOS 27.0, *) {
             DynamicIslandWidthReader { isLimitedWidth in
                 if isLimitedWidth {
@@ -207,6 +213,9 @@ struct LancerSessionLiveActivity: Widget {
         } else {
             compactTrailingBadge(context: context)
         }
+        #else
+        compactTrailingBadge(context: context)
+        #endif
     }
 
     @ViewBuilder
@@ -359,6 +368,12 @@ struct LancerSessionLiveActivity: Widget {
 // landscape width. It's an `EnvironmentValues` key, so it must be read from
 // inside a `View`'s `body` — this small reader lets call sites consume it
 // without promoting every helper into its own `View` type.
+//
+// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: the key
+// doesn't exist in the iOS 26 SDK at all, so a toolchain/SDK that predates
+// iOS 27 can't type-check this struct regardless of runtime availability
+// checks at the call site — see `compactTrailingView` above.
+#if swift(>=6.4)
 @available(iOS 27.0, *)
 private struct DynamicIslandWidthReader<Content: View>: View {
     @Environment(\.isDynamicIslandLimitedInWidth) private var isDynamicIslandLimitedInWidth
@@ -368,6 +383,7 @@ private struct DynamicIslandWidthReader<Content: View>: View {
         content(isDynamicIslandLimitedInWidth)
     }
 }
+#endif
 
 // MARK: - Previews
 //
