@@ -10,6 +10,11 @@ jobs:
   lancerkit-spm:
     name: LancerKit (SPM build + test)
     runs-on: macos-15
+    # Safety net, not a tuning knob: without this, a genuine hang (e.g. the
+    # cooperative-thread-pool deadlock fixed alongside this line — see
+    # OpenSSHKeyParserTests.swift's .serialized trait) silently burns CI
+    # minutes for GitHub's default 6h job cap instead of failing fast.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -24,6 +29,7 @@ jobs:
   lancer-app:
     name: Lancer app target (build_sim)
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -49,6 +55,7 @@ jobs:
   daemon-go:
     name: Daemon (Go build + test + vet)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

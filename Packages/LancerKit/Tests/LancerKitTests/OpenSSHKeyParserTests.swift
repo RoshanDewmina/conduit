@@ -10,7 +10,20 @@ import CryptoKit
 // here as PEM strings. Key material in tests is disposable — these are
 // NOT production keys. The passphrase for the encrypted vector is "testpassphrase".
 
-@Suite("OpenSSHKeyParser")
+// .serialized: six of these tests each run a real bcrypt-pbkdf KDF
+// (deliberately slow/CPU-bound by OpenSSH's own design, ~20s each on this
+// machine) synchronously inside the test body. Swift Testing's default
+// concurrent scheduling hands all 24 of this suite's tests to the shared
+// cooperative thread pool at once; on a small-core CI runner (unlike this
+// dev machine) that pool has too few threads to make progress on that much
+// simultaneous CPU-bound synchronous work without yielding, and the whole
+// `swift test` run — not just this suite — deadlocks indefinitely (observed:
+// CI hung 45+ minutes with zero completed tests after every test in every
+// suite reported "started" within the same few milliseconds, then nothing).
+// Never actually exercised in CI before this fix — CI's swift-tools-version
+// was orphaned above what the runner's Xcode has, so `swift package resolve`
+// always failed before any test could run at all.
+@Suite("OpenSSHKeyParser", .serialized)
 struct OpenSSHKeyParserTests {
 
     // MARK: - Fixtures
