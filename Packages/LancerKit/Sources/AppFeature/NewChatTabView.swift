@@ -54,6 +54,12 @@ public struct NewChatTabView: View {
     let preferredCwd: String?
     let onMachineHintConsumed: () -> Void
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
+    /// Appends a follow-up through the host ledger (`agent.conversations.append`)
+    /// instead of the legacy `channel.continueRun` — used whenever the active
+    /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
+    /// Defaults to a hard failure so existing previews/tests that don't wire it
+    /// simply fall back to the legacy path (nil `conversationID` never calls this).
+    let onContinueConversation: (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
     var onOpenSidebar: () -> Void = {}
@@ -148,6 +154,7 @@ public struct NewChatTabView: View {
         preferredCwd: String? = nil,
         onMachineHintConsumed: @escaping () -> Void = {},
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
+        onContinueConversation: @escaping (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome = { _, _, _, _, _, _ in .blocked("Ledger continuation not wired.") },
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         onOpenSidebar: @escaping () -> Void = {},
@@ -166,6 +173,7 @@ public struct NewChatTabView: View {
         self.preferredCwd = preferredCwd
         self.onMachineHintConsumed = onMachineHintConsumed
         self.onDispatch = onDispatch
+        self.onContinueConversation = onContinueConversation
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
@@ -1117,8 +1125,14 @@ public struct NewChatTabView: View {
                     )
                 }
             }
-            // Persist conversation + turn
-            if let chatRepo {
+            // Persist conversation + turn. A ledger-backed run (Task 7) already had
+            // its mirror row written by `ConversationSyncCoordinator.startConversation`
+            // — just adopt its id. Only fall back to the legacy direct-mirror write
+            // when the run has no `conversationID` (the mirror write itself failed,
+            // best-effort, or this call site hasn't been migrated to the coordinator).
+            if let convID = run.conversationID {
+                conversationID = convID
+            } else if let chatRepo {
                 Task {
                     // Persist the daemon-resolved absolute cwd (run.cwd), not the raw
                     // local `cwd` — a fresh relay dispatch's local value may still be
@@ -1140,8 +1154,17 @@ public struct NewChatTabView: View {
         }
     }
 
-    /// Continue the conversation: re-launch under a NEW runId via the run's channel,
-    /// re-passing the daemon's policy + budget gates, then append the continued turn.
+    /// The exact message `ConversationSyncCoordinator.append` returns for a
+    /// host "needsApproval" reply — matched here (rather than adding a
+    /// structured reason to `ChatDispatchOutcome`) so a ledger-backed
+    /// follow-up shows the same inline approval card as the legacy path
+    /// instead of a generic error alert.
+    private static let needsApprovalMessage = "Awaiting your approval — check the Inbox."
+
+    /// Continue the conversation: re-launch under a NEW runId, either through the
+    /// host conversation ledger (`onContinueConversation`, Task 7 — preferred,
+    /// keeps other devices in sync) or, for a pre-ledger run whose mirror write
+    /// failed at start, the legacy `channel.continueRun`.
     private func sendFollowUp(_ followUp: String) async {
         let trimmed = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isSending, let active = activeRun else { return }
@@ -1150,6 +1173,30 @@ public struct NewChatTabView: View {
         followUpText = ""
         // Fresh turn — clear any prior awaiting/denied state from the last approval.
         isAwaitingApproval = false
+
+        if let convID = active.conversationID {
+            let model = selectedModel.isEmpty ? nil : selectedModel
+            let outcome = await onContinueConversation(convID, active.nextBaseSeq, trimmed, selectedAgentID, effectiveCwd, model)
+            switch outcome {
+            case .started(let run):
+                activeRun = run
+                turns.append(ChatTurn(prompt: trimmed, runId: run.runId))
+                controlStore = RunControlStore(channel: run.channel, runId: run.runId)
+                endActivityTask?.cancel()
+                endActivityTask = nil
+                if #available(iOS 16.2, *), let key = liveActivityKey {
+                    Task { await LancerLiveActivityManager.shared.update(activityKey: key, status: "running") }
+                }
+            case .blocked(let message):
+                if message == Self.needsApprovalMessage {
+                    isAwaitingApproval = true
+                } else if !message.isEmpty {
+                    dispatchErrorMessage = message
+                }
+            }
+            return
+        }
+
         do {
             let result = try await active.channel.continueRun(runId: active.runId, prompt: trimmed)
             switch result.status {

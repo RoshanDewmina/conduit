@@ -142,7 +142,11 @@ public struct ChatHistoryView: View {
         activeRun = run
         liveTurns.append(LiveTurn(prompt: trimmed, runID: run.runId))
         controlStore = RunControlStore(channel: run.channel, runId: run.runId)
-        if let chatRepo {
+        // A ledger-backed conversation's turn is already persisted by
+        // `ConversationSyncCoordinator.continueConversation` (see `onContinue`
+        // in AppRoot) — only legacy (pre-ledger) conversations need this
+        // direct mirror write.
+        if conv.syncState == .localOnly, let chatRepo {
             _ = try? await chatRepo.appendTurn(conversationID: conversationID, prompt: trimmed, runID: run.runId)
         }
     }

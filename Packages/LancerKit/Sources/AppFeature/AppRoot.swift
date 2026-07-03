@@ -40,6 +40,11 @@ public final class AppEnvironment {
     public let chatRepo: ChatConversationRepository
     public let workspaceRepo: WorkspaceRepository
     public let accountSession: AccountSessionController
+    /// Host-mediated conversation turn orchestration (Task 7) — the only place
+    /// that should call `agent.conversations.append`/`.fetch` for UI-driven
+    /// turns. Lives on the environment (not `AppRoot`, a `View` struct) so its
+    /// per-conversation sync-state subscriptions survive view re-creation.
+    public let conversationSyncCoordinator: ConversationSyncCoordinator
 
     public init() throws {
         self.database = try AppDatabase.openShared()
@@ -49,6 +54,7 @@ public final class AppEnvironment {
         self.snapshotRepo = SessionSnapshotRepository(database)
         self.chatRepo = ChatConversationRepository(database)
         self.workspaceRepo = WorkspaceRepository(database)
+        self.conversationSyncCoordinator = ConversationSyncCoordinator(chatRepo: chatRepo)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
@@ -1001,15 +1007,65 @@ public struct AppRoot: View {
         return []
     }
 
-    /// Continue a persisted conversation from History. Resolves the conversation's
-    /// host channel (a connected SSH slot, else the relay bridge), continues the run
-    /// under a new runId, registers it for streaming, and returns the ActiveChatRun.
-    /// Returns nil if no live transport can reach the host.
-    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String) async -> ActiveChatRun? {
-        // Continue from the conversation's persisted context (agent/cwd/model) as a
-        // fallback, so a reopened chat still continues after the daemon forgot the
-        // run (process ended or daemon restarted) instead of "no longer has this run".
-        // Prefer the SSH slot that owns this host.
+    /// Continue a persisted conversation from History. A ledger-backed conversation
+    /// (Task 6/7 — `syncState != .localOnly`) appends through the host's conversation
+    /// ledger so another device sees the turn too; a legacy pre-ledger conversation
+    /// falls back to continuing directly via the run's channel. Returns nil if no
+    /// live transport can reach the conversation's host.
+    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String, env: AppEnvironment) async -> ActiveChatRun? {
+        if conv.syncState != .localOnly {
+            // Ledger conversations live on ONE host's SQLite ledger — unlike the
+            // legacy fallback below, there's no safe "any active machine" retry
+            // if the exact owning host (SSH slot, else the paired relay machine)
+            // isn't reachable.
+            if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
+               let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
+                let channel = slot.channel
+                let transport = ConversationTransport(
+                    append: { try await channel.appendConversation($0) },
+                    fetch: { try await channel.fetchConversation($0) },
+                    archive: { try await channel.archiveConversation($0) }
+                )
+                let outcome = await env.conversationSyncCoordinator.continueConversation(
+                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
+                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
+                    hostName: slot.hostName, hostID: slot.hostID.uuidString, transport: transport
+                )
+                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: slot.channel, title: conv.title) {
+                    return run
+                }
+                return nil
+            }
+            if let sourceHostID = conv.sourceHostID, let uuid = UUID(uuidString: sourceHostID),
+               let machine = relayFleetStore.machine(RelayMachineID(uuid)) {
+                let bridge = machine.bridge
+                let transport = ConversationTransport(
+                    append: { try await bridge.relayAppendConversation($0) },
+                    fetch: { try await bridge.relayFetchConversation($0) },
+                    archive: { try await bridge.relayArchiveConversation($0) }
+                )
+                let channel = RelayRunControl(
+                    send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
+                    onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p, agent: conv.agentID, cwd: conv.cwd, model: conv.model) }
+                )
+                let outcome = await env.conversationSyncCoordinator.continueConversation(
+                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
+                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
+                    hostName: machine.record.displayName, hostID: uuid.uuidString, transport: transport
+                )
+                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: channel, title: conv.title) {
+                    return run
+                }
+                return nil
+            }
+            return nil
+        }
+
+        // Legacy (pre-ledger) conversation: continue from the persisted context
+        // (agent/cwd/model) directly via the run's channel, so a reopened chat
+        // still continues after the daemon forgot the run (process ended or
+        // daemon restarted) instead of "no longer has this run". Prefer the SSH
+        // slot that owns this host.
         if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
            let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
             guard let result = try? await slot.channel.continueRun(
@@ -1046,106 +1102,144 @@ public struct AppRoot: View {
         return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
     }
 
-    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil) async -> ChatDispatchOutcome {
-        let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return .blocked("Unknown agent.") }
+    /// A fresh idempotency key for one `agent.conversations.append` call —
+    /// `stable-device-id:random`, per the build handoff's `clientTurnId`
+    /// contract. Uniqueness (not the exact device-id prefix format) is what
+    /// matters: it only needs to let a replayed append map back to the same
+    /// turn instead of creating a duplicate.
+    private static func newClientTurnID() -> String {
+        "\(DeviceIdentity.sessionID()):\(UUID().uuidString)"
+    }
 
-        // Relay-paired dispatch: send through the owning machine's E2E relay
-        // bridge. The id is 3-part ("relay|<machineID>|<agentID>") so it can
-        // route to the exact machine (see `dispatchAgents()`).
+    /// Maps a `ConversationSyncCoordinator.TurnOutcome` to the `ChatDispatchOutcome`
+    /// NewChatTabView already knows how to render, registering the run for
+    /// streaming and attaching the ledger's `conversationID`/`nextBaseSeq` so
+    /// follow-ups can continue through the ledger too (see `continueConversationTurn`).
+    private func chatDispatchOutcome(
+        from outcome: ConversationSyncCoordinator.TurnOutcome, channel: any RunControlling, title: String
+    ) -> ChatDispatchOutcome {
+        switch outcome {
+        case .started(let started):
+            guard !started.runID.isEmpty else { return .blocked("Couldn't start the run.") }
+            runOutputStore.register(runId: started.runID)
+            return .started(ActiveChatRun(
+                runId: started.runID,
+                channel: channel,
+                title: title,
+                subtitle: "",
+                cwd: started.cwd,
+                conversationID: started.conversationID,
+                nextBaseSeq: started.baseSeqForNextTurn
+            ))
+        case .blocked(let message):
+            return .blocked(message)
+        }
+    }
+
+    /// A transport + run-control channel resolved for one agent id, shared by
+    /// both the initial dispatch and every follow-up continuation so a thread
+    /// never has to re-derive "which bridge/slot owns this conversation".
+    private struct ResolvedAgentTransport {
+        let transport: ConversationTransport
+        let hostName: String
+        let hostID: String?
+        let channel: any RunControlling
+        let title: String
+    }
+
+    /// `resolveAgentTransport`'s outcome — a plain success/failure enum (not
+    /// `Result<_, Error>`) since the failure side is just a user-facing message,
+    /// not a thrown error.
+    private enum ResolvedAgentTransportOutcome {
+        case success(ResolvedAgentTransport)
+        case failure(String)
+    }
+
+    /// Resolves `agentID` (either "relay|<machineID>|<vendor>" or "<slotUUID>|<vendor>",
+    /// see `dispatchAgents()`) to the transport + run-control channel the
+    /// `ConversationSyncCoordinator` and `ActiveChatRun` need. `cwd`/`model` are
+    /// only used to build the relay channel's `onContinue` fallback closure (the
+    /// pre-sync path for the rare case a mirror write silently failed).
+    private func resolveAgentTransport(agentID: String, cwd: String, model: String?) -> ResolvedAgentTransportOutcome {
+        let parts = agentID.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return .failure("Unknown agent.") }
+
+        // Relay-paired: the id is 3-part ("relay|<machineID>|<agentID>") so it
+        // can route to the exact machine (see `dispatchAgents()`).
         if parts[0] == "relay" {
             let relayParts = agentID.split(separator: "|", maxSplits: 2).map(String.init)
             guard relayParts.count == 3, let uuid = UUID(uuidString: relayParts[1]) else {
-                return .blocked("Unknown agent.")
+                return .failure("Unknown agent.")
             }
-            guard let bridge = relayFleetStore.machine(RelayMachineID(uuid))?.bridge else {
-                return .blocked("Relay bridge not available.")
+            guard let machine = relayFleetStore.machine(RelayMachineID(uuid)) else {
+                return .failure("Relay bridge not available.")
             }
+            let bridge = machine.bridge
             let vendor = relayParts[2]
-            do {
-                let result = try await bridge.sendDispatch(
-                    agent: vendor, cwd: cwd, prompt: prompt,
-                    budgetUSD: budgetUSD, model: model
-                )
-                switch result.status {
-                case "started":
-                    guard let runId = result.runId else {
-                        return .blocked(result.message ?? "Couldn't start the run.")
-                    }
-                    runOutputStore.register(runId: runId)
-                    // Capture this run's agent/cwd/model so a follow-up continues even
-                    // after the original process exits (a one-shot `claude -p` exits as
-                    // soon as it answers, so the daemon no longer has the run in memory).
-                    // Use the daemon-resolved absolute cwd, not the raw local one (which
-                    // may be the literal "~") — same reasoning as ActiveChatRun.cwd below.
-                    let fbAgent = vendor
-                    let resolvedCwd = result.cwd ?? cwd
-                    let channel = RelayRunControl(send: { runId, action in
-                        await bridge.sendRunControl(runId: runId, action: action)
-                    }, onContinue: { runId, prompt in
-                        try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: fbAgent, cwd: resolvedCwd, model: model)
-                    })
-                    return .started(ActiveChatRun(
-                        runId: runId,
-                        channel: channel,
-                        title: "Relay · \(vendor)",
-                        subtitle: prompt,
-                        cwd: resolvedCwd
-                    ))
-                case "denied":
-                    return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
-                case "needsApproval":
-                    return .blocked("Awaiting your approval — check the Inbox.")
-                case "budgetExceeded":
-                    return .blocked(result.message ?? "Daily budget cap reached.")
-                default:
-                    return .blocked(result.message ?? "Couldn't start the run.")
-                }
-            } catch {
-                // A superseded request means a newer send replaced this one — benign,
-                // so return an empty block the composer ignores (no scary alert).
-                if case E2EError.superseded = error { return .blocked("") }
-                return .blocked("Relay dispatch failed: \(error.localizedDescription)")
-            }
+            let transport = ConversationTransport(
+                append: { try await bridge.relayAppendConversation($0) },
+                fetch: { try await bridge.relayFetchConversation($0) },
+                archive: { try await bridge.relayArchiveConversation($0) }
+            )
+            let channel = RelayRunControl(send: { runId, action in
+                await bridge.sendRunControl(runId: runId, action: action)
+            }, onContinue: { runId, prompt in
+                try await bridge.sendRunContinue(runId: runId, prompt: prompt, agent: vendor, cwd: cwd, model: model)
+            })
+            return .success(ResolvedAgentTransport(
+                transport: transport, hostName: machine.record.displayName, hostID: uuid.uuidString,
+                channel: channel, title: "Relay · \(vendor)"
+            ))
         }
 
-        // SSH dispatch: route through the fleet slot's daemon channel.
+        // SSH: route through the fleet slot's daemon channel.
         guard let slotUUID = UUID(uuidString: parts[0]),
               let slot = fleetStore.slots.first(where: { $0.id == slotUUID })
-        else { return .blocked("Host is no longer connected.") }
+        else { return .failure("Host is no longer connected.") }
         let vendor = parts[1]
-        do {
-            let result = try await slot.channel.dispatchAgent(
-                agent: vendor,
-                cwd: cwd,
-                prompt: prompt,
-                budgetUSD: budgetUSD ?? 0,
-                model: model
+        let channel = slot.channel
+        let transport = ConversationTransport(
+            append: { try await channel.appendConversation($0) },
+            fetch: { try await channel.fetchConversation($0) },
+            archive: { try await channel.archiveConversation($0) }
+        )
+        return .success(ResolvedAgentTransport(
+            transport: transport, hostName: slot.hostName, hostID: slot.hostID.uuidString,
+            channel: slot.channel, title: "\(vendor) · \(slot.hostName)"
+        ))
+    }
+
+    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil, env: AppEnvironment) async -> ChatDispatchOutcome {
+        let vendor = agentID.split(separator: "|").last.map(String.init) ?? agentID
+        switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
+        case .failure(let message):
+            return .blocked(message)
+        case .success(let resolved):
+            let outcome = await env.conversationSyncCoordinator.startConversation(
+                agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                hostName: resolved.hostName, hostID: resolved.hostID,
+                clientTurnID: Self.newClientTurnID(), transport: resolved.transport
             )
-            switch result.status {
-            case "started":
-                guard let runId = result.runId else {
-                    return .blocked(result.message ?? "Couldn't start the run.")
-                }
-                runOutputStore.register(runId: runId)
-                return .started(ActiveChatRun(
-                    runId: runId,
-                    channel: slot.channel,
-                    title: "\(vendor) · \(slot.hostName)",
-                    subtitle: prompt,
-                    cwd: result.cwd ?? cwd
-                ))
-            case "denied":
-                return .blocked("Blocked by policy\(result.rule.map { " (\($0))" } ?? "").")
-            case "needsApproval":
-                return .blocked("Awaiting your approval — check the Inbox.")
-            case "budgetExceeded":
-                return .blocked(result.message ?? "Daily budget cap reached.")
-            default:
-                return .blocked(result.message ?? "Couldn't start the run.")
-            }
-        } catch {
-            return .blocked("Dispatch failed: \(error.localizedDescription)")
+            return chatDispatchOutcome(from: outcome, channel: resolved.channel, title: resolved.title)
+        }
+    }
+
+    /// Appends a follow-up turn to an existing ledger-backed conversation —
+    /// `NewChatTabView.sendFollowUp`'s ledger path, used whenever the active
+    /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
+    private func performContinueConversation(
+        conversationID: String, baseSeq: Int, prompt: String, agentID: String, cwd: String, model: String?, env: AppEnvironment
+    ) async -> ChatDispatchOutcome {
+        switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
+        case .failure(let message):
+            return .blocked(message)
+        case .success(let resolved):
+            let outcome = await env.conversationSyncCoordinator.continueConversation(
+                conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
+                clientTurnID: Self.newClientTurnID(), model: model,
+                hostName: resolved.hostName, hostID: resolved.hostID, transport: resolved.transport
+            )
+            return chatDispatchOutcome(from: outcome, channel: resolved.channel, title: resolved.title)
         }
     }
 
@@ -1520,7 +1614,13 @@ public struct AppRoot: View {
                     pendingNewChatCwd = nil
                 },
                 onDispatch: { agentID, cwd, prompt, budget, model in
-                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
+                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model, env: env)
+                },
+                onContinueConversation: { conversationID, baseSeq, prompt, agentID, cwd, model in
+                    await performContinueConversation(
+                        conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
+                        agentID: agentID, cwd: cwd, model: model, env: env
+                    )
                 },
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
@@ -1545,7 +1645,7 @@ public struct AppRoot: View {
                 onBack: { sidebarState.navigate(to: .home) },
                 onNewChat: { sidebarState.navigate(to: .newChat) },
                 onContinue: { conv, lastRunID, prompt in
-                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt)
+                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt, env: env)
                 }
             )
             .id(id)
@@ -2555,6 +2655,24 @@ public struct ActiveChatRun: Identifiable {
     /// composer sent (which may be the literal "~" for a fresh relay dispatch).
     /// See `DispatchResult.cwd`.
     public let cwd: String
+    /// The host ledger conversation this run belongs to, once `performDispatch`
+    /// routed the initial turn through `agent.conversations.append` (Task 7).
+    /// `nil` only if the mirror write itself failed (best-effort) — callers
+    /// should treat that as "can't continue via the ledger", not as a hard
+    /// error, and fall back to `channel.continueRun` for follow-ups.
+    public let conversationID: String?
+    /// The `nextSeq` the host returned for this turn — the `baseSeq` the next
+    /// follow-up's `agent.conversations.append` call must send.
+    public let nextBaseSeq: Int
+    public init(runId: String, channel: any RunControlling, title: String, subtitle: String, cwd: String, conversationID: String? = nil, nextBaseSeq: Int = 0) {
+        self.runId = runId
+        self.channel = channel
+        self.title = title
+        self.subtitle = subtitle
+        self.cwd = cwd
+        self.conversationID = conversationID
+        self.nextBaseSeq = nextBaseSeq
+    }
     public var id: String { runId }
 }
 
