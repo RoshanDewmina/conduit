@@ -1,8 +1,37 @@
 # Siri-Primary Lancer: iOS 26 Launch Lane and iOS 27 Fast Follow
 
 Date: 2026-07-03
-Status: Planning and implementation handoff
+Status: Phase 1 implemented (iOS 26 launch-safe foundation); Phase 2 deferred until iOS 27 target/toolchain decision
 Owner goal: ship Lancer on iOS 26 now, then be ready to ship an iOS 27 Siri-first update quickly after the iOS 27 target/toolchain decision.
+
+## Implementation status (2026-07-03)
+
+### Phase 1 — done in `cursor/siri-primary-ios26-foundation-bc7c`
+
+- **`IntentEntityCatalog`** (`Packages/LancerKit/Sources/PersistenceKit/IntentEntityCatalog.swift`): testable GRDB-backed snapshots for machines, runs, approvals, conversations, workspaces. Relay machines and active run IDs are injected from the app target.
+- **App Entities + queries** (`Lancer/AppEntities.swift`): `MachineEntity`, `RunEntity`, `ApprovalEntity`, `ConversationEntity`, `WorkspaceEntity` with `EntityQuery` + `EntityStringQuery` disambiguation.
+- **Refactored run control** (`Lancer/RunControlIntents.swift`): `PauseRunIntent` / `StopRunIntent` accept optional `RunEntity`; fall back to sole-active-run only when unambiguous.
+- **Entity-aware deny** (`Lancer/DenyLatestApprovalIntent.swift`): `DenyApprovalIntent(approval:)` plus `DenyLatestApprovalIntent` only when exactly one approval is pending.
+- **Navigation intents** (`Lancer/NavigationIntents.swift`): `SearchLancerIntent`, `OpenConversationIntent`, `OpenMachineIntent`, `OpenApprovalIntent`, `ContinueConversationIntent` (opens thread; does not send to agent).
+- **Siri navigation bridge** (`NotificationsKit/SiriNavigation.swift`, `AppRoot.handleSiriNavigation`): intents post `lancerSiriNavigation`; app routes to sidebar search, thread, machines, or approval review.
+- **Shortcuts** (`Lancer/LancerAppShortcuts.swift`): 11 Siri phrases registered (status, pending approvals, search, open/continue conversation, open machine, open/deny approval, pause/stop run, deny latest). Approve remains never Siri-triggered.
+- **Tests** (`Packages/LancerKit/Tests/LancerKitTests/IntentEntityCatalogTests.swift`): catalog loading, FTS search, matcher behavior, multi-approval ambiguity guard.
+
+### Phase 2 — not started (requires iOS 27 SDK/target)
+
+- `IndexedEntity` / `IndexedEntityQuery` / Core Spotlight semantic indexing
+- `RelevantEntities`, view annotations, `LongRunningIntent`
+- `AppIntentsTesting` XCUITest bundle
+- Deployment target bump in `project.yml` / `Package.swift`
+
+### Verification note
+
+Cloud agent environment has no Xcode/Swift toolchain. Owner should run locally:
+
+- `cd Packages/LancerKit && swift build && swift test --no-parallel`
+- `xcodebuild build -project Lancer.xcodeproj -scheme Lancer -configuration Debug -destination 'platform=iOS Simulator,name=<available iPhone>,OS=latest'`
+
+Inspect build log for App Intents metadata extraction / training phrases.
 
 ## Ground Truth
 

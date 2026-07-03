@@ -1,55 +1,53 @@
 import AppIntents
 import Foundation
+import PersistenceKit
 import SessionFeature
 
 // Lives in the `Lancer` app target — see StatusQueryIntents.swift's header
 // comment for why (dual-target AppIntent compilation breaks runtime execution
 // lookup even though static Shortcuts discovery still works).
 
-/// Resolves which run a bare "pause/stop the session" phrase applies to, without
-/// full `AppEntity`/`EntityQuery` disambiguation. `ActiveRunRegistry` only tracks
-/// IDs (no per-machine/title metadata is visible to SessionFeature — that lives
-/// in AppFeature's `RunOutputStore`), so a genuine "which one?" picker isn't
-/// buildable here without inverting the Feature dependency graph. Scoped per the
-/// plan's own guidance: exactly one active run acts on it directly; zero or more
-/// than one returns a clear dialog instead of guessing. Full disambiguation is a
-/// fast follow if multi-run Siri control turns out to matter in practice.
-private enum SoleActiveRunResolution {
-    case success(String)
-    case failure(IntentDialog)
-}
-
-@available(iOS 17.0, *)
-@MainActor
-private func resolveSoleActiveRun() -> SoleActiveRunResolution {
-    let active = ActiveRunRegistry.shared.activeRunIDs
-    if active.isEmpty {
-        return .failure(IntentDialog("No agent runs are currently active."))
-    }
-    if active.count > 1 {
-        return .failure(IntentDialog("More than one agent is running — open Lancer to choose which one."))
-    }
-    return .success(active[0])
-}
-
 @available(iOS 17.0, *)
 public struct PauseRunIntent: AppIntent {
     public static let title: LocalizedStringResource = "Pause Agent Run"
-    public static let description = IntentDescription("Pause the active agent run.")
+    public static let description = IntentDescription("Pause an active agent run.")
+
+    @Parameter(title: "Run")
+    public var run: RunEntity?
 
     public init() {}
+    public init(run: RunEntity) { self.run = run }
 
     @MainActor
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        switch resolveSoleActiveRun() {
-        case .failure(let dialog):
-            return .result(dialog: dialog)
-        case .success(let runId):
-            switch await CommandGateway.shared.execute(.pause(runId: runId)) {
-            case .ok: return .result(dialog: "Paused.")
-            case .transportUnavailable: return .result(dialog: "Lancer isn't connected to a machine right now.")
-            default: return .result(dialog: "Couldn't pause the run.")
+        let catalog = try SiriIntentSupport.openCatalog()
+        let active = SiriIntentSupport.activeRunIDs()
+
+        let resolved: IntentRunRecord?
+        if let run {
+            resolved = try await catalog.run(id: run.id, activeRunIDs: active)
+            guard let resolved else {
+                return .result(dialog: "That run isn't active anymore.")
             }
+        } else if active.count == 1, let only = try await catalog.activeRuns(activeRunIDs: active).first {
+            resolved = only
+        } else if active.isEmpty {
+            return .result(dialog: "No agent runs are currently active.")
+        } else {
+            return .result(dialog: "More than one agent is running — pick which run to pause.")
+        }
+
+        guard let resolved else {
+            return .result(dialog: "Couldn't find that run.")
+        }
+
+        switch await CommandGateway.shared.execute(.pause(runId: resolved.id)) {
+        case .ok:
+            return .result(dialog: SiriIntentDialogs.pauseSuccess(resolved))
+        case .transportUnavailable:
+            return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: resolved.hostName))
+        default:
+            return .result(dialog: "Couldn't pause \(SiriIntentSupport.runDialogSubject(resolved)).")
         }
     }
 }
@@ -57,21 +55,44 @@ public struct PauseRunIntent: AppIntent {
 @available(iOS 17.0, *)
 public struct StopRunIntent: AppIntent {
     public static let title: LocalizedStringResource = "Stop Agent Run"
-    public static let description = IntentDescription("Stop the active agent run.")
+    public static let description = IntentDescription("Stop an active agent run.")
+
+    @Parameter(title: "Run")
+    public var run: RunEntity?
 
     public init() {}
+    public init(run: RunEntity) { self.run = run }
 
     @MainActor
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        switch resolveSoleActiveRun() {
-        case .failure(let dialog):
-            return .result(dialog: dialog)
-        case .success(let runId):
-            switch await CommandGateway.shared.execute(.cancel(runId: runId)) {
-            case .ok: return .result(dialog: "Stopped.")
-            case .transportUnavailable: return .result(dialog: "Lancer isn't connected to a machine right now.")
-            default: return .result(dialog: "Couldn't stop the run.")
+        let catalog = try SiriIntentSupport.openCatalog()
+        let active = SiriIntentSupport.activeRunIDs()
+
+        let resolved: IntentRunRecord?
+        if let run {
+            resolved = try await catalog.run(id: run.id, activeRunIDs: active)
+            guard let resolved else {
+                return .result(dialog: "That run isn't active anymore.")
             }
+        } else if active.count == 1, let only = try await catalog.activeRuns(activeRunIDs: active).first {
+            resolved = only
+        } else if active.isEmpty {
+            return .result(dialog: "No agent runs are currently active.")
+        } else {
+            return .result(dialog: "More than one agent is running — pick which run to stop.")
+        }
+
+        guard let resolved else {
+            return .result(dialog: "Couldn't find that run.")
+        }
+
+        switch await CommandGateway.shared.execute(.cancel(runId: resolved.id)) {
+        case .ok:
+            return .result(dialog: SiriIntentDialogs.stopSuccess(resolved))
+        case .transportUnavailable:
+            return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: resolved.hostName))
+        default:
+            return .result(dialog: "Couldn't stop \(SiriIntentSupport.runDialogSubject(resolved)).")
         }
     }
 }

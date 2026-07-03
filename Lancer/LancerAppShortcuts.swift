@@ -37,8 +37,54 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             systemImageName: "checkmark.shield"
         )
         AppShortcut(
+            intent: SearchLancerIntent(),
+            phrases: [
+                "Search \(.applicationName) for \(\.$query)",
+                "Find a conversation in \(.applicationName) about \(\.$query)",
+            ],
+            shortTitle: "Search Lancer",
+            systemImageName: "magnifyingglass"
+        )
+        AppShortcut(
+            intent: OpenConversationIntent(),
+            phrases: [
+                "Open \(\.$conversation) in \(.applicationName)",
+                "Show conversation \(\.$conversation) in \(.applicationName)",
+            ],
+            shortTitle: "Open Conversation",
+            systemImageName: "bubble.left.and.bubble.right"
+        )
+        AppShortcut(
+            intent: ContinueConversationIntent(),
+            phrases: [
+                "Continue \(\.$conversation) in \(.applicationName)",
+                "Keep working on \(\.$conversation) in \(.applicationName)",
+            ],
+            shortTitle: "Continue Conversation",
+            systemImageName: "arrow.turn.up.right"
+        )
+        AppShortcut(
+            intent: OpenMachineIntent(),
+            phrases: [
+                "Open \(\.$machine) in \(.applicationName)",
+                "Show machine \(\.$machine) in \(.applicationName)",
+            ],
+            shortTitle: "Open Machine",
+            systemImageName: "desktopcomputer"
+        )
+        AppShortcut(
+            intent: OpenApprovalIntent(),
+            phrases: [
+                "Open approval \(\.$approval) in \(.applicationName)",
+                "Review \(\.$approval) in \(.applicationName)",
+            ],
+            shortTitle: "Open Approval",
+            systemImageName: "checkmark.shield"
+        )
+        AppShortcut(
             intent: PauseRunIntent(),
             phrases: [
+                "Pause \(\.$run) in \(.applicationName)",
                 "Pause the agent in \(.applicationName)",
                 "Pause my \(.applicationName) session",
             ],
@@ -48,11 +94,20 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StopRunIntent(),
             phrases: [
+                "Stop \(\.$run) in \(.applicationName)",
                 "Stop the agent in \(.applicationName)",
                 "Stop my \(.applicationName) session",
             ],
             shortTitle: "Stop Run",
             systemImageName: "stop.circle"
+        )
+        AppShortcut(
+            intent: DenyApprovalIntent(),
+            phrases: [
+                "Deny \(\.$approval) in \(.applicationName)",
+            ],
+            shortTitle: "Deny Approval",
+            systemImageName: "xmark.shield"
         )
         AppShortcut(
             intent: DenyLatestApprovalIntent(),

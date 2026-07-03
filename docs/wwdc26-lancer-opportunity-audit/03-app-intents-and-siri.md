@@ -101,16 +101,18 @@ the existing workaround (compile it directly in the app target) — this API doe
 
 ## Entity model (recommended)
 
-Per `02-current-codebase-state.md`, Lancer has **zero** production `AppEntity`/`IndexedEntity`
-usage today — this is the largest addressable App Intents gap. Recommended entities:
+Per `02-current-codebase-state.md`, Lancer had **zero** production `AppEntity`/`IndexedEntity`
+usage before 2026-07-03. **Phase 1 (iOS 26) now ships:**
 
-| Entity | Kind | Rationale |
+| Entity | Kind | Status |
 |---|---|---|
-| `MachineEntity` | `IndexedEntity` (durable, low-churn) | Machines are long-lived, few in number (≤3-slot fleet), stable identity — ideal for indexing |
-| `ConversationEntity` | `IndexedEntity` | Chat threads persist in GRDB already; natural Spotlight surface for "find my conversation about X" |
-| `ApprovalEntity` | `EntityStringQuery` (volatile) | Pending approvals are short-lived and change fast — don't index, resolve fresh each time |
-| `RunEntity` | `EntityStringQuery` (volatile) | Active runs are ephemeral — same reasoning as approvals; directly fixes the confirmed gap where `ActiveRunRegistry.swift:4` stores run IDs only with no entity, causing the multi-run Siri disambiguation failure in `RunControlIntents` |
-| `WorkspaceEntity` (if the `docs/design/projects-workspaces-concept.md` design ships) | `IndexedEntity`, `SyncableEntity` | Would pair naturally with the design doc's already-decided GRDB storage layer |
+| `MachineEntity` | `EntityQuery` + `EntityStringQuery` | **Implemented** — SSH hosts (`HostRepository`) + relay machines (`RelayMachineMigration` index) |
+| `ConversationEntity` | `EntityQuery` + `EntityStringQuery` | **Implemented** — GRDB + existing FTS search path |
+| `ApprovalEntity` | `EntityQuery` + `EntityStringQuery` | **Implemented** — pending approvals only; `DenyApprovalIntent` resolves by entity |
+| `RunEntity` | `EntityQuery` + `EntityStringQuery` | **Implemented** — `ActiveRunRegistry` IDs enriched via `ChatConversationRepository.turnByRunID` |
+| `WorkspaceEntity` | `EntityQuery` + `EntityStringQuery` | **Implemented** — stable `WorkspaceRepository` IDs; no Siri shortcut yet |
+
+**Phase 2 (iOS 27)** still recommended for `IndexedEntity`, `IndexedEntityQuery`, Core Spotlight, `RelevantEntities`, view annotations, and `SyncableEntity` where cross-device resolution matters.
 
 ## Safety classification (unchanged from what's already correct — verify, don't relitigate)
 
@@ -129,7 +131,9 @@ usage today — this is the largest addressable App Intents gap. Recommended ent
 
 ## AppIntentsTesting adoption plan
 
-This framework runs as a separate XCUITest bundle process driving the real, compiled app — not
+**Phase 1 (2026-07-03):** Unit tests for `IntentEntityCatalog` and entity matching ship in `LancerKitTests`. App-target `AppIntentsTesting` remains Phase 2 — gated on iOS 27 SDK adoption per deployment-target policy.
+
+**Phase 2** — this framework runs as a separate XCUITest bundle process driving the real, compiled app — not
 mocks — and is exactly the tool that would have caught both of the confirmed production bugs from
 the 2026-07-02 session (`AppShortcutsProvider` never registering because it lived in the wrong
 target; the 5 Shortcuts-only intents crashing at runtime because they were compiled into two

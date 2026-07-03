@@ -1,18 +1,46 @@
 import AppIntents
 import Foundation
-import LancerCore
-import PersistenceKit
 import SessionFeature
 
 // Lives in the `Lancer` app target — see StatusQueryIntents.swift's header
 // comment for why (dual-target AppIntent compilation breaks runtime execution
 // lookup even though static Shortcuts discovery still works).
 
-/// "Deny the latest approval" — the one Siri-reachable approval decision, and
-/// deliberately the ONLY one: approve stays a visual, in-app/Live-Activity-tap
-/// action (`ApprovalActionIntent`), never Siri-triggered. Deny is safety-reducing
-/// (it can only stop an agent action, never let one through), matching the
-/// planning session's explicit risk framing for what's safe to expose to voice.
+/// Deny a specific pending approval resolved through `ApprovalEntity` /
+/// system disambiguation. Approve stays visual-only — never Siri-triggered.
+@available(iOS 17.0, *)
+public struct DenyApprovalIntent: AppIntent {
+    public static let title: LocalizedStringResource = "Deny Approval"
+    public static let description = IntentDescription("Deny a pending approval waiting for your review.")
+
+    @Parameter(title: "Approval")
+    public var approval: ApprovalEntity
+
+    public init() {}
+    public init(approval: ApprovalEntity) { self.approval = approval }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let catalog = try SiriIntentSupport.openCatalog()
+        guard let record = try await catalog.approval(id: approval.id) else {
+            return .result(dialog: "That approval was already resolved or isn't on this device.")
+        }
+
+        let outcome = await CommandGateway.shared.execute(
+            .respondApproval(id: record.id, decision: .rejected, editedInput: nil)
+        )
+        switch outcome {
+        case .ok:
+            return .result(dialog: SiriIntentDialogs.denySuccess(record))
+        case .transportUnavailable:
+            return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: record.hostName))
+        default:
+            return .result(dialog: "Couldn't deny \(SiriIntentSupport.approvalDialogSubject(record)).")
+        }
+    }
+}
+
+/// Back-compat phrase for "deny the latest approval" — delegates to the same
+/// safety-reducing path but only when exactly one approval is pending.
 @available(iOS 17.0, *)
 public struct DenyLatestApprovalIntent: AppIntent {
     public static let title: LocalizedStringResource = "Deny Latest Approval"
@@ -21,17 +49,19 @@ public struct DenyLatestApprovalIntent: AppIntent {
     public init() {}
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let db = try? AppDatabase.openShared(),
-              let latest = try? await ApprovalRepository(db).pending().first
-        else {
+        let catalog = try SiriIntentSupport.openCatalog()
+        let pending = try await catalog.pendingApprovals()
+        if pending.isEmpty {
             return .result(dialog: "No approvals are waiting.")
         }
-        let outcome = await CommandGateway.shared.execute(
-            .respondApproval(id: latest.id.uuidString, decision: .rejected, editedInput: nil)
-        )
-        switch outcome {
-        case .ok: return .result(dialog: "Denied the latest approval.")
-        default: return .result(dialog: "Couldn't reach the database to deny that approval.")
+        if pending.count > 1 {
+            return .result(dialog: "\(pending.count) approvals are waiting — say which one to deny.")
         }
+        guard let only = pending.first else {
+            return .result(dialog: "No approvals are waiting.")
+        }
+        var intent = DenyApprovalIntent()
+        intent.approval = ApprovalEntity(only)
+        return try await intent.perform()
     }
 }

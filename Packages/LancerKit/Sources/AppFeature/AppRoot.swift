@@ -449,6 +449,9 @@ public struct AppRoot: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerSiriNavigation)) { note in
+            handleSiriNavigation(note)
+        }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunOutput"))) { note in
@@ -585,6 +588,38 @@ public struct AppRoot: View {
             return
         }
         activeInboxViewModel.decide(approvalID, decision: decision)
+    }
+
+    private func handleSiriNavigation(_ note: Notification) {
+        guard let actionRaw = note.userInfo?[SiriNavigationUserInfoKey.action] as? String,
+              let action = SiriNavigationAction(rawValue: actionRaw)
+        else { return }
+
+        switch action {
+        case .search:
+            if let query = note.userInfo?[SiriNavigationUserInfoKey.searchQuery] as? String {
+                sidebarState.searchQuery = query
+                Task { await sidebarState.performSearch() }
+            }
+            sidebarState.navigate(to: .home)
+            sidebarState.isDrawerOpen = true
+        case .openConversation, .continueConversation:
+            if let id = note.userInfo?[SiriNavigationUserInfoKey.conversationId] as? String {
+                sidebarState.navigate(to: .thread(id: id))
+            }
+        case .openMachine:
+            sidebarState.navigate(to: .machines)
+        case .openApproval:
+            if let id = note.userInfo?[SiriNavigationUserInfoKey.approvalId] as? String {
+                NotificationCenter.default.post(
+                    name: .lancerOpenApproval,
+                    object: nil,
+                    userInfo: ["approvalId": id]
+                )
+            } else {
+                sidebarState.navigate(to: .needsAttention)
+            }
+        }
     }
 
     /// Drain buffered cold-launch approval actions (MAJOR-6) and apply each one
