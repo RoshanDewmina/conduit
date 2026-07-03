@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -382,6 +383,74 @@ func TestListOrdersByLastActivityDescending(t *testing.T) {
 	}
 	if listRes.Conversations[1].ID != older.ConversationID {
 		t.Errorf("older conversation second: got %q, want %q", listRes.Conversations[1].ID, older.ConversationID)
+	}
+}
+
+// TestListCursorPaginationCoversEveryConversationExactlyOnce pages through
+// list() one small page at a time via NextCursor (the (last_activity_at,
+// rowid) keyset from decodeListCursor/encodeListCursor) and checks the union
+// of every page is every conversation, in the same order a single
+// limit=len(all) call would return, with no duplicates or gaps at page
+// boundaries and no NextCursor once exhausted.
+func TestListCursorPaginationCoversEveryConversationExactlyOnce(t *testing.T) {
+	s := openTestConversationStore(t)
+
+	const total = 5
+	var created []string
+	for i := 0; i < total; i++ {
+		res, err := s.beginTurn(conversationAppendRequest{
+			ClientTurnID: fmt.Sprintf("device-1:%d", i),
+			Agent:        "claudeCode",
+			Prompt:       fmt.Sprintf("conversation %d", i),
+		}, fmt.Sprintf("/proj-%d", i), fmt.Sprintf("run_%d", i))
+		if err != nil {
+			t.Fatalf("beginTurn(%d): %v", i, err)
+		}
+		created = append(created, res.ConversationID)
+	}
+
+	full, err := s.list(total, "", false)
+	if err != nil {
+		t.Fatalf("list(full page): %v", err)
+	}
+	if len(full.Conversations) != total || full.NextCursor != "" {
+		t.Fatalf("full page = %d conversations, nextCursor=%q; want %d and empty cursor", len(full.Conversations), full.NextCursor, total)
+	}
+
+	var paged []conversationSummary
+	cursor := ""
+	for page := 0; ; page++ {
+		if page > total {
+			t.Fatalf("pagination did not terminate after %d pages", page)
+		}
+		res, err := s.list(2, cursor, false)
+		if err != nil {
+			t.Fatalf("list(page %d): %v", page, err)
+		}
+		paged = append(paged, res.Conversations...)
+		if res.NextCursor == "" {
+			break
+		}
+		cursor = res.NextCursor
+	}
+
+	if len(paged) != total {
+		t.Fatalf("paged through %d conversations, want %d", len(paged), total)
+	}
+	seen := map[string]bool{}
+	for i, conv := range paged {
+		if seen[conv.ID] {
+			t.Fatalf("conversation %q returned more than once across pages", conv.ID)
+		}
+		seen[conv.ID] = true
+		if conv.ID != full.Conversations[i].ID {
+			t.Fatalf("paged order diverges from full-page order at index %d: paged=%q full=%q", i, conv.ID, full.Conversations[i].ID)
+		}
+	}
+	for _, id := range created {
+		if !seen[id] {
+			t.Fatalf("conversation %q created but never seen across pages", id)
+		}
 	}
 }
 
