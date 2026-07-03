@@ -78,11 +78,19 @@ final class TapInjectionProofTests: XCTestCase {
                       "Settings should expose the shell hamburger to re-open the drawer")
         hamburger.tap()
 
-        let inboxRow = app.buttons["Inbox"]
-        XCTAssertTrue(inboxRow.waitForExistence(timeout: 10), "Re-opened drawer should list the Inbox destination")
-        inboxRow.tap()
-        XCTAssertTrue(inboxTitle.waitForExistence(timeout: 10),
-                      "Tapping Inbox in the re-opened drawer should return to the Inbox destination")
+        // Home IA rebuild (2026-07-02, commit 809cb6be) folded the standalone
+        // "Inbox" sidebar row into "Home" — the drawer's primary rows are now
+        // just Home and Machines. "Inbox" (`.needsAttention`) is still reachable
+        // via the LANCER_DESTINATION=inbox launch seam used above, and inline
+        // from Home's "Needs attention" section, but no longer has its own
+        // sidebar row to tap back to. Assert against the row that actually
+        // exists post-redesign rather than the pre-redesign label.
+        let homeRow = app.buttons["Home"]
+        XCTAssertTrue(homeRow.waitForExistence(timeout: 10), "Re-opened drawer should list the Home destination")
+        homeRow.tap()
+        let goodMorning = app.staticTexts["Good morning"]
+        XCTAssertTrue(goodMorning.waitForExistence(timeout: 10),
+                      "Tapping Home in the re-opened drawer should return to the Home destination")
     }
 
     /// The real verification goal: tap APPROVE on a seeded pending card and confirm
