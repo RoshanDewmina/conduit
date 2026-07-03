@@ -23,6 +23,25 @@ public struct RelayHomeEntry: Sendable {
     }
 }
 
+/// Identifies one workspace on one machine, passed to `onOpenWorkspace` — enough
+/// for the caller to push the dedicated workspace screen and, if the user renames
+/// or deletes the workspace there, to know which persisted `Workspace` (if any)
+/// to update.
+public struct HomeWorkspaceRef: Sendable {
+    public let machineKey: String?
+    public let machineName: String
+    public let path: String
+    public let displayName: String
+    public let workspaceID: String?
+    public init(machineKey: String?, machineName: String, path: String, displayName: String, workspaceID: String?) {
+        self.machineKey = machineKey
+        self.machineName = machineName
+        self.path = path
+        self.displayName = displayName
+        self.workspaceID = workspaceID
+    }
+}
+
 public struct LancerHomeView: View {
     private let fleetStore: FleetStore
     /// The relay-only fallback inbox VM — `fleetStore.slot(forApprovalID:)` only
@@ -36,12 +55,25 @@ public struct LancerHomeView: View {
     private let profileEmail: String?
     /// Every relay-paired host currently known to the app (see `RelayHomeEntry`).
     private let relayMachines: [RelayHomeEntry]
+    /// Persisted workspace records (see `Workspace`/`WorkspaceRepository`), across
+    /// every machine — grouped per-machine below so a workspace with a saved name
+    /// shows that name instead of its raw `cwd`, and so a freshly-created empty
+    /// workspace (no chats yet) still has a row to tap into.
+    private let workspaces: [Workspace]
     private let onOpenSidebar: (() -> Void)?
     private let onNewChat: () -> Void
     private let onOpenInbox: () -> Void
     private let onOpenMachines: () -> Void
     private let onOpenThread: (String) -> Void
     private let onOpenObservedSession: (ObservedSession) -> Void
+    /// Opens the dedicated workspace screen (Option B: a workspace is its own pushed
+    /// screen, not an inline-expanding list) for one workspace on one machine.
+    private let onOpenWorkspace: (HomeWorkspaceRef) -> Void
+    /// Starts a new workspace on the given machine (`machineKey` is the relay
+    /// machine's UUID string, matching `DispatchAgent.hostID`, or `nil` for a
+    /// legacy SSH machine — the New Chat composer preselects that machine when
+    /// non-nil, and falls back to its normal default-machine behavior otherwise).
+    private let onCreateWorkspace: (_ machineKey: String?) -> Void
     /// Fetches watch-only sessions discovered on a given host (Claude Code, etc.) —
     /// separate from `recentThreads`, which are Lancer-dispatched runs. Takes the
     /// host name to query so it can be fanned out per live machine. Defaults to
@@ -50,7 +82,6 @@ public struct LancerHomeView: View {
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var collapsed: Set<String> = []
     @State private var observedSessionsByHost: [String: [ObservedSession]] = [:]
     @State private var sessionsLoading = true
     @State private var reviewingApproval: Approval?
@@ -62,12 +93,15 @@ public struct LancerHomeView: View {
         pendingApprovalCount: Int,
         profileEmail: String? = nil,
         relayMachines: [RelayHomeEntry] = [],
+        workspaces: [Workspace] = [],
         onOpenSidebar: (() -> Void)? = nil,
         onNewChat: @escaping () -> Void,
         onOpenInbox: @escaping () -> Void,
         onOpenMachines: @escaping () -> Void,
         onOpenThread: @escaping (String) -> Void,
         onOpenObservedSession: @escaping (ObservedSession) -> Void = { _ in },
+        onOpenWorkspace: @escaping (HomeWorkspaceRef) -> Void = { _ in },
+        onCreateWorkspace: @escaping (_ machineKey: String?) -> Void = { _ in },
         loadSessions: @escaping @Sendable (String) async -> [ObservedSession] = { _ in [] }
     ) {
         self.fleetStore = fleetStore
@@ -76,12 +110,15 @@ public struct LancerHomeView: View {
         self.pendingApprovalCount = pendingApprovalCount
         self.profileEmail = profileEmail
         self.relayMachines = relayMachines
+        self.workspaces = workspaces
         self.onOpenSidebar = onOpenSidebar
         self.onNewChat = onNewChat
         self.onOpenInbox = onOpenInbox
         self.onOpenMachines = onOpenMachines
         self.onOpenThread = onOpenThread
         self.onOpenObservedSession = onOpenObservedSession
+        self.onOpenWorkspace = onOpenWorkspace
+        self.onCreateWorkspace = onCreateWorkspace
         self.loadSessions = loadSessions
     }
 
@@ -199,14 +236,23 @@ public struct LancerHomeView: View {
     /// a calm confirmation line, not an illustrated empty state, per the Mobbin "all caught up"
     /// references in the workflow-02 redesign report.
     private var allClearRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 13))
-                .foregroundStyle(t.ok)
-            Text("You're caught up — nothing needs review.")
-                .font(.dsSansPt(13))
-                .foregroundStyle(t.text3)
+        Button { onOpenInbox() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(t.ok)
+                Text("You're caught up — nothing needs review.")
+                    .font(.dsSansPt(13))
+                    .foregroundStyle(t.text3)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(t.text4)
+            }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open Inbox")
+        .accessibilityHint("Nothing needs review right now")
     }
 
     @ViewBuilder
@@ -218,12 +264,10 @@ public struct LancerHomeView: View {
                     .tracking(1.0)
                     .foregroundStyle(t.text4)
                 Spacer()
-                if items.count > 2 {
-                    Button("See all") { onOpenInbox() }
-                        .font(.dsSansPt(13, weight: .medium))
-                        .foregroundStyle(t.accent)
-                        .buttonStyle(.plain)
-                }
+                Button("See all") { onOpenInbox() }
+                    .font(.dsSansPt(13, weight: .medium))
+                    .foregroundStyle(t.accent)
+                    .buttonStyle(.plain)
             }
             ForEach(items.prefix(2)) { item in
                 attentionCard(for: item)
@@ -433,7 +477,7 @@ public struct LancerHomeView: View {
         return "\(Int(elapsed / 3600))h ago"
     }
 
-    // MARK: Machines → Projects → Sessions
+    // MARK: Machines → Workspaces → Sessions
 
     private var machinesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -458,13 +502,24 @@ public struct LancerHomeView: View {
                 connectMachineCard.padding(.horizontal, 18)
             } else {
                 ForEach(machines) { machine in
-                    MachineTreeCard(
+                    MachineWorkspacesCard(
                         machine: machine,
-                        isExpanded: !collapsed.contains(machine.id),
                         sessionsLoading: sessionsLoading,
-                        onToggle: { toggle(machine.id) },
                         onOpenMachine: { Haptics.selection(); onOpenMachines() },
-                        onOpenSession: { id in Haptics.selection(); onOpenThread(id) },
+                        onOpenWorkspace: { workspace in
+                            Haptics.selection()
+                            onOpenWorkspace(HomeWorkspaceRef(
+                                machineKey: machine.relayID?.uuidString,
+                                machineName: machine.name,
+                                path: workspace.path,
+                                displayName: workspace.displayName,
+                                workspaceID: workspace.workspaceID
+                            ))
+                        },
+                        onCreateWorkspace: {
+                            Haptics.selection()
+                            onCreateWorkspace(machine.relayID?.uuidString)
+                        },
                         onOpenObservedSession: { session in Haptics.selection(); onOpenObservedSession(session) }
                     )
                     .padding(.horizontal, 18)
@@ -502,21 +557,17 @@ public struct LancerHomeView: View {
         .buttonStyle(.plain)
     }
 
-    private func toggle(_ id: String) {
-        Haptics.selection()
-        if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
-    }
-
     // MARK: Derived model
 
     /// Machines built from every paired fleet host plus every known relay host,
-    /// grouped host → project (cwd) → session, enriched with recent threads and
+    /// grouped host → workspace (cwd) → session, enriched with recent threads and
     /// live connection state. Seeding from `fleetStore.slots` (not just
     /// `recentThreads`) means a freshly paired machine shows here immediately,
     /// before it has any chat history — matching what the Machines page lists.
     private var machines: [HomeMachine] {
         let byHost = Dictionary(grouping: recentThreads, by: \.hostName)
         let sshHostNames = Set(fleetStore.slots.map(\.hostName)).union(byHost.keys)
+        let workspacesByMachine = Dictionary(grouping: workspaces, by: \.machineID)
 
         // Rows are keyed by hostName for SSH/thread-history hosts (no relay
         // identity), but by RelayMachineID for relay-paired ones. Two relay
@@ -541,7 +592,15 @@ public struct LancerHomeView: View {
                     // Folds into the existing SSH/thread-history row (the
                     // common single-real-machine case — a relay host isn't a
                     // fleet slot, so this is how it shows before it has any
-                    // chat history of its own).
+                    // chat history of its own). That row must still carry
+                    // THIS relay machine's real identity — leaving relayID nil
+                    // here permanently breaks "+ New workspace" machine
+                    // preselection (onCreateWorkspace(machine.relayID?...))
+                    // for every machine that's ever had a single chat, since
+                    // `recentThreads` keeps that name in `sshHostNames` forever.
+                    if let idx = rows.firstIndex(where: { $0.name == entry.name }) {
+                        rows[idx].relayID = entry.id
+                    }
                     continue
                 }
             }
@@ -551,12 +610,28 @@ public struct LancerHomeView: View {
         return rows
             .map { row -> HomeMachine in
                 let host = row.name
-                let byProject = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)
-                let projects = byProject
-                    .map { path, sessions in
-                        HomeProject(path: path, sessions: sessions.sorted { $0.lastActivityAt > $1.lastActivityAt })
+                let byWorkspace = Dictionary(grouping: byHost[host] ?? [], by: \.cwd)
+                let machineWorkspaces = row.relayID.flatMap { workspacesByMachine[$0] } ?? []
+                var workspaces = byWorkspace
+                    .map { path, sessions -> HomeWorkspace in
+                        let workspace = machineWorkspaces.first { $0.path == path }
+                        return HomeWorkspace(
+                            path: path,
+                            displayName: workspace?.name ?? Self.shortDisplayPath(path),
+                            workspaceID: workspace?.id,
+                            sessions: sessions.sorted { $0.lastActivityAt > $1.lastActivityAt }
+                        )
                     }
-                    .sorted { ($0.sessions.first?.lastActivityAt ?? .distantPast) > ($1.sessions.first?.lastActivityAt ?? .distantPast) }
+                // A freshly-created workspace has no chats yet — still give it a row
+                // (with an empty session list) so "+ New workspace" doesn't create
+                // something invisible.
+                let pathsWithSessions = Set(workspaces.map(\.path))
+                let emptyWorkspaces = machineWorkspaces
+                    .filter { !pathsWithSessions.contains($0.path) }
+                    .map { HomeWorkspace(path: $0.path, displayName: $0.name, workspaceID: $0.id, sessions: []) }
+                workspaces.append(contentsOf: emptyWorkspaces)
+                workspaces.sort { ($0.sessions.first?.lastActivityAt ?? .distantPast) > ($1.sessions.first?.lastActivityAt ?? .distantPast) }
+
                 var liveState = fleetStore.slots.first { $0.hostName == host }.map { fleetStore.connectionState(for: $0) }
                 // The relay host isn't a fleet slot, so derive its dot from the live
                 // bridge state instead: paired-and-live vs. known-but-reconnecting.
@@ -572,17 +647,27 @@ public struct LancerHomeView: View {
                 return HomeMachine(
                     id: row.key,
                     name: host,
-                    projects: projects,
+                    relayID: row.relayID,
+                    workspaces: workspaces,
                     liveState: liveState,
                     observedSessions: isLiveHost ? (observedSessionsByHost[host] ?? []) : []
                 )
             }
-            .sorted { ($0.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) > ($1.projects.first?.sessions.first?.lastActivityAt ?? .distantPast) }
+            .sorted { ($0.workspaces.first?.sessions.first?.lastActivityAt ?? .distantPast) > ($1.workspaces.first?.sessions.first?.lastActivityAt ?? .distantPast) }
+    }
+
+    /// A short label for a workspace with no saved `Workspace` name yet — the
+    /// last path component (e.g. `/Users/roshansilva/lancer-ios` → `lancer-ios`),
+    /// or the raw path itself for a bare `~`/`/` with nothing to shorten.
+    private static func shortDisplayPath(_ path: String) -> String {
+        let trimmed = path.hasSuffix("/") ? String(path.dropLast()) : path
+        let last = (trimmed as NSString).lastPathComponent
+        return last.isEmpty ? path : last
     }
 
     private var runningCount: Int {
         machines.filter { machine in
-            machine.liveState == .connected || machine.projects.contains { $0.sessions.contains { $0.status == .active } }
+            machine.liveState == .connected || machine.workspaces.contains { $0.sessions.contains { $0.status == .active } }
         }.count
     }
 
@@ -609,26 +694,32 @@ public struct LancerHomeView: View {
 private struct HomeMachine: Identifiable {
     let id: String
     let name: String
-    let projects: [HomeProject]
+    /// `nil` for a legacy SSH machine with no relay identity — see
+    /// `HomeWorkspaceRef.machineKey`'s doc comment.
+    let relayID: RelayMachineID?
+    let workspaces: [HomeWorkspace]
     let liveState: Session.ConnectionState?
     let observedSessions: [ObservedSession]
 }
 
-private struct HomeProject: Identifiable {
+private struct HomeWorkspace: Identifiable {
     let path: String
+    /// The persisted `Workspace` name when one matches this path, else a
+    /// shortened form of the raw path (see `LancerHomeView.shortDisplayPath`).
+    let displayName: String
+    let workspaceID: String?
     let sessions: [ChatConversation]
     var id: String { path }
 }
 
-// MARK: - Machine card with expandable project/session tree
+// MARK: - Machine pill + workspace cards (each workspace pushes to its own screen)
 
-private struct MachineTreeCard: View {
+private struct MachineWorkspacesCard: View {
     let machine: HomeMachine
-    let isExpanded: Bool
     var sessionsLoading: Bool = false
-    let onToggle: () -> Void
     let onOpenMachine: () -> Void
-    let onOpenSession: (String) -> Void
+    let onOpenWorkspace: (HomeWorkspace) -> Void
+    let onCreateWorkspace: () -> Void
     let onOpenObservedSession: (ObservedSession) -> Void
 
     @Environment(\.lancerTokens) private var t
@@ -636,77 +727,102 @@ private struct MachineTreeCard: View {
     @State private var skeletonPulsing = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             header
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(machine.projects) { project in
-                        projectBlock(project)
-                    }
-                    if !machine.observedSessions.isEmpty {
-                        observedSessionsBlock
-                    } else if isLiveMachine && sessionsLoading {
-                        observedSessionsSkeletonBlock
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(machine.workspaces) { workspace in
+                    workspaceCard(workspace)
                 }
-                .padding(.leading, 24)
-                .padding(.trailing, 14)
-                .padding(.bottom, 12)
+                newWorkspaceRow
+                if !machine.observedSessions.isEmpty {
+                    observedSessionsBlock
+                } else if isLiveMachine && sessionsLoading {
+                    observedSessionsSkeletonBlock
+                }
             }
         }
-        .background(t.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(t.border, lineWidth: 1.5))
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Button(action: onToggle) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(t.text4)
-                    .frame(width: 12)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Collapse \(machine.name)" : "Expand \(machine.name)")
-
-            DSStatusDot(tone: dotTone, pulse: machine.liveState == .connected, size: 9)
-
-            Button(action: onOpenMachine) {
+        Button(action: onOpenMachine) {
+            HStack(spacing: 9) {
+                DSStatusDot(tone: dotTone, pulse: machine.liveState == .connected, size: 8)
                 Text(machine.name)
-                    .font(.dsDisplayPt(16, weight: .bold))
+                    .font(.dsSansPt(14.5, weight: .bold))
                     .foregroundStyle(t.text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Button(action: onOpenMachine) {
-                Text("\(projectSummary) ›")
-                    .font(.dsMonoPt(9.5))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text("\(workspaceSummary) ›")
+                    .font(.dsMonoPt(10))
                     .foregroundStyle(t.text4)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(t.border, lineWidth: 1))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
+        .buttonStyle(.plain)
     }
 
-    private func projectBlock(_ project: HomeProject) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(project.path)
-                .font(.dsMonoPt(10.5, weight: .medium))
-                .foregroundStyle(t.accent)
-                .padding(.top, 6)
-                .padding(.bottom, 2)
-            ForEach(project.sessions) { session in
-                sessionRow(session)
+    private func workspaceCard(_ workspace: HomeWorkspace) -> some View {
+        Button { onOpenWorkspace(workspace) } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(t.accent)
+                    .frame(width: 32, height: 32)
+                    .background(t.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(workspace.displayName)
+                        .font(.dsSansPt(13.5, weight: .bold))
+                        .foregroundStyle(t.text)
+                        .lineLimit(1)
+                    Text(workspace.path)
+                        .font(.dsMonoPt(9.5))
+                        .foregroundStyle(t.text4)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+                Spacer(minLength: 8)
+                if !workspace.sessions.isEmpty {
+                    Text("\(workspace.sessions.count)")
+                        .font(.dsMonoPt(10))
+                        .foregroundStyle(t.text3)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(t.surface2, in: Capsule())
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(t.text4)
             }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 12)
+            .background(t.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(t.border, lineWidth: 1))
         }
-        .padding(.leading, 14)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(t.border).frame(width: 1.5)
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var newWorkspaceRow: some View {
+        Button(action: onCreateWorkspace) {
+            HStack(spacing: 7) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .bold))
+                Text("New workspace")
+                    .font(.dsSansPt(12.5, weight: .semibold))
+            }
+            .foregroundStyle(t.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(t.border)
+            )
         }
-        .padding(.top, 4)
+        .buttonStyle(.plain)
+        .accessibilityLabel("New workspace on \(machine.name)")
     }
 
     private var isLiveMachine: Bool {
@@ -898,64 +1014,17 @@ private struct MachineTreeCard: View {
         return "\(d) day\(d == 1 ? "" : "s") ago"
     }
 
-    private func sessionRow(_ session: ChatConversation) -> some View {
-        Button { onOpenSession(session.id) } label: {
-            HStack(spacing: 10) {
-                Text(Self.initial(for: session))
-                    .font(.dsDisplayPt(11, weight: .bold))
-                    .foregroundStyle(t.accentFg)
-                    .frame(width: 24, height: 24)
-                    .background(t.accent, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                Text(session.title.isEmpty ? session.hostName : session.title)
-                    .font(.dsSansPt(13, weight: .semibold))
-                    .foregroundStyle(t.text)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                statusGlyph(session.status)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 9)
-            .background(t.bg, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(t.border, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private func statusGlyph(_ status: ChatConversation.Status) -> some View {
-        switch status {
-        case .active:
-            DSStatusDot(tone: .ok, pulse: true, size: 8)
-        case .completed:
-            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(t.ok)
-        case .failed:
-            DSStatusDot(tone: .danger, size: 8)
-        case .archived:
-            DSStatusDot(tone: .off, size: 8)
-        }
-    }
-
     private var dotTone: DSStatusDotTone {
         switch machine.liveState {
         case .connected, .relayPaired: return .ok
         case .connecting: return .warn
         case .failed: return .danger
-        case .offline, .none: return machine.projects.contains { $0.sessions.contains { $0.status == .active } } ? .ok : .off
+        case .offline, .none: return machine.workspaces.contains { $0.sessions.contains { $0.status == .active } } ? .ok : .off
         }
     }
 
-    private var projectSummary: String {
-        machine.projects.count == 1 ? "1 project" : "\(machine.projects.count) projects"
-    }
-
-    static func initial(for session: ChatConversation) -> String {
-        let key = (session.vendor ?? session.agentID).lowercased()
-        if key.contains("codex") { return "Cx" }
-        if key.contains("claude") { return "C" }
-        if key.contains("kimi") { return "K" }
-        if key.contains("opencode") || key.contains("open") { return "O" }
-        return String((session.vendor ?? session.agentID).prefix(1)).uppercased()
+    private var workspaceSummary: String {
+        machine.workspaces.count == 1 ? "1 workspace" : "\(machine.workspaces.count) workspaces"
     }
 }
 

@@ -2,6 +2,8 @@
 import SwiftUI
 import DesignSystem
 import LancerCore
+import DiffKit
+import DiffFeature
 
 public struct ChatArtifactDetailView: View {
     let artifact: ChatArtifact
@@ -169,19 +171,28 @@ public struct ChatArtifactDetailView: View {
                     .font(.dsSansPt(14))
                     .foregroundStyle(t.text2)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(diffText)
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.text)
-                    .textSelection(.enabled)
-                    .padding(12)
+            if let parsed = parsedDiff {
+                DiffView(diff: parsed)
+                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                            .strokeBorder(t.border, lineWidth: 1)
+                    )
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(diffText)
+                        .font(.dsMonoPt(12))
+                        .foregroundStyle(t.text)
+                        .textSelection(.enabled)
+                        .padding(12)
+                }
+                .background(t.surfaceSunk)
+                .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: t.r3, style: .continuous)
+                        .strokeBorder(t.border, lineWidth: 1)
+                )
             }
-            .background(t.surfaceSunk)
-            .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 1)
-            )
         }
     }
 
@@ -192,6 +203,17 @@ public struct ChatArtifactDetailView: View {
             return diff
         }
         return artifact.summary ?? "(no diff content)"
+    }
+
+    /// Parses `diffText` into DiffKit's structured `UnifiedDiff` for the rich
+    /// `DiffView` renderer. Falls back to `nil` (raw-text rendering) when the
+    /// parser finds no files — malformed/empty diff text — mirroring
+    /// `MarkdownText.inline(_:)`'s parse-then-fall-back-to-plain-text pattern.
+    private var parsedDiff: UnifiedDiff? {
+        let text = diffText
+        guard !text.isEmpty else { return nil }
+        let parsed = UnifiedDiffParser.parse(text)
+        return parsed.files.isEmpty ? nil : parsed
     }
 
     // MARK: - File detail

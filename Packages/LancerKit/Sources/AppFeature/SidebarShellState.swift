@@ -16,6 +16,10 @@ public enum SidebarDestination: Hashable, Sendable {
     /// Lancer. `title`/`hostName`/`vendor`/`cwd` travel with the route since
     /// observed sessions aren't persisted in `recentThreads`.
     case observedSession(sessionId: String, title: String, hostName: String, vendor: String, cwd: String)
+    /// The chat list for one workspace/project on one machine — pushed to from
+    /// Home's workspace cards. `machineKey`/`machineName`/`path` travel with the
+    /// route since a `HomeWorkspaceRef` isn't itself persisted anywhere.
+    case workspace(machineKey: String?, machineName: String, path: String, displayName: String, workspaceID: String?)
 }
 
 public enum SidebarSection: Hashable, Sendable {
@@ -42,6 +46,10 @@ public final class SidebarShellState {
     public var pendingApprovalCount = 0
     public var fleetSlotCount = 0
     public var relayConnected = false
+    /// Most recent time any relay machine was live. Lets the sidebar footer
+    /// show "last seen Xm ago" instead of a bare "disconnected" during the
+    /// brief reconnect window every background/foreground cycle triggers.
+    public var relayLastConnectedAt: Date? = nil
 
     private var chatRepo: ChatConversationRepository?
 

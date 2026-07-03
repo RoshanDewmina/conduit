@@ -39,7 +39,7 @@ public final class AppDatabase: Sendable {
             for table in ["chat_artifacts", "chat_turns", "chat_conversations",
                           "approvals", "blocks", "patches", "session_snapshots",
                           "sync_tombstones", "audit_events", "loops",
-                          "snippets", "hosts"] {
+                          "snippets", "hosts", "workspaces"] {
                 try? db.execute(sql: "DELETE FROM \(table)")
             }
         }
@@ -318,6 +318,24 @@ public final class AppDatabase: Sendable {
             try db.alter(table: "approvals") { t in
                 t.add(column: "content_hash", .text)
             }
+        }
+
+        // Workspace — a persisted, named project directory scoped to a machine
+        // (the Machine → Workspace → Chat middle layer). Replaces the flat,
+        // unscoped `lancer.recentProjectPaths` AppStorage cache in
+        // NewChatTabView with a real, listable, renameable record.
+        m.registerMigration("v12") { db in
+            try db.create(table: "workspaces") { t in
+                t.column("id",           .text).primaryKey()
+                t.column("name",         .text).notNull()
+                t.column("machine_id",   .text).notNull()
+                t.column("path",         .text).notNull()
+                t.column("last_branch",  .text)
+                t.column("created_at",   .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+                t.column("last_used_at", .datetime).notNull().defaults(to: "CURRENT_TIMESTAMP")
+            }
+            try db.create(index: "idx_workspaces_machine", on: "workspaces", columns: ["machine_id"])
+            try db.create(index: "idx_workspaces_last_used", on: "workspaces", columns: ["last_used_at"])
         }
 
         return m

@@ -19,6 +19,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
+    private var fsReadContinuation: CheckedContinuation<RelayFileContent, Error>?
     private var commandsListContinuation: CheckedContinuation<[AgentCommand], Error>?
     private var sessionsListContinuation: CheckedContinuation<[ObservedSession], Error>?
     private var installedAgentsContinuation: CheckedContinuation<[String], Error>?
@@ -29,6 +30,11 @@ public final class E2ERelayBridge: ObservableObject {
     /// which only ever have one dispatch/list/etc. in flight at a time).
     private var pendingDecisionAcks: [String: CheckedContinuation<Bool, Never>] = [:]
     private var statusQueryContinuation: CheckedContinuation<AgentStatusSnapshot, Error>?
+    private var conversationsListContinuation: CheckedContinuation<ConversationListResponse, Error>?
+    private var conversationsFetchContinuation: CheckedContinuation<ConversationFetchResponse, Error>?
+    private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
+    private var conversationsArchiveContinuation: CheckedContinuation<ConversationArchiveResponse, Error>?
+    private var conversationsAttachObservedSessionContinuation: CheckedContinuation<ConversationAttachObservedSessionResponse, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
@@ -291,6 +297,19 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Reads a host file's content through the E2E relay. Mirrors `relayListDir`:
+    /// sends `agentFsRead`, awaits `fsReadResult`. The daemon's `fsRead` is
+    /// home-confined, size-capped, and rejects binary content, all fail-closed —
+    /// surfaced here as a thrown `RelayFSError.host`.
+    public func relayReadFile(_ path: String) async throws -> RelayFileContent {
+        guard isActive else { throw E2EError.notPaired }
+        struct ReadParams: Codable, Sendable { let path: String }
+        try await relayClient.send(type: "agentFsRead", payload: ReadParams(path: path))
+        return try await withCheckedThrowingContinuation { c in
+            self.fsReadContinuation = c
+        }
+    }
+
     /// Lists the agent's slash-commands for a workspace through the E2E relay.
     /// Mirrors `relayListDir`: sends `agentCommandsList`, awaits `commandsListResult`.
     /// Returns [] on failure so the composer autocomplete degrades gracefully.
@@ -378,6 +397,111 @@ public final class E2ERelayBridge: ObservableObject {
         defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.sessionContinueContinuation = c
+        }
+    }
+
+    // MARK: - Conversations (agent.conversations.*, cross-device sync)
+
+    /// Lists Lancer-owned conversations from the relay-paired host's ledger, most-
+    /// recently-active first. Mirrors `relayFetchTranscript`'s bounded-wait +
+    /// supersede shape (mirrors `sendDispatch`).
+    public func relayListConversations(_ request: ConversationListRequest = ConversationListRequest()) async throws -> ConversationListResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "agentConversationsList", payload: request)
+        // A stale in-flight list must be resumed before we replace it — mirrors
+        // sendDispatch's supersede-then-bound-wait pattern.
+        conversationsListContinuation?.resume(throwing: E2EError.superseded)
+        conversationsListContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.conversationsListContinuation?.resume(throwing: E2EError.timedOut)
+            self.conversationsListContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.conversationsListContinuation = c
+        }
+    }
+
+    /// Fetches one conversation's turns/artifacts plus events strictly after
+    /// `request.sinceSeq` from the relay-paired host, for incremental paging
+    /// through the append-only event log.
+    public func relayFetchConversation(_ request: ConversationFetchRequest) async throws -> ConversationFetchResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "agentConversationsFetch", payload: request)
+        conversationsFetchContinuation?.resume(throwing: E2EError.superseded)
+        conversationsFetchContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.conversationsFetchContinuation?.resume(throwing: E2EError.timedOut)
+            self.conversationsFetchContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.conversationsFetchContinuation = c
+        }
+    }
+
+    /// Starts a new conversation (`request.conversationId == nil`) or appends a
+    /// follow-up turn to an existing one, through the relay-paired host. The
+    /// daemon is the single writer for executable turns — this is the host-
+    /// mediated append the cross-device sync design requires. A 20s timeout
+    /// (matching `sendDispatch`, not the 15s used by the read-only conversation
+    /// RPCs above) since this can launch a vendor CLI process on the host.
+    public func relayAppendConversation(_ request: ConversationAppendRequest) async throws -> ConversationAppendResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "agentConversationsAppend", payload: request)
+        conversationsAppendContinuation?.resume(throwing: E2EError.superseded)
+        conversationsAppendContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard let self, !Task.isCancelled else { return }
+            self.conversationsAppendContinuation?.resume(throwing: E2EError.timedOut)
+            self.conversationsAppendContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.conversationsAppendContinuation = c
+        }
+    }
+
+    /// Archives or unarchives a conversation on the relay-paired host.
+    public func relayArchiveConversation(_ request: ConversationArchiveRequest) async throws -> ConversationArchiveResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "agentConversationsArchive", payload: request)
+        conversationsArchiveContinuation?.resume(throwing: E2EError.superseded)
+        conversationsArchiveContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.conversationsArchiveContinuation?.resume(throwing: E2EError.timedOut)
+            self.conversationsArchiveContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.conversationsArchiveContinuation = c
+        }
+    }
+
+    /// Converts a terminal-originated Observed Session into a Lancer conversation
+    /// on the relay-paired host. Currently always errors — Task 9 hasn't landed
+    /// real transcript import yet (see conversation_rpc.go's package doc comment).
+    public func relayAttachObservedSession(_ request: ConversationAttachObservedSessionRequest) async throws -> ConversationAttachObservedSessionResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "agentConversationsAttachObservedSession", payload: request)
+        conversationsAttachObservedSessionContinuation?.resume(throwing: E2EError.superseded)
+        conversationsAttachObservedSessionContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.conversationsAttachObservedSessionContinuation?.resume(throwing: E2EError.timedOut)
+            self.conversationsAttachObservedSessionContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.conversationsAttachObservedSessionContinuation = c
         }
     }
 
@@ -520,6 +644,25 @@ public final class E2ERelayBridge: ObservableObject {
             }
             fsListContinuation = nil
 
+        case "fsReadResult":
+            // Same envelope unwrap as fsListResult. The daemon includes an
+            // `error` field when fsRead fails closed (path escape, directory,
+            // binary content, or a read error) — surface it as a thrown error
+            // so the preview shows an error state instead of garbage.
+            let readEnvelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<RelayFileContent>.self, from: message.payload
+            )
+            if let file = readEnvelope?.payload {
+                if let err = file.error, !err.isEmpty {
+                    fsReadContinuation?.resume(throwing: RelayFSError.host(err))
+                } else {
+                    fsReadContinuation?.resume(returning: file)
+                }
+            } else {
+                fsReadContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            fsReadContinuation = nil
+
         case "sessionsListResult":
             struct SessionsPayload: Codable { let sessions: [ObservedSession] }
             let decoder = JSONDecoder()
@@ -595,6 +738,84 @@ public final class E2ERelayBridge: ObservableObject {
                 userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
+        case "agentConversationsListResult":
+            // Same envelope unwrap as fsListResult. e2e_router.go's
+            // conversationRelayPayload adds an "error" key into the flattened
+            // payload on failure — surface it as a thrown error, same as fsList.
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ConversationListResponse>.self, from: message.payload
+            )
+            if let response = envelope?.payload {
+                if let err = response.error, !err.isEmpty {
+                    conversationsListContinuation?.resume(throwing: RelayConversationError.host(err))
+                } else {
+                    conversationsListContinuation?.resume(returning: response)
+                }
+            } else {
+                conversationsListContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            conversationsListContinuation = nil
+
+        case "agentConversationsFetchResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ConversationFetchResponse>.self, from: message.payload
+            )
+            if let response = envelope?.payload {
+                if let err = response.error, !err.isEmpty {
+                    conversationsFetchContinuation?.resume(throwing: RelayConversationError.host(err))
+                } else {
+                    conversationsFetchContinuation?.resume(returning: response)
+                }
+            } else {
+                conversationsFetchContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            conversationsFetchContinuation = nil
+
+        case "agentConversationsAppendResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ConversationAppendResponse>.self, from: message.payload
+            )
+            if let response = envelope?.payload {
+                if let err = response.error, !err.isEmpty {
+                    conversationsAppendContinuation?.resume(throwing: RelayConversationError.host(err))
+                } else {
+                    conversationsAppendContinuation?.resume(returning: response)
+                }
+            } else {
+                conversationsAppendContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            conversationsAppendContinuation = nil
+
+        case "agentConversationsArchiveResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ConversationArchiveResponse>.self, from: message.payload
+            )
+            if let response = envelope?.payload {
+                if let err = response.error, !err.isEmpty {
+                    conversationsArchiveContinuation?.resume(throwing: RelayConversationError.host(err))
+                } else {
+                    conversationsArchiveContinuation?.resume(returning: response)
+                }
+            } else {
+                conversationsArchiveContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            conversationsArchiveContinuation = nil
+
+        case "agentConversationsAttachObservedSessionResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ConversationAttachObservedSessionResponse>.self, from: message.payload
+            )
+            if let response = envelope?.payload {
+                if let err = response.error, !err.isEmpty {
+                    conversationsAttachObservedSessionContinuation?.resume(throwing: RelayConversationError.host(err))
+                } else {
+                    conversationsAttachObservedSessionContinuation?.resume(returning: response)
+                }
+            } else {
+                conversationsAttachObservedSessionContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            conversationsAttachObservedSessionContinuation = nil
+
         default:
             break
         }
@@ -633,6 +854,21 @@ public struct RelayDirEntry: Codable, Sendable, Identifiable, Hashable {
 /// A host-side filesystem error reported by the daemon over the relay (e.g. a
 /// path outside the home directory, or a stat/readdir failure).
 public enum RelayFSError: Error, LocalizedError {
+    case host(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .host(let message): return message
+        }
+    }
+}
+
+/// A host-side conversation-ledger error reported by the daemon over the relay
+/// (e.g. "conversation store unavailable", a not-found `conversationId`, or the
+/// Task-9-not-yet-implemented `attachObservedSession` stub) — mirrors `RelayFSError`.
+/// Note: a stale `baseSeq` is NOT this error — it comes back as a normal
+/// `ConversationAppendResponse` with `status == "conflict"`, not a thrown error.
+public enum RelayConversationError: Error, LocalizedError {
     case host(String)
 
     public var errorDescription: String? {

@@ -294,12 +294,11 @@ public struct LancerSidebarView: View {
     // MARK: - Footer
 
     private var footerText: String {
-        guard state.relayConnected else { return "Relay disconnected" }
-        switch state.fleetSlotCount {
-        case 0: return "Relay connected"
-        case 1: return "Relay connected · 1 host"
-        default: return "Relay connected · \(state.fleetSlotCount) hosts"
-        }
+        RelayConnectionStatusText.footerText(
+            connected: state.relayConnected,
+            hostCount: state.fleetSlotCount,
+            lastConnectedAt: state.relayLastConnectedAt
+        )
     }
 
     private var relayFooter: some View {

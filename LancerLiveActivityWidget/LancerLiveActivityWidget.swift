@@ -11,6 +11,27 @@ import AppIntents
 import SessionFeature
 import NotificationsKit
 
+// MARK: - Palette
+//
+// Mirrors DesignSystem/Tokens.swift's `LancerTokens.dark` semantic colors —
+// sage-green `ok`, amber `warn`, dusty-red `danger`, warm-orange `accent` — so
+// the widget matches the app's actual (post-rebrand) Editorial system instead
+// of the pre-rebrand bright green/amber/red plus an ad-hoc blue that had
+// never been part of any token set. Hardcoded here (not imported from
+// DesignSystem) because this extension target only depends on SessionFeature;
+// pulling in the whole component library would bloat the extension binary for
+// four color constants. Keep these literals in sync with Tokens.swift's dark
+// palette if that palette is ever retuned.
+private enum LAPalette {
+    static let ok         = Color(.sRGB, red: 0.212, green: 0.761, blue: 0.420, opacity: 1) // #36c26b
+    static let warn       = Color(.sRGB, red: 0.941, green: 0.663, blue: 0.231, opacity: 1) // #f0a93b
+    static let warnSoft   = Color(.sRGB, red: 0.165, green: 0.125, blue: 0.031, opacity: 1) // #2a2008
+    static let danger     = Color(.sRGB, red: 0.878, green: 0.325, blue: 0.247, opacity: 1) // #e0533f
+    static let dangerSoft = Color(.sRGB, red: 0.165, green: 0.078, blue: 0.063, opacity: 1) // #2a1410
+    static let accent     = Color(.sRGB, red: 0.894, green: 0.482, blue: 0.341, opacity: 1) // #e47b57
+    static let idle       = Color(.sRGB, red: 0.494, green: 0.478, blue: 0.431, opacity: 1) // #7e7a6e (text3)
+}
+
 @main
 struct LancerLiveActivityWidgetBundle: WidgetBundle {
     var body: some Widget {
@@ -69,7 +90,7 @@ struct LancerSessionLiveActivity: Widget {
                             if context.state.isStreaming {
                                 Image(systemName: "waveform")
                                     .font(.caption2)
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(LAPalette.ok)
                             }
 
                             if let cost = context.state.cost, cost > 0 {
@@ -94,6 +115,18 @@ struct LancerSessionLiveActivity: Widget {
 
     @ViewBuilder
     private func lockScreenView(context: ActivityViewContext<LancerSessionAttributes>) -> some View {
+        let presentation = LiveActivityPresentation.resolve(context.state, budget: nil)
+        let needsApproval: Bool = { if case .needsYou = presentation.primary { return true } else { return false } }()
+        let isElevated = needsApproval && presentation.riskTier?.isElevated == true
+
+        // Escalation for a high/critical pending approval shifts the WHOLE card's
+        // tone and swaps the headline to the urgent copy, rather than stacking a
+        // second banner row above the existing one. Real Live Activities that
+        // escalate urgency (Duolingo's streak-loss card, BeReal's reminder,
+        // Rivian's alarm) all do a single-surface tone/copy swap, not a two-tier
+        // banner — checked against comparable apps via Mobbin before building
+        // this. A stacked band would add height to an already tiny surface and
+        // duplicate what the trailing risk badge already signals.
         HStack(spacing: 12) {
             // Status indicator
             Circle()
@@ -101,13 +134,25 @@ struct LancerSessionLiveActivity: Widget {
                 .frame(width: 10, height: 10)
 
             VStack(alignment: .leading, spacing: 2) {
-                // Agent name or host name
-                Text(context.state.agentName ?? context.attributes.hostName)
-                    .font(.headline)
-                    .lineLimit(1)
+                if isElevated {
+                    Text("High-risk action")
+                        .font(.headline)
+                        .lineLimit(1)
+                } else {
+                    Text(context.state.agentName ?? context.attributes.hostName)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
 
-                // Status + cost
+                // Status + cost (elevated: lead with the agent/host name here
+                // instead, since the headline above already spent on urgency)
                 HStack(spacing: 6) {
+                    if isElevated {
+                        Text(context.state.agentName ?? context.attributes.hostName)
+                            .foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
+                    }
+
                     Text(statusLabel(for: context.state))
                         .foregroundStyle(.secondary)
 
@@ -133,7 +178,7 @@ struct LancerSessionLiveActivity: Widget {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .activityBackgroundTint(Color.black.opacity(0.75))
+        .activityBackgroundTint(isElevated ? LAPalette.dangerSoft.opacity(0.92) : Color.black.opacity(0.75))
         .activitySystemActionForegroundColor(.white)
     }
 
@@ -201,6 +246,7 @@ struct LancerSessionLiveActivity: Widget {
                 Label("Reject", systemImage: "xmark")
             }
             .buttonStyle(.bordered)
+            .tint(LAPalette.danger)
 
             Button(
                 intent: ApprovalActionIntent(
@@ -212,6 +258,7 @@ struct LancerSessionLiveActivity: Widget {
                 Label("Approve", systemImage: "checkmark")
             }
             .buttonStyle(.borderedProminent)
+            .tint(LAPalette.accent)
         }
         .font(.caption)
     }
@@ -227,31 +274,33 @@ struct LancerSessionLiveActivity: Widget {
 
     private func approvalBadgeColor(for state: LancerSessionAttributes.ContentState) -> Color {
         LiveActivityPresentation.resolve(state, budget: nil).riskTier?.isElevated == true
-            ? Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (high/critical)
-            : .orange // routine
+            ? LAPalette.danger // high/critical
+            : LAPalette.warn   // routine
     }
 
-    // MARK: - Status Colors (ok=green, warn=amber, danger=red)
+    // MARK: - Status Colors
+    //
+    // sage-green (ok) for running/connected/approved/online, amber (warn) for
+    // "needs you" / reconnecting, dusty-red (danger) for rejected/error/blocked
+    // high-risk — no blue anywhere. Matches the app's actual Editorial · Sand
+    // status trio (see LAPalette above); previously `.running` rendered an
+    // ad-hoc blue that was never part of any token set.
 
     private func statusColor(for state: LancerSessionAttributes.ContentState) -> Color {
         let p = LiveActivityPresentation.resolve(state, budget: nil)
         switch p.primary {
         case .needsYou:
-            return p.riskTier?.isElevated == true
-                ? Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red (high/critical)
-                : Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber (routine)
+            return p.riskTier?.isElevated == true ? LAPalette.danger : LAPalette.warn
         case .decisionLanded(let approved):
-            return approved
-                ? Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1)  // green (approved)
-                : Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1)  // red (rejected)
+            return approved ? LAPalette.ok : LAPalette.danger
         case .running:
-            return Color(.sRGB, red: 0.318, green: 0.573, blue: 0.929, opacity: 1) // blue (streaming)
+            return LAPalette.ok
         case .idle:
             switch state.status {
-            case "reconnecting": return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1)
-            case "error":        return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1)
-            case "suspended":    return Color(.sRGB, red: 0.373, green: 0.357, blue: 0.329, opacity: 1)
-            default:             return Color(.sRGB, red: 0.173, green: 0.608, blue: 0.349, opacity: 1)
+            case "reconnecting": return LAPalette.warn
+            case "error":        return LAPalette.danger
+            case "suspended":    return LAPalette.idle
+            default:             return LAPalette.ok
             }
         }
     }
@@ -291,8 +340,8 @@ struct LancerSessionLiveActivity: Widget {
 
     private func costColor(for state: LancerSessionAttributes.ContentState) -> Color {
         switch LiveActivityPresentation.resolve(state, budget: nil).costLevel {
-        case .over:    return Color(.sRGB, red: 0.765, green: 0.227, blue: 0.192, opacity: 1) // red
-        case .warning: return Color(.sRGB, red: 0.780, green: 0.584, blue: 0.157, opacity: 1) // amber
+        case .over:    return LAPalette.danger
+        case .warning: return LAPalette.warn
         default:       return .secondary
         }
     }

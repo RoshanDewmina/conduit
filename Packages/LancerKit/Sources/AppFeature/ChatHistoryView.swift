@@ -367,6 +367,9 @@ private struct WorkThreadTurnBlock: View {
                 if status == .running && bodyText.isEmpty {
                     DarkTypingIndicator()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else if status != .failed, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    MarkdownText(bodyText.trimmingCharacters(in: .whitespacesAndNewlines), textColor: t.text2)
+                        .textSelection(.enabled)
                 } else {
                     Text(displayText)
                         .font(.dsSansPt(13))

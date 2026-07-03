@@ -38,6 +38,7 @@ public final class AppEnvironment {
     public let quotaGuardStore: QuotaGuardStore
     public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
+    public let workspaceRepo: WorkspaceRepository
     public let accountSession: AccountSessionController
 
     public init() throws {
@@ -47,6 +48,7 @@ public final class AppEnvironment {
         self.blockRepo = BlockRepository(database)
         self.snapshotRepo = SessionSnapshotRepository(database)
         self.chatRepo = ChatConversationRepository(database)
+        self.workspaceRepo = WorkspaceRepository(database)
         self.keyStore = KeyStore()
         self.hostKeyStore = HostKeyStore()
         self.aiKeyStore = KeychainAIKeyStore()
@@ -143,6 +145,13 @@ public struct AppRoot: View {
     @State private var sessionViewModel: SessionViewModel?
     @State private var drawerRoute: AppDrawerRoute?
     @State private var workspacesRevision = UUID()
+    /// One-shot hint set by Home's "+ New workspace" / a workspace screen's
+    /// "New chat here" — consumed by `NewChatTabView.restoreLastSelectionOrDefault()`
+    /// via `onMachineHintConsumed`, then cleared so it doesn't leak into the
+    /// next unrelated New Chat entry.
+    @State private var pendingNewChatMachineKey: String?
+    @State private var pendingNewChatCwd: String?
+    @State private var allWorkspaces: [Workspace] = []
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
@@ -710,9 +719,6 @@ public struct AppRoot: View {
         .onChange(of: fleetStore.slots.count, initial: true) { _, count in
             sidebarState.fleetSlotCount = count
         }
-        .onChange(of: relayFleetStore.machines.map(\.bridge.isActive), initial: true) { _, _ in
-            sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
-        }
         // One-time interactive coach-mark tour. Overlay stays installed (cheap,
         // inert while inactive) but auto-start is OFF: on-device it mis-rendered
         // and trapped all input (auto-opened the drawer, then ate every tap with
@@ -878,6 +884,19 @@ public struct AppRoot: View {
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
+        // Wire Home's attention feed to the SAME live-observed VM immediately,
+        // not only after the first live relay approval notification arrives
+        // (the previous behavior — see the narrower reassignment in the
+        // .lancerE2EApprovalReceived handler below). LiveInboxViewModel starts
+        // observing the persisted approvals table the instant it's created, so
+        // any approval that existed BEFORE this app launch (e.g. the app was
+        // killed with one pending, or it was written while fully backgrounded)
+        // was already visible in the real Inbox screen but invisible to Home's
+        // "attentionItems"/headline until a brand-new live notification
+        // happened to fire — a user could see "All clear tonight" while a
+        // real, already-pending high-risk approval sat unreviewed. Safe to set
+        // unconditionally per the dedupe-by-id note at the other call site.
+        fleetStore.relayInboxVM = liveVM
     }
 
     /// Bridge RPC actions for the selected (or first) fleet slot.
@@ -1349,13 +1368,6 @@ public struct AppRoot: View {
         }
     }
 
-    private func jumpToUnreadLiveSession() {
-        guard let slot = fleetStore.firstSlotWithPendingApprovals() else { return }
-        selectFleetSlot(slot.id)
-        sidebarState.navigate(to: .needsAttention)
-        isShowingLiveSession = true
-    }
-
     private func inboxDestination(env: AppEnvironment) -> some View {
         let actions = bridgeSessionActions()
         return InboxView(
@@ -1499,7 +1511,14 @@ public struct AppRoot: View {
                 agents: dispatchAgents(),
                 runOutputStore: runOutputStore,
                 chatRepo: env.chatRepo,
+                workspaceRepo: env.workspaceRepo,
                 fleetStore: fleetStore,
+                preferredMachineKey: pendingNewChatMachineKey,
+                preferredCwd: pendingNewChatCwd,
+                onMachineHintConsumed: {
+                    pendingNewChatMachineKey = nil
+                    pendingNewChatCwd = nil
+                },
                 onDispatch: { agentID, cwd, prompt, budget, model in
                     await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model)
                 },
@@ -1549,6 +1568,20 @@ public struct AppRoot: View {
                 },
                 onBack: { sidebarState.navigate(to: .home) }
             )
+        case .workspace(let machineKey, let machineName, let path, let displayName, _):
+            WorkspaceDetailView(
+                machineName: machineName,
+                path: path,
+                displayName: displayName,
+                sessions: sidebarState.recentThreads.filter { $0.hostName == machineName && $0.cwd == path },
+                onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
+                onNewChatHere: {
+                    pendingNewChatMachineKey = machineKey
+                    pendingNewChatCwd = path
+                    sidebarState.navigate(to: .newChat)
+                },
+                onBack: { sidebarState.navigate(to: .home) }
+            )
         }
     }
 
@@ -1562,6 +1595,7 @@ public struct AppRoot: View {
             relayMachines: debugFakeRelayEntry.map { [$0] } ?? relayFleetStore.machines.map {
                 RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: $0.bridge.isActive)
             },
+            workspaces: allWorkspaces,
             onOpenSidebar: homeSidebarAction,
             onNewChat: { sidebarState.navigate(to: .newChat) },
             onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
@@ -1579,8 +1613,42 @@ public struct AppRoot: View {
                     cwd: session.cwd
                 ))
             },
+            onOpenWorkspace: { ref in
+                sidebarState.navigate(to: .workspace(
+                    machineKey: ref.machineKey,
+                    machineName: ref.machineName,
+                    path: ref.path,
+                    displayName: ref.displayName,
+                    workspaceID: ref.workspaceID
+                ))
+            },
+            onCreateWorkspace: { machineKey in
+                pendingNewChatMachineKey = machineKey
+                pendingNewChatCwd = nil
+                sidebarState.navigate(to: .newChat)
+            },
             loadSessions: { hostName in await loadObservedSessions(hostName: hostName) }
         )
+        // Refreshes every time Home is (re)entered — e.g. after creating a new
+        // workspace from New Chat and navigating back — matching the simple
+        // reload-on-appear approach `LancerHomeView`'s own `.task` already uses
+        // for observed sessions, rather than a more invasive change-notification.
+        .task(id: sidebarState.selectedDestination) {
+            await loadAllWorkspaces(env: env)
+        }
+    }
+
+    /// Every persisted `Workspace` across every currently-paired relay machine,
+    /// for `LancerHomeView`'s workspace cards. Best-effort per machine so one
+    /// unreachable host's repo query doesn't blank out every other machine's list.
+    private func loadAllWorkspaces(env: AppEnvironment) async {
+        var all: [Workspace] = []
+        for machine in relayFleetStore.machines {
+            if let list = try? await env.workspaceRepo.list(machineID: machine.id) {
+                all.append(contentsOf: list)
+            }
+        }
+        allWorkspaces = all
     }
 
     /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
@@ -1881,6 +1949,7 @@ public struct AppRoot: View {
                 // Recompute every derived aggregate that used to come from the
                 // single relayBridgeIsActive bool, now folded across ALL machines.
                 sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
+                if active { sidebarState.relayLastConnectedAt = Date() }
                 fleetStore.setRelayStateOnAllSlots(aggregateRelayState())
                 if active {
                     // When a relay machine goes live, ask the host which agent CLIs

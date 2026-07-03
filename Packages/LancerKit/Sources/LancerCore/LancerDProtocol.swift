@@ -617,3 +617,396 @@ public enum DaemonRPCResponse: Sendable {
         return .unknown
     }
 }
+
+// MARK: - Conversation sync (agent.conversations.*)
+//
+// Wire-level Codable mirrors of the Go types in daemon/lancerd/conversation_store.go
+// and daemon/lancerd/conversation_rpc.go (see the cross-device sync build handoff,
+// docs/design-questions/2026-07-03-cross-device-conversation-sync-build-handoff.md,
+// Task 5). These are shared between the SSH JSON-RPC transport (DaemonChannel) and
+// the E2E relay transport (E2ERelayBridge): conversation_rpc.go's server methods are
+// called by both server.go's SSH switch and e2e_router.go's relay switch, so both
+// transports return an identical payload shape by construction — one Swift type per
+// RPC covers both, rather than a duplicate "Relay"-prefixed type per response (see
+// this file's `error` field comment on each *Response type below).
+
+/// Mirrors Go's `conversationSummary` (daemon/lancerd/conversation_store.go:199).
+public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let title: String
+    public let provider: String
+    public let agentID: String
+    public let hostID: String?
+    public let hostName: String
+    public let cwd: String
+    public let model: String?
+    public let budgetUSD: Double?
+    public let state: String
+    public let source: String
+    public let createdAt: String
+    public let updatedAt: String
+    public let lastActivityAt: String
+    public let lastSeq: Int
+    public let archivedAt: String?
+
+    public init(
+        id: String, title: String, provider: String, agentID: String, hostID: String? = nil,
+        hostName: String, cwd: String, model: String? = nil, budgetUSD: Double? = nil,
+        state: String, source: String, createdAt: String, updatedAt: String,
+        lastActivityAt: String, lastSeq: Int, archivedAt: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.provider = provider
+        self.agentID = agentID
+        self.hostID = hostID
+        self.hostName = hostName
+        self.cwd = cwd
+        self.model = model
+        self.budgetUSD = budgetUSD
+        self.state = state
+        self.source = source
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.lastActivityAt = lastActivityAt
+        self.lastSeq = lastSeq
+        self.archivedAt = archivedAt
+    }
+}
+
+/// Mirrors Go's `conversationTurn` (daemon/lancerd/conversation_store.go:218).
+public struct ConversationTurnEnvelope: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let conversationId: String
+    public let ordinal: Int
+    public let clientTurnId: String
+    public let prompt: String
+    public let runId: String
+    public let provider: String
+    public let vendorSessionId: String?
+    public let status: String
+    public let startedAt: String
+    public let completedAt: String?
+    public let errorMessage: String?
+
+    public init(
+        id: String, conversationId: String, ordinal: Int, clientTurnId: String, prompt: String,
+        runId: String, provider: String, vendorSessionId: String? = nil, status: String,
+        startedAt: String, completedAt: String? = nil, errorMessage: String? = nil
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.ordinal = ordinal
+        self.clientTurnId = clientTurnId
+        self.prompt = prompt
+        self.runId = runId
+        self.provider = provider
+        self.vendorSessionId = vendorSessionId
+        self.status = status
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.errorMessage = errorMessage
+    }
+}
+
+/// Mirrors Go's `conversationEvent` (daemon/lancerd/conversation_store.go:233).
+public struct ConversationEvent: Codable, Sendable, Hashable {
+    public let conversationId: String
+    public let seq: Int
+    public let turnId: String?
+    public let runId: String?
+    public let kind: String
+    public let role: String?
+    public let stream: String?
+    public let text: String?
+    public let payloadJson: String?
+    public let createdAt: String
+
+    public init(
+        conversationId: String, seq: Int, turnId: String? = nil, runId: String? = nil,
+        kind: String, role: String? = nil, stream: String? = nil, text: String? = nil,
+        payloadJson: String? = nil, createdAt: String
+    ) {
+        self.conversationId = conversationId
+        self.seq = seq
+        self.turnId = turnId
+        self.runId = runId
+        self.kind = kind
+        self.role = role
+        self.stream = stream
+        self.text = text
+        self.payloadJson = payloadJson
+        self.createdAt = createdAt
+    }
+}
+
+/// Mirrors Go's `conversationArtifact` (daemon/lancerd/conversation_store.go:246).
+public struct ConversationArtifactEnvelope: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let conversationId: String
+    public let turnId: String?
+    public let runId: String
+    public let kind: String
+    public let title: String
+    public let summary: String?
+    public let payloadJson: String
+    public let status: String
+    public let createdAt: String
+    public let updatedAt: String
+
+    public init(
+        id: String, conversationId: String, turnId: String? = nil, runId: String, kind: String,
+        title: String, summary: String? = nil, payloadJson: String, status: String,
+        createdAt: String, updatedAt: String
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.turnId = turnId
+        self.runId = runId
+        self.kind = kind
+        self.title = title
+        self.summary = summary
+        self.payloadJson = payloadJson
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+/// Request for `agent.conversations.list` — mirrors Go's `conversationListRequest`
+/// (daemon/lancerd/conversation_rpc.go:32). None of its fields are `,omitempty` on
+/// the Go side, but all three are always sent by the phone regardless.
+public struct ConversationListRequest: Codable, Sendable {
+    public let limit: Int
+    public let cursor: String
+    public let includeArchived: Bool
+
+    public init(limit: Int = 50, cursor: String = "", includeArchived: Bool = false) {
+        self.limit = limit
+        self.cursor = cursor
+        self.includeArchived = includeArchived
+    }
+}
+
+/// Response for `agent.conversations.list` — mirrors Go's `conversationListResult`
+/// (daemon/lancerd/conversation_store.go:260).
+public struct ConversationListResponse: Codable, Sendable {
+    public let conversations: [ConversationSummary]
+    public let nextCursor: String
+    /// Populated only over the E2E relay path when the RPC fails —
+    /// e2e_router.go's `conversationRelayPayload` flattens the (zero-value)
+    /// result struct into a map and adds this key on failure. Always nil over
+    /// SSH, where a JSON-RPC failure is a separate top-level `{"error":{...}}`
+    /// envelope handled generically by `DaemonChannel.decodeResultObject`.
+    public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case conversations, nextCursor, error
+    }
+
+    public init(conversations: [ConversationSummary] = [], nextCursor: String = "", error: String? = nil) {
+        self.conversations = conversations
+        self.nextCursor = nextCursor
+        self.error = error
+    }
+
+    // Go's `[]conversationSummary` marshals a nil slice as JSON `null` (not
+    // `[]`) when there are zero conversations — `decodeIfPresent` treats both
+    // a missing key and an explicit null as "absent" and defaults to [],
+    // where a plain `decode([ConversationSummary].self, ...)` would throw.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        conversations = try c.decodeIfPresent([ConversationSummary].self, forKey: .conversations) ?? []
+        nextCursor = try c.decodeIfPresent(String.self, forKey: .nextCursor) ?? ""
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+    }
+}
+
+/// Request for `agent.conversations.fetch` — mirrors Go's `conversationFetchRequest`
+/// (daemon/lancerd/conversation_rpc.go:39).
+public struct ConversationFetchRequest: Codable, Sendable {
+    public let conversationId: String
+    public let sinceSeq: Int
+    public let limit: Int
+
+    public init(conversationId: String, sinceSeq: Int = 0, limit: Int = 500) {
+        self.conversationId = conversationId
+        self.sinceSeq = sinceSeq
+        self.limit = limit
+    }
+}
+
+/// Response for `agent.conversations.fetch` — mirrors Go's `conversationFetchResult`
+/// (daemon/lancerd/conversation_store.go:265).
+public struct ConversationFetchResponse: Codable, Sendable {
+    public let conversation: ConversationSummary
+    public let turns: [ConversationTurnEnvelope]
+    public let events: [ConversationEvent]
+    public let artifacts: [ConversationArtifactEnvelope]
+    public let nextSeq: Int
+    public let hasMore: Bool
+    /// Relay-only failure signal — see `ConversationListResponse.error`.
+    public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case conversation, turns, events, artifacts, nextSeq, hasMore, error
+    }
+
+    public init(
+        conversation: ConversationSummary, turns: [ConversationTurnEnvelope] = [],
+        events: [ConversationEvent] = [], artifacts: [ConversationArtifactEnvelope] = [],
+        nextSeq: Int = 0, hasMore: Bool = false, error: String? = nil
+    ) {
+        self.conversation = conversation
+        self.turns = turns
+        self.events = events
+        self.artifacts = artifacts
+        self.nextSeq = nextSeq
+        self.hasMore = hasMore
+        self.error = error
+    }
+
+    // Same nil-slice-marshals-null defense as ConversationListResponse, for
+    // all three list fields — turns/events/artifacts are each independently a
+    // Go nil slice when a conversation has none of that kind yet.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        conversation = try c.decode(ConversationSummary.self, forKey: .conversation)
+        turns = try c.decodeIfPresent([ConversationTurnEnvelope].self, forKey: .turns) ?? []
+        events = try c.decodeIfPresent([ConversationEvent].self, forKey: .events) ?? []
+        artifacts = try c.decodeIfPresent([ConversationArtifactEnvelope].self, forKey: .artifacts) ?? []
+        nextSeq = try c.decodeIfPresent(Int.self, forKey: .nextSeq) ?? 0
+        hasMore = try c.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+    }
+}
+
+/// Request for `agent.conversations.append` — mirrors Go's `conversationAppendRequest`
+/// (daemon/lancerd/conversation_store.go:172), the store-level type
+/// conversation_rpc.go's `conversationsAppend` handler takes directly (there is no
+/// separate RPC-level request type on the Go side).
+public struct ConversationAppendRequest: Codable, Sendable {
+    public let conversationId: String?
+    public let baseSeq: Int
+    public let clientTurnId: String
+    public let agent: String?
+    public let cwd: String?
+    public let prompt: String
+    public let model: String?
+    public let budgetUSD: Double?
+
+    public init(
+        conversationId: String? = nil, baseSeq: Int = 0, clientTurnId: String,
+        agent: String? = nil, cwd: String? = nil, prompt: String, model: String? = nil,
+        budgetUSD: Double? = nil
+    ) {
+        self.conversationId = conversationId
+        self.baseSeq = baseSeq
+        self.clientTurnId = clientTurnId
+        self.agent = agent
+        self.cwd = cwd
+        self.prompt = prompt
+        self.model = model
+        self.budgetUSD = budgetUSD
+    }
+}
+
+/// Response for `agent.conversations.append` — mirrors Go's `conversationAppendResponse`
+/// (daemon/lancerd/conversation_rpc.go:49), the RPC-layer superset of the store's
+/// `conversationAppendResult` (adds vendorSessionId/resumeMode/rule).
+public struct ConversationAppendResponse: Codable, Sendable {
+    public let status: String
+    public let conversationId: String
+    public let turnId: String?
+    public let runId: String?
+    public let vendorSessionId: String?
+    public let cwd: String?
+    public let baseSeq: Int
+    public let nextSeq: Int
+    public let resumeMode: String?
+    public let message: String?
+    public let rule: String?
+    /// Relay-only failure signal — see `ConversationListResponse.error`.
+    public let error: String?
+
+    public init(
+        status: String, conversationId: String, turnId: String? = nil, runId: String? = nil,
+        vendorSessionId: String? = nil, cwd: String? = nil, baseSeq: Int = 0, nextSeq: Int = 0,
+        resumeMode: String? = nil, message: String? = nil, rule: String? = nil, error: String? = nil
+    ) {
+        self.status = status
+        self.conversationId = conversationId
+        self.turnId = turnId
+        self.runId = runId
+        self.vendorSessionId = vendorSessionId
+        self.cwd = cwd
+        self.baseSeq = baseSeq
+        self.nextSeq = nextSeq
+        self.resumeMode = resumeMode
+        self.message = message
+        self.rule = rule
+        self.error = error
+    }
+}
+
+/// Request for `agent.conversations.archive` — mirrors Go's `conversationArchiveRequest`
+/// (daemon/lancerd/conversation_rpc.go:64).
+public struct ConversationArchiveRequest: Codable, Sendable {
+    public let conversationId: String
+    public let archived: Bool
+
+    public init(conversationId: String, archived: Bool) {
+        self.conversationId = conversationId
+        self.archived = archived
+    }
+}
+
+/// Response for `agent.conversations.archive` — mirrors Go's `conversationArchiveResponse`
+/// (daemon/lancerd/conversation_rpc.go:70).
+public struct ConversationArchiveResponse: Codable, Sendable {
+    public let ok: Bool
+    public let conversationId: String
+    public let lastSeq: Int
+    /// Relay-only failure signal — see `ConversationListResponse.error`.
+    public let error: String?
+
+    public init(ok: Bool = false, conversationId: String = "", lastSeq: Int = 0, error: String? = nil) {
+        self.ok = ok
+        self.conversationId = conversationId
+        self.lastSeq = lastSeq
+        self.error = error
+    }
+}
+
+/// Request for `agent.conversations.attachObservedSession` — mirrors Go's
+/// `conversationAttachObservedSessionRequest` (daemon/lancerd/conversation_rpc.go:78).
+public struct ConversationAttachObservedSessionRequest: Codable, Sendable {
+    public let provider: String
+    public let sessionId: String
+    public let cwd: String
+
+    public init(provider: String, sessionId: String, cwd: String) {
+        self.provider = provider
+        self.sessionId = sessionId
+        self.cwd = cwd
+    }
+}
+
+/// Response for `agent.conversations.attachObservedSession` — mirrors Go's
+/// `conversationAttachObservedSessionResponse` (daemon/lancerd/conversation_rpc.go:86).
+/// Currently always returns with `error` set (Task 9 hasn't landed real transcript
+/// import yet — see conversation_rpc.go's package doc comment).
+public struct ConversationAttachObservedSessionResponse: Codable, Sendable {
+    public let conversationId: String
+    public let importedEvents: Int
+    public let lastSeq: Int
+    /// Relay-only failure signal — see `ConversationListResponse.error`.
+    public let error: String?
+
+    public init(conversationId: String = "", importedEvents: Int = 0, lastSeq: Int = 0, error: String? = nil) {
+        self.conversationId = conversationId
+        self.importedEvents = importedEvents
+        self.lastSeq = lastSeq
+        self.error = error
+    }
+}

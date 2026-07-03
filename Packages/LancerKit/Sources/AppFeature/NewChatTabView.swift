@@ -46,7 +46,13 @@ public struct NewChatTabView: View {
     let agents: [DispatchAgent]
     let runOutputStore: RunOutputStore
     let chatRepo: ChatConversationRepository?
+    /// Persisted, machine-scoped project directories — the Machine → Workspace →
+    /// Chat middle layer. `nil` in previews/tests, same as `chatRepo`.
+    let workspaceRepo: WorkspaceRepository?
     let fleetStore: FleetStore
+    let preferredMachineKey: String?
+    let preferredCwd: String?
+    let onMachineHintConsumed: () -> Void
     let onDispatch: (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
@@ -106,9 +112,11 @@ public struct NewChatTabView: View {
     /// True while a dispatch/continue is awaiting the daemon's reply — disables Send
     /// so a second tap can't fire a duplicate run (the "superseded" cause).
     @State private var isSending = false
-    /// Recently-used custom project paths, newest first, persisted so a path the
-    /// user typed once is reusable from the picker instead of retyped each time.
-    @AppStorage("lancer.recentProjectPaths") private var recentProjectPathsRaw: String = ""
+    /// Persisted workspaces for the currently-selected machine (loaded via
+    /// `workspaceRepo`), most-recently-used first. Replaces the old flat,
+    /// unscoped `lancer.recentProjectPaths` AppStorage cache — every entry here
+    /// is a real, named, per-machine record, not a bare typed string.
+    @State private var machineWorkspaces: [Workspace] = []
     /// Last-used machine / workspace / model, persisted so the next New Chat entry
     /// resumes the prior context instead of always defaulting to "first online agent".
     @AppStorage("lancer.newChat.lastMachine") private var lastMachineID: String = ""
@@ -128,7 +136,17 @@ public struct NewChatTabView: View {
         agents: [DispatchAgent],
         runOutputStore: RunOutputStore,
         chatRepo: ChatConversationRepository? = nil,
+        workspaceRepo: WorkspaceRepository? = nil,
         fleetStore: FleetStore,
+        /// One-shot machine preselection — set when entering New Chat via a
+        /// "+ New workspace" tap on a specific machine's Home card, so the
+        /// composer opens with that machine already picked instead of the
+        /// default/last-used one. `onMachineHintConsumed` fires once the hint
+        /// has been applied, so the caller can clear its own state and this
+        /// preselection doesn't stick around for the next unrelated New Chat.
+        preferredMachineKey: String? = nil,
+        preferredCwd: String? = nil,
+        onMachineHintConsumed: @escaping () -> Void = {},
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
@@ -142,7 +160,11 @@ public struct NewChatTabView: View {
         self.agents = agents
         self.runOutputStore = runOutputStore
         self.chatRepo = chatRepo
+        self.workspaceRepo = workspaceRepo
         self.fleetStore = fleetStore
+        self.preferredMachineKey = preferredMachineKey
+        self.preferredCwd = preferredCwd
+        self.onMachineHintConsumed = onMachineHintConsumed
         self.onDispatch = onDispatch
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
@@ -285,6 +307,7 @@ public struct NewChatTabView: View {
         .background(t.bg.ignoresSafeArea())
         .onAppear { restoreLastSelectionOrDefault() }
         .task(id: selectedAgentID) { await refreshCommands() }
+        .task(id: selectedAgentID) { await loadWorkspaces() }
         .onChange(of: showComposer) { _, open in
             if open { Task { await refreshCommands() } }
         }
@@ -887,8 +910,10 @@ public struct NewChatTabView: View {
         "\(machineLabel) · \(modelShortLabel)"
     }
 
-    /// Distinct known project directories across the connected agents, selected
-    /// agent's cwd first — the quick-pick list in the Project drawer.
+    /// Distinct known project directories reported live by the connected
+    /// agents on the selected machine, selected agent's cwd first — a
+    /// zero-setup quick-pick shown above the persisted `machineWorkspaces`
+    /// list in the Workspace section.
     private var projectDirs: [String] {
         var seen = Set<String>()
         var ordered: [String] = []
@@ -898,11 +923,39 @@ public struct NewChatTabView: View {
         for agent in agents where !agent.cwd.isEmpty {
             if seen.insert(agent.cwd).inserted { ordered.append(agent.cwd) }
         }
-        // Saved custom paths the user typed before — reusable without retyping.
-        for path in recentProjectPaths where seen.insert(path).inserted {
-            ordered.append(path)
-        }
         return ordered
+    }
+
+    /// `projectDirs` minus any path already saved as a persisted `Workspace` on
+    /// this machine, so the Workspace section never shows the same directory
+    /// twice (once as a named record, once as a bare live quick-pick).
+    private var projectDirsExcludingSaved: [String] {
+        let saved = Set(machineWorkspaces.map(\.path))
+        return projectDirs.filter { !saved.contains($0) }
+    }
+
+    /// The selected agent's machine, as the opaque UUID `Workspace` records are
+    /// scoped by. `DispatchAgent.hostID` already unifies two UUID spaces — an
+    /// SSH host's `HostID` and a paired relay host's `RelayMachineID` — into one
+    /// plain string (see `AppRoot.dispatchAgents()`), so reusing `RelayMachineID`
+    /// as the workspace scoping key here covers both transports without a new
+    /// type. `nil` when no agent is selected or its hostID isn't a UUID.
+    private var currentMachineID: RelayMachineID? {
+        guard let raw = selectedAgent?.hostID, let uuid = UUID(uuidString: raw) else { return nil }
+        return RelayMachineID(uuid)
+    }
+
+    /// Loads the persisted workspaces for the currently-selected machine. Called
+    /// whenever `selectedAgentID` changes (via `.task(id:)`) and after any
+    /// create/rename/delete so the picker reflects the latest state. No-op
+    /// (clears the list) if there's no resolvable machine or no repo wired.
+    private func loadWorkspaces() async {
+        guard let repo = workspaceRepo, let machineID = currentMachineID else {
+            await MainActor.run { machineWorkspaces = [] }
+            return
+        }
+        let workspaces = (try? await repo.list(machineID: machineID)) ?? []
+        await MainActor.run { machineWorkspaces = workspaces }
     }
 
     private var canSend: Bool {
@@ -975,6 +1028,18 @@ public struct NewChatTabView: View {
     /// picking logic if the persisted machine/agent no longer exists or is offline.
     private func restoreLastSelectionOrDefault() {
         guard selectedAgentID.isEmpty else { return }
+        // A one-shot "+ New workspace"/"New chat in this workspace" hint wins
+        // over the persisted last-used machine — the user just told us which
+        // machine (and, from inside a workspace, which path) they want.
+        if let hint = preferredMachineKey, !hint.isEmpty,
+           let agent = restoreAgent(machineKey: hint, modelID: lastModelID) {
+            selectedAgentID = agent.id
+            if let cwd = preferredCwd, !cwd.isEmpty {
+                selectedCwd = cwd
+            }
+            onMachineHintConsumed()
+            return
+        }
         if let agent = restoreAgent(machineKey: lastMachineID, modelID: lastModelID) {
             selectedAgentID = agent.id
             if !lastModelID.isEmpty, ModelCatalog.vendor(forModelID: lastModelID) == agent.vendor {
@@ -986,6 +1051,7 @@ public struct NewChatTabView: View {
         } else if let first = agents.first(where: { !$0.isOffline }) {
             selectedAgentID = first.id
         }
+        if preferredMachineKey != nil { onMachineHintConsumed() }
     }
 
     /// Finds an online agent on the persisted machine, preferring the one whose
@@ -1250,7 +1316,24 @@ public struct NewChatTabView: View {
                 }
 
                 contextSection("Workspace") {
-                    ForEach(projectDirs, id: \.self) { dir in
+                    // Persisted, named workspaces for this machine first (the
+                    // real Machine → Workspace → Chat records) — a checkmark on
+                    // "Use" below saves whatever's in the custom-path field as
+                    // one of these instead of a bare string.
+                    ForEach(machineWorkspaces) { workspace in
+                        contextRow(
+                            icon: .folder,
+                            label: workspace.name,
+                            sub: displayPath(workspace.path),
+                            isSelected: workspace.path == effectiveCwd,
+                            isDisabled: false
+                        ) {
+                            selectPersistedWorkspace(workspace)
+                        }
+                    }
+                    // Live quick-picks reported by connected agents that aren't
+                    // already saved as a workspace.
+                    ForEach(projectDirsExcludingSaved, id: \.self) { dir in
                         contextRow(
                             icon: .folder,
                             label: lastPathComponent(dir),
@@ -1407,7 +1490,8 @@ public struct NewChatTabView: View {
         selectedAgentID = pick.id
         // A new machine invalidates both the workspace default and the model
         // selection (models are vendor-specific) — reset both, same as today's
-        // machine-picker behavior for cwd.
+        // machine-picker behavior for cwd. `selectedAgentID` changing also
+        // re-triggers `loadWorkspaces()` via `.task(id: selectedAgentID)`.
         selectedCwd = ""
         selectedModel = ""
         persistSelection()
@@ -1416,6 +1500,18 @@ public struct NewChatTabView: View {
     private func selectWorkspace(_ dir: String) {
         selectedCwd = dir
         persistSelection()
+    }
+
+    /// Picks a persisted `Workspace` from the machine-scoped list, and bumps its
+    /// `lastUsedAt` so it stays sorted by recency next time the picker opens.
+    private func selectPersistedWorkspace(_ workspace: Workspace) {
+        selectedCwd = workspace.path
+        persistSelection()
+        guard let repo = workspaceRepo else { return }
+        Task {
+            try? await repo.touch(workspace.id)
+            await loadWorkspaces()
+        }
     }
 
     private func selectModel(agent: DispatchAgent, modelID: String) {
@@ -1448,26 +1544,33 @@ public struct NewChatTabView: View {
         .padding(.top, 4)
     }
 
+    /// The "Use" action on the custom-path field: selects the path for this run
+    /// AND persists it as a named `Workspace` scoped to the current machine
+    /// (named after the path's last component), so it survives relaunch and
+    /// reappears in the machine's own list next time — replacing the old
+    /// behavior of only caching the raw string in a flat, unscoped AppStorage
+    /// MRU list.
     private func useCustomCwd() {
         let trimmed = customCwd.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         Haptics.selection()
         selectedCwd = trimmed
-        rememberProjectPath(trimmed)
         customCwd = ""
         persistSelection()
+        Task { await persistAsWorkspace(path: trimmed) }
     }
 
-    /// Recently-used custom paths (newest first), persisted across launches.
-    private var recentProjectPaths: [String] {
-        recentProjectPathsRaw.split(separator: "\n").map(String.init)
-    }
-
-    /// Save a custom path to the front of the recents (deduped, capped at 8).
-    private func rememberProjectPath(_ path: String) {
-        var recents = recentProjectPaths.filter { $0 != path }
-        recents.insert(path, at: 0)
-        recentProjectPathsRaw = recents.prefix(8).joined(separator: "\n")
+    /// Creates (or, if the path is already a known workspace on this machine,
+    /// just re-touches) a persisted `Workspace` record for `path`. No-op if
+    /// there's no resolvable machine or no repo wired (previews/tests).
+    private func persistAsWorkspace(path: String) async {
+        guard let repo = workspaceRepo, let machineID = currentMachineID else { return }
+        if let existing = machineWorkspaces.first(where: { $0.path == path }) {
+            try? await repo.touch(existing.id)
+        } else {
+            _ = try? await repo.create(name: lastPathComponent(path), machineID: machineID, path: path)
+        }
+        await loadWorkspaces()
     }
 }
 

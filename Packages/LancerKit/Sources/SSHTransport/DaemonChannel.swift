@@ -431,6 +431,64 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: DispatchResult.self)
     }
 
+    // MARK: - Conversations (agent.conversations.*, cross-device sync)
+
+    /// Lists Lancer-owned conversations from the host ledger, most-recently-active
+    /// first (see `daemon/lancerd/conversation_store.go`'s `list`).
+    public func listConversations(_ request: ConversationListRequest = ConversationListRequest()) async throws -> ConversationListResponse {
+        let data = try await sendRPC(
+            method: "agent.conversations.list",
+            params: ["limit": request.limit, "cursor": request.cursor, "includeArchived": request.includeArchived]
+        )
+        return try Self.decodeResult(data, as: ConversationListResponse.self)
+    }
+
+    /// Fetches one conversation's turns/artifacts plus events strictly after
+    /// `request.sinceSeq`, for incremental paging through the append-only event log.
+    public func fetchConversation(_ request: ConversationFetchRequest) async throws -> ConversationFetchResponse {
+        let data = try await sendRPC(
+            method: "agent.conversations.fetch",
+            params: ["conversationId": request.conversationId, "sinceSeq": request.sinceSeq, "limit": request.limit]
+        )
+        return try Self.decodeResult(data, as: ConversationFetchResponse.self)
+    }
+
+    /// Starts a new conversation (`request.conversationId == nil`) or appends a
+    /// follow-up turn to an existing one. The daemon is the single writer for
+    /// executable turns — this is the host-mediated append the cross-device sync
+    /// design requires (see the build handoff's Non-Negotiable Product Semantics #4).
+    public func appendConversation(_ request: ConversationAppendRequest) async throws -> ConversationAppendResponse {
+        var params: [String: Any] = [
+            "baseSeq": request.baseSeq, "clientTurnId": request.clientTurnId, "prompt": request.prompt,
+        ]
+        if let conversationId = request.conversationId, !conversationId.isEmpty { params["conversationId"] = conversationId }
+        if let agent = request.agent, !agent.isEmpty { params["agent"] = agent }
+        if let cwd = request.cwd, !cwd.isEmpty { params["cwd"] = cwd }
+        if let model = request.model, !model.isEmpty { params["model"] = model }
+        if let budgetUSD = request.budgetUSD, budgetUSD > 0 { params["budgetUSD"] = budgetUSD }
+        let data = try await sendRPC(method: "agent.conversations.append", params: params)
+        return try Self.decodeResult(data, as: ConversationAppendResponse.self)
+    }
+
+    /// Archives or unarchives a conversation.
+    public func archiveConversation(_ request: ConversationArchiveRequest) async throws -> ConversationArchiveResponse {
+        let data = try await sendRPC(
+            method: "agent.conversations.archive",
+            params: ["conversationId": request.conversationId, "archived": request.archived]
+        )
+        return try Self.decodeResult(data, as: ConversationArchiveResponse.self)
+    }
+
+    /// Converts a terminal-originated Observed Session into a Lancer conversation.
+    /// Currently always errors — Task 9 hasn't landed real transcript import yet.
+    public func attachObservedSession(_ request: ConversationAttachObservedSessionRequest) async throws -> ConversationAttachObservedSessionResponse {
+        let data = try await sendRPC(
+            method: "agent.conversations.attachObservedSession",
+            params: ["provider": request.provider, "sessionId": request.sessionId, "cwd": request.cwd]
+        )
+        return try Self.decodeResult(data, as: ConversationAttachObservedSessionResponse.self)
+    }
+
     // MARK: - CI Events
 
     /// Fetch recent CI/PR events for a repository from the push-backend.
