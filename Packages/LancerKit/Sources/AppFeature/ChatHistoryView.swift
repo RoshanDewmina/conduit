@@ -15,6 +15,9 @@ public struct ChatHistoryView: View {
     let conversationID: String
     let chatRepo: ChatConversationRepository?
     let runOutputStore: RunOutputStore?
+    /// Drives the inline `ConversationSyncBanner` for a ledger-backed conversation.
+    /// `nil` in previews/tests, same as `chatRepo`.
+    let conversationSyncCoordinator: ConversationSyncCoordinator?
     let onBack: () -> Void
     let onNewChat: () -> Void
     /// Resolves a live channel + new run to continue this conversation. AppRoot
@@ -22,8 +25,13 @@ public struct ChatHistoryView: View {
     /// returns the ActiveChatRun (or nil if the host is unreachable). nil disables
     /// resume — the view stays read-only.
     let onContinue: ((_ conversation: ChatConversation, _ lastRunID: String, _ prompt: String) async -> ActiveChatRun?)?
+    /// Re-pulls this conversation from its host ledger (the sync banner's
+    /// Refresh action, and mid-stream handoff polling below). Returns the
+    /// fresh `nextSeq`, or `nil` if the host can't be reached.
+    var onRefreshConversation: (_ conversationID: String) async -> Int? = { _ in nil }
 
     @State private var conversation: ChatConversation?
+    @State private var syncState: ConversationSyncUIState = .synced
     @State private var title: String = "chat"
     @State private var hostName: String = "relay"
     @State private var agentLabel: String = "Agent"
@@ -47,16 +55,20 @@ public struct ChatHistoryView: View {
         conversationID: String,
         chatRepo: ChatConversationRepository?,
         runOutputStore: RunOutputStore? = nil,
+        conversationSyncCoordinator: ConversationSyncCoordinator? = nil,
         onBack: @escaping () -> Void,
         onNewChat: @escaping () -> Void,
-        onContinue: ((_ conversation: ChatConversation, _ lastRunID: String, _ prompt: String) async -> ActiveChatRun?)? = nil
+        onContinue: ((_ conversation: ChatConversation, _ lastRunID: String, _ prompt: String) async -> ActiveChatRun?)? = nil,
+        onRefreshConversation: @escaping (_ conversationID: String) async -> Int? = { _ in nil }
     ) {
         self.conversationID = conversationID
         self.chatRepo = chatRepo
         self.runOutputStore = runOutputStore
+        self.conversationSyncCoordinator = conversationSyncCoordinator
         self.onBack = onBack
         self.onNewChat = onNewChat
         self.onContinue = onContinue
+        self.onRefreshConversation = onRefreshConversation
     }
 
     public var body: some View {
@@ -70,6 +82,7 @@ public struct ChatHistoryView: View {
                 onNew: { Haptics.selection(); onNewChat() },
                 shareText: { transcriptText() }
             )
+            ConversationSyncBanner(state: syncState, onRefresh: { Task { await refreshFromHost() } })
             ConversationScrollView(bottomID: "history-bottom", scrollKey: turns.count + liveTurns.count + (runOutputStore?.run(activeRun?.runId ?? "")?.chunks.count ?? 0)) {
                 VStack(alignment: .leading, spacing: 14) {
                     threadSummaryCard
@@ -98,6 +111,8 @@ public struct ChatHistoryView: View {
         }
         .background(t.bg.ignoresSafeArea())
         .task(id: conversationID) { await load() }
+        .task(id: conversationID) { await observeSyncState() }
+        .task(id: conversationID) { await refreshAndPollIfStreaming() }
         .sheet(item: $selectedArtifact) { ChatArtifactDetailView(artifact: $0) }
         .alert("Couldn't continue", isPresented: Binding(
             get: { resumeError != nil }, set: { if !$0 { resumeError = nil } }
@@ -218,6 +233,46 @@ public struct ChatHistoryView: View {
             out += "## Request\n\(turn.prompt)\n\n## \(agentLabel) activity\n\(reply)\n\n"
         }
         return out
+    }
+
+    /// Subscribes to the coordinator's live sync-state stream for this thread
+    /// — cancelled automatically (via `.task(id:)`) when `conversationID` changes.
+    private func observeSyncState() async {
+        guard let coordinator = conversationSyncCoordinator else { return }
+        for await state in await coordinator.observeSyncState(conversationID: conversationID) {
+            syncState = state
+        }
+    }
+
+    /// Re-pulls this conversation from its host ledger and reloads the mirror
+    /// into view state — the sync banner's Refresh action, and this view's
+    /// own one-shot open-time refresh below. No-op for a legacy (pre-ledger)
+    /// conversation, which has no host ledger row to pull from.
+    @discardableResult
+    private func refreshFromHost() async -> Bool {
+        guard let repo = chatRepo,
+              let conv = try? await repo.conversation(id: conversationID),
+              conv.syncState != .localOnly,
+              await onRefreshConversation(conversationID) != nil
+        else { return false }
+        await load()
+        return true
+    }
+
+    /// Streaming handoff (build handoff plan, Phase 3): pulls this
+    /// conversation from the host once on open (catching whatever another
+    /// device wrote since this mirror last synced), then — only while the
+    /// most recent turn is still `.running` — keeps polling every few seconds
+    /// so a device that opens mid-stream catches ledger events the relay
+    /// fan-out may have missed during a reconnect, instead of relying solely
+    /// on `RunOutputStore`'s live feed.
+    private func refreshAndPollIfStreaming() async {
+        await refreshFromHost()
+        while !Task.isCancelled, turns.last?.status == .running {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            await refreshFromHost()
+        }
     }
 
     private func load() async {

@@ -1224,6 +1224,45 @@ public struct AppRoot: View {
         }
     }
 
+    /// Resolves just the `ConversationTransport` (no run-control channel) for a
+    /// persisted conversation's ledger host, by its `hostID` (SSH slot) or
+    /// `sourceHostID` (paired relay machine) — used for refresh-only calls
+    /// (the sync banner's Refresh action, streaming-handoff polling) that
+    /// don't start or continue a run. `nil` if neither host is reachable.
+    private func resolveTransport(forConversation conv: ChatConversation) -> ConversationTransport? {
+        if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
+           let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
+            let channel = slot.channel
+            return ConversationTransport(
+                append: { try await channel.appendConversation($0) },
+                fetch: { try await channel.fetchConversation($0) },
+                archive: { try await channel.archiveConversation($0) }
+            )
+        }
+        if let sourceHostID = conv.sourceHostID, let uuid = UUID(uuidString: sourceHostID),
+           let machine = relayFleetStore.machine(RelayMachineID(uuid)) {
+            let bridge = machine.bridge
+            return ConversationTransport(
+                append: { try await bridge.relayAppendConversation($0) },
+                fetch: { try await bridge.relayFetchConversation($0) },
+                archive: { try await bridge.relayArchiveConversation($0) }
+            )
+        }
+        return nil
+    }
+
+    /// Re-pulls a conversation from its host ledger and merges it into the
+    /// mirror — shared by `NewChatTabView`'s and `ChatHistoryView`'s sync
+    /// banners (Refresh/Resend) and by streaming-handoff polling. Returns the
+    /// fresh `nextSeq`, or `nil` if the conversation or its host transport
+    /// can't be resolved.
+    private func refreshConversationMirror(conversationID: String, env: AppEnvironment) async -> Int? {
+        guard let conv = try? await env.chatRepo.conversation(id: conversationID),
+              let transport = resolveTransport(forConversation: conv)
+        else { return nil }
+        return try? await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
+    }
+
     /// Appends a follow-up turn to an existing ledger-backed conversation —
     /// `NewChatTabView.sendFollowUp`'s ledger path, used whenever the active
     /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
@@ -1607,6 +1646,7 @@ public struct AppRoot: View {
                 chatRepo: env.chatRepo,
                 workspaceRepo: env.workspaceRepo,
                 fleetStore: fleetStore,
+                conversationSyncCoordinator: env.conversationSyncCoordinator,
                 preferredMachineKey: pendingNewChatMachineKey,
                 preferredCwd: pendingNewChatCwd,
                 onMachineHintConsumed: {
@@ -1621,6 +1661,9 @@ public struct AppRoot: View {
                         conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
                         agentID: agentID, cwd: cwd, model: model, env: env
                     )
+                },
+                onRefreshConversation: { conversationID in
+                    await refreshConversationMirror(conversationID: conversationID, env: env)
                 },
                 onNewTask: { sidebarState.navigate(to: .newChat) },
                 onOpenWorkspace: { agent in openWorkspace(for: agent) },
@@ -1642,10 +1685,14 @@ public struct AppRoot: View {
                 conversationID: id,
                 chatRepo: env.chatRepo,
                 runOutputStore: runOutputStore,
+                conversationSyncCoordinator: env.conversationSyncCoordinator,
                 onBack: { sidebarState.navigate(to: .home) },
                 onNewChat: { sidebarState.navigate(to: .newChat) },
                 onContinue: { conv, lastRunID, prompt in
                     await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt, env: env)
+                },
+                onRefreshConversation: { conversationID in
+                    await refreshConversationMirror(conversationID: conversationID, env: env)
                 }
             )
             .id(id)

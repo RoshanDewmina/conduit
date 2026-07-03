@@ -261,14 +261,35 @@ public actor ConversationSyncCoordinator {
         let conversation = Self.mapSummary(response.conversation, fallback: existing)
         _ = try await chatRepo.upsertConversationMirror(conversation, lastHostSeq: response.nextSeq, syncState: .synced)
 
+        let events = response.events.map(Self.mapEvent)
+        try await chatRepo.appendEventsMirror(conversationID: response.conversation.id, events: events)
+
+        // `ConversationTurnEnvelope` carries no rolled-up reply text (only the
+        // ledger's raw per-seq events do — see appendRunOutput in
+        // conversation_store.go) — assemble each turn's `assistantText` from
+        // ITS OWN mirrored events (this fetch's plus whatever was already
+        // stored) before writing the turn row, so a device that never
+        // streamed a turn live still renders its content in ChatHistoryView.
+        let allEvents = (try? await chatRepo.events(conversationID: response.conversation.id, sinceSeq: 0, limit: 5000)) ?? []
+        let eventsByTurn = Dictionary(grouping: allEvents, by: { $0.turnID })
         for turnEnvelope in response.turns {
-            let turn = Self.mapTurn(turnEnvelope, conversationID: response.conversation.id)
+            var turn = Self.mapTurn(turnEnvelope, conversationID: response.conversation.id)
+            turn.assistantText = Self.assistantText(from: eventsByTurn[turn.id] ?? [])
             _ = try await chatRepo.upsertTurnMirror(
                 turn, vendorSessionID: turnEnvelope.vendorSessionId, hostSeqStart: nil, hostSeqEnd: nil
             )
         }
-        let events = response.events.map(Self.mapEvent)
-        try await chatRepo.appendEventsMirror(conversationID: response.conversation.id, events: events)
+    }
+
+    /// Concatenates a turn's `kind == "output"` events (the ledger's mirror of
+    /// the run's raw stdout/stderr stream — see `appendRunOutput`) in seq
+    /// order, the same text `RunOutputStore` accumulates live for an active run.
+    private static func assistantText(from events: [ChatEvent]) -> String {
+        events
+            .filter { $0.kind == "output" }
+            .sorted { $0.seq < $1.seq }
+            .compactMap(\.text)
+            .joined()
     }
 
     private func publish(_ state: ConversationSyncUIState, for conversationID: String) {
@@ -334,6 +355,7 @@ public actor ConversationSyncCoordinator {
             id: turn.id, conversationID: conversationID, ordinal: turn.ordinal,
             prompt: turn.prompt, runID: turn.runId, transportKind: "sync",
             status: LancerCore.ChatTurn.Status(rawValue: turn.status) ?? .running,
+            errorMessage: turn.errorMessage,
             createdAt: parseDate(turn.startedAt) ?? .now,
             completedAt: parseDate(turn.completedAt),
             clientTurnID: turn.clientTurnId,

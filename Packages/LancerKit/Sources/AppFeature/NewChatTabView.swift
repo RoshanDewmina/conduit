@@ -50,6 +50,10 @@ public struct NewChatTabView: View {
     /// Chat middle layer. `nil` in previews/tests, same as `chatRepo`.
     let workspaceRepo: WorkspaceRepository?
     let fleetStore: FleetStore
+    /// Shared sync orchestrator (Task 7) — drives the inline `ConversationSyncBanner`
+    /// and resolves conflict/offline follow-ups. `nil` in previews/tests, same as
+    /// `chatRepo`; the banner and its actions simply don't appear without it.
+    let conversationSyncCoordinator: ConversationSyncCoordinator?
     let preferredMachineKey: String?
     let preferredCwd: String?
     let onMachineHintConsumed: () -> Void
@@ -60,6 +64,11 @@ public struct NewChatTabView: View {
     /// Defaults to a hard failure so existing previews/tests that don't wire it
     /// simply fall back to the legacy path (nil `conversationID` never calls this).
     let onContinueConversation: (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome
+    /// Re-pulls the conversation from its host ledger and merges it into the
+    /// mirror (the sync banner's Refresh/Resend actions) — returns the fresh
+    /// `nextSeq` to use as the next `baseSeq`, or `nil` if the host couldn't
+    /// be reached. Defaults to a no-op so existing previews/tests compile.
+    var onRefreshConversation: (_ conversationID: String) async -> Int? = { _ in nil }
     let onNewTask: () -> Void
     let onOpenWorkspace: (DispatchAgent?) -> Void
     var onOpenSidebar: () -> Void = {}
@@ -131,6 +140,10 @@ public struct NewChatTabView: View {
 
     // Persistence
     @State private var conversationID: String?
+    /// Live sync status for `conversationID`, observed from `conversationSyncCoordinator`
+    /// — drives the inline `ConversationSyncBanner`. Always `.synced` (no banner)
+    /// for a legacy pre-ledger conversation, since it's never registered there.
+    @State private var syncState: ConversationSyncUIState = .synced
     @State private var artifactsByRun: [String: [ChatArtifact]] = [:]
     @State private var selectedArtifact: ChatArtifact?
     @FocusState private var composeFocused: Bool
@@ -144,6 +157,7 @@ public struct NewChatTabView: View {
         chatRepo: ChatConversationRepository? = nil,
         workspaceRepo: WorkspaceRepository? = nil,
         fleetStore: FleetStore,
+        conversationSyncCoordinator: ConversationSyncCoordinator? = nil,
         /// One-shot machine preselection — set when entering New Chat via a
         /// "+ New workspace" tap on a specific machine's Home card, so the
         /// composer opens with that machine already picked instead of the
@@ -155,6 +169,7 @@ public struct NewChatTabView: View {
         onMachineHintConsumed: @escaping () -> Void = {},
         onDispatch: @escaping (_ agentID: String, _ cwd: String, _ prompt: String, _ budgetUSD: Double?, _ model: String?) async -> ChatDispatchOutcome,
         onContinueConversation: @escaping (_ conversationID: String, _ baseSeq: Int, _ prompt: String, _ agentID: String, _ cwd: String, _ model: String?) async -> ChatDispatchOutcome = { _, _, _, _, _, _ in .blocked("Ledger continuation not wired.") },
+        onRefreshConversation: @escaping (_ conversationID: String) async -> Int? = { _ in nil },
         onNewTask: @escaping () -> Void,
         onOpenWorkspace: @escaping (DispatchAgent?) -> Void = { _ in },
         onOpenSidebar: @escaping () -> Void = {},
@@ -169,11 +184,13 @@ public struct NewChatTabView: View {
         self.chatRepo = chatRepo
         self.workspaceRepo = workspaceRepo
         self.fleetStore = fleetStore
+        self.conversationSyncCoordinator = conversationSyncCoordinator
         self.preferredMachineKey = preferredMachineKey
         self.preferredCwd = preferredCwd
         self.onMachineHintConsumed = onMachineHintConsumed
         self.onDispatch = onDispatch
         self.onContinueConversation = onContinueConversation
+        self.onRefreshConversation = onRefreshConversation
         self.onNewTask = onNewTask
         self.onOpenWorkspace = onOpenWorkspace
         self.onOpenSidebar = onOpenSidebar
@@ -298,6 +315,11 @@ public struct NewChatTabView: View {
         VStack(spacing: 0) {
             if activeRun != nil {
                 darkChatHeader
+                ConversationSyncBanner(
+                    state: syncState,
+                    onRefresh: { Task { await refreshSync() } },
+                    onResend: { Task { await refreshSync(); await sendFollowUp(followUpText) } }
+                )
                 ConversationScrollView(bottomID: "newchat-bottom", scrollKey: currentRun?.chunks.count ?? 0) {
                     VStack(alignment: .leading, spacing: 18) {
                         ForEach(turns) { turn in
@@ -313,6 +335,7 @@ public struct NewChatTabView: View {
         // Chat follows the app's light/dark scheme (inherits the parent's tokens);
         // terminal blocks keep their own terminal palette via term* tokens.
         .background(t.bg.ignoresSafeArea())
+        .task(id: activeRun?.conversationID) { await observeSyncState() }
         .onAppear { restoreLastSelectionOrDefault() }
         .task(id: selectedAgentID) { await refreshCommands() }
         .task(id: selectedAgentID) { await loadWorkspaces() }
@@ -1190,6 +1213,11 @@ public struct NewChatTabView: View {
             case .blocked(let message):
                 if message == Self.needsApprovalMessage {
                     isAwaitingApproval = true
+                } else if await conversationSyncCoordinator?.currentSyncState(convID) == .conflict {
+                    // The sync banner already surfaces this with Refresh/Resend
+                    // (see `body`'s onResend) — restore the prompt so Resend has
+                    // something to send instead of also popping an alert.
+                    followUpText = trimmed
                 } else if !message.isEmpty {
                     dispatchErrorMessage = message
                 }
@@ -1249,6 +1277,33 @@ public struct NewChatTabView: View {
             if case E2EError.superseded = error { return }
             dispatchErrorMessage = "Follow-up failed: \(error.localizedDescription)"
         }
+    }
+
+    /// Subscribes to the coordinator's live sync-state stream for the active
+    /// ledger-backed conversation — cancelled automatically (via `.task(id:)`)
+    /// whenever `activeRun?.conversationID` changes, e.g. a new thread starts.
+    private func observeSyncState() async {
+        guard let coordinator = conversationSyncCoordinator, let convID = activeRun?.conversationID else {
+            syncState = .synced
+            return
+        }
+        for await state in await coordinator.observeSyncState(conversationID: convID) {
+            syncState = state
+        }
+    }
+
+    /// The sync banner's Refresh action: re-pulls the conversation from its
+    /// host ledger and adopts the fresh `nextSeq` as this thread's `baseSeq`,
+    /// so a stale/conflicted `ActiveChatRun` can send again without refetching
+    /// the whole thread from scratch.
+    private func refreshSync() async {
+        guard let active = activeRun, let convID = active.conversationID,
+              let newBaseSeq = await onRefreshConversation(convID)
+        else { return }
+        activeRun = ActiveChatRun(
+            runId: active.runId, channel: active.channel, title: active.title, subtitle: active.subtitle,
+            cwd: active.cwd, conversationID: convID, nextBaseSeq: newBaseSeq
+        )
     }
 
     /// Regenerate the last response: re-run the most recent prompt as a fresh turn
