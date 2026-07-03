@@ -258,6 +258,21 @@ public struct AppRoot: View {
         case failure(String)
     }
 
+    /// UI-audit hook: skip the system notification-permission prompt. On this
+    /// Xcode-beta/iOS27 headless simulator, that system alert doesn't respond
+    /// to HID taps at all (idb `ui_tap`, XcodeBuildMCP `tap`/`key_press` all
+    /// no-op on it — a known limitation, see the 2026-07-02 Device Hub matrix
+    /// report), permanently blocking automated screenshot/UI passes on any
+    /// freshly-installed simulator. Gated `#if DEBUG` like the other launch
+    /// seams in `init()` below — never compiled into a release build.
+    static var skipNotificationPromptForUITesting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["LANCER_SKIP_NOTIFICATION_PROMPT"] == "1"
+        #else
+        false
+        #endif
+    }
+
     public init() {
         do {
             let env = try AppEnvironment()
@@ -344,13 +359,13 @@ public struct AppRoot: View {
             }
         }
         .task {
-            if onboardingSeen {
+            if onboardingSeen && !Self.skipNotificationPromptForUITesting {
                 Notifications.shared.registerCategories()
                 _ = await Notifications.shared.requestAuthorization()
             }
         }
         .onChange(of: onboardingSeen) { _, seen in
-            if seen {
+            if seen && !Self.skipNotificationPromptForUITesting {
                 Notifications.shared.registerCategories()
                 Task { _ = await Notifications.shared.requestAuthorization() }
             }

@@ -23,7 +23,17 @@ jobs:
         run: swift package resolve
         working-directory: Packages/LancerKit
       - name: Run tests
-        run: swift test --configuration debug
+        # --no-parallel: Swift Testing's default concurrent scheduling hands
+        # every test in every suite to the shared cooperative thread pool at
+        # once. On this runner's small core count that's not just slower —
+        # it deadlocks (confirmed: 48+ min with zero completed tests, then a
+        # second, only-partially-fixed hang after serializing just the worst
+        # offender). Fully serial is ~42s locally, no risk of thread
+        # starvation regardless of what any given test does. The
+        # `.serialized` trait on OpenSSHKeyParserTests stays as defense in
+        # depth if this flag is ever removed without the reason being
+        # rediscovered.
+        run: swift test --configuration debug --no-parallel
         working-directory: Packages/LancerKit
 
   lancer-app:
