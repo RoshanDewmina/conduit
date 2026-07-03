@@ -1,6 +1,11 @@
 import Foundation
 import LancerCore
 import PersistenceKit
+import NotificationsKit
+
+#if os(iOS)
+import CloudKit
+#endif
 
 /// Bidirectional CloudKit mirror for the host-owned conversation ledger's
 /// already-mirrored rows (Task 8). Deliberately a separate actor from
@@ -15,6 +20,10 @@ import PersistenceKit
 /// It never originates a turn or drives dispatch.
 public actor ConversationSyncEngine {
     public static let zoneName = "LancerConversations"
+    /// Stable across launches/upserts — `CKModifySubscriptionsOperation` treats a
+    /// re-save of the same ID as an update, and the AppDelegate-delivered
+    /// `CKNotification.subscriptionID` must match this to be routed here.
+    public static let backgroundSubscriptionID = "lancer.conversationSync.dbSubscription"
     private static let changeTokenDefaultsKey = "lancer.cloudsync.conversationZoneToken"
 
     private let cloudSync: CloudSync
@@ -27,6 +36,7 @@ public actor ConversationSyncEngine {
     public private(set) var isSyncing: Bool = false
 
     private var notificationTask: Task<Void, Never>?
+    private var remotePushTask: Task<Void, Never>?
 
     public init(
         cloudSync: CloudSync,
@@ -45,11 +55,28 @@ public actor ConversationSyncEngine {
         guard status == .available else { return }
 
         await performSync()
+        // Best-effort: a build without the full CloudKit entitlement (or a
+        // sandboxed/dev profile) may reject subscription creation even though
+        // record read/write still works. Don't let that block startup — it
+        // just means this device falls back to foreground/pull-to-refresh
+        // sync, the pre-existing behavior.
+        try? await cloudSync.ensureDatabaseSubscriptionExists(subscriptionID: Self.backgroundSubscriptionID)
 
         #if os(iOS)
         notificationTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
                 await self?.performSync()
+            }
+        }
+        remotePushTask = Task { [weak self] in
+            for await note in NotificationCenter.default.notifications(named: .lancerCloudKitRemoteNotification) {
+                // Parse here, outside actor isolation, and cross the boundary
+                // with only a Sendable String — `note.userInfo` is
+                // `[AnyHashable: Any]?`, which Swift 6 strict concurrency
+                // correctly refuses to hand to an actor-isolated method.
+                guard let userInfo = note.userInfo,
+                      let ckNotification = CKNotification(fromRemoteNotificationDictionary: userInfo) else { continue }
+                await self?.handleRemoteNotification(subscriptionID: ckNotification.subscriptionID)
             }
         }
         #endif
@@ -58,6 +85,23 @@ public actor ConversationSyncEngine {
     public func stop() {
         notificationTask?.cancel()
         notificationTask = nil
+        remotePushTask?.cancel()
+        remotePushTask = nil
+    }
+
+    /// Confirms a background remote-notification belongs to this engine's
+    /// subscription (not some other push type routed onto the same
+    /// NotificationCenter name) before triggering an out-of-cycle sync.
+    /// Takes the already-parsed `CKNotification.subscriptionID` rather than
+    /// the raw `userInfo` dictionary so callers can parse the `CKNotification`
+    /// in a non-isolated context first — `[AnyHashable: Any]` isn't Sendable,
+    /// so handing it directly to an actor-isolated method trips Swift 6
+    /// strict concurrency's region-isolation check.
+    @discardableResult
+    public func handleRemoteNotification(subscriptionID: String?) async -> Bool {
+        guard subscriptionID == Self.backgroundSubscriptionID else { return false }
+        await performSync()
+        return true
     }
 
     /// Manually triggers a sync cycle — used by "Sync now" in Settings and

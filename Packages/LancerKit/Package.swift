@@ -127,7 +127,7 @@ let package = Package(
         ),
         .target(
             name: "SyncKit",
-            dependencies: ["LancerCore", "PersistenceKit", "SecurityKit"],
+            dependencies: ["LancerCore", "PersistenceKit", "SecurityKit", "NotificationsKit"],
             swiftSettings: swiftSettings
         ),
         .target(

@@ -39,6 +39,41 @@ struct ConversationSyncEngineTests {
         try await engine.syncNow()
     }
 
+    // MARK: - Background pull (Task 8 / B9: CKDatabaseSubscription)
+
+    @Test("handleRemoteNotification ignores a subscriptionID that isn't ours")
+    func handleRemoteNotificationIgnoresForeignSubscription() async throws {
+        let engine = try makeEngine()
+        let handled = await engine.handleRemoteNotification(subscriptionID: "some-other-subscription")
+        #expect(handled == false)
+        // Not our subscription — must not have kicked off a sync cycle.
+        let syncDate = await engine.lastSyncDate
+        #expect(syncDate == nil)
+    }
+
+    @Test("handleRemoteNotification ignores a nil subscriptionID")
+    func handleRemoteNotificationIgnoresNilSubscription() async throws {
+        let engine = try makeEngine()
+        let handled = await engine.handleRemoteNotification(subscriptionID: nil)
+        #expect(handled == false)
+    }
+
+    @Test("handleRemoteNotification triggers a sync cycle when the subscriptionID matches")
+    func handleRemoteNotificationTriggersSyncOnMatch() async throws {
+        let engine = try makeEngine()
+        let handled = await engine.handleRemoteNotification(subscriptionID: ConversationSyncEngine.backgroundSubscriptionID)
+        #expect(handled == true)
+        // Unlike `start()` (which checks account status first and bails
+        // early on this CloudKit-less test host), handleRemoteNotification
+        // calls performSync() unconditionally once the subscription ID
+        // matches — it's a real push, so there's no "account unavailable"
+        // check to skip. CloudSync's own methods no-op successfully rather
+        // than throwing, so the cycle completes and isSyncing settles back
+        // to false rather than getting stuck mid-sync.
+        let stillSyncing = await engine.isSyncing
+        #expect(stillSyncing == false)
+    }
+
     // MARK: - Helpers
 
     private func makeEngine() throws -> ConversationSyncEngine {

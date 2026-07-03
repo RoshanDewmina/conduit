@@ -215,6 +215,46 @@ public actor CloudSync {
         #endif
     }
 
+    // MARK: - Background pull (Task 8 / B9: CKDatabaseSubscription)
+
+    /// Registers a `CKDatabaseSubscription` on the private database so a
+    /// silent push (`content-available`) arrives whenever any record changes
+    /// server-side — the missing piece that made `ConversationSyncEngine`
+    /// pull-only-on-foreground before this. Safe to call on every launch:
+    /// `CKModifySubscriptionsOperation` with a stable subscription ID is an
+    /// idempotent upsert, not a duplicate-create.
+    ///
+    /// Deliberately database-wide (not zone-scoped to `LancerConversations`)
+    /// because this is, as of this change, the app's *only* CloudKit push
+    /// subscription — `SyncEngine` (Hosts/Snippets, default zone) still polls
+    /// on foreground/account-change only. A database subscription covers
+    /// both; the extra wake for an unrelated Hosts/Snippets change is a
+    /// no-op sync cycle, not a correctness issue.
+    public func ensureDatabaseSubscriptionExists(subscriptionID: String) async throws {
+        #if os(iOS) && !targetEnvironment(simulator)
+        guard let db else { return }
+        let subscription = CKDatabaseSubscription(subscriptionID: subscriptionID)
+        let notificationInfo = CKSubscription.NotificationInfo()
+        notificationInfo.shouldSendContentAvailable = true
+        subscription.notificationInfo = notificationInfo
+
+        let operation = CKModifySubscriptionsOperation(
+            subscriptionsToSave: [subscription],
+            subscriptionIDsToDelete: nil
+        )
+        operation.qualityOfService = .utility
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            operation.modifySubscriptionsResultBlock = { result in
+                switch result {
+                case .success: cont.resume()
+                case .failure(let err): cont.resume(throwing: err)
+                }
+            }
+            db.add(operation)
+        }
+        #endif
+    }
+
     #if os(iOS) && !targetEnvironment(simulator)
     private static func encodeChangeToken(_ token: CKServerChangeToken) -> Data? {
         try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
