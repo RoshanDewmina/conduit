@@ -296,3 +296,29 @@ are now archived under `docs/_archive/`.
   never surfaced anywhere — worth a "Paired machines carry over after reinstall" note in onboarding
   or the Paired Machines screen if this causes future confusion). No bulk "remove all offline
   machines" action — user had to understand the cap error and navigate to Settings manually.
+- **P1 (found + partially fixed, NOT confirmed resolved, 2026-07-03):** the Home screen's per-machine
+  connection dot (and by extension `FleetRelayMachine`/`RelayMachineRow` everywhere else
+  `relayFleetStore.machines` feeds a UI) can show a paired relay machine as disconnected/orange long
+  after it has actually reconnected. Root cause: `RelayFleetStore` (`@Observable`) held each
+  machine's `E2ERelayBridge` (`ObservableObject`, `@Published private(set) var isActive`) as a plain
+  stored reference — `@Observable`'s macro only tracks direct mutations on the object itself, so a
+  `@Published` flip inside the referenced bridge never told SwiftUI to re-render. A view could
+  capture `isActive == false` once early in the connection lifecycle and never be re-invoked again
+  except by an unrelated state change. Distinct from a similar-sounding, already-fixed issue in
+  `SidebarShellState.relayConnected` (the sidebar footer), which has its own working live-update
+  loop in `AppRoot.addRelayMachine` — this bug is specifically in `RelayFleetStore`, reached only via
+  the Home/Fleet/Settings machine-list code paths.
+  **Fix applied** (`Packages/LancerKit/Sources/AppFeature/RelayFleetStore.swift`, commit `61d02b8a`
+  on `feat/cross-device-conversation-sync`): `add()` now subscribes to the new machine's
+  `bridge.$isActive` and re-assigns `machines[i] = machines[i]` through the `@Observable`-synthesized
+  setter on each emission — bridging the Combine publisher into `Observation` tracking, the standard
+  pattern for this. `remove()` tears the subscription down. Builds clean, full 551-test suite green.
+  **NOT confirmed to resolve the symptom**: rebuilt and reinstalled to a real physical device twice
+  (once with an ~1hr gap before rechecking) and the dot was still orange both times. Either the fix
+  is necessary-but-not-sufficient (a second bug exists in the reconnect/pairing-restore path), or the
+  underlying `bridge.isActive` was genuinely, correctly `false` at those moments for a reason
+  unrelated to UI staleness (e.g. the relay pairing needing a fuller re-establish after a fresh
+  reinstall than was observed) — not distinguished due to no device console log access this session.
+  Full writeup: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md` Part 7. Blocks
+  live verification of the Observed-Session-import flow (that report's Part 6) since
+  `observedSessionsBlock` only renders for a host the UI considers live.

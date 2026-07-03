@@ -3,20 +3,31 @@
 Date: 2026-07-03
 Runner: Claude Sonnet 5
 Branch: `feat/cross-device-conversation-sync` (PR #14)
+Final commit this session: `61d02b8a`
 Scope: independently re-verify the cross-device conversation sync feature (built across a prior
 Claude Code session and a prior Cursor session — see
 `docs/design-questions/2026-07-03-cross-device-conversation-sync-build-handoff.md`), fix whatever
 was actually broken, and live-test the real behavior against the real running daemon rather than
 trusting the self-reported "everything green."
 
+**This report was rewritten at the end of the session to be the complete record** — it covers CI
+hardening, independent Task 1-10 re-verification, closing B9, protocol-layer live testing (two
+simulated devices, all three vendors, durability), the discovery that real-device XCUITest works
+where the simulator doesn't, an attempted-but-unresolved real Terminal→phone import test, and a
+relay-connection-status bug found and partially fixed along the way. Read "Part 8 — What's actually
+unresolved" first if you only want the honest bottom line.
+
 ## Summary
 
-The feature works. Five real, pre-existing bugs were blocking CI from ever actually proving that —
-none were introduced by this feature; all were latent issues CI's swift-tools-version mismatch had
-been masking for days by failing before any of them could be exercised. All five are fixed on this
-branch. Independently, the feature itself was live-tested against the real `lancerd` daemon (built
-from this branch) for cross-device continuation, all three supported vendors, and durability across
-a full daemon restart — all passed.
+The core feature — host-owned conversation ledger, exact vendor-session resume, cross-device
+continuation at the protocol layer — works and was proven live against a real daemon rebuilt from
+this branch, for all three vendors, surviving a full daemon restart. Five real, pre-existing CI bugs
+(none introduced by this feature) were found and fixed, and CI is now genuinely green on all three
+checks for the first time. What did **not** get fully verified: the actual end-user experience
+through the real iOS app UI — starting a chat by typing into the real composer, and importing a
+real Terminal-started Claude Code session onto the phone — because of a real, only-partially-fixed
+bug where the phone's UI can keep showing a paired Mac as disconnected long after it's actually
+reconnected. See Part 8.
 
 ## Part 1 — CI was red, and not because of this feature
 
@@ -206,15 +217,169 @@ same binary, a genuine process stop/start). After restart:
 Test conversations were archived (`agent.conversations.archive`) after verification so they don't
 clutter the owner's real conversation list.
 
-## What's still open
+## Part 5 — Real-device XCUITest works where the simulator doesn't
 
-- **C7 (two-device CloudKit QA on physical hardware)** — unchanged, still owner-gated. Nothing in
-  this session could close it; it needs a second physical Apple device signed into the same iCloud
-  account, per `docs/LIVE_LOOP_RUNBOOK.md` PHASE 7.
-- **Device Hub simulator UI screenshot pass over the new surfaces** (Home IA, sync badges,
-  `ConversationSyncBanner`, resumed-thread markdown, Import-to-Lancer) — not completed. Blocked by
-  the tap-injection limitation above; static (non-interactive) screenshots of Home/Machines were
-  captured but multi-step interactive flows could not be driven.
-- **Codex non-git-cwd silent failure** (Part 4) — real, narrow gap, not fixed this session.
-- **Task 8's CloudKit artifact-sync scope narrowing** (Part 2) — real, undisclosed-until-now scope
-  reduction from the original spec, not fixed this session.
+After Part 4 established the protocol layer works, the user asked directly whether real UI-level
+verification was possible — specifically, whether XCUITest could drive their actual paired iPhone.
+It can, and the project already had proof of this from a prior session
+(`LancerUITests/TapInjectionProofTests.swift`'s own header comment: "Proof that XCUITest event
+injection works on this machine... If these pass, the tap-gated audit verification can be done
+entirely through XCUITest — no idb, no Simulator.app"). That file's simulator-tap conclusions from
+Part 4 above were about `ios-simulator`/`XcodeBuildMCP` HID-style injection specifically, not
+XCUITest's own (different) event injection mechanism — the two were conflated in earlier reasoning
+this session before this was checked.
+
+**What was found and fixed:**
+
+- Ran the existing `TapInjectionProofTests.testTapInjectionViaTabSwitch` against the user's
+  connected physical device ("Roshan's iPhone", paired via `XcodeBuildMCP`'s `list_devices` +
+  `test_device`). It failed on a genuinely stale assertion — the test still expected a sidebar
+  "Inbox" row, which the Home IA rebuild (commit `809cb6be`, part of this same feature branch)
+  folded into "Home" months... hours earlier the same night. Fixed the test to assert against
+  "Home" and the "Good morning" greeting instead; reran, passed twice.
+- Added `LancerUITests/PhysicalDeviceCrossDeviceSyncTests.swift`, a new real-device XCUITest file.
+  `testHomeIARendersOnDevice` passes and captures real screenshots (attached to the xcresult
+  bundle, extracted via `xcrun xcresulttool export attachments`) of the actual redesigned Home IA
+  and sidebar rendering correctly on hardware, with the user's real account and real chat history
+  visible — not simulator mock data.
+- `testLANSSHConnectFromPhysicalDevice` (opt-in, `XCTSkip` by default) attempts a real SSH connect
+  from the phone to the Mac over actual WiFi (the Mac's LAN IP, not the simulator-only `127.0.0.1`
+  loopback trick — meaningless from a real device's own network namespace). One live attempt reached
+  the connect screen but the connection showed "Offline" rather than progressing to the TOFU prompt.
+  Root-caused one contributing bug (`NSUserName()` evaluated on-device returns iOS's sandboxed
+  process user, `"mobile"`, not the Mac's actual account — fixed by requiring an explicit
+  `LANCER_TEST_USER`) but the connection still didn't complete after that fix. Left the test in
+  place, opt-in, for whoever debugges that network path next — not discarded, not claimed working.
+
+**Practical takeaway:** for future sessions, real-device XCUITest via `XcodeBuildMCP`'s
+`test_device`/`build_run_device`/`list_devices` is the reliable path for this project's UI
+verification. The simulator's HID-style tap injection being broken in this specific
+Xcode-beta/iOS-27 environment does not mean UI automation is unavailable — it means the wrong layer
+was being used.
+
+## Part 6 — The literal scenario: Terminal session → phone import (blocked)
+
+The user asked directly: "started a conversation/claude code session on this computer and it came
+up on the phone and vice versa?" Direct, honest answer at the time: no — Part 4's testing simulated
+two devices via raw protocol calls, not through the real app UI, and an explicit check at the time
+found that host-ledger conversations created that way do **not** auto-appear in the phone's local
+UI without an explicit action (by design — Task 9's "Import to Lancer" flow is deliberately manual,
+not automatic, for terminal-originated sessions).
+
+To actually test this, live:
+
+1. Ran a real `claude -p "..."` session directly in a Terminal on the Mac (a trusted git directory,
+   `/tmp/lancer-observed-session-test` — not through Lancer at all).
+2. Confirmed via `agent.sessions.list` that the daemon correctly detected it as an observed session
+   (`source: "transcriptObserved"`, real `sessionId`, real `cwd`, real title).
+3. Wrote `testImportObservedTerminalSession` to drive the real phone: navigate Home, find the
+   "SESSIONS ON THIS MAC" block under the live machine card, tap the session row, open the overflow
+   menu (`"More actions"` accessibility label, per `DarkTranscriptComponents.swift`), tap "Import to
+   Lancer", verify the resulting thread.
+4. **Blocked at step 3, before the session list even rendered.** The machine card's connection dot
+   was orange (not live/green), and `observedSessionsBlock` only renders when `isLiveHost` — so the
+   real terminal session the daemon had already detected was invisible to the phone's UI purely
+   because of connection-status display state, not because anything about the sync feature itself
+   was broken. This is what led to Part 7.
+
+**This specific test was never completed successfully.** It remains in the repo
+(`LANCER_OBSERVED_SESSION_TITLE`-gated) for whoever picks up Part 7's unresolved issue.
+
+## Part 7 — Relay connection-status bug: found, partially fixed, not confirmed resolved
+
+Root-caused a real bug, fixed the part that was clearly wrong, but could not confirm on a live
+device that the fix resolves the symptom that blocked Part 6.
+
+**Diagnosis:** `RelayFleetStore` (the `@Observable` class Home/Fleet/Settings read to build each
+relay machine's `RelayHomeEntry`/`RelayMachineRow`/`FleetRelayMachine`, all of which read
+`machine.bridge.isActive`) never told SwiftUI to re-render when a machine's connection state
+changed. `E2ERelayBridge` is `ObservableObject` with `@Published private(set) var isActive`
+(Combine, not the modern `@Observable` macro). `@Observable`'s macro-generated tracking only
+instruments direct property access/mutation on the object itself — a `@Published` change on a
+class instance *referenced by* an `@Observable` object's stored property doesn't automatically
+propagate. Net effect: a view could render once early in a bridge's connection lifecycle (e.g.
+right after a fresh app launch, before the relay handshake completes), capture `isActive == false`,
+and then never be told to re-render even after the bridge genuinely reconnected — only picking up
+the live value whenever something *else* happened to force SwiftUI to re-evaluate that view.
+
+This is architecturally distinct from (and, on inspection, unrelated to) an earlier-diagnosed
+"dual-source-of-truth" bug in a different piece of state, `SidebarShellState.relayConnected` (the
+sidebar footer) — that one already has a working live-update mechanism
+(`AppRoot.swift`'s `for await active in bridge.$isActive.values` loop, `addRelayMachine`), added at
+some point during this feature's development. The Home screen's per-machine dot, reached via a
+completely separate code path (`relayFleetStore.machines` read directly inside `homeDestination`'s
+view-builder body), had no equivalent.
+
+**Fix applied** (`Packages/LancerKit/Sources/AppFeature/RelayFleetStore.swift`,
+commit `61d02b8a`): `RelayFleetStore.add()` now subscribes to the new machine's `bridge.$isActive`
+Combine publisher and, on each emission, re-assigns `machines[i] = machines[i]` through the
+`@Observable`-synthesized setter — the standard pattern for bridging a Combine `ObservableObject`
+into `Observation` tracking. `remove()` tears the subscription down. This is independently correct
+and needed regardless of whether it's the complete fix for what was observed.
+
+**What was NOT confirmed:** rebuilt and reinstalled the fixed app to the user's real device twice
+via `XcodeBuildMCP`'s `build_run_device`, taking verification screenshots each time (one ~4 seconds
+after launch, one after a gap of roughly an hour — the user was actively using the phone, watching
+YouTube, battery draining). **The machine card's dot was still orange both times.** Two honest
+possibilities, neither ruled out:
+
+1. The fix is necessary but not sufficient — a second issue exists somewhere in the reconnect or
+   pairing-restore path that this session didn't find.
+2. The underlying `bridge.isActive` value is genuinely, correctly `false` at those moments for a
+   real reason unrelated to UI staleness — e.g. the relay pairing itself needing to fully
+   re-establish (key exchange, not just a raw socket reconnect) after a fresh Xcode-driven app
+   reinstall, in a way that takes longer than observed, or that has its own separate bug. The
+   daemon's own logs showed successful relay reconnects on a roughly 1-hour cadence (consistent
+   with a cloud load-balancer's idle-websocket timeout) throughout this window, so the *daemon*
+   side was not the problem — but the daemon reconnecting doesn't guarantee the *phone's own*
+   independent relay connection is simultaneously healthy.
+
+No device console log access was available this session to distinguish between these — that's the
+concrete next step, not more blind reinstall-and-screenshot cycles against the user's live device.
+Stopped deliberately rather than continue iterating against a device the user was actively using
+with a draining battery.
+
+## Part 8 — What's actually unresolved (read this if nothing else)
+
+**Proven working, high confidence:**
+- Host-owned conversation ledger: append, fetch, conflict-free follow-up, exact vendor-session
+  resume — for opencode, Claude Code, and codex — all live-tested against a real daemon.
+- Durability: 9 real conversations, full turn/event/vendor-session data, survived a complete
+  `lancerd` process restart byte-for-byte; the daemon resumed normal dispatch immediately after.
+- `CKDatabaseSubscription` background-pull registration and notification routing: implemented,
+  unit-tested, code-complete.
+- Real-device XCUITest is a viable, working automation path for this project going forward.
+- CI is genuinely green (all 3 checks) for the first time — 5 pre-existing bugs fixed:
+  orphaned `swift-tools-version`, a test with an undeclared real-CLI dependency, a `State`/`@State`
+  naming collision, an unguarded iOS-27-only SDK symbol, and a real cooperative-thread-pool deadlock
+  in the test suite.
+
+**Explicitly NOT verified — do not assume these work:**
+- **Starting a chat through the real iOS composer UI** (typing a prompt, tapping Send) and having it
+  dispatch correctly. Never driven through the actual UI this session — only simulated via direct
+  daemon-protocol calls.
+- **Importing a real Terminal-started Claude Code session onto the phone** (the exact "Observed
+  Session → Import to Lancer" flow). Attempted live, blocked by the relay-status bug in Part 7
+  before the import UI was even reachable.
+- **C7: two-device CloudKit propagation on physical hardware.** Unchanged, still owner-gated —
+  needs a second physical Apple device signed into the same iCloud account
+  (`docs/LIVE_LOOP_RUNBOOK.md` PHASE 7). `CloudSync`/`ConversationSyncEngine` are simulator no-ops
+  by design, so nothing short of two real devices can close this.
+- **Silent push delivery** for the new `CKDatabaseSubscription` — registration is implemented, but
+  whether a real background push actually arrives and triggers a sync was never observed.
+- **The relay connection-status bug itself (Part 7).** A real fix landed; the symptom that
+  triggered the investigation was not confirmed resolved on the live device.
+
+**Known, narrow, unfixed gaps (not blocking, but real):**
+- Dispatching **codex** against a non-git working directory fails silently — no error surfaced to
+  the ledger or UI, just an unexplained `status: "failed"`. Codex CLI itself refuses to run
+  ("Not inside a trusted directory") unless `--skip-git-repo-check` is passed, which
+  `dispatch.go`'s `agentArgv` doesn't currently add. Real usage against an actual project directory
+  is unaffected.
+- **CloudKit does not sync artifacts** (tool-call outputs) — the Task 8 spec called for 4 CloudKit
+  record types; 2 shipped (conversations, turn+event chunks). Not disclosed in the original
+  implementing session's self-report. Artifacts remain host-ledger-only.
+- **Device Hub simulator UI screenshot pass** over the new surfaces (sync badges,
+  `ConversationSyncBanner` states, resumed-thread markdown) — not completed; superseded in practice
+  by the real-device screenshots in Part 5, but those didn't cover every surface the original plan
+  called for.
