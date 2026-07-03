@@ -10,16 +10,28 @@ public struct StartAgentRunIntent: AppIntent {
     )
     public static let openAppWhenRun: Bool = true
 
-    @Parameter(title: "Machine")
+    @Parameter(
+        title: "Machine",
+        requestValueDialog: IntentDialog("Which machine should run this?")
+    )
     public var machine: MachineEntity
 
-    @Parameter(title: "Agent")
+    @Parameter(
+        title: "Agent",
+        requestValueDialog: IntentDialog("Which agent — Claude Code, Codex, OpenCode, or Kimi?")
+    )
     public var agent: AgentVendorAppEnum
 
-    @Parameter(title: "Prompt")
+    @Parameter(
+        title: "Prompt",
+        requestValueDialog: IntentDialog("What should the agent work on?")
+    )
     public var prompt: String
 
-    @Parameter(title: "Workspace")
+    @Parameter(
+        title: "Workspace",
+        requestValueDialog: IntentDialog("Which workspace — or say \"most recent\" to use the last one you worked in?")
+    )
     public var workspace: WorkspaceEntity?
 
     public init() {}
