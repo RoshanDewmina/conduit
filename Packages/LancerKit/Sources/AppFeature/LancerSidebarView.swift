@@ -427,6 +427,22 @@ private struct ThreadRow: View {
         }
     }
 
+    /// A subtle, sidebar-scale sync flag — only for states worth surfacing
+    /// before the user even opens the thread (Mobbin review: "use a dot only
+    /// for streamingElsewhere or needsRefresh, not generic sync"). `.syncing`/
+    /// `.synced` never show anything here; the full-detail state lives in
+    /// `ConversationSyncBanner` inside the thread itself.
+    private var syncBadge: (icon: String, tone: Color, label: String)? {
+        switch thread.syncState {
+        case .conflict:
+            return ("exclamationmark.arrow.triangle.2.circlepath", t.danger, "Changed on another device")
+        case .hostOffline:
+            return ("wifi.slash", t.warn, "Host unreachable")
+        case .localOnly, .syncing, .synced:
+            return nil
+        }
+    }
+
     var body: some View {
         HStack(spacing: 11) {
             DSStatusDot(tone: dotTone, pulse: thread.status == .active, size: 8)
@@ -442,6 +458,12 @@ private struct ThreadRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if let syncBadge {
+                Image(systemName: syncBadge.icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(syncBadge.tone)
+                    .accessibilityLabel(syncBadge.label)
+            }
             if isPinned {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 10, weight: .semibold))
@@ -454,7 +476,7 @@ private struct ThreadRow: View {
         .background(isSelected ? t.surface2 : Color.clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(thread.title.isEmpty ? thread.hostName : thread.title), \(thread.hostName), \(statusLabel)")
+        .accessibilityLabel("\(thread.title.isEmpty ? thread.hostName : thread.title), \(thread.hostName), \(statusLabel)\(syncBadge.map { ", \($0.label)" } ?? "")")
     }
 }
 #endif
