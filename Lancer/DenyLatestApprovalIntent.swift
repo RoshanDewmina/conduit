@@ -20,9 +20,17 @@ public struct DenyApprovalIntent: AppIntent {
     public init(approval: ApprovalEntity) { self.approval = approval }
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
+        return .result(dialog: try await Self.deny(approvalID: approval.id))
+    }
+
+    /// Shared deny logic for a resolved approval ID. Extracted so
+    /// `DenyLatestApprovalIntent` can reuse it without returning this
+    /// function's opaque `perform()` result type directly (opaque types
+    /// don't unify across distinct `perform()` declarations).
+    static func deny(approvalID: String) async throws -> IntentDialog {
         let catalog = try SiriIntentSupport.openCatalog()
-        guard let record = try await catalog.approval(id: approval.id) else {
-            return .result(dialog: "That approval was already resolved or isn't on this device.")
+        guard let record = try await catalog.approval(id: approvalID) else {
+            return "That approval was already resolved or isn't on this device."
         }
 
         let outcome = await CommandGateway.shared.execute(
@@ -30,11 +38,11 @@ public struct DenyApprovalIntent: AppIntent {
         )
         switch outcome {
         case .ok:
-            return .result(dialog: SiriIntentDialogs.denySuccess(record))
+            return SiriIntentDialogs.denySuccess(record)
         case .transportUnavailable:
-            return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: record.hostName))
+            return SiriIntentDialogs.transportUnavailable(machine: record.hostName)
         default:
-            return .result(dialog: "Couldn't deny \(SiriIntentSupport.approvalDialogSubject(record)).")
+            return "Couldn't deny \(SiriIntentSupport.approvalDialogSubject(record))."
         }
     }
 }
@@ -60,8 +68,6 @@ public struct DenyLatestApprovalIntent: AppIntent {
         guard let only = pending.first else {
             return .result(dialog: "No approvals are waiting.")
         }
-        var intent = DenyApprovalIntent()
-        intent.approval = ApprovalEntity(only)
-        return try await intent.perform()
+        return .result(dialog: try await DenyApprovalIntent.deny(approvalID: only.id))
     }
 }

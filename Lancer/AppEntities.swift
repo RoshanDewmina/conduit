@@ -5,20 +5,22 @@ import PersistenceKit
 // MARK: - Machine
 
 @available(iOS 17.0, *)
-struct MachineEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Machine")
-    static var defaultQuery = MachineEntityQuery()
+public struct MachineEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Machine")
+    }
+    public static var defaultQuery: MachineEntityQuery { MachineEntityQuery() }
 
-    let id: String
-    let displayName: String
-    let hostName: String
-    let connectivityLabel: String
+    public let id: String
+    public let displayName: String
+    public let hostName: String
+    public let connectivityLabel: String
 
-    var displayRepresentation: DisplayRepresentation {
+    public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(displayName)", subtitle: "\(connectivityLabel)")
     }
 
-    init(_ record: IntentMachineRecord) {
+    public init(_ record: IntentMachineRecord) {
         id = record.id
         displayName = record.displayName
         hostName = record.hostName
@@ -27,21 +29,23 @@ struct MachineEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 17.0, *)
-struct MachineEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [MachineEntity.ID]) async throws -> [MachineEntity] {
+public struct MachineEntityQuery: EntityQuery, EntityStringQuery {
+    public init() {}
+
+    public func entities(for identifiers: [MachineEntity.ID]) async throws -> [MachineEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let relay = await SiriIntentSupport.relayMachineSnapshots()
         let all = try await catalog.machines(relayMachines: relay)
         return IntentEntityMatcher.resolveByID(all, identifiers: identifiers).map(MachineEntity.init)
     }
 
-    func suggestedEntities() async throws -> [MachineEntity] {
+    public func suggestedEntities() async throws -> [MachineEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let relay = await SiriIntentSupport.relayMachineSnapshots()
         return try await catalog.machines(relayMachines: relay).prefix(6).map(MachineEntity.init)
     }
 
-    func entities(matching string: String) async throws -> [MachineEntity] {
+    public func entities(matching string: String) async throws -> [MachineEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let relay = await SiriIntentSupport.relayMachineSnapshots()
         let all = try await catalog.machines(relayMachines: relay)
@@ -57,19 +61,21 @@ struct MachineEntityQuery: EntityQuery, EntityStringQuery {
 // MARK: - Run
 
 @available(iOS 17.0, *)
-struct RunEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Agent Run")
-    static var defaultQuery = RunEntityQuery()
+public struct RunEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Agent Run")
+    }
+    public static var defaultQuery: RunEntityQuery { RunEntityQuery() }
 
-    let id: String
-    let title: String
-    let subtitle: String
+    public let id: String
+    public let title: String
+    public let subtitle: String
 
-    var displayRepresentation: DisplayRepresentation {
+    public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(title)", subtitle: "\(subtitle)")
     }
 
-    init(_ record: IntentRunRecord) {
+    public init(_ record: IntentRunRecord) {
         id = record.id
         title = record.conversationTitle ?? record.title
         if let host = record.hostName {
@@ -81,9 +87,11 @@ struct RunEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 17.0, *)
-struct RunEntityQuery: EntityQuery, EntityStringQuery {
+public struct RunEntityQuery: EntityQuery, EntityStringQuery {
+    public init() {}
+
     @MainActor
-    func entities(for identifiers: [RunEntity.ID]) async throws -> [RunEntity] {
+    public func entities(for identifiers: [RunEntity.ID]) async throws -> [RunEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let active = SiriIntentSupport.activeRunIDs()
         let all = try await catalog.activeRuns(activeRunIDs: active)
@@ -91,14 +99,14 @@ struct RunEntityQuery: EntityQuery, EntityStringQuery {
     }
 
     @MainActor
-    func suggestedEntities() async throws -> [RunEntity] {
+    public func suggestedEntities() async throws -> [RunEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let active = SiriIntentSupport.activeRunIDs()
         return try await catalog.activeRuns(activeRunIDs: active).map(RunEntity.init)
     }
 
     @MainActor
-    func entities(matching string: String) async throws -> [RunEntity] {
+    public func entities(matching string: String) async throws -> [RunEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let active = SiriIntentSupport.activeRunIDs()
         let all = try await catalog.activeRuns(activeRunIDs: active)
@@ -106,7 +114,7 @@ struct RunEntityQuery: EntityQuery, EntityStringQuery {
             all,
             query: string,
             title: { ($0.conversationTitle ?? $0.title) + " " + ($0.hostName ?? "") },
-            recency: { .now }
+            recency: { _ in .now }
         ).map(RunEntity.init)
     }
 }
@@ -114,19 +122,21 @@ struct RunEntityQuery: EntityQuery, EntityStringQuery {
 // MARK: - Approval
 
 @available(iOS 17.0, *)
-struct ApprovalEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Approval")
-    static var defaultQuery = ApprovalEntityQuery()
+public struct ApprovalEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Approval")
+    }
+    public static var defaultQuery: ApprovalEntityQuery { ApprovalEntityQuery() }
 
-    let id: String
-    let headline: String
-    let riskLabel: String
+    public let id: String
+    public let headline: String
+    public let riskLabel: String
 
-    var displayRepresentation: DisplayRepresentation {
+    public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(headline)", subtitle: "\(riskLabel)")
     }
 
-    init(_ record: IntentApprovalRecord) {
+    public init(_ record: IntentApprovalRecord) {
         id = record.id
         headline = record.headline
         riskLabel = record.riskLabel
@@ -134,19 +144,21 @@ struct ApprovalEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 17.0, *)
-struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [ApprovalEntity.ID]) async throws -> [ApprovalEntity] {
+public struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
+    public init() {}
+
+    public func entities(for identifiers: [ApprovalEntity.ID]) async throws -> [ApprovalEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let all = try await catalog.pendingApprovals()
         return IntentEntityMatcher.resolveByID(all, identifiers: identifiers).map(ApprovalEntity.init)
     }
 
-    func suggestedEntities() async throws -> [ApprovalEntity] {
+    public func suggestedEntities() async throws -> [ApprovalEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         return try await catalog.pendingApprovals().map(ApprovalEntity.init)
     }
 
-    func entities(matching string: String) async throws -> [ApprovalEntity] {
+    public func entities(matching string: String) async throws -> [ApprovalEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let all = try await catalog.pendingApprovals()
         return IntentEntityMatcher.matchString(
@@ -161,19 +173,21 @@ struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
 // MARK: - Conversation
 
 @available(iOS 17.0, *)
-struct ConversationEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Conversation")
-    static var defaultQuery = ConversationEntityQuery()
+public struct ConversationEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Conversation")
+    }
+    public static var defaultQuery: ConversationEntityQuery { ConversationEntityQuery() }
 
-    let id: String
-    let title: String
-    let hostName: String
+    public let id: String
+    public let title: String
+    public let hostName: String
 
-    var displayRepresentation: DisplayRepresentation {
+    public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(title)", subtitle: "\(hostName)")
     }
 
-    init(_ record: IntentConversationRecord) {
+    public init(_ record: IntentConversationRecord) {
         id = record.id
         title = record.title
         hostName = record.hostName
@@ -181,8 +195,10 @@ struct ConversationEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 17.0, *)
-struct ConversationEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [ConversationEntity.ID]) async throws -> [ConversationEntity] {
+public struct ConversationEntityQuery: EntityQuery, EntityStringQuery {
+    public init() {}
+
+    public func entities(for identifiers: [ConversationEntity.ID]) async throws -> [ConversationEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         var resolved: [IntentConversationRecord] = []
         for id in identifiers {
@@ -193,12 +209,12 @@ struct ConversationEntityQuery: EntityQuery, EntityStringQuery {
         return resolved.map(ConversationEntity.init)
     }
 
-    func suggestedEntities() async throws -> [ConversationEntity] {
+    public func suggestedEntities() async throws -> [ConversationEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         return try await catalog.conversations(limit: 8).map(ConversationEntity.init)
     }
 
-    func entities(matching string: String) async throws -> [ConversationEntity] {
+    public func entities(matching string: String) async throws -> [ConversationEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         let records: [IntentConversationRecord]
@@ -214,19 +230,21 @@ struct ConversationEntityQuery: EntityQuery, EntityStringQuery {
 // MARK: - Workspace
 
 @available(iOS 17.0, *)
-struct WorkspaceEntity: AppEntity, Identifiable {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Workspace")
-    static var defaultQuery = WorkspaceEntityQuery()
+public struct WorkspaceEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Workspace")
+    }
+    public static var defaultQuery: WorkspaceEntityQuery { WorkspaceEntityQuery() }
 
-    let id: String
-    let name: String
-    let path: String
+    public let id: String
+    public let name: String
+    public let path: String
 
-    var displayRepresentation: DisplayRepresentation {
+    public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)", subtitle: "\(path)")
     }
 
-    init(_ record: IntentWorkspaceRecord) {
+    public init(_ record: IntentWorkspaceRecord) {
         id = record.id
         name = record.name
         path = record.path
@@ -234,19 +252,21 @@ struct WorkspaceEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 17.0, *)
-struct WorkspaceEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [WorkspaceEntity.ID]) async throws -> [WorkspaceEntity] {
+public struct WorkspaceEntityQuery: EntityQuery, EntityStringQuery {
+    public init() {}
+
+    public func entities(for identifiers: [WorkspaceEntity.ID]) async throws -> [WorkspaceEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let all = try await catalog.workspaces()
         return IntentEntityMatcher.resolveByID(all, identifiers: identifiers).map(WorkspaceEntity.init)
     }
 
-    func suggestedEntities() async throws -> [WorkspaceEntity] {
+    public func suggestedEntities() async throws -> [WorkspaceEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         return try await catalog.workspaces().prefix(8).map(WorkspaceEntity.init)
     }
 
-    func entities(matching string: String) async throws -> [WorkspaceEntity] {
+    public func entities(matching string: String) async throws -> [WorkspaceEntity] {
         let catalog = try SiriIntentSupport.openCatalog()
         let all = try await catalog.workspaces()
         return IntentEntityMatcher.matchString(

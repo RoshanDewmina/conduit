@@ -39,8 +39,7 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: SearchLancerIntent(),
             phrases: [
-                "Search \(.applicationName) for \(\.$query)",
-                "Find a conversation in \(.applicationName) about \(\.$query)",
+                "Search \(.applicationName)",
             ],
             shortTitle: "Search Lancer",
             systemImageName: "magnifyingglass"
@@ -101,20 +100,19 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             shortTitle: "Stop Run",
             systemImageName: "stop.circle"
         )
+        // `DenyApprovalIntent(approval:)` covers both the entity-disambiguated
+        // and single-pending-approval cases (it resolves via `ApprovalEntity`
+        // just like every other entity-parameterized shortcut here); a
+        // separate `DenyLatestApprovalIntent` shortcut would push this list
+        // to 11, over Apple's 10-per-app App Shortcuts cap. The intent itself
+        // still exists for direct invocation — it's just not a Siri phrase.
         AppShortcut(
             intent: DenyApprovalIntent(),
             phrases: [
                 "Deny \(\.$approval) in \(.applicationName)",
-            ],
-            shortTitle: "Deny Approval",
-            systemImageName: "xmark.shield"
-        )
-        AppShortcut(
-            intent: DenyLatestApprovalIntent(),
-            phrases: [
                 "Deny the latest approval in \(.applicationName)",
             ],
-            shortTitle: "Deny Latest Approval",
+            shortTitle: "Deny Approval",
             systemImageName: "xmark.shield"
         )
     }
