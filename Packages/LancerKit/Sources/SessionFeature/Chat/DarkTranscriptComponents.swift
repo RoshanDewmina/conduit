@@ -157,12 +157,19 @@ public struct DarkTypingIndicator: View {
 // expand to the full, scrollable output; tap again to re-collapse.
 
 public struct DarkTerminalBlockCard: View {
-    public enum State { case running, done, error }
+    // Named `CardState`, not `State` — a nested `State` shadows SwiftUI's
+    // `@State` property-wrapper attribute for every property below it in
+    // this type, which Xcode 27/Swift 6.4 silently resolves correctly but
+    // Xcode 26's Swift 6.2 compiler rejects outright ("enum 'State' cannot
+    // be used as an attribute") — this only surfaces once CI is actually
+    // able to compile the package under 6.2 (see the swift-tools-version
+    // fix in the same change).
+    public enum CardState { case running, done, error }
 
     private let host: String
     private let command: String?
     private let output: String
-    private let state: State
+    private let state: CardState
     /// Whether this card is genuinely showing a shell/zsh invocation. When false,
     /// the header drops the "zsh — host" window-chrome claim and traffic-light
     /// dots — callers use this for non-shell tool calls (Read/Write/Edit/etc.) and
@@ -177,7 +184,7 @@ public struct DarkTerminalBlockCard: View {
     @Environment(\.lancerTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(host: String, command: String?, output: String, state: State, isShellSession: Bool = true) {
+    public init(host: String, command: String?, output: String, state: CardState, isShellSession: Bool = true) {
         self.host = host
         self.command = command
         self.output = output
