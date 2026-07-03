@@ -793,7 +793,7 @@ type dispatchRun struct {
 	Model     string // model of the original launch; reused for continues
 	Status    string // running | paused | cancelled | budget-exceeded
 	BudgetUSD float64
-	SessionID string // reserved for future resume-by-id
+	SessionID string // captured vendor session/thread id; bound to the conversation ledger via bindVendorSession for exact resume
 	handle    *procHandle
 }
 

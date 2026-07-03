@@ -479,10 +479,11 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			log.Printf("e2e: unmarshal agentConversationsAppend failed: %v", err)
 			return
 		}
-		// Mirrors the SSH agent.conversations.append arm. NOTE: this does not
-		// dispatch/launch a CLI process — see conversation_rpc.go's package doc
-		// comment. Task 3 replaces the stub on both transports at once because
-		// both call the same r.server.conversationsAppend.
+		// Mirrors the SSH agent.conversations.append arm. This DOES dispatch/
+		// launch the vendor CLI process (via s.conversations.beginTurn +
+		// dispatcher.launchConversationTurn inside conversationsAppend) — both
+		// transports call the exact same r.server.conversationsAppend, so a
+		// relay-only pairing gets identical dispatch behavior to SSH.
 		result, err := r.server.conversationsAppend(req)
 		payloadOut := conversationRelayPayload(result, err)
 		msg := map[string]interface{}{"type": "agentConversationsAppendResult", "payload": payloadOut}

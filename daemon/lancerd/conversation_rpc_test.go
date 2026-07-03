@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"lancer/lancerd/policy"
 )
 
 // --- test helpers ---------------------------------------------------------
@@ -369,11 +371,16 @@ func TestConversationsAppendConflictSameOnBothPaths(t *testing.T) {
 	}
 }
 
-// TestConversationsAppendDoesNotDispatchAnyProcess is the explicit
-// "stub, not fake dispatch" test the build handoff asks for: appending must
-// create ledger rows via beginTurn but must never touch the dispatcher's run
-// registry or launch anything.
-func TestConversationsAppendDoesNotDispatchAnyProcess(t *testing.T) {
+// TestConversationsAppendNeedsApprovalUnderDefaultPolicyDoesNotDispatch
+// proves the fail-closed path: on a fresh temp-dir server (no policy.yaml,
+// and — critically — no PreToolUse hook actually installed for "claude" in
+// this home dir), launchConversationTurn's policy gate treats the launch as
+// not hook-wired and escalates to needsApproval, so the fake dispatcher.launch
+// must never be called. This is NOT proof that agent.conversations.append is
+// a dispatch stub — see TestConversationsAppendLaunchesAndBindsSessionUnderAllowPolicy
+// for the positive case showing it DOES launch and bind a session once policy
+// allows it (Task 3, already implemented in conversationsAppend).
+func TestConversationsAppendNeedsApprovalUnderDefaultPolicyDoesNotDispatch(t *testing.T) {
 	home := t.TempDir()
 	s := newServer(home)
 	defer s.poller.stopForTest()
@@ -397,7 +404,7 @@ func TestConversationsAppendDoesNotDispatchAnyProcess(t *testing.T) {
 	decodeInto(t, sshMsg.Result, &result)
 
 	if launched {
-		t.Fatal("agent.conversations.append must not launch a CLI process (Task 3 scope), but dispatcher.launch was called")
+		t.Fatal("agent.conversations.append should have been gated to needsApproval under default fail-closed policy, but dispatcher.launch was called")
 	}
 	s.dispatcher.mu.Lock()
 	_, dispatched := s.dispatcher.runs[result.RunID]
@@ -416,6 +423,102 @@ func TestConversationsAppendDoesNotDispatchAnyProcess(t *testing.T) {
 	}
 	if len(fetchRes.Turns) != 1 || fetchRes.Turns[0].RunID != result.RunID {
 		t.Fatalf("expected the ledger to record the stub runID: %+v", fetchRes.Turns)
+	}
+}
+
+// TestConversationsAppendLaunchesAndBindsSessionUnderAllowPolicy is the RPC-
+// level positive counterpart to the needsApproval test above: with an
+// explicit allow policy rule in place, a real agent.conversations.append call
+// (through s.handleMessage, exactly like a live SSH client) must launch the
+// fake CLI process, capture its emitted vendor session id via
+// wrapEmitForRun -> bindVendorSession, and expose it as resumeMode "new" on
+// this turn — proving append's dispatch integration (Task 3) end-to-end
+// through the actual RPC entrypoint, not just the lower-level dispatcher
+// unit tests in dispatch_conversation_test.go.
+func TestConversationsAppendLaunchesAndBindsSessionUnderAllowPolicy(t *testing.T) {
+	home := t.TempDir()
+	globalPath := policy.GlobalPolicyPath(home)
+	doc := policy.Document{
+		Default: string(policy.EffectAsk),
+		Rules: []policy.Rule{
+			{ID: "allow-all-commands", Effect: string(policy.EffectAllow), Kind: "command"},
+		},
+	}
+	if err := policy.SaveFile(globalPath, doc); err != nil {
+		t.Fatalf("SaveFile policy: %v", err)
+	}
+
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	var launchedArgv []string
+	s.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launchedArgv = argv
+		// Simulate the vendor CLI announcing its session id on first output,
+		// exactly like TestLaunchConversationTurnBindsVendorSessionForExactResume.
+		emit("agent.run.vendorSession", map[string]any{"runId": runID, "vendorSessionId": "live-sess-rpc-1"})
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+
+	sshMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
+		"clientTurnId": "device-1:1",
+		"agent":        "claudeCode",
+		"cwd":          "/proj",
+		"prompt":       "actually run this",
+	})
+	if sshMsg.Error != nil {
+		t.Fatalf("agent.conversations.append error: %+v", sshMsg.Error)
+	}
+	var result conversationAppendResponse
+	decodeInto(t, sshMsg.Result, &result)
+
+	if result.Status != "started" {
+		t.Fatalf("status = %q, want started (%s)", result.Status, result.Message)
+	}
+	if launchedArgv == nil {
+		t.Fatal("expected dispatcher.launch to be called under an allow policy, but it wasn't")
+	}
+	if result.ResumeMode != "new" {
+		t.Fatalf("resumeMode = %q, want new (first turn of a brand-new conversation)", result.ResumeMode)
+	}
+
+	s.dispatcher.mu.Lock()
+	run, dispatched := s.dispatcher.runs[result.RunID]
+	s.dispatcher.mu.Unlock()
+	if !dispatched {
+		t.Fatalf("runID %q must appear in dispatcher.runs after a real launch", result.RunID)
+	}
+	if run.Status != "running" {
+		t.Fatalf("run.Status = %q, want running", run.Status)
+	}
+
+	// The emitted vendor session id must have propagated through
+	// wrapEmitForRun into the ledger, so a follow-up append on this same
+	// conversation gets exact resume, not latest-in-cwd fallback.
+	bound, err := s.conversations.latestVendorSessionID(result.ConversationID)
+	if err != nil {
+		t.Fatalf("latestVendorSessionID: %v", err)
+	}
+	if bound != "live-sess-rpc-1" {
+		t.Fatalf("bound vendor session = %q, want live-sess-rpc-1", bound)
+	}
+
+	followUp := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
+		"conversationId": result.ConversationID,
+		"baseSeq":        result.NextSeq,
+		"clientTurnId":   "device-1:2",
+		"prompt":         "follow up",
+	})
+	if followUp.Error != nil {
+		t.Fatalf("follow-up agent.conversations.append error: %+v", followUp.Error)
+	}
+	var followUpResult conversationAppendResponse
+	decodeInto(t, followUp.Result, &followUpResult)
+	if followUpResult.Status != "started" {
+		t.Fatalf("follow-up status = %q, want started (%s)", followUpResult.Status, followUpResult.Message)
+	}
+	if followUpResult.ResumeMode != "exact" || followUpResult.VendorSessionID != "live-sess-rpc-1" {
+		t.Fatalf("follow-up resumeMode=%q vendorSessionId=%q, want exact/live-sess-rpc-1", followUpResult.ResumeMode, followUpResult.VendorSessionID)
 	}
 }
 
