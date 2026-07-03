@@ -627,13 +627,13 @@ Response:
 
 **Steps:**
 
-- [ ] Add `modernc.org/sqlite` to `daemon/lancerd/go.mod`.
-- [ ] Implement schema creation under `~/.lancer/conversations.sqlite`.
-- [ ] Write tests for create/list/fetch append ordering.
-- [ ] Write tests for idempotent `clientTurnId`.
-- [ ] Write tests for conflict when `baseSeq` is stale.
-- [ ] Run `cd daemon/lancerd && go test ./...`.
-- [ ] Commit: `feat(lancerd): add host conversation ledger`.
+- [x] Add `modernc.org/sqlite` to `daemon/lancerd/go.mod`.
+- [x] Implement schema creation under `~/.lancer/conversations.sqlite`.
+- [x] Write tests for create/list/fetch append ordering.
+- [x] Write tests for idempotent `clientTurnId`.
+- [x] Write tests for conflict when `baseSeq` is stale.
+- [x] Run `cd daemon/lancerd && go test ./...`.
+- [x] Commit: `feat(lancerd): add host conversation ledger`.
 
 ### Task 2: Daemon conversation RPCs
 
@@ -659,14 +659,14 @@ Response:
 
 **Steps:**
 
-- [ ] Add request/response structs in Go.
-- [ ] Add `server` field for `conversationStore`.
-- [ ] Initialize the store at server startup.
-- [ ] Add server switch cases.
-- [ ] Add E2E router switch cases and result message types.
-- [ ] Add tests proving SSH RPC and relay paths return the same payload shape.
-- [ ] Run `cd daemon/lancerd && go test ./...`.
-- [ ] Commit: `feat(lancerd): expose conversation RPCs`.
+- [x] Add request/response structs in Go.
+- [x] Add `server` field for `conversationStore`.
+- [x] Initialize the store at server startup.
+- [x] Add server switch cases.
+- [x] Add E2E router switch cases and result message types.
+- [x] Add tests proving SSH RPC and relay paths return the same payload shape.
+- [x] Run `cd daemon/lancerd && go test ./...`.
+- [x] Commit: `feat(lancerd): expose conversation RPCs`.
 
 ### Task 3: Host-mediated append and exact resume
 
@@ -679,7 +679,7 @@ Response:
 
 **Required pre-step:**
 
-- [ ] Run `vendor-cli-adapter-audit` because this task changes dispatch/resume behavior.
+- [x] Run `vendor-cli-adapter-audit` because this task changes dispatch/resume behavior.
 
 **Behavior:**
 
@@ -690,18 +690,18 @@ Response:
 
 **Steps:**
 
-- [ ] Add a metadata extraction path to `streamJSONOutput` without dumping metadata into chat.
-- [ ] Capture Claude `session_id` from `{"type":"system","subtype":"init","session_id":"..."}`.
-- [ ] Capture Codex thread/session ID from `thread.started` or current verified JSON event shape.
-- [ ] Capture OpenCode session ID from current verified JSON event shape.
-- [ ] Capture Kimi session ID from current verified JSON event shape.
-- [ ] Fill `dispatchRun.SessionID`.
-- [ ] Persist `vendorSessionID` to `conversation_turns`.
-- [ ] Use `resumeArgv` for follow-ups when session ID exists.
-- [ ] Add tests that the old Claude system metadata line now binds session ID but still emits zero transcript chunks.
-- [ ] Add tests that exact resume is chosen over latest-in-cwd when session ID exists.
-- [ ] Run `cd daemon/lancerd && go test ./...`.
-- [ ] Commit: `feat(lancerd): bind conversations to exact vendor sessions`.
+- [x] Add a metadata extraction path to `streamJSONOutput` without dumping metadata into chat.
+- [x] Capture Claude `session_id` from `{"type":"system","subtype":"init","session_id":"..."}`.
+- [x] Capture Codex thread/session ID from `thread.started` or current verified JSON event shape.
+- [x] Capture OpenCode session ID from current verified JSON event shape.
+- [x] Capture Kimi session ID from current verified JSON event shape.
+- [x] Fill `dispatchRun.SessionID`.
+- [x] Persist `vendorSessionID` to `conversation_turns`.
+- [x] Use `resumeArgv` for follow-ups when session ID exists.
+- [x] Add tests that the old Claude system metadata line now binds session ID but still emits zero transcript chunks.
+- [x] Add tests that exact resume is chosen over latest-in-cwd when session ID exists.
+- [x] Run `cd daemon/lancerd && go test ./...`.
+- [x] Commit: `feat(lancerd): bind conversations to exact vendor sessions`.
 
 ### Task 4: Persist live output/events to the ledger
 
@@ -720,12 +720,12 @@ Response:
 
 **Steps:**
 
-- [ ] Add a small `persistConversationEvent(method, params)` helper.
-- [ ] Call it at the start of `server.emitNotification` before writing frames.
-- [ ] Make persistence best-effort but logged. A failed ledger write must not crash live streaming.
-- [ ] Add tests with fake store proving output/status/artifacts are persisted once.
-- [ ] Run `cd daemon/lancerd && go test ./...`.
-- [ ] Commit: `feat(lancerd): persist conversation event stream`.
+- [x] Add a small `persistConversationEvent(method, params)` helper.
+- [x] Call it at the start of `server.emitNotification` before writing frames.
+- [x] Make persistence best-effort but logged. A failed ledger write must not crash live streaming.
+- [x] Add tests with fake store proving output/status/artifacts are persisted once.
+- [x] Run `cd daemon/lancerd && go test ./...`.
+- [x] Commit: `feat(lancerd): persist conversation event stream`.
 
 ### Task 5: iOS protocol models and transport methods
 
@@ -756,14 +756,14 @@ Response:
 
 **Steps:**
 
-- [ ] Add Codable structs with stable coding keys matching Go JSON.
-- [ ] Add `DaemonChannel` methods for each `agent.conversations.*` RPC.
-- [ ] Add `E2ERelayBridge` methods with bounded waits and supersede behavior matching `sendDispatch`.
-- [ ] Add relay result decode handling in `handleMessage`.
-- [ ] Add wire tests for request/response payload names and optional fields.
-- [ ] Run `cd Packages/LancerKit && swift build`.
-- [ ] Run the relevant LancerKit tests. If unrelated tests fail in the dirty worktree, record exact failures.
-- [ ] Commit: `feat(ios): add conversation sync protocol`.
+- [x] Add Codable structs with stable coding keys matching Go JSON.
+- [x] Add `DaemonChannel` methods for each `agent.conversations.*` RPC.
+- [x] Add `E2ERelayBridge` methods with bounded waits and supersede behavior matching `sendDispatch`.
+- [x] Add relay result decode handling in `handleMessage`.
+- [x] Add wire tests for request/response payload names and optional fields.
+- [x] Run `cd Packages/LancerKit && swift build`.
+- [x] Run the relevant LancerKit tests. If unrelated tests fail in the dirty worktree, record exact failures. (Two pre-existing unrelated failures — `LiveActivityContentStateTests`, `RelayMachineTests` — were seen intermittently in earlier task runs; the full suite is green as of this task's final run.)
+- [x] Commit: `feat(ios): add conversation sync protocol`.
 
 ### Task 6: iOS local mirror repository
 
@@ -782,14 +782,14 @@ Response:
 
 **Steps:**
 
-- [ ] Add a new GRDB migration after `v11`.
-- [ ] Add Swift model fields with backwards-compatible defaults.
-- [ ] Add `ChatEvent`.
-- [ ] Add mirror upsert APIs.
-- [ ] Add tests for host fetch -> local mirror -> recent/search.
-- [ ] Add tests for repeated event upsert idempotency by `(conversationID, seq)`.
-- [ ] Run `cd Packages/LancerKit && swift test --filter ChatConversationRepositoryTests`.
-- [ ] Commit: `feat(ios): mirror host conversations locally`.
+- [x] Add a new GRDB migration after `v11`. (Landed as `v12` + `v13` — `v12` first, `v13` added the conversation mirror tables/columns.)
+- [x] Add Swift model fields with backwards-compatible defaults.
+- [x] Add `ChatEvent`.
+- [x] Add mirror upsert APIs.
+- [x] Add tests for host fetch -> local mirror -> recent/search.
+- [x] Add tests for repeated event upsert idempotency by `(conversationID, seq)`.
+- [x] Run `cd Packages/LancerKit && swift test --filter ChatConversationRepositoryTests`.
+- [x] Commit: `feat(ios): mirror host conversations locally`.
 
 ### Task 7: Route New Chat and Thread through daemon conversations
 
@@ -811,15 +811,15 @@ Response:
 
 **Steps:**
 
-- [ ] Change `performDispatch` to request a conversation append, not raw dispatch.
-- [ ] Change `resumeConversation` to append by `conversationId`, not last run ID.
-- [ ] Keep `sendRunContinue` only for legacy conversations without host ledger IDs.
-- [ ] Update `NewChatTabView` to store daemon-returned `conversationID` and `turnID`.
-- [ ] Update `ChatHistoryView` to refresh host data before enabling follow-up.
-- [ ] Add tests for conflict response causing refetch before send.
-- [ ] Run `cd Packages/LancerKit && swift build`.
-- [ ] Run targeted LancerKit tests.
-- [ ] Commit: `feat(ios): send chats through host conversation ledger`.
+- [x] Change `performDispatch` to request a conversation append, not raw dispatch.
+- [x] Change `resumeConversation` to append by `conversationId`, not last run ID.
+- [x] Keep `sendRunContinue` only for legacy conversations without host ledger IDs.
+- [x] Update `NewChatTabView` to store daemon-returned `conversationID` and `turnID`.
+- [x] Update `ChatHistoryView` to refresh host data before enabling follow-up.
+- [x] Add tests for conflict response causing refetch before send.
+- [x] Run `cd Packages/LancerKit && swift build`.
+- [x] Run targeted LancerKit tests.
+- [x] Commit: `feat(ios): send chats through host conversation ledger`.
 
 ### Task 8: CloudKit conversation mirror
 
@@ -843,15 +843,15 @@ Response:
 
 **Steps:**
 
-- [ ] Add custom-zone support and per-zone change tokens to `CloudSync`.
-- [ ] Add CloudKit record mapping helpers.
-- [ ] Add chunking for transcript events.
-- [ ] Add tombstone handling for archive/delete.
-- [ ] Add a subscription setup path for `CKDatabaseSubscription`.
-- [ ] Add tests for record mapping and chunking.
-- [ ] Run `cd Packages/LancerKit && swift build`.
-- [ ] Test on a real device build with CloudKit entitlements when available.
-- [ ] Commit: `feat(sync): mirror conversations with CloudKit`.
+- [x] Add custom-zone support and per-zone change tokens to `CloudSync`.
+- [x] Add CloudKit record mapping helpers.
+- [x] Add chunking for transcript events.
+- [x] Add tombstone handling for archive/delete.
+- [ ] Add a subscription setup path for `CKDatabaseSubscription`. **Not done** — `ConversationSyncEngine` pulls on `start()` + explicit `syncNow()` only, no push-driven background pull yet. Background pull for conversations should be added before relying on it for "another device sent a message while this one was backgrounded" freshness; polling-on-foreground/pull-to-refresh covers the interim.
+- [x] Add tests for record mapping and chunking.
+- [x] Run `cd Packages/LancerKit && swift build`.
+- [ ] Test on a real device build with CloudKit entitlements when available. **Not done in this session** — no physical device access; `CloudSync`/`ConversationSyncEngine` are no-ops on the simulator by design (see Known Risks), so this remains an open verification gate before shipping the feature externally.
+- [x] Commit: `feat(sync): mirror conversations with CloudKit`.
 
 ### Task 9: Observed Session attach/import
 
@@ -871,14 +871,14 @@ Response:
 
 **Steps:**
 
-- [ ] Implement `agent.conversations.attachObservedSession`.
-- [ ] Convert `SessionMessage` transcript entries to ledger events.
-- [ ] Store `vendorSessionID` on the imported turn/session.
-- [ ] Add UI affordance in observed session view to attach/import.
-- [ ] Add tests for import idempotency.
-- [ ] Run `cd daemon/lancerd && go test ./...`.
-- [ ] Run relevant LancerKit tests.
-- [ ] Commit: `feat: attach observed sessions to conversations`.
+- [x] Implement `agent.conversations.attachObservedSession`.
+- [x] Convert `SessionMessage` transcript entries to ledger events.
+- [x] Store `vendorSessionID` on the imported turn/session.
+- [x] Add UI affordance in observed session view to attach/import. (`DarkTranscriptHeader`'s overflow menu gains "Import to Lancer", wired through `ObservedSessionView.onImportToLancer` → `AppRoot.importObservedSession` → SSH/relay `attachObservedSession`, navigating into the new thread on success.)
+- [x] Add tests for import idempotency.
+- [x] Run `cd daemon/lancerd && go test ./...`.
+- [x] Run relevant LancerKit tests.
+- [x] Commit: `feat: attach observed sessions to conversations`. (Landed as `feat(lancerd,ios): implement attachObservedSession import + Import to Lancer UI`.)
 
 ### Task 10: Documentation, migration, and release guardrails
 
@@ -899,11 +899,11 @@ Response:
 
 **Steps:**
 
-- [ ] Update architecture docs.
-- [ ] Add a manual QA matrix for one device, two devices, host offline, host reconnect, app reinstall, and observed-session attach.
-- [ ] Add release checklist entries for CloudKit schema deployment and entitlements.
-- [ ] Run docs link/path sanity checks if available.
-- [ ] Commit: `docs: record conversation sync architecture`.
+- [x] Update architecture docs. (`ARCHITECTURE.md` §0.1 Implemented list + rewritten §11.2/§11.3.)
+- [x] Add a manual QA matrix for one device, two devices, host offline, host reconnect, app reinstall, and observed-session attach. (`docs/LIVE_LOOP_RUNBOOK.md` PHASE 7 + two new Triage rows.)
+- [x] Add release checklist entries for CloudKit schema deployment and entitlements. (`docs/PUBLISH_READINESS_CHECKLIST.md` B9, C7, D2 CloudKit schema note.)
+- [x] Run docs link/path sanity checks if available. (No automated checker exists in this repo; manually verified every file path newly cited in the doc updates above resolves.)
+- [x] Commit: `docs: record conversation sync architecture`.
 
 ## Acceptance Criteria
 

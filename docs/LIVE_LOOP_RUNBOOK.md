@@ -266,6 +266,46 @@ own machine, and completes one approve-from-lock-screen loop (Phase 5c) end-to-e
 
 ---
 
+## PHASE 7 — Cross-device conversation sync (two-device QA)
+
+> Proves the feature in ARCHITECTURE.md §11.2: host-owned ledger is execution truth, CloudKit is the
+> Apple-device read-continuity mirror, conflicts are explicit (never silently merged), and offline
+> sends never silently queue. **This phase requires two Apple devices signed into the same iCloud
+> account** (two physical devices, or one physical device + one simulator for the checks that don't
+> depend on real CloudKit push/subscription delivery — `CloudSync`/`ConversationSyncEngine` are
+> simulator no-ops, so simulator-only devices can't prove CloudKit propagation, only host-ledger
+> behavior). Device Hub (Xcode 27) or `devicectl`/`simctl` can drive both simultaneously.
+
+Prereqs: Phase 1 build, Phase 2 daemon up, both devices paired to the same host (relay or SSH).
+
+1. **Start on A, appears on B.** New Chat on device A, send a prompt, let it complete. On device B, open
+   the sidebar's Recent list (pull to refresh, or background/foreground B to trigger `ConversationSyncEngine.syncNow()`
+   — there's no `CKDatabaseSubscription` push yet, see §11.2 "Known gaps") and confirm the conversation and its
+   turns appear.
+2. **Follow-up from B while host is online.** From B, open that same thread and send a follow-up. Confirm
+   it dispatches through the host (not a local-only echo) and streams a real reply.
+3. **Kill + reinstall A.** Force-quit and delete the app on A, reinstall, sign back into the same
+   Lancer/iCloud account. Confirm the conversation from step 1 reappears via the CloudKit mirror even
+   before A re-pairs to the host.
+4. **Conflict.** Open the same thread on both A and B, and send from both within the same few seconds.
+   Confirm exactly one send succeeds and the other surfaces the `.conflict` `ConversationSyncBanner`
+   ("Conversation changed on another device") with Refresh + Resend — not a silent merge or a duplicate turn.
+5. **Host offline.** Disconnect the host (stop `lancerd` or disconnect its network) mid-thread on A.
+   Confirm the transcript stays readable (from the local mirror / CloudKit) and the composer shows the
+   `hostOffline` state — Send is blocked, not silently queued or auto-sent on reconnect.
+6. **Observed-session import.** On the host, start a session directly in a terminal (not through Lancer),
+   then from a device's Home → "Sessions on this Mac" open it as an `ObservedSessionView` and use the
+   overflow menu's **Import to Lancer**. Confirm it navigates into a new durable thread, and that a
+   follow-up sent from that thread resumes the *exact* vendor session (not latest-in-cwd).
+
+🛑 **CHECKPOINT 7:** all six steps above behave as described. Record which steps ran on two physical
+devices vs. one physical + one simulator (device combos, since simulator legs can't prove real CloudKit
+propagation). Update `docs/PUBLISH_READINESS_CHECKLIST.md`'s CloudKit conversation-mirror entries only
+for the steps you actually verified on physical hardware — do not mark cross-device CloudKit propagation
+green from a simulator-only run, same rule as APNs (Phase 5c).
+
+---
+
 ## Triage (symptom → where to look)
 
 | Symptom | Likely cause | Inspect |
@@ -276,6 +316,8 @@ own machine, and completes one approve-from-lock-screen loop (Phase 5c) end-to-e
 | **D.** Everything holds (exit 1) | fail-closed: daemon unreachable | socket present? launchd loaded? |
 | **E.** No push on device | APNs env not set / token not registered / sessionId mismatch | `push-backend` secrets (5a); `registerDeviceToken` actually called; backend token map keyed by the same `sessionId`. |
 | **F.** `continue` errors for a vendor | argv/flag drift | `continueArgv` in `dispatch.go`; re-run `which`/`--version`/`--help`; `vendor-cli-adapter-audit`. |
+| **G.** A conversation started on device A never appears on device B | no `CKDatabaseSubscription` yet — B only pulls on foreground/`syncNow()` (§11.2 "Known gaps"); or B isn't signed into the same iCloud account | force a foreground/pull-to-refresh on B; confirm both devices' iCloud account; `ConversationSyncEngine.syncNow()` / `SyncStatusView`'s "Sync now". |
+| **H.** Concurrent sends from two devices both appear to succeed instead of one conflicting | `baseSeq` compare didn't run, or the coordinator swallowed the conflict response | `conversationsAppend` in `conversation_rpc.go` (status must be `"conflict"` on stale `baseSeq`); `ConversationSyncCoordinator`'s `case "conflict"` handling. |
 
 ---
 

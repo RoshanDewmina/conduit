@@ -65,6 +65,7 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is exactly what's in `docs/V1_PRODUCT_SPEC.md` / `docs/V1_STATE_AND_ACTION_MATRIX.md` / `docs/V1_IMPLEMENTATION_PLAN.md` (the Codex-research → ChatGPT-synthesis → locked-spec chain): the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
+- **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior is unverified on physical hardware** and `CKDatabaseSubscription`-driven background pull is not yet implemented — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
 - **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
 - **Governance folded into Settings** (2026-07-01, reversing the 2026-06-24 standalone-root promotion): policy presets/matrix, the audit trail, and team & roles live under Settings' "Policy & Governance" section — one entry point, not a 5th sidebar root, keeping the locked four-root IA (Home/Work/Machines/Settings) accurate.
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
@@ -798,25 +799,125 @@ Single GRDB database. Schema (v1):
 Migrations are append-only. `eraseDatabaseOnSchemaChange = true` in
 DEBUG only.
 
-### 11.2 Cross-device sync (M5+)
+### 11.2 Cross-device sync
 
-CloudKit (`CKContainer`) for snippets, hosts, and host-key fingerprints —
-data the user actively curates and wants on every device. Private DB
-only; we do not use the public DB.
+Two sync domains exist, and it's important not to conflate them:
 
-Blocks and scrollback are **not** synced. They are tied to a workspace,
-not a user, and pushing terabytes of session logs into CloudKit is
-neither cheap nor useful.
+**Curated settings (snippets, hosts, host-key fingerprints).** CloudKit
+(`CKContainer`) private DB, default zone, via `SyncEngine`
+(`Packages/LancerKit/Sources/SyncKit/SyncEngine.swift`). Data the user
+actively curates and wants on every device. CRDT is a future
+consideration; LWW on `lastUsedAt` is fine at launch.
 
-CRDT for snippets is a future consideration; LWW on `lastUsedAt` is fine
-at launch.
+**Lancer conversations (cross-device conversation continuation, landed
+2026-07-03).** This is a distinct sync domain with a different
+architecture, because conversation history is neither "curated settings"
+nor raw terminal scrollback:
+
+- **Execution truth is the host, not the phone or CloudKit.** Every
+  Lancer-dispatched conversation lives in a per-host, host-owned SQLite
+  ledger at `~/.lancer/conversations.sqlite`
+  (`daemon/lancerd/conversation_store.go`), written only by `lancerd` in
+  response to `agent.conversations.*` RPCs (`list`/`fetch`/`append`/
+  `archive`/`attachObservedSession`, same RPC contract over both the SSH
+  and E2E-relay transports — see `daemon/lancerd/conversation_rpc.go`).
+  The daemon is the single writer for executable turns; a phone always
+  appends *through* the host, never directly into CloudKit.
+- **iOS keeps a local GRDB mirror** (`ChatConversation`/`ChatTurn`/
+  `ChatEvent`/`ChatDraft`, migration `v13`,
+  `Packages/LancerKit/Sources/PersistenceKit/ChatConversationRepository.swift`)
+  populated from host RPC responses via the `ConversationSyncCoordinator`
+  actor (`Packages/LancerKit/Sources/AppFeature/ConversationSyncCoordinator.swift`),
+  which owns transport selection (SSH slot vs. relay bridge), conflict
+  refetch, draft lifecycle, and publishes a `ConversationSyncUIState`
+  (`synced`/`syncing`/`hostOffline`/`cloudStale`/`conflict`/
+  `degradedResume`/`streamingElsewhere`) that `ConversationSyncBanner`
+  renders inline above the thread.
+- **CloudKit is the Apple-device mirror, not the writer.** A second,
+  independent actor, `ConversationSyncEngine`
+  (`Packages/LancerKit/Sources/SyncKit/ConversationSyncEngine.swift`),
+  mirrors the local GRDB rows into a custom private-DB zone
+  (`LancerConversations`, via CloudKit-CRUD additions to `CloudSync.swift`:
+  `ensureZoneExists`/`fetchZoneChanges`/zone-scoped `deleteRecords`, with
+  per-zone `CKServerChangeToken` persistence in `UserDefaults`). Two
+  record types (`ConversationCloudRecords.swift`): a mutable
+  `Conversation` metadata record and immutable `ConversationTurnChunk`
+  records (one per completed turn, each carrying that turn's `ChatEvent`s
+  serialized as JSON — inlined under ~200 KB, promoted to a `CKAsset`
+  above that to stay clear of CloudKit's 1 MB record ceiling). This is a
+  **read-continuity mirror**: it lets a second Apple device show a
+  conversation's history while the host is unreachable, but it never
+  creates an executable turn on its own — pulled `Conversation` rows
+  never trigger a dispatch.
+- **Conflict on append:** the host compares the caller's `baseSeq`
+  against the conversation's actual `lastSeq`; a stale `baseSeq` gets
+  `status: "conflict"` (not a generic RPC error) plus the current
+  `nextSeq`, and the coordinator surfaces this as the `.conflict` sync
+  state — the client refetches and the user explicitly resends, there is
+  no automatic merge.
+- **Offline sends stay local, never silently queued.** If no transport is
+  reachable, the coordinator marks `.hostOffline`; the composer keeps the
+  draft (`ChatDraft`) locally and blocks sending. There is no
+  auto-send-on-reconnect — the product deliberately does not fake a
+  "sent" state the way ChatGPT/iMessage would, because Lancer cannot
+  claim execution happened when the host never received it.
+- **Observed-session import.** A session started directly in a terminal
+  (never dispatched through Lancer) can be promoted into a durable,
+  synced conversation via `agent.conversations.attachObservedSession`:
+  the daemon re-reads that session's full on-disk transcript
+  (`loadFullObservedTranscript`, `daemon/lancerd/session_index.go`) and
+  imports it as one completed turn (`conversationStore.attachObservedSession`,
+  `daemon/lancerd/conversation_store.go`), binding the vendor session ID
+  so a later follow-up gets exact resume instead of latest-in-cwd
+  fallback. Idempotent by `(provider, sessionId)` — re-attaching returns
+  the original conversation rather than importing a duplicate. The
+  affordance lives in `ObservedSessionView`'s overflow menu ("Import to
+  Lancer").
+- **Exact vendor-session binding.** The daemon captures each vendor CLI's
+  session/thread id from its structured JSON stream — Claude's
+  `{"type":"system","subtype":"init","session_id"}`, Codex's
+  `{"type":"thread.started","thread_id"}`, OpenCode's top-level
+  `sessionID` field — and persists it onto the completed turn
+  (`daemon/lancerd/dispatch.go`). A follow-up append uses `resumeArgv`
+  (exact resume) when a vendor session ID is already bound, falling back
+  to `resumeMode: "latestInCwdFallback"` otherwise. **Kimi's capture is
+  best-effort and not live-verified** (the installed CLI hit an
+  account/billing gate before emitting stdout during implementation) — it
+  should re-verify against a live run before being trusted, and may
+  legitimately surface `degradedResume` in the interim.
+- **Blocks and raw terminal scrollback are still not synced anywhere** —
+  they're tied to a workspace, not a user, and V1 doesn't ship a live
+  interactive terminal in the sidebar IA regardless (§0.1). Only
+  Lancer-conversation transcripts (chat turns, tool-call/artifact
+  summaries) go through the mirror above.
+
+**Known gaps (not yet closed):** `ConversationSyncEngine` only pulls on
+`start()`/explicit `syncNow()` — there is no `CKDatabaseSubscription`
+yet, so a second device only sees a fresh conversation on next
+foreground/pull-to-refresh, not on a background push. Two-device
+CloudKit behavior (start on device A, appears on device B; kill/reinstall
+A, restores from CloudKit) has not been verified on physical hardware —
+`CloudSync`/`ConversationSyncEngine` are simulator no-ops by design, so
+this is an open gate before external release; see
+`docs/LIVE_LOOP_RUNBOOK.md`.
 
 ### 11.3 Session continuity
 
-The truth source for session continuity is the **remote `tmux`/`screen`
-session**, not the device. On reconnect we enumerate tmux sessions, match
-by name, and reattach. The block list is reconciled by replaying the
-last K bytes of `tmux capture-pane -pS -K` against the local block FTS.
+Two distinct mechanisms, matching the two sync domains above:
+
+- **Lancer conversations** (§11.2): continuity is **exact vendor-session
+  resume**, driven by the host ledger's bound `vendorSessionId` — not a
+  local block replay. Reopening a thread on any device calls
+  `agent.conversations.fetch(sinceSeq:)` against the host to catch up on
+  any events the CloudKit mirror or a relay reconnect might have missed,
+  and polls the same endpoint while a turn is `running` so a device that
+  opens mid-stream doesn't miss ledger events a relay drop swallowed.
+- **Raw terminal sessions** (the legacy SSH/block-terminal surface, not
+  part of the V1 sidebar IA per §0.1): the truth source is the **remote
+  `tmux`/`screen` session**, not the device. On reconnect we enumerate
+  tmux sessions, match by name, and reattach. The block list is
+  reconciled by replaying the last K bytes of `tmux capture-pane -pS -K`
+  against the local block FTS.
 
 ---
 
