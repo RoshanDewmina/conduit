@@ -13,6 +13,21 @@ final class PhysicalDeviceCrossDeviceSyncTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// Not reseeded — attaches directly to the app that's already running (or
+    /// launches a fresh copy of the real, already-signed-in state) purely to
+    /// screenshot the current machine-card connection dot. Verification aid
+    /// for the RelayFleetStore reactivity fix, not a real assertion (dot
+    /// color at any given instant depends on live relay timing) — read the
+    /// screenshot, don't trust a pass/fail here.
+    func testScreenshotCurrentHomeState() throws {
+        let app = XCUIApplication()
+        app.launch()
+        defer { app.terminate() }
+        _ = app.staticTexts["Good morning"].waitForExistence(timeout: 15)
+        sleep(4) // let the relay bridge's reconnect settle before capturing
+        attach(app, name: "home-live-state")
+    }
+
     private func attach(_ app: XCUIApplication, name: String) {
         let shot = app.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
@@ -109,5 +124,71 @@ final class PhysicalDeviceCrossDeviceSyncTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Connected"].waitForExistence(timeout: 45),
                       "After trusting the LAN host key, the SSH session should connect over real WiFi")
         attach(app, name: "04-connected")
+    }
+
+    /// The literal scenario: a Claude Code session started directly in a
+    /// Terminal on this Mac (bypassing Lancer entirely — an "Observed
+    /// Session"), then imported from the real phone via the real UI. NOT
+    /// reseeded — this runs against whatever real host/account is already
+    /// paired on this device, because the observed session must be detected
+    /// by the SAME daemon the phone is already live-connected to.
+    ///
+    /// By design (Task 9 of the cross-device sync spec) this import is
+    /// explicit, not automatic — the phone will NOT show the terminal
+    /// session as a Lancer conversation until this flow runs.
+    func testImportObservedTerminalSession() throws {
+        let runnerEnv = ProcessInfo.processInfo.environment
+        guard let sessionTitle = runnerEnv["LANCER_OBSERVED_SESSION_TITLE"], !sessionTitle.isEmpty else {
+            throw XCTSkip("Set LANCER_OBSERVED_SESSION_TITLE to the exact title of a real terminal session to import")
+        }
+
+        let app = XCUIApplication()
+        app.launch()
+        defer { app.terminate() }
+        attach(app, name: "00-launch")
+
+        // Land on Home (real account's default), scroll to find the live
+        // machine card's "SESSIONS ON THIS MAC" block.
+        let sessionsHeader = app.staticTexts["SESSIONS ON THIS MAC"]
+        var scrolls = 0
+        while !sessionsHeader.exists && scrolls < 10 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(sessionsHeader.waitForExistence(timeout: 20),
+                      "Home should show the live machine's observed-sessions block")
+        attach(app, name: "01-sessions-block")
+
+        let sessionRow = app.staticTexts[sessionTitle].firstMatch
+        var rowScrolls = 0
+        while !sessionRow.exists && rowScrolls < 10 {
+            app.swipeUp()
+            rowScrolls += 1
+        }
+        XCTAssertTrue(sessionRow.waitForExistence(timeout: 15),
+                      "The real terminal session (title: \(sessionTitle)) should be detected and listed")
+        attach(app, name: "02-session-found")
+        sessionRow.tap()
+
+        // ObservedSessionView / DarkTranscriptHeader: overflow menu →
+        // "Import to Lancer" (DarkTranscriptComponents.swift, .accessibilityLabel("More actions")).
+        let overflow = app.buttons["More actions"]
+        XCTAssertTrue(overflow.waitForExistence(timeout: 15), "Observed session view should expose the 'More actions' overflow menu")
+        attach(app, name: "03-observed-session-opened")
+        overflow.tap()
+
+        let importButton = app.buttons["Import to Lancer"]
+        XCTAssertTrue(importButton.waitForExistence(timeout: 10), "Overflow menu should offer Import to Lancer")
+        attach(app, name: "04-overflow-menu")
+        importButton.tap()
+
+        // Success navigates into the new Lancer-owned thread.
+        let deadline = Date().addingTimeInterval(30)
+        while !app.staticTexts[sessionTitle].firstMatch.exists && Date() < deadline {
+            usleep(300_000)
+        }
+        attach(app, name: "05-after-import")
+        XCTAssertTrue(app.staticTexts[sessionTitle].firstMatch.exists,
+                      "After import, the phone should be viewing the new Lancer conversation")
     }
 }

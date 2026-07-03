@@ -1,5 +1,6 @@
 #if os(iOS)
 import Foundation
+import Combine
 import Observation
 import LancerCore
 import SSHTransport
@@ -29,6 +30,20 @@ public final class RelayFleetStore {
     }
 
     public private(set) var machines: [Machine] = []
+
+    /// Bridges each machine's `E2ERelayBridge.$isActive` (Combine, `@Published`)
+    /// into this store's own `@Observable` change tracking. Without this,
+    /// SwiftUI views reading `machines[i].bridge.isActive` (directly, or via
+    /// `aggregateConnectionState`, or via the `RelayHomeEntry`/`RelayMachineRow`
+    /// mappings built from `machines` in AppRoot.swift) never re-render when a
+    /// relay reconnects or drops — `@Observable`'s macro only tracks direct
+    /// mutations to properties on THIS object; a `@Published` change inside a
+    /// referenced `ObservableObject` doesn't ripple back on its own. That was
+    /// the root cause of the Home/Fleet/Settings connection dot and the
+    /// sidebar footer all being able to read "disconnected" long after the
+    /// daemon actually reconnected (observed live: daemon logs showed a
+    /// successful reconnect while the UI still showed the stale state).
+    @ObservationIgnored private var bridgeSubscriptions: [RelayMachineID: AnyCancellable] = [:]
 
     public init() {}
 
@@ -62,8 +77,27 @@ public final class RelayFleetStore {
     public func add(_ machine: Machine) {
         guard !isFull else { return }
         machines.append(machine)
+        observeBridge(for: machine)
         let records = machines.map(\.record)
         Task { await RelayMachineMigration.writeIndex(records) }
+    }
+
+    /// Subscribes to `machine.bridge.$isActive` so a Combine-side change gets
+    /// turned into an `@Observable`-visible mutation on this store. Reading
+    /// `isActive` fresh at render time was already correct — the missing
+    /// piece was ever telling SwiftUI a re-render was needed at all.
+    private func observeBridge(for machine: Machine) {
+        let id = machine.id
+        bridgeSubscriptions[id] = machine.bridge.$isActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let i = self.machines.firstIndex(where: { $0.id == id }) else { return }
+                // Re-assigning through the @Observable-synthesized setter is
+                // what actually notifies dependents, even though the element
+                // itself (a struct wrapping the same class references) is
+                // otherwise unchanged.
+                self.machines[i] = self.machines[i]
+            }
     }
 
     /// Removes a machine: tears down its live connection and deletes its
@@ -76,6 +110,7 @@ public final class RelayFleetStore {
         m.client.disconnect()
         E2ERelayClient.deleteStoredPairing(machineID: id)
         machines.removeAll { $0.id == id }
+        bridgeSubscriptions.removeValue(forKey: id)
         let records = machines.map(\.record)
         Task { await RelayMachineMigration.writeIndex(records) }
     }
