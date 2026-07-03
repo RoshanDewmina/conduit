@@ -340,25 +340,33 @@ import Foundation
 
     @Test("ConversationAttachObservedSessionResponse decodes the daemon's shape")
     func conversationAttachObservedSessionResponseDecodesShape() throws {
-        let wireJSON = #"{"conversationId":"conv_1","importedEvents":120,"lastSeq":120}"#
+        let wireJSON = #"{"conversationId":"conv_1","importedEvents":120,"lastSeq":120,"alreadyAttached":false}"#
         let response = try JSONDecoder().decode(ConversationAttachObservedSessionResponse.self, from: Data(wireJSON.utf8))
         #expect(response.conversationId == "conv_1")
         #expect(response.importedEvents == 120)
         #expect(response.lastSeq == 120)
+        #expect(response.alreadyAttached == false)
     }
 
-    // Task 9 (attachObservedSession real import) isn't built yet — the Go
-    // handler always errors "not yet implemented" (conversation_rpc.go's
-    // conversationsAttachObservedSession). Over the relay path this surfaces
-    // as the zero-value response struct plus an added "error" key.
-    @Test("ConversationAttachObservedSessionResponse surfaces the Task-9-not-yet-implemented relay error")
-    func conversationAttachObservedSessionResponseDecodesNotImplementedError() throws {
+    @Test("ConversationAttachObservedSessionResponse decodes a re-attach as alreadyAttached with no new events")
+    func conversationAttachObservedSessionResponseDecodesAlreadyAttached() throws {
+        let wireJSON = #"{"conversationId":"conv_1","importedEvents":0,"lastSeq":120,"alreadyAttached":true}"#
+        let response = try JSONDecoder().decode(ConversationAttachObservedSessionResponse.self, from: Data(wireJSON.utf8))
+        #expect(response.conversationId == "conv_1")
+        #expect(response.alreadyAttached == true)
+    }
+
+    // A failure (e.g. an unknown on-disk sessionId — see
+    // conversation_rpc.go's conversationsAttachObservedSession) surfaces over
+    // the relay path as the zero-value response struct plus an added "error" key.
+    @Test("ConversationAttachObservedSessionResponse surfaces a relay-path host error")
+    func conversationAttachObservedSessionResponseDecodesHostError() throws {
         let wireJSON = """
-        {"conversationId":"","importedEvents":0,"lastSeq":0,\
-        "error":"attachObservedSession: transcript import not yet implemented (see Task 9)"}
+        {"conversationId":"","importedEvents":0,"lastSeq":0,"alreadyAttached":false,\
+        "error":"attachObservedSession: session not found"}
         """
         let response = try JSONDecoder().decode(ConversationAttachObservedSessionResponse.self, from: Data(wireJSON.utf8))
-        #expect(response.error == "attachObservedSession: transcript import not yet implemented (see Task 9)")
+        #expect(response.error == "attachObservedSession: session not found")
     }
 
     // MARK: - Conversation requests round-trip (phone → daemon encode side)
@@ -452,12 +460,12 @@ import Foundation
     func agentConversationsAttachObservedSessionResultEnvelopeDecodesError() throws {
         let wireJSON = """
         {"type":"agentConversationsAttachObservedSessionResult","payload":{"conversationId":"",\
-        "importedEvents":0,"lastSeq":0,\
-        "error":"attachObservedSession: transcript import not yet implemented (see Task 9)"}}
+        "importedEvents":0,"lastSeq":0,"alreadyAttached":false,\
+        "error":"attachObservedSession: session not found"}}
         """
         let env = try JSONDecoder().decode(
             E2ERelayMessage.RelayInnerEnvelope<ConversationAttachObservedSessionResponse>.self, from: Data(wireJSON.utf8)
         )
-        #expect(env.payload.error == "attachObservedSession: transcript import not yet implemented (see Task 9)")
+        #expect(env.payload.error == "attachObservedSession: session not found")
     }
 }

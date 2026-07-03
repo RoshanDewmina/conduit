@@ -1723,6 +1723,10 @@ public struct AppRoot: View {
                 onSendFollowUp: { prompt in
                     await sendObservedSessionFollowUp(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
                 },
+                onImportToLancer: vendor.isEmpty ? nil : {
+                    await importObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd)
+                },
+                onImported: { conversationID in sidebarState.navigate(to: .thread(id: conversationID)) },
                 onBack: { sidebarState.navigate(to: .home) }
             )
         case .workspace(let machineKey, let machineName, let path, let displayName, _):
@@ -1862,6 +1866,31 @@ public struct AppRoot: View {
             }
         }
         return DispatchResult(status: "error", message: "No direct connection to this machine.")
+    }
+
+    /// Imports an observed session's transcript into a durable, cross-device
+    /// Lancer conversation via `agent.conversations.attachObservedSession`.
+    /// Same transport-selection order as `sendObservedSessionFollowUp`.
+    private func importObservedSession(vendor: String, sessionId: String, cwd: String) async -> Result<ObservedSessionImportSummary, ObservedSessionImportError> {
+        let request = ConversationAttachObservedSessionRequest(provider: vendor, sessionId: sessionId, cwd: cwd)
+        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
+                ?? fleetStore.slots.first {
+            do {
+                let response = try await slot.channel.attachObservedSession(request)
+                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
+            } catch {
+                return .failure(ObservedSessionImportError(error.localizedDescription))
+            }
+        }
+        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+            do {
+                let response = try await bridge.relayAttachObservedSession(request)
+                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
+            } catch {
+                return .failure(ObservedSessionImportError(error.localizedDescription))
+            }
+        }
+        return .failure(ObservedSessionImportError("No direct connection to this machine."))
     }
 
     private func profileLabel(for env: AppEnvironment) -> String {

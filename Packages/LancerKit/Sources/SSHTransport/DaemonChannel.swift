@@ -479,8 +479,10 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: ConversationArchiveResponse.self)
     }
 
-    /// Converts a terminal-originated Observed Session into a Lancer conversation.
-    /// Currently always errors — Task 9 hasn't landed real transcript import yet.
+    /// Converts a terminal-originated Observed Session into a Lancer conversation
+    /// by importing its full on-disk transcript into the host ledger as one
+    /// completed turn (idempotent by provider+sessionId — re-attaching returns
+    /// the same conversationId rather than duplicating it).
     public func attachObservedSession(_ request: ConversationAttachObservedSessionRequest) async throws -> ConversationAttachObservedSessionResponse {
         let data = try await sendRPC(
             method: "agent.conversations.attachObservedSession",

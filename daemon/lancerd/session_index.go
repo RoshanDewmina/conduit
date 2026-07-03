@@ -327,6 +327,40 @@ func loadSessionTranscript(home, sessionID string, sinceLine int) (SessionTransc
 	return SessionTranscriptResult{Messages: msgs, NextLine: nextLine, ResetRequired: resetRequired}, nil
 }
 
+// loadFullObservedTranscript is like loadSessionTranscript but always returns
+// the complete transcript regardless of length. agent.conversations
+// .attachObservedSession (Task 9) imports into host-local SQLite rather than
+// serializing the result over an RPC transport, so the tail-cap
+// loadSessionTranscript applies to Claude sessions for live viewing (see
+// maxObservedTailLines) doesn't apply here — a full session, however long,
+// should end up in the ledger.
+func loadFullObservedTranscript(home, sessionID string) (SessionTranscriptResult, error) {
+	if home == "" {
+		home = agentHomeDir()
+	}
+	switch {
+	case isOpenCodeSessionID(sessionID):
+		return openCodeTranscript(home, sessionID, 0)
+	case strings.HasPrefix(sessionID, "session_"):
+		return kimiTranscript(home, sessionID, 0)
+	}
+	path := findSessionTranscriptPath(home, sessionID)
+	if path == "" {
+		if codexFindTranscriptPath(home, sessionID) != "" {
+			return codexTranscript(home, sessionID, 0)
+		}
+		return SessionTranscriptResult{}, errUnknownSessionID
+	}
+	msgs, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		return SessionTranscriptResult{}, err
+	}
+	if msgs == nil {
+		msgs = []SessionMessage{}
+	}
+	return SessionTranscriptResult{Messages: msgs}, nil
+}
+
 func countTranscriptLines(path string) int {
 	f, err := os.Open(path)
 	if err != nil {

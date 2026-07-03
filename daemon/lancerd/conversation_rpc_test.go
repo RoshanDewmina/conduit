@@ -623,24 +623,29 @@ func TestConversationsArchiveUnknownConversationErrorsSameOnBothPaths(t *testing
 	}
 }
 
-// TestConversationsAttachObservedSessionIsHonestStub verifies
-// agent.conversations.attachObservedSession validates its request shape and
-// returns a clear "not yet implemented" error — never a fabricated success —
-// identically on both transports. Real transcript import is Task 9's scope.
-func TestConversationsAttachObservedSessionIsHonestStub(t *testing.T) {
+// TestConversationsAttachObservedSessionUnknownSessionErrorsIdentically
+// verifies agent.conversations.attachObservedSession surfaces an unknown
+// on-disk session as a clear error — never a fabricated success — identically
+// on both transports. (The RPC layer always re-reads the transcript from
+// disk rather than trusting caller-supplied content — see
+// conversation_rpc.go's Task 9 note — so an unfixtured sessionId in these
+// process-wide ~/.claude/projects-rooted tests is exactly the "not found"
+// path; conversation_store_test.go covers the real-import/idempotency
+// behavior directly against the store, independent of on-disk transcripts.)
+func TestConversationsAttachObservedSessionUnknownSessionErrorsIdentically(t *testing.T) {
 	home := t.TempDir()
 	s := newServer(home)
 	defer s.poller.stopForTest()
 
 	req := map[string]interface{}{
 		"provider":  "claudeCode",
-		"sessionId": "vendor-session-abc",
+		"sessionId": "vendor-session-does-not-exist",
 		"cwd":       "/Users/roshan/project",
 	}
 
 	sshMsg := callSSHRPC(t, s, "agent.conversations.attachObservedSession", req)
 	if sshMsg.Error == nil {
-		t.Fatal("expected SSH error (not yet implemented), got a success result")
+		t.Fatal("expected SSH error for an unknown sessionId, got a success result")
 	}
 
 	client := &fakeRelayClient{paired: true}
@@ -656,7 +661,7 @@ func TestConversationsAttachObservedSessionIsHonestStub(t *testing.T) {
 	}
 	relayErr, hasErr := payloadMap["error"]
 	if !hasErr {
-		t.Fatalf("expected relay payload to carry an error field (honest stub), got %+v", payloadMap)
+		t.Fatalf("expected relay payload to carry an error field, got %+v", payloadMap)
 	}
 
 	if sshMsg.Error.Message != relayErr {
@@ -664,7 +669,7 @@ func TestConversationsAttachObservedSessionIsHonestStub(t *testing.T) {
 	}
 	if importedEvents, ok := payloadMap["importedEvents"]; ok {
 		if importedEvents != float64(0) {
-			t.Fatalf("expected importedEvents=0 in the stub payload, got %v", importedEvents)
+			t.Fatalf("expected importedEvents=0 in the error payload, got %v", importedEvents)
 		}
 	}
 

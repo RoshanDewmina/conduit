@@ -508,9 +508,8 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			log.Printf("e2e: unmarshal agentConversationsAttachObservedSession failed: %v", err)
 			return
 		}
-		// Stub per conversation_rpc.go's package doc comment: validates request
-		// shape, always errors "not yet implemented" until Task 9 lands real
-		// transcript import.
+		// See conversation_rpc.go's package doc comment: imports the observed
+		// session's on-disk transcript into the ledger as one completed turn.
 		result, err := r.server.conversationsAttachObservedSession(req)
 		payloadOut := conversationRelayPayload(result, err)
 		msg := map[string]interface{}{"type": "agentConversationsAttachObservedSessionResult", "payload": payloadOut}

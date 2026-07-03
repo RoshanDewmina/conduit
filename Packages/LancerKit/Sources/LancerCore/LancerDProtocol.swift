@@ -994,19 +994,23 @@ public struct ConversationAttachObservedSessionRequest: Codable, Sendable {
 
 /// Response for `agent.conversations.attachObservedSession` — mirrors Go's
 /// `conversationAttachObservedSessionResponse` (daemon/lancerd/conversation_rpc.go:86).
-/// Currently always returns with `error` set (Task 9 hasn't landed real transcript
-/// import yet — see conversation_rpc.go's package doc comment).
+/// `error` is relay-only (see `ConversationListResponse.error`); the SSH
+/// transport surfaces failures as a thrown JSON-RPC error instead.
 public struct ConversationAttachObservedSessionResponse: Codable, Sendable {
     public let conversationId: String
     public let importedEvents: Int
     public let lastSeq: Int
+    /// True when this session's provider+sessionId was already imported by an
+    /// earlier call — `conversationId` still points at that original conversation.
+    public let alreadyAttached: Bool
     /// Relay-only failure signal — see `ConversationListResponse.error`.
     public let error: String?
 
-    public init(conversationId: String = "", importedEvents: Int = 0, lastSeq: Int = 0, error: String? = nil) {
+    public init(conversationId: String = "", importedEvents: Int = 0, lastSeq: Int = 0, alreadyAttached: Bool = false, error: String? = nil) {
         self.conversationId = conversationId
         self.importedEvents = importedEvents
         self.lastSeq = lastSeq
+        self.alreadyAttached = alreadyAttached
         self.error = error
     }
 }

@@ -20,13 +20,13 @@ import "fmt"
 // they differ, the original call already dispatched this turn, so we report
 // its state without launching a second process.
 //
-// NOTE on agent.conversations.attachObservedSession (Task 9 scope):
-// converting an observed terminal session's transcript into ledger events
-// requires new conversationStore support (a create-from-import path distinct
-// from beginTurn's prompt/turn semantics) that Task 1 did not build and this
-// task does not add. This handler validates the request shape and returns an
-// explicit "not yet implemented" error rather than a fabricated success, so
-// callers get an honest signal instead of a silently-empty import.
+// NOTE on agent.conversations.attachObservedSession (Task 9): imports an
+// already-observed terminal session's transcript into the ledger as one
+// completed turn via conversationStore.attachObservedSession — a
+// create-from-import path distinct from beginTurn's prompt/turn semantics.
+// The transcript itself is read fresh from disk here (loadFullObservedTranscript,
+// session_index.go) rather than accepting caller-supplied messages, so a
+// phone can't inject arbitrary ledger content through this RPC.
 
 // conversationListRequest mirrors the agent.conversations.list RPC request.
 type conversationListRequest struct {
@@ -84,9 +84,10 @@ type conversationAttachObservedSessionRequest struct {
 // conversationAttachObservedSessionResponse mirrors the
 // agent.conversations.attachObservedSession RPC response.
 type conversationAttachObservedSessionResponse struct {
-	ConversationID string `json:"conversationId"`
-	ImportedEvents int    `json:"importedEvents"`
-	LastSeq        int64  `json:"lastSeq"`
+	ConversationID  string `json:"conversationId"`
+	ImportedEvents  int    `json:"importedEvents"`
+	LastSeq         int64  `json:"lastSeq"`
+	AlreadyAttached bool   `json:"alreadyAttached"`
 }
 
 // --- server methods shared by the SSH JSON-RPC switch (server.go) and the
@@ -253,12 +254,32 @@ func (s *server) conversationsArchive(req conversationArchiveRequest) (conversat
 	return conversationArchiveResponse{OK: true, ConversationID: req.ConversationID, LastSeq: lastSeq}, nil
 }
 
-// conversationsAttachObservedSession validates the request shape but performs
-// no import — see the package doc comment above for why real import is Task
-// 9's job, not this one.
+// conversationsAttachObservedSession imports an observed session's full
+// on-disk transcript into the host ledger as one completed turn. See the
+// package doc comment above and conversationStore.attachObservedSession for
+// the idempotency/exact-resume-binding contract.
 func (s *server) conversationsAttachObservedSession(req conversationAttachObservedSessionRequest) (conversationAttachObservedSessionResponse, error) {
 	if req.Provider == "" || req.SessionID == "" {
 		return conversationAttachObservedSessionResponse{}, fmt.Errorf("provider and sessionId are required")
 	}
-	return conversationAttachObservedSessionResponse{}, fmt.Errorf("attachObservedSession: transcript import not yet implemented (see Task 9)")
+	if s.conversations == nil {
+		return conversationAttachObservedSessionResponse{}, fmt.Errorf("conversation store unavailable")
+	}
+
+	transcript, err := loadFullObservedTranscript("", req.SessionID)
+	if err != nil {
+		return conversationAttachObservedSessionResponse{}, fmt.Errorf("attachObservedSession: %w", err)
+	}
+
+	res, err := s.conversations.attachObservedSession(req.Provider, req.SessionID, expandHome(req.CWD), "", transcript.Messages)
+	if err != nil {
+		return conversationAttachObservedSessionResponse{}, err
+	}
+
+	return conversationAttachObservedSessionResponse{
+		ConversationID:  res.ConversationID,
+		ImportedEvents:  res.ImportedEvents,
+		LastSeq:         res.LastSeq,
+		AlreadyAttached: res.AlreadyAttached,
+	}, nil
 }

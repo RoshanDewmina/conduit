@@ -1058,6 +1058,132 @@ func (s *conversationStore) turnByRunID(runID string) (conversationID, turnID st
 	return conversationID, turnID, err
 }
 
+// --- attachObservedSession (Task 9) -----------------------------------------
+
+// conversationImportResult mirrors what attachObservedSession can determine at
+// the store layer — conversation_rpc.go maps this onto the
+// agent.conversations.attachObservedSession wire response.
+type conversationImportResult struct {
+	ConversationID  string
+	TurnID          string
+	RunID           string
+	ImportedEvents  int
+	LastSeq         int64
+	AlreadyAttached bool
+}
+
+// attachObservedSession imports an already-observed CLI session's transcript
+// (e.g. a Claude Code session the user ran directly in a terminal, never
+// dispatched through agent.conversations.append) into the host ledger as a
+// single, already-completed turn, so it shows up and can be continued like
+// any other host-mediated conversation — importantly, binding vendorSessionID
+// means a follow-up append on the resulting conversation gets exact resume
+// (resumeArgv), not just "latest in cwd".
+//
+// Idempotent: re-attaching the same provider+sessionID returns the
+// conversation the FIRST call created rather than importing a second copy.
+// This reuses beginTurn's exact replay mechanism — a deterministic
+// clientTurnId ("observed:<provider>:<sessionId>") looked up via
+// existingTurnByClientTurnID — rather than a parallel one, since both are
+// "has this exact external event already been recorded?" checks.
+func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, title string, messages []SessionMessage) (conversationImportResult, error) {
+	if provider == "" || sessionID == "" {
+		return conversationImportResult{}, fmt.Errorf("conversation_store: provider and sessionId are required")
+	}
+	clientTurnID := "observed:" + provider + ":" + sessionID
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return conversationImportResult{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if existing, ok, err := existingTurnByClientTurnID(tx, clientTurnID); err != nil {
+		return conversationImportResult{}, err
+	} else if ok {
+		conv, err := scanConversationRow(tx.QueryRow(conversationSelectByID, existing.conversationID))
+		if err != nil {
+			return conversationImportResult{}, err
+		}
+		return conversationImportResult{
+			ConversationID:  existing.conversationID,
+			TurnID:          existing.id,
+			RunID:           existing.runID,
+			LastSeq:         conv.LastSeq,
+			AlreadyAttached: true,
+		}, nil
+	}
+
+	now := conversationNow()
+	convID := "conv_" + newUUID()
+	runID := "observed_" + newUUID()
+	turnID := "turn_" + newUUID()
+	hostName, _ := os.Hostname()
+
+	convTitle := title
+	if convTitle == "" {
+		convTitle = firstUserMessagePreview(messages)
+	}
+	if convTitle == "" {
+		convTitle = "Imported session"
+	}
+
+	if _, err := tx.Exec(`INSERT INTO conversations
+		(id, title, provider, agent_id, host_id, host_name, cwd, state, source,
+		 created_at, updated_at, last_activity_at, last_seq)
+		VALUES (?, ?, ?, ?, NULL, ?, ?, 'active', 'observedImport', ?, ?, ?, 0)`,
+		convID, convTitle, provider, provider, hostName, cwd, now, now, now); err != nil {
+		return conversationImportResult{}, err
+	}
+
+	if _, err := tx.Exec(`INSERT INTO conversation_turns
+		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider,
+		 vendor_session_id, status, started_at, completed_at)
+		VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'completed', ?, ?)`,
+		turnID, convID, clientTurnID, firstUserMessagePreview(messages), runID, provider, sessionID, now, now); err != nil {
+		return conversationImportResult{}, err
+	}
+
+	var seq int64
+	for _, msg := range messages {
+		seq++
+		if _, err := tx.Exec(`INSERT INTO conversation_events
+			(conversation_id, seq, turn_id, run_id, kind, role, text, created_at)
+			VALUES (?, ?, ?, ?, 'output', ?, ?, ?)`,
+			convID, seq, turnID, runID, nullIfEmpty(msg.Role), msg.Text, now); err != nil {
+			return conversationImportResult{}, err
+		}
+	}
+
+	if _, err := tx.Exec(`UPDATE conversations SET last_seq = ? WHERE id = ?`, seq, convID); err != nil {
+		return conversationImportResult{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return conversationImportResult{}, err
+	}
+
+	return conversationImportResult{
+		ConversationID: convID,
+		TurnID:         turnID,
+		RunID:          runID,
+		ImportedEvents: len(messages),
+		LastSeq:        seq,
+	}, nil
+}
+
+// firstUserMessagePreview derives a short title/prompt-preview from the first
+// user-role message in an imported transcript, falling back to "" (callers
+// each have their own default for that case) when there is none.
+func firstUserMessagePreview(messages []SessionMessage) string {
+	for _, m := range messages {
+		if m.Role == "user" && m.Text != "" {
+			return deriveTitle(m.Text)
+		}
+	}
+	return ""
+}
+
 // runStatus returns a turn's current status column by its run id — used by
 // agent.conversations.append's clientTurnId-replay path (conversation_rpc.go)
 // to report the SAME outcome (started/needsApproval/denied/budgetExceeded/

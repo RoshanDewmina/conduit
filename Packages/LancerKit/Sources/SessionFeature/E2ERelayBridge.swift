@@ -486,8 +486,8 @@ public final class E2ERelayBridge: ObservableObject {
     }
 
     /// Converts a terminal-originated Observed Session into a Lancer conversation
-    /// on the relay-paired host. Currently always errors — Task 9 hasn't landed
-    /// real transcript import yet (see conversation_rpc.go's package doc comment).
+    /// on the relay-paired host by importing its full on-disk transcript into the
+    /// host ledger as one completed turn (idempotent by provider+sessionId).
     public func relayAttachObservedSession(_ request: ConversationAttachObservedSessionRequest) async throws -> ConversationAttachObservedSessionResponse {
         guard isActive else { throw E2EError.notPaired }
         try await relayClient.send(type: "agentConversationsAttachObservedSession", payload: request)
@@ -864,8 +864,8 @@ public enum RelayFSError: Error, LocalizedError {
 }
 
 /// A host-side conversation-ledger error reported by the daemon over the relay
-/// (e.g. "conversation store unavailable", a not-found `conversationId`, or the
-/// Task-9-not-yet-implemented `attachObservedSession` stub) — mirrors `RelayFSError`.
+/// (e.g. "conversation store unavailable", a not-found `conversationId`, or an
+/// `attachObservedSession` transcript-load failure) — mirrors `RelayFSError`.
 /// Note: a stale `baseSeq` is NOT this error — it comes back as a normal
 /// `ConversationAppendResponse` with `status == "conflict"`, not a thrown error.
 public enum RelayConversationError: Error, LocalizedError {

@@ -320,6 +320,10 @@ public struct DarkTranscriptHeader: View {
     /// When non-nil, shows a dedicated "Terminal & files" affordance that explains
     /// those SSH-only features and offers to connect this machine directly.
     private let onSSHFeatures: (() -> Void)?
+    /// When non-nil, adds an "Import to Lancer" overflow-menu item that turns
+    /// this terminal-originated Observed Session into a durable, cross-device
+    /// Lancer conversation (see `ObservedSessionView`).
+    private let onImportToLancer: (() -> Void)?
     @Environment(\.lancerTokens) private var t
 
     public init(
@@ -330,7 +334,8 @@ public struct DarkTranscriptHeader: View {
         onWorkspace: @escaping () -> Void,
         onNew: (() -> Void)? = nil,
         shareText: (() -> String)? = nil,
-        onSSHFeatures: (() -> Void)? = nil
+        onSSHFeatures: (() -> Void)? = nil,
+        onImportToLancer: (() -> Void)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -340,6 +345,7 @@ public struct DarkTranscriptHeader: View {
         self.onNew = onNew
         self.shareText = shareText
         self.onSSHFeatures = onSSHFeatures
+        self.onImportToLancer = onImportToLancer
     }
 
     public var body: some View {
@@ -382,6 +388,11 @@ public struct DarkTranscriptHeader: View {
             // they don't crowd the title into a "My mach…" truncation. Only the
             // primary New-thread action keeps a dedicated circle button.
             Menu {
+                if let onImportToLancer {
+                    Button { onImportToLancer() } label: {
+                        Label("Import to Lancer", systemImage: "arrow.down.doc")
+                    }
+                }
                 if let shareText {
                     ShareLink(item: shareText()) {
                         Label("Share transcript", systemImage: "square.and.arrow.up")
