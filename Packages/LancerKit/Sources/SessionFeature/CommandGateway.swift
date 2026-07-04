@@ -48,12 +48,27 @@ public final class CommandGateway {
     private nonisolated static let logger = Logger(subsystem: "dev.lancer.mobile", category: "CommandGateway")
 
     private let approvalRelay: ApprovalRelay
+    private let connectionStates: ConnectionStateStore
 
     /// Internal (not private) so tests can inject a fresh `ApprovalRelay` instance
     /// instead of mutating the shared singleton — mirrors `ApprovalRelay`'s own
     /// test convention (fresh instance + settable `channel`/`relayBridges`).
-    public init(approvalRelay: ApprovalRelay) {
+    /// `connectionStates` defaults to the app-wide store so Siri's connectivity
+    /// answer is the same one Home/Fleet/Settings render.
+    public init(approvalRelay: ApprovalRelay, connectionStates: ConnectionStateStore = .shared) {
         self.approvalRelay = approvalRelay
+        self.connectionStates = connectionStates
+    }
+
+    /// The relay bridge for the first machine the authoritative store reports
+    /// as connected. Tolerates a machine mid-reconnect with a short bounded
+    /// wait (through the store's `.reconnecting`/`.hostOffline` states, not a
+    /// bespoke poll) — the cold-launch race used to make Siri report a live
+    /// machine as offline (fixed 2026-07-03 on the Siri branch with a local
+    /// poll; this is the centralized replacement).
+    private func firstConnectedBridge() async -> E2ERelayBridge? {
+        guard let id = await connectionStates.waitForAnyConnected() else { return nil }
+        return approvalRelay.relayBridges[id]
     }
 
     public func execute(_ request: CommandRequest) async -> CommandOutcome {
@@ -106,7 +121,7 @@ public final class CommandGateway {
         // No machine context reaches here (an AppIntent has no per-run channel to
         // resolve from) — mirrors AppRoot's own "first active relay machine" fallback
         // used elsewhere for the same reason (e.g. loadWorkspaceFiles, resumeConversation).
-        guard let bridge = approvalRelay.relayBridges.values.first(where: { $0.isActive }) else {
+        guard let bridge = await firstConnectedBridge() else {
             return .transportUnavailable
         }
         let sent = await bridge.sendRunControl(runId: runId, action: action)
@@ -123,7 +138,7 @@ public final class CommandGateway {
            let snap = try? await channel.fetchAgentStatus(homeDir: homeDir ?? "") {
             return .statusSnapshot(snap)
         }
-        guard let bridge = approvalRelay.relayBridges.values.first(where: { $0.isActive }) else {
+        guard let bridge = await firstConnectedBridge() else {
             return .transportUnavailable
         }
         do {

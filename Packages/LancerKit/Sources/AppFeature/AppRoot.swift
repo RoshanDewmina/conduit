@@ -795,7 +795,7 @@ public struct AppRoot: View {
     /// dead-end "workspace unavailable" sheet when the machine's bridge is active.
     @MainActor
     private func presentRelayWorkspace(machineID: RelayMachineID) {
-        if relayFleetStore.machine(machineID)?.bridge.isActive == true {
+        if relayFleetStore.isConnected(machineID) {
             relayFileBrowserMachineID = machineID
         } else {
             showingRelayWorkspaceUnavailable = true
@@ -1005,7 +1005,7 @@ public struct AppRoot: View {
                     // not the machine's name, so it must never be the label.
                     name: displayName,
                     cwd: "~",
-                    isOffline: !machine.bridge.isActive,
+                    isOffline: !relayFleetStore.isConnected(machine.id),
                     hostID: machine.id.uuidString,
                     hostName: machine.record.displayName
                 ))
@@ -1026,7 +1026,7 @@ public struct AppRoot: View {
            let cmds = try? await slot.channel.listCommands(cwd: cwd, vendor: vendor), !cmds.isEmpty {
             return cmds
         }
-        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
             return (try? await bridge.relayListCommands(cwd: cwd, vendor: vendor)) ?? []
         }
         return []
@@ -1103,7 +1103,7 @@ public struct AppRoot: View {
         }
         // Fall back to the first active relay machine's bridge (interim
         // limitation — see AppRoot's report on first-machine-only fallbacks).
-        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
             guard let result = try? await bridge.sendRunContinue(
                 runId: lastRunID, prompt: prompt,
                 agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
@@ -1122,7 +1122,7 @@ public struct AppRoot: View {
     /// Uses the relay bridge's read-only agent.fs.ls (the only fs-listing transport
     /// today). Dirs get a trailing "/". Returns [] if no relay is active.
     private func loadWorkspaceFiles(cwd: String) async -> [String] {
-        guard let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge,
+        guard let bridge = relayFleetStore.firstConnectedMachine?.bridge,
               let listing = try? await bridge.relayListDir(cwd) else { return [] }
         return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
     }
@@ -1578,8 +1578,8 @@ public struct AppRoot: View {
                 FleetRelayMachine(
                     id: $0.id,
                     name: $0.record.displayName,
-                    isActive: $0.bridge.isActive,
-                    agentLabels: $0.bridge.isActive ? relayAgentDisplayLabels(for: $0.installedAgentVendors) : []
+                    isActive: relayFleetStore.isConnected($0.id),
+                    agentLabels: relayFleetStore.isConnected($0.id) ? relayAgentDisplayLabels(for: $0.installedAgentVendors) : []
                 )
             },
             onOpenRelayChat: { _ in sidebarState.navigate(to: .newChat) }
@@ -1594,7 +1594,7 @@ public struct AppRoot: View {
             for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
                 await slot.sessionViewModel.disconnect()
             }
-            for machine in relayFleetStore.machines where machine.bridge.isActive {
+            for machine in relayFleetStore.machines where relayFleetStore.isConnected(machine.id) {
                 for run in runOutputStore.runs.values where !run.isTerminal {
                     _ = await machine.bridge.sendRunControl(runId: run.runId, action: "stop")
                 }
@@ -1625,7 +1625,7 @@ public struct AppRoot: View {
             sshKeyStore: env.keyStore,
             daemonChannel: daemonChannel,
             relayMachines: relayFleetStore.machines.map {
-                RelayMachineRow(id: $0.id, displayName: $0.record.displayName, isConnected: $0.bridge.isActive)
+                RelayMachineRow(id: $0.id, displayName: $0.record.displayName, isConnected: relayFleetStore.isConnected($0.id))
             },
             onRelayPaired: { client, record in addRelayMachine(client: client, record: record, env: env) },
             onRelayUnpair: { id in
@@ -1772,7 +1772,7 @@ public struct AppRoot: View {
             pendingApprovalCount: fleetStore.attentionItems.count,
             profileEmail: env.accountSession.email,
             relayMachines: debugFakeRelayEntry.map { [$0] } ?? relayFleetStore.machines.map {
-                RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: $0.bridge.isActive)
+                RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: relayFleetStore.isConnected($0.id))
             },
             workspaces: allWorkspaces,
             onOpenSidebar: homeSidebarAction,
@@ -1832,7 +1832,7 @@ public struct AppRoot: View {
             return sessions
         }
         if let machine = relayFleetStore.machines.first(where: { $0.record.displayName == hostName }),
-           machine.bridge.isActive {
+           relayFleetStore.isConnected(machine.id) {
             return (try? await machine.bridge.relayListSessions()) ?? []
         }
         return []
@@ -1846,7 +1846,7 @@ public struct AppRoot: View {
            let result = try? await slot.channel.fetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
             return result
         }
-        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge,
+        if let bridge = relayFleetStore.firstConnectedMachine?.bridge,
            let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
             return result
         }
@@ -1867,7 +1867,7 @@ public struct AppRoot: View {
                 return DispatchResult(status: "error", message: error.localizedDescription)
             }
         }
-        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
             do {
                 return try await bridge.relayContinueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
             } catch {
@@ -1908,25 +1908,16 @@ public struct AppRoot: View {
         }
     }
 
-    /// Polls `relayFleetStore.machines` for an active bridge for up to ~2
-    /// seconds. `bridge.isActive` can read momentarily false right after
-    /// navigation/reconnect even though the same machine just answered
-    /// `loadObservedSessions` moments earlier — a bare one-shot check here
-    /// raced that and fell back to the read-only observed-session view with
-    /// a real, connected machine (found live 2026-07-03: tapping a watched
-    /// session showed "Watching" / "No transcript recorded" even though
-    /// Home's own machine row showed green and a message had just been sent
-    /// successfully). Same fix shape as `StartAgentRunSupport.pollBridgeActive`.
+    /// A liveness read can be momentarily false right after navigation or a
+    /// reconnect even though the same machine just answered an RPC — a bare
+    /// one-shot check here raced that and fell back to the read-only
+    /// observed-session view with a real, connected machine (found live
+    /// 2026-07-03). `ConnectionStateStore.waitForAnyConnected` tolerates the
+    /// race the sanctioned way: it waits only while a machine is genuinely
+    /// mid-reconnect and bails immediately when every pairing is known-bad.
     private func activeRelayBridge() async -> E2ERelayBridge? {
-        for attempt in 0..<4 {
-            if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
-                return bridge
-            }
-            if attempt < 3 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-            }
-        }
-        return nil
+        guard let id = await relayFleetStore.connectionStates.waitForAnyConnected() else { return nil }
+        return relayFleetStore.machine(id)?.bridge
     }
 
     /// Imports an observed session's transcript into a durable, cross-device
@@ -2053,7 +2044,7 @@ public struct AppRoot: View {
         let backendURL = Self.pushBackendURL()
         guard !backendURL.isEmpty, let token = await Notifications.shared.pendingAPNSTokenHex else { return }
         let sessionID = DeviceIdentity.sessionID()
-        for machine in relayFleetStore.machines where machine.bridge.isActive {
+        for machine in relayFleetStore.machines where relayFleetStore.isConnected(machine.id) {
             await machine.bridge.registerDevice(apnsToken: token, sessionID: sessionID, pushBackendURL: backendURL)
         }
         if let channel = daemonChannel {
@@ -2105,7 +2096,7 @@ public struct AppRoot: View {
                 // the reverse order). Register over every active machine's relay so
                 // closed-app push works on relay-only devices.
                 guard !backendURL.isEmpty else { continue }
-                for machine in self.relayFleetStore.machines where machine.bridge.isActive {
+                for machine in self.relayFleetStore.machines where self.relayFleetStore.isConnected(machine.id) {
                     await machine.bridge.registerDevice(
                         apnsToken: token,
                         sessionID: DeviceIdentity.sessionID(),
@@ -2143,7 +2134,7 @@ public struct AppRoot: View {
                     )
                 }
                 guard !backendURL.isEmpty else { continue }
-                for machine in self.relayFleetStore.machines where machine.bridge.isActive {
+                for machine in self.relayFleetStore.machines where self.relayFleetStore.isConnected(machine.id) {
                     await machine.bridge.registerActivityToken(
                         sessionID: sessionID,
                         activityToken: activityToken,
@@ -2208,10 +2199,16 @@ public struct AppRoot: View {
     private func hydrateRelayFleetStore(env: AppEnvironment) async {
         _ = await RelayMachineMigration.migrateLegacyIfNeeded()
         let records = await RelayMachineMigration.readIndex()
+        // One launch-time summary of exactly which machines hydration is
+        // about to restore. The 2026-07-04 daemon-restart incident took hours
+        // to diagnose because there was no way to tell FROM LOGS which
+        // pairings the phone still knew about vs. which had quietly never
+        // made it into (or been dropped from) this index.
+        Self.logger.info("hydrateRelayFleetStore: index has \(records.count, privacy: .public) machine(s): \(records.map { "\($0.id.uuidString.prefix(8))(\($0.displayName))" }.joined(separator: ", "), privacy: .public)")
         for record in records {
             let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
             let restored = client.restoreNamespacedStoredPairing()
-            addRelayMachine(client: client, record: record, env: env)
+            addRelayMachine(client: client, record: record, env: env, pairingUsable: restored)
             // Only this restore-from-disk path needs to actively dial out — every
             // other addRelayMachine caller (debug seam, real pairing-UI callbacks)
             // already has a client that just live-paired moments ago, and calling
@@ -2234,17 +2231,30 @@ public struct AppRoot: View {
     /// aggregate). Called from launch hydration, the pairing-UI callbacks, and
     /// the `LANCER_RELAY_CODE` debug seam.
     @MainActor
-    private func addRelayMachine(client: E2ERelayClient, record: RelayMachineRecord, env: AppEnvironment) {
+    private func addRelayMachine(client: E2ERelayClient, record: RelayMachineRecord, env: AppEnvironment, pairingUsable: Bool = true) {
         let bridge = E2ERelayBridge(relayClient: client, approvalRelay: ApprovalRelay.shared, machineID: record.id)
-        bridge.start()
         let machine = RelayFleetStore.Machine(record: record, client: client, bridge: bridge)
-        relayFleetStore.add(machine)
+        guard relayFleetStore.add(machine, pairingUsable: pairingUsable) else {
+            // At the fleet cap the machine was NOT stored — do not start the
+            // bridge or register it anywhere. Before this guard, the bridge
+            // was started and registered with ApprovalRelay regardless, so a
+            // cap-dropped pairing kept working in-memory (approvals, hourly
+            // reconnects) and then silently vanished at the next relaunch
+            // because it was never in the hydration index.
+            Self.logger.fault("addRelayMachine: fleet at cap — machine=\(record.id.uuidString, privacy: .public) NOT added; tearing down its client. Remove a paired machine and re-pair.")
+            client.disconnect()
+            return
+        }
+        bridge.start()
         ApprovalRelay.shared.relayBridges[record.id] = bridge
         Task { @MainActor in
+            // The bridge's `$isActive` edge remains the trigger for the
+            // side-effect actions below (they need the paired bridge to be
+            // ready to carry RPCs), but every derived STATE is read back from
+            // the authoritative ConnectionStateStore — which updates strictly
+            // before this async loop observes the edge.
             for await active in bridge.$isActive.values {
-                // Recompute every derived aggregate that used to come from the
-                // single relayBridgeIsActive bool, now folded across ALL machines.
-                sidebarState.relayConnected = relayFleetStore.machines.contains { $0.bridge.isActive }
+                sidebarState.relayConnected = relayFleetStore.connectionStates.anyConnected
                 if active { sidebarState.relayLastConnectedAt = Date() }
                 fleetStore.setRelayStateOnAllSlots(aggregateRelayState())
                 if active {
@@ -2273,7 +2283,7 @@ public struct AppRoot: View {
     /// degraded > connecting > error > none.
     private func aggregateRelayState() -> Session.RelayState {
         let states = relayFleetStore.machines.map {
-            Self.relayState(pairing: $0.client.pairingState, connection: $0.client.connectionState)
+            Self.relayState(relayFleetStore.connectionState(for: $0.id))
         }
         let rank: (Session.RelayState) -> Int = { state in
             switch state {
@@ -2287,30 +2297,17 @@ public struct AppRoot: View {
         return states.max(by: { rank($0) < rank($1) }) ?? .none
     }
 
-    /// Maps the E2E relay client's pairing + connection state onto the
-    /// `Session.RelayState` the status badge renders. Paired wins; otherwise an
-    /// active (connecting / reconnecting) socket reads as `.connecting`; a
-    /// pairing failure reads as `.error`; everything else is `.none`.
-    private static func relayState(
-        pairing: E2ERelayClient.PairingState,
-        connection: E2ERelayClient.ConnectionState
-    ) -> Session.RelayState {
-        switch pairing {
-        case .paired:
-            return .paired
-        case .pairingFailed:
-            return .error
-        case .waitingForPeer:
-            return .connecting
-        case .unpaired:
-            switch connection {
-            case .connecting, .reconnecting:
-                return .connecting
-            case .connected:
-                return .connecting
-            case .disconnected:
-                return .none
-            }
+    /// Maps the authoritative per-machine connection state onto the
+    /// `Session.RelayState` the status badge renders. Connected wins; a
+    /// machine still able to recover on its own (reconnecting, or on the
+    /// relay waiting for the daemon peer) reads as `.connecting`; a pairing
+    /// that needs a human re-pair reads as `.error`.
+    private static func relayState(_ state: ConnectionStateStore.MachineState?) -> Session.RelayState {
+        switch state {
+        case .connected: return .paired
+        case .reconnecting, .hostOffline: return .connecting
+        case .pairingInvalid: return .error
+        case nil: return .none
         }
     }
 

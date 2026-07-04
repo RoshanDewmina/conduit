@@ -1,6 +1,5 @@
 #if os(iOS)
 import Foundation
-import Combine
 import Observation
 import LancerCore
 import SSHTransport
@@ -31,21 +30,36 @@ public final class RelayFleetStore {
 
     public private(set) var machines: [Machine] = []
 
-    /// Bridges each machine's `E2ERelayBridge.$isActive` (Combine, `@Published`)
-    /// into this store's own `@Observable` change tracking. Without this,
-    /// SwiftUI views reading `machines[i].bridge.isActive` (directly, or via
-    /// `aggregateConnectionState`, or via the `RelayHomeEntry`/`RelayMachineRow`
-    /// mappings built from `machines` in AppRoot.swift) never re-render when a
-    /// relay reconnects or drops — `@Observable`'s macro only tracks direct
-    /// mutations to properties on THIS object; a `@Published` change inside a
-    /// referenced `ObservableObject` doesn't ripple back on its own. That was
-    /// the root cause of the Home/Fleet/Settings connection dot and the
-    /// sidebar footer all being able to read "disconnected" long after the
-    /// daemon actually reconnected (observed live: daemon logs showed a
-    /// successful reconnect while the UI still showed the stale state).
-    @ObservationIgnored private var bridgeSubscriptions: [RelayMachineID: AnyCancellable] = [:]
+    /// The single authoritative liveness source for every machine in this
+    /// fleet. This store no longer derives connectivity itself — it registers
+    /// machines with `connectionStates` and consumes the result, same as every
+    /// other surface (Home, Fleet, Settings, Siri, observed-session import).
+    /// Defaults to the app-wide shared instance so those surfaces can never
+    /// disagree; tests inject a fresh one.
+    public let connectionStates: ConnectionStateStore
 
-    public init() {}
+    public init(connectionStates: ConnectionStateStore = .shared) {
+        self.connectionStates = connectionStates
+        // Two responsibilities on every real state transition:
+        // 1. Re-assign through the @Observable-synthesized setter so SwiftUI
+        //    consumers reading `machines` re-render (the element is a struct
+        //    wrapping the same class references, so the assignment is what
+        //    notifies dependents — the c9b86283 staleness fix, now driven by
+        //    the one authoritative store instead of a per-store subscription).
+        // 2. Persist `lastConnectedAt` on EVERY transition into `.connected`,
+        //    not just initial pairing: the persisted index is read back by
+        //    launch hydration and any consumer of `RelayMachineMigration
+        //    .readIndex()`, and letting it go stale was itself a bug (PR #18).
+        connectionStates.addObserver { [weak self] machineID, state in
+            guard let self, let i = self.machines.firstIndex(where: { $0.id == machineID }) else { return }
+            self.machines[i] = self.machines[i]
+            if state == .connected {
+                self.machines[i].record.lastConnectedAt = self.connectionStates.lastConnectedAt[machineID] ?? .now
+                let records = self.machines.map(\.record)
+                Task { await RelayMachineMigration.writeIndex(records) }
+            }
+        }
+    }
 
     public var isFull: Bool { isRelayFleetFull(count: machines.count) }
 
@@ -71,50 +85,23 @@ public final class RelayFleetStore {
         Task { await RelayMachineMigration.writeIndex(records) }
     }
 
-    /// Adds a machine. No-op if the store is already at the cap — callers
-    /// (the pairing UI, a later lane) must check `isFull` first and disable
-    /// pairing UI accordingly rather than relying on this silently dropping.
-    public func add(_ machine: Machine) {
-        guard !isFull else { return }
+    /// Adds a machine and registers it with the connection-state store.
+    /// `pairingUsable: false` marks a machine whose persisted pairing failed
+    /// to restore (it stays listed, permanently `.pairingInvalid`, until a
+    /// re-pair). Returns false (adding nothing) at the cap — callers MUST
+    /// check the result and tear down the machine's live client/bridge
+    /// instead of proceeding: a dropped-but-started machine keeps working
+    /// in-memory until the next relaunch and then silently vanishes (it was
+    /// never in the hydration index), which presents as "my machine unpaired
+    /// itself overnight".
+    @discardableResult
+    public func add(_ machine: Machine, pairingUsable: Bool = true) -> Bool {
+        guard !isFull else { return false }
         machines.append(machine)
-        observeBridge(for: machine)
+        connectionStates.track(machineID: machine.id, client: machine.client, pairingUsable: pairingUsable)
         let records = machines.map(\.record)
         Task { await RelayMachineMigration.writeIndex(records) }
-    }
-
-    /// Subscribes to `machine.bridge.$isActive` so a Combine-side change gets
-    /// turned into an `@Observable`-visible mutation on this store. Reading
-    /// `isActive` fresh at render time was already correct — the missing
-    /// piece was ever telling SwiftUI a re-render was needed at all.
-    private func observeBridge(for machine: Machine) {
-        let id = machine.id
-        bridgeSubscriptions[id] = machine.bridge.$isActive
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isActive in
-                guard let self, let i = self.machines.firstIndex(where: { $0.id == id }) else { return }
-                // Re-assigning through the @Observable-synthesized setter is
-                // what actually notifies dependents, even though the element
-                // itself (a struct wrapping the same class references) is
-                // otherwise unchanged.
-                self.machines[i] = self.machines[i]
-                if isActive {
-                    // `lastConnectedAt` in the persisted index (read by Siri
-                    // via `RelayMachineMigration.readIndex()`) was previously
-                    // only set once, at initial pairing (`add()`) — never
-                    // refreshed on later reconnects. Home's own connectivity
-                    // dot reads `bridge.isActive` live and was correct; Siri's
-                    // 10-minute-freshness heuristic over the stale timestamp
-                    // eventually reported a genuinely-live machine as
-                    // "offline" (found live 2026-07-03: Home showed a green
-                    // dot and a successful message send, Siri's own machine
-                    // picker showed the same machine "offline"). Refresh it
-                    // on every reconnect so Siri's freshness check tracks
-                    // reality instead of going stale after ~10 minutes.
-                    self.machines[i].record.lastConnectedAt = .now
-                    let records = self.machines.map(\.record)
-                    Task { await RelayMachineMigration.writeIndex(records) }
-                }
-            }
+        return true
     }
 
     /// Removes a machine: tears down its live connection and deletes its
@@ -127,19 +114,35 @@ public final class RelayFleetStore {
         m.client.disconnect()
         E2ERelayClient.deleteStoredPairing(machineID: id)
         machines.removeAll { $0.id == id }
-        bridgeSubscriptions.removeValue(forKey: id)
+        connectionStates.untrack(machineID: id)
         let records = machines.map(\.record)
         Task { await RelayMachineMigration.writeIndex(records) }
     }
 
+    // MARK: - Liveness reads (all delegated to ConnectionStateStore)
+
+    public func connectionState(for id: RelayMachineID) -> ConnectionStateStore.MachineState? {
+        connectionStates.state(for: id)
+    }
+
+    public func isConnected(_ id: RelayMachineID) -> Bool {
+        connectionStates.isConnected(id)
+    }
+
+    /// The first machine whose relay is live end-to-end — the shared fallback
+    /// for callers with no per-machine context (Siri-style "any machine",
+    /// composer autocomplete, observed-session transport selection).
+    public var firstConnectedMachine: Machine? {
+        guard let id = connectionStates.firstConnectedMachineID else { return nil }
+        return machine(id)
+    }
+
     /// Fleet-wide "most live wins" state, mirroring FleetStore.connectionState's
     /// ordering (connected > relayPaired > connecting > failed > offline) but
-    /// derived purely from each machine's bridge.isActive (a relay machine is
-    /// either fully paired-and-live, or not — there's no separate SSH-connected
-    /// state for a relay machine the way FleetStore's SSH slots have).
+    /// derived from the authoritative per-machine connection states.
     public var aggregateConnectionState: Session.ConnectionState {
         guard !machines.isEmpty else { return .offline }
-        return machines.contains { $0.bridge.isActive } ? .relayPaired : .connecting
+        return connectionStates.anyConnected ? .relayPaired : .connecting
     }
 }
 #endif

@@ -7,24 +7,25 @@ import Testing
 @testable import SecurityKit
 @testable import LancerCore
 
-// Regression for the 2026-07-03 fix (commit c9b86283): RelayFleetStore's
-// `observeBridge` must refresh `record.lastConnectedAt` on EVERY reconnect
-// (every `isActive == true` edge), not just the first one at pairing time.
-// Before that fix, Siri's freshness check (which reads `lastConnectedAt`
-// via `RelayMachineMigration.readIndex()`) could report a genuinely-live
-// machine as offline once the stale timestamp aged past its threshold, even
-// though Home's own connectivity dot (reading `bridge.isActive` live) was
-// correct. This test pins that behavior so it can't silently regress.
+// Regression for the 2026-07-03 fix (commit c9b86283): `lastConnectedAt` must
+// refresh on EVERY reconnect (every transition into `.connected`), not just
+// the first one at pairing time. Before that fix, Siri's freshness check
+// (which reads `lastConnectedAt` via `RelayMachineMigration.readIndex()`)
+// could report a genuinely-live machine as offline once the stale timestamp
+// aged past its threshold, even though Home's own connectivity dot was
+// correct. Now pinned against `ConnectionStateStore` (the single authoritative
+// liveness source), driven through `E2ERelayClient.setStateForTesting` — the
+// same real-object-with-a-seam pattern the old `setActiveForTesting` used.
 @MainActor
 @Suite struct RelayFleetStoreTests {
 
-    private func makeMachine() -> (machine: RelayFleetStore.Machine, bridge: E2ERelayBridge) {
+    private func makeMachine() -> (machine: RelayFleetStore.Machine, client: E2ERelayClient) {
         let relayURL = URL(string: "https://relay.example.com")!
         let client = E2ERelayClient(relayURL: relayURL, pairingCode: "111222")
         let bridge = E2ERelayBridge(relayClient: client, approvalRelay: ApprovalRelay(), machineID: client.machineID)
         let record = RelayMachineRecord(id: client.machineID, displayName: "Test Machine")
         let machine = RelayFleetStore.Machine(record: record, client: client, bridge: bridge)
-        return (machine, bridge)
+        return (machine, client)
     }
 
     @Test("lastConnectedAt refreshes on every reconnect, not just the first")
@@ -34,18 +35,21 @@ import Testing
         // Keychain, matching RelayMachineMigrationTests' existing pattern.
         RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
 
-        let store = RelayFleetStore()
-        let (machine, bridge) = makeMachine()
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (machine, client) = makeMachine()
         store.add(machine)
 
         var observedTimestamps: [Date] = []
-        for isActive in [true, false, true, false, true] {
-            bridge.setActiveForTesting(isActive)
-            // Combine's `.receive(on: DispatchQueue.main)` dispatches
-            // asynchronously even when already on the main queue — give the
-            // sink a tick to run before reading the store's state back.
+        for isPaired in [true, false, true, false, true] {
+            client.setStateForTesting(
+                pairing: isPaired ? .paired : .unpaired,
+                connection: isPaired ? .connected : .disconnected
+            )
+            // The store applies synchronously, but consecutive transitions in a
+            // tight loop can land on the same Date tick — space them out so the
+            // strictly-increasing assertion below is meaningful.
             try await Task.sleep(nanoseconds: 20_000_000)
-            if isActive {
+            if isPaired {
                 let ts = try #require(store.machine(machine.id)?.record.lastConnectedAt)
                 observedTimestamps.append(ts)
             }
@@ -56,22 +60,56 @@ import Testing
         #expect(observedTimestamps[1] < observedTimestamps[2])
     }
 
-    @Test("aggregateConnectionState reflects live bridge state, not stale record data")
-    func aggregateConnectionStateTracksLiveBridge() async throws {
+    @Test("aggregateConnectionState reflects live connection state, not stale record data")
+    func aggregateConnectionStateTracksLiveState() async throws {
         RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
 
-        let store = RelayFleetStore()
-        let (machine, bridge) = makeMachine()
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (machine, client) = makeMachine()
         store.add(machine)
         #expect(store.aggregateConnectionState == .connecting)
 
-        bridge.setActiveForTesting(true)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        client.setStateForTesting(pairing: .paired, connection: .connected)
         #expect(store.aggregateConnectionState == .relayPaired)
+        #expect(store.isConnected(machine.id))
 
-        bridge.setActiveForTesting(false)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        client.setStateForTesting(pairing: .unpaired, connection: .disconnected)
         #expect(store.aggregateConnectionState == .connecting)
+        #expect(!store.isConnected(machine.id))
+    }
+
+    @Test("a machine whose stored pairing failed to restore reads pairingInvalid, and remove() untracks it")
+    func unrestorableMachineReadsPairingInvalid() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (machine, _) = makeMachine()
+        store.add(machine, pairingUsable: false)
+
+        #expect(store.connectionState(for: machine.id) == .pairingInvalid)
+        #expect(store.firstConnectedMachine == nil)
+
+        store.remove(machine.id)
+        #expect(store.connectionState(for: machine.id) == nil)
+    }
+
+    // Regression for the 2026-07-04 incident class: an add() past the fleet
+    // cap must report failure so the caller tears the live client down,
+    // instead of the machine continuing to work in-memory (bridge started,
+    // ApprovalRelay-registered) while silently absent from the hydration
+    // index — which presented as "my machine unpaired itself after relaunch".
+    @Test("add() past the fleet cap returns false and tracks nothing")
+    func addPastCapReportsFailure() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        for _ in 0..<relayFleetMaxMachines {
+            #expect(store.add(makeMachine().machine))
+        }
+        let (overflow, _) = makeMachine()
+        #expect(!store.add(overflow))
+        #expect(store.machine(overflow.id) == nil)
+        #expect(store.connectionState(for: overflow.id) == nil)
     }
 }
 #endif

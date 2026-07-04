@@ -420,6 +420,21 @@ public final class E2ERelayClient: ObservableObject {
         recv.reset()
     }
 
+#if DEBUG
+    /// Test-only seam: drive the published pairing/connection states directly so
+    /// `ConnectionStateStore`'s derivation and downstream consumers can be
+    /// exercised without a live relay — a narrow seam on the real object, not
+    /// a parallel fake class (the codebase's established test pattern; see
+    /// `E2ERelayClientRestoreTests`).
+    public func setStateForTesting(
+        pairing: PairingState,
+        connection: ConnectionState
+    ) {
+        connectionState = connection
+        pairingState = pairing
+    }
+#endif
+
     /// Send an encrypted message to the daemon through the relay.
     public func send(type: String, payload: some Codable) async throws {
         guard let key = sessionKey else {

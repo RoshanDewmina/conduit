@@ -19,7 +19,7 @@ import Foundation
     func noTransportRunControl() async throws {
         let relay = ApprovalRelay()
         relay.credentialKeychain = Keychain(service: "test.commandGateway.noTransport1", inMemory: true)
-        let gateway = CommandGateway(approvalRelay: relay)
+        let gateway = CommandGateway(approvalRelay: relay, connectionStates: ConnectionStateStore())
 
         #expect(await gateway.execute(.pause(runId: "r1")) == .transportUnavailable)
         #expect(await gateway.execute(.resume(runId: "r1")) == .transportUnavailable)
@@ -30,28 +30,35 @@ import Foundation
     func noTransportStatusQuery() async throws {
         let relay = ApprovalRelay()
         relay.credentialKeychain = Keychain(service: "test.commandGateway.noTransport2", inMemory: true)
-        let gateway = CommandGateway(approvalRelay: relay)
+        let gateway = CommandGateway(approvalRelay: relay, connectionStates: ConnectionStateStore())
 
         #expect(await gateway.execute(.queryStatus(homeDir: nil)) == .transportUnavailable)
     }
 
-    @Test("a relay bridge that never paired (isActive false) is not sent to — falls through to transportUnavailable")
-    func inactiveBridgeFallsThrough() async throws {
+    @Test("a machine whose pairing is known-bad is not sent to and not waited on — falls through to transportUnavailable immediately")
+    func pairingInvalidBridgeFallsThrough() async throws {
         let relay = ApprovalRelay()
         relay.credentialKeychain = Keychain(service: "test.commandGateway.inactiveBridge", inMemory: true)
         let client = E2ERelayClient(relayURL: URL(string: "wss://127.0.0.1:1")!, pairingCode: "000000")
-        let machineID = RelayMachineID()
+        let machineID = client.machineID
         let bridge = E2ERelayBridge(relayClient: client, approvalRelay: relay, machineID: machineID)
-        // Not calling .start(): isActive starts false and there's no reason to
-        // spin up a real socket attempt in this test (same rationale as
-        // ApprovalRelayMultiMachineTests' registeredOriginWithMismatchedBridgeFallsThrough).
+        // Not calling .start(): there's no reason to spin up a real socket
+        // attempt in this test (same rationale as ApprovalRelayMultiMachineTests'
+        // registeredOriginWithMismatchedBridgeFallsThrough).
         relay.relayBridges[machineID] = bridge
+        let connectionStates = ConnectionStateStore()
+        // pairingUsable: false = the store knows this pairing can never connect
+        // without a re-pair, so the gateway must fail fast instead of burning
+        // its bounded reconnect wait.
+        connectionStates.track(machineID: machineID, client: client, pairingUsable: false)
 
-        let gateway = CommandGateway(approvalRelay: relay)
+        let gateway = CommandGateway(approvalRelay: relay, connectionStates: connectionStates)
+        let start = Date()
         #expect(await gateway.execute(.pause(runId: "r2")) == .transportUnavailable)
         #expect(await gateway.execute(.resume(runId: "r2")) == .transportUnavailable)
         #expect(await gateway.execute(.cancel(runId: "r2")) == .transportUnavailable)
         #expect(await gateway.execute(.queryStatus(homeDir: "/tmp")) == .transportUnavailable)
+        #expect(Date().timeIntervalSince(start) < 1.0)
     }
 }
 #endif
