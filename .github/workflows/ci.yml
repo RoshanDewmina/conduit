@@ -61,12 +61,12 @@ jobs:
           -scheme Lancer
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
-      # ConversationSyncCoordinatorTests is `#if os(iOS)`-gated, so the
-      # macOS-host `swift test` in lancerkit-spm above silently skips it —
-      # until 2026-07-03 this suite ran nowhere in CI. `generic/platform=iOS
-      # Simulator` above is build-only (no destination device), so testing
-      # needs a concrete, bootable destination.
-      - name: Run ConversationSyncCoordinatorTests on iOS simulator
+      # ConversationSyncCoordinatorTests and RelayFleetStoreTests are both
+      # `#if os(iOS)`-gated, so the macOS-host `swift test` in lancerkit-spm
+      # above silently skips them — until 2026-07-03 these suites ran nowhere
+      # in CI. `generic/platform=iOS Simulator` above is build-only (no
+      # destination device), so testing needs a concrete, bootable destination.
+      - name: Run iOS-gated LancerKitTests suites on iOS simulator
         run: |
           set -euo pipefail
           SIM_NAME="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1; exit }')"
@@ -81,6 +81,7 @@ jobs:
             -scheme LancerKitTests \
             -destination "platform=iOS Simulator,name=${SIM_NAME},OS=latest" \
             -only-testing:LancerKitTests/ConversationSyncCoordinatorTests \
+            -only-testing:LancerKitTests/RelayFleetStoreTests \
             CODE_SIGNING_ALLOWED=NO
 
   daemon-go:
