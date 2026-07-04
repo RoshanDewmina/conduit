@@ -91,6 +91,9 @@ elif tool_l.startswith("mcp__"):
         kind = "browser"
     elif any(part in mcp_leaf for part in ("http", "network", "fetch", "request", "url")):
         kind = "network"
+elif tool in {"AskUserQuestion", "AskQuestion", "question"} or tool_l in {"askuserquestion", "ask_question"}:
+    kind = "askQuestion"
+    risk = "low"
 
 danger = re.compile(r"(?i)(rm\s+-rf|sudo\s+|chmod\s+-R|chown\s+-R|mkfs|dd\s+if=|curl\b.*\|\s*(sh|bash)|wget\b.*\|\s*(sh|bash))")
 risk = "low"
@@ -180,6 +183,9 @@ EXTRA_ARGS=()
 [ -n "$TOOL_USE_ID" ]                            && EXTRA_ARGS+=(--tool-use-id="$TOOL_USE_ID")
 [ -n "$SESSION_ID" ]                             && EXTRA_ARGS+=(--session-id="$SESSION_ID")
 [ -n "$TOOL_INPUT" ] && [ "$TOOL_INPUT" != "{}" ] && EXTRA_ARGS+=(--tool-input="$TOOL_INPUT")
+if [ "$KIND" = "askQuestion" ]; then
+  EXTRA_ARGS+=(--question "$COMMAND")
+fi
 
 if "$LANCERD" agent-hook \
   --agent codex \

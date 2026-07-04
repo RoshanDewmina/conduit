@@ -273,8 +273,34 @@ public struct InboxView: View {
 
     @ViewBuilder
     private func pendingCard(_ approval: Approval) -> some View {
+        if approval.kind == .askQuestion {
+            askQuestionCard(approval)
+        } else {
+            standardPendingCard(approval)
+        }
+    }
+
+    @ViewBuilder
+    private func askQuestionCard(_ approval: Approval) -> some View {
+        let choices = approval.choices ?? []
+        DSAskQuestionCard(
+            agentKey: agentKey(approval.agent),
+            agentName: agentName(approval.agent),
+            hostLabel: lastPathComponent(approval.cwd),
+            timeLabel: pendingTimeLabel(approval),
+            question: approval.question ?? "What should I do next?",
+            choices: choices.isEmpty ? ["Continue", "Stop"] : choices,
+            onAnswer: { idx in
+                let answer = (choices.isEmpty ? ["Continue", "Stop"] : choices)[idx]
+                vm.decide(approval.id, decision: .approved, editedToolInput: answer)
+                Haptics.success()
+            }
+        )
+    }
+
+    private func standardPendingCard(_ approval: Approval) -> some View {
         let requiresFullReview = approval.risk > .low || approval.kind == .patch
-        InboxBoardCard(
+        return InboxBoardCard(
             bandLabel: bandLabel(for: approval),
             agentInitial: agentInitial(approval.agent),
             agentName: agentName(approval.agent),

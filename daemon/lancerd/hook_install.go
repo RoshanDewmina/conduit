@@ -15,6 +15,10 @@ import (
 // hook block. Must match docs/claude-settings-hook.json verbatim.
 const claudeHookCommand = "bash ~/.claude/hooks/lancer-hook.sh"
 
+// codexHookCommand is the command string Lancer registers in Codex's PreToolUse
+// hook block. Must match docs/codex-hooks.json verbatim.
+const codexHookCommand = "bash ~/.codex/hooks/lancer-hook.sh"
+
 // claudeHookScript is the PreToolUse hook `lancerd install` drops to
 // ~/.claude/hooks/lancer-hook.sh. Keep it byte-for-byte in sync with
 // docs/lancer-hook.sh (the canonical, human-readable copy).
@@ -59,6 +63,31 @@ TOOL="$TOOL_NAME"
 case "$TOOL" in
   Read|Glob|Grep|LS|WebSearch|WebFetch|TodoRead|TodoWrite|NotebookRead)
     exit 0
+    ;;
+esac
+
+# Agent question tools — escalate as askQuestion (not a mutating command).
+case "$TOOL" in
+  AskUserQuestion|AskQuestion|ask_user|question)
+    QUESTION_ARGS=()
+    [ -n "$TOOL_NAME" ]                              && QUESTION_ARGS+=(--tool-name="$TOOL_NAME")
+    [ -n "$TOOL_USE_ID" ]                            && QUESTION_ARGS+=(--tool-use-id="$TOOL_USE_ID")
+    [ -n "$SESSION_ID" ]                             && QUESTION_ARGS+=(--session-id="$SESSION_ID")
+    [ -n "$TOOL_INPUT" ] && [ "$TOOL_INPUT" != "{}" ] && QUESTION_ARGS+=(--tool-input="$TOOL_INPUT")
+    if "$LANCERD" agent-hook \
+      --agent "claudeCode" \
+      --kind "askQuestion" \
+      --command "$COMMAND" \
+      --cwd "$(pwd)" \
+      --risk "low" \
+      --question "$COMMAND" \
+      "${QUESTION_ARGS[@]}"
+    then
+      exit 0
+    else
+      printf "Blocked by Lancer — question was not answered on the iOS app."
+      exit 2
+    fi
     ;;
 esac
 
@@ -235,6 +264,20 @@ func claudeHookWired(settingsPath string) bool {
 		return false
 	}
 	return settingsHasHookCommand(settings, claudeHookCommand)
+}
+
+// codexHookWired reports whether the Lancer PreToolUse hook is registered in
+// ~/.codex/hooks.json.
+func codexHookWired(hooksPath string) bool {
+	data, err := os.ReadFile(hooksPath)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	var settings map[string]json.RawMessage
+	if json.Unmarshal(data, &settings) != nil {
+		return false
+	}
+	return settingsHasHookCommand(settings, codexHookCommand)
 }
 
 // atomicWriteFile writes data to path via a temp file in the same directory

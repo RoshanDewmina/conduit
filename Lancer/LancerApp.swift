@@ -238,20 +238,55 @@ final class LancerNotificationDelegate: NSObject, UNUserNotificationCenterDelega
                 object: nil,
                 userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": "reject"]
             )
+        case "question.answer":
+            if !approvalId.isEmpty {
+                OpenApprovalBuffer.shared.record(approvalID: approvalId)
+                NotificationCenter.default.post(
+                    name: .lancerOpenApproval,
+                    object: nil,
+                    userInfo: ["approvalId": approvalId]
+                )
+            }
         case "run.view":
             NotificationCenter.default.post(
                 name: .lancerRunCompleteAction,
                 object: nil,
                 userInfo: ["sessionId": sessionId]
             )
+        case "needs-input.reply":
+            NotificationCenter.default.post(
+                name: .lancerNeedsInputAction,
+                object: nil,
+                userInfo: [
+                    "sessionId": sessionId,
+                    "vendorSessionId": info["vendorSessionId"] as? String ?? "",
+                    "agent": info["agent"] as? String ?? "",
+                ]
+            )
+        case "secret.view":
+            NotificationCenter.default.post(name: .lancerOpenSecrets, object: nil)
         case UNNotificationDefaultActionIdentifier:
             // Tapping the notification body (not an action button) — bring the
             // user to the relevant session rather than doing nothing.
-            NotificationCenter.default.post(
-                name: .lancerRunCompleteAction,
-                object: nil,
-                userInfo: ["sessionId": sessionId]
-            )
+            if (info["kind"] as? String) == "secretRequest" {
+                NotificationCenter.default.post(name: .lancerOpenSecrets, object: nil)
+            } else if (info["kind"] as? String) == "needsInput" {
+                NotificationCenter.default.post(
+                    name: .lancerNeedsInputAction,
+                    object: nil,
+                    userInfo: [
+                        "sessionId": sessionId,
+                        "vendorSessionId": info["vendorSessionId"] as? String ?? "",
+                        "agent": info["agent"] as? String ?? "",
+                    ]
+                )
+            } else {
+                NotificationCenter.default.post(
+                    name: .lancerRunCompleteAction,
+                    object: nil,
+                    userInfo: ["sessionId": sessionId]
+                )
+            }
             // When the body tap is for an approval, also open the detail sheet.
             // Record to the buffer first (cold-launch guard) then post for warm case.
             if !approvalId.isEmpty {

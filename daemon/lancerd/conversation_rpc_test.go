@@ -23,6 +23,11 @@ func callSSHRPC(t *testing.T, s *server, method string, params any) rpcMessage {
 	s.setEmitter(func(data []byte) error {
 		var m rpcMessage
 		_ = json.Unmarshal(data, &m)
+		// Notifications (agent.approval.pending, agent.run.output, …) have no
+		// JSON-RPC id — only capture the RPC response frame for this call.
+		if m.ID == nil {
+			return nil
+		}
 		select {
 		case resultCh <- m:
 		default:

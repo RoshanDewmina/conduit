@@ -74,6 +74,8 @@ public struct ApprovalPendingParams: Codable, Sendable {
     /// echoed verbatim in the decision so `approvalStore.resolve` can verify it —
     /// mirrors `ApprovalEvent.ContentHash` (`daemon/lancerd/approval.go`).
     public let contentHash: String?
+    public let question: String?
+    public let choices: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id, sessionId, agent, kind, command, patch, cwd, risk, runId
@@ -81,6 +83,7 @@ public struct ApprovalPendingParams: Codable, Sendable {
         case agentSessionID = "agentSessionID"
         case files, touchesGit, touchesNetwork, matchedRule
         case contentHash
+        case question, choices
     }
 
     public var approvalRisk: Approval.Risk {
@@ -97,6 +100,8 @@ public struct ApprovalPendingParams: Codable, Sendable {
     public var approvalAgentSessionID: String? { agentSessionID }
     public var approvalToolInput: String? { toolInput }
     public var approvalContentHash: String? { contentHash }
+    public var approvalQuestion: String? { question }
+    public var approvalChoices: [String]? { choices }
     public var blastRadius: ApprovalBlastRadius {
         ApprovalBlastRadius(
             files: files,

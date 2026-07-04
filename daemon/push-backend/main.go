@@ -71,11 +71,35 @@ type registerRequest struct {
 }
 
 type approvalEvent struct {
-	ID        string `json:"id"`
-	SessionID string `json:"sessionId"`
-	Command   string `json:"command"`
-	Risk      string `json:"risk"`
-	HostName  string `json:"hostName"`
+	ID        string   `json:"id"`
+	SessionID string   `json:"sessionId"`
+	Command   string   `json:"command"`
+	Risk      string   `json:"risk"`
+	HostName  string   `json:"hostName"`
+	Kind      string   `json:"kind,omitempty"`
+	Question  string   `json:"question,omitempty"`
+	Choices   []string `json:"choices,omitempty"`
+	Agent     string   `json:"agent,omitempty"`
+	ToolName  string   `json:"toolName,omitempty"`
+}
+
+type secretRequestEvent struct {
+	ID             string `json:"id"`
+	SessionID      string `json:"sessionId"`
+	Agent          string `json:"agent"`
+	ToolName       string `json:"toolName"`
+	CredentialType string `json:"credentialType"`
+	RequestedScope string `json:"requestedScope"`
+	HostName       string `json:"hostName"`
+}
+
+type needsInputEvent struct {
+	SessionID       string `json:"sessionId"`
+	HostName        string `json:"hostName"`
+	Agent           string `json:"agent"`
+	VendorSessionID string `json:"vendorSessionId"`
+	Title           string `json:"title"`
+	Kind            string `json:"kind"`
 }
 
 type runCompleteEvent struct {
@@ -105,6 +129,8 @@ func main() {
 	mux.HandleFunc("POST /register-activity-token", handleRegisterActivityToken)
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
+	mux.HandleFunc("POST /secret-request", handleSecretRequest)
+	mux.HandleFunc("POST /needs-input", handleNeedsInput)
 	mux.HandleFunc("POST /run-start", handleRunStart)
 	mux.HandleFunc("/approval/decision", handlePostDecision)
 	mux.HandleFunc("/decisions", handlePollDecisions)
@@ -280,6 +306,129 @@ func handleApproval(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func handleSecretRequest(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var ev secretRequestEvent
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
+		return
+	}
+	registry.RLock()
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
+	registry.RUnlock()
+	if !ok || token == "" {
+		log.Printf("no device token for session %s — dropping secret-request", ev.SessionID)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	if err := pushSecretRequest(token, ev); err != nil {
+		log.Printf("APNs secret-request push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleNeedsInput(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var ev needsInputEvent
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
+		return
+	}
+	registry.RLock()
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
+	registry.RUnlock()
+	if !ok || token == "" {
+		log.Printf("no device token for session %s — dropping needs-input", ev.SessionID)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	if err := pushNeedsInput(token, ev); err != nil {
+		log.Printf("APNs needs-input push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func pushSecretRequest(deviceToken string, ev secretRequestEvent) error {
+	keyID := mustEnv("APNS_KEY_ID")
+	teamID := mustEnv("APNS_TEAM_ID")
+	keyPath := mustEnv("APNS_KEY_PATH")
+	bundleID := mustEnv("APNS_BUNDLE_ID")
+	key, err := loadP8Key(keyPath)
+	if err != nil {
+		return fmt.Errorf("load APNs key: %w", err)
+	}
+	token, err := makeJWT(keyID, teamID, key)
+	if err != nil {
+		return fmt.Errorf("make JWT: %w", err)
+	}
+	title := fmt.Sprintf("Credential needed · %s", ev.HostName)
+	body := "An agent is requesting access to a credential"
+	if ev.ToolName != "" {
+		body = fmt.Sprintf("Credential needed for %s", ev.ToolName)
+	}
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{"title": title, "body": body},
+			"sound": "default", "badge": 1, "category": "secret-request",
+		},
+		"sessionId": ev.SessionID, "kind": "secretRequest",
+	}
+	buf, _ := json.Marshal(payload)
+	return sendAPNsAlert(deviceToken, bundleID, token, buf, "10")
+}
+
+func pushNeedsInput(deviceToken string, ev needsInputEvent) error {
+	keyID := mustEnv("APNS_KEY_ID")
+	teamID := mustEnv("APNS_TEAM_ID")
+	keyPath := mustEnv("APNS_KEY_PATH")
+	bundleID := mustEnv("APNS_BUNDLE_ID")
+	key, err := loadP8Key(keyPath)
+	if err != nil {
+		return fmt.Errorf("load APNs key: %w", err)
+	}
+	token, err := makeJWT(keyID, teamID, key)
+	if err != nil {
+		return fmt.Errorf("make JWT: %w", err)
+	}
+	title := fmt.Sprintf("Needs your input · %s", ev.HostName)
+	body := ev.Title
+	if body == "" {
+		body = "An agent is waiting for your reply"
+	}
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{"title": title, "body": body},
+			"sound": "default", "badge": 1, "category": "needs-input",
+		},
+        "sessionId": ev.SessionID, "kind": "needsInput",
+		"vendorSessionId": ev.VendorSessionID, "agent": ev.Agent,
+	}
+	buf, _ := json.Marshal(payload)
+	return sendAPNsAlert(deviceToken, bundleID, token, buf, "10")
+}
+
 func handleRunComplete(w http.ResponseWriter, r *http.Request) {
 	if !relayAuthorized(w, r) {
 		return
@@ -420,11 +569,21 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	if risk == "" {
 		risk = "unknown"
 	}
+	category := "approval"
 	title := fmt.Sprintf("Approval needed · %s", ev.HostName)
-	// PRIVACY: never put raw command text, file paths, env values, or secrets
-	// in the APNs alert body — it appears on the lock screen. Use a redacted
-	// summary (risk + tool category). Full detail is fetched in-app post-unlock.
 	body := redactSummary(risk, ev.Command)
+	if ev.Kind == "askQuestion" {
+		category = "question"
+		title = fmt.Sprintf("Agent question · %s", ev.HostName)
+		if q := strings.TrimSpace(ev.Question); q != "" {
+			if len(q) > 120 {
+				q = q[:117] + "..."
+			}
+			body = q
+		} else {
+			body = "Your agent needs your input"
+		}
+	}
 
 	payload := map[string]any{
 		"aps": map[string]any{
@@ -434,11 +593,12 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 			},
 			"sound":    "default",
 			"badge":    1,
-			"category": "approval",
+			"category": category,
 		},
 		"approvalId": ev.ID,
 		"sessionId":  ev.SessionID,
 		"risk":       risk,
+		"kind":       ev.Kind,
 	}
 
 	buf, _ := json.Marshal(payload)

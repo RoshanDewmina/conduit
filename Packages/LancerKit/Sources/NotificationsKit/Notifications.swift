@@ -11,6 +11,14 @@ public extension Notification.Name {
     /// Posted when the user taps View on a run-complete push notification.
     /// userInfo: ["sessionId": String]
     static let lancerRunCompleteAction = Notification.Name("dev.lancer.runCompleteAction")
+    /// Posted when the user taps Reply on a needs-input push notification.
+    /// userInfo: ["sessionId": String, "vendorSessionId": String?, "agent": String?]
+    static let lancerNeedsInputAction = Notification.Name("dev.lancer.needsInputAction")
+    /// Posted to focus the nearest follow-up / chat composer (e.g. after a
+    /// needs-input notification deep-link).
+    static let lancerFocusComposer = Notification.Name("dev.lancer.focusComposer")
+    /// Posted when the user taps a credential-request push notification.
+    static let lancerOpenSecrets = Notification.Name("dev.lancer.openSecrets")
     /// Posted when a background remote (APNs) push is received so the Inbox
     /// can refresh approval / run-complete state without the user opening the app.
     /// userInfo: the raw APNs userInfo dictionary forwarded from the push payload.
@@ -118,6 +126,9 @@ public struct NotificationFilter: Codable, Sendable, Equatable {
     public var quietHoursEnd: Int = 8
     /// Per-event-kind toggles
     public var approvalNotifications: Bool = true
+    public var questionNotifications: Bool = true
+    public var secretNotifications: Bool = true
+    public var needsInputNotifications: Bool = true
     public var runCompleteNotifications: Bool = true
     public var errorNotifications: Bool = true
 
@@ -133,12 +144,15 @@ public struct NotificationFilter: Codable, Sendable, Equatable {
     public func shouldDeliver(kind: NotificationKind) -> Bool {
         switch kind {
         case .approval: return approvalNotifications
+        case .question: return questionNotifications
+        case .secret: return secretNotifications
+        case .needsInput: return needsInputNotifications
         case .runComplete: return runCompleteNotifications
         case .error: return errorNotifications
         }
     }
 
-    public enum NotificationKind: Sendable { case approval, runComplete, error }
+    public enum NotificationKind: Sendable { case approval, question, secret, needsInput, runComplete, error }
 
     private func isCurrentlyQuiet() -> Bool {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -213,20 +227,27 @@ public actor Notifications {
     /// Schedule a local notification representing a pending approval. The
     /// notification body uses `userInfo` to deep-link into the Inbox tab.
     public func notifyPendingApproval(_ approval: Approval, hostName: String) async {
-        guard _filter.shouldDeliver(kind: .approval) else { return }
+        let notifKind: NotificationFilter.NotificationKind = approval.kind == .askQuestion ? .question : .approval
+        guard _filter.shouldDeliver(kind: notifKind) else { return }
         guard _filter.shouldDeliver(risk: approval.risk, agent: approval.agent) else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Approval needed · \(hostName)"
-        content.body = approval.command ?? approval.patch.map { _ in "Patch ready for review" } ?? "Action pending"
+        if approval.kind == .askQuestion {
+            content.title = "Agent question · \(hostName)"
+            let q = (approval.question ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            content.body = q.isEmpty ? "Your agent needs your input" : String(q.prefix(120))
+            content.categoryIdentifier = "question"
+        } else {
+            content.title = "Approval needed · \(hostName)"
+            content.body = approval.command ?? approval.patch.map { _ in "Patch ready for review" } ?? "Action pending"
+            content.categoryIdentifier = "approval"
+        }
         content.sound = .defaultCritical
         content.threadIdentifier = approval.sessionID.uuidString
         content.userInfo = [
-            "kind": "approval",
+            "kind": approval.kind == .askQuestion ? "question" : "approval",
             "approvalId": approval.id.uuidString,
             "sessionId":  approval.sessionID.uuidString,
         ]
-        // Actionable category — registered in registerCategories().
-        content.categoryIdentifier = "approval"
 
         let req = UNNotificationRequest(
             identifier: approval.id.uuidString,
@@ -356,6 +377,44 @@ public actor Notifications {
             options: []
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories([approvalCategory, runCategory])
+        let answer = UNNotificationAction(
+            identifier: "question.answer",
+            title: "Answer",
+            options: [.foreground, .authenticationRequired]
+        )
+        let questionCategory = UNNotificationCategory(
+            identifier: "question",
+            actions: [answer],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        let viewSecrets = UNNotificationAction(
+            identifier: "secret.view",
+            title: "Review",
+            options: [.foreground]
+        )
+        let secretCategory = UNNotificationCategory(
+            identifier: "secret-request",
+            actions: [viewSecrets],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        let reply = UNNotificationAction(
+            identifier: "needs-input.reply",
+            title: "Reply",
+            options: [.foreground]
+        )
+        let needsInputCategory = UNNotificationCategory(
+            identifier: "needs-input",
+            actions: [reply],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([
+            approvalCategory, questionCategory, secretCategory, needsInputCategory, runCategory,
+        ])
     }
 }

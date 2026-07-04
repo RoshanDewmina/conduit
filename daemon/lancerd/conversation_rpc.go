@@ -227,7 +227,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		launchParams.worktreePath = wt.Path
 		launchParams.worktreeRepoRoot = wt.RepoRoot
 	}
-	launchResult := s.dispatcher.launchConversationTurn(runID, launchParams, s.policyEffect, s.auditEntry)
+	launchResult := s.runDispatchResult(s.dispatcher.launchConversationTurn(runID, launchParams, s.policyEffect, s.auditEntry))
 
 	if wt.Path != "" {
 		if launchResult.Status == "started" {

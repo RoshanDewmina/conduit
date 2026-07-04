@@ -175,6 +175,9 @@ struct RunFollowUpBar: View {
         .padding(.vertical, 9)
         .background(t.surfaceSunk, in: Capsule())
         .overlay(Capsule().stroke(t.border.opacity(0.65), lineWidth: 1))
+        .onReceive(NotificationCenter.default.publisher(for: .lancerFocusComposer)) { _ in
+            focused = true
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,8 @@ func runAgentHook(args []string) error {
 	toolUseID := fs.String("tool-use-id", "", "tool_use_id from the agent session")
 	sessionID := fs.String("session-id", "", "agent session ID")
 	toolInput := fs.String("tool-input", "", "raw JSON tool_input from tool_use")
+	question := fs.String("question", "", "agent question text (askQuestion kind)")
+	choices := fs.String("choices", "", "comma-separated answer choices")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -48,6 +51,20 @@ func runAgentHook(args []string) error {
 	}
 
 	event := buildApprovalEventForTest(*agent, *kind, *command, *cwd, *risk, *toolName, *toolUseID, *sessionID, *toolInput)
+	if *question != "" {
+		event.Question = *question
+	}
+	if *choices != "" {
+		for _, c := range strings.Split(*choices, ",") {
+			if t := strings.TrimSpace(c); t != "" {
+				event.Choices = append(event.Choices, t)
+			}
+		}
+	}
+	if event.Kind == "askQuestion" && event.Question == "" {
+		event.Question = *command
+	}
+	event.ContentHash = computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -156,6 +173,8 @@ func normalizeKind(kind string) string {
 		return "credential"
 	case "browser":
 		return "browser"
+	case "askQuestion", "ask_question", "AskUserQuestion", "question":
+		return "askQuestion"
 	default:
 		return kind
 	}

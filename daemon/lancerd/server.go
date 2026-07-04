@@ -217,6 +217,13 @@ type server struct {
 	// (conversation_rpc.go) then return a clear "conversation store
 	// unavailable" error instead of panicking on a nil pointer.
 	conversations *conversationStore
+	// pendingLaunches holds dispatch/continue launches waiting for a human
+	// approve on a policy gate (see attention.go).
+	pendingLaunchMu sync.Mutex
+	pendingLaunches map[string]pendingGateLaunch
+	// needsInputNotified debounces waitingForInput push notifications per session.
+	needsInputMu       sync.Mutex
+	needsInputNotified map[string]time.Time
 }
 
 type loopState struct {
@@ -310,6 +317,7 @@ func (s *server) applyDecision(id, decision, editedToolInput, contentHash string
 			fmt.Fprintf(os.Stderr, "appendAllowAlways failed for %s: %v\n", id, err)
 		}
 	}
+	s.maybeLaunchPendingGate(event, decision)
 	return event, ok
 }
 
@@ -330,6 +338,8 @@ func hookWiredForAgent(home string) func(string) bool {
 		switch bin {
 		case "claude":
 			return claudeHookWired(claudeSettingsPath(home))
+		case "codex":
+			return codexHookWired(filepath.Join(home, ".codex", "hooks.json"))
 		case "opencode":
 			return opencodeGateWired(home)
 		default:
@@ -436,13 +446,13 @@ func (s *server) runDispatch(p dispatchParams) dispatchResult {
 			_, _ = s.removeManagedWorktree(wt.RepoRoot, wt.Path)
 		}
 	}
-	return res
+	return s.runDispatchResult(res)
 }
 
 // runContinue continues an existing run with a new prompt (used by the SSH RPC and
 // the E2E relay), re-passing the policy + budget gates via the dispatcher.
 func (s *server) runContinue(runID, prompt string, fb continueFallback) dispatchResult {
-	return s.dispatcher.continueRun(runID, prompt, fb, s.policyEffect, s.auditEntry)
+	return s.runDispatchResult(s.dispatcher.continueRun(runID, prompt, fb, s.policyEffect, s.auditEntry))
 }
 
 // runObservedSessionContinue sends a follow-up prompt into a session that was
@@ -450,7 +460,7 @@ func (s *server) runContinue(runID, prompt string, fb continueFallback) dispatch
 // targeted by its exact vendor session ID, re-passing the policy + budget
 // gates via the dispatcher (used by agent.observedSession.continue).
 func (s *server) runObservedSessionContinue(p observedSessionContinueParams) dispatchResult {
-	return s.dispatcher.resumeObservedSession(p, s.policyEffect, s.auditEntry)
+	return s.runDispatchResult(s.dispatcher.resumeObservedSession(p, s.policyEffect, s.auditEntry))
 }
 
 // applyRunControl applies a relay-delivered run-control action to a dispatched
@@ -781,6 +791,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32000, err.Error())
 			return
 		}
+		s.notifyWaitingForInputSessions(sessions)
 		s.writeResult(msg.ID, map[string]interface{}{"sessions": sessions})
 
 	case "agent.sessions.transcript":
@@ -1554,6 +1565,9 @@ func (s *server) writeError(id interface{}, code int, message string) {
 // handoff) regardless of ledger persistence outcome.
 func (s *server) emitNotification(method string, params any) {
 	s.persistConversationEvent(method, params)
+	if method == "agent.run.status" {
+		s.maybePostRunCompletePush(params)
+	}
 
 	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 	if err != nil {
@@ -1743,6 +1757,13 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 		"hostName":  hostname,
 		"agent":     event.Agent,
 		"toolName":  tool,
+		"kind":      event.Kind,
+	}
+	if event.Question != "" {
+		payload["question"] = event.Question
+	}
+	if len(event.Choices) > 0 {
+		payload["choices"] = event.Choices
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
