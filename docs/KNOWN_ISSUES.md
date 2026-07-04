@@ -349,3 +349,32 @@ are now archived under `docs/_archive/`.
   OSStatus logging make any recurrence self-diagnosing.
   Full investigation record: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md`
   Part 7 (superseded by this entry's root cause).
+- **P1 (filed 2026-07-04, ROOT CAUSE FOUND + resolved same day):** after stopping/restarting the
+  production `dev.lancer.lancerd`, the daemon logged `connected to relay as daemon (code: 194990)`
+  with no `paired with phone` ever following, while Cloud Run showed the phone reconnecting with a
+  *different* code (`role=phone&code=893127`). **This was not a restart bug.** Root cause: the
+  daemon has exactly ONE pairing slot (`~/.lancer/relay-pairing.json`), and every daemon-side
+  pairing entry point (`lancerd pair`, `agent.pair.begin`, `lancerd relay-attach`, the install
+  helper) mints a fresh code and overwrites that file immediately; the resident's watcher then
+  hot-swaps the live relay client onto the new code within ~5s — silently orphaning every phone
+  paired to the old code. On 2026-07-03 20:57 a test session re-paired the daemon (code 194990)
+  and the "phone" that completed that pairing was the iPhone 17 Pro **Simulator** (verified: the
+  sim container holds `lancer.relay.machine.….code => 194990`); the owner's real iPhone (893127)
+  had been orphaned since that moment. The 2026-07-04 10:24 restart merely revealed it. The
+  restart-reconnect path itself (persisted pairing intact on both sides) was verified working
+  live — see `docs/test-runs/2026-07-04-connection-state-architecture.md`. Restart-with-intact-
+  pairing requires NO re-pair; a daemon-side re-pair orphans all phones BY DESIGN of the single
+  pairing slot, and is now loud: `writeRelayPairing` + the watcher log
+  `REPLACING existing relay pairing (code X -> Y) — phones paired to the old code are orphaned`.
+  A related silent-orphan defect on the phone was fixed in the same pass: `addRelayMachine`
+  started + registered a bridge even when `RelayFleetStore.add()` silently dropped the machine at
+  the 3-machine cap, producing a pairing that worked in-memory until the next relaunch and then
+  vanished (never in the hydration index). `add()` now returns `Bool`; the caller tears down and
+  logs `.fault` on a cap drop; hydration logs a launch summary of exactly which machines the index
+  restores. **Owner action:** the physical iPhone's 893127 pairing is unrecoverable by code — it
+  must be re-paired once against the daemon's current code. Follow-up (unfiled, low): from the
+  phone, an orphaned pairing is protocol-indistinguishable from "host offline" — the new
+  `ConnectionStateStore.hostOffline` state's UI copy should eventually hint "if the Mac shows a
+  new pairing code, re-pair". Second observation from the same logs: an additional daemon dials
+  the relay hourly on code `504109` (pk `n_dtq…`) from somewhere other than this Mac's launchd
+  daemon — likely a stale test/remote instance; harmless but worth identifying.
