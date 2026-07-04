@@ -190,6 +190,7 @@ type conversationAppendRequest struct {
 	Prompt         string  `json:"prompt"`
 	Model          string  `json:"model,omitempty"`
 	BudgetUSD      float64 `json:"budgetUSD,omitempty"`
+	UseWorktree    bool    `json:"useWorktree,omitempty"`
 }
 
 // conversationAppendResult mirrors the subset of the agent.conversations.append

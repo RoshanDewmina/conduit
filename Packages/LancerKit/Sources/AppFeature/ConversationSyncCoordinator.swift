@@ -86,6 +86,8 @@ public actor ConversationSyncCoordinator {
         public let baseSeqForNextTurn: Int
         public let resumeMode: String?
         public let vendorSessionID: String?
+        public let worktreePath: String?
+        public let isolated: Bool
     }
 
     // MARK: - Public API
@@ -196,7 +198,9 @@ public actor ConversationSyncCoordinator {
                 cwd: response.cwd ?? request.cwd ?? "",
                 baseSeqForNextTurn: response.nextSeq,
                 resumeMode: response.resumeMode,
-                vendorSessionID: response.vendorSessionId
+                vendorSessionID: response.vendorSessionId,
+                worktreePath: response.worktreePath,
+                isolated: response.isolated ?? false
             ))
         case "conflict":
             publish(.conflict, for: response.conversationId)

@@ -1156,7 +1156,8 @@ public struct AppRoot: View {
                 subtitle: "",
                 cwd: started.cwd,
                 conversationID: started.conversationID,
-                nextBaseSeq: started.baseSeqForNextTurn
+                nextBaseSeq: started.baseSeqForNextTurn,
+                worktreePath: started.worktreePath
             ))
         case .blocked(let message):
             return .blocked(message)
@@ -2868,7 +2869,9 @@ public struct ActiveChatRun: Identifiable {
     /// The `nextSeq` the host returned for this turn — the `baseSeq` the next
     /// follow-up's `agent.conversations.append` call must send.
     public let nextBaseSeq: Int
-    public init(runId: String, channel: any RunControlling, title: String, subtitle: String, cwd: String, conversationID: String? = nil, nextBaseSeq: Int = 0) {
+    /// Daemon-managed per-run worktree path, when the run was dispatched with isolation.
+    public let worktreePath: String?
+    public init(runId: String, channel: any RunControlling, title: String, subtitle: String, cwd: String, conversationID: String? = nil, nextBaseSeq: Int = 0, worktreePath: String? = nil) {
         self.runId = runId
         self.channel = channel
         self.title = title
@@ -2876,6 +2879,7 @@ public struct ActiveChatRun: Identifiable {
         self.cwd = cwd
         self.conversationID = conversationID
         self.nextBaseSeq = nextBaseSeq
+        self.worktreePath = worktreePath
     }
     public var id: String { runId }
 }

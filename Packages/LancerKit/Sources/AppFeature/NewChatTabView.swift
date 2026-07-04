@@ -616,16 +616,32 @@ public struct NewChatTabView: View {
     // Transcript chrome follows the app theme; only the terminal output card is
     // intentionally dark so an active conversation doesn't create a second app skin.
     private var darkChatHeader: some View {
-        DarkTranscriptHeader(
-            title: chatTitle,
-            subtitle: "\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "My machine")",
-            isLive: isStreaming,
-            onBack: { Haptics.selection(); resetForNewChat() },
-            onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
-            onNew: { Haptics.selection(); resetForNewChat() },
-            shareText: { transcriptText() },
-            onSSHFeatures: { Haptics.selection(); showSSHFeatures = true }
-        )
+        VStack(spacing: 0) {
+            DarkTranscriptHeader(
+                title: chatTitle,
+                subtitle: "\(selectedAgent?.name ?? "Agent") · \(selectedAgent?.hostName ?? "My machine")",
+                isLive: isStreaming,
+                onBack: { Haptics.selection(); resetForNewChat() },
+                onWorkspace: { Haptics.selection(); onOpenWorkspace(selectedAgent) },
+                onNew: { Haptics.selection(); resetForNewChat() },
+                shareText: { transcriptText() },
+                onSSHFeatures: { Haptics.selection(); showSSHFeatures = true }
+            )
+            if let wt = activeRun?.worktreePath, !wt.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.dsMonoPt(10))
+                    Text("Isolated · \(URL(fileURLWithPath: wt).lastPathComponent)")
+                        .font(.dsMonoPt(10))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .foregroundStyle(t.text3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
+        }
     }
 
     @ViewBuilder

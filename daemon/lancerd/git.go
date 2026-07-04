@@ -431,18 +431,154 @@ type worktreeResult struct {
 	Branch       string           `json:"branch"`
 	Path         string           `json:"path"`
 	Status       string           `json:"status"`
+	Managed      bool             `json:"managed"`
 	ChangedFiles []gitChangedFile `json:"changedFiles"`
 	LastActivity string           `json:"lastActivity"`
+}
+
+type worktreeCreateParams struct {
+	Workdir string `json:"workdir"`
+	Branch  string `json:"branch,omitempty"`
+	ID      string `json:"id,omitempty"`
+}
+
+type worktreeCreateResult struct {
+	ID       string `json:"id"`
+	Path     string `json:"path"`
+	Branch   string `json:"branch"`
+	Managed  bool   `json:"managed"`
+	RepoRoot string `json:"repoRoot,omitempty"`
+}
+
+type worktreeRemoveParams struct {
+	Workdir string `json:"workdir"`
+	Path    string `json:"path"`
+}
+
+type worktreeRemoveResult struct {
+	Removed bool `json:"removed"`
+}
+
+// managedWorktreesRoot is where lancerd creates per-run isolated checkouts
+// (~/.lancer/worktrees/<repo>/<id>). Distinct from vendor scratch dirs like
+// .claude/worktrees/ — these are daemon-owned and removable via agent.worktree.remove.
+func managedWorktreesRoot(home string) string {
+	return filepath.Join(home, ".lancer", "worktrees")
+}
+
+func isManagedWorktree(home, path string) bool {
+	root := filepath.Clean(managedWorktreesRoot(home))
+	path = filepath.Clean(expandHome(path))
+	return path == root || strings.HasPrefix(path, root+string(os.PathSeparator))
+}
+
+func sanitizeWorktreeID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return strings.ReplaceAll(newUUID(), "-", ""), nil
+	}
+	for _, r := range id {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+			return "", errors.New("invalid worktree id")
+		}
+	}
+	return id, nil
+}
+
+func (s *server) repoRoot(workdir string) (string, error) {
+	out, err := s.gitRun(expandHome(workdir), "git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// createManagedWorktree runs `git worktree add` into ~/.lancer/worktrees/<repo>/<id>.
+// workdir may be any path inside the repo; branch defaults to lancer/run-<id>.
+func (s *server) createManagedWorktree(workdir, branch, id string) (worktreeCreateResult, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return worktreeCreateResult{}, err
+	}
+	workdir = expandHome(workdir)
+	if workdir == "" {
+		return worktreeCreateResult{}, errors.New("workdir required")
+	}
+	repoRoot, err := s.repoRoot(workdir)
+	if err != nil {
+		return worktreeCreateResult{}, fmt.Errorf("not a git repo: %w", err)
+	}
+	if !withinHome(home, repoRoot) {
+		return worktreeCreateResult{}, errors.New("repo is outside the home directory")
+	}
+
+	wtID, err := sanitizeWorktreeID(id)
+	if err != nil {
+		return worktreeCreateResult{}, err
+	}
+	dest := filepath.Join(managedWorktreesRoot(home), filepath.Base(repoRoot), wtID)
+	if !withinHome(home, dest) {
+		return worktreeCreateResult{}, errors.New("managed worktree path escapes home")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		return worktreeCreateResult{}, fmt.Errorf("worktree %s already exists", wtID)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
+		return worktreeCreateResult{}, err
+	}
+
+	if branch == "" {
+		short := wtID
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		branch = "lancer/run-" + short
+	}
+	if _, err := s.gitRun(repoRoot, "git", "worktree", "add", "-b", branch, dest); err != nil {
+		return worktreeCreateResult{}, err
+	}
+	return worktreeCreateResult{
+		ID: wtID, Path: dest, Branch: branch, Managed: true, RepoRoot: repoRoot,
+	}, nil
+}
+
+// removeManagedWorktree deletes a daemon-managed checkout. Only paths under
+// ~/.lancer/worktrees are accepted — never arbitrary worktrees the owner created.
+func (s *server) removeManagedWorktree(workdir, path string) (worktreeRemoveResult, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return worktreeRemoveResult{}, err
+	}
+	path = filepath.Clean(expandHome(path))
+	if path == "" {
+		return worktreeRemoveResult{}, errors.New("path required")
+	}
+	if !isManagedWorktree(home, path) {
+		return worktreeRemoveResult{}, errors.New("refusing to remove non-managed worktree")
+	}
+	repoRoot, err := s.repoRoot(workdir)
+	if err != nil {
+		repoRoot, err = s.repoRoot(path)
+		if err != nil {
+			return worktreeRemoveResult{}, err
+		}
+	}
+	if _, err := s.gitRun(repoRoot, "git", "worktree", "remove", "--force", path); err != nil {
+		return worktreeRemoveResult{}, err
+	}
+	_ = os.Remove(filepath.Dir(path))
+	return worktreeRemoveResult{Removed: true}, nil
 }
 
 // listWorktrees parses `git worktree list --porcelain` for workdir's repo and
 // annotates each with its branch + dirty/clean status. workdir may be any path
 // inside the repo. A supervision board view — not a worktree manager.
-func (s *server) listWorktrees(workdir string) ([]worktreeResult, error) {
+func (s *server) listWorktrees(workdir string, managedOnly bool) ([]worktreeResult, error) {
 	out, err := s.gitRun(workdir, "git", "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
+	home, _ := os.UserHomeDir()
 	repoName := ""
 	if name, nErr := s.gitRun(workdir, "git", "rev-parse", "--show-toplevel"); nErr == nil {
 		parts := strings.Split(strings.TrimSpace(name), "/")
@@ -470,6 +606,11 @@ func (s *server) listWorktrees(workdir string) ([]worktreeResult, error) {
 			} else {
 				cur.Status = "idle"
 			}
+		}
+		cur.Managed = isManagedWorktree(home, cur.Path)
+		if managedOnly && !cur.Managed {
+			cur = nil
+			return
 		}
 		trees = append(trees, *cur)
 		cur = nil

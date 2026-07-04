@@ -8,6 +8,8 @@ public struct Worktree: Sendable, Codable, Identifiable {
     public let path: String
     public let baseBranch: String?
     public let status: Status
+    /// True when the checkout lives under ~/.lancer/worktrees (daemon-managed).
+    public let managed: Bool?
     public let agentID: String?
     public let loopID: String?
     public let changedFiles: [ChangedFile]
@@ -58,6 +60,7 @@ public struct Worktree: Sendable, Codable, Identifiable {
         path: String,
         baseBranch: String? = nil,
         status: Status,
+        managed: Bool? = nil,
         agentID: String? = nil,
         loopID: String? = nil,
         changedFiles: [ChangedFile] = [],
@@ -70,6 +73,7 @@ public struct Worktree: Sendable, Codable, Identifiable {
         self.path = path
         self.baseBranch = baseBranch
         self.status = status
+        self.managed = managed
         self.agentID = agentID
         self.loopID = loopID
         self.changedFiles = changedFiles

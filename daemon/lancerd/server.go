@@ -276,7 +276,20 @@ func newServer(home string) *server {
 	// Dispatched runs stream stdout/stderr + status back to the phone through the
 	// same serialized writer the approval-pending notification uses.
 	s.dispatcher.emit = s.emitNotification
+	s.dispatcher.onRunTerminal = s.handleRunTerminal
 	return s
+}
+
+// handleRunTerminal applies per-run worktree retention: successful runs are
+// removed automatically; failed runs are kept for host-side inspection.
+func (s *server) handleRunTerminal(runID, status string, exitCode int) {
+	wtPath, repoRoot := s.dispatcher.takeRunWorktree(runID)
+	if wtPath == "" {
+		return
+	}
+	if status == "exited" && exitCode == 0 {
+		_, _ = s.removeManagedWorktree(repoRoot, wtPath)
+	}
 }
 
 // applyDecision resolves a pending approval and persists the outcome IDENTICALLY
@@ -397,7 +410,29 @@ func (s *server) persistLoopsLocked() {
 
 // runDispatch applies the policy + budget gate and launches (used by RPC + scheduler).
 func (s *server) runDispatch(p dispatchParams) dispatchResult {
-	return s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
+	var wt worktreeCreateResult
+	if p.UseWorktree && p.CWD != "" {
+		var err error
+		wt, err = s.createManagedWorktree(p.CWD, "", "")
+		if err != nil {
+			return dispatchResult{Status: "error", Message: err.Error()}
+		}
+		p.CWD = wt.Path
+	}
+	res := s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
+	if wt.Path != "" {
+		if res.Status == "started" {
+			s.dispatcher.attachRunWorktree(res.RunID, wt.Path, wt.RepoRoot)
+			res.WorktreePath = wt.Path
+			res.Isolated = true
+			if res.CWD == "" {
+				res.CWD = expandHome(wt.Path)
+			}
+		} else {
+			_, _ = s.removeManagedWorktree(wt.RepoRoot, wt.Path)
+		}
+	}
+	return res
 }
 
 // runContinue continues an existing run with a new prompt (used by the SSH RPC and
@@ -1180,7 +1215,8 @@ func (s *server) handleMessage(msg *rpcMessage) {
 
 	case "agent.worktree.list":
 		var p struct {
-			Workdir string `json:"workdir"`
+			Workdir     string `json:"workdir"`
+			ManagedOnly bool   `json:"managedOnly"`
 		}
 		_ = json.Unmarshal(msg.Params, &p)
 		if p.Workdir == "" {
@@ -1189,12 +1225,40 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeResult(msg.ID, map[string]interface{}{"worktrees": []worktreeResult{}})
 			return
 		}
-		trees, err := s.listWorktrees(p.Workdir)
+		trees, err := s.listWorktrees(p.Workdir, p.ManagedOnly)
 		if err != nil {
 			s.writeError(msg.ID, -32000, err.Error())
 			return
 		}
 		s.writeResult(msg.ID, map[string]interface{}{"worktrees": trees})
+
+	case "agent.worktree.create":
+		var p worktreeCreateParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" {
+			s.writeError(msg.ID, -32602, "workdir required")
+			return
+		}
+		s.auditEntry(AuditEntry{Action: "worktree-create", Kind: "git", Command: "worktree add " + p.Workdir})
+		res, err := s.createManagedWorktree(p.Workdir, p.Branch, p.ID)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
+	case "agent.worktree.remove":
+		var p worktreeRemoveParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" || p.Path == "" {
+			s.writeError(msg.ID, -32602, "workdir and path required")
+			return
+		}
+		s.auditEntry(AuditEntry{Action: "worktree-remove", Kind: "git", Command: "worktree remove " + p.Path})
+		res, err := s.removeManagedWorktree(p.Workdir, p.Path)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
 
 	case "agent.ci.recent":
 		var p struct {

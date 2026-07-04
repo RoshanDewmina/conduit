@@ -58,6 +58,8 @@ type conversationAppendResponse struct {
 	ResumeMode      string `json:"resumeMode,omitempty"`
 	Message         string `json:"message,omitempty"`
 	Rule            string `json:"rule,omitempty"`
+	WorktreePath    string `json:"worktreePath,omitempty"`
+	Isolated        bool   `json:"isolated,omitempty"`
 }
 
 // conversationArchiveRequest mirrors the agent.conversations.archive RPC request.
@@ -123,6 +125,16 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	}
 
 	runID := newUUID()
+	var wt worktreeCreateResult
+	if req.UseWorktree && isNew && resolvedCWD != "" {
+		var err error
+		wt, err = s.createManagedWorktree(resolvedCWD, "", runID)
+		if err != nil {
+			return conversationAppendResponse{Status: "error", Message: err.Error()}, nil
+		}
+		resolvedCWD = wt.Path
+	}
+
 	res, err := s.conversations.beginTurn(req, resolvedCWD, runID)
 	if err != nil {
 		return conversationAppendResponse{}, err
@@ -197,15 +209,26 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		}
 	}
 
+	launchCWD := res.CWD
 	launchResult := s.dispatcher.launchConversationTurn(runID, conversationLaunchParams{
 		Agent:           agent,
-		CWD:             res.CWD,
+		CWD:             launchCWD,
 		Prompt:          req.Prompt,
 		Model:           req.Model,
 		BudgetUSD:       req.BudgetUSD,
 		VendorSessionID: vendorSessionID,
 		IsNew:           isNew,
 	}, s.policyEffect, s.auditEntry)
+
+	if wt.Path != "" {
+		if launchResult.Status == "started" {
+			s.dispatcher.attachRunWorktree(runID, wt.Path, wt.RepoRoot)
+			resp.WorktreePath = wt.Path
+			resp.Isolated = true
+		} else {
+			_, _ = s.removeManagedWorktree(wt.RepoRoot, wt.Path)
+		}
+	}
 
 	// Persist the REAL outcome onto the turn row (best-effort — a failed
 	// write here would only degrade a future clientTurnId replay's reported
