@@ -136,6 +136,7 @@ func main() {
 	startRunReaper()
 	startRelayJanitor()
 	warnIfRelayUnauthenticated()
+	warnIfAppAttestDisabled()
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -84,6 +84,7 @@ jobs:
             -only-testing:LancerKitTests/RelayFleetStoreTests \
             -only-testing:LancerKitTests/ConnectionStateStoreTests \
             -only-testing:LancerKitTests/CommandGatewayTests \
+            -only-testing:LancerKitTests/InboxDecisionGateTests \
             CODE_SIGNING_ALLOWED=NO
 
   daemon-go:

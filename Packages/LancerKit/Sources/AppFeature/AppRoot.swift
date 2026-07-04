@@ -2423,6 +2423,15 @@ public struct AppRoot: View {
                         // call actually resolved the gate, so the inbox reflects
                         // watch decisions and a stale watch tap can't flip a
                         // decided gate (MAJOR-15 + B3).
+                        //
+                        // DELIBERATE exception to the phone-side local-auth gate
+                        // (ApprovalDecisionAuth): WCSession decisions only arrive
+                        // from a paired watch that is unlocked and on-wrist —
+                        // wrist detection + the watch passcode are Apple's auth
+                        // boundary for that surface (trusted enough to unlock the
+                        // paired iPhone itself), and a Face ID prompt on a phone
+                        // in the user's pocket would just strand the decision.
+                        // Documented in docs/legal/SECURITY_ARCHITECTURE.md §5.1.
                         let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
                         guard changed else { return }
                         Notifications.shared.clearDeliveredApproval(id: id.uuidString)

@@ -507,3 +507,67 @@ func isClosedNetErr(err error) bool {
 	return err.Error() == "read: connection reset by peer" ||
 		err.Error() == "EOF"
 }
+
+// TestHookLiedLowRiskNoClientDoesNotAutoApprove is the risk-downgrade twin of
+// TestHookHighRiskNoClientDoesNotAutoApprove: the wire event CLAIMS low risk
+// but the command itself scores high, so the evaluate-time floor must re-tier
+// it and keep it out of the noClientGrace fast-approve path.
+func TestHookLiedLowRiskNoClientDoesNotAutoApprove(t *testing.T) {
+	withStateDir(t)
+	installTestPolicy(t) // default ask → escalate
+
+	s := newServer(serverHome())
+	srv, cli := net.Pipe()
+
+	event := ApprovalEvent{
+		ApprovalID: "noclient-lied-1",
+		Agent:      "claudeCode",
+		Kind:       "command",
+		Command:    "sudo rm -rf /var/data",
+		CWD:        "/tmp",
+		Risk:       0, // lied: scoring says high
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	first, _ := json.Marshal(event)
+
+	done := make(chan struct{})
+	go func() {
+		s.handleHookWithNotify(srv, first, nil, func() bool { return false })
+		close(done)
+	}()
+
+	time.Sleep(noClientGrace + 500*time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("lied-low-risk escalation auto-approved — the risk floor must keep it out of the grace path")
+	default:
+	}
+	found := false
+	for _, e := range s.approvals.pendingEvents() {
+		if e.ApprovalID == "noclient-lied-1" {
+			if e.Risk < 2 {
+				t.Fatalf("pending event risk = %d, want re-tiered >= 2", e.Risk)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("approval resolved without an explicit decision — lied-low risk must not auto-approve on no-client")
+	}
+
+	wantHash := computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+	if _, ok := s.applyDecision("noclient-lied-1", "deny", "", wantHash); !ok {
+		t.Fatal("pending approval missing — hook did not keep waiting for an explicit decision")
+	}
+
+	var decision ApprovalDecision
+	_ = cli.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewDecoder(cli).Decode(&decision); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if decision.Decision != "deny" {
+		t.Fatalf("decision = %q, want deny", decision.Decision)
+	}
+	cli.Close()
+	<-done
+}

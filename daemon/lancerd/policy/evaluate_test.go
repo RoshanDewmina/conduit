@@ -134,3 +134,32 @@ func TestDefaultDocumentBehavior(t *testing.T) {
 		})
 	}
 }
+
+// TestEvaluateWireRiskCannotDowngrade proves a client-supplied risk band can
+// raise the scored tier but never lower it below the daemon's own ScoreRiskInt
+// — the no-client grace fast path keys off this tier, so a lied or omitted
+// wire band must not make a dangerous escalation grace-eligible.
+func TestEvaluateWireRiskCannotDowngrade(t *testing.T) {
+	doc := Document{Default: string(EffectAsk)}
+
+	lied := req("claudeCode", "command", "sudo rm -rf /var/data", "/repo", "")
+	lied.Risk = 0 // client claims low; ScoreRiskInt says high
+	res := Evaluate(doc, lied)
+	if res.ScoredRisk < 2 {
+		t.Fatalf("wire risk=0 downgraded a high-risk command to %d", res.ScoredRisk)
+	}
+	if PermitsNoClientGrace(res.ScoredRisk) {
+		t.Fatal("downgraded event became eligible for the no-client grace fast path")
+	}
+
+	raised := req("claudeCode", "command", "ls -la", "/repo", "")
+	raised.Risk = 3 // client escalates a low-scoring command to critical
+	if res := Evaluate(doc, raised); res.ScoredRisk != 3 {
+		t.Fatalf("wire risk should still be able to RAISE the tier, got %d", res.ScoredRisk)
+	}
+
+	unset := req("claudeCode", "command", "sudo rm -rf /var/data", "/repo", "")
+	if res := Evaluate(doc, unset); res.ScoredRisk < 2 {
+		t.Fatalf("unset wire risk must fall back to scoring, got %d", res.ScoredRisk)
+	}
+}

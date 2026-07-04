@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 import SecurityKit
+import CryptoKit
+#if canImport(DeviceCheck)
+import DeviceCheck
+#endif
 
 /// Deliberately small account boundary for the iOS app. The UI depends on this
 /// protocol, never directly on Supabase, so previews and tests do not need a
@@ -333,21 +337,66 @@ public final class AccountSessionController {
 
     /// Authorizes a daemon challenge after the phone scanned its QR. The only
     /// credential sent is the user's existing access token; neither the phone
-    /// nor the daemon sends an account password.
+    /// nor the daemon sends an account password. On hardware that supports App
+    /// Attest the request also carries a fresh attestation over a server nonce,
+    /// which production backends REQUIRE — a leaked QR secret plus a signed-in
+    /// session is deliberately not sufficient to bind on its own.
     public func bindDaemonDevice(challengeID: String, secret: String, backendURL: URL) async throws {
         guard let session else { throw AccountError.noAuthenticatedSession }
         let base = backendURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: base + "/v1/devices/bind") else { throw AccountError.malformedResponse }
+        // Simulator / unsupported hardware yields nil and the bind proceeds
+        // bare — accepted only by a backend running with App Attest disabled
+        // (local dev); a production backend rejects it with 401.
+        let attestation = try await mintAppAttestation(base: base, accessToken: session.accessToken)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 20
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(DeviceBindPayload(challengeID: challengeID, secret: secret))
+        request.httpBody = try JSONEncoder().encode(DeviceBindPayload(
+            challengeID: challengeID,
+            secret: secret,
+            attestChallengeId: attestation?.challengeID,
+            attestKeyId: attestation?.keyID,
+            attestationObject: attestation?.object
+        ))
         let (_, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AccountError.requestFailed(status: (response as? HTTPURLResponse)?.statusCode ?? 0)
         }
+    }
+
+    /// Generates an App Attest key and attests it over a server-minted nonce.
+    /// Returns nil where App Attest is unavailable (simulator, macOS test host).
+    private func mintAppAttestation(base: String, accessToken: String) async throws -> MintedAppAttestation? {
+        #if canImport(DeviceCheck)
+        let service = DCAppAttestService.shared
+        guard service.isSupported else { return nil }
+        guard let url = URL(string: base + "/v1/devices/attest-challenge") else { throw AccountError.malformedResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw AccountError.requestFailed(status: (response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        struct AttestChallengeResponse: Decodable { let attestChallengeId: String; let challenge: String }
+        guard let minted = try? JSONDecoder().decode(AttestChallengeResponse.self, from: data),
+              let challengeData = Data(base64Encoded: minted.challenge)
+        else { throw AccountError.malformedResponse }
+        let keyID = try await service.generateKey()
+        let clientDataHash = Data(SHA256.hash(data: challengeData))
+        let attestation = try await service.attestKey(keyID, clientDataHash: clientDataHash)
+        return MintedAppAttestation(
+            challengeID: minted.attestChallengeId,
+            keyID: keyID,
+            object: attestation.base64EncodedString()
+        )
+        #else
+        return nil
+        #endif
     }
 
     /// Lists the daemon devices bound to this account. Offline self-hosted mode
@@ -499,7 +548,19 @@ private struct SignUpBody: Encodable {
     // Supabase GoTrue stores `data` into the user's user_metadata at sign-up.
     var data: SignUpMetadata? = nil
 }
-private struct DeviceBindPayload: Encodable { let challengeID: String; let secret: String }
+private struct DeviceBindPayload: Encodable {
+    let challengeID: String
+    let secret: String
+    var attestChallengeId: String? = nil
+    var attestKeyId: String? = nil
+    var attestationObject: String? = nil
+}
+
+private struct MintedAppAttestation {
+    let challengeID: String
+    let keyID: String
+    let object: String
+}
 private struct CallbackToken { let accessToken: String; let refreshToken: String; let expiresAt: Date }
 private struct AuthUser: Decodable { let id: String; let email: String }
 private struct AuthResponse: Decodable {
