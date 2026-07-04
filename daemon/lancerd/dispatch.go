@@ -213,19 +213,22 @@ func buildConversationArgv(p conversationLaunchParams) (argv []string, resumeMod
 }
 
 type dispatchParams struct {
-	Agent     string  `json:"agent"`
-	CWD       string  `json:"cwd"`
-	Prompt    string  `json:"prompt"`
-	BudgetUSD float64 `json:"budgetUSD"`
-	Model     string  `json:"model"`
+	Agent       string  `json:"agent"`
+	CWD         string  `json:"cwd"`
+	Prompt      string  `json:"prompt"`
+	BudgetUSD   float64 `json:"budgetUSD"`
+	Model       string  `json:"model"`
+	UseWorktree bool    `json:"useWorktree,omitempty"`
 }
 
 type dispatchResult struct {
-	RunID    string `json:"runId,omitempty"`
-	Status   string `json:"status"`             // started | needsApproval | denied | budgetExceeded | error
-	Decision string `json:"decision,omitempty"` // allow | ask | deny
-	Rule     string `json:"rule,omitempty"`
-	Message  string `json:"message,omitempty"`
+	RunID        string `json:"runId,omitempty"`
+	Status       string `json:"status"`             // started | needsApproval | denied | budgetExceeded | error
+	Decision     string `json:"decision,omitempty"` // allow | ask | deny
+	Rule         string `json:"rule,omitempty"`
+	Message      string `json:"message,omitempty"`
+	WorktreePath string `json:"worktreePath,omitempty"`
+	Isolated     bool   `json:"isolated,omitempty"`
 	// CWD is the ~-expanded absolute path the run actually launched in — set
 	// only on a successful "started" result. The phone persists this (not the
 	// raw cwd it sent, which may be the literal "~") so a phone-dispatched
@@ -786,16 +789,22 @@ func exitCode(waitErr error) int {
 }
 
 type dispatchRun struct {
-	ID        string
-	Agent     string
-	Prompt    string
-	CWD       string // working dir of the original launch; reused for continues
-	Model     string // model of the original launch; reused for continues
-	Status    string // running | paused | cancelled | budget-exceeded
-	BudgetUSD float64
-	SessionID string // captured vendor session/thread id; bound to the conversation ledger via bindVendorSession for exact resume
-	handle    *procHandle
+	ID           string
+	Agent        string
+	Prompt       string
+	CWD          string // working dir of the original launch; reused for continues
+	Model        string // model of the original launch; reused for continues
+	Status       string // running | paused | cancelled | budget-exceeded
+	BudgetUSD    float64
+	SessionID    string // captured vendor session/thread id; bound to the conversation ledger via bindVendorSession for exact resume
+	WorktreePath string // non-empty when launched in a daemon-managed per-run worktree
+	RepoRoot     string // repo root for worktree cleanup
+	handle       *procHandle
 }
+
+// runTerminalCallback fires once when a launched run reaches a terminal process
+// status (exited/failed). Used by the server to apply per-run worktree retention.
+type runTerminalCallback func(runID, status string, exitCode int)
 
 // policyEvalFunc returns the policy effect ("allow"|"ask"|"deny"), the matched
 // rule, and whether the effect came from the fail-closed default (no rule matched).
@@ -875,6 +884,8 @@ type dispatcher struct {
 	// dispatch/continueRun/resumeObservedSession runs have no ledger turn to
 	// bind against.
 	bindVendorSession func(runID, vendorSessionID string) error
+	// onRunTerminal is invoked when a launched run emits exited/failed status.
+	onRunTerminal runTerminalCallback
 }
 
 func newDispatcher() *dispatcher {
@@ -930,10 +941,50 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 			}
 			return
 		}
+		if method == "agent.run.status" && d.onRunTerminal != nil {
+			if m, ok := params.(map[string]any); ok {
+				status, _ := m["status"].(string)
+				exitCode := -1
+				switch c := m["exitCode"].(type) {
+				case int:
+					exitCode = c
+				case float64:
+					exitCode = int(c)
+				}
+				if status == "exited" || status == "failed" {
+					d.onRunTerminal(runID, status, exitCode)
+				}
+			}
+		}
 		if d.emit != nil {
 			d.emit(method, params)
 		}
 	}
+}
+
+// attachRunWorktree records a managed worktree path on a launched run so
+// onRunTerminal can apply the retention policy after the process exits.
+func (d *dispatcher) attachRunWorktree(runID, worktreePath, repoRoot string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if run := d.runs[runID]; run != nil {
+		run.WorktreePath = worktreePath
+		run.RepoRoot = repoRoot
+	}
+}
+
+// takeRunWorktree returns and clears the managed worktree metadata for a run.
+func (d *dispatcher) takeRunWorktree(runID string) (path, repoRoot string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	run := d.runs[runID]
+	if run == nil || run.WorktreePath == "" {
+		return "", ""
+	}
+	path, repoRoot = run.WorktreePath, run.RepoRoot
+	run.WorktreePath = ""
+	run.RepoRoot = ""
+	return path, repoRoot
 }
 
 // setSpentUSD updates the tracked daily spend and enforces per-run caps.

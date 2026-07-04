@@ -585,14 +585,40 @@ public actor DaemonChannel {
     }
 
     /// Real worktree list for the host (replaces the old `return []` stub).
-    public func listWorktrees(workdir: String) async throws -> [Worktree] {
-        let data = try await sendRPC(method: "agent.worktree.list", params: ["workdir": workdir])
+    public func listWorktrees(workdir: String, managedOnly: Bool = false) async throws -> [Worktree] {
+        var params: [String: Any] = ["workdir": workdir]
+        if managedOnly { params["managedOnly"] = true }
+        let data = try await sendRPC(method: "agent.worktree.list", params: params)
         let result = try Self.gitResultObject(data)
         guard let trees = result["worktrees"],
               let rd = try? JSONSerialization.data(withJSONObject: trees) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([Worktree].self, from: rd)) ?? []
+    }
+
+    public struct WorktreeCreateResult: Codable, Sendable {
+        public let id: String
+        public let path: String
+        public let branch: String
+        public let managed: Bool
+    }
+
+    public func createWorktree(workdir: String, branch: String? = nil, id: String? = nil) async throws -> WorktreeCreateResult {
+        var params: [String: Any] = ["workdir": workdir]
+        if let branch, !branch.isEmpty { params["branch"] = branch }
+        if let id, !id.isEmpty { params["id"] = id }
+        let data = try await sendRPC(method: "agent.worktree.create", params: params)
+        return try Self.decodeResult(data, as: WorktreeCreateResult.self)
+    }
+
+    public struct WorktreeRemoveResult: Codable, Sendable {
+        public let removed: Bool
+    }
+
+    public func removeWorktree(workdir: String, path: String) async throws -> WorktreeRemoveResult {
+        let data = try await sendRPC(method: "agent.worktree.remove", params: ["workdir": workdir, "path": path])
+        return try Self.decodeResult(data, as: WorktreeRemoveResult.self)
     }
 
     /// Unwrap a JSON-RPC `result` object or throw the daemon's error message.
@@ -620,10 +646,11 @@ public actor DaemonChannel {
     // MARK: - Proactive dispatch & schedule (WS-B2)
 
     /// Start an agent run on the host, bounded by policy + budget on the daemon.
-    public func dispatchAgent(agent: String, cwd: String, prompt: String, budgetUSD: Double = 0, model: String? = nil) async throws -> DispatchResult {
+    public func dispatchAgent(agent: String, cwd: String, prompt: String, budgetUSD: Double = 0, model: String? = nil, useWorktree: Bool = false) async throws -> DispatchResult {
         var params: [String: Any] = ["agent": agent, "cwd": cwd, "prompt": prompt]
         if budgetUSD > 0 { params["budgetUSD"] = budgetUSD }
         if let model, !model.isEmpty { params["model"] = model }
+        if useWorktree { params["useWorktree"] = true }
         let data = try await sendRPC(method: "agent.dispatch", params: params)
         return try Self.decodeResult(data, as: DispatchResult.self)
     }

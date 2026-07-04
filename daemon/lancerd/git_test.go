@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -269,6 +271,120 @@ func TestRecentCIEventsNoDeviceReturnsEmpty(t *testing.T) {
 }
 
 // agent.ci.recent must be a registered RPC (the audit found it was never wired).
+func TestListWorktreesManagedFlag(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	home, _ := os.UserHomeDir()
+	managedPath := filepath.Join(home, ".lancer", "worktrees", "repo", "run1")
+	otherPath := "/tmp/other-worktree"
+	f := &fakeRunner{
+		outputs: map[string]string{
+			"git worktree":  "worktree " + managedPath + "\nbranch refs/heads/lancer/run-run1\n\nworktree " + otherPath + "\nbranch refs/heads/main\n",
+			"git rev-parse": "repo\n",
+			"git status":    "## main\n",
+		},
+	}
+	s.git = f.run
+	trees, err := s.listWorktrees("/repo", false)
+	if err != nil {
+		t.Fatalf("listWorktrees: %v", err)
+	}
+	if len(trees) != 2 {
+		t.Fatalf("trees = %d, want 2", len(trees))
+	}
+	if !trees[0].Managed {
+		t.Errorf("trees[0].Managed = false, want true")
+	}
+	if trees[1].Managed {
+		t.Errorf("trees[1].Managed = true, want false")
+	}
+	managedOnly, err := s.listWorktrees("/repo", true)
+	if err != nil {
+		t.Fatalf("listWorktrees managedOnly: %v", err)
+	}
+	if len(managedOnly) != 1 || managedOnly[0].Path != managedPath {
+		t.Fatalf("managedOnly = %+v, want only %s", managedOnly, managedPath)
+	}
+}
+
+func TestCreateManagedWorktree(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	repoRoot := filepath.Join(home, "proj")
+	_ = os.MkdirAll(repoRoot, 0700)
+	dest := filepath.Join(home, ".lancer", "worktrees", "proj", "abc123")
+	calls := 0
+	s.git = func(workdir, tool string, args ...string) (string, error) {
+		calls++
+		if tool == "git" && len(args) >= 2 && args[0] == "rev-parse" {
+			return repoRoot + "\n", nil
+		}
+		if tool == "git" && len(args) >= 1 && args[0] == "worktree" && args[1] == "add" && args[len(args)-1] == dest {
+			return "", nil
+		}
+		return "", nil
+	}
+	res, err := s.createManagedWorktree(repoRoot, "", "abc123")
+	if err != nil {
+		t.Fatalf("createManagedWorktree: %v", err)
+	}
+	if res.Path != dest || !res.Managed || res.Branch != "lancer/run-abc123" {
+		t.Fatalf("result = %+v", res)
+	}
+	if calls < 2 {
+		t.Fatalf("expected git calls, got %d", calls)
+	}
+}
+
+func TestRemoveManagedWorktreeRejectsNonManaged(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	_, err := s.removeManagedWorktree("/repo", "/tmp/not-managed")
+	if err == nil {
+		t.Fatal("expected error for non-managed path")
+	}
+}
+
+func TestRunDispatchWorktreeRetention(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	repoRoot := filepath.Join(home, "proj")
+	removed := false
+	s.git = func(workdir, tool string, args ...string) (string, error) {
+		if tool == "git" && len(args) > 0 && args[0] == "rev-parse" {
+			return repoRoot + "\n", nil
+		}
+		if tool == "git" && len(args) > 1 && args[0] == "worktree" && args[1] == "add" {
+			return "", nil
+		}
+		if tool == "git" && len(args) > 2 && args[0] == "worktree" && args[1] == "remove" {
+			removed = true
+			return "", nil
+		}
+		return "", nil
+	}
+	d := s.dispatcher
+	d.hookWired = func(string) bool { return true }
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		go func() {
+			emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+		}()
+		return &procHandle{}, nil
+	}
+	res := s.runDispatch(dispatchParams{Agent: "claudeCode", CWD: repoRoot, Prompt: "hi", UseWorktree: true})
+	if res.Status != "started" || res.WorktreePath == "" || !res.Isolated {
+		t.Fatalf("dispatch result = %+v", res)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if !removed {
+		t.Fatal("expected successful run to remove managed worktree")
+	}
+}
+
 func TestAgentCIRecentRegistered(t *testing.T) {
 	s := newServer(t.TempDir())
 	defer s.poller.stopForTest()

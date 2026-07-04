@@ -183,14 +183,20 @@ public struct DispatchResult: Codable, Sendable, Hashable {
     /// `nil` when talking to an older daemon build that doesn't send it yet —
     /// callers must fall back to the raw cwd they sent.
     public let cwd: String?
+    /// Absolute path of the daemon-managed per-run worktree, when `useWorktree` was set.
+    public let worktreePath: String?
+    /// True when the run launched in an isolated managed worktree (not the repo root).
+    public let isolated: Bool?
 
-    public init(runId: String? = nil, status: String, decision: String? = nil, rule: String? = nil, message: String? = nil, cwd: String? = nil) {
+    public init(runId: String? = nil, status: String, decision: String? = nil, rule: String? = nil, message: String? = nil, cwd: String? = nil, worktreePath: String? = nil, isolated: Bool? = nil) {
         self.runId = runId
         self.status = status
         self.decision = decision
         self.rule = rule
         self.message = message
         self.cwd = cwd
+        self.worktreePath = worktreePath
+        self.isolated = isolated
     }
 
     /// The runId of a genuinely *started* run, or `nil` otherwise. A usable run
@@ -894,11 +900,13 @@ public struct ConversationAppendRequest: Codable, Sendable {
     public let prompt: String
     public let model: String?
     public let budgetUSD: Double?
+    /// When true on a new conversation, the daemon creates a managed git worktree and dispatches into it.
+    public let useWorktree: Bool?
 
     public init(
         conversationId: String? = nil, baseSeq: Int = 0, clientTurnId: String,
         agent: String? = nil, cwd: String? = nil, prompt: String, model: String? = nil,
-        budgetUSD: Double? = nil
+        budgetUSD: Double? = nil, useWorktree: Bool? = nil
     ) {
         self.conversationId = conversationId
         self.baseSeq = baseSeq
@@ -908,6 +916,7 @@ public struct ConversationAppendRequest: Codable, Sendable {
         self.prompt = prompt
         self.model = model
         self.budgetUSD = budgetUSD
+        self.useWorktree = useWorktree
     }
 }
 
@@ -926,13 +935,16 @@ public struct ConversationAppendResponse: Codable, Sendable {
     public let resumeMode: String?
     public let message: String?
     public let rule: String?
+    public let worktreePath: String?
+    public let isolated: Bool?
     /// Relay-only failure signal — see `ConversationListResponse.error`.
     public let error: String?
 
     public init(
         status: String, conversationId: String, turnId: String? = nil, runId: String? = nil,
         vendorSessionId: String? = nil, cwd: String? = nil, baseSeq: Int = 0, nextSeq: Int = 0,
-        resumeMode: String? = nil, message: String? = nil, rule: String? = nil, error: String? = nil
+        resumeMode: String? = nil, message: String? = nil, rule: String? = nil,
+        worktreePath: String? = nil, isolated: Bool? = nil, error: String? = nil
     ) {
         self.status = status
         self.conversationId = conversationId
@@ -945,6 +957,8 @@ public struct ConversationAppendResponse: Codable, Sendable {
         self.resumeMode = resumeMode
         self.message = message
         self.rule = rule
+        self.worktreePath = worktreePath
+        self.isolated = isolated
         self.error = error
     }
 }

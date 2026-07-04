@@ -159,6 +159,13 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
 - 🟡 **Follow-up:** after PreviewFeature removal, `PreviewKit` is consumed only by the test target — evaluate
   it for removal separately.
 
+**Per-run git worktree isolation (2026-07-04 foundation):**
+- Daemon RPCs: `agent.worktree.create`, `agent.worktree.remove`, extended `agent.worktree.list` (`managed` flag + `managedOnly` filter).
+- Opt-in via `useWorktree` on `agent.dispatch` and new-conversation `agent.conversations.append`.
+- Managed paths live under `~/.lancer/worktrees/<repo>/<id>` — distinct from vendor scratch dirs (`.claude/worktrees/`).
+- **Retention policy:** successful runs (`exited`, exit code 0) auto-remove the managed worktree; **failed runs keep the worktree** on disk for host-side inspection. Manual cleanup: `agent.worktree.remove` or `git worktree remove` on the host. No automatic TTL yet — stale failed worktrees are an operational follow-up.
+- iOS surfaces `worktreePath` / `isolated` on dispatch responses; no dedicated worktree manager UI (the old `WorktreesFeature` target stays removed per §3 above).
+
 **Repo hygiene — FIXED:**
 - `daemon/agent-runner/agent-runner` (Mach-O 8.2 MB) was tracked in git while sibling binaries were ignored.
   Untracked (`git rm --cached`) + added to `.gitignore`. Committed `810d8704`.
