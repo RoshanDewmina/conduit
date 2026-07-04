@@ -30,7 +30,7 @@ public struct DenyApprovalIntent: AppIntent {
     static func deny(approvalID: String) async throws -> IntentDialog {
         let catalog = try SiriIntentSupport.openCatalog()
         guard let record = try await catalog.approval(id: approvalID) else {
-            return "That approval was already resolved or isn't on this device."
+            return "Looks like that one's already been handled, or it's not on this device."
         }
 
         let outcome = await CommandGateway.shared.execute(
@@ -42,7 +42,7 @@ public struct DenyApprovalIntent: AppIntent {
         case .transportUnavailable:
             return SiriIntentDialogs.transportUnavailable(machine: record.hostName)
         default:
-            return "Couldn't deny \(SiriIntentSupport.approvalDialogSubject(record))."
+            return "I wasn't able to deny \(SiriIntentSupport.approvalDialogSubject(record))."
         }
     }
 }
@@ -60,13 +60,13 @@ public struct DenyLatestApprovalIntent: AppIntent {
         let catalog = try SiriIntentSupport.openCatalog()
         let pending = try await catalog.pendingApprovals()
         if pending.isEmpty {
-            return .result(dialog: "No approvals are waiting.")
+            return .result(dialog: "You're all caught up — nothing's waiting for review.")
         }
         if pending.count > 1 {
-            return .result(dialog: "\(pending.count) approvals are waiting — say which one to deny.")
+            return .result(dialog: "You've got \(pending.count) approvals waiting — which one should I deny?")
         }
         guard let only = pending.first else {
-            return .result(dialog: "No approvals are waiting.")
+            return .result(dialog: "You're all caught up — nothing's waiting for review.")
         }
         return .result(dialog: try await DenyApprovalIntent.deny(approvalID: only.id))
     }

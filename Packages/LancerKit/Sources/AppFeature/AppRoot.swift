@@ -2003,6 +2003,27 @@ public struct AppRoot: View {
         }
     }
 
+    /// Polls `relayFleetStore.machines` for an active bridge for up to ~2
+    /// seconds. `bridge.isActive` can read momentarily false right after
+    /// navigation/reconnect even though the same machine just answered
+    /// `loadObservedSessions` moments earlier — a bare one-shot check here
+    /// raced that and fell back to the read-only observed-session view with
+    /// a real, connected machine (found live 2026-07-03: tapping a watched
+    /// session showed "Watching" / "No transcript recorded" even though
+    /// Home's own machine row showed green and a message had just been sent
+    /// successfully). Same fix shape as `StartAgentRunSupport.pollBridgeActive`.
+    private func activeRelayBridge() async -> E2ERelayBridge? {
+        for attempt in 0..<4 {
+            if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+                return bridge
+            }
+            if attempt < 3 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+        return nil
+    }
+
     /// Imports an observed session's transcript into a durable, cross-device
     /// Lancer conversation via `agent.conversations.attachObservedSession`.
     /// Same transport-selection order as `sendObservedSessionFollowUp`.
@@ -2040,7 +2061,7 @@ public struct AppRoot: View {
                 return .failure(ObservedSessionImportError(error.localizedDescription))
             }
         }
-        if let bridge = relayFleetStore.machines.first(where: { $0.bridge.isActive })?.bridge {
+        if let bridge = await activeRelayBridge() {
             do {
                 let response = try await bridge.relayAttachObservedSession(request)
                 await hydrateImportedConversationMirror(

@@ -20,7 +20,7 @@ public struct SearchLancerIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .result(dialog: "What should I search for?")
+            return .result(dialog: "Sure — what should I search for?")
         }
 
         let catalog = try SiriIntentSupport.openCatalog()
@@ -45,7 +45,7 @@ public struct OpenConversationIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let catalog = try SiriIntentSupport.openCatalog()
         guard let record = try await catalog.conversation(id: conversation.id) else {
-            return .result(dialog: "That conversation isn't on this device anymore.")
+            return .result(dialog: "I couldn't find that conversation anymore.")
         }
         SiriIntentSupport.postNavigation(.openConversation, conversationId: record.id)
         return .result(dialog: SiriIntentDialogs.openedConversation(record))
@@ -68,10 +68,10 @@ public struct OpenMachineIntent: AppIntent {
         let catalog = try SiriIntentSupport.openCatalog()
         let relay = await SiriIntentSupport.relayMachineSnapshots()
         guard let record = try await catalog.machine(id: machine.id, relayMachines: relay) else {
-            return .result(dialog: "That machine isn't paired anymore.")
+            return .result(dialog: "That machine isn't paired anymore — you'll need to reconnect it in Lancer.")
         }
         SiriIntentSupport.postNavigation(.openMachine, machineId: record.id)
-        return .result(dialog: "Opened \(record.displayName) (\(SiriIntentSupport.machineConnectivityLabel(record))).")
+        return .result(dialog: "Here's \(record.displayName) — it's \(SiriIntentSupport.machineConnectivityLabel(record)).")
     }
 }
 
@@ -90,10 +90,10 @@ public struct OpenApprovalIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let catalog = try SiriIntentSupport.openCatalog()
         guard let record = try await catalog.approval(id: approval.id) else {
-            return .result(dialog: "That approval was already resolved.")
+            return .result(dialog: "That one's already been handled.")
         }
         SiriIntentSupport.postNavigation(.openApproval, approvalId: record.id)
-        return .result(dialog: "Opened \(SiriIntentSupport.approvalDialogSubject(record)) for review. Approve in Lancer — voice can't approve commands.")
+        return .result(dialog: "Pulled up \(SiriIntentSupport.approvalDialogSubject(record)) for you — you'll need to approve it in Lancer, though. I can't approve actions by voice.")
     }
 }
 
@@ -112,7 +112,7 @@ public struct ContinueConversationIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let catalog = try SiriIntentSupport.openCatalog()
         guard let record = try await catalog.conversation(id: conversation.id) else {
-            return .result(dialog: "That conversation isn't on this device anymore.")
+            return .result(dialog: "I couldn't find that conversation anymore.")
         }
         SiriIntentSupport.postNavigation(.continueConversation, conversationId: record.id)
         return .result(dialog: SiriIntentDialogs.continueConversation(record))

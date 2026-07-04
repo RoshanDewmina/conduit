@@ -32,13 +32,13 @@ public struct AgentStatusQueryIntent: AppIntent {
         case .statusSnapshot(let snapshot):
             let running = snapshot.agents.compactMap(\.runningCount).reduce(0, +)
             if running > 0 {
-                return .result(dialog: "\(running) agent run\(running == 1 ? "" : "s") active right now.")
+                return .result(dialog: "You've got \(running) agent run\(running == 1 ? "" : "s") going right now.")
             }
-            return .result(dialog: "No agents are currently running.")
+            return .result(dialog: "Nothing's running right now — all quiet.")
         case .timedOut:
-            return .result(dialog: "That machine didn't respond in time.")
+            return .result(dialog: "That machine's taking a while to respond — mind trying again in a moment?")
         case .transportUnavailable, .denied, .ok:
-            return .result(dialog: "Lancer isn't connected to a machine right now. Open the app to reconnect.")
+            return .result(dialog: "I can't reach your machine right now. Open Lancer and I'll reconnect.")
         }
     }
 }
@@ -58,11 +58,11 @@ public struct PendingApprovalsQueryIntent: AppIntent {
         guard let db = try? AppDatabase.openShared(),
               let pending = try? await ApprovalRepository(db).pending()
         else {
-            return .result(dialog: "Couldn't check approvals right now.")
+            return .result(dialog: "I wasn't able to check approvals just now.")
         }
         if pending.isEmpty {
-            return .result(dialog: "No approvals are waiting.")
+            return .result(dialog: "You're all caught up — nothing's waiting for review.")
         }
-        return .result(dialog: "\(pending.count) approval\(pending.count == 1 ? "" : "s") waiting for your review.")
+        return .result(dialog: "You've got \(pending.count) approval\(pending.count == 1 ? "" : "s") waiting for you.")
     }
 }

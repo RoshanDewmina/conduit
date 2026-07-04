@@ -27,18 +27,18 @@ public struct PauseRunIntent: AppIntent {
         if let run {
             resolved = try await catalog.run(id: run.id, activeRunIDs: active)
             guard let resolved else {
-                return .result(dialog: "That run isn't active anymore.")
+                return .result(dialog: "That run isn't active anymore — looks like it already finished.")
             }
         } else if active.count == 1, let only = try await catalog.activeRuns(activeRunIDs: active).first {
             resolved = only
         } else if active.isEmpty {
-            return .result(dialog: "No agent runs are currently active.")
+            return .result(dialog: "Nothing's running right now.")
         } else {
-            return .result(dialog: "More than one agent is running — pick which run to pause.")
+            return .result(dialog: "You've got a few agents running — which one should I pause?")
         }
 
         guard let resolved else {
-            return .result(dialog: "Couldn't find that run.")
+            return .result(dialog: "I couldn't find that run.")
         }
 
         switch await CommandGateway.shared.execute(.pause(runId: resolved.id)) {
@@ -47,7 +47,7 @@ public struct PauseRunIntent: AppIntent {
         case .transportUnavailable:
             return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: resolved.hostName))
         default:
-            return .result(dialog: "Couldn't pause \(SiriIntentSupport.runDialogSubject(resolved)).")
+            return .result(dialog: "I wasn't able to pause \(SiriIntentSupport.runDialogSubject(resolved)).")
         }
     }
 }
@@ -72,18 +72,18 @@ public struct StopRunIntent: AppIntent {
         if let run {
             resolved = try await catalog.run(id: run.id, activeRunIDs: active)
             guard let resolved else {
-                return .result(dialog: "That run isn't active anymore.")
+                return .result(dialog: "That run isn't active anymore — looks like it already finished.")
             }
         } else if active.count == 1, let only = try await catalog.activeRuns(activeRunIDs: active).first {
             resolved = only
         } else if active.isEmpty {
-            return .result(dialog: "No agent runs are currently active.")
+            return .result(dialog: "Nothing's running right now.")
         } else {
-            return .result(dialog: "More than one agent is running — pick which run to stop.")
+            return .result(dialog: "You've got a few agents running — which one should I stop?")
         }
 
         guard let resolved else {
-            return .result(dialog: "Couldn't find that run.")
+            return .result(dialog: "I couldn't find that run.")
         }
 
         switch await CommandGateway.shared.execute(.cancel(runId: resolved.id)) {
@@ -92,7 +92,7 @@ public struct StopRunIntent: AppIntent {
         case .transportUnavailable:
             return .result(dialog: SiriIntentDialogs.transportUnavailable(machine: resolved.hostName))
         default:
-            return .result(dialog: "Couldn't stop \(SiriIntentSupport.runDialogSubject(resolved)).")
+            return .result(dialog: "I wasn't able to stop \(SiriIntentSupport.runDialogSubject(resolved)).")
         }
     }
 }

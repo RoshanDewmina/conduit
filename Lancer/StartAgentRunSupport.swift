@@ -4,11 +4,14 @@ import LancerCore
 import NotificationsKit
 import PersistenceKit
 import SessionFeature
+import os.log
 
 /// Shared start-run validation and dispatch used by `StartAgentRunIntent`
 /// (iOS 26 path and iOS 27 long-running path).
 @available(iOS 17.0, *)
 enum StartAgentRunSupport {
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "StartAgentRunSupport")
+
     enum Stage: String, Sendable {
         case resolvingMachine
         case checkingConnection
@@ -33,6 +36,32 @@ enum StartAgentRunSupport {
         case dialog(String)
     }
 
+    /// Polls `ApprovalRelay.shared.relayBridges` for up to ~3 seconds so a
+    /// cold-launch reconnect (triggered by Siri's `openAppWhenRun`) has time
+    /// to finish before this treats the machine as offline.
+    private static func pollBridgeActive(relayID: RelayMachineID, attempts: Int = 6) async -> Bool {
+        for attempt in 0..<attempts {
+            let active = await MainActor.run {
+                ApprovalRelay.shared.relayBridges[relayID]?.isActive == true
+            }
+            if active { return true }
+            if attempt < attempts - 1 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+        return false
+    }
+
+    /// The working directory of this host's most recently active
+    /// conversation — Home's actual definition of "has a workspace" for
+    /// display purposes, independent of whether an explicit `Workspace` row
+    /// exists. See the call site comment for the bug this closes.
+    private static func mostRecentConversationCwd(hostName: String, catalog: IntentEntityCatalog) async throws -> String? {
+        try await catalog.conversations()
+            .first { $0.hostName == hostName }?
+            .workspacePath
+    }
+
     static func prepare(
         machine: MachineEntity,
         agent: AgentVendorAppEnum,
@@ -44,56 +73,77 @@ enum StartAgentRunSupport {
 
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
-            return .dialog("What should the agent work on?")
+            return .dialog("Sure — what should the agent work on?")
         }
 
         let catalog = try SiriIntentSupport.openCatalog()
         let relay = await SiriIntentSupport.relayMachineSnapshots()
         let machines = try await catalog.machines(relayMachines: relay)
         guard !machines.isEmpty else {
-            return .dialog("No machines are paired yet. Open Lancer to connect one.")
+            return .dialog("You don't have any machines paired yet — open Lancer and connect one first.")
         }
 
         guard let record = try await catalog.machine(id: machine.id, relayMachines: relay) else {
-            return .dialog("That machine isn't paired anymore.")
+            return .dialog("That machine isn't paired anymore — check Lancer to reconnect it.")
         }
 
         guard record.kind == .relayMachine else {
-            return .dialog("Starting runs by voice needs a relay-paired machine. Open Lancer to connect over relay.")
+            return .dialog("Starting a run by voice needs a relay-paired machine — open Lancer and connect over relay first.")
         }
 
         guard let relayUUID = SiriIntentSupport.relayMachineUUID(from: record.id),
               let uuid = UUID(uuidString: relayUUID)
         else {
-            return .dialog("Couldn't resolve that machine.")
+            return .dialog("I couldn't figure out which machine that is.")
         }
 
         onProgress?(.checkingConnection)
 
         let relayID = RelayMachineID(uuid)
-        let bridgeActive = await MainActor.run {
-            ApprovalRelay.shared.relayBridges[relayID]?.isActive == true
-        }
+        // Siri's `openAppWhenRun` brings the app forward fresh, and the relay
+        // bridge reconnect that follows a cold launch isn't instant — a bare
+        // one-shot check here raced the reconnect and reported "not connected"
+        // moments before Home's own state showed it green (found on-device
+        // 2026-07-03: real machine, real workspace, real prior message sent,
+        // Siri still refused). Give the reconnect a few seconds, matching the
+        // cold-launch relay race already fixed elsewhere in the app.
+        let bridgeActive = await pollBridgeActive(relayID: relayID)
         let online = SiriIntentSupport.machineConnectivityLabel(record) == "online" || bridgeActive
         guard online else {
             let message = record.displayName.isEmpty
-                ? "Lancer isn't connected to a machine right now. Open Lancer to reconnect."
-                : "\(record.displayName) isn't connected right now. Open Lancer to reconnect."
+                ? "I can't reach Lancer's connection to your machine right now — open the app and I'll try again."
+                : "I can't reach \(record.displayName) right now — open Lancer and I'll try again once it's back."
             return .dialog(message)
         }
 
         let cwd: String
         if let workspace {
             guard let ws = try await catalog.workspaces(machineID: relayUUID).first(where: { $0.id == workspace.id }) else {
-                return .dialog("That workspace isn't available on this machine anymore.")
+                return .dialog("I couldn't find that workspace on this machine anymore.")
             }
             cwd = ws.path
         } else {
             let workspaces = try await catalog.workspaces(machineID: relayUUID)
-            guard let mru = workspaces.first else {
-                return .dialog("No workspace is set up on \(record.displayName). Open Lancer to pick a project folder first.")
+            Self.logger.info("prepare: workspaces(machineID=\(relayUUID, privacy: .public)) -> \(workspaces.count, privacy: .public) rows")
+            if let mru = workspaces.first {
+                cwd = mru.path
+            } else if let recentCwd = try await mostRecentConversationCwd(hostName: record.displayName, catalog: catalog) {
+                // Home doesn't require an explicit `Workspace` row to show a
+                // "workspace" — `LancerHomeView` synthesizes one from any
+                // directory that already has chat history for this host
+                // (`byWorkspace = Dictionary(grouping: sessions, by: \.cwd)`).
+                // This lookup only knows about explicit `Workspace` rows, so
+                // it disagreed with what Home visibly showed (found live
+                // 2026-07-03: Home showed "Relay host · roshansilva" with 2
+                // sessions, no matching `workspaces` table row, and this
+                // refused with "no workspace is set up"). Match Home's
+                // definition: fall back to the most recent conversation's
+                // directory on this host.
+                Self.logger.info("prepare: no Workspace row for '\(record.displayName, privacy: .public)', using most-recent-conversation cwd fallback")
+                cwd = recentCwd
+            } else {
+                return .dialog("There's no workspace set up on \(record.displayName) yet — open Lancer and pick a project folder first.")
             }
-            cwd = mru.path
         }
 
         let workspaceLabel = URL(fileURLWithPath: cwd).lastPathComponent
@@ -153,7 +203,7 @@ enum StartAgentRunSupport {
 
     static func confirmationDialog(for prepared: PreparedRun) -> IntentDialog {
         IntentDialog(
-            "Start \(prepared.agentName) on \(prepared.displayName) in \(prepared.workspaceLabel)? Prompt: \"\(SiriIntentSupport.promptExcerpt(prepared.trimmedPrompt))\". Nothing runs until you confirm."
+            "Ready to start \(prepared.agentName) on \(prepared.displayName), in \(prepared.workspaceLabel), with: \"\(SiriIntentSupport.promptExcerpt(prepared.trimmedPrompt))\". Want me to go ahead?"
         )
     }
 }

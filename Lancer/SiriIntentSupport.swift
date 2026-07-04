@@ -109,22 +109,22 @@ enum SiriIntentError: Error, CustomLocalizedStringResourceConvertible {
 @available(iOS 17.0, *)
 enum SiriIntentDialogs {
     static func noPairedMachines() -> IntentDialog {
-        IntentDialog("No machines are paired yet. Open Lancer to connect one.")
+        IntentDialog("You don't have any machines paired yet — open Lancer and connect one, then I can help.")
     }
 
     static func transportUnavailable(machine: String?) -> IntentDialog {
         if let machine {
-            return IntentDialog("\(machine) isn't connected right now. Open Lancer to reconnect.")
+            return IntentDialog("I can't reach \(machine) right now. Open Lancer and I'll reconnect.")
         }
-        return IntentDialog("Lancer isn't connected to a machine right now. Open Lancer to reconnect.")
+        return IntentDialog("I can't reach your machine right now. Open Lancer and I'll reconnect.")
     }
 
     static func pauseSuccess(_ run: IntentRunRecord) -> IntentDialog {
-        IntentDialog("Paused \(SiriIntentSupport.runDialogSubject(run)).")
+        IntentDialog("Done — paused \(SiriIntentSupport.runDialogSubject(run)).")
     }
 
     static func stopSuccess(_ run: IntentRunRecord) -> IntentDialog {
-        IntentDialog("Stopped \(SiriIntentSupport.runDialogSubject(run)).")
+        IntentDialog("Done — stopped \(SiriIntentSupport.runDialogSubject(run)).")
     }
 
     static func denySuccess(_ approval: IntentApprovalRecord) -> IntentDialog {
@@ -132,17 +132,17 @@ enum SiriIntentDialogs {
     }
 
     static func openedConversation(_ conversation: IntentConversationRecord) -> IntentDialog {
-        IntentDialog("Opened \(SiriIntentSupport.conversationDialogSubject(conversation)).")
+        IntentDialog("Here's \(SiriIntentSupport.conversationDialogSubject(conversation)).")
     }
 
     static func continueConversation(_ conversation: IntentConversationRecord) -> IntentDialog {
-        IntentDialog("Opened \(conversation.title). Type your next message in Lancer to continue — nothing was sent to the agent yet.")
+        IntentDialog("Opened \(conversation.title) — type your next message in Lancer when you're ready. I haven't sent anything to the agent yet.")
     }
 
     static func searchResults(_ query: String, count: Int) -> IntentDialog {
         if count == 0 {
-            return IntentDialog("No conversations matched \"\(query)\".")
+            return IntentDialog("I couldn't find anything for \"\(query)\".")
         }
-        return IntentDialog("Found \(count) conversation\(count == 1 ? "" : "s") for \"\(query)\". Open Lancer to review them.")
+        return IntentDialog("Found \(count) conversation\(count == 1 ? "" : "s") for \"\(query)\" — take a look in Lancer.")
     }
 }
