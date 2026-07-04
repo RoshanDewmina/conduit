@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -643,6 +646,54 @@ func TestE2ERouterHandleApprovalResponseAckFailure(t *testing.T) {
 	if ack.Payload.OK {
 		t.Fatalf("expected ok=false for a decision on a never-pending approval, got %+v", ack.Payload)
 	}
+}
+
+// TestE2ERouterSendApproval verifies sendApproval respects pairing state and
+// logs when an approval is dropped because the relay is unpaired.
+func TestE2ERouterSendApproval(t *testing.T) {
+	t.Run("unpaired logs and does not send", func(t *testing.T) {
+		var buf bytes.Buffer
+		orig := log.Writer()
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(orig) })
+
+		client := &fakeRelayClient{paired: false}
+		router := &e2eRouter{client: client}
+		router.sendApproval(ApprovalEvent{ApprovalID: "appr-drop"})
+
+		if msgType, _ := client.lastMessage(); msgType != "" {
+			t.Fatalf("expected no message sent while unpaired, got %q", msgType)
+		}
+		out := buf.String()
+		if !strings.Contains(out, "dropped approval appr-drop") {
+			t.Fatalf("expected dropped-approval log, got %q", out)
+		}
+		if !strings.Contains(out, "not paired") {
+			t.Fatalf("expected not-paired log, got %q", out)
+		}
+	})
+
+	t.Run("paired sends approvalPending", func(t *testing.T) {
+		client := &fakeRelayClient{paired: true}
+		router := &e2eRouter{client: client}
+		router.sendApproval(ApprovalEvent{ApprovalID: "appr-ok", Agent: "claude", Kind: "bash"})
+		msgType, data := client.lastMessage()
+		if msgType != "approval" {
+			t.Fatalf("expected approval, got %q", msgType)
+		}
+		var msg struct {
+			Type    string `json:"type"`
+			Payload struct {
+				ApprovalID string `json:"approvalID"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if msg.Type != "approvalPending" || msg.Payload.ApprovalID != "appr-ok" {
+			t.Fatalf("unexpected payload: %+v", msg)
+		}
+	})
 }
 
 // TestE2ERouterSendApprovalResolved verifies the resolved-notification sender

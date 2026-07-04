@@ -249,19 +249,11 @@ are now archived under `docs/_archive/`.
 ## 6. Remaining P0/P1/P2 after this audit
 
 - **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
-- **P1:** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero logging when
-  `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live testing on a
-  real phone. A real escalation was dropped this way (audit showed `escalate`→`deny` exactly 120s apart,
-  i.e. the fail-closed timeout, not a human decision) while `lancerd.stderr.log` showed irregular relay
-  re-pairing right around that timestamp — the daemon and phone's websocket pairing flaps, and any
-  approval that fires inside a flap window vanishes with no trace beyond the eventual timeout-deny. A
-  retry once the relay had been stable for 30+ min succeeded normally (`escalate`→`approve` in 49s). The
-  loop's fail-closed behavior means this is safe, not silent-unsafe — but it's silent-*undiagnosable*: add
-  a log line on the early-return so a dropped send is distinguishable from "phone never got it" in
-  `lancerd.stderr.log` instead of only inferable from audit-log timing + re-pair-log correlation after
-  the fact.
-  (Perf/UX/a11y deep audit is now done — §4/§4b. The stale Swift `lancerd` was quarantined this session;
-  `SnippetEditorView` + dead DS components were removed.)
+- **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
+  logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
+  testing on a real phone. **Fixed:** early-return now logs
+  `e2e: dropped approval <id> — relay client not paired` so a dropped send is distinguishable from
+  "phone never got it" in `lancerd.stderr.log` (branch `cursor/sendapproval-log-9257`).
 - **P2:** (b) Per-screen VoiceOver-label + Dynamic-Type sweep across all surfaces (checklist B8).
   *(a) Reduce-Motion ✓ fixed 53bac151. (c) PreviewFeature ✓ removed 59e7ae3d.*
 - **P3:** `BridgeAuditFeedView` plain-VStack laziness defeat (§4); 2 slow-type-check getters (§4); deliberate
