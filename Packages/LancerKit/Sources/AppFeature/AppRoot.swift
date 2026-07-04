@@ -552,10 +552,10 @@ public struct AppRoot: View {
                 command: data.command,
                 cwd: data.cwd ?? "",
                 risk: Approval.Risk(rawValue: data.risk) ?? .medium,
-                toolName: data.toolName,
-                contentHash: data.contentHash,
                 question: data.question,
-                choices: data.choices
+                choices: data.choices,
+                toolName: data.toolName,
+                contentHash: data.contentHash
             )
             // Tag this approval with the machine it arrived from BEFORE inserting
             // it into the inbox VM, so the eventual decision routes back to that
