@@ -90,13 +90,30 @@ public final class RelayFleetStore {
         let id = machine.id
         bridgeSubscriptions[id] = machine.bridge.$isActive
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] isActive in
                 guard let self, let i = self.machines.firstIndex(where: { $0.id == id }) else { return }
                 // Re-assigning through the @Observable-synthesized setter is
                 // what actually notifies dependents, even though the element
                 // itself (a struct wrapping the same class references) is
                 // otherwise unchanged.
                 self.machines[i] = self.machines[i]
+                if isActive {
+                    // `lastConnectedAt` in the persisted index (read by Siri
+                    // via `RelayMachineMigration.readIndex()`) was previously
+                    // only set once, at initial pairing (`add()`) — never
+                    // refreshed on later reconnects. Home's own connectivity
+                    // dot reads `bridge.isActive` live and was correct; Siri's
+                    // 10-minute-freshness heuristic over the stale timestamp
+                    // eventually reported a genuinely-live machine as
+                    // "offline" (found live 2026-07-03: Home showed a green
+                    // dot and a successful message send, Siri's own machine
+                    // picker showed the same machine "offline"). Refresh it
+                    // on every reconnect so Siri's freshness check tracks
+                    // reality instead of going stale after ~10 minutes.
+                    self.machines[i].record.lastConnectedAt = .now
+                    let records = self.machines.map(\.record)
+                    Task { await RelayMachineMigration.writeIndex(records) }
+                }
             }
     }
 
