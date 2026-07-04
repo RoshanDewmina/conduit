@@ -210,7 +210,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	}
 
 	launchCWD := res.CWD
-	launchResult := s.dispatcher.launchConversationTurn(runID, conversationLaunchParams{
+	launchParams := conversationLaunchParams{
 		Agent:           agent,
 		CWD:             launchCWD,
 		Prompt:          req.Prompt,
@@ -218,11 +218,19 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		BudgetUSD:       req.BudgetUSD,
 		VendorSessionID: vendorSessionID,
 		IsNew:           isNew,
-	}, s.policyEffect, s.auditEntry)
+	}
+	if wt.Path != "" {
+		// Set on the run record inside launchConversationTurn() itself,
+		// before launch — not after it returns — so a fast-exiting
+		// process's terminal-status event can't race past the run's own
+		// creation. See dispatch.go's identical fix for runDispatch.
+		launchParams.worktreePath = wt.Path
+		launchParams.worktreeRepoRoot = wt.RepoRoot
+	}
+	launchResult := s.dispatcher.launchConversationTurn(runID, launchParams, s.policyEffect, s.auditEntry)
 
 	if wt.Path != "" {
 		if launchResult.Status == "started" {
-			s.dispatcher.attachRunWorktree(runID, wt.Path, wt.RepoRoot)
 			resp.WorktreePath = wt.Path
 			resp.Isolated = true
 		} else {

@@ -178,6 +178,11 @@ type conversationLaunchParams struct {
 	BudgetUSD       float64
 	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
 	IsNew           bool   // true ⇒ first turn of a brand-new conversation
+
+	// worktreePath/worktreeRepoRoot: see the identical fields on dispatchParams —
+	// same race, same fix, applied here too.
+	worktreePath     string
+	worktreeRepoRoot string
 }
 
 // buildConversationArgv selects which per-vendor argv to launch for a
@@ -219,6 +224,15 @@ type dispatchParams struct {
 	BudgetUSD   float64 `json:"budgetUSD"`
 	Model       string  `json:"model"`
 	UseWorktree bool    `json:"useWorktree,omitempty"`
+
+	// worktreePath/worktreeRepoRoot are set by runDispatch (never over the wire —
+	// unexported) so dispatch() can record them on the run BEFORE launching the
+	// process. Setting them only after launch returns (as attachRunWorktree once
+	// did) raced a fast-exiting process's terminal-status event against the
+	// run record's own creation, silently skipping worktree cleanup — see
+	// TestRunDispatchWorktreeRetention.
+	worktreePath     string
+	worktreeRepoRoot string
 }
 
 type dispatchResult struct {
@@ -962,17 +976,6 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 	}
 }
 
-// attachRunWorktree records a managed worktree path on a launched run so
-// onRunTerminal can apply the retention policy after the process exits.
-func (d *dispatcher) attachRunWorktree(runID, worktreePath, repoRoot string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if run := d.runs[runID]; run != nil {
-		run.WorktreePath = worktreePath
-		run.RepoRoot = repoRoot
-	}
-}
-
 // takeRunWorktree returns and clears the managed worktree metadata for a run.
 func (d *dispatcher) takeRunWorktree(runID string) (path, repoRoot string) {
 	d.mu.Lock()
@@ -1276,15 +1279,27 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	}
 
 	// Allocate the runId before launch so streamed output/status events can be
-	// tagged with it from the first byte.
+	// tagged with it from the first byte. The run record (including worktree
+	// metadata) is created BEFORE launch runs — d.launch's emit callback can
+	// fire synchronously/immediately for a fast-exiting process, and it must
+	// find this record already in place or run-terminal handling (worktree
+	// retention, status tracking) silently no-ops against a nil run.
 	id := newUUID()
+	d.mu.Lock()
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	d.mu.Unlock()
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
+		d.mu.Lock()
+		delete(d.runs, id)
+		d.mu.Unlock()
 		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
+	if run := d.runs[id]; run != nil {
+		run.handle = handle
+	}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
@@ -1556,13 +1571,24 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	// See dispatch()'s identical comment: the run record must exist before
+	// launch runs, or a fast-exiting process's terminal-status event races
+	// past a nil run and worktree cleanup silently no-ops.
+	d.mu.Lock()
+	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	d.mu.Unlock()
 	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
 	if err != nil {
+		d.mu.Lock()
+		delete(d.runs, runID)
+		d.mu.Unlock()
 		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 	d.mu.Lock()
-	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
+	if run := d.runs[runID]; run != nil {
+		run.handle = handle
+	}
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "conversation-append-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: runID})
 	return dispatchResult{RunID: runID, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}

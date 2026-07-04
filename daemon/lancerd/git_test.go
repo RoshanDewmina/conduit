@@ -353,7 +353,12 @@ func TestRunDispatchWorktreeRetention(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	repoRoot := filepath.Join(home, "proj")
-	removed := false
+	// removedCh (not a bare bool) so the assertion below synchronizes with
+	// the async removeManagedWorktree call instead of racing it — a plain
+	// bool written by the emit goroutine and read after a fixed sleep is a
+	// real data race under `go test -race` regardless of whether the sleep
+	// happens to be long enough in practice.
+	removedCh := make(chan struct{}, 1)
 	s.git = func(workdir, tool string, args ...string) (string, error) {
 		if tool == "git" && len(args) > 0 && args[0] == "rev-parse" {
 			return repoRoot + "\n", nil
@@ -362,7 +367,10 @@ func TestRunDispatchWorktreeRetention(t *testing.T) {
 			return "", nil
 		}
 		if tool == "git" && len(args) > 2 && args[0] == "worktree" && args[1] == "remove" {
-			removed = true
+			select {
+			case removedCh <- struct{}{}:
+			default:
+			}
 			return "", nil
 		}
 		return "", nil
@@ -379,8 +387,9 @@ func TestRunDispatchWorktreeRetention(t *testing.T) {
 	if res.Status != "started" || res.WorktreePath == "" || !res.Isolated {
 		t.Fatalf("dispatch result = %+v", res)
 	}
-	time.Sleep(50 * time.Millisecond)
-	if !removed {
+	select {
+	case <-removedCh:
+	case <-time.After(2 * time.Second):
 		t.Fatal("expected successful run to remove managed worktree")
 	}
 }

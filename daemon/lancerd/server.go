@@ -418,11 +418,15 @@ func (s *server) runDispatch(p dispatchParams) dispatchResult {
 			return dispatchResult{Status: "error", Message: err.Error()}
 		}
 		p.CWD = wt.Path
+		// Set on the run record inside dispatch() itself, before launch —
+		// not after dispatch() returns — so a fast-exiting process's
+		// terminal-status event can't race past the run's own creation.
+		p.worktreePath = wt.Path
+		p.worktreeRepoRoot = wt.RepoRoot
 	}
 	res := s.dispatcher.dispatch(p, s.policyEffect, s.auditEntry)
 	if wt.Path != "" {
 		if res.Status == "started" {
-			s.dispatcher.attachRunWorktree(res.RunID, wt.Path, wt.RepoRoot)
 			res.WorktreePath = wt.Path
 			res.Isolated = true
 			if res.CWD == "" {
