@@ -25,7 +25,12 @@ actor SiriRelevanceCoordinator {
             onlineMachineID: onlineMachineID
         )
         let stale = SiriRelevanceSelection.staleDonationKinds(previous: lastSnapshot, current: snapshot)
-        _ = stale
+        await removeStaleDonations(stale)
+
+        if #available(iOS 27.0, *) {
+            await syncRelevantEntities(previous: lastSnapshot, current: snapshot)
+        }
+
         lastSnapshot = snapshot
 
         await donateIntents(for: snapshot)
@@ -77,6 +82,65 @@ actor SiriRelevanceCoordinator {
             intent.conversation = ConversationEntity(record)
             try? await IntentDonationManager.shared.donate(intent: intent)
         }
+
+        if let machineID = snapshot.onlineMachineID {
+            let relay = await SiriIntentSupport.relayMachineSnapshots()
+            if let record = try? await catalog.machine(id: machineID, relayMachines: relay) {
+                var start = StartAgentRunIntent()
+                start.machine = MachineEntity(record)
+                try? await IntentDonationManager.shared.donate(intent: start)
+            }
+        }
+    }
+
+    private func removeStaleDonations(_ kinds: [String]) async {
+        for kind in kinds {
+            if kind.hasPrefix("openApproval:") {
+                let id = String(kind.dropFirst("openApproval:".count))
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(
+                        OpenApprovalIntent.self,
+                        entityIdentifier: EntityIdentifier(for: ApprovalEntity.self, identifier: id)
+                    )
+                )
+            } else if kind.hasPrefix("denyApproval:") {
+                let id = String(kind.dropFirst("denyApproval:".count))
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(
+                        DenyApprovalIntent.self,
+                        entityIdentifier: EntityIdentifier(for: ApprovalEntity.self, identifier: id)
+                    )
+                )
+            } else if kind.hasPrefix("pauseRun:") {
+                let id = String(kind.dropFirst("pauseRun:".count))
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(
+                        PauseRunIntent.self,
+                        entityIdentifier: EntityIdentifier(for: RunEntity.self, identifier: id)
+                    )
+                )
+            } else if kind.hasPrefix("stopRun:") {
+                let id = String(kind.dropFirst("stopRun:".count))
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(
+                        StopRunIntent.self,
+                        entityIdentifier: EntityIdentifier(for: RunEntity.self, identifier: id)
+                    )
+                )
+            } else if kind.hasPrefix("continueConversation:") {
+                let id = String(kind.dropFirst("continueConversation:".count))
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(
+                        ContinueConversationIntent.self,
+                        entityIdentifier: EntityIdentifier(for: ConversationEntity.self, identifier: id)
+                    )
+                )
+            } else if kind == "startAgentRun" {
+                try? await IntentDonationManager.shared.deleteDonations(
+                    matching: .intentType(StartAgentRunIntent.self)
+                )
+            }
+        }
     }
 
     @available(iOS 27.0, *)
@@ -84,6 +148,42 @@ actor SiriRelevanceCoordinator {
         let catalog = try? SiriIntentSupport.openCatalog()
         guard let catalog else { return }
 
+        let entities = await relevantEntities(for: snapshot, catalog: catalog)
+
+        guard !entities.isEmpty else {
+            try? await RelevantEntities.shared.removeAllEntities()
+            return
+        }
+
+        // AppEntityContext is audio-only in iOS 27 beta SDK; register relevance via
+        // entity-bearing intent donations until general-purpose contexts ship.
+        // Spotlight indexing remains the primary proactive search path.
+        for entity in entities {
+            await donateRelevantEntity(entity)
+        }
+    }
+
+    @available(iOS 27.0, *)
+    private func syncRelevantEntities(
+        previous: SiriRelevanceSnapshot,
+        current: SiriRelevanceSnapshot
+    ) async {
+        let catalog = try? SiriIntentSupport.openCatalog()
+        guard let catalog else { return }
+
+        let previousEntities = await relevantEntities(for: previous, catalog: catalog)
+        let currentEntities = await relevantEntities(for: current, catalog: catalog)
+        let currentIDs = Set(currentEntities.map(\.id))
+        let staleEntities = previousEntities.filter { !currentIDs.contains($0.id) }
+        guard !staleEntities.isEmpty else { return }
+        try? await RelevantEntities.shared.removeEntities(staleEntities)
+    }
+
+    @available(iOS 27.0, *)
+    private func relevantEntities(
+        for snapshot: SiriRelevanceSnapshot,
+        catalog: IntentEntityCatalog
+    ) async -> [any AppEntity] {
         var entities: [any AppEntity] = []
 
         if let approvalID = snapshot.pendingApprovalIDs.first,
@@ -109,14 +209,38 @@ actor SiriRelevanceCoordinator {
             }
         }
 
-        guard !entities.isEmpty else {
-            try? await RelevantEntities.shared.removeAllEntities()
-            return
-        }
+        return entities
+    }
 
-        // AppEntityContext is audio-only in iOS 27 beta SDK; donate entities without
-        // a typed context until Apple ships general-purpose relevance contexts.
-        // Spotlight indexing remains the primary proactive search path.
-        _ = entities
+    @available(iOS 27.0, *)
+    private func donateRelevantEntity(_ entity: any AppEntity) async {
+        switch entity {
+        case let approval as ApprovalEntity:
+            var open = OpenApprovalIntent()
+            open.approval = approval
+            try? await IntentDonationManager.shared.donate(intent: open)
+
+            var deny = DenyApprovalIntent()
+            deny.approval = approval
+            try? await IntentDonationManager.shared.donate(intent: deny)
+        case let run as RunEntity:
+            var pause = PauseRunIntent()
+            pause.run = run
+            try? await IntentDonationManager.shared.donate(intent: pause)
+
+            var stop = StopRunIntent()
+            stop.run = run
+            try? await IntentDonationManager.shared.donate(intent: stop)
+        case let conversation as ConversationEntity:
+            var intent = ContinueConversationIntent()
+            intent.conversation = conversation
+            try? await IntentDonationManager.shared.donate(intent: intent)
+        case let machine as MachineEntity:
+            var start = StartAgentRunIntent()
+            start.machine = machine
+            try? await IntentDonationManager.shared.donate(intent: start)
+        default:
+            break
+        }
     }
 }
