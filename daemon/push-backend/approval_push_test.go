@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,5 +59,26 @@ func TestHandleApprovalDropsUnknownSession(t *testing.T) {
 	}
 	if called {
 		t.Fatal("should not push to an unregistered session")
+	}
+}
+
+func TestAskQuestionApprovalAlertBodyRedacted(t *testing.T) {
+	sensitiveQuestion := "Should I delete /etc/passwd and export AWS_SECRET=supersecret?"
+	body := approvalAlertBody(approvalEvent{
+		Kind:     "askQuestion",
+		Question: sensitiveQuestion,
+		Risk:     "high",
+		Command:  "rm -rf /",
+	})
+	if body != "Your agent needs your input" {
+		t.Errorf("body = %q, want generic redacted copy", body)
+	}
+	if strings.Contains(body, sensitiveQuestion) {
+		t.Errorf("alert body leaked raw question: %q", body)
+	}
+	for _, fragment := range []string{"/etc/passwd", "supersecret", "delete"} {
+		if strings.Contains(body, fragment) {
+			t.Errorf("alert body leaked sensitive fragment %q: %q", fragment, body)
+		}
 	}
 }

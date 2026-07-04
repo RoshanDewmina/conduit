@@ -336,6 +336,20 @@ func redactSummary(risk, command string) string {
 	}
 }
 
+// approvalAlertBody returns the lock-screen APNs alert body for an approval event.
+// Full question text, command arguments, file paths, and secrets are NEVER
+// included; full detail is fetched in-app after device unlock.
+func approvalAlertBody(ev approvalEvent) string {
+	if ev.Kind == "askQuestion" {
+		return "Your agent needs your input"
+	}
+	risk := ev.Risk
+	if risk == "" {
+		risk = "unknown"
+	}
+	return redactSummary(risk, ev.Command)
+}
+
 // classifyTool returns a short, non-sensitive tool-category label derived from
 // the beginning of the command string. Only the command name (first token) is
 // examined — never file paths, arguments, or env values.

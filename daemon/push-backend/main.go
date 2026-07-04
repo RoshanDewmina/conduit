@@ -571,18 +571,10 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	}
 	category := "approval"
 	title := fmt.Sprintf("Approval needed · %s", ev.HostName)
-	body := redactSummary(risk, ev.Command)
+	body := approvalAlertBody(ev)
 	if ev.Kind == "askQuestion" {
 		category = "question"
 		title = fmt.Sprintf("Agent question · %s", ev.HostName)
-		if q := strings.TrimSpace(ev.Question); q != "" {
-			if len(q) > 120 {
-				q = q[:117] + "..."
-			}
-			body = q
-		} else {
-			body = "Your agent needs your input"
-		}
 	}
 
 	payload := map[string]any{
