@@ -19,6 +19,12 @@ type resident struct {
 	attachMu sync.Mutex
 	attach   io.ReadWriteCloser
 	writeMu  sync.Mutex
+
+	// relayMu guards relayCode, the pairing code of the currently connected
+	// relay client — connectRelay runs both from startup (main goroutine) and
+	// from the pairing-file watcher goroutine.
+	relayMu   sync.Mutex
+	relayCode string
 }
 
 func runDaemon() error {
@@ -275,6 +281,9 @@ func (r *resident) connectRelay(cfg *relayPairConfig) {
 	router := newE2ERouter(client, r.core)
 	r.core.setE2ERouter(router)
 	client.start()
+	r.relayMu.Lock()
+	r.relayCode = cfg.Code
+	r.relayMu.Unlock()
 	fmt.Fprintf(os.Stderr, "lancerd daemon: E2E relay started for code %s\n", cfg.Code)
 }
 
@@ -282,8 +291,19 @@ func (r *resident) connectRelay(cfg *relayPairConfig) {
 // E2E relay when a new pairing is written (e.g. by lancerd pair).
 func (r *resident) startRelayWatch() {
 	w := newRelayPairWatcher(func(cfg *relayPairConfig) {
-		// If a router already exists, stop its client and reconnect.
+		// If a router already exists, stop its client and reconnect. This is
+		// how pairing completes (pair/begin writes the file, this reconnects
+		// on the new code) — but it equally means a re-pair silently orphans
+		// every phone on the previous code, so log the transition explicitly.
 		if r.core.e2e != nil {
+			r.relayMu.Lock()
+			oldCode := r.relayCode
+			r.relayMu.Unlock()
+			if oldCode != "" && oldCode != cfg.Code {
+				fmt.Fprintf(os.Stderr,
+					"lancerd daemon: relay pairing file changed (code %s -> %s) — dropping the old code's relay session; phones paired to %s are orphaned until re-paired\n",
+					oldCode, cfg.Code, oldCode)
+			}
 			r.core.e2e.client.stop()
 		}
 		r.connectRelay(cfg)

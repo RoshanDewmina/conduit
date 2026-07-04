@@ -49,6 +49,19 @@ func writeRelayPairing(cfg *relayPairConfig) error {
 	if err != nil {
 		return err
 	}
+	// The daemon has exactly ONE pairing slot: every phone paired to the old
+	// code is silently orphaned the moment this file changes (the resident's
+	// watcher hot-swaps the live relay client within ~5s, and the old phones
+	// keep dialing a code no daemon listens on, forever, with no error on
+	// either side — root cause of the 2026-07-04 "phone never re-paired after
+	// daemon restart" incident). Warn loudly whenever an existing, different
+	// pairing is being replaced so the operator knows a re-pair of every
+	// phone is now required.
+	if old, err := readRelayPairing(); err == nil && old.Code != cfg.Code {
+		fmt.Fprintf(os.Stderr,
+			"lancerd: REPLACING existing relay pairing (code %s -> %s) — phones paired to the old code are orphaned and must re-pair\n",
+			old.Code, cfg.Code)
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
