@@ -877,4 +877,17 @@ public enum RelayConversationError: Error, LocalizedError {
         }
     }
 }
+
+#if DEBUG
+extension E2ERelayBridge {
+    /// Test-only seam: flips `isActive` directly so `RelayFleetStore`'s
+    /// reconnect-observation logic can be regression-tested without a live
+    /// WebSocket relay server. `isActive`'s only production driver is
+    /// `relayClient.$pairingState` inside `start()` — there is no other way
+    /// to simulate a reconnect from a unit test.
+    func setActiveForTesting(_ active: Bool) {
+        isActive = active
+    }
+}
+#endif
 #endif
