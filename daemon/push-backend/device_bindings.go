@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,16 +19,19 @@ import (
 // The QR challenge proves the phone approved this daemon; the daemon only ever
 // redeems an opaque capability and never receives an account password or JWT.
 type deviceBinding struct {
-	ID                string     `json:"id"`
-	UserID            string     `json:"userId,omitempty"`
-	Name              string     `json:"name"`
-	PublicFingerprint string     `json:"publicFingerprint"`
-	SecretHash        string     `json:"-"`
-	CredentialHash    string     `json:"-"`
-	ExpiresAt         time.Time  `json:"expiresAt"`
-	BoundAt           *time.Time `json:"boundAt,omitempty"`
-	RedeemedAt        *time.Time `json:"redeemedAt,omitempty"`
-	RevokedAt         *time.Time `json:"revokedAt,omitempty"`
+	ID                string `json:"id"`
+	UserID            string `json:"userId,omitempty"`
+	Name              string `json:"name"`
+	PublicFingerprint string `json:"publicFingerprint"`
+	SecretHash        string `json:"-"`
+	CredentialHash    string `json:"-"`
+	// SHA-256 key identifier of the App Attest key that authorized the bind
+	// (empty when the server ran with App Attest disabled). Kept for audit.
+	AttestKeyID string     `json:"-"`
+	ExpiresAt   time.Time  `json:"expiresAt"`
+	BoundAt     *time.Time `json:"boundAt,omitempty"`
+	RedeemedAt  *time.Time `json:"redeemedAt,omitempty"`
+	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
 }
 
 type deviceBindingSnapshot struct {
@@ -94,6 +98,13 @@ type createDeviceChallengeRequest struct {
 type bindDeviceRequest struct {
 	ChallengeID string `json:"challengeId"`
 	Secret      string `json:"secret"`
+	// App Attest fields, required whenever the server has App Attest
+	// configured (appAttestConfig.enabled): the attestation must verify for
+	// the bind to proceed, even with a correct QR secret — a leaked/phished
+	// secret plus a signed-in session must not be sufficient on its own.
+	AttestChallengeID string `json:"attestChallengeId,omitempty"`
+	AttestKeyID       string `json:"attestKeyId,omitempty"`
+	AttestationObject string `json:"attestationObject,omitempty"`
 }
 
 type redeemDeviceRequest struct {
@@ -103,6 +114,7 @@ type redeemDeviceRequest struct {
 
 func registerDeviceBindingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/devices/challenges", handleCreateDeviceChallenge)
+	mux.HandleFunc("POST /v1/devices/attest-challenge", handleCreateAttestChallenge)
 	mux.HandleFunc("POST /v1/devices/bind", handleBindDevice)
 	mux.HandleFunc("POST /v1/devices/redeem", handleRedeemDevice)
 	mux.HandleFunc("GET /v1/devices", handleListDevices)
@@ -140,15 +152,51 @@ func handleCreateDeviceChallenge(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, publicDeviceBinding(binding))
 }
 
+// handleCreateAttestChallenge mints the single-use server nonce a phone folds
+// into its App Attest attestation before calling /v1/devices/bind.
+func handleCreateAttestChallenge(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireAuthenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	id, challenge, err := activeAttestChallengeStore.mint(user.ID, time.Now().UTC())
+	if err != nil {
+		http.Error(w, "challenge unavailable", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{
+		"attestChallengeId": id,
+		"challenge":         base64.StdEncoding.EncodeToString(challenge),
+	})
+}
+
 func handleBindDevice(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireAuthenticatedUser(w, r)
 	if !ok {
 		return
 	}
 	var req bindDeviceRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
+	}
+	// Hardware attestation gate — fail closed BEFORE touching the binding.
+	// A correct QR secret alone must never be sufficient to bind.
+	if activeAppAttestConfig.enabled() {
+		if req.AttestChallengeID == "" || req.AttestKeyID == "" || req.AttestationObject == "" {
+			http.Error(w, "app attestation required", http.StatusUnauthorized)
+			return
+		}
+		challenge, ok := activeAttestChallengeStore.consume(req.AttestChallengeID, user.ID, time.Now().UTC())
+		if !ok {
+			http.Error(w, "app attestation required", http.StatusUnauthorized)
+			return
+		}
+		if err := verifyAppAttestation(req.AttestationObject, req.AttestKeyID, challenge, activeAppAttestConfig, time.Now().UTC()); err != nil {
+			log.Printf("security: device bind rejected — app attestation failed: %v", err)
+			http.Error(w, "app attestation failed", http.StatusUnauthorized)
+			return
+		}
 	}
 	var result deviceBinding
 	err := activeDeviceBindingStore.update(func(devices map[string]deviceBinding) error {
@@ -159,6 +207,7 @@ func handleBindDevice(w http.ResponseWriter, r *http.Request) {
 		now := time.Now().UTC()
 		binding.UserID = user.ID
 		binding.BoundAt = &now
+		binding.AttestKeyID = req.AttestKeyID
 		devices[binding.ID] = binding
 		result = binding
 		return nil

@@ -82,6 +82,7 @@ jobs:
             -destination "platform=iOS Simulator,name=${SIM_NAME},OS=latest" \
             -only-testing:LancerKitTests/ConversationSyncCoordinatorTests \
             -only-testing:LancerKitTests/RelayFleetStoreTests \
+            -only-testing:LancerKitTests/InboxDecisionGateTests \
             CODE_SIGNING_ALLOWED=NO
 
   daemon-go:

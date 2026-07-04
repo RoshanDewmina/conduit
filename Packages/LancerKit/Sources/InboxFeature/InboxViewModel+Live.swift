@@ -4,6 +4,7 @@ import Observation
 import LancerCore
 import PersistenceKit
 import NotificationsKit
+import SecurityKit
 
 @MainActor @Observable
 public final class LiveInboxViewModel: InboxViewModel {
@@ -58,8 +59,18 @@ public final class LiveInboxViewModel: InboxViewModel {
             return
         }
         let contentHash = existing?.contentHash
-        super.decide(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
+        // Gate BEFORE any mutation or persistence: a high/critical (or
+        // unknown-risk — `existing` can be nil when the row hasn't loaded into
+        // memory yet) decision needs a fresh local-auth unlock, and both the
+        // in-memory flip and the DB write must wait for it. The base class's
+        // `decide` gates independently, so route the post-auth work through the
+        // ungated `applyDecision` to avoid a second prompt.
+        let risk = existing?.risk
         Task {
+            if ApprovalDecisionAuth.requiresUnlock(risk: risk) {
+                guard await decisionAuthorizer(risk) else { return }
+            }
+            applyDecision(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
             // The DB UPDATE is guarded on `decision IS NULL`; only forward to the
             // wire + clear the lock-screen banner when this call actually resolved
             // the row. The Live Activity / badge update follows reactively from the

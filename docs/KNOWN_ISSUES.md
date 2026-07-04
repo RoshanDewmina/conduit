@@ -135,8 +135,65 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   on real devices without passcode, while preserving explicit simulator/test bypass behavior. Defense-in-depth
   bonus: bind SSH-key Keychain items with `SecAccessControl` where feasible.
 
+**Approval-trust-boundary hardening pass — 2026-07-04 (branch `fable/approval-security-hardening`), against the 2026-07-02 Codex read-only audit's 6 findings:**
+
+- ✅ **Replay resistance (audit finding) — verified correct in both directions.** The Go daemon stamps
+  `sendSeq` on every send and checks `recv.accept(seq)` on every receive (`e2e_client.go`); the Swift
+  client mirrors both (`SSHTransport/E2ERelayClient.swift` `SeqFrame`/`ReplaySequencer`); counters
+  reset on `peer_joined`. 🟡 **Accepted P2 limitation:** the session key derivation has no epoch
+  nonce, so a malicious relay forging `peer_joined` re-derives the SAME key and resets the sequencer,
+  permitting replay of prior-generation frames. Impact bounded: approval IDs are single-use
+  (`approvalStore.resolve` deletes on resolve) and decisions must also pass the content-hash check.
+  Full fix = epoch nonces in HKDF inputs (protocol change on both sides) — tracked, not done.
+- ✅ **Content-hash binding (audit finding) — verified; cross-language vector pinned on BOTH sides.**
+  Go `computeContentHash` and Swift `Approval.computeContentHash` produce byte-identical digests;
+  the shared vector `c5fca73e…` is asserted in `content_hash_test.go` (Go) and
+  `ApprovalContentHashTests.matchesGoVector` (Swift), and was independently recomputed with `shasum`.
+- ✅ **`noClientGrace` 8s auto-allow (audit P0) — reclassified: confirmed intentional,
+  risk-tier-scoped, NOT a fail-open bug.** The comment block at `server.go:1274-1297` documents the
+  owner directive (2026-07-02): only low/medium risk gets the grace; high/critical waits indefinitely
+  for an explicit human decision. **However, the tier gating was NOT airtight — real gap found and
+  fixed:** `policy.Evaluate` trusted a wire-supplied `risk >= 0` verbatim, and hook adapters send
+  coarse tiers (opencode: any non-bash tool → low; Claude wrapper: unknown tools → low; a JSON event
+  omitting `risk` unmarshals to 0 = low), so a lied/omitted band made a dangerous escalation
+  grace-eligible. Fixed: the evaluated risk is now **floored at the daemon's own `ScoreRiskInt`** —
+  clients may raise a tier, never lower it. Regressions: `TestEvaluateWireRiskCannotDowngrade`
+  (policy) + `TestHookLiedLowRiskNoClientDoesNotAutoApprove` (server-level, proves the event stays
+  pending past the grace and honors the eventual explicit decision).
+- ✅ **BiometricGate wired into approval decisions (audit finding — was: zero call sites on decision
+  paths).** New `SecurityKit/ApprovalDecisionAuth` gates approve/reject **before persist/forward**
+  for **high/critical-risk and unknown-risk (fail-closed)** decisions, at every live entry point:
+  inbox cards (`InboxViewModel`/`LiveInboxViewModel.decide`), notification-action routing, and
+  `ApprovalRelay.enqueue` (Live Activity/Dynamic Island widget intents — which
+  `authenticationRequired` does NOT cover — plus Siri/`CommandGateway` and the cold-launch drain).
+  **Scoped by design:** low/medium decisions are NOT biometric-gated (same tier split as
+  `PermitsNoClientGrace`; notification actions still require an unlocked device). **Documented
+  exception:** Watch decisions rely on wrist-detection + watch passcode (see AppRoot watch
+  `onDecision` comment + SECURITY_ARCHITECTURE §5.1). Tests: `ApprovalDecisionAuthTests` (macOS) +
+  `InboxDecisionGateTests` (iOS-gated, wired into the CI simulator step). Note: the pre-existing
+  P2 above (BiometricGate degrades open with no passcode enrolled) bounds this gate's strength too.
+  `AgentStore.respondToApproval` (AgentKit hosted-runtime path) is currently caller-less/dormant and
+  was not gated.
+- ✅ **App Attest on device binding (audit finding — was: QR secret + auth alone binds).**
+  `push-backend` now verifies an Apple App Attest attestation at **bind** time (bind is the iOS-side
+  step; redeem is performed by the Go daemon, which cannot attest — the audit's "at redeem" intent,
+  *leaked QR secret must not suffice to bind*, is enforced at bind, and redeem already requires a
+  completed bind). Full verification per Apple's steps (chain to pinned Apple App Attest root CA,
+  nonce, keyId, App ID, counter, aaguid) in `app_attest.go`; single-use per-user server nonces via
+  `POST /v1/devices/attest-challenge`; iOS `AccountSessionController.bindDaemonDevice` attests via
+  `DCAppAttestService` (iOS 27 target — no DeviceCheck fallback needed). **Fail-closed startup
+  check** mirrors `relaySecretStartupCheck`: production deployment without
+  `APP_ATTEST_TEAM_ID`/`APP_ATTEST_BUNDLE_ID` → `log.Fatal`. Regressions:
+  `TestBindRejectsWithoutValidAttestation` (correct QR secret + missing/garbage attestation → 401;
+  attest nonce single-use), `TestAttestChallengeIsPerUserAndExpires`, `TestAppAttestStartupCheck`.
+  Simulator/dev backends without the env vars keep working (warn, not fatal, off Cloud Run/Fly).
+
 **Residual operational items (not code bugs):**
 - Confirm `APNS_*` + live `STRIPE_*` secrets are set on the running push-backend instance (D1 in checklist).
+- **NEW (2026-07-04): the next push-backend deploy will refuse to start** unless
+  `APP_ATTEST_TEAM_ID=39HM2X8GS6` and `APP_ATTEST_BUNDLE_ID=dev.lancer.mobile` are set on the service
+  (plus `APP_ATTEST_ENV=development` for dev-signed builds). Deliberate fail-closed choice — set the
+  env vars as part of the deploy.
 - Ensure the **deployed daemon is the Go build**, not the stale Swift `lancerd` 0.1.0 (now quarantined in §3).
 
 ---

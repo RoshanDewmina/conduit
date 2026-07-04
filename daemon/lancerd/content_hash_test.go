@@ -69,3 +69,13 @@ func TestApprovalResolveRejectsContentHashMismatch(t *testing.T) {
 		t.Fatal("expected a decision to be delivered after a correct-hash resolve")
 	}
 }
+
+// TestComputeContentHashCrossLanguageVector pins the shared vector also
+// asserted by the Swift side (ApprovalContentHashTests.matchesGoVector) so a
+// canonicalization change in either language breaks a test in that language.
+func TestComputeContentHashCrossLanguageVector(t *testing.T) {
+	const want = "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3"
+	if got := computeContentHash("echo hi", "", "/tmp", ""); got != want {
+		t.Fatalf("cross-language vector mismatch: got %s, want %s", got, want)
+	}
+}

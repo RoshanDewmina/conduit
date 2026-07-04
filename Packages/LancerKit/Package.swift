@@ -179,6 +179,7 @@ let package = Package(
                 "DiffFeature",
                 "SettingsFeature",
                 "SSHTransport",
+                "SecurityKit",
             ],
             swiftSettings: swiftSettings
         ),

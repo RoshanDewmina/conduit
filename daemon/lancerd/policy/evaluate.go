@@ -3,9 +3,14 @@ package policy
 // Evaluate applies all rules in doc; among matches, strictest effect wins (deny > ask > allow).
 // Unmatched requests use doc.Default, or ask when empty (fail-closed).
 func Evaluate(doc Document, req Request) Result {
-	riskInt := req.Risk
-	if riskInt < 0 {
-		riskInt = ScoreRiskInt(req.Command, req.Kind)
+	// A wire-supplied risk band may RAISE the tier above the daemon's own
+	// scoring but never lower it: hook adapters set risk from coarse tool-name
+	// maps (unknown tools default to low), and the no-client grace fast path
+	// keys off this tier — trusting a lower client value verbatim would let a
+	// lied or omitted band turn a high/critical escalation grace-eligible.
+	riskInt := ScoreRiskInt(req.Command, req.Kind)
+	if req.Risk > riskInt {
+		riskInt = req.Risk
 	}
 	riskLabel := RiskLabel(riskInt)
 	paths := ExtractPaths(req.Command, req.CWD, "")

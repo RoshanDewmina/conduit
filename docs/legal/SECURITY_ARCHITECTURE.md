@@ -1,6 +1,6 @@
 # Security Architecture — Lancer
 
-**Last updated:** 2026-06-17
+**Last updated:** 2026-07-04
 
 **Audience:** Security researchers, system administrators, and technically
 sophisticated users evaluating Lancer's threat model.
@@ -93,6 +93,33 @@ enforces three protections:
   opaque ciphertext only; private keys and the derived session key never
   reach it (see §4.3).
 
+### 2.4 Account device binding — App Attest (hosted flow)
+
+Separate from the relay pairing above, the hosted account flow binds a daemon
+to a user account via a QR challenge (`push-backend` `/v1/devices/*`): the
+daemon mints a challenge + secret, a signed-in phone binds it, the daemon
+redeems an opaque capability credential. As of 2026-07-04 the **bind step
+additionally requires Apple App Attest** when the backend is configured for it
+(`APP_ATTEST_TEAM_ID` / `APP_ATTEST_BUNDLE_ID`; fail-closed `log.Fatal` at
+startup if unset in a production deployment):
+
+- The phone requests a single-use, per-user server nonce
+  (`POST /v1/devices/attest-challenge`), generates an App Attest key, and
+  attests it over the nonce (`DCAppAttestService`).
+- The backend verifies the attestation per Apple's documented steps —
+  certificate chain to the pinned Apple App Attest root CA, nonce binding,
+  key-identifier match, App ID (team + bundle), counter 0, environment aaguid —
+  and rejects the bind on any failure **even when the QR capability secret is
+  correct**. A leaked/guessed/phished QR secret plus a signed-in session is
+  deliberately not sufficient to bind a device.
+- Attestation is applied at **bind** (the iOS entry point), not redeem: redeem
+  is performed by the Go daemon, which cannot attest, and redeem already
+  requires a completed bind plus the secret. The verified App Attest key ID is
+  stored on the binding for audit.
+- The simulator and non-Apple hardware cannot attest; binds without attestation
+  are accepted **only** by a backend explicitly running with App Attest
+  disabled (local dev). Production refuses them (HTTP 401).
+
 ---
 
 ## 3. Session keys
@@ -171,6 +198,45 @@ The relay does **not** have access to:
 - Any identifying user information (Lancer has no account system)
 - IP addresses beyond standard HTTP access logs (retained 14 days)
 
+### 4.4 Approval-event integrity (replay + content binding)
+
+Two integrity mechanisms protect governed approvals end to end (2026-07,
+audited 2026-07-04):
+
+- **Replay resistance.** Every E2E relay frame wraps a monotonically increasing
+  per-direction sequence number *inside* the encrypted payload
+  (`seqFrame`/`replaySequencer`, `daemon/lancerd/e2e_crypto.go`; Swift mirror
+  `SeqFrame`/`ReplaySequencer` in `SSHTransport/E2ERelayClient.swift`). Both
+  sides stamp what they send and reject any received frame whose sequence is
+  not strictly greater than the last accepted one; counters reset on each
+  `peer_joined` key (re)establishment. Known limitation (accepted, P2): the
+  session key is derived deterministically from the static pairing keys, so a
+  relay that forges `peer_joined` can reset the counters and replay
+  prior-generation frames — the impact is bounded because approval IDs are
+  single-use (a replayed decision for a resolved approval is a no-op) and every
+  decision must also pass the content-hash check below. Epoch nonces in the key
+  derivation would close this fully and are tracked as follow-up.
+- **Content-hash binding.** Every approval event carries a SHA-256 over the
+  exact command / patch / cwd / tool-input the human reviews
+  (`computeContentHash`, `daemon/lancerd/approval.go`), and a decision must
+  echo it back; `approvalStore.resolve` rejects any decision whose hash doesn't
+  match the stored pending event, on every transport (SSH attach, E2E relay,
+  backend REST). The Go and Swift canonicalizations are pinned to a shared
+  cross-language test vector on both sides.
+
+### 4.5 Risk tiering and the no-client grace
+
+Escalated approvals with **no reachable client** (no attach channel, no relay
+pairing, no push device) auto-approve after an 8-second grace **only for
+low/medium-risk events** (`policy.PermitsNoClientGrace`) so unattended on-host
+agent runs are not stalled; high/critical events wait indefinitely for an
+explicit human decision (owner directive 2026-07-02). Since 2026-07-04 the
+risk tier used for this gate is **floored at the daemon's own scoring**
+(`policy.Evaluate` + `ScoreRiskInt`): a hook adapter may raise an event's risk
+band but can never lower it below what the daemon computes from the command
+and kind, so a lied or omitted wire risk cannot make a dangerous escalation
+grace-eligible.
+
 ---
 
 ## 5. On-device key storage
@@ -184,6 +250,35 @@ The relay does **not** have access to:
 
 All Keychain items have `kSecAttrSynchronizable: false` — they never sync to
 iCloud.
+
+### 5.1 Approval-decision local authentication
+
+Since 2026-07-04, committing an approve/reject decision on a **high or
+critical-risk** approval requires a fresh biometric/passcode unlock
+(`ApprovalDecisionAuth` in SecurityKit, backed by `BiometricGate`); the gate
+runs *before* the decision is persisted or forwarded. Scope, stated precisely:
+
+- **Gated:** the in-app inbox cards (`InboxViewModel` / `LiveInboxViewModel.decide`),
+  notification-action routing, and the `ApprovalRelay.enqueue` entry point that
+  serves Live Activity / Dynamic Island buttons, Siri/Shortcuts
+  (`CommandGateway`) and the cold-launch action drain. Live Activity buttons
+  are widget intents, which `UNNotificationActionOptions.authenticationRequired`
+  does **not** cover — hence the explicit gate.
+- **Unknown risk fails closed:** a decision for an approval with no local row
+  (so no tier to read) requires the unlock.
+- **Not gated (by design):** low/medium-risk decisions — the same tier split as
+  the daemon's `PermitsNoClientGrace`; prompting on every routine approval
+  would defeat the product's core loop. Notification actions still require an
+  unlocked device via `authenticationRequired`.
+- **Documented exception — Apple Watch:** watch decisions arrive over WCSession
+  only from a paired watch that is unlocked and on-wrist; wrist detection + the
+  watch passcode are Apple's auth boundary for that surface (trusted enough to
+  unlock the paired iPhone itself). No phone-side Face ID prompt is inserted
+  for watch taps.
+- **Residual (pre-existing, P2):** `BiometricGate` degrades open on devices
+  with no passcode/biometry enrolled and on the simulator (see
+  `docs/KNOWN_ISSUES.md` §2) — the gate is only as strong as `BiometricGate`
+  itself until that fail-closed hardening lands.
 
 ---
 
