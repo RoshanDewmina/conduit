@@ -94,10 +94,11 @@ public struct DoctorView: View {
     private func checkRow(_ check: DoctorCheckResult) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: check.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 14))
+                .font(.dsSansPt(14))
                 .foregroundStyle(check.passed ? t.risk(0) : severityColor(check.severity))
                 .frame(width: 20)
                 .padding(.top, 1)
+                .accessibilityLabel(check.passed ? "Passed" : "Failed")
             VStack(alignment: .leading, spacing: 2) {
                 Text(check.name)
                     .font(.dsSansPt(14, weight: .semibold))
@@ -112,6 +113,8 @@ public struct DoctorView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(check.name), \(check.passed ? "passed" : "failed"), \(check.message)")
     }
 
     @ViewBuilder
@@ -144,8 +147,9 @@ public struct DoctorView: View {
             HStack(spacing: 8) {
                 if report.allPassed {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 14))
+                        .font(.dsSansPt(14))
                         .foregroundStyle(t.risk(0))
+                        .accessibilityHidden(true)
                     Text("All checks passed")
                         .font(.dsSansPt(14, weight: .medium))
                         .foregroundStyle(t.risk(0))
@@ -153,8 +157,9 @@ public struct DoctorView: View {
                     let errCount = report.errors.count
                     let warnCount = report.warnings.count
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 14))
+                        .font(.dsSansPt(14))
                         .foregroundStyle(t.warn)
+                        .accessibilityHidden(true)
                     Text("\(errCount) error\(errCount == 1 ? "" : "s"), \(warnCount) warning\(warnCount == 1 ? "" : "s")")
                         .font(.dsSansPt(14, weight: .medium))
                         .foregroundStyle(errCount > 0 ? t.danger : t.warn)
@@ -168,6 +173,12 @@ public struct DoctorView: View {
             .padding(.vertical, 12)
         }
         .padding(.top, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            report.allPassed
+                ? "All checks passed, daemon version \(report.daemonVersion)"
+                : "\(report.errors.count) error\(report.errors.count == 1 ? "" : "s"), \(report.warnings.count) warning\(report.warnings.count == 1 ? "" : "s"), daemon version \(report.daemonVersion)"
+        )
     }
 
     // MARK: - Prompt / error / loading

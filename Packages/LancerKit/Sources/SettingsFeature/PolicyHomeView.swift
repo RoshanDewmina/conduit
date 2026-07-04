@@ -34,6 +34,7 @@ public struct PolicyHomeView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .accessibilityLabel("Policy section")
 
             if tab == 0 {
                 PolicyPresetsView(hosts: hosts, embedded: true, onApply: onApplyPreset)
