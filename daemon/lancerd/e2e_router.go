@@ -34,6 +34,7 @@ func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
 // sendApproval routes an approval event through the E2E relay.
 func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 	if r.client == nil || !r.client.isPaired() {
+		log.Printf("e2e: dropped approval %s — relay client not paired", ev.ApprovalID)
 		return
 	}
 
