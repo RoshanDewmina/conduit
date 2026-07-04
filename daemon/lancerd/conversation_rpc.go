@@ -197,7 +197,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		}
 	}
 
-	launchResult := s.dispatcher.launchConversationTurn(runID, conversationLaunchParams{
+	launchResult := s.runDispatchResult(s.dispatcher.launchConversationTurn(runID, conversationLaunchParams{
 		Agent:           agent,
 		CWD:             res.CWD,
 		Prompt:          req.Prompt,
@@ -205,7 +205,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		BudgetUSD:       req.BudgetUSD,
 		VendorSessionID: vendorSessionID,
 		IsNew:           isNew,
-	}, s.policyEffect, s.auditEntry)
+	}, s.policyEffect, s.auditEntry))
 
 	// Persist the REAL outcome onto the turn row (best-effort — a failed
 	// write here would only degrade a future clientTurnId replay's reported

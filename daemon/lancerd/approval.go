@@ -37,6 +37,8 @@ type ApprovalEvent struct {
 	TouchesNetwork bool     `json:"touchesNetwork,omitempty"`
 	MatchedRule    string   `json:"matchedRule,omitempty"`
 	RunID          string   `json:"runId,omitempty"`
+	Question       string   `json:"question,omitempty"`
+	Choices        []string `json:"choices,omitempty"`
 
 	// ContentHash binds this event to the exact content (Command, Patch, CWD,
 	// ToolInput) a decision must be computed over. Set once at construction via

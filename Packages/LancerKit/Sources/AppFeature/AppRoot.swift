@@ -423,6 +423,28 @@ public struct AppRoot: View {
             }
             if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerOpenSecrets)) { _ in
+            sidebarState.navigate(to: .settings)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerNeedsInputAction)) { note in
+            guard case .ready(let env) = environment else { return }
+            let vendorSessionId = (note.userInfo?["vendorSessionId"] as? String) ?? ""
+            let agent = (note.userInfo?["agent"] as? String) ?? ""
+            Task { @MainActor in
+                await openNeedsInputFromNotification(vendorSessionId: vendorSessionId, agent: agent, env: env)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerRemoteApprovalReceived)) { note in
+            if let approvalId = note.userInfo?["approvalId"] as? String, !approvalId.isEmpty {
+                OpenApprovalBuffer.shared.record(approvalID: approvalId)
+                NotificationCenter.default.post(
+                    name: .lancerOpenApproval,
+                    object: nil,
+                    userInfo: ["approvalId": approvalId]
+                )
+            }
+            Task { await fleetStore.refreshBridgeStatus() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .lancerOpenApproval)) { note in
             // Route to the specific thread the approval belongs to (where the
             // in-chat approval card lives) rather than the generic Inbox list —
@@ -521,7 +543,9 @@ public struct AppRoot: View {
                 cwd: data.cwd ?? "",
                 risk: Approval.Risk(rawValue: data.risk) ?? .medium,
                 toolName: data.toolName,
-                contentHash: data.contentHash
+                contentHash: data.contentHash,
+                question: data.question,
+                choices: data.choices
             )
             // Tag this approval with the machine it arrived from BEFORE inserting
             // it into the inbox VM, so the eventual decision routes back to that
@@ -532,6 +556,10 @@ public struct AppRoot: View {
             let vm = activeInboxViewModel
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
                 vm.approvals.insert(approval, at: 0)
+            }
+            if UIApplication.shared.applicationState == .background {
+                let hostName = (note.userInfo?["hostName"] as? String) ?? "Host"
+                Task { await Notifications.shared.notifyPendingApproval(approval, hostName: hostName) }
             }
             // Only a true relay-only setup (no fleet/SSH slot) needs this —
             // a slot's own inboxVM is already covered by FleetStore's
@@ -1897,6 +1925,7 @@ public struct AppRoot: View {
         switch result {
         case .success(let summary):
             sidebarState.navigate(to: .thread(id: summary.conversationId))
+            NotificationCenter.default.post(name: .lancerFocusComposer, object: nil)
         case .failure:
             sidebarState.navigate(to: .observedSession(
                 sessionId: session.sessionId,
@@ -1905,7 +1934,47 @@ public struct AppRoot: View {
                 vendor: session.provider,
                 cwd: session.cwd
             ))
+            NotificationCenter.default.post(name: .lancerFocusComposer, object: nil)
         }
+    }
+
+    /// Deep-link from a needs-input push: open the waiting agent session and
+    /// focus the reply composer so the user can answer immediately.
+    private func openNeedsInputFromNotification(vendorSessionId: String, agent: String, env: AppEnvironment) async {
+        let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
+        if !vendorSessionId.isEmpty {
+            if let byHost = ObservedSessionsCache.loadByHost() {
+                for (_, sessions) in byHost {
+                    if let match = sessions.first(where: { $0.sessionId == vendorSessionId }) {
+                        await openObservedSessionAutoImporting(match, env: env)
+                        return
+                    }
+                }
+            }
+            if let sessions = ObservedSessionsCache.load(),
+               let match = sessions.first(where: { $0.sessionId == vendorSessionId }) {
+                await openObservedSessionAutoImporting(match, env: env)
+                return
+            }
+            sidebarState.navigate(to: .observedSession(
+                sessionId: vendorSessionId,
+                title: "Agent session",
+                hostName: hostName,
+                vendor: agent,
+                cwd: ""
+            ))
+            NotificationCenter.default.post(name: .lancerFocusComposer, object: nil)
+            return
+        }
+        if !agent.isEmpty,
+           let conversation = await FleetThreadMapper.findConversation(
+               hostName: hostName, agentID: agent, cwd: "", chatRepo: env.chatRepo
+           ) {
+            sidebarState.navigate(to: .thread(id: conversation.id))
+            NotificationCenter.default.post(name: .lancerFocusComposer, object: nil)
+            return
+        }
+        sidebarState.navigate(to: .home)
     }
 
     /// Polls `relayFleetStore.machines` for an active bridge for up to ~2

@@ -46,6 +46,31 @@ case "$TOOL" in
     ;;
 esac
 
+# Agent question tools — escalate as askQuestion (not a mutating command).
+case "$TOOL" in
+  AskUserQuestion|AskQuestion|ask_user|question)
+    QUESTION_ARGS=()
+    [ -n "$TOOL_NAME" ]                              && QUESTION_ARGS+=(--tool-name="$TOOL_NAME")
+    [ -n "$TOOL_USE_ID" ]                            && QUESTION_ARGS+=(--tool-use-id="$TOOL_USE_ID")
+    [ -n "$SESSION_ID" ]                             && QUESTION_ARGS+=(--session-id="$SESSION_ID")
+    [ -n "$TOOL_INPUT" ] && [ "$TOOL_INPUT" != "{}" ] && QUESTION_ARGS+=(--tool-input="$TOOL_INPUT")
+    if "$LANCERD" agent-hook \
+      --agent "claudeCode" \
+      --kind "askQuestion" \
+      --command "$COMMAND" \
+      --cwd "$(pwd)" \
+      --risk "low" \
+      --question "$COMMAND" \
+      "${QUESTION_ARGS[@]}"
+    then
+      exit 0
+    else
+      printf "Blocked by Lancer — question was not answered on the iOS app."
+      exit 2
+    fi
+    ;;
+esac
+
 # Map tool name to risk band and kind
 case "$TOOL" in
   Bash)                   RISK="high";   KIND="command"  ;;

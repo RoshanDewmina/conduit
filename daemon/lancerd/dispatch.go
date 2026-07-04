@@ -226,12 +226,18 @@ type dispatchResult struct {
 	Decision string `json:"decision,omitempty"` // allow | ask | deny
 	Rule     string `json:"rule,omitempty"`
 	Message  string `json:"message,omitempty"`
+	// ApprovalID is set when Status == needsApproval so the phone can correlate
+	// the inbox card with the gate.
+	ApprovalID string `json:"approvalId,omitempty"`
 	// CWD is the ~-expanded absolute path the run actually launched in — set
 	// only on a successful "started" result. The phone persists this (not the
 	// raw cwd it sent, which may be the literal "~") so a phone-dispatched
 	// conversation and a terminal session in the same real directory group
 	// together instead of silently diverging on string comparison.
 	CWD string `json:"cwd,omitempty"`
+	// Internal escalation payload — not serialized to the phone RPC.
+	PendingEvent  *ApprovalEvent     `json:"-"`
+	PendingLaunch *pendingGateLaunch `json:"-"`
 }
 
 // procHandle controls a launched agent process. Injectable for tests.
@@ -1220,8 +1226,21 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		audit(AuditEntry{Action: "dispatch-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
-		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
-		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+		br := computeBlastRadius(event, rule)
+		event.Files = br.Files
+		event.TouchesGit = br.TouchesGit
+		event.TouchesNetwork = br.TouchesNetwork
+		event.MatchedRule = br.MatchedRule
+		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule, ApprovalID: event.ApprovalID})
+		return finalizeDispatchGate(event, pendingGateLaunch{
+			launchType: "dispatch",
+			argv:       argv,
+			cwd:        p.CWD,
+			agent:      p.Agent,
+			model:      p.Model,
+			budgetUSD:  p.BudgetUSD,
+			prompt:     p.Prompt,
+		}, rule)
 	}
 
 	// Allocate the runId before launch so streamed output/status events can be
@@ -1360,8 +1379,22 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		audit(AuditEntry{Action: "continue-denied", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
-		audit(AuditEntry{Action: "continue-needs-approval", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
-		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+		br := computeBlastRadius(event, rule)
+		event.Files = br.Files
+		event.TouchesGit = br.TouchesGit
+		event.TouchesNetwork = br.TouchesNetwork
+		event.MatchedRule = br.MatchedRule
+		audit(AuditEntry{Action: "continue-needs-approval", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule, ApprovalID: event.ApprovalID})
+		return finalizeDispatchGate(event, pendingGateLaunch{
+			launchType: "continue",
+			argv:       argv,
+			cwd:        cwd,
+			agent:      agent,
+			model:      model,
+			budgetUSD:  budget,
+			prompt:     prompt,
+			runID:      runID,
+		}, rule)
 	}
 
 	id := newUUID()
@@ -1438,8 +1471,22 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 		audit(AuditEntry{Action: "observed-continue-denied", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
-		audit(AuditEntry{Action: "observed-continue-needs-approval", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
-		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+		br := computeBlastRadius(event, rule)
+		event.Files = br.Files
+		event.TouchesGit = br.TouchesGit
+		event.TouchesNetwork = br.TouchesNetwork
+		event.MatchedRule = br.MatchedRule
+		audit(AuditEntry{Action: "observed-continue-needs-approval", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule, ApprovalID: event.ApprovalID})
+		return finalizeDispatchGate(event, pendingGateLaunch{
+			launchType:      "observed",
+			argv:            argv,
+			cwd:             p.CWD,
+			agent:           p.Vendor,
+			model:           p.Model,
+			budgetUSD:       p.BudgetUSD,
+			prompt:          p.Prompt,
+			vendorSessionID: p.SessionID,
+		}, rule)
 	}
 
 	id := newUUID()
@@ -1501,8 +1548,22 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		audit(AuditEntry{Action: "conversation-append-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
-		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
-		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+		br := computeBlastRadius(event, rule)
+		event.Files = br.Files
+		event.TouchesGit = br.TouchesGit
+		event.TouchesNetwork = br.TouchesNetwork
+		event.MatchedRule = br.MatchedRule
+		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule, ApprovalID: event.ApprovalID})
+		return finalizeDispatchGate(event, pendingGateLaunch{
+			launchType: "conversation",
+			argv:       argv,
+			cwd:        p.CWD,
+			agent:      p.Agent,
+			model:      p.Model,
+			budgetUSD:  p.BudgetUSD,
+			prompt:     p.Prompt,
+			runID:      runID,
+		}, rule)
 	}
 
 	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
@@ -1515,4 +1576,26 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 	d.mu.Unlock()
 	audit(AuditEntry{Action: "conversation-append-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: runID})
 	return dispatchResult{RunID: runID, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
+}
+
+// launchAfterGateApproval starts a run that was held at a policy gate once the
+// human approved the corresponding inbox item.
+func (d *dispatcher) launchAfterGateApproval(p pendingGateLaunch, audit func(AuditEntry)) {
+	ledgerBacked := p.launchType == "conversation"
+	runID := p.runID
+	if runID == "" {
+		runID = newUUID()
+	}
+	handle, err := d.launch(p.argv, p.cwd, runID, d.wrapEmitForRun(runID, ledgerBacked))
+	if err != nil {
+		audit(AuditEntry{Action: "gate-launch-error", Agent: p.agent, Kind: "dispatch", Command: p.prompt, Effect: "allow"})
+		return
+	}
+	d.mu.Lock()
+	d.runs[runID] = &dispatchRun{
+		ID: runID, Agent: p.agent, Prompt: p.prompt, CWD: p.cwd, Model: p.model,
+		Status: "running", BudgetUSD: p.budgetUSD, handle: handle,
+	}
+	d.mu.Unlock()
+	audit(AuditEntry{Action: "gate-launch-started", Agent: p.agent, Kind: "dispatch", Command: p.prompt, Effect: "allow", ApprovalID: runID})
 }

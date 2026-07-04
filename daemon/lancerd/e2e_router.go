@@ -50,6 +50,8 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 			"toolName":    ev.ToolName,
 			"toolInput":   ev.ToolInput,
 			"contentHash": ev.ContentHash,
+			"question":    ev.Question,
+			"choices":     ev.Choices,
 		},
 	}
 

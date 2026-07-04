@@ -138,7 +138,9 @@ public actor ApprovalIngest {
                         toolInput: params.approvalToolInput,
                         blastRadius: params.blastRadius,
                         lastStateChangeAt: Date(),
-                        contentHash: params.approvalContentHash
+                        contentHash: params.approvalContentHash,
+                        question: params.approvalQuestion,
+                        choices: params.approvalChoices
                     )
                     try? await repository.upsert(approval)
                     await chatPersistenceSink?.handleApprovalPending(params)

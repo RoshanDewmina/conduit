@@ -52,8 +52,10 @@ public enum E2ERelayMessage: Codable, Sendable {
         /// The daemon's `computeContentHash` over (command, patch, cwd, toolInput)
         /// at approval-creation time — see `Approval.computeContentHash`.
         public let contentHash: String?
+        public let question: String?
+        public let choices: [String]?
 
-        public init(approvalID: String, agent: String, kind: String, command: String?, patch: String? = nil, risk: Int, cwd: String?, toolName: String?, toolInput: String? = nil, contentHash: String? = nil) {
+        public init(approvalID: String, agent: String, kind: String, command: String?, patch: String? = nil, risk: Int, cwd: String?, toolName: String?, toolInput: String? = nil, contentHash: String? = nil, question: String? = nil, choices: [String]? = nil) {
             self.approvalID = approvalID
             self.agent = agent
             self.kind = kind
@@ -64,6 +66,8 @@ public enum E2ERelayMessage: Codable, Sendable {
             self.toolName = toolName
             self.toolInput = toolInput
             self.contentHash = contentHash
+            self.question = question
+            self.choices = choices
         }
     }
 
