@@ -203,6 +203,43 @@ struct ConversationSyncCoordinatorTests {
         #expect(await coordinator.currentSyncState("conv-1") == .hostOffline)
     }
 
+    @Test("a transient transport failure on append recovers via retry instead of going hostOffline")
+    func appendRetriesTransientFailureBeforeGivingUp() async throws {
+        struct Blip: Error {}
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+
+        let attemptCount = Counter()
+        let transport = makeTransport(append: { _ in
+            let n = await attemptCount.increment()
+            if n < 2 { throw Blip() } // fails once, succeeds on the retry
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 2, nextSeq: 4, resumeMode: "exact"
+            )
+        })
+
+        let outcome = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 2, prompt: "follow up", clientTurnID: "d:2",
+            hostName: "h", hostID: nil, transport: transport
+        )
+        guard case .started = outcome else {
+            Issue.record("expected .started after the retry recovered, got \(outcome)")
+            return
+        }
+        #expect(await attemptCount.value == 2, "should have retried exactly once before succeeding")
+        #expect(await coordinator.currentSyncState("conv-1") == .synced, "a recovered append must not leave the conversation flagged hostOffline")
+    }
+
+    private actor Counter {
+        private(set) var value = 0
+        @discardableResult
+        func increment() -> Int { value += 1; return value }
+    }
+
     @Test("refreshConversation merges conversation, turns, and events into the mirror")
     func refreshMergesFetchResponse() async throws {
         let db = try AppDatabase.inMemory()
