@@ -273,6 +273,8 @@ public struct FleetView: View {
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(machineName), \(statusLine(state))")
     }
 
     private var machineName: String {
@@ -474,6 +476,7 @@ public struct FleetView: View {
                 PrivacyBadge(badge)
             }
             DSStatusDot(tone: running ? .ok : .off, pulse: running, size: 8)
+                .accessibilityHidden(true)
             Text(running ? "running" : "idle")
                 .font(.dsMonoPt(10.5))
                 .foregroundStyle(running ? t.ok : t.text4)
@@ -573,6 +576,7 @@ public struct FleetView: View {
                 showingDriftFindings = true
             } label: { card }
             .buttonStyle(.plain)
+            .accessibilityLabel("Setup drift: \(driftDisplay)")
             .accessibilityHint("Shows the \(report.findings.count) drift findings")
         } else {
             card
@@ -673,29 +677,32 @@ public struct FleetView: View {
     private var quotaGuardEntry: some View {
         HStack(spacing: 8) {
             Image(systemName: "shield.checkered")
-                .font(.system(size: 13))
+                .font(.dsSansPt(13))
                 .foregroundStyle(t.info)
             Text("Usage & limits")
                 .font(.dsSansPt(14, weight: .medium))
                 .foregroundStyle(t.text)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.dsSansPt(10, weight: .semibold))
                 .foregroundStyle(t.text4)
         }
         .padding(.horizontal, 14)
         .frame(height: 50)
         .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Usage and limits")
     }
 
     private var localAgentBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 14))
+                .font(.dsSansPt(14))
                 .foregroundStyle(t.ok)
                 .frame(width: 32, height: 32)
                 .background(t.okSoft, in: Circle())
+                .accessibilityHidden(true)
             Text("\(localAgentCount) agent\(localAgentCount == 1 ? "" : "s") run\(localAgentCount == 1 ? "s" : "") a local model — prompts and code never leave the host.")
                 .font(.dsSansPt(13))
                 .foregroundStyle(t.text2)
@@ -706,6 +713,8 @@ public struct FleetView: View {
         .padding(.vertical, 12)
         .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: t.r3, style: .continuous).strokeBorder(t.border, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(localAgentCount) local agent\(localAgentCount == 1 ? "" : "s") — prompts and code never leave the host")
     }
 
     private func attentionBanner(agentName: String) -> some View {
@@ -791,7 +800,7 @@ public struct FleetView: View {
                 }
                 Spacer()
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSansPt(15, weight: .semibold))
                     .foregroundStyle(t.accent)
                     .frame(width: 36, height: 36)
                     .background(t.accentSoft, in: Circle())
@@ -863,6 +872,7 @@ private struct MachineHealthBadge: View {
             Circle()
                 .fill(tone)
                 .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
             Text(label.uppercased())
                 .font(.dsMonoPt(10, weight: .semibold))
                 .foregroundStyle(tone)
@@ -870,6 +880,8 @@ private struct MachineHealthBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(tone.opacity(0.12), in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
     }
 }
 

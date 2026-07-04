@@ -148,10 +148,11 @@ public struct PolicyPresetsView: View {
                         showingEditor = true
                     } label: {
                         Image(systemName: "pencil")
-                            .font(.system(size: 14))
+                            .font(.dsSansPt(14))
                             .foregroundStyle(t.text3)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit \(preset.name)")
                 }
                 if !hosts.isEmpty {
                     Menu {
@@ -161,6 +162,7 @@ public struct PolicyPresetsView: View {
                     } label: {
                         DSChip("Apply", tone: .accent, variant: .soft, size: .sm)
                     }
+                    .accessibilityLabel("Apply \(preset.name) to a host")
                 }
                 if !preset.id.hasPrefix("builtin.") {
                     Button {
@@ -169,15 +171,17 @@ public struct PolicyPresetsView: View {
                         Haptics.selection()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.dsSansPt(16))
                             .foregroundStyle(t.danger)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Delete \(preset.name)")
                 }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
     }
 
     private var addSection: some View {
@@ -190,7 +194,7 @@ public struct PolicyPresetsView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.dsSansPt(18))
                             .foregroundStyle(t.accent)
                         Text("New preset")
                             .font(.dsSansPt(15, weight: .medium))
@@ -214,7 +218,7 @@ public struct PolicyPresetsView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 16))
+                            .font(.dsSansPt(16))
                             .foregroundStyle(t.text2)
                             .frame(width: 22)
                         Text("Import JSON")
@@ -235,7 +239,7 @@ public struct PolicyPresetsView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16))
+                            .font(.dsSansPt(16))
                             .foregroundStyle(t.text2)
                             .frame(width: 22)
                         Text("Export JSON")
@@ -328,6 +332,7 @@ private struct NewPresetSheet: View {
                         )
                         .padding(.horizontal, 18)
                         .padding(.top, 6)
+                        .accessibilityLabel("Policy YAML for new preset")
                     DSButton(
                         "Save preset",
                         variant: .accent,

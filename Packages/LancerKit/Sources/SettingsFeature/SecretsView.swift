@@ -197,7 +197,7 @@ public struct SecretsView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "key.fill")
-                .font(.system(size: 28))
+                .font(.dsSansPt(28))
                 .foregroundStyle(t.text4)
             Text("No secrets stored")
                 .font(.dsSansPt(15, weight: .medium))
@@ -255,9 +255,10 @@ private struct SecretRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: iconForType(secret.type))
-                    .font(.system(size: 14))
+                    .font(.dsSansPt(14))
                     .foregroundStyle(t.accent)
                     .frame(width: 20, alignment: .center)
+                    .accessibilityHidden(true)
                 Text(secret.name)
                     .font(.dsSansPt(15, weight: .medium))
                     .foregroundStyle(t.text)
@@ -295,6 +296,7 @@ private struct SecretRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
     }
 
     private func iconForType(_ type: SecretRequest.CredentialType) -> String {
@@ -319,9 +321,10 @@ private struct PendingSecretRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "key.fill")
-                    .font(.system(size: 14))
+                    .font(.dsSansPt(14))
                     .foregroundStyle(t.warn)
                     .frame(width: 20, alignment: .center)
+                    .accessibilityHidden(true)
                 Text("\(request.request.agent) requests \(request.request.credentialType.rawValue)")
                     .font(.dsSansPt(14, weight: .medium))
                     .foregroundStyle(t.text)
@@ -378,6 +381,7 @@ private struct PendingSecretRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
     }
 }
 

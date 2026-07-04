@@ -100,6 +100,7 @@ public struct RelayMachinesListView: View {
             Circle()
                 .fill(machine.isConnected ? t.risk(0) : t.text4)
                 .frame(width: 8, height: 8)
+                .accessibilityLabel(machine.isConnected ? "Connected" : "Offline")
 
             Text(machine.displayName)
                 .font(.dsSansPt(15, weight: .medium))
@@ -133,12 +134,13 @@ public struct RelayMachinesListView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
     }
 
     private var addMachineRow: some View {
         HStack(spacing: 10) {
             Image(systemName: "plus.circle.fill")
-                .font(.system(size: 18))
+                .font(.dsSansPt(18))
                 .foregroundStyle(t.accent)
             Text("Pair another machine")
                 .font(.dsSansPt(15, weight: .medium))

@@ -36,12 +36,20 @@ public struct SyncStatusView: View {
     }
     private var combinedError: String? { error ?? conversationError }
 
+    private var syncHeaderAccessibilityLabel: String {
+        if combinedIsSyncing { return "iCloud Sync, syncing" }
+        if let combinedLastSync {
+            return "iCloud Sync, last synced \(combinedLastSync.formatted(date: .omitted, time: .shortened))"
+        }
+        return "iCloud Sync, not synced"
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             // Header row
             HStack(spacing: 10) {
                 Image(systemName: "icloud")
-                    .font(.system(size: 15))
+                    .font(.dsSansPt(15))
                     .foregroundStyle(t.accent)
                 Text("iCloud Sync")
                     .font(.dsSansPt(15))
@@ -61,6 +69,8 @@ public struct SyncStatusView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(syncHeaderAccessibilityLabel)
 
             // Error banner
             if let combinedError {
@@ -77,8 +87,9 @@ public struct SyncStatusView: View {
                 t.border.frame(height: 0.5).padding(.horizontal, 16)
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 12))
+                        .font(.dsSansPt(12))
                         .foregroundStyle(t.warn)
+                        .accessibilityHidden(true)
                     Text("\(conflictCount) conflict\(conflictCount == 1 ? "" : "s") resolved (last-write-wins)")
                         .font(.dsSansPt(12))
                         .foregroundStyle(t.warn)
@@ -86,6 +97,8 @@ public struct SyncStatusView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(conflictCount) sync conflict\(conflictCount == 1 ? "" : "s") resolved, last write wins")
             }
 
             t.border.frame(height: 0.5).padding(.horizontal, 16)
@@ -118,6 +131,7 @@ public struct SyncStatusView: View {
             }
             .buttonStyle(.plain)
             .disabled(combinedIsSyncing)
+            .accessibilityLabel("Sync now")
 
             // Scope disclosure
             t.border.frame(height: 0.5).padding(.horizontal, 16)
@@ -131,13 +145,15 @@ public struct SyncStatusView: View {
                         .foregroundStyle(t.text3)
                     Spacer()
                     Image(systemName: showScope ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.dsSansPt(11, weight: .medium))
                         .foregroundStyle(t.text3)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(showScope ? "Hide what syncs" : "Show what syncs")
+            .accessibilityValue(showScope ? "expanded" : "collapsed")
 
             if showScope {
                 t.border.frame(height: 0.5).padding(.horizontal, 16)
@@ -173,14 +189,17 @@ public struct SyncStatusView: View {
     private func syncRow(icon: String, label: String, color: Color) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.dsSansPt(12))
                 .foregroundStyle(color)
                 .frame(width: 16)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.dsSansPt(12))
                 .foregroundStyle(t.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
     }
 }
 #endif

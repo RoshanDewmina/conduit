@@ -349,6 +349,8 @@ public struct TrustPrivacyView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(detail)")
     }
 
     private func privacyRow(icon: String, title: String, detail: String, isGreen: Bool) -> some View {
@@ -371,6 +373,8 @@ public struct TrustPrivacyView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(detail)")
     }
 
     private func connRow(active: Bool, title: String, detail: String) -> some View {
@@ -383,6 +387,7 @@ public struct TrustPrivacyView: View {
                         .fill(active ? t.accent : Color.clear)
                         .frame(width: 8, height: 8)
                 )
+                .accessibilityLabel(active ? "Active" : "Inactive")
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.dsSansPt(14, weight: .semibold))
@@ -396,6 +401,8 @@ public struct TrustPrivacyView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(active ? "active" : "inactive"), \(detail)")
     }
 
     private var comparisonTable: some View {
@@ -616,6 +623,8 @@ public struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(accountSession?.email ?? (accountSession?.isOfflineSelfHosted == true ? "Self-hosted offline" : "Lancer")), \(purchases.isPro ? "Lancer Pro" : "Free plan")")
             if accountSession?.isStandardAccount == true {
                 Button("sign out") {
                     Task {
@@ -655,6 +664,7 @@ public struct SettingsView: View {
                             .foregroundStyle(t.accentFg.opacity(0.82))
                         Spacer(minLength: 0)
                         DSStatusDot(tone: .ok, pulse: true, size: 9)
+                            .accessibilityLabel("Policy enforcing")
                     }
                     // Real state, not a static "All clear" — every autonomy preset
                     // (including "Always ask") is an enforcing policy, so this always
@@ -675,6 +685,8 @@ public struct SettingsView: View {
                 .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Policy bridge, \(autonomyLabel), rules enforcing across your connected agents")
             .padding(.horizontal, 16)
 
             // Calm native grouped list instead of a 2-up card grid — matches the
@@ -940,6 +952,8 @@ public struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label), \(detail)")
     }
 
     private var divider: some View {
@@ -1016,6 +1030,7 @@ private struct AutonomyLevelView: View {
                             } label: {
                                 HStack(alignment: .top, spacing: 12) {
                                     DSStatusDot(tone: autonomy == preset ? .accent : .off, size: 9)
+                                        .accessibilityHidden(true)
                                         .padding(.top, 5)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(preset.label)
@@ -1035,6 +1050,7 @@ private struct AutonomyLevelView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("autonomy_\(preset.rawValue)")
+                            .accessibilityLabel(preset.label)
                             .accessibilityValue(autonomy == preset ? "selected" : "unselected")
                         }
                     }
@@ -1249,6 +1265,8 @@ private struct AccentSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(theme.displayName)
+                            .accessibilityValue(selected ? "selected" : "unselected")
                         }
                     }
                     .padding(.horizontal, 18)
@@ -1290,6 +1308,7 @@ private struct AppearanceSettingsView: View {
                             } label: {
                                 HStack(alignment: .top, spacing: 12) {
                                     DSStatusDot(tone: colorSchemePref == key ? .accent : .off, size: 9)
+                                        .accessibilityHidden(true)
                                         .padding(.top, 5)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(label)
@@ -1313,6 +1332,7 @@ private struct AppearanceSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("\(label), \(desc)")
                         }
                     }
                     .padding(.horizontal, 18)

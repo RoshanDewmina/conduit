@@ -206,7 +206,14 @@ public struct AuditView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .font(.title2)
+        .font(.dsSansPt(20))
+        .accessibilityLabel(chainStatusAccessibilityLabel)
+    }
+
+    private var chainStatusAccessibilityLabel: String {
+        if vm.chainValid == true { return "Audit chain valid" }
+        if vm.chainValid == false { return "Audit chain invalid" }
+        return "Audit chain status unknown"
     }
 
     private static func metadataText(_ metadata: [String: String]) -> String {
@@ -247,6 +254,7 @@ public struct AuditView: View {
                         DSChip("Verify", tone: vm.chainValid == true ? .ok : vm.chainValid == false ? .danger : .neutral, variant: .outlined, size: .sm)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Verify audit chain")
                 }
             }
             .padding(.horizontal, 16)
@@ -261,6 +269,7 @@ public struct AuditView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 16)
+        .accessibilityElement(children: .contain)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -282,6 +291,8 @@ public struct AuditView: View {
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
     }
 
     private var emptyState: some View {
@@ -343,6 +354,8 @@ public struct AuditView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(event.type.rawValue), \(event.createdAt.formatted(date: .abbreviated, time: .shortened)), host \(event.hostID.uuidString)")
     }
 }
 #endif

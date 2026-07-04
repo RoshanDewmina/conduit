@@ -131,13 +131,15 @@ public struct PolicyEditorView: View {
                 Haptics.selection()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
+                    .font(.dsSansPt(18))
                     .foregroundStyle(t.danger)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Revoke rule \(rule.description)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
     }
 
     private func loadActiveAllowRules() {
@@ -249,6 +251,8 @@ public struct PolicyEditorView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(rule.matcher), \(rule.effectLabel)")
     }
 
     private var failSafeRow: some View {
@@ -268,9 +272,9 @@ public struct PolicyEditorView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Unmatched actions ask for approval, fail-safe")
     }
-
-    // MARK: - YAML editor
 
     private var yamlSection: some View {
         VStack(alignment: .leading, spacing: 0) {
