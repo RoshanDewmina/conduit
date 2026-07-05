@@ -4,7 +4,16 @@ import SwiftUI
 /// Visual clone of Cursor's mobile Workspaces list: an "All Repos" entry plus
 /// one row per repo. Static seed data only — no daemon/network wiring.
 public struct CursorWorkspacesView: View {
-    public init() {}
+    private let onSelectWorkspace: (String) -> Void
+    private let onOpenComposer: () -> Void
+
+    public init(
+        onSelectWorkspace: @escaping (String) -> Void = { _ in },
+        onOpenComposer: @escaping () -> Void = {}
+    ) {
+        self.onSelectWorkspace = onSelectWorkspace
+        self.onOpenComposer = onOpenComposer
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -25,30 +34,46 @@ public struct CursorWorkspacesView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    CursorListRow(
-                        iconSystemName: "square.stack.3d.up",
-                        title: "All Repos",
-                        trailingCount: 3,
-                        showChevron: true
-                    )
-                    CursorListRow(
-                        iconSystemName: "folder",
-                        title: "lancer-ios",
-                        trailingCount: 4,
-                        showChevron: true
-                    )
-                    CursorListRow(
-                        iconSystemName: "folder",
-                        title: "push-backend",
-                        trailingCount: 2,
-                        showChevron: true
-                    )
-                    CursorListRow(
-                        iconSystemName: "folder",
-                        title: "lancer-mac",
-                        trailingCount: nil,
-                        showChevron: true
-                    )
+                    Button(action: { onSelectWorkspace("All Repos") }) {
+                        CursorListRow(
+                            iconSystemName: "square.stack.3d.up",
+                            title: "All Repos",
+                            trailingCount: 3,
+                            showChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { onSelectWorkspace("lancer-ios") }) {
+                        CursorListRow(
+                            iconSystemName: "folder",
+                            title: "lancer-ios",
+                            trailingCount: 4,
+                            showChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { onSelectWorkspace("push-backend") }) {
+                        CursorListRow(
+                            iconSystemName: "folder",
+                            title: "push-backend",
+                            trailingCount: 2,
+                            showChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { onSelectWorkspace("lancer-mac") }) {
+                        CursorListRow(
+                            iconSystemName: "folder",
+                            title: "lancer-mac",
+                            trailingCount: nil,
+                            showChevron: true
+                        )
+                    }
+                    .buttonStyle(.plain)
+
                     CursorListRow(
                         iconSystemName: "folder.badge.plus",
                         title: "Add Repo",
@@ -61,6 +86,11 @@ public struct CursorWorkspacesView: View {
         .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer()
+                .overlay(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpenComposer)
+                )
         }
         .environment(\.cursorScheme, .light)
     }

@@ -5,7 +5,16 @@ import SwiftUI
 /// grouped by day, each row tagged with its originating repo. Static seed data
 /// only — no daemon/network wiring.
 public struct CursorHomeView: View {
-    public init() {}
+    private let onSelectThread: (String) -> Void
+    private let onOpenComposer: () -> Void
+
+    public init(
+        onSelectThread: @escaping (String) -> Void = { _ in },
+        onOpenComposer: @escaping () -> Void = {}
+    ) {
+        self.onSelectThread = onSelectThread
+        self.onOpenComposer = onOpenComposer
+    }
 
     private var todayThreads: [CursorThreadRowModel] {
         [
@@ -61,12 +70,18 @@ public struct CursorHomeView: View {
                 VStack(spacing: 0) {
                     CursorSectionHeader("Today")
                     ForEach(todayThreads) { model in
-                        CursorThreadRow(model: model, showRepoTag: true)
+                        Button(action: { onSelectThread(model.title) }) {
+                            CursorThreadRow(model: model, showRepoTag: true)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     CursorSectionHeader("Yesterday")
                     ForEach(yesterdayThreads) { model in
-                        CursorThreadRow(model: model, showRepoTag: true)
+                        Button(action: { onSelectThread(model.title) }) {
+                            CursorThreadRow(model: model, showRepoTag: true)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -74,6 +89,11 @@ public struct CursorHomeView: View {
         .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer()
+                .overlay(
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onOpenComposer)
+                )
         }
         .environment(\.cursorScheme, .light)
     }
