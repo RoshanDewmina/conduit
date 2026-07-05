@@ -10,8 +10,11 @@ import SwiftUI
 public struct CursorOnboardingView: View {
     @State private var step: Int = 0
     @State private var showInvalidCodePreview: Bool = false
+    private let onComplete: () -> Void
 
-    public init() {}
+    public init(onComplete: @escaping () -> Void = {}) {
+        self.onComplete = onComplete
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -46,8 +49,8 @@ public struct CursorOnboardingView: View {
             )
         default:
             CursorOnboardingAccountStep(
-                onAddAccount: { advance() },
-                onSkip: { advance() }
+                onAddAccount: { onComplete() },
+                onSkip: { onComplete() }
             )
         }
     }
