@@ -28,17 +28,22 @@ public struct CursorPillButton: View {
 
     private let segments: [Segment]
     private let style: Style
+    /// Stretches the capsule to fill its container's width, e.g. Ship &
+    /// History's checks-passed card "Mark Ready" button (IMG_2364).
+    private let fullWidth: Bool
     private let action: () -> Void
 
-    public init(title: String, style: Style = .secondary, action: @escaping () -> Void) {
+    public init(title: String, style: Style = .secondary, fullWidth: Bool = false, action: @escaping () -> Void) {
         self.segments = [Segment(title)]
         self.style = style
+        self.fullWidth = fullWidth
         self.action = action
     }
 
-    public init(segments: [Segment], style: Style = .secondary, action: @escaping () -> Void) {
+    public init(segments: [Segment], style: Style = .secondary, fullWidth: Bool = false, action: @escaping () -> Void) {
         self.segments = segments
         self.style = style
+        self.fullWidth = fullWidth
         self.action = action
     }
 
@@ -52,6 +57,7 @@ public struct CursorPillButton: View {
                         .foregroundColor(segment.color ?? labelColor(colors))
                 }
             }
+            .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, CursorMetrics.pillButtonHorizontalPadding)
             .frame(height: CursorMetrics.pillButtonHeight)
             .background(background(colors))
