@@ -52,9 +52,9 @@ public struct CursorHomeView: View {
 
             Text("Home")
                 .font(CursorType.pageTitle)
-                .foregroundColor(CursorPalette.primaryText)
-                .padding(.leading, 16)
-                .padding(.top, 12)
+                .foregroundColor(CursorColors.light.primaryText)
+                .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
+                .padding(.top, CursorMetrics.pageTitleTopPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             ScrollView {
@@ -71,11 +71,11 @@ public struct CursorHomeView: View {
                 }
             }
         }
-        .background(CursorPalette.pageBackground.ignoresSafeArea())
+        .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer()
         }
-        .environment(\.colorScheme, .light)
+        .environment(\.cursorScheme, .light)
     }
 
     private var avatarCircle: some View {
