@@ -8,18 +8,24 @@ public struct CursorListRow: View {
 
     private let iconSystemName: String?
     private let title: String
+    private let titleColor: Color?
     private let trailingCount: Int?
+    private let trailingText: String?
     private let showChevron: Bool
 
     public init(
         iconSystemName: String? = nil,
         title: String,
+        titleColor: Color? = nil,
         trailingCount: Int? = nil,
+        trailingText: String? = nil,
         showChevron: Bool = false
     ) {
         self.iconSystemName = iconSystemName
         self.title = title
+        self.titleColor = titleColor
         self.trailingCount = trailingCount
+        self.trailingText = trailingText
         self.showChevron = showChevron
     }
 
@@ -35,8 +41,13 @@ public struct CursorListRow: View {
                 }
                 Text(title)
                     .font(CursorType.rowTitle)
-                    .foregroundColor(colors.primaryText)
+                    .foregroundColor(titleColor ?? colors.primaryText)
                 Spacer()
+                if let trailingText {
+                    Text(trailingText)
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(colors.secondaryText)
+                }
                 if let trailingCount {
                     Text("\(trailingCount)")
                         .font(CursorType.rowSecondary)
