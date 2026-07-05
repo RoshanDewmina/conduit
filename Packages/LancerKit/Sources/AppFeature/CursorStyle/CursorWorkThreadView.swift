@@ -10,7 +10,25 @@ public struct CursorWorkThreadView: View {
     @State private var isTodosExpanded = false
     @State private var isActionRailExpanded = true
 
-    public init() {}
+    private let missionTitle: String
+    private let onBack: () -> Void
+    private let onViewPR: () -> Void
+    private let onOpenReview: () -> Void
+    private let onOpenComposer: () -> Void
+
+    public init(
+        missionTitle: String = "Fix onboarding pairing flow",
+        onBack: @escaping () -> Void = {},
+        onViewPR: @escaping () -> Void = {},
+        onOpenReview: @escaping () -> Void = {},
+        onOpenComposer: @escaping () -> Void = {}
+    ) {
+        self.missionTitle = missionTitle
+        self.onBack = onBack
+        self.onViewPR = onViewPR
+        self.onOpenReview = onOpenReview
+        self.onOpenComposer = onOpenComposer
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +50,8 @@ public struct CursorWorkThreadView: View {
         .background(CursorColors.dark.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
+                approvalBanner
+
                 if isActionRailExpanded {
                     CursorActionRail(
                         buttons: [
@@ -42,7 +62,7 @@ public struct CursorWorkThreadView: View {
                                     .init("-38", color: CursorColors.dark.dangerRed)
                                 ],
                                 style: .secondary,
-                                action: {}
+                                action: onViewPR
                             ),
                             CursorPillButton(title: "Mark Ready", style: .secondary, action: {})
                         ],
@@ -51,10 +71,55 @@ public struct CursorWorkThreadView: View {
                 } else {
                     collapsedActionRailHandle
                 }
-                CursorBottomComposer(placeholder: "Follow up...")
+                composer
             }
         }
         .environment(\.cursorScheme, .dark)
+    }
+
+    // MARK: Needs-approval banner
+
+    /// Governed-approval interruption surfaced above the sticky action rail —
+    /// Work Thread's own screenshots don't show this state, but the daemon's
+    /// approval gate can trip mid-run, so the thread needs a way to demand
+    /// attention without leaving the screen.
+    private var approvalBanner: some View {
+        Button(action: onOpenReview) {
+            CursorArtifactCard {
+                HStack(spacing: 10) {
+                    CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
+                    Text("Deploy to production")
+                        .font(CursorType.bodyText)
+                        .foregroundColor(CursorColors.dark.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(CursorColors.dark.secondaryText)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
+        .padding(.top, CursorMetrics.actionRailVerticalPadding)
+    }
+
+    // MARK: Composer
+
+    /// The whole composer area is tappable to open the fuller composer sheet,
+    /// rather than editing inline — matches the Home/Workspaces composer-tap
+    /// convention. The real `CursorBottomComposer` is rendered for visual
+    /// fidelity but has hit-testing disabled so its `TextField` never steals
+    /// first responder; an invisible button on top forwards the tap.
+    private var composer: some View {
+        ZStack {
+            CursorBottomComposer(placeholder: "Follow up...")
+                .allowsHitTesting(false)
+            Button(action: onOpenComposer) {
+                Color.clear
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: Header
@@ -62,7 +127,7 @@ public struct CursorWorkThreadView: View {
     private var header: some View {
         CursorHeaderBar(
             leading: AnyView(
-                CursorIconButton(systemImageName: "chevron.left", action: {})
+                CursorIconButton(systemImageName: "chevron.left", action: onBack)
             ),
             trailing: [
                 CursorIconButton(systemImageName: "ellipsis", action: {})
@@ -70,7 +135,7 @@ public struct CursorWorkThreadView: View {
         )
         .overlay(alignment: .center) {
             HStack(spacing: 6) {
-                Text("Fix onboarding pairing flow")
+                Text(missionTitle)
                     .font(CursorType.sheetTitle)
                     .foregroundColor(CursorColors.dark.primaryText)
                     .lineLimit(1)
