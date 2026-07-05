@@ -53,6 +53,18 @@ public enum CursorMetrics {
     public static let sheetHeaderHorizontalPadding: CGFloat = 16
     public static let sheetHeaderBottomPadding: CGFloat = 12
     public static let sheetLeadingButtonDiameter: CGFloat = 32
+    public static let sheetContentBottomPadding: CGFloat = 24
+
+    // MARK: Composer sheet (expanded, CursorComposerSheet)
+    public static let composerSheetPickerSpacing: CGFloat = 16
+    public static let composerSheetPickerBottomPadding: CGFloat = 16
+    public static let composerSheetTextMinHeight: CGFloat = 96
+    public static let composerSheetTextBottomPadding: CGFloat = 12
+    public static let composerSheetBottomRowSpacing: CGFloat = 12
+    public static let composerSheetBottomRowBottomPadding: CGFloat = 16
+
+    // MARK: Picker sheet rows (CursorRunOnSheet / CursorModelSheet)
+    public static let modelRowEllipsisDiameter: CGFloat = 32
 
     // MARK: Search field
     public static let searchFieldHeight: CGFloat = 40
