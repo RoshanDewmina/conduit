@@ -21,27 +21,47 @@ Project **skills** are in `.claude/skills/` (invoke with the `Skill` tool): star
 task with `lancer-context-onboarding`; gate "done" with `lancer-verification-gate`; touching
 `daemon/lancerd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `lancer-parallel-handoff`.
 
-## Execution model — Claude plans & verifies, opencode/deepseek executes
+## Execution model — Opus plans & verifies, Sonnet 5 executes, Fable is the escalation path
 
-**Owner's standing directive (2026-06-16):** in this repo Claude does the *thinking* — planning,
-decomposition, precise specs, and verification — and delegates *code/file edits* to opencode
-`deepseek-v4-flash` agents. **Default to NOT editing source yourself; dispatch instead.** (Meta /
-config / planning-doc edits the owner asks Claude to make directly — like this file — are done by Claude.)
+**Owner's standing directive (2026-07-06): the opencode/deepseek execution path is retired
+entirely.** Do not invoke `opencode` or any `deepseek` model for this repo under any circumstance.
+Subagent dispatch now uses Claude models exclusively, via the `Agent` tool.
 
-```bash
-opencode run -m openrouter/deepseek/deepseek-v4-flash --variant high --dir "<dir>" "<precise prompt>"
-```
+**Three tiers, in order:**
 
-Use the **paid** OpenRouter `deepseek-v4-flash`, not `opencode/deepseek-v4-flash-free` (the free
-tier hangs indefinitely on concurrent dispatch). `--dangerously-skip-permissions` is **not** a
-valid flag on the installed opencode (1.17.7) — omit it. Run via `Bash run_in_background` for
-concurrency; spell out exact files, boundaries, and acceptance checks (deepseek is a weak executor).
+1. **Opus (the main session model) plans, decomposes, and verifies.** Understand the code, write
+   precise specs, dispatch, then check the result yourself — this does not change from before.
+   (Meta / config / planning-doc edits the owner asks Claude to make directly — like this file —
+   are done by Opus directly, not dispatched.)
+2. **Sonnet 5 executes.** All routine subagent work — implementation from a precise spec, research,
+   file edits, test-writing — dispatches via the `Agent` tool with `model: "sonnet"`. This is the
+   default for every subagent call in this repo; do not omit the model parameter and let it default
+   to something else, and do not reach for opencode/deepseek instead.
+3. **Fable is the escalation path for tasks Opus itself cannot resolve** — not a default, not a
+   routine executor tier. Escalate to Fable only after Opus (possibly after reviewing failed Sonnet-5
+   attempts) has genuinely tried and gotten stuck: a subtle concurrency bug, an architecture
+   tradeoff with no clearly-correct answer, a correctness issue that survived a normal review pass,
+   or a problem where Sonnet-5 output has been checked and is repeatedly wrong. Dispatch via the
+   `Agent` tool with `model: "fable"`.
+
+**When escalating to Fable, the prompt must be unambiguous and evidence-backed — never a vague
+"figure this out":**
+
+- State exactly what is being asked and the exact scope of what Fable should decide or produce.
+- State exactly what blocked Opus/Sonnet already — the specific failure, ambiguity, or dead end —
+  so Fable isn't repeating work that's already been tried and ruled out.
+- Attach concrete evidence: exact `file:line` references, full error output or stack traces verbatim
+  (not paraphrased), the exact commands run and their exact output, and any docs/specs already
+  consulted. Fable should not have to re-derive context that already exists.
+- State exactly what "done" looks like — a concrete, checkable bar (a passing test, a specific
+  build command's clean output, a specific behavior reproduced or fixed) — not "does this seem right."
 
 **Be aggressive about parallelism.** The one hard rule: parallel agents must not write the same
 files — isolate by a distinct output file per agent, or a separate branch/worktree on a shared tree.
 
-**Always verify — never trust deepseek output blind.** Re-run the authoritative gate yourself
-(see "Verify before claiming done" in `AGENTS.md`) and re-dispatch with corrections on any failure.
+**Always verify — never trust subagent output blind**, at either tier. Re-run the authoritative
+gate yourself (see "Verify before claiming done" in `AGENTS.md`) and re-dispatch with corrections
+on any failure.
 
 ## MCP tooling — prefer over raw shell for Apple-platform work
 
