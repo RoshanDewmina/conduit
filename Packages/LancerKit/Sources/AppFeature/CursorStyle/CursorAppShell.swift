@@ -175,10 +175,19 @@ public struct CursorAppShell: View {
             }
         )
         .sheet(isPresented: $showingSettingsFromProfile) {
+            settingsSheet
+        }
+    }
+
+    @ViewBuilder
+    private var settingsSheet: some View {
+        if let liveBridge {
             CursorSettingsView(
-                relayMachineCount: 0,
-                onOpenRealSettings: liveBridge != nil ? handleSettingsDestination : nil
+                relayMachineCount: liveBridge.relayMachineCount,
+                onOpenRealSettings: handleSettingsDestination
             )
+        } else {
+            CursorSettingsView()
         }
     }
 

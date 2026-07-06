@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import InboxFeature
 import LancerCore
+import AgentKit
 
 /// Bridges real AppRoot infrastructure into the Cursor-style navigation shell
 /// for Tier-0 phone-usable flows (workspaces, threads, dispatch, approvals).

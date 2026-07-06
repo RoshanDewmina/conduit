@@ -1015,10 +1015,43 @@ public struct AppRoot: View {
                 )
             }
             cursorLiveBridge.reloadWorkspaceThreads(threads.isEmpty ? ["command-center": []] : threads)
-            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+            let pending = activeInboxViewModel.approvals.filter(\.isPending)
+            cursorLiveBridge.pendingApprovalID = pending.first?.id
+            cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.threadAttention = threadAttentionMap(
+                conversations: conversations,
+                pendingApprovals: pending
+            )
+            if relayFleetStore.machines.isEmpty, fleetStore.slots.isEmpty {
+                cursorLiveBridge.connectionPhase = .needsPairing
+            } else if relayFleetStore.firstConnectedMachine == nil,
+                      fleetStore.slots.allSatisfy({ $0.sessionViewModel.status != .connected }) {
+                cursorLiveBridge.connectionPhase = .offline
+            } else {
+                cursorLiveBridge.connectionPhase = .connected
+            }
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
+    }
+
+    @MainActor
+    private func threadAttentionMap(
+        conversations: [ChatConversation],
+        pendingApprovals: [Approval]
+    ) -> [String: CursorThreadAttention] {
+        var map: [String: CursorThreadAttention] = [:]
+        for conv in conversations {
+            let hasApproval = pendingApprovals.contains { approval in
+                approval.cwd == conv.cwd || approval.agentSessionID == conv.id
+            }
+            if hasApproval {
+                map[conv.id] = .needsApproval
+            } else if conv.status == .active {
+                map[conv.id] = .working
+            }
+        }
+        return map
     }
 
     private func defaultDispatchAgentID(env: AppEnvironment) -> String {
