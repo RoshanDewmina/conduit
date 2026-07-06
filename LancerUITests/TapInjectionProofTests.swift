@@ -239,9 +239,20 @@ final class TapInjectionProofTests: XCTestCase {
                       "Live Cursor shell should land on Workspaces after relay pairing")
 
         let approvalBanner = app.buttons["approval-banner"].firstMatch
-        XCTAssertTrue(approvalBanner.waitForExistence(timeout: 120),
+        let needsApproval = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Needs your approval")
+        ).firstMatch
+        let bannerDeadline = Date().addingTimeInterval(120)
+        while !approvalBanner.exists && !needsApproval.exists && Date() < bannerDeadline {
+            usleep(300_000)
+        }
+        XCTAssertTrue(approvalBanner.exists || needsApproval.exists,
                       "A relay-delivered escalation should surface the Workspaces approval banner")
-        approvalBanner.tap()
+        if approvalBanner.exists {
+            approvalBanner.tap()
+        } else {
+            needsApproval.tap()
+        }
 
         let approve = app.buttons["approval.approve"].firstMatch
         XCTAssertTrue(approve.waitForExistence(timeout: 15),

@@ -78,6 +78,7 @@ public struct CursorAppShell: View {
                 onOpenSearch: { showingSearchOverlay = true },
                 onOpenReview: { path.append(CursorRoute.reviewDiff) }
             )
+            .environment(\.cursorShellLiveBridge, liveBridge)
             .navigationDestination(for: CursorRoute.self) { route in
                 destinationView(for: route)
             }

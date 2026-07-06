@@ -27,12 +27,36 @@ public struct CursorWorkspacesView: View {
         self.onOpenReview = onOpenReview
     }
 
-    private var showsApprovalBanner: Bool {
-        guard let liveBridge else { return false }
-        return liveBridge.pendingApprovalID != nil
-    }
-
     public var body: some View {
+        if let liveBridge {
+            CursorWorkspacesLiveBody(
+                bridge: liveBridge,
+                onSelectWorkspace: onSelectWorkspace,
+                onOpenComposer: onOpenComposer,
+                onOpenProfile: onOpenProfile,
+                onOpenSearch: onOpenSearch,
+                onOpenReview: onOpenReview
+            )
+        } else {
+            CursorWorkspacesSeedBody(
+                onSelectWorkspace: onSelectWorkspace,
+                onOpenComposer: onOpenComposer,
+                onOpenProfile: onOpenProfile,
+                onOpenSearch: onOpenSearch
+            )
+        }
+    }
+}
+
+private struct CursorWorkspacesLiveBody: View {
+    @Bindable var bridge: CursorShellLiveBridge
+    let onSelectWorkspace: (String) -> Void
+    let onOpenComposer: () -> Void
+    let onOpenProfile: () -> Void
+    let onOpenSearch: () -> Void
+    let onOpenReview: () -> Void
+
+    var body: some View {
         VStack(spacing: 0) {
             CursorHeaderBar(
                 leading: AnyView(
@@ -45,14 +69,14 @@ public struct CursorWorkspacesView: View {
                 ]
             )
 
-            if let liveBridge, liveBridge.connectionPhase != .connected {
+            if bridge.connectionPhase != .connected {
                 CursorConnectionBanner(
-                    phase: liveBridge.connectionPhase,
-                    onPair: liveBridge.onRequestPairing
+                    phase: bridge.connectionPhase,
+                    onPair: bridge.onRequestPairing
                 )
             }
 
-            if showsApprovalBanner {
+            if bridge.pendingApprovalID != nil {
                 approvalBanner
             }
 
@@ -65,8 +89,8 @@ public struct CursorWorkspacesView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    if let liveBridge, !liveBridge.workspaces.isEmpty {
-                        let total = liveBridge.workspaces.reduce(0) { $0 + $1.threadCount }
+                    if !bridge.workspaces.isEmpty {
+                        let total = bridge.workspaces.reduce(0) { $0 + $1.threadCount }
                         Button(action: { onSelectWorkspace("All Repos") }) {
                             CursorListRow(
                                 iconSystemName: "square.stack.3d.up",
@@ -77,7 +101,7 @@ public struct CursorWorkspacesView: View {
                         }
                         .buttonStyle(.plain)
 
-                        ForEach(liveBridge.workspaces) { workspace in
+                        ForEach(bridge.workspaces) { workspace in
                             Button(action: { onSelectWorkspace(workspace.name) }) {
                                 CursorListRow(
                                     iconSystemName: "folder",
@@ -88,8 +112,6 @@ public struct CursorWorkspacesView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    } else {
-                        seedWorkspaceRows
                     }
 
                     CursorListRow(
@@ -129,6 +151,67 @@ public struct CursorWorkspacesView: View {
         .accessibilityIdentifier("approval-banner")
         .padding(.horizontal, 16)
         .padding(.top, 8)
+    }
+
+    private var avatarCircle: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.29, green: 0.42, blue: 0.94),
+                        Color(red: 0.62, green: 0.31, blue: 0.87)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 44, height: 44)
+    }
+}
+
+private struct CursorWorkspacesSeedBody: View {
+    let onSelectWorkspace: (String) -> Void
+    let onOpenComposer: () -> Void
+    let onOpenProfile: () -> Void
+    let onOpenSearch: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CursorHeaderBar(
+                leading: AnyView(
+                    Button(action: onOpenProfile) { avatarCircle }
+                        .buttonStyle(.plain)
+                ),
+                trailing: [
+                    CursorIconButton(systemImageName: "magnifyingglass", action: onOpenSearch),
+                    CursorIconButton(systemImageName: "plus", action: {})
+                ]
+            )
+
+            Text("Workspaces")
+                .font(CursorType.pageTitle)
+                .foregroundColor(CursorColors.light.primaryText)
+                .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
+                .padding(.top, CursorMetrics.pageTitleTopPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    seedWorkspaceRows
+                    CursorListRow(
+                        iconSystemName: "folder.badge.plus",
+                        title: "Add Repo",
+                        trailingCount: nil,
+                        showChevron: false
+                    )
+                }
+            }
+        }
+        .background(CursorColors.light.background.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            CursorBottomComposer(onTap: onOpenComposer)
+        }
+        .environment(\.cursorScheme, .light)
     }
 
     private var avatarCircle: some View {

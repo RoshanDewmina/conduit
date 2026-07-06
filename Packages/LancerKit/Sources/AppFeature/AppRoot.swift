@@ -538,22 +538,22 @@ public struct AppRoot: View {
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
             }
+            let vm = activeInboxViewModel
+            if !vm.approvals.contains(where: { $0.id == approval.id }) {
+                vm.approvals.insert(approval, at: 0)
+            }
+            if selectedFleetSlot == nil {
+                fleetStore.relayInboxVM = vm
+            }
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
+                cursorLiveBridge.pendingApprovalID = approval.id
+            }
+            #endif
+            workspacesRevision = UUID()
             Task { @MainActor in
                 let repo = approvalRepository ?? ApprovalRepository(env.database)
                 try? await repo.upsert(approval)
-                let vm = activeInboxViewModel
-                if !vm.approvals.contains(where: { $0.id == approval.id }) {
-                    vm.approvals.insert(approval, at: 0)
-                }
-                if selectedFleetSlot == nil {
-                    fleetStore.relayInboxVM = vm
-                }
-                #if DEBUG
-                if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
-                    cursorLiveBridge.pendingApprovalID = approval.id
-                }
-                #endif
-                workspacesRevision = UUID()
             }
         }
         // The daemon resolved a pending approval without ever hearing back from
