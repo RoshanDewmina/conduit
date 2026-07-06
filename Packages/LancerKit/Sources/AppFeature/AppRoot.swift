@@ -208,9 +208,9 @@ public struct AppRoot: View {
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var relayFleetStore = RelayFleetStore()
-    /// UI-test seam only: a fake relay entry seeded by `LANCER_FAKE_RELAY_HOST`,
-    /// shown in Home in place of `relayFleetStore.machines` (see `homeDestination`).
-    @State private var debugFakeRelayEntry: RelayHomeEntry?
+    @State private var cursorLiveBridge = CursorShellLiveBridge()
+    @State private var showingCursorSettings = false
+    @State private var showingCursorRelayPairing = false
     /// Idempotency guard for `configureRelayFleetStore` — it used to check
     /// `e2eBridge == nil`, but there's no single bridge anymore.
     @State private var configuredRelayFleetStore = false
@@ -301,21 +301,31 @@ public struct AppRoot: View {
             }
             _sidebarState = State(initialValue: state)
         }
-        // UI-test seam: simulate a paired, live relay host so Home's machine list can
-        // be verified without a live relay. `configureRelayFleetStore` early-returns
-        // when this is set so the real bridge subscription doesn't clobber it.
-        if let fakeRelayHost = ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] {
-            _debugFakeRelayEntry = State(initialValue: RelayHomeEntry(
-                id: RelayMachineID(), name: fakeRelayHost, connected: true
-            ))
-        }
         #endif
     }
 
     @ViewBuilder
     public var body: some View {
+        #if DEBUG
+        if usesMockCursorShell {
+            CursorAppShell()
+        } else {
+            mainBody.environment(\.lancerTokens, tokens)
+        }
+        #else
         mainBody.environment(\.lancerTokens, tokens)
+        #endif
     }
+
+    #if DEBUG
+    /// Mock Cursor shell for UI tests (`LANCER_CURSOR_SHELL=1`) and design review.
+    /// `LANCER_CURSOR_SHELL_LIVE=1` routes through `mainBody` with a wired shell.
+    private var usesMockCursorShell: Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env["LANCER_CURSOR_SHELL_LIVE"] == "1" { return false }
+        return env["LANCER_CURSOR_SHELL"] == "1" || env["LANCER_SKIP_CURSOR_ONBOARDING"] == "1"
+    }
+    #endif
 
     // The content tree, split out of mainBody so the Swift type-checker handles the
     // view hierarchy and the long .task/.onChange/.onReceive modifier chain as two
@@ -683,6 +693,7 @@ public struct AppRoot: View {
         })
         .task {
             configureGlobalInbox(env: env)
+            setupCursorLiveBridge(env: env)
             sidebarState.configure(chatRepo: env.chatRepo)
             await sidebarState.loadRecent()
             await configureCloudServices(env: env)
@@ -718,11 +729,34 @@ public struct AppRoot: View {
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
         Group {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
+                CursorAppShell(liveBridge: cursorLiveBridge)
+                    .task(id: workspacesRevision) { await refreshCursorLiveBridge(env: env) }
+                    .sheet(isPresented: $showingCursorSettings) {
+                        settingsDestination(env: env)
+                    }
+                    .sheet(isPresented: $showingCursorRelayPairing) {
+                        E2ERelayPairingView(
+                            existingMachineCount: relayFleetStore.machines.count,
+                            onPaired: { client, record in
+                                addRelayMachine(client: client, record: record, env: env)
+                                showingCursorRelayPairing = false
+                            }
+                        )
+                    }
+            } else if horizontalSizeClass == .regular {
+                regularRoot(env: env)
+            } else {
+                compactRoot(env: env)
+            }
+            #else
             if horizontalSizeClass == .regular {
                 regularRoot(env: env)
             } else {
                 compactRoot(env: env)
             }
+            #endif
         }
         // Agent status header — a slim, in-layout strip shown only while a live
         // session exists (the store returns no agents when idle). Each tab renders
@@ -928,6 +962,80 @@ public struct AppRoot: View {
         // real, already-pending high-risk approval sat unreviewed. Safe to set
         // unconditionally per the dedupe-by-id note at the other call site.
         fleetStore.relayInboxVM = liveVM
+    }
+
+    @MainActor
+    private func setupCursorLiveBridge(env: AppEnvironment) {
+        cursorLiveBridge.onDispatch = { [self] prompt, cwd in
+            let agentID = defaultDispatchAgentID(env: env)
+            _ = await performDispatch(
+                agentID: agentID,
+                cwd: cwd,
+                prompt: prompt,
+                budgetUSD: nil,
+                model: nil,
+                env: env
+            )
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onContinue = { [self] conversationID, prompt in
+            guard let conv = try? await env.chatRepo.conversation(id: conversationID) else { return }
+            _ = await performContinueConversation(
+                conversationID: conv.id,
+                baseSeq: conv.lastHostSeq,
+                prompt: prompt,
+                agentID: conv.agentID,
+                cwd: conv.cwd,
+                model: conv.model,
+                env: env
+            )
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onDecide = { [self] id, decision in
+            inboxVM.decide(id, decision: decision)
+        }
+        cursorLiveBridge.onOpenSettings = { showingCursorSettings = true }
+        cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
+    }
+
+    @MainActor
+    private func refreshCursorLiveBridge(env: AppEnvironment) async {
+        do {
+            let conversations = try await env.chatRepo.recent(limit: 200)
+            var counts: [String: Int] = [:]
+            var threads: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
+            for conv in conversations {
+                let repo = (conv.cwd as NSString).lastPathComponent.isEmpty ? conv.cwd : (conv.cwd as NSString).lastPathComponent
+                counts[repo, default: 0] += 1
+                threads[repo, default: []].append(
+                    CursorShellLiveBridge.ThreadRow(
+                        id: conv.id,
+                        title: conv.title,
+                        repoName: repo,
+                        updatedAt: conv.updatedAt
+                    )
+                )
+            }
+            let names = Array(counts.keys).sorted()
+            cursorLiveBridge.reloadWorkspaces(
+                from: names.isEmpty ? ["command-center"] : names,
+                threadCounts: counts
+            )
+            for (name, rows) in threads {
+                let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+                cursorLiveBridge.reloadThreads(workspaceName: name, rows: sorted)
+            }
+            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+        } catch {
+            // Best-effort hydration for the Cursor live shell.
+        }
+    }
+
+    private func defaultDispatchAgentID(env: AppEnvironment) -> String {
+        if let online = dispatchAgents().first(where: { !$0.isOffline }) {
+            return online.id
+        }
+        return dispatchAgents().first?.id ?? "claude"
     }
 
     /// Bridge RPC actions for the selected (or first) fleet slot.
@@ -1400,9 +1508,12 @@ public struct AppRoot: View {
                         // UIKit wraps it in a second circular chrome layer. Root
                         // surfaces own exactly one shared control instead.
                         .safeAreaInset(edge: .top, spacing: 0) {
-                            // Chat destinations own their top chrome; everything else
-                            // (Inbox, Machines, Settings) gets the shell hamburger bar.
+                            // Chat destinations own their top chrome; Home and Machines
+                            // (CursorHomeView / CursorWorkspacesView) bring their own
+                            // complete header too. Everything else (Inbox, Settings)
+                            // gets the shell hamburger bar.
                             if sidebarState.selectedDestination != .home,
+                               sidebarState.selectedDestination != .machines,
                                !isChatDestination(sidebarState.selectedDestination) {
                                 HStack {
                                     DSCircleButton(
@@ -1557,35 +1668,8 @@ public struct AppRoot: View {
     }
 
     private func fleetDestination(env: AppEnvironment) -> some View {
-        FleetView(
-            store: fleetStore,
-            hostRepo: env.hostRepo,
-            chatRepo: env.chatRepo,
-            loopStore: env.loopStore,
-            quotaGuardStore: env.quotaGuardStore,
-            hostHealthStore: env.hostHealthStore,
-            onConnectHost: { drawerRoute = .relayPairing },
-            onReconnect: { host in openSession(host: host, env: env) },
-            onDelete: { host in Task { try? await env.hostRepo.delete(id: host.id) } },
-            onQuotaGuard: { showingQuotaGuard = true },
-            // V1's Work Thread/Machines are a read-only activity log — the live
-            // interactive terminal (SessionView) is deferred to V2 and intentionally
-            // not wired into nav here. FleetView hides/no-ops its terminal-drill-in
-            // affordances when this is nil.
-            onOpenThread: { id in
-                sidebarState.navigate(to: .thread(id: id))
-            },
-            relayMachines: relayFleetStore.machines.map {
-                FleetRelayMachine(
-                    id: $0.id,
-                    name: $0.record.displayName,
-                    isActive: relayFleetStore.isConnected($0.id),
-                    agentLabels: relayFleetStore.isConnected($0.id) ? relayAgentDisplayLabels(for: $0.installedAgentVendors) : []
-                )
-            },
-            onOpenRelayChat: { _ in sidebarState.navigate(to: .newChat) }
-        )
-        .id(workspacesRevision)
+        CursorWorkspacesView()
+            .id(workspacesRevision)
     }
 
     /// Stop every running agent: disconnect SSH sessions and send a relay stop for
@@ -1766,47 +1850,14 @@ public struct AppRoot: View {
     }
 
     private func homeDestination(env: AppEnvironment) -> some View {
-        LancerHomeView(
-            fleetStore: fleetStore,
-            defaultInboxVM: activeInboxViewModel,
-            recentThreads: sidebarState.recentThreads,
-            pendingApprovalCount: fleetStore.attentionItems.count,
-            profileEmail: env.accountSession.email,
-            relayMachines: debugFakeRelayEntry.map { [$0] } ?? relayFleetStore.machines.map {
-                RelayHomeEntry(id: $0.id, name: $0.record.displayName, connected: relayFleetStore.isConnected($0.id))
-            },
-            workspaces: allWorkspaces,
-            onOpenSidebar: homeSidebarAction,
-            onNewChat: { sidebarState.navigate(to: .newChat) },
-            onOpenInbox: { sidebarState.navigate(to: .needsAttention) },
-            onOpenMachines: { sidebarState.navigate(to: .machines) },
-            onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
-            onOpenObservedSession: { session in
-                Task { await openObservedSessionAutoImporting(session, env: env) }
-            },
-            onOpenWorkspace: { ref in
-                sidebarState.navigate(to: .workspace(
-                    machineKey: ref.machineKey,
-                    machineName: ref.machineName,
-                    path: ref.path,
-                    displayName: ref.displayName,
-                    workspaceID: ref.workspaceID
-                ))
-            },
-            onCreateWorkspace: { machineKey in
-                pendingNewChatMachineKey = machineKey
-                pendingNewChatCwd = nil
-                sidebarState.navigate(to: .newChat)
-            },
-            loadSessions: { hostName in await loadObservedSessions(hostName: hostName) }
-        )
-        // Refreshes every time Home is (re)entered — e.g. after creating a new
-        // workspace from New Chat and navigating back — matching the simple
-        // reload-on-appear approach `LancerHomeView`'s own `.task` already uses
-        // for observed sessions, rather than a more invasive change-notification.
-        .task(id: sidebarState.selectedDestination) {
-            await loadAllWorkspaces(env: env)
-        }
+        CursorHomeView()
+            // Refreshes every time Home is (re)entered — e.g. after creating a new
+            // workspace from New Chat and navigating back — matching the simple
+            // reload-on-appear approach the previous Home view's own `.task` already
+            // used for observed sessions, rather than a more invasive change-notification.
+            .task(id: sidebarState.selectedDestination) {
+                await loadAllWorkspaces(env: env)
+            }
     }
 
     /// Every persisted `Workspace` across every currently-paired relay machine,
