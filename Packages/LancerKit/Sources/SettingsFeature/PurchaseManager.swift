@@ -2,6 +2,7 @@
 import Foundation
 import StoreKit
 import Observation
+import RevenueCat
 import AgentKit
 
 public enum PurchaseState: Sendable, Equatable {
@@ -19,19 +20,24 @@ public enum CloudEntitlementLoadState: Sendable, Equatable {
     case error(String)
 }
 
-/// StoreKit 2 manager for the Lancer one-time purchase.
-/// Product ID matches the entry in App Store Connect.
+/// RevenueCat-backed manager for the Lancer one-time Pro purchase.
+/// Product ID matches `Lancer.storekit` / App Store Connect; entitlement ID
+/// must match the RevenueCat dashboard (`BillingEligibility.proEntitlementID`).
 @MainActor @Observable
-public final class PurchaseManager {
+public final class PurchaseManager: NSObject {
     public static let shared = PurchaseManager()
 
-    public static let proProductID = "dev.lancer.mobile.pro"
+    public static let proProductID = BillingEligibility.proProductID
     public static let stripeCustomerIDKey = "dev.lancer.stripeCustomerId"
     public static let appAccountTokenKey = "dev.lancer.appAccountToken"
     public static let clientTokenKey = "dev.lancer.clientToken"
 
+    // TODO(owner): replace with real RevenueCat API key from https://app.revenuecat.com
+    private static let revenueCatAPIKey = "REVENUECAT_API_KEY_PLACEHOLDER"
+
     public var purchaseState: PurchaseState = .unknown
-    public var product: Product?
+    /// Localized price for the Pro package when offerings load successfully.
+    public var displayPrice: String?
     public var storefrontCountryCode: String?
     public var cloudEntitlement: CloudEntitlement?
     public var cloudEntitlementState: CloudEntitlementLoadState = .unknown
@@ -43,8 +49,7 @@ public final class PurchaseManager {
     /// Apple IAP one-time purchase — unlocks core Pro features.
     public var isPro: Bool {
         #if DEBUG
-        // Default: unlocked. Explicit `false` overrides back to paywall.
-        if UserDefaults.standard.object(forKey: "lancerDebugProBypass") == nil { return true }
+        if ProcessInfo.processInfo.environment["LANCER_FORCE_PRO"] == "1" { return true }
         if UserDefaults.standard.bool(forKey: "lancerDebugProBypass") { return true }
         #endif
         return purchaseState == .purchased
@@ -82,12 +87,13 @@ public final class PurchaseManager {
     }
 #endif
 
-    @ObservationIgnored nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
+    @ObservationIgnored private var proPackage: Package?
+    @ObservationIgnored private static var isConfigured = false
     @ObservationIgnored private var cachedBackendURL: String?
     @ObservationIgnored private var accountAccessToken: String?
 
-    private init() {
-        transactionListener = listenForTransactions()
+    private override init() {
+        super.init()
     }
 
     public func configure(backendURL: String, accountAccessToken: String? = nil) {
@@ -96,19 +102,19 @@ public final class PurchaseManager {
     }
 
     public func load() async {
+        ensureConfigured()
+        storefrontCountryCode = await Storefront.current?.countryCode
         do {
-            storefrontCountryCode = await Storefront.current?.countryCode
-            let products = try await Product.products(for: [Self.proProductID])
-            guard let loadedProduct = products.first else {
-                product = nil
+            let offerings = try await Purchases.shared.offerings()
+            proPackage = Self.resolveProPackage(from: offerings)
+            displayPrice = proPackage?.storeProduct.localizedPriceString
+            if proPackage == nil {
                 #if DEBUG
-                purchaseState = .error("Product not found. Check that Lancer.storekit is selected in the Run scheme for StoreKit testing.")
+                purchaseState = .error("Pro package not found. Check RevenueCat offerings and that Lancer.storekit is selected in the Run scheme.")
                 #else
                 purchaseState = .error("Couldn't load purchase options. Please check your connection and try again.")
                 #endif
-                return
             }
-            product = loadedProduct
             await refreshPurchaseState()
         } catch {
             #if DEBUG
@@ -120,9 +126,10 @@ public final class PurchaseManager {
     }
 
     public func purchase() async {
-        guard let product else {
+        ensureConfigured()
+        guard let proPackage else {
             #if DEBUG
-            purchaseState = .error("Product not loaded")
+            purchaseState = .error("Pro package not loaded")
             #else
             purchaseState = .error("Couldn't start the purchase. Please try again.")
             #endif
@@ -130,18 +137,11 @@ public final class PurchaseManager {
         }
         purchaseState = .purchasing
         do {
-            let result = try await product.purchase()
-            switch result {
-            case .success(let verification):
-                let transaction = try verification.payloadValue
-                await transaction.finish()
-                purchaseState = .purchased
-            case .userCancelled:
+            let result = try await Purchases.shared.purchase(package: proPackage)
+            if result.userCancelled {
                 purchaseState = .notPurchased
-            case .pending:
-                purchaseState = .notPurchased
-            @unknown default:
-                purchaseState = .notPurchased
+            } else {
+                applyCustomerInfo(result.customerInfo)
             }
         } catch {
             purchaseState = .error(error.localizedDescription)
@@ -149,9 +149,10 @@ public final class PurchaseManager {
     }
 
     public func restore() async {
+        ensureConfigured()
         do {
-            try await AppStore.sync()
-            await refreshPurchaseState()
+            let customerInfo = try await Purchases.shared.restorePurchases()
+            applyCustomerInfo(customerInfo)
         } catch {
             purchaseState = .error(error.localizedDescription)
         }
@@ -201,6 +202,29 @@ public final class PurchaseManager {
 
     // MARK: - Private
 
+    private func ensureConfigured() {
+        guard !Self.isConfigured else { return }
+        #if DEBUG
+        Purchases.logLevel = .debug
+        #endif
+        Purchases.configure(
+            with: Configuration.Builder(withAPIKey: Self.revenueCatAPIKey)
+                .with(storeKitVersion: .storeKit2)
+                .build()
+        )
+        Purchases.shared.delegate = self
+        Self.isConfigured = true
+    }
+
+    private static func resolveProPackage(from offerings: Offerings) -> Package? {
+        let allPackages = offerings.all.values.flatMap(\.availablePackages)
+        if let match = allPackages.first(where: { $0.storeProduct.productIdentifier == proProductID }) {
+            return match
+        }
+        return offerings.current?.lifetime
+            ?? offerings.current?.availablePackages.first
+    }
+
     private func checkoutSessionIdFromBillingReturn() -> String? {
         guard let urlString = UserDefaults.standard.string(forKey: "dev.lancer.lastBillingReturnURL"),
               let url = URL(string: urlString),
@@ -210,26 +234,29 @@ public final class PurchaseManager {
             ?? components.queryItems?.first(where: { $0.name == "session_id" })?.value
     }
 
-    private func refreshPurchaseState() async {
-        for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result,
-               transaction.productID == Self.proProductID,
-               transaction.revocationDate == nil {
-                purchaseState = .purchased
-                return
-            }
-        }
-        purchaseState = .notPurchased
+    private func applyCustomerInfo(_ customerInfo: CustomerInfo) {
+        let isActive = BillingEligibility.isProEntitlementActive(
+            customerInfo.entitlements[BillingEligibility.proEntitlementID]?.isActive == true
+        )
+        purchaseState = isActive ? .purchased : .notPurchased
     }
 
-    private func listenForTransactions() -> Task<Void, Never> {
-        Task(priority: .background) { [weak self] in
-            for await result in Transaction.updates {
-                if case .verified(let transaction) = result {
-                    await transaction.finish()
-                    await self?.refreshPurchaseState()
-                }
+    private func refreshPurchaseState() async {
+        do {
+            let customerInfo = try await Purchases.shared.customerInfo()
+            applyCustomerInfo(customerInfo)
+        } catch {
+            if case .unknown = purchaseState {
+                purchaseState = .notPurchased
             }
+        }
+    }
+}
+
+extension PurchaseManager: PurchasesDelegate {
+    nonisolated public func purchases(_ purchases: Purchases, receivedUpdated customerInfo: CustomerInfo) {
+        Task { @MainActor in
+            self.applyCustomerInfo(customerInfo)
         }
     }
 }
