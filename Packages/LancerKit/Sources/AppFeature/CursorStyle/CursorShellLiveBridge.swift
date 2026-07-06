@@ -9,6 +9,8 @@ import LancerCore
 @MainActor
 @Observable
 public final class CursorShellLiveBridge {
+    public static let allReposWorkspaceName = "All Repos"
+
     public struct WorkspaceRow: Identifiable, Sendable {
         public let id: String
         public let name: String
@@ -48,6 +50,24 @@ public final class CursorShellLiveBridge {
 
     public func reloadThreads(workspaceName: String, rows: [ThreadRow]) {
         threadsByWorkspace[workspaceName] = rows
+    }
+
+    public func reloadWorkspaceThreads(_ rowsByWorkspace: [String: [ThreadRow]]) {
+        let names = rowsByWorkspace.keys.sorted()
+        let threadCounts = rowsByWorkspace.mapValues(\.count)
+        reloadWorkspaces(from: names, threadCounts: threadCounts)
+
+        threadsByWorkspace = [:]
+        for (name, rows) in rowsByWorkspace {
+            threadsByWorkspace[name] = sortedThreads(rows)
+        }
+        threadsByWorkspace[Self.allReposWorkspaceName] = sortedThreads(
+            rowsByWorkspace.values.flatMap { $0 }
+        )
+    }
+
+    private func sortedThreads(_ rows: [ThreadRow]) -> [ThreadRow] {
+        rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
     }
 }
 #endif

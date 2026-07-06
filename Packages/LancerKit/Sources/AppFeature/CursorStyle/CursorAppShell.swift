@@ -12,10 +12,9 @@ private enum CursorRoute: Hashable {
     case reviewDiff
 }
 
-/// Cohesive, clickable navigation shell wiring every Cursor-styled mock screen
-/// in `CursorStyle/` together with mock/seeded data. Navigation-only — no real
-/// data wiring, no daemon calls. Lets the owner tap through the whole
-/// redesign end-to-end before any real backend integration happens.
+/// Cohesive, clickable navigation shell wiring every Cursor-styled screen in
+/// `CursorStyle/`. Without a live bridge it uses seeded data for design review;
+/// with `LANCER_CURSOR_SHELL_LIVE=1`, Tier 0 actions route through AppRoot.
 ///
 /// Deliberately has no `TabView`: Cursor's own app is a single stack rooted at
 /// the Workspaces list, with account (Profile drawer), repo switching (Repo
@@ -169,10 +168,19 @@ public struct CursorAppShell: View {
         )
         .sheet(isPresented: $showingSettingsFromProfile) {
             if let liveBridge, liveBridge.onOpenSettings != nil {
-                CursorSettingsView(onOpenRealSettings: liveBridge.onOpenSettings)
+                CursorSettingsView(onOpenRealSettings: openRealSettingsFromProfile)
             } else {
                 CursorSettingsView()
             }
+        }
+    }
+
+    private func openRealSettingsFromProfile() {
+        showingSettingsFromProfile = false
+        showingProfileDrawer = false
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            liveBridge?.onOpenSettings?()
         }
     }
 

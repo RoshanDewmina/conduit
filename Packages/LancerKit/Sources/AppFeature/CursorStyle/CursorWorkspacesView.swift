@@ -1,8 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
-/// Visual clone of Cursor's mobile Workspaces list: an "All Repos" entry plus
-/// one row per repo. Static seed data only — no daemon/network wiring.
+/// Cursor-style mobile Workspaces list: an "All Repos" entry plus one row per
+/// repo. Uses live bridge data when AppRoot provides it; otherwise falls back
+/// to seeded rows for design-review UI tests.
 public struct CursorWorkspacesView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 

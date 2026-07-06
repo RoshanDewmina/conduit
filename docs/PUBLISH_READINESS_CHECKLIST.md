@@ -1,6 +1,6 @@
 # Lancer — Publish Readiness Checklist (single source of truth)
 
-> Reconciled 2026-06-27 against the current cleanup branch and live-loop/TestFlight state.
+> Reconciled 2026-07-06 against the current Tier 0 live Cursor shell state.
 > Supersedes the status claims in `docs/_archive/remaining-work.md` (2026-05-28, stale: says "free team"),
 > and reconciles `ship-gate-owner-steps.md` + archived `docs/_archive/PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
 > When those disagree, **this file + `ARCHITECTURE.md` (§0.1 / §4.1) win.**
@@ -49,6 +49,8 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [ ] **B7 — Feature-wiring audit.** Confirm policy editor, audit feed, usage dashboard, composer reachable from real navigation.
 - [ ] **B8 — Empty/error/loading + a11y sweep.** Every surface: empty/loading/error states, Dynamic Type, VoiceOver, light+dark.
 - [x] **B9 — Cross-device conversation sync: add `CKDatabaseSubscription` for background pull.** ✅ DONE 2026-07-03. `CloudSync.ensureDatabaseSubscriptionExists` registers a `CKDatabaseSubscription` (idempotent, `shouldSendContentAvailable`); `ConversationSyncEngine.start()` registers it after the first sync (best-effort — entitlement issues fall back to the pre-existing foreground-only behavior); `AppDelegate.didReceiveRemoteNotification` now distinguishes a CloudKit push from an APNs approval push and routes to `ConversationSyncEngine.handleRemoteNotification(subscriptionID:)`. Registration + routing are code-complete and unit-tested; actual silent-push delivery is still unverified on hardware — see C7.
+- [ ] **B10 — Prove Tier 0 through the live Cursor shell.** `LANCER_CURSOR_SHELL_LIVE=1` must complete pair → dispatch → approve/deny → follow-up against the real daemon/relay path. The shell is merged and partially wired; seeded `LANCER_CURSOR_SHELL=1` coverage is not sufficient for external beta.
+- [ ] **B11 — Close P0 beta blockers.** External beta is blocked until `BiometricGate` fails closed on real no-passcode devices and Emergency Stop is implemented as a daemon-side atomic primitive, or the owner explicitly signs off on a release-blocking exception.
 
 ---
 
@@ -76,7 +78,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 
 ## E. Doc hygiene
 
-- [ ] **E1 — Continue doc consolidation.** Keep useful evidence, route active state through this checklist and `docs/KNOWN_ISSUES.md`.
+- [ ] **E1 — Continue doc consolidation.** Keep useful evidence, route active state through this checklist, `ARCHITECTURE.md` §0.1, `docs/KNOWN_ISSUES.md`, and the Tier 0 gap matrix. July 4/5 Away/Proof/Siri/design artifacts remain context until the Tier 0 live shell and validation gates are proven.
 
 ---
 

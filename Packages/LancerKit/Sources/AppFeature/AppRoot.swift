@@ -1002,11 +1002,9 @@ public struct AppRoot: View {
     private func refreshCursorLiveBridge(env: AppEnvironment) async {
         do {
             let conversations = try await env.chatRepo.recent(limit: 200)
-            var counts: [String: Int] = [:]
             var threads: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
             for conv in conversations {
                 let repo = (conv.cwd as NSString).lastPathComponent.isEmpty ? conv.cwd : (conv.cwd as NSString).lastPathComponent
-                counts[repo, default: 0] += 1
                 threads[repo, default: []].append(
                     CursorShellLiveBridge.ThreadRow(
                         id: conv.id,
@@ -1016,15 +1014,7 @@ public struct AppRoot: View {
                     )
                 )
             }
-            let names = Array(counts.keys).sorted()
-            cursorLiveBridge.reloadWorkspaces(
-                from: names.isEmpty ? ["command-center"] : names,
-                threadCounts: counts
-            )
-            for (name, rows) in threads {
-                let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-                cursorLiveBridge.reloadThreads(workspaceName: name, rows: sorted)
-            }
+            cursorLiveBridge.reloadWorkspaceThreads(threads.isEmpty ? ["command-center": []] : threads)
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
         } catch {
             // Best-effort hydration for the Cursor live shell.

@@ -22,6 +22,14 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         return app
     }
 
+    private func launchLiveShell() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_CURSOR_SHELL_LIVE"] = "1"
+        app.launchEnvironment["LANCER_UITEST_RESEED"] = "1"
+        app.launch()
+        return app
+    }
+
     private func launchOnboarding() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
@@ -219,6 +227,29 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         app.swipeDown(velocity: .fast)
         XCTAssertTrue(app.staticTexts["Profile"].waitForExistence(timeout: 10), "Dismissing Settings should return to Profile drawer")
         snapshot("03d-back-to-profile-drawer", app: app)
+    }
+
+    func testLiveShell_UsesAppRootBridgeForWorkspaceAndSettings() throws {
+        let app = launchLiveShell()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["All Repos"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["command-center"].waitForExistence(timeout: 10))
+        snapshot("03-live-shell-workspaces", app: app)
+
+        avatarCoordinate(app).tap()
+        XCTAssertTrue(app.staticTexts["Profile"].waitForExistence(timeout: 10))
+        let appSettings = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "App Settings")).firstMatch
+        XCTAssertTrue(appSettings.waitForExistence(timeout: 5))
+        appSettings.tap()
+        XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 10))
+        let trustedMachines = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Trusted machines")).firstMatch
+        XCTAssertTrue(trustedMachines.waitForExistence(timeout: 5))
+        trustedMachines.tap()
+        XCTAssertTrue(app.staticTexts["GENERAL"].waitForExistence(timeout: 10),
+                      "Live shell Settings rows should open the real AppRoot Settings destination")
+        snapshot("03-live-shell-real-settings", app: app)
     }
 
     func testProfileDrawer_SignOutReturnsToOnboarding() throws {

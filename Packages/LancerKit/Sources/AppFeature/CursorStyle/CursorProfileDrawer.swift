@@ -5,8 +5,8 @@ import SwiftUI
 /// presented as a bottom sheet when the header avatar circle is tapped.
 /// Identity/usage/streak sections are Cursor-account-flavored mock content;
 /// the trailing "Lancer" section links out to Lancer's real product settings
-/// (`CursorSettingsView`) via `onOpenSettings` — wiring that in is a later
-/// integration pass. Static seed data only, forced light `cursorScheme`.
+/// (`CursorSettingsView`) via `onOpenSettings`. Static seed identity data only,
+/// forced light `cursorScheme`.
 public struct CursorProfileDrawer: View {
     @Environment(\.cursorScheme) private var cursorScheme
 

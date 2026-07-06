@@ -4,8 +4,8 @@ import SwiftUI
 /// Visual clone of Cursor's mobile per-repo thread list: unlike `CursorHomeView`
 /// (a cross-repo aggregate), this is scoped to a single workspace, with a
 /// back-chevron + search + hamburger header instead of the avatar+search+plus
-/// header Home/Workspaces use. Uses live bridge threads when wired; seed data
-/// fallback for mock UI tests.
+/// header Home/Workspaces use. Uses live bridge threads when wired, including
+/// an empty live state; seed data is only for mock UI tests without a bridge.
 public struct CursorWorkspaceThreadListView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
@@ -33,14 +33,14 @@ public struct CursorWorkspaceThreadListView: View {
     }
 
     private var todayThreads: [CursorThreadRowModel] {
-        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
+        if let liveBridge {
             return liveThreadsSection(liveBridge.threads(for: workspaceName))
         }
         return seedTodayThreads
     }
 
     private var yesterdayThreads: [CursorThreadRowModel] {
-        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
+        if liveBridge != nil {
             return []
         }
         return seedYesterdayThreads

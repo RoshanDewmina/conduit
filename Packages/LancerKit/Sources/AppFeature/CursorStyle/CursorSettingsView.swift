@@ -5,8 +5,8 @@ import SwiftUI
 /// (`docs/design-audit/workflows/06-settings.md`) rendered in the Cursor-style
 /// visual language: same header bar, page title, and grouped `CursorListRow`
 /// sections as `CursorHomeView` / `CursorWorkspacesView` — "boring on purpose,"
-/// no policy hero or operations dashboard. Static seed data only — no
-/// daemon/network wiring, row taps are no-ops. Not yet wired into navigation.
+/// no policy hero or operations dashboard. In seeded mode rows are inert; in
+/// live mode selected rows hand off to the real Settings destination.
 public struct CursorSettingsView: View {
     private let onOpenRealSettings: (() -> Void)?
 
