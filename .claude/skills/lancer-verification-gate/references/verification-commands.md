@@ -2,6 +2,30 @@
 
 Choose checks by touched files.
 
+## Pre-flight: disk space
+
+Before any Xcode build, multi-repo clone, or parallel worktree build, check free disk space —
+`/tmp` DerivedData and per-worktree build caches have independently caused 0-bytes-free and 67GB
+DerivedData incidents at least 4 times:
+
+```bash
+df -h / /tmp
+```
+
+If free space is under ~15GB, clean stale caches before proceeding rather than mid-build:
+
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/Lancer-*
+rm -rf /tmp/LancerDerivedData*
+./scripts/check-worktree-sprawl.sh
+```
+
+## Physical device reinstall
+
+Never reinstall a build onto a physical device with live paired/relay state without asking the
+owner first — a fresh install silently wipes the stored pairing code, breaking connectivity until
+manual re-pair.
+
 ## Swift Package
 
 ```bash
@@ -85,7 +109,7 @@ Also run `go build -o lancerd .` if the adapter code changed.
 
 Distinguish:
 
-- repo migration board: `/Users/roshansilva/Documents/command-center/docs/audit/migration-board/index.html`
+- feature backlog (canonical IA/scope): `docs/product/FEATURE_BACKLOG.md`
 - exported interactive board: `/Users/roshansilva/Downloads/Lancer GitHub repo/Lancer Board.dc.html`
 
 Verification must inspect the rendered result after hydration. Use browser automation, DOM text checks, and screenshots as needed.

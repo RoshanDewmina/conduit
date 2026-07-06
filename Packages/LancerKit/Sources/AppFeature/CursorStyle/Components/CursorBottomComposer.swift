@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Collapsed composer chrome pinned above the safe area.
 public enum CursorCollapsedComposerStyle: Sendable {

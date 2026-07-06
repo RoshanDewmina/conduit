@@ -64,6 +64,7 @@ public struct AddHostView: View {
     @State private var saveError: String?
 
     @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @FocusState private var pasteFieldFocused: Bool
 
     private enum AuthChoice: String, CaseIterable, Identifiable {
@@ -296,13 +297,7 @@ public struct AddHostView: View {
                     .foregroundStyle(t.ok)
             }
 
-            DSButton(
-                "use hosted runtime",
-                systemImage: "sparkles",
-                variant: .primary,
-                mono: true,
-                fullWidth: true
-            ) {
+            CursorPillButton(title: "use hosted runtime", style: .primary, fullWidth: true) {
                 Haptics.success()
                 onUseHosted?()
             }
@@ -417,11 +412,11 @@ public struct AddHostView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    DSChip("user · \(p.user)", tone: .ok, variant: .solid, size: .sm)
-                    DSChip("host · \(p.host)", tone: .ok, variant: .solid, size: .sm)
-                    DSChip("port · \(p.port)", tone: .ok, variant: .solid, size: .sm)
+                    CursorStatusBadge(kind: .success, label: "user · \(p.user)")
+                    CursorStatusBadge(kind: .success, label: "host · \(p.host)")
+                    CursorStatusBadge(kind: .success, label: "port · \(p.port)")
                     if let idf = p.identityFile {
-                        DSChip("key · \(URL(fileURLWithPath: idf).lastPathComponent)", tone: .accent, variant: .solid, size: .sm)
+                        CursorStatusBadge(kind: .risk(level: .low), label: "key · \(URL(fileURLWithPath: idf).lastPathComponent)")
                     }
                 }
             }
@@ -471,10 +466,10 @@ public struct AddHostView: View {
 
             HStack(spacing: 8) {
                 Spacer()
-                DSButton("dismiss", variant: .ghost, size: .sm, mono: true) {
+                CursorPillButton(title: "dismiss", style: .secondary) {
                     withAnimation { clipboardBannerDismissed = true }
                 }
-                DSButton("connect to \(result.host)", variant: .secondary, size: .sm, mono: true) {
+                CursorPillButton(title: "connect to \(result.host)", style: .secondary) {
                     fillFromResult(result)
                     withAnimation { clipboardBannerDismissed = true }
                 }
@@ -628,11 +623,11 @@ public struct AddHostView: View {
                     )
 
                 HStack(spacing: 8) {
-                    DSButton("copy public", variant: .secondary, size: .sm, mono: true) {
+                    CursorPillButton(title: "copy public", style: .secondary) {
                         UIPasteboard.general.string = keyInfo.openSSH
                     }
                     if let p = parsed {
-                        DSButton("ssh-copy-id", variant: .secondary, size: .sm, mono: true) {
+                        CursorPillButton(title: "ssh-copy-id", style: .secondary) {
                             let oneLiner = "echo '\(keyInfo.openSSH)' | ssh-copy-id -i /dev/stdin \(p.user)@\(p.host)\(p.port != 22 ? " -p \(p.port)" : "")"
                             UIPasteboard.general.string = oneLiner
                             showCopiedSSHCopyId = true
@@ -647,12 +642,9 @@ public struct AddHostView: View {
                         .foregroundStyle(t.danger)
                 }
 
-                DSButton(
-                    "generate ed25519 key",
-                    systemImage: "key.fill",
-                    variant: .secondary,
-                    size: .sm,
-                    mono: true,
+                CursorPillButton(
+                    title: "generate ed25519 key",
+                    style: .secondary,
                     isLoading: isGeneratingKey
                 ) {
                     keyGenTask = Task { await generateKey() }
@@ -787,10 +779,10 @@ public struct AddHostView: View {
             Rectangle().fill(t.border).frame(height: 1)
             HStack {
                 Spacer()
-                DSButton(
-                    "connect & save",
-                    variant: .primary,
-                    size: .lg,
+                CursorPillButton(
+                    title: "connect & save",
+                    style: .primary,
+                    fullWidth: true,
                     isLoading: isSaving
                 ) {
                     Task { await connectAndSave() }

@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Floating card chrome matching Cursor mobile: rounded on all corners, subtle
 /// shadow, inset from the screen edges — used by the expanded composer sheet.

@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// One selectable repo row: an org/repo pair, plus the checked-out branch
 /// name for the currently active repo (used to render the trailing

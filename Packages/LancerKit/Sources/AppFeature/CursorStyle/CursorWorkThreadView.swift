@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's mobile Work Thread transcript: a user prompt bubble
 /// followed by narration prose, a plan card, a to-dos card, and a changes card,

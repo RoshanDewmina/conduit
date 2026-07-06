@@ -44,7 +44,7 @@ kimi --prompt "hi" --help 2>/dev/null || true
 - RPC surface: `daemon/lancerd/server.go`
 - Relay surface: `daemon/lancerd/e2e_router.go`
 - Codex hook draft: `docs/codex-lancer-hook.sh`, `docs/codex-hooks.json`
-- Codex risk note: `docs/audit/CODEX_GATING.md`
+- Codex policy/gating threat model: `docs/legal/SECURITY_ARCHITECTURE.md`
 - OpenCode hook draft: `docs/opencode-lancer-hook.sh`, `docs/opencode-hooks.json`
 - Installer/doctor coverage: `daemon/lancerd/install.go`, `daemon/lancerd/hook_install.go`, related tests
 

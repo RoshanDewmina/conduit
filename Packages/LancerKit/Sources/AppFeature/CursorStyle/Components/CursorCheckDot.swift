@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Small reusable checkbox-style circle: filled with a checkmark when done,
 /// empty outline when not — used by Work Thread's to-do card rows.

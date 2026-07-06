@@ -627,9 +627,8 @@ public enum DaemonRPCResponse: Sendable {
 // MARK: - Conversation sync (agent.conversations.*)
 //
 // Wire-level Codable mirrors of the Go types in daemon/lancerd/conversation_store.go
-// and daemon/lancerd/conversation_rpc.go (see the cross-device sync build handoff,
-// docs/design-questions/2026-07-03-cross-device-conversation-sync-build-handoff.md,
-// Task 5). These are shared between the SSH JSON-RPC transport (DaemonChannel) and
+// and daemon/lancerd/conversation_rpc.go for cross-device conversation sync. These are
+// shared between the SSH JSON-RPC transport (DaemonChannel) and
 // the E2E relay transport (E2ERelayBridge): conversation_rpc.go's server methods are
 // called by both server.go's SSH switch and e2e_router.go's relay switch, so both
 // transports return an identical payload shape by construction — one Swift type per

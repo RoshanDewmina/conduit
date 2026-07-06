@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual-only clone of the approved onboarding sequence (see
 /// `docs/design-audit/workflows/01-onboarding-pairing.md`), built on the

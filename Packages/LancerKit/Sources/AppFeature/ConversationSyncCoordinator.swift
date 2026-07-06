@@ -28,8 +28,7 @@ public struct ConversationTransport: Sendable {
 /// Where a conversation stands for the sync status banner (ChatHistoryView /
 /// NewChatTabView / sidebar rows) — a superset of `ChatConversation.SyncState`
 /// that also covers states the UI cares about but the mirror row doesn't
-/// persist (see docs/design-questions/2026-07-03-cross-device-conversation-sync-build-handoff.md's
-/// Mobbin UX review section for the patterns these map to).
+/// persist (host offline, stale mirror, etc.).
 public enum ConversationSyncUIState: Sendable, Equatable {
     /// No banner — mirror matches the host's last known state.
     case synced

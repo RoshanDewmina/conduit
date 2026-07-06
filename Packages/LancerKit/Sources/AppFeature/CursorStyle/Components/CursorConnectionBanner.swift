@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 public struct CursorConnectionBanner: View {
     @Environment(\.cursorScheme) private var cursorScheme

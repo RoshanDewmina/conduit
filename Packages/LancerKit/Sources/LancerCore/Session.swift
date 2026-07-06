@@ -39,8 +39,7 @@ public struct Session: Identifiable, Sendable, Hashable {
     /// status bar and the Fleet header. It unifies the authoritative SSH session
     /// `Status` with the relay pairing `RelayState` so the two never disagree:
     /// the app must never claim "connected" until an SSH session or relay pairing
-    /// is actually established (not merely attempting). Both `PersistentStatusBar`
-    /// and `DSStatusHeader` derive their label from one value of this type.
+    /// is actually established (not merely attempting).
     public enum ConnectionState: String, Sendable, Codable, Hashable {
         case offline       // nothing live — no session, no pairing
         case connecting    // SSH dialing OR relay handshaking — NOT yet usable

@@ -1,82 +1,97 @@
 # Lancer Feature Implementation Gap Matrix
 
-Compiled: 2026-07-06 (refreshed end of phone-ready pass)  
-Canonical features: [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
-Canonical implementation: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §0.1 + §4.1
-
-> **Living tracker** — update here when code or tests change. Feature scope decisions stay in the master plan.
+Compiled: 2026-07-06  
+Updated: 2026-07-06 — Cursor shell landed on master; live bridge wiring has begun.  
+Canonical source: [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
+Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
 ## Executive summary
 
-| Layer | Status (2026-07-06) |
-|-------|------------------------|
-| **Production shell** | Cursor shell **only** (2026-07-06 cutover): `CursorAppShell` + `CursorShellLiveBridge`. Legacy sidebar / `NewChatTabView` / drawer IA **deleted**. |
-| **Cursor DEBUG shell** | 34 Swift files; **20/20** mock UI tests (`LANCER_CURSOR_SHELL=1`); live bridge is now the default production root. |
-| **Relay E2E** | **`scripts/validation/relay-approval-e2e.sh` PASS** (pairing wait fix). |
-| **Gap** | Tier 1+ mock-only surfaces (Proof Suite, Away Launch, Git ship actions); P0 correctness items in master plan §7. |
+| Layer | Status |
+|-------|--------|
+| **Real backend (master)** | Governed loop shipped: pair → dispatch → approve → audit. Chat, relay, policy, biometric gate all wired. |
+| **Cursor UI shell (master)** | Merged under `AppFeature/CursorStyle`; seeded prototype remains under `LANCER_CURSOR_SHELL=1`. |
+| **Live Cursor shell** | `LANCER_CURSOR_SHELL_LIVE=1` routes through `AppRoot` for pairing, conversation-backed workspace/thread hydration, dispatch, continue, approval decisions, and real Settings handoff. |
+| **Gap** | Tier 0 live-shell proof still needs real daemon/relay E2E: pair → dispatch → approval → follow-up. |
+
+**Tier 0 exit criteria:** send prompt from phone → receive approval → approve → follow-up works through Cursor shell with real `lancerd`.
 
 ---
 
-## Tier 0 — Phone-usable loop
+## Tier 0 — Phone-usable today (wire first)
 
-| Feature | Status | Evidence |
-|---------|--------|----------|
-| Pairing (E2E relay) | **Shipped** | `E2ERelayPairingView`, `LANCER_RELAY_CODE` seam; relay E2E PASS |
-| Workspaces list | **Wired** | `CursorWorkspacesView` + `refreshCursorLiveBridge` |
-| Thread list | **Wired** | `ChatConversationRepository` → bridge; seed fallback for empty |
-| Composer → dispatch | **Wired** | `CursorComposerSheet` → `onDispatch` / `onContinue` |
-| Approvals | **Wired** | `InboxView` + `CursorReviewDiffView` → `onDecide`; UITest biometric bypass |
-| Follow-up / continue | **Wired** | `performContinueConversation` via bridge |
-| Settings / policy | **Wired** | `CursorSettingsView(onOpenRealSettings:)` → `SettingsWithLibraryView` sheet |
-| Work Thread approval banner | **Wired** | Shown when `pendingApprovalID != nil` on live bridge |
-
----
-
-## Tier 1 — MVP UI mocked in Cursor shell
-
-| Feature | Shell | UI tests |
-|---------|-------|----------|
-| Onboarding | wireframed + live pairing callback | 4 tests (mock suite) |
-| Workspaces → thread → work thread | mock + live hydration | 8 tests |
-| Approval review | mock + live `onDecide` | 4 tests + **live approval test** |
-| PR detail + diff | mock | 1 test |
-| Search / profile / composer chain | mock | 6 tests |
-
-**Mock suite:** `CursorAppShellExhaustiveTests` **20/20 PASS** (~399s, iPhone 17 Pro sim).
+| Feature | Master (real code) | Cursor shell | Action |
+|---------|-------------------|--------------|--------|
+| Pairing (E2E relay + `lancerd pair`) | **Shipped** — `OnboardingRedesignGalleryView`, `E2ERelayClient` | **Live bridge callback** opens real `E2ERelayPairingView` | E2E verify from live shell |
+| Workspaces list | **Shipped** — `ChatConversationRepository` + relay fleet state elsewhere | **Partial live** — conversation-backed repo rows + `All Repos` aggregate | Add relay host health when needed |
+| Thread list | **Shipped** — `ChatConversationRepository` | **Live** — per-repo and all-repo rows from recent conversations | E2E verify select → continue |
+| Composer → dispatch | **Shipped** — `AppRoot.performDispatch` | **Live callback** calls `performDispatch` | E2E verify daemon launch |
+| Approvals | **Shipped** — `InboxViewModel`, `ApprovalRelay`, `ApprovalDecisionAuth` | **Live callback** calls `decide()` | E2E verify biometric/risk path |
+| Follow-up / continue | **Shipped** — `performContinueConversation` | **Live callback** calls `performContinueConversation` | E2E verify follow-up |
+| Settings / policy | **Shipped** — `SettingsWithLibraryView`, `PolicyHomeView` | **Live handoff** opens real Settings from Cursor settings rows | Keep policy edits in real Settings |
 
 ---
 
-## Tier 2 — Not in shell (deferred)
+## Tier 1 — MVP UI already mocked in Cursor shell
 
-Per master plan §5–§6: Away Launch Composer, Proof Suite/Reel, Mobile QA Annotation, Question Cards, Git/PR/Merge ship actions, Flight Recorder. See master plan for rationale.
+| Feature | Shell status | UI tests |
+|---------|-------------|----------|
+| Onboarding flow (5 steps) | wireframed-mock | 4 tests |
+| Workspaces → thread list → work thread | wireframed-mock | 8 tests |
+| Approval review (approve/deny/reply) | wireframed-mock | 4 tests |
+| PR detail + inline diff | wireframed-mock | 1 test |
+| Search overlay | wireframed-mock | 1 test |
+| Profile drawer + settings sheet | wireframed-mock | 3 tests |
+| Composer chain (run-on, model) | wireframed-mock | 2 tests (2 failing) |
 
 ---
 
-## Correctness gaps (master plan §7)
+## Tier 2 — MVP not in Cursor shell
+
+| Feature | Master | Cursor shell |
+|---------|--------|--------------|
+| Away Digest home (needs-you-first) | Partial — `LancerHomeView` attention cards | `CursorHomeView` exists but **not wired** |
+| Away Launch Composer + launch contract | Missing | Generic composer only |
+| Proof Suite / Proof Reel | Missing (design stub only) | Mock artifact cards in work thread |
+| Mobile QA Annotation | Missing | Not present |
+| Question Cards + Ladder | Missing | Not present |
+| Git/PR/Merge ship actions | Missing | PR detail mock only |
+| Flight Recorder + Work Search | Missing | Search overlay mock only |
+
+---
+
+## Tier 3 — Post-MVP / rejected
+
+Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md).
+
+---
+
+## Correctness gaps (must fix before MVP ships)
 
 | Gap | Severity | Status |
 |-----|----------|--------|
-| Biometric degrade-open on no-passcode devices | P0 | Open — document in readiness checklist |
-| Emergency Stop not atomic | P0 | Open |
+| Biometric gate degrades open on no-passcode devices | P0 | **Fixed** (`531685b6`) — owner device validation pending |
+| Emergency Stop not atomic | P0 | **Fixed** (`531685b6`) — daemon latch + RPC |
 | JWT HS256-only | P1 | Open |
-| StoreKit vs Stripe entitlement | P1 | Open |
+| Dormant StoreKit vs Stripe entitlement | P1 | Open |
 | Watch app not embedded | P1 | Open |
+| Daemon single pairing-slot ceiling | P2 | Open |
 
 ---
 
-## Operational checklist
+## Operational checklist cross-check
 
-| Checklist | Status | Proof |
-|-----------|--------|-------|
-| LIVE_LOOP_RUNBOOK relay subset | **PASS** | `relay-approval-e2e.sh` 2026-07-06 |
-| chat-device-test-checklist §1–6 (automated subset) | **PASS** | TapInjection + Cursor suites |
-| §7 APNs lock-screen (5c) | **Owner-gated** | Needs unlocked physical device + recording |
-| Physical device build/install | **PASS** | iPhone 17 `557A7877…` |
+| Checklist | Master | Cursor shell |
+|-----------|--------|--------------|
+| LIVE_LOOP_RUNBOOK SSH subset | Proven sim + device C2 | Needs live-shell rerun |
+| On-device QA (legacy chat-device checklist, purged 2026-07-06) §1–6 | Shipped in legacy sidebar; Cursor live shell partial | Needs live-shell rerun |
+| On-device QA §7 (APNs lock-screen) | Proven 2026-06-23 (`ARCHITECTURE.md` §0.1) | Needs live-shell rerun |
 
 ---
 
-## Superseded claims (do not cite)
+## Recommended sequencing
 
-- ~~"Cursor shell mock only on master"~~ — merged; live bridge on `master` / this branch.
-- ~~"2 failing UI tests"~~ — 20/20 mock + 4/4 TapInjection + live approval test.
-- ~~"APNs proven in gap matrix"~~ — re-prove 5c per runbook before ship.
+1. Keep Tier 2/Away/Proof expansion frozen until Tier 0 live shell is proven.
+2. Complete live-shell E2E on simulator: pair → dispatch → approve → follow-up.
+3. Fix or formally gate the P0 beta blockers: no-passcode `BiometricGate` and atomic Emergency Stop.
+4. Physical device: APNs lock-screen approve through the live shell before external beta.

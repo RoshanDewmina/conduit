@@ -4,9 +4,13 @@
 
 The shared, cross-agent contract — what Lancer is, the source-of-truth docs, the working rules,
 and the verification gate — is imported above from `AGENTS.md`. This file adds only the
-Claude-specific execution model and tooling. For product truth read `ARCHITECTURE.md` **§0.1**
+Claude-specific execution model and tooling.
+
+**Before any non-trivial task:** read [`docs/AGENT_READ_FIRST.md`](docs/AGENT_READ_FIRST.md) (task read-order + standing instructions). Owner hub: [`docs/STATUS_LEDGER.md`](docs/STATUS_LEDGER.md).
+
+For product truth read `ARCHITECTURE.md` **§0.1**
 (current-state snapshot: implemented / partial / planned / deprecated) and **§4.1** (navigation):
-the app home is a **sidebar / Command Home shell** with durable chat threads, **not** a tab bar
+the app home is the **Cursor shell** (3-root: Home / Workspaces / Settings), **not** a tab bar
 (`enum Tab` in `AppRoot.swift` is vestigial). `docs/LANCER_PROJECT_DOSSIER.md` is archived — don't cite it.
 
 ## Path-scoped rules & skills
@@ -56,12 +60,23 @@ Subagent dispatch now uses Claude models exclusively, via the `Agent` tool.
 - State exactly what "done" looks like — a concrete, checkable bar (a passing test, a specific
   build command's clean output, a specific behavior reproduced or fixed) — not "does this seem right."
 
+This shape (explicit ask, explicit blocker, verbatim evidence, explicit done-bar) is the Fable-brief
+template — it worked well in the 2026-07-04 security-hardening brief (`e2be79fb`) and should be
+reused verbatim rather than re-derived each time.
+
 **Be aggressive about parallelism.** The one hard rule: parallel agents must not write the same
 files — isolate by a distinct output file per agent, or a separate branch/worktree on a shared tree.
 
 **Always verify — never trust subagent output blind**, at either tier. Re-run the authoritative
 gate yourself (see "Verify before claiming done" in `AGENTS.md`) and re-dispatch with corrections
-on any failure.
+on any failure. A subagent's own "finished" label is not proof of completion — check its actual
+`<result>` content; a result that is itself an error string (e.g. a session-limit message) means
+verification never happened, not that it passed.
+
+## Tooling gotchas
+
+- **`AskUserQuestion` accepts at most 4 options per question.** A 5+ item list needs to be split
+  across two questions, or it fails with a schema `InputValidationError` (max 4).
 
 ## MCP tooling — prefer over raw shell for Apple-platform work
 

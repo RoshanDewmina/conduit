@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Status line under a thread row title: either a green "Checks Passed" with a
 /// colored diffstat, or a plain gray "No Changes".

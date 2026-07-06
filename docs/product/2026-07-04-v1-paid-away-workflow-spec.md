@@ -1,5 +1,7 @@
 # V1 Paid Away Workflow Spec
 
+> **Superseded for scope decisions** by [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md). Keep for workflow narrative and stage detail; use [`FEATURE_BACKLOG.md`](FEATURE_BACKLOG.md) for status.
+
 Prepared: 2026-07-04  
 Compiled: 2026-07-04T18:08:02Z  
 Status: product spec draft, awaiting owner review  

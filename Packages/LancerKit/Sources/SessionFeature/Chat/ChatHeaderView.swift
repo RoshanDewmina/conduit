@@ -158,7 +158,7 @@ public struct ChatHeaderView: View {
         )
 
         if let reason = blockedReason {
-            DSBlockedReasonRow(reason)
+            CursorBlockedReasonRow(reason)
                 .padding(.horizontal, 14)
                 .padding(.bottom, 8)
         }

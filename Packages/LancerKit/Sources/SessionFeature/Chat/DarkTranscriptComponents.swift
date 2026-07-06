@@ -357,7 +357,7 @@ public struct DarkTranscriptHeader: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            DSCircleButton("chevron.left", diameter: 38, accessibilityLabel: "Back", action: onBack)
+            CursorIconButton(systemImageName: "chevron.left", diameter: 38, action: onBack)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.dsDisplayPt(19, weight: .bold))
@@ -417,7 +417,7 @@ public struct DarkTranscriptHeader: View {
             }
             .accessibilityLabel("More actions")
             if let onNew {
-                DSCircleButton("plus", diameter: 38, accessibilityLabel: "New thread", action: onNew)
+                CursorIconButton(systemImageName: "plus", diameter: 38, action: onNew)
             }
         }
         .padding(.horizontal, 16)

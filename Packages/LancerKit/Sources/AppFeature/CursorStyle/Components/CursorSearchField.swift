@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Rounded pill search input: leading magnifying-glass icon, `TextField` with
 /// placeholder "Search", light gray fill — used inside the Model-picker sheet.

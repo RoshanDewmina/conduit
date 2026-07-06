@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 import AgentKit
 
 /// Cursor-style "Model" picker sheet: a search field below the title, an

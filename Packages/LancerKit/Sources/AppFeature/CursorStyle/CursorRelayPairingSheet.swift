@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 import SSHTransport
 import LancerCore
 import SecurityKit

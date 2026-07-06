@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 import LancerCore
 
 /// Visual clone of a Cursor-style "Approval Review" screen: a single reusable

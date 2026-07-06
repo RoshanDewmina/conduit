@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Full-screen Cursor-style search overlay: header with a close button and
 /// centered "Search" title (`CursorBottomSheetContainer`'s chrome, stretched

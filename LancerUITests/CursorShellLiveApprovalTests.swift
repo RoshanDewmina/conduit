@@ -11,7 +11,6 @@ final class CursorShellLiveApprovalTests: XCTestCase {
 
     private func launchLiveShellReseeded() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchEnvironment["LANCER_CURSOR_SHELL_LIVE"] = "1"
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
         app.launchEnvironment["LANCER_UITEST_RESEED"] = "1"
         app.launchArguments += ["-onboardingSeen", "YES"]

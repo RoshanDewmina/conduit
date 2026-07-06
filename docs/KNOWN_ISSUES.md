@@ -21,8 +21,10 @@
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
 > `docs/PUBLISH_READINESS_CHECKLIST.md`; for product/architecture narrative use `ARCHITECTURE.md`
-> (§0.1 current-state snapshot + §4.1 IA). The current IA is the **sidebar / New Chat shell** —
-> not a tab bar (the old `LANCER_PROJECT_DOSSIER.md` is archived under `docs/_archive/`).
+> (§0.1 current-state snapshot + §4.1 IA). The current IA is the **Cursor-style 3-root shell**
+> (Home / Workspaces / Settings) under `AppFeature/CursorStyle/` — not a tab bar and not the
+> legacy sidebar / Command Home (deprecated). The old `LANCER_PROJECT_DOSSIER.md` and `docs/_archive/`
+> were **purged 2026-07-06** — use `ARCHITECTURE.md` §0.1 + `docs/STATUS_LEDGER.md`.
 >
 > **Method note:** the multi-agent fan-out repeatedly tripped the account session limit (parallel agents
 > burn quota fast), so **all dimensions were audited inline by a single agent** against current source —
@@ -80,22 +82,21 @@
 Only compiler **warnings** in our code (8 total) are "getter took >300ms to type-check" hints — compile-time
 only, no runtime effect. See §4.
 
-**Open test debt — `UI-IA-1` (tracked 2026-06-19, REWRITTEN 2026-07-06):** four `LancerUITests/TapInjectionProofTests` were
-**quarantined with `XCTSkip`** — … **Re-enable** them with sidebar-shell navigation
-(open-drawer → destination) once the sidebar IA is committed/settled. The XCUITest injection-proof value
-(approve-applies, Face-ID opt-in, saved-host reconnect, TOFU) is worth preserving — rewrite, don't delete.
-
-**Status 2026-07-06:** all four tests **re-enabled and green** on iPhone 17 Pro sim — rewritten for
-sidebar Home/Machines IA, board-card Review→sheet approve flow, Security & Trust (app-lock toggle removed),
-and Cursor Workspaces list. UITest biometric bypass: `LANCER_UITEST_RESEED` sets `decisionAuthorizer = { true }`.
+**Open test debt — `UI-IA-1` (tracked 2026-06-19):** four `LancerUITests/TapInjectionProofTests` are
+**quarantined with `XCTSkip`** — tab-bar and legacy sidebar navigation assumptions. Production UI target
+is the **Cursor shell** (`LANCER_CURSOR_SHELL_LIVE=1`). **Re-enable** with Cursor-shell navigation
+(workspaces → approval banner / review sheet) — see `CursorAppShellExhaustiveTests` and
+`docs/test-runs/user-ready-tier0-2026-07-06/`. Preserve injection-proof value (approve-applies,
+Face-ID opt-in, saved-host reconnect, TOFU) — rewrite, don't delete.
 
 ---
 
 ## 2. Security posture — GO holds; most prior OPEN items now CLOSED in code
 
-The 2026-06-13 triage (`docs/audit/2026-06-13-security-triage.md`) reached **GO** on the four core
-properties. Re-verified 2026-06-17, the code has since **closed almost every OPEN item** — that triage
-doc is now stale on its "OPEN" column:
+The 2026-06-13 security triage (formerly `docs/audit/2026-06-13-security-triage.md`, **purged
+2026-07-06**) reached **GO** on the four core properties. Re-verified 2026-06-17, the code has since
+**closed almost every OPEN item** — see `docs/legal/SECURITY_ARCHITECTURE.md` for the current threat
+model:
 
 | Prior finding (Jun 13) | Status now | Evidence (2026-06-17) |
 |---|---|---|
@@ -126,13 +127,11 @@ doc is now stale on its "OPEN" column:
 C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
 **compliant** with current Apple/OWASP-MASVS guidance.
 
-**Documented security follow-up (P0 external-beta blocker, device validation needed):**
-- **BiometricGate no-passcode fallback still degrades open.** `SecurityKit/BiometricGate.swift:16-24`
-  now falls back to `.deviceOwnerAuthentication` when biometry is not enrolled, and the `.biometryLockout`
-  branch requires passcode. If `canEvaluatePolicy` fails for other reasons, the gate still returns success
-  for simulator/no-passcode compatibility. **Required before external beta:** add a device-tested policy that fails closed
-  on real devices without passcode, while preserving explicit simulator/test bypass behavior. Defense-in-depth
-  bonus: bind SSH-key Keychain items with `SecAccessControl` where feasible.
+**BiometricGate no-passcode policy (P0 — fixed 2026-07-06 on `codex/tier-0-live-cursor-shell`):**
+- `SecurityKit/BiometricGate.swift` now **fails closed** when biometry is unavailable except
+  `.biometryNotEnrolled`, which falls back to device-owner passcode. Covered by
+  `BiometricGateTests` (`passcode-not-set`, `biometry-unavailable` cases).
+  **Owner-gated:** validate on a real no-passcode test device before external beta sign-off.
 
 **Approval-trust-boundary hardening pass — 2026-07-04 (branch `fable/approval-security-hardening`), against the 2026-07-02 Codex read-only audit's 6 findings:**
 
@@ -209,8 +208,10 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   `import PreviewFeature` in `AppRoot.swift:18`, zero type usage; removed dir + Package.swift target/product/dep).
 - ✅ `PreviewFeature` **REMOVED** (commit 59e7ae3d): module dir + Package.swift target/product/AppFeature dep all deleted.
 - ✅ **CORRECTION:** `FilesFeature` is **NOT orphaned** — `FilePreviewView` has a real production route via
-  `AgentFilesView` → `AgentDetailView.swift:405` ("Files" tool row) + `AgentRunDetailView.swift:215`. **Keep.**
-  (An earlier draft of this doc wrongly listed it as orphaned.)
+  `SessionWorkspaceContainer.swift:604` (relay-backed file preview) and `RelayFileBrowserView.swift`. **Keep.**
+  (An earlier draft of this doc wrongly listed it as orphaned; a later draft's citation —
+  `AgentDetailView.swift:405`/`AgentFilesView` — was itself stale, since both were superseded by
+  `RelayFileBrowserView`/`SessionWorkspaceContainer` and no longer exist in the tree. Corrected 2026-07-06.)
 - ✅ `QuotaGuardView` is **reachable** (`AppRoot.swift:489`) — keep (also wrongly listed orphaned earlier).
 - 🟡 **Follow-up:** after PreviewFeature removal, `PreviewKit` is consumed only by the test target — evaluate
   it for removal separately.
@@ -285,21 +286,21 @@ perf issues.** The hot paths are correctly engineered:
 
 ~90 markdown docs, many overlapping or point-in-time. **Drift found earlier, now resolved:**
 - `agent-contract.md` §8 once named `docs/current-state-audit.md` (2026-06-02) as the source of truth
-  for "what works"; the pointer was corrected and that doc is now archived (`docs/_archive/`).
-- `docs/remaining-work.md` (self-flagged SUPERSEDED, with a wrong "free Apple team" blocker) is now
-  archived; ARCHITECTURE.md §0.1 is the live state doc.
+  for "what works"; the pointer was corrected and that doc was **purged 2026-07-06**.
+- `docs/remaining-work.md` (self-flagged SUPERSEDED, with a wrong "free Apple team" blocker) was
+  **purged 2026-07-06**; `ARCHITECTURE.md` §0.1 + `docs/STATUS_LEDGER.md` are the live state docs.
 
 **Canonical set (keep + maintain):**
 `ARCHITECTURE.md` (product/architecture + §0.1 current-state snapshot), `docs/agent-contract.md`,
 `docs/PUBLISH_READINESS_CHECKLIST.md` (launch state), `docs/SECURITY.md` +
 `docs/legal/SECURITY_ARCHITECTURE.md`, `docs/ROADMAP.md`, **this file** (`KNOWN_ISSUES.md`),
-`docs/block-terminal-implementation.md`. (`LANCER_PROJECT_DOSSIER.md` is **archived** —
-ARCHITECTURE.md §0.1 is its successor.)
+`docs/block-terminal-implementation.md`, **`docs/STATUS_LEDGER.md`**. (`LANCER_PROJECT_DOSSIER.md` and
+`docs/_archive/` were **purged 2026-07-06** — `ARCHITECTURE.md` §0.1 is its successor.)
 Tab/gallery-era handoff/planning docs (`docs/design-handoff/PAGES.md`,
 `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, root `ship-plan/`)
-are now archived under `docs/_archive/`.
+were **purged 2026-07-06** with the rest of `docs/_archive/`.
 
-**Archived in the 2026-06-27 lean sweep** (moved to `docs/_archive/`, inbound references checked):
+**Purged in the 2026-07-06 doc sweep** (formerly under `docs/_archive/`, inbound references checked):
 `docs/current-state-audit.md`, `docs/remaining-work.md`, `docs/APP_AUDIT.md`,
 `docs/cloud-execution-engine-plan.md`, plus the tab/gallery-era handoff/planning docs above.
 **Still candidates** (lower priority): `docs/demos/M0–M11*.md`, the dated
@@ -311,9 +312,10 @@ are now archived under `docs/_archive/`.
 
 ## 6. Remaining P0/P1/P2 after this audit
 
-- **P0:** `BiometricGate` still degrades open on real no-passcode devices; Emergency Stop is still
-  client-orchestrated rather than a daemon-side atomic primitive. Both block external beta unless
-  the owner explicitly signs off on a release-blocking exception.
+- **P0 (fixed 2026-07-06, owner device validation pending):** `BiometricGate` fail-closed on
+  no-passcode / biometry-unavailable; daemon-side atomic Emergency Stop latch in `dispatch.go`
+  (`agent.emergencyStop` RPC). Verified: `swift test --filter BiometricGate`, `go test ./...`
+  from `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
 - **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
   logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
   testing on a real phone. **Fixed:** early-return now logs
@@ -395,8 +397,8 @@ are now archived under `docs/_archive/`.
   `lancerd.stderr.log` (`e2e: paired with phone (code: 873026)`) and the device UI directly
   ("online · healthy", ONLINE badge, green dot on Home) — the orange-dot bug is closed on the
   owner's real device. Composer send through the real UI over this relay connection was also
-  proven live (real dispatch + streamed reply, not a local echo) — see
-  `docs/test-runs/2026-07-03-cross-device-sync-release-gate.md` §6.
+  proven live (real dispatch + streamed reply, not a local echo) — see `ARCHITECTURE.md` §0.1 / §11.2
+  (detailed test-run logs purged 2026-07-06).
   **Still open, follow-ups (not release-blocking):** (a) 4 orphaned
   `lancer.relay.machine.*.privKey` Keychain items linger on that device (harmless, but a cleanup
   sweep on hydrate would be tidy — not implemented, judged not worth the risk this session);
@@ -404,8 +406,7 @@ are now archived under `docs/_archive/`.
   does, the dot doesn't; (c) the historical writer of the corrupt state (key deleted vs.
   `SecItemAdd` failed during pairing) was not identified — `persistPairing` atomicity + the new
   OSStatus logging make any recurrence self-diagnosing.
-  Full investigation record: `docs/test-runs/2026-07-03-cross-device-sync-live-verification.md`
-  Part 7 (superseded by this entry's root cause).
+  Full investigation record: summarized in this entry (detailed test-run logs purged 2026-07-06).
 - **P1 (filed 2026-07-04, ROOT CAUSE FOUND + resolved same day):** after stopping/restarting the
   production `dev.lancer.lancerd`, the daemon logged `connected to relay as daemon (code: 194990)`
   with no `paired with phone` ever following, while Cloud Run showed the phone reconnecting with a
@@ -419,7 +420,7 @@ are now archived under `docs/_archive/`.
   sim container holds `lancer.relay.machine.….code => 194990`); the owner's real iPhone (893127)
   had been orphaned since that moment. The 2026-07-04 10:24 restart merely revealed it. The
   restart-reconnect path itself (persisted pairing intact on both sides) was verified working
-  live — see `docs/test-runs/2026-07-04-connection-state-architecture.md`. Restart-with-intact-
+  live — see `ARCHITECTURE.md` §0.1 (connection-state test-run logs purged 2026-07-06). Restart-with-intact-
   pairing requires NO re-pair; a daemon-side re-pair orphans all phones BY DESIGN of the single
   pairing slot, and is now loud: `writeRelayPairing` + the watcher log
   `REPLACING existing relay pairing (code X -> Y) — phones paired to the old code are orphaned`.

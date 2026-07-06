@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 public enum CursorThreadAttention: Sendable {
     case needsApproval

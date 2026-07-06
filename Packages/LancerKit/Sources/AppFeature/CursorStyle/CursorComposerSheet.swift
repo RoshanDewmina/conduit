@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Cursor-style expanded composer: floating card with repo/branch picker, run
 /// target, multiline prompt, and attach / model / dictate controls.

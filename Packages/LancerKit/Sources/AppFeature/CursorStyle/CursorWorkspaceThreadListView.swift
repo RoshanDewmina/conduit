@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's mobile per-repo thread list: unlike `CursorHomeView`
 /// (a cross-repo aggregate), this is scoped to a single workspace, with a

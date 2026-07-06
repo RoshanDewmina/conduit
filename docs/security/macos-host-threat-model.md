@@ -159,10 +159,9 @@ reason — the redaction is in the name, not optional.
 
 Lancer.app drives the **existing** pairing flow (plan: "Reuse existing pairing: drive `conduitd
 pair` and render the QR + 6-digit code in the app... Manual-code fallback already exists.") — it
-does not implement new crypto. **Correction to the plan's framing:** there is no QR path left to
-reuse. Per `docs/V1_IMPLEMENTATION_PLAN.md`, the iOS app's QR/camera pairing entry was removed
-app-wide (`OnboardingPairing.swift`, `BridgePairingView.swift`) in favor of code-only entry through
-the relay — the flow `daemon/push-backend/PAIRING_PROTOCOL.md` specifies and
+does not implement new crypto. **Correction to the plan's framing:** the iOS app leads with QR
+scanning for relay pairing (`OnboardingPairing.swift`, `BridgePairingView.swift`); manual 6-digit
+entry is the secondary path — the flow `daemon/push-backend/PAIRING_PROTOCOL.md` specifies and
 `SECURITY_ARCHITECTURE.md` §2 describes. Lancer.app should drive `lancerd pair` and render the
 6-digit code; "manual-code" is the *only* path now, not a fallback. Confirmed against code:
 

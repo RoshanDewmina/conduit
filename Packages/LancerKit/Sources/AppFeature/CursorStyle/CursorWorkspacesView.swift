@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's mobile Workspaces list: an "All Repos" entry plus
 /// one row per repo. Static seed data only — no daemon/network wiring.

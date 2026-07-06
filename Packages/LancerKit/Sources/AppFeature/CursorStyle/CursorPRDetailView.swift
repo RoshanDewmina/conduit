@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// A file row in Ship & History's file list — filename, muted path, and a
 /// colored diffstat, with an expand chevron that reveals its diff inline.

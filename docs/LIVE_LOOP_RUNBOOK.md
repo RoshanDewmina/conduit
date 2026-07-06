@@ -42,7 +42,7 @@ hook blocks ≤120s ◀── decision relayed back ◀── phone Approve/Reje
 
 **Notifications:** `push-backend` holds the APNs `.p8` and POSTs to APNs when an `ask` escalates. The device registers its APNs token via `Lancer/LancerApp.swift` → `Notifications.registerDeviceToken(sessionID:backendURL:)`. **The `sessionId` used at registration MUST equal the one in the relay decision POST** (`DeviceIdentity.sessionID()`) or the backend can't map token↔session (this was MAJOR-8).
 
-**What's already PROVEN (don't re-litigate):** the full SSH loop on the simulator + localhost sshd — real `claude` → daemon → policy → Inbox card → Approve → agent unblocked (audit `approve` ~+13–20s, well under the 120s fail-closed timeout). Two bugs were found & fixed there: (1) TOFU first-connect didn't arm the daemon channel — fixed in `SessionViewModel.trustHostKey()` (now calls `onReconnected?()`); (2) UUID case mismatch dropped every decision — fixed by case-insensitive normalization in lancerd `approvalStore`. Evidence: `docs/test-runs/2026-06-12-live-loop-pass1.md`.
+**What's already PROVEN (don't re-litigate):** the full SSH loop on the simulator + localhost sshd — real `claude` → daemon → policy → Inbox card → Approve → agent unblocked (audit `approve` ~+13–20s, well under the 120s fail-closed timeout). Two bugs were found & fixed there: (1) TOFU first-connect didn't arm the daemon channel — fixed in `SessionViewModel.trustHostKey()` (now calls `onReconnected?()`); (2) UUID case mismatch dropped every decision — fixed by case-insensitive normalization in lancerd `approvalStore`. Evidence: `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md` and `ARCHITECTURE.md` §0.1.
 
 **What is NOT yet proven (the point of this runbook):**
 - **APNs on a physical device while the app is closed** — simulators can't receive real APNs. This is the #1 unverified product promise.
@@ -135,7 +135,7 @@ This is the proven path; use it to confirm your environment before going to devi
 ```bash
 ./scripts/relay-regression.sh
 ```
-What it does: builds the app, installs to the booted sim, launches the real sidebar shell with `LANCER_DAEMON_E2E=1` and `LANCER_DESTINATION=sessions`, seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve**, screenshots `after-approval`. The old session gallery route is gone.
+What it does: builds the app, installs to the booted sim, launches with `LANCER_CURSOR_SHELL_LIVE=1` (or legacy `LANCER_DAEMON_E2E=1` on deprecated sidebar path), seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve**, screenshots `after-approval`.
 
 Manual equivalent (if you want to drive it yourself):
 ```bash
@@ -279,7 +279,7 @@ own machine, and completes one approve-from-lock-screen loop (Phase 5c) end-to-e
 Prereqs: Phase 1 build, Phase 2 daemon up, both devices paired to the same host (relay or SSH).
 
 1. **Start on A, appears on B.** New Chat on device A, send a prompt, let it complete. On device B, open
-   the sidebar's Recent list (pull to refresh, background/foreground B to trigger
+   the Workspaces thread list (pull to refresh, background/foreground to trigger
    `ConversationSyncEngine.syncNow()`, or wait for the best-effort `CKDatabaseSubscription` silent-push
    path) and confirm the conversation and its turns appear. Silent-push delivery is not yet hardware-proven,
    so capture whether the update arrived automatically or required a manual refresh.
@@ -334,7 +334,7 @@ After a run, report: which phases passed (with checkpoint evidence — audit tai
 You are executing Lancer's live-loop bring-up. Repo: /Users/roshansilva/Documents/command-center.
 
 FIRST: invoke the `lancer-context-onboarding` skill, then read docs/LIVE_LOOP_RUNBOOK.md in full and
-ARCHITECTURE.md §0.1 + §4.1. The app home is a sidebar/New Chat shell, not a tab bar. lancerd is the
+ARCHITECTURE.md §0.1 + §4.1. The app home is the **Cursor shell** (Home / Workspaces / Settings), not a tab bar. `lancerd` is the
 Go source under daemon/lancerd (the shipped prebuilt binary is stale — rebuild it).
 
 GOAL: bring up and prove the governed-approval loop end-to-end per the runbook's phases, pausing at each

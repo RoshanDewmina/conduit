@@ -1,5 +1,0 @@
-{"type":"server-started","port":52141,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:52141","screen_dir":"/Users/roshansilva/Documents/command-center/.superpowers/brainstorm/35525-1780829945/content","state_dir":"/Users/roshansilva/Documents/command-center/.superpowers/brainstorm/35525-1780829945/state"}
-{"type":"screen-added","file":"/Users/roshansilva/Documents/command-center/.superpowers/brainstorm/35525-1780829945/content/approaches.html"}
-{"type":"screen-added","file":"/Users/roshansilva/Documents/command-center/.superpowers/brainstorm/35525-1780829945/content/features.html"}
-{"type":"screen-added","file":"/Users/roshansilva/Documents/command-center/.superpowers/brainstorm/35525-1780829945/content/waiting.html"}
-{"type":"server-stopped","reason":"idle timeout"}

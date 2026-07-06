@@ -16,7 +16,7 @@ Use this skill to build a current, repo-grounded mental model before planning or
 3. Read `CLAUDE.md` when the task involves agent workflow, Swift/iOS verification, or parallel execution.
 4. Read `README.md` and `ARCHITECTURE.md` when product scope, module layout, or non-goals matter.
 5. Run `git status --short` and treat existing changes as user/other-agent work. Do not revert them unless explicitly asked.
-6. Open only task-relevant plans or docs from `docs/superpowers/plans/`, `docs/KNOWN_ISSUES.md`, `docs/PUBLISH_READINESS_CHECKLIST.md`, `docs/validation-playbook.md`, and `docs/test-runs/`.
+6. Open only task-relevant docs from `docs/product/FEATURE_BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/PUBLISH_READINESS_CHECKLIST.md`, `docs/validation-playbook.md`, and `docs/test-runs/`.
 7. If memory is available and the task depends on prior decisions, do a quick memory pass before deeper repo exploration.
 
 ## Current Product Direction

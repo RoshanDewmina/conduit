@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 import AgentKit
 
 /// Every reachable push destination in the Cursor-style demo shell. There is

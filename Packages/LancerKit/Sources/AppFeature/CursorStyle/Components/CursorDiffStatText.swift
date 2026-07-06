@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Renders "+142" in green and "-18" in red as one inline unit. Shared by
 /// `CursorThreadRow`'s status line and PR file-list rows (Ship & History).

@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's own profile drawer (owner-supplied screenshots),
 /// presented as a bottom sheet when the header avatar circle is tapped.

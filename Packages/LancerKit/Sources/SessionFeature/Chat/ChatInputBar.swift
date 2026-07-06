@@ -96,7 +96,7 @@ public struct ChatInputBar: View {
         VStack(spacing: 0) {
             // (a) Approval quick-action banner — amber pill above input
             if approvalBarEnabled, pendingApprovalCount > 0, let approve = onApprove, let reject = onReject {
-                DSApprovalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
+                CursorApprovalBanner(count: pendingApprovalCount, onApprove: approve, onReject: reject)
             }
 
             // P2.6: Keyboard toolbar rail

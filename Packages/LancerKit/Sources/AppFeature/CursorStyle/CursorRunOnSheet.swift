@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Cursor-style "Run on" picker sheet: choose which host/target a run
 /// dispatches to. Two sections — the currently active target and other
