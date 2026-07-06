@@ -976,6 +976,10 @@ public struct AppRoot: View {
             }
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.connectionPhase = Self.connectionPhase(
+                for: relayFleetStore,
+                fleetStore: fleetStore
+            )
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
@@ -1344,6 +1348,13 @@ public struct AppRoot: View {
         // dropped (same fail-closed spirit as everywhere else in this feature).
         Task { await hydrateRelayFleetStore(env: env) }
 
+        relayFleetStore.connectionStates.addObserver { [relayFleetStore, cursorLiveBridge, fleetStore] _, _ in
+            cursorLiveBridge.connectionPhase = AppRoot.connectionPhase(
+                for: relayFleetStore,
+                fleetStore: fleetStore
+            )
+        }
+
         // lancerE2EStatusUpdate is posted by every machine's bridge; route each
         // to the machine it named via userInfo["machineID"].
         Task { @MainActor in
@@ -1570,6 +1581,28 @@ public struct AppRoot: View {
             }
         }
         return states.max(by: { rank($0) < rank($1) }) ?? .none
+    }
+
+    /// Maps relay + SSH fleet liveness onto the Cursor shell connection banner.
+    private static func connectionPhase(
+        for relayFleetStore: RelayFleetStore,
+        fleetStore: FleetStore
+    ) -> CursorShellLiveBridge.ConnectionPhase {
+        let hasSSHConnected = fleetStore.slots.contains { $0.sessionViewModel.status == .connected }
+        if relayFleetStore.machines.isEmpty, fleetStore.slots.isEmpty {
+            return .needsPairing
+        }
+        if relayFleetStore.connectionStates.anyConnected || hasSSHConnected {
+            return .connected
+        }
+        let states = relayFleetStore.machines.compactMap { relayFleetStore.connectionState(for: $0.id) }
+        if !states.isEmpty, states.allSatisfy({ $0 == .pairingInvalid }) {
+            return .needsPairing
+        }
+        if states.contains(where: { $0 == .reconnecting || $0 == .hostOffline }) {
+            return .reconnecting
+        }
+        return .offline
     }
 
     /// Maps the authoritative per-machine connection state onto the
