@@ -4,6 +4,10 @@ Compiled: 2026-07-06
 Canonical source: [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
 Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
+> **Away Mode pivot descoped (2026-07-06):** Rows below may use legacy "Away …" feature names from
+> wireframes. The underlying capabilities remain tracked; only the Away Mode brand/pivot is retired.
+> See `docs/_archive/away-mode-2026-07/README.md`.
+
 ## Executive summary
 
 | Layer | Status |
