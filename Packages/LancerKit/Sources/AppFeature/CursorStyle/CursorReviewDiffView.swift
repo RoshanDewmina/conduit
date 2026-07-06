@@ -1,12 +1,15 @@
 #if os(iOS)
 import SwiftUI
+import LancerCore
 
-/// Visual clone of a Cursor-dark "Approval Review" screen: a single reusable
+/// Visual clone of a Cursor-style "Approval Review" screen: a single reusable
 /// anatomy (request, scope, risk, evidence, decision, audit) for a governed
-/// approval, continuing the dark treatment established by Work Thread. Static
-/// seed data only — no daemon/network wiring; decision buttons flip a local
-/// `@State` to show a confirmation state rather than sending anything.
+/// approval. Static seed data only — no daemon/network wiring; decision
+/// buttons flip a local `@State` to show a confirmation state rather than
+/// sending anything.
 public struct CursorReviewDiffView: View {
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     private enum Decision: Equatable {
         case pending
         case approved
@@ -16,7 +19,11 @@ public struct CursorReviewDiffView: View {
 
     @State private var decision: Decision = .pending
 
-    public init() {}
+    private let onBack: () -> Void
+
+    public init(onBack: @escaping () -> Void = {}) {
+        self.onBack = onBack
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -38,8 +45,8 @@ public struct CursorReviewDiffView: View {
                 .padding(.bottom, 24)
             }
         }
-        .background(CursorColors.dark.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .dark)
+        .background(CursorColors.light.background.ignoresSafeArea())
+        .environment(\.cursorScheme, .light)
     }
 
     // MARK: Header
@@ -47,7 +54,7 @@ public struct CursorReviewDiffView: View {
     private var header: some View {
         CursorHeaderBar(
             leading: AnyView(
-                CursorIconButton(systemImageName: "chevron.left", action: {})
+                CursorIconButton(systemImageName: "chevron.left", action: onBack)
             ),
             trailing: [
                 CursorIconButton(systemImageName: "ellipsis", action: {})
@@ -56,7 +63,7 @@ public struct CursorReviewDiffView: View {
         .overlay(alignment: .center) {
             Text("Review")
                 .font(CursorType.sheetTitle)
-                .foregroundColor(CursorColors.dark.primaryText)
+                .foregroundColor(CursorColors.light.primaryText)
                 .padding(.top, CursorMetrics.headerTopPadding)
         }
     }
@@ -69,7 +76,7 @@ public struct CursorReviewDiffView: View {
                 sectionLabel("Request")
                 Text("Run terraform apply on the push-backend production workspace")
                     .font(CursorType.bodyEmphasis)
-                    .foregroundColor(CursorColors.dark.primaryText)
+                    .foregroundColor(CursorColors.light.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -98,11 +105,11 @@ public struct CursorReviewDiffView: View {
             HStack(alignment: .top, spacing: 12) {
                 Text(label)
                     .font(CursorType.rowSecondary)
-                    .foregroundColor(CursorColors.dark.secondaryText)
+                    .foregroundColor(CursorColors.light.secondaryText)
                     .frame(width: 96, alignment: .leading)
                 Text(value)
                     .font(CursorType.inlineCode)
-                    .foregroundColor(CursorColors.dark.primaryText)
+                    .foregroundColor(CursorColors.light.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -110,7 +117,7 @@ public struct CursorReviewDiffView: View {
 
             if !isLast {
                 Rectangle()
-                    .fill(CursorColors.dark.hairline)
+                    .fill(CursorColors.light.hairline)
                     .frame(height: CursorMetrics.cardHairlineHeight)
             }
         }
@@ -127,12 +134,12 @@ public struct CursorReviewDiffView: View {
 
                 Text("This applies infrastructure changes directly to the production workspace.")
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.dark.primaryText)
+                    .foregroundColor(CursorColors.light.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("Terraform can recreate or destroy live cloud resources; there is no rollback once the apply starts.")
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.dark.secondaryText)
+                    .foregroundColor(CursorColors.light.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -150,7 +157,7 @@ public struct CursorReviewDiffView: View {
                 HStack(spacing: 8) {
                     Text("Changes")
                         .font(CursorType.bodyEmphasis)
-                        .foregroundColor(CursorColors.dark.primaryText)
+                        .foregroundColor(CursorColors.light.primaryText)
                     CursorDiffStatText(added: 12, removed: 3, font: CursorType.statusPill)
                 }
 
@@ -167,12 +174,12 @@ public struct CursorReviewDiffView: View {
     private var commandBlock: some View {
         Text("terraform apply -var-file=infra/production.tfvars")
             .font(CursorType.diffCode)
-            .foregroundColor(CursorColors.dark.primaryText)
+            .foregroundColor(CursorColors.light.primaryText)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(CursorColors.dark.background)
+            .background(CursorColors.light.background)
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -181,10 +188,10 @@ public struct CursorReviewDiffView: View {
             HStack(spacing: 10) {
                 Image(systemName: "doc")
                     .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(CursorColors.dark.secondaryText)
+                    .foregroundColor(CursorColors.light.secondaryText)
                 Text(filename)
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.dark.primaryText)
+                    .foregroundColor(CursorColors.light.primaryText)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)
@@ -194,7 +201,7 @@ public struct CursorReviewDiffView: View {
 
             if !isLast {
                 Rectangle()
-                    .fill(CursorColors.dark.hairline)
+                    .fill(CursorColors.light.hairline)
                     .frame(height: CursorMetrics.cardHairlineHeight)
             }
         }
@@ -205,11 +212,11 @@ public struct CursorReviewDiffView: View {
             HStack(spacing: 8) {
                 Text("View full diff")
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.dark.statusDotActive)
+                    .foregroundColor(CursorColors.light.statusDotActive)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(CursorColors.dark.mutedText)
+                    .foregroundColor(CursorColors.light.mutedText)
             }
             .padding(.top, 4)
         }
@@ -235,18 +242,24 @@ public struct CursorReviewDiffView: View {
     private var decisionButtons: some View {
         HStack(spacing: CursorMetrics.pillButtonSpacing) {
             CursorPillButton(title: "Approve", style: .primary) {
-                decision = .approved
+                applyDecision(.approved, relay: .approved)
             }
             CursorPillButton(
-                segments: [CursorPillButton.Segment("Deny", color: CursorColors.dark.dangerRed)],
+                segments: [CursorPillButton.Segment("Deny", color: CursorColors.light.dangerRed)],
                 style: .secondary
             ) {
-                decision = .denied
+                applyDecision(.denied, relay: .rejected)
             }
             CursorPillButton(title: "Reply", style: .secondary) {
-                decision = .replied
+                applyDecision(.replied, relay: nil)
             }
         }
+    }
+
+    private func applyDecision(_ local: Decision, relay: Approval.Decision?) {
+        decision = local
+        guard let relay, let liveBridge, let approvalID = liveBridge.pendingApprovalID else { return }
+        Task { await liveBridge.onDecide?(approvalID, relay) }
     }
 
     private var decisionStatusLine: some View {
@@ -280,10 +293,10 @@ public struct CursorReviewDiffView: View {
 
     private var decisionColor: Color {
         switch decision {
-        case .approved: return CursorColors.dark.successGreen
-        case .denied: return CursorColors.dark.dangerRed
-        case .replied: return CursorColors.dark.secondaryText
-        case .pending: return CursorColors.dark.primaryText
+        case .approved: return CursorColors.light.successGreen
+        case .denied: return CursorColors.light.dangerRed
+        case .replied: return CursorColors.light.secondaryText
+        case .pending: return CursorColors.light.primaryText
         }
     }
 
@@ -292,7 +305,7 @@ public struct CursorReviewDiffView: View {
     private var auditLine: some View {
         Text(auditText)
             .font(CursorType.logLine)
-            .foregroundColor(CursorColors.dark.mutedText)
+            .foregroundColor(CursorColors.light.mutedText)
             .padding(.horizontal, 4)
     }
 
@@ -309,7 +322,7 @@ public struct CursorReviewDiffView: View {
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
             .font(CursorType.cardTitle)
-            .foregroundColor(CursorColors.dark.secondaryText)
+            .foregroundColor(CursorColors.light.secondaryText)
     }
 }
 #endif

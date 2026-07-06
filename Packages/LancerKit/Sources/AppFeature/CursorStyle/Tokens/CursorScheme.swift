@@ -1,10 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
-/// Which visual look a Cursor-style screen renders in. Screens force one
-/// specific look on purpose (e.g. Work Thread is always dark, Home is always
-/// light) regardless of the device's system appearance — this is deliberately
-/// separate from SwiftUI's `\.colorScheme`, which follows system dark mode.
+/// Which visual look a Cursor-style screen renders in. Follows the app's
+/// `LancerAppearance` setting via `AppRoot`'s `cursorResolvedScheme` env
+/// injection; individual screens may still override when product requires it.
 public enum CursorScheme: Sendable {
     case light
     case dark

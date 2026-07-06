@@ -20,6 +20,7 @@ public struct CursorComposerSheet: View {
     private let onAttach: () -> Void
     private let onPickModel: () -> Void
     private let onDictate: () -> Void
+    private let onSend: ((String) -> Void)?
 
     public init(
         repoName: String = "lancer-ios",
@@ -30,7 +31,8 @@ public struct CursorComposerSheet: View {
         onPickRunTarget: @escaping () -> Void = {},
         onAttach: @escaping () -> Void = {},
         onPickModel: @escaping () -> Void = {},
-        onDictate: @escaping () -> Void = {}
+        onDictate: @escaping () -> Void = {},
+        onSend: ((String) -> Void)? = nil
     ) {
         self.repoName = repoName
         self.branchName = branchName
@@ -41,6 +43,7 @@ public struct CursorComposerSheet: View {
         self.onAttach = onAttach
         self.onPickModel = onPickModel
         self.onDictate = onDictate
+        self.onSend = onSend
     }
 
     public var body: some View {
@@ -68,6 +71,7 @@ public struct CursorComposerSheet: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("cloud")
 
                     Spacer()
                 }
@@ -83,6 +87,7 @@ public struct CursorComposerSheet: View {
                     .frame(minHeight: CursorMetrics.composerSheetTextMinHeight, alignment: .top)
                     .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
                     .padding(.bottom, CursorMetrics.composerSheetTextBottomPadding)
+                    .onSubmit { submitIfNeeded() }
 
                 HStack(spacing: CursorMetrics.composerSheetBottomRowSpacing) {
                     CursorIconButton(systemImageName: "plus", action: onAttach)
@@ -102,6 +107,10 @@ public struct CursorComposerSheet: View {
 
                     Spacer()
 
+                    if onSend != nil {
+                        CursorIconButton(systemImageName: "arrow.up.circle.fill", action: submitIfNeeded)
+                    }
+
                     CursorIconButton(systemImageName: "mic.fill", action: onDictate)
                 }
                 .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
@@ -115,6 +124,13 @@ public struct CursorComposerSheet: View {
         Image(systemName: "chevron.down")
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(colors.secondaryText)
+    }
+
+    private func submitIfNeeded() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onSend?(trimmed)
+        text = ""
     }
 }
 #endif

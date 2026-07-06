@@ -112,7 +112,7 @@ public struct ChatInputBar: View {
                 }
                 if !isExecuting {
                     Text("⌘↵ to send")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.dsMono(.caption2))
                         .foregroundStyle(t.text4)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.trailing, 4)
@@ -164,12 +164,12 @@ public struct ChatInputBar: View {
             // Mode indicator
             if isExecuting {
                 Image(systemName: "circle.fill")
-                    .font(.system(size: 7))
+                    .font(.dsMono(.caption2))
                     .foregroundStyle(t.ok)
                     .padding(.leading, 4)
             } else {
                 Text(inputText.hasPrefix("#") ? "#" : "$")
-                    .font(.system(.footnote, design: .monospaced).weight(.medium))
+                    .font(.dsMono(.footnote).weight(.medium))
                     .foregroundStyle(inputText.hasPrefix("#") ? t.accent : t.text3)
                     .padding(.leading, 4)
             }
@@ -179,7 +179,7 @@ public struct ChatInputBar: View {
                     liveInputActive = true
                 } label: {
                     Text("Running — tap to type")
-                        .font(.system(.callout, design: .monospaced))
+                        .font(.dsMono(.callout))
                         .foregroundStyle(t.text3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -346,7 +346,7 @@ public struct ChatInputBar: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.dsSans(.caption).weight(.medium))
                 Text(label)
                     .font(.dsMonoPt(10))
             }

@@ -4,75 +4,76 @@ import SwiftUI
 /// Visual clone of Cursor's mobile Workspaces list: an "All Repos" entry plus
 /// one row per repo. Static seed data only — no daemon/network wiring.
 public struct CursorWorkspacesView: View {
+    @Environment(\.cursorScheme) private var cursorScheme
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     private let onSelectWorkspace: (String) -> Void
     private let onOpenComposer: () -> Void
+    private let onOpenProfile: () -> Void
+    private let onOpenSearch: () -> Void
 
     public init(
         onSelectWorkspace: @escaping (String) -> Void = { _ in },
-        onOpenComposer: @escaping () -> Void = {}
+        onOpenComposer: @escaping () -> Void = {},
+        onOpenProfile: @escaping () -> Void = {},
+        onOpenSearch: @escaping () -> Void = {}
     ) {
         self.onSelectWorkspace = onSelectWorkspace
         self.onOpenComposer = onOpenComposer
+        self.onOpenProfile = onOpenProfile
+        self.onOpenSearch = onOpenSearch
     }
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         VStack(spacing: 0) {
             CursorHeaderBar(
-                leading: AnyView(avatarCircle),
+                leading: AnyView(
+                    Button(action: onOpenProfile) { avatarCircle }
+                        .buttonStyle(.plain)
+                ),
                 trailing: [
-                    CursorIconButton(systemImageName: "magnifyingglass", action: {}),
+                    CursorIconButton(systemImageName: "magnifyingglass", action: onOpenSearch),
                     CursorIconButton(systemImageName: "plus", action: {})
                 ]
             )
 
             Text("Workspaces")
                 .font(CursorType.pageTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
                 .padding(.top, CursorMetrics.pageTitleTopPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             ScrollView {
                 VStack(spacing: 0) {
-                    Button(action: { onSelectWorkspace("All Repos") }) {
-                        CursorListRow(
-                            iconSystemName: "square.stack.3d.up",
-                            title: "All Repos",
-                            trailingCount: 3,
-                            showChevron: true
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    if let liveBridge, !liveBridge.workspaces.isEmpty {
+                        let total = liveBridge.workspaces.reduce(0) { $0 + $1.threadCount }
+                        Button(action: { onSelectWorkspace("All Repos") }) {
+                            CursorListRow(
+                                iconSystemName: "square.stack.3d.up",
+                                title: "All Repos",
+                                trailingCount: total,
+                                showChevron: true
+                            )
+                        }
+                        .buttonStyle(.plain)
 
-                    Button(action: { onSelectWorkspace("lancer-ios") }) {
-                        CursorListRow(
-                            iconSystemName: "folder",
-                            title: "lancer-ios",
-                            trailingCount: 4,
-                            showChevron: true
-                        )
+                        ForEach(liveBridge.workspaces) { workspace in
+                            Button(action: { onSelectWorkspace(workspace.name) }) {
+                                CursorListRow(
+                                    iconSystemName: "folder",
+                                    title: workspace.name,
+                                    trailingCount: workspace.threadCount > 0 ? workspace.threadCount : nil,
+                                    showChevron: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        seedWorkspaceRows
                     }
-                    .buttonStyle(.plain)
-
-                    Button(action: { onSelectWorkspace("push-backend") }) {
-                        CursorListRow(
-                            iconSystemName: "folder",
-                            title: "push-backend",
-                            trailingCount: 2,
-                            showChevron: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { onSelectWorkspace("lancer-mac") }) {
-                        CursorListRow(
-                            iconSystemName: "folder",
-                            title: "lancer-mac",
-                            trailingCount: nil,
-                            showChevron: true
-                        )
-                    }
-                    .buttonStyle(.plain)
 
                     CursorListRow(
                         iconSystemName: "folder.badge.plus",
@@ -83,16 +84,10 @@ public struct CursorWorkspacesView: View {
                 }
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
+        .background(colors.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            CursorBottomComposer()
-                .overlay(
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onOpenComposer)
-                )
+            CursorBottomComposer(onTap: onOpenComposer)
         }
-        .environment(\.cursorScheme, .light)
     }
 
     private var avatarCircle: some View {
@@ -108,6 +103,49 @@ public struct CursorWorkspacesView: View {
                 )
             )
             .frame(width: 44, height: 44)
+    }
+
+    @ViewBuilder
+    private var seedWorkspaceRows: some View {
+        Button(action: { onSelectWorkspace("All Repos") }) {
+            CursorListRow(
+                iconSystemName: "square.stack.3d.up",
+                title: "All Repos",
+                trailingCount: 3,
+                showChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+
+        Button(action: { onSelectWorkspace("lancer-ios") }) {
+            CursorListRow(
+                iconSystemName: "folder",
+                title: "lancer-ios",
+                trailingCount: 4,
+                showChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+
+        Button(action: { onSelectWorkspace("push-backend") }) {
+            CursorListRow(
+                iconSystemName: "folder",
+                title: "push-backend",
+                trailingCount: 2,
+                showChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+
+        Button(action: { onSelectWorkspace("lancer-mac") }) {
+            CursorListRow(
+                iconSystemName: "folder",
+                title: "lancer-mac",
+                trailingCount: nil,
+                showChevron: true
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 #endif

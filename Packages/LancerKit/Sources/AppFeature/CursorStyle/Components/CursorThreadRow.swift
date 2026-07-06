@@ -75,6 +75,12 @@ public struct CursorThreadRow: View {
                 .frame(height: CursorMetrics.rowHairlineHeight)
                 .padding(.leading, CursorMetrics.threadRowHairlineLeadingInset)
         }
+        // See CursorListRow's identical fix: without this, the trailing
+        // `Spacer()` (and any other gap between rendered content) isn't
+        // hit-testable, so a tap centered on this row's accessibility frame
+        // — which XCUITest and the simulator's own synthesized taps both use
+        // — can silently miss the wrapping Button entirely.
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder

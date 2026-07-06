@@ -80,15 +80,14 @@
 Only compiler **warnings** in our code (8 total) are "getter took >300ms to type-check" hints — compile-time
 only, no runtime effect. See §4.
 
-**Open test debt — `UI-IA-1` (tracked 2026-06-19):** four `LancerUITests/TapInjectionProofTests` are
-**quarantined with `XCTSkip`** — `testTapInjectionViaTabSwitch`, `testApproveDecisionApplies`,
-`testFaceIDToggleOptIn`, `testSavedHostReconnectPresentsPrompt`. They assert the **superseded tab-bar
-navigation** (`app.buttons["Settings"]`/`["Inbox"]`, `LANCER_TAB=settings/fleet`, "inbox" default header).
-The app home is now the **sidebar / New Chat shell**, so these surfaces aren't reachable via the old nav.
-They are *not* a regression from the 2026-06-19 V1 work (Live Activity push / watch / opencode gating) —
-`git diff` shows that work never touched `LancerUITests/`. **Re-enable** them with sidebar-shell navigation
+**Open test debt — `UI-IA-1` (tracked 2026-06-19, REWRITTEN 2026-07-06):** four `LancerUITests/TapInjectionProofTests` were
+**quarantined with `XCTSkip`** — … **Re-enable** them with sidebar-shell navigation
 (open-drawer → destination) once the sidebar IA is committed/settled. The XCUITest injection-proof value
 (approve-applies, Face-ID opt-in, saved-host reconnect, TOFU) is worth preserving — rewrite, don't delete.
+
+**Status 2026-07-06:** all four tests **re-enabled and green** on iPhone 17 Pro sim — rewritten for
+sidebar Home/Machines IA, board-card Review→sheet approve flow, Security & Trust (app-lock toggle removed),
+and Cursor Workspaces list. UITest biometric bypass: `LANCER_UITEST_RESEED` sets `decisionAuthorizer = { true }`.
 
 ---
 

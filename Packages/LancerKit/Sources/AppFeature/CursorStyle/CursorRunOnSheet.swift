@@ -99,6 +99,10 @@ public struct CursorRunOnSheet: View {
                     .frame(height: CursorMetrics.rowHairlineHeight)
                     .padding(.leading, CursorMetrics.rowHairlineLeadingInsetWithIcon)
             }
+            // Same dead-tap-zone fix as CursorListRow/CursorThreadRow: without
+            // this, a tap in the `Spacer()` gap between the title and the
+            // trailing checkmark/chevron doesn't register as hitting the Button.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

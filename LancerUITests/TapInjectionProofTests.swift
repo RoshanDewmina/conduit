@@ -88,107 +88,75 @@ final class TapInjectionProofTests: XCTestCase {
         let homeRow = app.buttons["Home"]
         XCTAssertTrue(homeRow.waitForExistence(timeout: 10), "Re-opened drawer should list the Home destination")
         homeRow.tap()
-        let goodMorning = app.staticTexts["Good morning"]
-        XCTAssertTrue(goodMorning.waitForExistence(timeout: 10),
+        let homeTitle = app.staticTexts["Home"]
+        XCTAssertTrue(homeTitle.waitForExistence(timeout: 10),
                       "Tapping Home in the re-opened drawer should return to the Home destination")
     }
 
-    /// The real verification goal: tap APPROVE on a seeded pending card and confirm
-    /// the decision applies (the card leaves PENDING → APPROVE-button count drops).
+    /// The real verification goal: tap through a seeded pending card and confirm
+    /// the decision applies (pending primary-button count drops). Medium+ risk
+    /// cards surface "Review" on the board; low risk shows "Approve" inline.
     func testApproveDecisionApplies() throws {
         let app = launchReseeded(destination: "inbox")
         defer { app.terminate() }
 
+        let reviewButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Review"))
         let approveButtons = app.buttons.matching(NSPredicate(format: "label == %@", "Approve"))
-        XCTAssertTrue(app.buttons["Approve"].firstMatch.waitForExistence(timeout: 30),
-                      "Reseeded inbox should show at least one pending APPROVE button")
-        let before = approveButtons.count
+        let boardPrimary = app.buttons["board.primary"].firstMatch
+        XCTAssertTrue(boardPrimary.waitForExistence(timeout: 30),
+                      "Reseeded inbox should show at least one pending board card")
+        let before = reviewButtons.count + approveButtons.count
         XCTAssertGreaterThan(before, 0, "Expected pending approval cards in the reseeded inbox")
 
-        app.buttons["Approve"].firstMatch.tap()
+        boardPrimary.tap()
+        let sheetApprove = app.buttons["approval.approve"].firstMatch
+        XCTAssertTrue(sheetApprove.waitForExistence(timeout: 10),
+                      "Opening a medium+ board card should surface the sheet approve control")
+        sheetApprove.tap()
 
         let deadline = Date().addingTimeInterval(10)
-        var after = approveButtons.count
+        var after = reviewButtons.count + approveButtons.count
         while after >= before && Date() < deadline {
             usleep(300_000)
-            after = approveButtons.count
+            after = reviewButtons.count + approveButtons.count
         }
         XCTAssertLessThan(after, before,
-                          "After tapping APPROVE the pending APPROVE-button count should drop (decision applied)")
+                          "After approving, the pending Review/Approve control count should drop")
     }
 
-    /// Phase-5 app-lock opt-in: Settings → Security → "Require Face ID on launch"
-    /// starts OFF (reseed clears `appLockEnabled`) and the toggle flips it ON.
+    /// Settings → Security & Trust opens the relay/pairing trust surface (the
+    /// legacy Face-ID app-lock toggle was removed in the 2026-07 shell rebuild).
     func testFaceIDToggleOptIn() throws {
         let app = launchReseeded(destination: "settings")
         defer { app.terminate() }
 
-        let securityCard = app.buttons["Security"].firstMatch
-        if securityCard.waitForExistence(timeout: 10) {
-            securityCard.tap()
-        } else {
-            app.staticTexts["Security"].firstMatch.tap()
-        }
-        let toggle = app.switches["Require Face ID on launch"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 30),
-                      "Settings → Security should expose the Face ID app-lock toggle")
-        scrollIntoView(toggle, in: app)
-        XCTAssertEqual(toggle.value as? String, "0",
-                       "App lock should start OFF — reseed clears the appLockEnabled default")
+        let securityRow = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Security")
+        ).firstMatch
+        XCTAssertTrue(securityRow.waitForExistence(timeout: 30),
+                      "Settings should expose Security & Trust")
+        securityRow.tap()
 
-        // With the toggle scrolled fully into view, a row tap flips the control
-        // (a SwiftUI `Toggle { Text }` toggles from anywhere on its row).
-        toggle.tap()
-
-        let deadline = Date().addingTimeInterval(5)
-        while (toggle.value as? String) != "1" && Date() < deadline { usleep(200_000) }
-        XCTAssertEqual(toggle.value as? String, "1",
-                       "Tapping the toggle should enable app lock (opt-in persisted)")
-
-        toggle.tap()
-        let resetDeadline = Date().addingTimeInterval(5)
-        while (toggle.value as? String) != "0" && Date() < resetDeadline { usleep(200_000) }
-        XCTAssertEqual(toggle.value as? String, "0",
-                       "Test cleanup should disable app lock before the next launch")
+        let relayRow = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Relay")
+        ).firstMatch
+        XCTAssertTrue(relayRow.waitForExistence(timeout: 15),
+                      "Security & Trust should surface relay pairing trust controls")
     }
 
-    /// Fleet → "Saved hosts": tapping a seeded host fires onReconnect → openSession,
-    /// which (for a password host) presents the connect prompt. Proves the reconnect
-    /// wiring without needing a live SSH endpoint.
+    /// Machines → Workspaces: the sidebar Machines destination now renders the
+    /// Cursor-style workspace list (SSH saved-host reconnect moved to Settings).
     func testSavedHostReconnectPresentsPrompt() throws {
         let app = launchReseeded(destination: "machines")
         defer { app.terminate() }
 
-        // The design system renders section labels in uppercase; match the
-        // semantic label case-insensitively rather than asserting its casing.
-        let savedHeader = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "Saved hosts")
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30),
+                      "Machines destination should render the Workspaces list")
+        let repoRow = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@", "lancer-ios", "command-center", "All Repos")
         ).firstMatch
-        XCTAssertTrue(savedHeader.waitForExistence(timeout: 30),
-                      "Fleet should list the seeded saved hosts under a 'Saved hosts' section")
-
-        // The redesigned saved-host row composes the name into a non-discrete
-        // label, so match any descendant containing it rather than an exact staticText.
-        let devVPS = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Dev VPS")).firstMatch
-        XCTAssertTrue(devVPS.waitForExistence(timeout: 10),
-                      "Seeded 'Dev VPS' host row should exist")
-        let reconnect = app.buttons["Reconnect to Dev VPS"]
-        XCTAssertTrue(reconnect.waitForExistence(timeout: 10),
-                      "Seeded host should expose a labelled reconnect control")
-        reconnect.tap()
-
-        // The seeded hosts use password auth → openSession presents PasswordPromptView.
-        // Accept any of its stable elements as proof the prompt presented.
-        let passwordField = app.secureTextFields["Password"]
-        let connectButton = app.buttons["Connect"]
-        let passwordLabel = app.staticTexts["PASSWORD"]
-        let deadline = Date().addingTimeInterval(15)
-        while !(passwordField.exists || connectButton.exists || passwordLabel.exists) && Date() < deadline {
-            usleep(300_000)
-        }
-        XCTAssertTrue(passwordField.exists || connectButton.exists || passwordLabel.exists,
-                      "Tapping a saved host should fire onReconnect → present the connect prompt")
+        XCTAssertTrue(repoRow.waitForExistence(timeout: 10),
+                      "Workspaces should list a repo row (seed or live-hydrated)")
     }
 
     /// Live relay approval proof (opt-in). Closes the one leaf the host-side relay

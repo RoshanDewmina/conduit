@@ -74,16 +74,26 @@ xcodebuild test \
   >/tmp/lancer-relay-e2e/xcodebuild.log 2>&1 &
 XCB_PID=$!
 
-echo "=== wait for app to PAIR with the daemon over the relay (up to 240s incl. build) ==="
+echo "=== wait for app to PAIR with the daemon over the relay (up to 600s incl. build) ==="
 PAIRED=0
-for i in $(seq 1 120); do
+for i in $(seq 1 300); do
   grep -q "paired with phone" "$LOG" && { PAIRED=1; break; }
-  kill -0 "$XCB_PID" 2>/dev/null || { echo "  xcodebuild exited early"; break; }
+  if ! kill -0 "$XCB_PID" 2>/dev/null; then
+    echo "  xcodebuild exited before pairing completed"
+    wait "$XCB_PID" || true
+    echo ">>> FAIL: xcodebuild died before phone paired — see /tmp/lancer-relay-e2e/xcodebuild.log"
+    exit 1
+  fi
   sleep 2
 done
-[ "$PAIRED" = 1 ] && echo "  PAIRED ✓" || echo "  WARN: pairing not observed in daemon log"
-# Let the (second-launch) app settle on the Inbox before the escalation arrives.
-sleep 4
+if [ "$PAIRED" != 1 ]; then
+  echo ">>> FAIL: phone never paired with daemon within 600s — see $LOG"
+  kill "$XCB_PID" 2>/dev/null || true
+  wait "$XCB_PID" 2>/dev/null || true
+  exit 1
+fi
+echo "  PAIRED ✓"
+sleep 3
 
 echo "=== fire fileWrite escalation (blocks awaiting the phone's decision) ==="
 HOME="$ISO" "$LANCERD" agent-hook \
