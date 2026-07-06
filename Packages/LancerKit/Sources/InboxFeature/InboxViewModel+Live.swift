@@ -1,5 +1,4 @@
 #if os(iOS)
-import SwiftUI
 import Observation
 import LancerCore
 import PersistenceKit

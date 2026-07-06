@@ -10,8 +10,8 @@ Canonical implementation: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §0.1 + §4
 
 | Layer | Status (2026-07-06) |
 |-------|------------------------|
-| **Sidebar shell (production)** | Tier-0 governed loop **shipped**: pair → dispatch → approve → follow-up. Home/Machines use Cursor-styled surfaces wired to `CursorShellLiveBridge`. |
-| **Cursor DEBUG shell** | 34 Swift files; **20/20** mock UI tests; **live integration test** (`CursorShellLiveApprovalTests`). |
+| **Production shell** | Cursor shell **only** (2026-07-06 cutover): `CursorAppShell` + `CursorShellLiveBridge`. Legacy sidebar / `NewChatTabView` / drawer IA **deleted**. |
+| **Cursor DEBUG shell** | 34 Swift files; **20/20** mock UI tests (`LANCER_CURSOR_SHELL=1`); live bridge is now the default production root. |
 | **Relay E2E** | **`scripts/validation/relay-approval-e2e.sh` PASS** (pairing wait fix). |
 | **Gap** | Tier 1+ mock-only surfaces (Proof Suite, Away Launch, Git ship actions); P0 correctness items in master plan §7. |
 

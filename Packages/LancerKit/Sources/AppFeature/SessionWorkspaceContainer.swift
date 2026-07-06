@@ -166,8 +166,8 @@ private struct WorkspaceDrawer: View {
 public struct RelayWorkspaceUnavailableView: View {
     private let onConnectSSH: (() -> Void)?
 
+    @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.lancerTokens) private var t
 
     public init(onConnectSSH: (() -> Void)? = nil) {
         self.onConnectSSH = onConnectSSH
@@ -180,86 +180,73 @@ public struct RelayWorkspaceUnavailableView: View {
     }
 
     private static let features: [SSHFeature] = [
-        SSHFeature(
-            systemImage: "terminal",
-            title: "Terminal",
-            subtitle: "A full interactive shell with Warp-style command blocks"
-        ),
-        SSHFeature(
-            systemImage: "folder",
-            title: "File browser",
-            subtitle: "Browse and open files on the machine"
-        ),
-        SSHFeature(
-            systemImage: "network",
-            title: "Port forwarding",
-            subtitle: "Reach a dev server running on the host"
-        ),
+        SSHFeature(systemImage: "terminal", title: "Terminal", subtitle: "Interactive shell with command blocks"),
+        SSHFeature(systemImage: "folder", title: "File browser", subtitle: "Browse and open files on the machine"),
+        SSHFeature(systemImage: "network", title: "Port forwarding", subtitle: "Reach a dev server running on the host"),
     ]
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "lock.laptopcomputer")
-                    .font(.dsDisplayPt(28, weight: .semibold))
-                    .foregroundStyle(t.accent)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(colors.statusDotActive)
                 Text("Unlock the full workspace")
-                    .font(.dsSansPt(21, weight: .semibold))
-                    .foregroundStyle(t.text)
+                    .font(CursorType.cardTitle)
+                    .foregroundColor(colors.primaryText)
                 Text("These features need a direct SSH connection to this machine — they aren't available over relay.")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text2)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 0) {
-                ForEach(Array(Self.features.enumerated()), id: \.offset) { index, feature in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: feature.systemImage)
-                            .font(.dsSansPt(17, weight: .medium))
-                            .foregroundStyle(t.accent)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(feature.title)
-                                .font(.dsSansPt(15, weight: .medium))
-                                .foregroundStyle(t.text)
-                            Text(feature.subtitle)
-                                .font(.dsSansPt(13))
-                                .foregroundStyle(t.text3)
-                                .fixedSize(horizontal: false, vertical: true)
+            CursorArtifactCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(Self.features.enumerated()), id: \.offset) { index, feature in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: feature.systemImage)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(colors.secondaryText)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.title)
+                                    .font(CursorType.bodyEmphasis)
+                                    .foregroundColor(colors.primaryText)
+                                Text(feature.subtitle)
+                                    .font(CursorType.rowSecondary)
+                                    .foregroundColor(colors.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if index < Self.features.count - 1 {
+                            Rectangle()
+                                .fill(colors.hairline)
+                                .frame(height: 1)
                         }
                     }
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if index < Self.features.count - 1 {
-                        Divider().background(t.border)
-                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 1)
-            )
 
             Text("Relay still handles dispatch, output, and approvals for this machine.")
-                .font(.dsSansPt(13))
-                .foregroundStyle(t.text3)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 10) {
-                DSButton("Connect this machine over SSH", variant: .accent, size: .lg, fullWidth: true) {
-                    onConnectSSH?()
-                    dismiss()
-                }
-                DSButton("Not now", variant: .ghost, size: .lg, fullWidth: true) {
-                    dismiss()
-                }
+            if let onConnectSSH {
+                CursorPillButton(title: "Connect over SSH", style: .primary, action: onConnectSSH)
+                    .frame(maxWidth: .infinity)
             }
+
+            CursorPillButton(title: "Not now", style: .secondary) { dismiss() }
+                .frame(maxWidth: .infinity)
         }
-        .padding(24)
-        .background(t.bg)
+        .padding(20)
+        .background(colors.background)
+        .environment(\.cursorScheme, .light)
     }
 }
 
@@ -413,11 +400,8 @@ private struct WorkspaceEnvironmentView: View {
 
     private func chooseBranch(_ branch: String) {
         guard branch != status?.branch else { return }
-        if WorkspaceBranchGuard.needsConfirmation(
-            currentBranch: status?.branch ?? "",
-            targetBranch: branch,
-            isClean: status?.isClean ?? false
-        ) {
+        let isClean = status?.isClean ?? false
+        if branch != (status?.branch ?? "") && !isClean {
             pendingBranch = branch
         } else {
             checkout(branch)

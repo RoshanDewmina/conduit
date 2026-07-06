@@ -32,12 +32,21 @@ public enum CursorMetrics {
     public static let repoTagVerticalPadding: CGFloat = 3
 
     // MARK: Composer
-    public static let composerHeight: CGFloat = 54
-    public static let composerHorizontalMargin: CGFloat = 16
-    public static let composerBottomPadding: CGFloat = 8
-    public static let composerInnerHorizontalPadding: CGFloat = 18
+    public static let composerHeight: CGFloat = 52
+    public static let composerHorizontalMargin: CGFloat = 12
+    public static let composerBottomPadding: CGFloat = 10
+    public static let composerInnerHorizontalPadding: CGFloat = 16
     public static let composerSpacing: CGFloat = 10
-    public static let composerSendIconSize: CGFloat = 26
+    public static let composerSendIconSize: CGFloat = 28
+    public static let composerAccessoryIconSize: CGFloat = 17
+    public static let composerAccessoryTapSize: CGFloat = 28
+    public static let composerToolbarButtonDiameter: CGFloat = 36
+    public static let composerCornerRadius: CGFloat = 22
+    public static let floatingCardCornerRadius: CGFloat = 20
+    public static let floatingCardHorizontalMargin: CGFloat = 10
+    public static let floatingCardShadowRadius: CGFloat = 16
+    public static let floatingCardShadowYOffset: CGFloat = 6
+    public static let composerSheetMinHeight: CGFloat = 220
 
     // MARK: Section header
     public static let sectionHeaderHorizontalPadding: CGFloat = 16
@@ -58,7 +67,7 @@ public enum CursorMetrics {
     // MARK: Composer sheet (expanded, CursorComposerSheet)
     public static let composerSheetPickerSpacing: CGFloat = 16
     public static let composerSheetPickerBottomPadding: CGFloat = 16
-    public static let composerSheetTextMinHeight: CGFloat = 96
+    public static let composerSheetTextMinHeight: CGFloat = 120
     public static let composerSheetTextBottomPadding: CGFloat = 12
     public static let composerSheetBottomRowSpacing: CGFloat = 12
     public static let composerSheetBottomRowBottomPadding: CGFloat = 16

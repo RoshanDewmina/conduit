@@ -96,7 +96,6 @@ public struct CursorWorkThreadView: View {
         // correct regardless of what its host `NavigationStack` does.
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .environment(\.cursorScheme, .light)
     }
 
     // MARK: Needs-approval banner
@@ -131,7 +130,11 @@ public struct CursorWorkThreadView: View {
     // MARK: Composer
 
     private var composer: some View {
-        CursorBottomComposer(placeholder: "Follow up...", onTap: onOpenComposer)
+        CursorBottomComposer(
+            placeholder: "Follow up...",
+            style: .followUp,
+            onTap: onOpenComposer
+        )
     }
 
     // MARK: Header

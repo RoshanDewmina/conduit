@@ -1,25 +1,16 @@
 #if os(iOS)
 import SwiftUI
-import DesignSystem
 import SessionFeature
 import FilesFeature
 import LancerCore
 
-/// Read-only host directory browser over the E2E relay. Mirrors `AgentFilesView`
-/// (the SSH file browser) visually, but lists through `E2ERelayBridge.relayListDir`
-/// instead of SFTP. The daemon's `fsList` is home-confined and fails closed, so the
-/// browser can never escape the user's home directory — an out-of-home path comes
-/// back as an error state.
-///
-/// Tapping a folder lists into it; tapping a file fetches its content through
-/// `E2ERelayBridge.relayReadFile` (home-confined, size-capped, binary-rejecting,
-/// same fail-closed posture as the directory listing) and shows it in
-/// `FilePreviewView`.
+/// Read-only host directory browser over the E2E relay, styled in the Cursor
+/// visual language (light list chrome, circular header controls).
 struct RelayFileBrowserView: View {
     let bridge: E2ERelayBridge
     let initialPath: String
 
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.dismiss) private var dismiss
 
     @State private var path: String
@@ -39,15 +30,34 @@ struct RelayFileBrowserView: View {
         _path = State(initialValue: initialPath)
     }
 
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                DSDetailHeader("Files", breadcrumb: path, onBack: { dismiss() })
-                pathBar
-                content
+        VStack(spacing: 0) {
+            CursorHeaderBar(
+                leading: AnyView(
+                    CursorIconButton(systemImageName: "chevron.left", action: { dismiss() })
+                ),
+                trailing: []
+            )
+            .overlay(alignment: .center) {
+                VStack(spacing: 2) {
+                    Text("Files")
+                        .font(CursorType.sheetTitle)
+                        .foregroundColor(colors.primaryText)
+                    Text(path)
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(colors.secondaryText)
+                        .lineLimit(1)
+                }
+                .padding(.top, CursorMetrics.headerTopPadding)
             }
+
+            pathBar
+            content
         }
+        .background(colors.background.ignoresSafeArea())
+        .environment(\.cursorScheme, .light)
         .navigationBarHidden(true)
         .task(id: path) { await load() }
         .filePreviewDrawer(
@@ -72,11 +82,11 @@ struct RelayFileBrowserView: View {
 
     private var pathBar: some View {
         HStack(spacing: 8) {
-            DSButton("Up", variant: .ghost, size: .sm, mono: true) { goUp() }
+            CursorPillButton(title: "Up", style: .secondary) { goUp() }
                 .disabled(parent == nil || loading)
             Text(path)
-                .font(.dsMonoPt(12))
-                .foregroundStyle(t.text2)
+                .font(CursorType.inlineCode)
+                .foregroundColor(colors.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,29 +94,32 @@ struct RelayFileBrowserView: View {
                 ProgressView().controlSize(.small)
             }
         }
-        .padding(12)
-        .background(t.surface)
+        .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
     private var content: some View {
         if let errorText {
-            DSEmptyState(
-                icon: .folder,
-                title: "Couldn’t list this folder",
-                subtitle: errorText,
-                action: ("Retry", { Task { await load() } })
-            )
+            VStack(spacing: 12) {
+                Text("Couldn’t list this folder")
+                    .font(CursorType.cardTitle)
+                    .foregroundColor(colors.primaryText)
+                Text(errorText)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.secondaryText)
+                    .multilineTextAlignment(.center)
+                CursorPillButton(title: "Retry", style: .primary) {
+                    Task { await load() }
+                }
+            }
             .frame(maxHeight: .infinity)
             .padding(.horizontal, 24)
         } else if entries.isEmpty && !loading {
-            DSEmptyState(
-                icon: .folder,
-                title: "Empty folder",
-                subtitle: "Nothing to show in \(path)."
-            )
-            .frame(maxHeight: .infinity)
-            .padding(.horizontal, 24)
+            Text("Empty folder")
+                .font(CursorType.bodyText)
+                .foregroundColor(colors.secondaryText)
+                .frame(maxHeight: .infinity)
         } else {
             listView
         }
@@ -116,42 +129,19 @@ struct RelayFileBrowserView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(entries) { entry in
-                    entryRow(entry)
-                    DSDivider()
+                    Button { handleTap(entry) } label: {
+                        CursorListRow(
+                            iconSystemName: entry.isDir ? "folder.fill" : "doc",
+                            title: entry.name,
+                            showChevron: entry.isDir
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(loading)
                 }
             }
         }
     }
-
-    private func entryRow(_ entry: RelayDirEntry) -> some View {
-        Button {
-            handleTap(entry)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: entry.isDir ? "folder.fill" : "doc")
-                    .font(.system(size: 13))
-                    .foregroundStyle(entry.isDir ? t.accent : t.text3)
-                    .frame(width: 18)
-                Text(entry.name)
-                    .font(.dsMonoPt(13, weight: entry.isDir ? .semibold : .regular))
-                    .foregroundStyle(entry.isDir ? t.text : t.text2)
-                    .lineLimit(1)
-                Spacer()
-                if entry.isDir {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(t.text4)
-                }
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(loading)
-    }
-
-    // MARK: - Actions
 
     private func handleTap(_ entry: RelayDirEntry) {
         guard !loading else { return }
@@ -184,8 +174,6 @@ struct RelayFileBrowserView: View {
         path = parent
     }
 
-    /// Joins a child name onto the displayed path. Paths are home-folded ("~",
-    /// "~/projects"); the daemon re-resolves and re-confines, so a naive join is safe.
     private func childPath(of base: String, name: String) -> String {
         base.hasSuffix("/") ? base + name : base + "/" + name
     }

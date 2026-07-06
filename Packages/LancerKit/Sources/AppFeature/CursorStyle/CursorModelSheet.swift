@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import AgentKit
 
 /// Cursor-style "Model" picker sheet: a search field below the title, an
 /// "Active" section for the currently selected model, and a "More" section
@@ -30,13 +31,14 @@ public struct CursorModelSheet: View {
 
     public init(
         activeModels: [CursorModelOption] = [
-            CursorModelOption(id: "claude-sonnet-5", title: "Claude Sonnet 5", isSelected: true)
+            CursorModelOption(id: ManagedModel.claudeHaiku.rawValue, title: ManagedModel.claudeHaiku.label, isSelected: true)
         ],
         moreModels: [CursorModelOption] = [
-            CursorModelOption(id: "claude-opus-4-8", title: "Claude Opus 4.8"),
-            CursorModelOption(id: "gpt-5-5", title: "GPT-5.5"),
-            CursorModelOption(id: "codex-5-3", title: "Codex 5.3"),
-            CursorModelOption(id: "fable-5", title: "Fable 5")
+            CursorModelOption(id: ManagedModel.claudeSonnet.rawValue, title: ManagedModel.claudeSonnet.label),
+            CursorModelOption(id: ManagedModel.claudeOpus.rawValue, title: ManagedModel.claudeOpus.label),
+            CursorModelOption(id: ManagedModel.gptCodex.rawValue, title: ManagedModel.gptCodex.label),
+            CursorModelOption(id: ManagedModel.gpt.rawValue, title: ManagedModel.gpt.label),
+            CursorModelOption(id: ManagedModel.geminiPro.rawValue, title: ManagedModel.geminiPro.label)
         ],
         onClose: @escaping () -> Void = {},
         onSelect: @escaping (CursorModelOption) -> Void = { _ in },

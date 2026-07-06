@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import AgentKit
 
 /// Every reachable push destination in the Cursor-style demo shell. There is
 /// exactly one navigation stack — no tab bar — matching Cursor's own app,
@@ -42,6 +43,7 @@ public struct CursorAppShell: View {
     @State private var showingComposerSheet = false
     @State private var showingRunOnSheet = false
     @State private var showingModelSheet = false
+    @State private var composerPlaceholder = "Plan, ask, build..."
 
     public init(liveBridge: CursorShellLiveBridge? = nil) {
         self.liveBridge = liveBridge
@@ -73,9 +75,10 @@ public struct CursorAppShell: View {
                     liveBridge?.composerCWD = name == "All Repos" ? "" : name
                     path.append(CursorRoute.workspaceThreadList(name))
                 },
-                onOpenComposer: { showingComposerSheet = true },
+                onOpenComposer: { openComposer(placeholder: "Plan, ask, build...") },
                 onOpenProfile: { showingProfileDrawer = true },
-                onOpenSearch: { showingSearchOverlay = true }
+                onOpenSearch: { showingSearchOverlay = true },
+                onRequestPairing: { liveBridge?.onRequestPairing?() }
             )
             .navigationDestination(for: CursorRoute.self) { route in
                 destinationView(for: route)
@@ -102,6 +105,10 @@ public struct CursorAppShell: View {
         }
         .sheet(isPresented: $showingComposerSheet) {
             composerSheetChain
+                .presentationDetents([.height(380), .large])
+                .presentationBackground(.clear)
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(CursorMetrics.floatingCardCornerRadius)
         }
     }
 
@@ -128,7 +135,7 @@ public struct CursorAppShell: View {
                         }
                         path.append(CursorRoute.workThread(title))
                     },
-                    onOpenComposer: { showingComposerSheet = true },
+                    onOpenComposer: { openComposer(placeholder: "Follow up...") },
                     onOpenSearch: { showingSearchOverlay = true },
                     onOpenMenu: { showingRepoPicker = true }
                 )
@@ -138,7 +145,7 @@ public struct CursorAppShell: View {
                     onBack: { popIfPossible() },
                     onViewPR: { path.append(CursorRoute.prDetail) },
                     onOpenReview: { path.append(CursorRoute.reviewDiff) },
-                    onOpenComposer: { showingComposerSheet = true }
+                    onOpenComposer: { openComposer(placeholder: "Follow up...") }
                 )
             case .prDetail:
                 CursorPRDetailView(onBack: { popIfPossible() })
@@ -155,6 +162,11 @@ public struct CursorAppShell: View {
         path.removeLast()
     }
 
+    private func openComposer(placeholder: String) {
+        composerPlaceholder = placeholder
+        showingComposerSheet = true
+    }
+
     // MARK: Profile drawer -> Settings sheet-on-sheet
 
     private var profileDrawerChain: some View {
@@ -168,11 +180,10 @@ public struct CursorAppShell: View {
             }
         )
         .sheet(isPresented: $showingSettingsFromProfile) {
-            if let liveBridge, liveBridge.onOpenSettings != nil {
-                CursorSettingsView(onOpenRealSettings: liveBridge.onOpenSettings)
-            } else {
-                CursorSettingsView()
-            }
+            CursorSettingsView(
+                relayMachineCount: liveBridge?.relayMachineCount ?? 0,
+                onPaired: liveBridge?.onPaired
+            )
         }
     }
 
@@ -185,15 +196,19 @@ public struct CursorAppShell: View {
     private var composerSheetChain: some View {
         CursorComposerSheet(
             repoName: liveBridge?.composerCWD.isEmpty == false ? (liveBridge?.composerCWD ?? "lancer-ios") : "lancer-ios",
+            modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
+            placeholder: composerPlaceholder,
+            onPickRepo: { showingRepoPicker = true },
             onPickRunTarget: { showingRunOnSheet = true },
             onPickModel: { showingModelSheet = true },
             onSend: liveBridge == nil ? nil : { prompt in
                 guard let liveBridge else { return }
                 let cwd = liveBridge.composerCWD.isEmpty ? "command-center" : liveBridge.composerCWD
+                let model = liveBridge.composerModelSlug
                 if let threadID = liveBridge.selectedThreadID {
-                    Task { await liveBridge.onContinue?(threadID, prompt) }
+                    Task { await liveBridge.onContinue?(threadID, prompt, model) }
                 } else {
-                    Task { await liveBridge.onDispatch?(prompt, cwd) }
+                    Task { await liveBridge.onDispatch?(prompt, cwd, model) }
                 }
                 showingComposerSheet = false
             }
@@ -206,8 +221,19 @@ public struct CursorAppShell: View {
         }
         .sheet(isPresented: $showingModelSheet) {
             CursorModelSheet(
+                activeModels: [
+                    .init(
+                        id: liveBridge?.composerModelSlug ?? ManagedModel.claudeHaiku.rawValue,
+                        title: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
+                        isSelected: true
+                    )
+                ],
                 onClose: { showingModelSheet = false },
-                onSelect: { _ in showingModelSheet = false }
+                onSelect: { option in
+                    liveBridge?.composerModelSlug = option.id
+                    liveBridge?.composerModelLabel = option.title
+                    showingModelSheet = false
+                }
             )
         }
     }

@@ -113,31 +113,43 @@ public struct AddHostView: View {
     // MARK: - Body
 
     public var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
 
-            VStack(spacing: 0) {
-                // ── Header
-                DSDetailHeader("add host", onBack: onCancel)
+            Text("Add machine")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(Color.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
 
-                Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            if showClipboardBanner, let result = clipboardBannerResult {
+                clipboardBanner(result)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
-                // ── Clipboard banner (V3) — BYO only
-                if showClipboardBanner, let result = clipboardBannerResult {
-                    clipboardBanner(result)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // ── Body
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                         // ── Paste field section
                         pasteSection
                             .padding(.horizontal, 16)
@@ -168,13 +180,13 @@ public struct AddHostView: View {
                         }
 
                         Spacer(minLength: 40)
-                    }
                 }
-
-                footerCTA
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            footerCTA
+                .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+        .background(Color(red: 0.961, green: 0.957, blue: 0.941).ignoresSafeArea())
         .navigationBarHidden(true)
         .animation(.easeInOut(duration: 0.2), value: showClipboardBanner)
         .animation(.easeInOut(duration: 0.2), value: parsed != nil)

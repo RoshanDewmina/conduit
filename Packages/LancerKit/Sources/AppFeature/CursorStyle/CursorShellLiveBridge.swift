@@ -3,6 +3,8 @@ import Foundation
 import Observation
 import InboxFeature
 import LancerCore
+import SSHTransport
+import AgentKit
 
 /// Bridges real AppRoot infrastructure into the Cursor-style navigation shell
 /// for Tier-0 phone-usable flows (workspaces, threads, dispatch, approvals).
@@ -27,12 +29,16 @@ public final class CursorShellLiveBridge {
     public var pendingApprovalID: ApprovalID?
     public var composerCWD: String = ""
     public var selectedThreadID: String?
+    /// OpenRouter / vendor model slug used for the next dispatch from the composer.
+    public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
+    public var composerModelLabel: String = ManagedModel.claudeHaiku.label
 
-    public var onDispatch: ((String, String) async -> Void)?
-    public var onContinue: ((String, String) async -> Void)?
+    public var onDispatch: ((String, String, String?) async -> Void)?
+    public var onContinue: ((String, String, String?) async -> Void)?
     public var onDecide: ((ApprovalID, Approval.Decision) async -> Void)?
-    public var onOpenSettings: (() -> Void)?
     public var onRequestPairing: (() -> Void)?
+    public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
+    public var relayMachineCount: Int = 0
 
     public init() {}
 

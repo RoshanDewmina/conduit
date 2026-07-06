@@ -1,23 +1,31 @@
 #if os(iOS)
 import SwiftUI
+import SSHTransport
+import LancerCore
 
-/// Visual clone of Lancer's approved Settings structure
-/// (`docs/design-audit/workflows/06-settings.md`) rendered in the Cursor-style
-/// visual language: same header bar, page title, and grouped `CursorListRow`
-/// sections as `CursorHomeView` / `CursorWorkspacesView` — "boring on purpose,"
-/// no policy hero or operations dashboard. Static seed data only — no
-/// daemon/network wiring, row taps are no-ops. Not yet wired into navigation.
+/// Cursor-style Settings — the only user-facing settings surface. No bridge to
+/// the legacy policy-bridge `SettingsView`.
 public struct CursorSettingsView: View {
-    private let onOpenRealSettings: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingPairing = false
 
-    public init(onOpenRealSettings: (() -> Void)? = nil) {
-        self.onOpenRealSettings = onOpenRealSettings
+    private let relayMachineCount: Int
+    private let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
+
+    public init(
+        relayMachineCount: Int = 0,
+        onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil
+    ) {
+        self.relayMachineCount = relayMachineCount
+        self.onPaired = onPaired
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             CursorHeaderBar(
-                leading: AnyView(avatarCircle),
+                leading: AnyView(
+                    CursorIconButton(systemImageName: "xmark", action: { dismiss() })
+                ),
                 trailing: []
             )
 
@@ -33,24 +41,24 @@ public struct CursorSettingsView: View {
                     CursorSectionHeader("Account")
                     row(
                         title: "Account",
-                        trailingText: "Signed in as roshan@example.com",
+                        trailingText: "Signed in",
                         showChevron: true
                     )
 
                     CursorSectionHeader("Machines & Pairing")
                     row(
                         title: "Trusted machines",
-                        trailingCount: 3,
+                        trailingCount: relayMachineCount > 0 ? relayMachineCount : nil,
                         showChevron: true,
-                        action: openRealSettings
+                        action: { showingPairing = true }
                     )
 
                     CursorSectionHeader("Notifications")
                     row(title: "Notifications", showChevron: true)
 
                     CursorSectionHeader("Security & Approvals")
-                    row(title: "Policy defaults", showChevron: true, action: openRealSettings)
-                    row(title: "Audit log", showChevron: true, action: openRealSettings)
+                    row(title: "Policy defaults", showChevron: true)
+                    row(title: "Audit log", showChevron: true)
 
                     CursorSectionHeader("Diagnostics")
                     row(title: "Diagnostics & support", showChevron: true)
@@ -75,15 +83,17 @@ public struct CursorSettingsView: View {
         }
         .background(CursorColors.light.background.ignoresSafeArea())
         .environment(\.cursorScheme, .light)
+        .accessibilityIdentifier("cursor.settings")
+        .sheet(isPresented: $showingPairing) {
+            if let onPaired {
+                CursorRelayPairingSheet(
+                    existingMachineCount: relayMachineCount,
+                    onPaired: onPaired
+                )
+            }
+        }
     }
 
-    private func openRealSettings() {
-        onOpenRealSettings?()
-    }
-
-    /// Wraps `CursorListRow` in a plain-style `Button` so every row has a real
-    /// (if inert) tap target matching its chevron affordance — legitimate for
-    /// this visual-only pass since there's nothing to navigate to yet.
     private func row(
         title: String,
         titleColor: Color? = nil,
@@ -102,21 +112,6 @@ public struct CursorSettingsView: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    private var avatarCircle: some View {
-        Circle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.29, green: 0.42, blue: 0.94),
-                        Color(red: 0.62, green: 0.31, blue: 0.87)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: 44, height: 44)
     }
 }
 #endif
