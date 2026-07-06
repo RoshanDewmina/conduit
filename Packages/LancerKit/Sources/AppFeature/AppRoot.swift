@@ -976,6 +976,7 @@ public struct AppRoot: View {
             }
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.connectionPhase = Self.connectionPhase(for: relayFleetStore)
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
@@ -1344,6 +1345,14 @@ public struct AppRoot: View {
         // dropped (same fail-closed spirit as everywhere else in this feature).
         Task { await hydrateRelayFleetStore(env: env) }
 
+        // Reactively mirror connection-state transitions into the banner phase.
+        // Fires edge-triggered on every per-machine state change (connected ↔
+        // reconnecting ↔ hostOffline ↔ pairingInvalid), keeping the banner in
+        // sync with live fleet liveness without polling.
+        relayFleetStore.connectionStates.addObserver { [relayFleetStore, cursorLiveBridge] _, _ in
+            cursorLiveBridge.connectionPhase = AppRoot.connectionPhase(for: relayFleetStore)
+        }
+
         // lancerE2EStatusUpdate is posted by every machine's bridge; route each
         // to the machine it named via userInfo["machineID"].
         Task { @MainActor in
@@ -1584,6 +1593,27 @@ public struct AppRoot: View {
         case .pairingInvalid: return .error
         case nil: return .none
         }
+    }
+
+    /// Maps the current relay fleet state onto the `CursorConnectionBanner` phase.
+    ///
+    /// Priority ladder (highest wins):
+    /// - No paired machines or all pairingInvalid → `.needsPairing` (human must re-pair)
+    /// - Any machine `.connected` → `.connected` (banner hidden)
+    /// - Any machine `.reconnecting` or `.hostOffline` → `.reconnecting` (auto-recovery in flight)
+    /// - Remaining cases (e.g. all hostOffline with no reconnect hope) → `.offline`
+    private static func connectionPhase(for fleet: RelayFleetStore) -> CursorShellLiveBridge.ConnectionPhase {
+        guard !fleet.machines.isEmpty else { return .needsPairing }
+        if fleet.connectionStates.anyConnected { return .connected }
+        let anyCanRecover = fleet.machines.contains {
+            let s = fleet.connectionState(for: $0.id)
+            return s == .reconnecting || s == .hostOffline
+        }
+        if anyCanRecover { return .reconnecting }
+        if fleet.machines.allSatisfy({ fleet.connectionState(for: $0.id) == .pairingInvalid }) {
+            return .needsPairing
+        }
+        return .offline
     }
 
     private static func pushBackendURL() -> String {
