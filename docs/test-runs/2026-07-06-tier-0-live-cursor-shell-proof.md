@@ -23,7 +23,8 @@ a live `lancerd` relay remains **owner-gated** — see checklist below.
 | Device build + install | `xcodebuild build` (signed) + `devicectl device install app` | **PASS** — `dev.lancer.mobile` installed |
 | Device live-shell launch | `devicectl device process launch … LANCER_CURSOR_SHELL_LIVE=1` | **PASS** — app launched on device |
 | Live shell UI (device) | Same test as sim, physical destination | **FAIL** — `XCTAssertTrue` on workspace hydration (`command-center` label); device has real paired state, not UITest reseed fixtures |
-| Relay approval E2E | `scripts/validation/relay-approval-e2e.sh` | **FAIL** — `TapInjectionProofTests.testRelayApprovalUnblocksHostHook` could not find `board.primary` Inbox card (Cursor shell no longer surfaces legacy Inbox tab) |
+| Relay approval E2E | `scripts/validation/relay-approval-e2e.sh` | **PASS** (2026-07-06, see below) — was FAIL: `TapInjectionProofTests.testRelayApprovalUnblocksHostHook` timed out waiting for the Workspaces `approval-banner` |
+| Cursor shell regression suite | `xcodebuild test … -only-testing:LancerUITests/CursorAppShellExhaustiveTests` | **PASS** — 22/22 (21 original + 1 uncommitted addition already in the tree) |
 
 ## Interpretation
 
@@ -31,7 +32,59 @@ a live `lancerd` relay remains **owner-gated** — see checklist below.
 - **P0 security fixes are verified** (BiometricGate fail-closed, daemon atomic emergency stop).
 - **Physical device** accepts signed builds and launches with `LANCER_CURSOR_SHELL_LIVE=1`.
 - **Automated device UI test** needs a device-tolerant assertion path (do not require `command-center` fixture label when real conversation data is present).
-- **Relay E2E harness** needs updating for Cursor-shell navigation (approval surface moved from legacy Inbox tab).
+- **Relay E2E harness now passes** through the live Cursor shell — see fix below.
+
+## Relay E2E fix (2026-07-06, follow-up)
+
+**Symptom:** `relay-approval-e2e.sh` failed with the daemon log showing `paired with phone` and
+an `escalate` audit entry, but the phone never rendered the Workspaces `approval-banner` —
+`TapInjectionProofTests.testRelayApprovalUnblocksHostHook` timed out after 120s waiting for it.
+
+**Root cause:** not a Cursor-shell routing bug. `RelayFleetStore` caps paired machines at
+`relayFleetMaxMachines` (3), and `isFull`/`add()` counted **every** hydrated machine record
+toward that cap — including ones whose persisted pairing had permanently failed to restore
+(`pairingUsable: false`, i.e. `ConnectionStateStore` state `.pairingInvalid`, which can never
+reconnect without a fresh re-pair). The iOS Simulator's Keychain survives `xcrun simctl
+uninstall` even though `UserDefaults` does not, so each harness run (or any real device that's
+been reinstalled a few times while reusing the same relay code) left one more permanently-dead
+machine record in the Keychain-backed index. After ~3 such runs the cap was permanently full of
+unusable ghosts, so `addRelayMachine` rejected every *new*, real pairing right after it completed
+its handshake (`AppRoot.swift`'s `guard relayFleetStore.add(...) else { …; client.disconnect();
+return }` — the bridge was never started, so the `approvalPending` relay message had nowhere to
+land). Confirmed live via temporary instrumentation + `log stream`: the fresh client reached
+`peer_joined`/session-key-derived (hence the daemon's "paired with phone"), then was immediately
+disconnected with `addRelayMachine: fleet at cap`.
+
+**Fix:** `RelayFleetStore.isFull` now excludes machines whose `ConnectionStateStore` state is
+`.pairingInvalid` from the cap count (`Packages/LancerKit/Sources/AppFeature/RelayFleetStore.swift`).
+A permanently-unrestorable ghost pairing still shows up in the fleet list (existing behavior,
+unchanged) but no longer consumes a slot that a real pairing needs.
+
+**Verification (2026-07-06):**
+
+```
+cd /Users/roshansilva/Documents/command-center
+LANCER_SIM_UDID=095F8B3A-FEA3-4031-A2A5-561755740730 bash scripts/validation/relay-approval-e2e.sh
+```
+
+Ran twice consecutively — both **PASS**:
+
+```
+xcodebuild test rc : 0  (0 = APPROVE tapped + card cleared)
+agent-hook rc      : 0 (0 = host hook UNBLOCKED via relay approve)
+--- audit tail ---
+{"action":"escalate", ..., "approvalId":"...",...}
+{"action":"approve", ..., "approvalId":"...",...}
+>>> PASS: relay approval round-trip proven (phone tap → relay → host unblock).
+```
+
+`xcodebuild test -only-testing:LancerUITests/CursorAppShellExhaustiveTests` stayed green after
+the fix: 22/22 passed (356.9s).
+
+Known side note (not fixed here, out of scope): the harness's hardcoded relay code (314159)
+means the Keychain-persisted ghost index keeps growing by one entry per run (5 at last count).
+The cap fix makes this harmless for pairing, but a long-lived dev simulator will eventually want
+a "clear all relay pairings" debug action if the growing list becomes visible clutter in Settings.
 
 ## Owner-gated next proof (manual)
 
