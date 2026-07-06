@@ -7,6 +7,9 @@ import SwiftUI
 /// data only — no daemon/network wiring. Forces `.light` to match the rest of
 /// the app.
 public struct CursorWorkThreadView: View {
+    @Environment(\.cursorScheme) private var cursorScheme
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     @State private var isTodosExpanded = false
     @State private var isActionRailExpanded = true
 
@@ -15,6 +18,15 @@ public struct CursorWorkThreadView: View {
     private let onViewPR: () -> Void
     private let onOpenReview: () -> Void
     private let onOpenComposer: () -> Void
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
+    /// Mock shell always shows the banner for UI tests; live shell only when a
+    /// pending approval is wired through `CursorShellLiveBridge`.
+    private var showsApprovalBanner: Bool {
+        guard let liveBridge else { return true }
+        return liveBridge.pendingApprovalID != nil
+    }
 
     public init(
         missionTitle: String = "Fix onboarding pairing flow",
@@ -47,10 +59,12 @@ public struct CursorWorkThreadView: View {
                 .padding(.bottom, 12)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
+        .background(colors.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                approvalBanner
+                if showsApprovalBanner {
+                    approvalBanner
+                }
 
                 if isActionRailExpanded {
                     CursorActionRail(
@@ -96,14 +110,14 @@ public struct CursorWorkThreadView: View {
             CursorArtifactCard {
                 HStack(spacing: 10) {
                     CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
-                    Text("Deploy to production")
+                    Text("Pending approval")
                         .font(CursorType.bodyText)
-                        .foregroundColor(CursorColors.light.secondaryText)
+                        .foregroundColor(colors.secondaryText)
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(CursorColors.light.secondaryText)
+                        .foregroundColor(colors.secondaryText)
                 }
             }
             .contentShape(Rectangle())
@@ -318,7 +332,7 @@ public struct CursorWorkThreadView: View {
                         .foregroundColor(CursorColors.light.primaryText)
                     Text("3")
                         .font(CursorType.cardTitle)
-                        .foregroundColor(CursorColors.light.secondaryText)
+                        .foregroundColor(colors.secondaryText)
                 }
                 .padding(.bottom, 10)
 

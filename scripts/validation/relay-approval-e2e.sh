@@ -93,7 +93,13 @@ if [ "$PAIRED" != 1 ]; then
   exit 1
 fi
 echo "  PAIRED ✓"
-sleep 3
+echo "=== wait for relay XCUITest to start (build finished, app on Inbox) ==="
+for i in $(seq 1 180); do
+  grep -q "Test Case.*testRelayApprovalUnblocksHostHook.*started" /tmp/lancer-relay-e2e/xcodebuild.log 2>/dev/null && break
+  if ! kill -0 "$XCB_PID" 2>/dev/null; then break; fi
+  sleep 2
+done
+sleep 5
 
 echo "=== fire fileWrite escalation (blocks awaiting the phone's decision) ==="
 HOME="$ISO" "$LANCERD" agent-hook \

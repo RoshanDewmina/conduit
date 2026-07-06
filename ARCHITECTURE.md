@@ -250,23 +250,34 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation — **sidebar / Command Home shell** (redesigned 2026-06-20)
+### 4.1 Top-level navigation — **3-root IA** (sidebar shell + Cursor-style surfaces)
 
-The home is **not** a tab bar. It is a **sidebar/drawer shell** (ChatGPT/Claude-app
-style) whose default surface is **Command Home**. Source of truth:
+The home is **not** a tab bar. Production navigation is a **sidebar/drawer shell**
+(ChatGPT/Claude-app style) whose default surface is **Home**. Source of truth:
 `AppFeature/AppRoot.swift` (`compactRoot` = drawer overlay on iPhone, `regularRoot`
 = `NavigationSplitView` on iPad), `LancerSidebarView.swift`, `SidebarShellState.swift`.
+
+**Approved 3-root IA** (per `docs/product/2026-07-05-lancer-feature-master-plan.md` §2):
+**Home**, **Workspaces** (labeled **Machines** in the sidebar row today), **Settings**.
+Inbox / needs-attention is a **destination**, not a fourth root — it folds into Home's
+attention ledger. Governance folds into Settings → Security & Trust.
 
 Navigation is driven by `SidebarDestination`, not `enum Tab`:
 
 | Sidebar destination | Surface | Notes |
 |---|---|---|
-| **Home** (`.home`) | `LancerHomeView` — attention, machines, recent work | **Default first surface.** Opens New Chat from its primary action. |
+| **Home** (`.home`) | `CursorHomeView` — cross-repo thread ledger + needs-attention row | **Default first surface.** Wired to `CursorShellLiveBridge` for live threads. |
 | **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | Durable, backed by `ChatConversationRepository`. |
-| **Thread** (`.thread(id)`) | `NewChatTabView(initialConversationID:)` | Resume a persisted conversation from the sidebar's Recent list. |
-| **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | Inbox is the system of record for approvals; History/Activity is a sheet off Inbox, not a root. |
-| **Machines** (`.machines`) | `FleetView` — hosts + active session slots (≤3) | Machine detail opens a slot's live block terminal as an intentional drill-in. |
-| **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security / Advanced / Account. |
+| **Thread** (`.thread(id)`) | `ChatHistoryView` / resume via `NewChatTabView` | Resume a persisted conversation from the sidebar's Recent list. |
+| **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | System of record for approvals; relay E2E lands here via `LANCER_DESTINATION=inbox`. |
+| **Machines** (`.machines`) | `CursorWorkspacesView` — repo/workspace list | Relay pairing via Settings/Connection or workspace `+` → `drawerRoute = .relayPairing`. |
+| **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security & Trust / Advanced / Account. |
+
+**DEBUG Cursor shell** (`Packages/LancerKit/Sources/AppFeature/CursorStyle/`):
+- `LANCER_CURSOR_SHELL=1` — mock-data navigation shell for design review + 20 UI tests.
+- `LANCER_CURSOR_SHELL_LIVE=1` — same chrome with `CursorShellLiveBridge` wired to real
+  dispatch, continue, approvals, settings, and pairing. **Not a second product** — a
+  Tier-0 phone-usable seam sharing the same backend as the sidebar shell.
 
 > **Deprecated:** the earlier `enum Tab { inbox, fleet, newchat, settings }` **tab bar**
 > and the `Inbox / Fleet / Activity / Settings` and `Inbox / Fleet / Control / Settings`

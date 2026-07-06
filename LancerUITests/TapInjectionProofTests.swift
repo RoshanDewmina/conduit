@@ -184,6 +184,7 @@ final class TapInjectionProofTests: XCTestCase {
         app.launchEnvironment["LANCER_RELAY_CODE"] = env["LANCER_RELAY_CODE"] ?? ""
         app.launchEnvironment["LANCER_PUSH_BACKEND_URL"] = env["LANCER_PUSH_BACKEND_URL"] ?? ""
         app.launchEnvironment["LANCER_DESTINATION"] = "inbox"
+        app.launchEnvironment["LANCER_SKIP_NOTIFICATION_PROMPT"] = "1"
         addUIInterruptionMonitor(withDescription: "Notification permission") { alert in
             let allow = alert.buttons["Allow"]
             if allow.exists {

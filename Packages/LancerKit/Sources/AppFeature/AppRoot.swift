@@ -700,8 +700,21 @@ public struct AppRoot: View {
             configureGlobalInbox(env: env)
             setupCursorLiveBridge(env: env)
             sidebarState.configure(chatRepo: env.chatRepo)
-            await sidebarState.loadRecent()
+            // Relay auto-pair + bridge registration must complete before the host
+            // can deliver an escalation over the production relay (relay-approval-e2e).
             await configureCloudServices(env: env)
+#if DEBUG
+            if ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1" {
+                await DebugSeeder.seedIfNeeded(env: env)
+            }
+            await DebugSeeder.resetForUITestIfRequested(env: env)
+            await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
+            if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
+                cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+                workspacesRevision = UUID()
+            }
+#endif
+            await sidebarState.loadRecent()
             // MAJOR-6: replay any approval action tapped from a lock-screen banner
             // while the app was killed (its NotificationCenter post had no live
             // subscriber). Done after configureCloudServices so the relay backend
@@ -719,15 +732,6 @@ public struct AppRoot: View {
             }
             await env.syncEngine.start()
             await env.conversationSyncEngine.start()
-        }
-        .task {
-#if DEBUG
-            if ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1" {
-                await DebugSeeder.seedIfNeeded(env: env)
-            }
-            await DebugSeeder.resetForUITestIfRequested(env: env)
-            await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
-#endif
         }
     }
 
@@ -1688,7 +1692,8 @@ public struct AppRoot: View {
             },
             onOpenComposer: { sidebarState.navigate(to: .newChat) },
             onOpenProfile: { sidebarState.navigate(to: .settings) },
-            onOpenSearch: { sidebarState.navigate(to: .newChat) }
+            onOpenSearch: { sidebarState.navigate(to: .newChat) },
+            onRequestPairing: { drawerRoute = .relayPairing }
         )
         .id(workspacesRevision)
         .task(id: workspacesRevision) { await refreshCursorLiveBridge(env: env) }

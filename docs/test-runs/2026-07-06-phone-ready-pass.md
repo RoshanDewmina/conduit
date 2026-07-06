@@ -6,9 +6,10 @@ Branch/worktree: `claude/amazing-mayer-246fef` (merged `master` Cursor shell)
 
 | Gate | Command / artifact | Result |
 |---|---|---|
-| Relay E2E round-trip | `LANCER_SIM_UDID=095F8B3A-FEA3-4031-A2A5-561755740730 bash scripts/validation/relay-approval-e2e.sh` | **PASS** — xcodebuild rc 0, agent-hook rc 0, audit `approve` |
+| Relay E2E round-trip | `scripts/validation/relay-approval-e2e.sh` | **PASS** (2026-07-06 04:33 UTC); harness hardened with test-start detection — re-run if sim diagnostics hang |
 | TapInjectionProofTests (sidebar IA) | `xcodebuild test … -only-testing:LancerUITests/TapInjectionProofTests` (4 rewritten tests) | **PASS** (2026-07-06 01:09 UTC) |
 | CursorAppShellExhaustiveTests | `xcodebuild test … -only-testing:LancerUITests/CursorAppShellExhaustiveTests` | **20/20 PASS** (~399s) |
+| CursorShellLiveApprovalTests | `xcodebuild test … -only-testing:LancerUITests/CursorShellLiveApprovalTests` | **PASS** (Tier-0 live shell + seeded approval) |
 | lancerd Go | `cd daemon/lancerd && go test ./...` | **PASS** |
 | App sim build (iPhone 17 Pro) | `xcodebuild build -destination id=095F8B3A-…` | **SUCCEEDED** |
 | App device build (iPhone 17 physical) | `xcodebuild build -destination id=557A7877-…` | **SUCCEEDED** |
@@ -33,7 +34,12 @@ Branch/worktree: `claude/amazing-mayer-246fef` (merged `master` Cursor shell)
 | Both shells manual device checklist | Sidebar + `LANCER_CURSOR_SHELL_LIVE=1` — build green; manual tap-through on Roshan's iPhone 17 (`557A7877…`) pending |
 | StoreKit / Watch / production Supabase | Per `KNOWN_ISSUES.md` §0.1 / §6 owner gates |
 
-## Shells
+## Docs reconciled (2026-07-06)
+
+- [`docs/product/2026-07-06-feature-implementation-gap-matrix.md`](../product/2026-07-06-feature-implementation-gap-matrix.md) — refreshed
+- [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §4.1 — 3-root IA + Cursor DEBUG shell
+- [`docs/product/2026-07-06-phone-primary-dev-readiness.md`](../product/2026-07-06-phone-primary-dev-readiness.md)
+- [`docs/architecture/2026-07-06-terminal-git-worktree-adr.md`](../architecture/2026-07-06-terminal-git-worktree-adr.md)
 
 - **Sidebar / New Chat** — production `AppRoot` path; relay E2E uses `LANCER_DESTINATION=inbox`.
 - **Cursor live shell** — `LANCER_CURSOR_SHELL_LIVE=1` DEBUG seam; 20/20 mock exhaustive tests green.

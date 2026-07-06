@@ -244,6 +244,7 @@ public struct CursorReviewDiffView: View {
             CursorPillButton(title: "Approve", style: .primary) {
                 applyDecision(.approved, relay: .approved)
             }
+            .accessibilityIdentifier("cursor.review.approve")
             CursorPillButton(
                 segments: [CursorPillButton.Segment("Deny", color: CursorColors.light.dangerRed)],
                 style: .secondary

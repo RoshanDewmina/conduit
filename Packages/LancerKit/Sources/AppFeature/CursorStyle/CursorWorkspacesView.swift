@@ -11,17 +11,20 @@ public struct CursorWorkspacesView: View {
     private let onOpenComposer: () -> Void
     private let onOpenProfile: () -> Void
     private let onOpenSearch: () -> Void
+    private let onRequestPairing: () -> Void
 
     public init(
         onSelectWorkspace: @escaping (String) -> Void = { _ in },
         onOpenComposer: @escaping () -> Void = {},
         onOpenProfile: @escaping () -> Void = {},
-        onOpenSearch: @escaping () -> Void = {}
+        onOpenSearch: @escaping () -> Void = {},
+        onRequestPairing: @escaping () -> Void = {}
     ) {
         self.onSelectWorkspace = onSelectWorkspace
         self.onOpenComposer = onOpenComposer
         self.onOpenProfile = onOpenProfile
         self.onOpenSearch = onOpenSearch
+        self.onRequestPairing = onRequestPairing
     }
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
@@ -35,7 +38,7 @@ public struct CursorWorkspacesView: View {
                 ),
                 trailing: [
                     CursorIconButton(systemImageName: "magnifyingglass", action: onOpenSearch),
-                    CursorIconButton(systemImageName: "plus", action: {})
+                    CursorIconButton(systemImageName: "plus", action: onRequestPairing)
                 ]
             )
 
