@@ -39,9 +39,7 @@ public final class AppEnvironment {
     public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
-    public let loopStore: LoopStore
     public let quotaGuardStore: QuotaGuardStore
-    public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
     public let workspaceRepo: WorkspaceRepository
     public let accountSession: AccountSessionController
@@ -80,9 +78,7 @@ public final class AppEnvironment {
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
-        self.loopStore = LoopStore(loopRepo: LoopRepository(database))
         self.quotaGuardStore = QuotaGuardStore()
-        self.hostHealthStore = HostHealthStore()
         // Relay machine hydration (migrate legacy pairing + restore each paired
         // machine's client/bridge) now happens asynchronously after launch, from
         // the machines index — see `AppRoot.hydrateRelayFleetStore`.
@@ -163,7 +159,6 @@ public struct AppRoot: View {
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var runOutputStore = RunOutputStore()
-    @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
@@ -589,12 +584,12 @@ public struct AppRoot: View {
             }
         }
         .sheet(isPresented: $showingQuotaGuard) {
-            LancerDrawer(title: "Usage & limits", detents: [.large]) {
+            CursorDrawer(title: "Usage & limits", detents: [.large]) {
                 QuotaGuardView(store: env.quotaGuardStore)
             }
         }
         .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 RelayWorkspaceUnavailableView(onConnectSSH: { drawerRoute = .addMachine })
             }
         }
@@ -685,15 +680,7 @@ public struct AppRoot: View {
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
         cursorShellRoot(env: env)
-        // Agent status header — a slim, in-layout strip shown only while a live
-        // session exists (the store returns no agents when idle). Hidden behind
-        // the live SessionView cover.
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
-        // Single source of truth for "needs attention": fleetStore.attentionItems is
-        // also what Home's attention list renders from, so the headline and the
-        // list can never disagree.
         .onChange(of: fleetStore.attentionItems.count, initial: true) { _, count in
-            hudStore.pendingApprovals = count
             let highestRisk = fleetStore.attentionItems.map(\.severity.rawValue).max()
             if #available(iOS 16.2, *) {
                 Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count, highestRisk: highestRisk) }
@@ -800,7 +787,6 @@ public struct AppRoot: View {
             sessionViewModel = slot.sessionViewModel
             daemonChannel = slot.channel
             approvalIngest = slot.ingest
-            hudStore.session = slot.sessionViewModel
         }
     }
 
@@ -808,7 +794,7 @@ public struct AppRoot: View {
     private func drawerDestination(_ route: AppDrawerRoute, env: AppEnvironment) -> some View {
         switch route {
         case .addMachine:
-            LancerDrawer(
+            CursorDrawer(
                 title: "Add a machine",
                 subtitle: "Relay is the recommended path. SSH adds a live terminal.",
                 detents: [.medium, .large]
@@ -819,7 +805,7 @@ public struct AppRoot: View {
                 )
             }
         case .relayPairing:
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 CursorRelayPairingSheet(
                     existingMachineCount: relayFleetStore.machines.count,
                     onPaired: { client, record in
@@ -828,7 +814,7 @@ public struct AppRoot: View {
                 )
             }
         case .addHost:
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 AddHostView(
                     repository: env.hostRepo,
                     keyStore: env.keyStore,
@@ -844,7 +830,7 @@ public struct AppRoot: View {
                 )
             }
         case .editHost(let host):
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 HostEditorView(
                     viewModel: HostEditorViewModel(
                         repository: env.hostRepo,
@@ -1286,7 +1272,6 @@ public struct AppRoot: View {
                     sessionViewModel = nil
                     daemonChannel = nil
                     approvalIngest = nil
-                    hudStore.session = nil
                     isShowingLiveSession = false
                 } else if let fallback = fleetStore.slots.first {
                     selectFleetSlot(fallback.id)
@@ -1850,7 +1835,6 @@ public struct AppRoot: View {
             await ingest.start()
             await MainActor.run {
                 env.quotaGuardStore.setChannel(channel)
-                env.hostHealthStore.startPolling(fleetStore: self.fleetStore)
             }
             await env.quotaGuardStore.refresh()
         }

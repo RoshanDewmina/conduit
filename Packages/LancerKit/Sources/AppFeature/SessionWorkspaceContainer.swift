@@ -34,7 +34,7 @@ public struct SessionWorkspaceContainer: View {
             showDrawer = true
         })
         .sheet(isPresented: $showDrawer) {
-            LancerDrawer(detents: [.medium, .large], surface: .workspace) {
+            CursorDrawer(detents: [.medium, .large]) {
                 WorkspaceDrawer(
                     tab: $tab,
                     viewModel: viewModel,
@@ -277,37 +277,32 @@ private struct WorkspaceEnvironmentView: View {
                         .foregroundStyle(t.danger)
                 }
 
-                DSSectionGroup("Workspace") {
-                    DSNavigationRow(
-                        "Changes",
-                        subtitle: changesSubtitle,
-                        value: changesValue,
-                        systemImage: "plusminus",
-                        action: onOpenReview
-                    )
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow(
-                        "Host",
-                        subtitle: "Connected through SSH",
-                        value: host.name,
-                        systemImage: "laptopcomputer",
-                        action: onSwitchHost
-                    )
-                    DSDivider().padding(.leading, 50)
-                    branchRow
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow(
-                        "Commit or push",
-                        subtitle: "Stage, commit, then push the current branch",
-                        systemImage: "arrow.up.to.line.compact",
-                        action: { isShowingCommit = true }
-                    )
+                CursorSectionHeader("Workspace")
+                CursorArtifactCard {
+                    VStack(spacing: 0) {
+                        Button(action: onOpenReview) {
+                            CursorListRow(iconSystemName: "plusminus", title: "Changes", trailingText: changesValue, showChevron: true)
+                        }.buttonStyle(.plain)
+                        Button(action: onSwitchHost) {
+                            CursorListRow(iconSystemName: "laptopcomputer", title: "Host", trailingText: host.name, showChevron: true)
+                        }.buttonStyle(.plain)
+                        branchRow
+                        Button(action: { isShowingCommit = true }) {
+                            CursorListRow(iconSystemName: "arrow.up.to.line.compact", title: "Commit or push", showChevron: true)
+                        }.buttonStyle(.plain)
+                    }
                 }
 
-                DSSectionGroup("Sources") {
-                    DSNavigationRow("Files", subtitle: "Browse this host", systemImage: "folder", action: onOpenFiles)
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow("Browser", subtitle: "Open a local dev preview", systemImage: "globe", action: onOpenBrowser)
+                CursorSectionHeader("Sources")
+                CursorArtifactCard {
+                    VStack(spacing: 0) {
+                        Button(action: onOpenFiles) {
+                            CursorListRow(iconSystemName: "folder", title: "Files", showChevron: true)
+                        }.buttonStyle(.plain)
+                        Button(action: onOpenBrowser) {
+                            CursorListRow(iconSystemName: "globe", title: "Browser", showChevron: true)
+                        }.buttonStyle(.plain)
+                    }
                 }
 
                 if isLoading {
@@ -584,7 +579,7 @@ private struct HostFilesView: View {
         .task { path = initialPath; await load() }
         .task(id: path) { await load() }
         .sheet(item: $preview) { preview in
-            DSReviewSheet(preview.entry.name) {
+            CursorBottomSheetContainer(title: preview.entry.name) {
                 FilePreviewView(filename: preview.entry.name, content: preview.content, path: preview.entry.path)
             }
             .presentationDetents([.medium, .large])
