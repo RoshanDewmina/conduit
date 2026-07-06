@@ -1,7 +1,69 @@
 # Workflow 04: Review / Approvals / Diff Review
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — Cursor-dark review drill-in** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Review / Approvals / Diff should become a **Cursor-dark review drill-in** from the Work Thread, not a separate heavyweight Inbox product.
+
+The key decision: approval is an interruption in the thread. The user taps `Review`, gets one focused review surface, opens the diff only when needed, and returns to the same thread with the decision recorded.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board — Review / Diff](../lancer-core-wireframes-2026-07-05/index.html#review)
+- [Preview image](../lancer-core-wireframes-2026-07-05/preview.png)
+
+### What Is Good About This Direction
+
+- It keeps the visual language aligned with the approved Work Thread instead of introducing a new banking-style approval product.
+- It preserves the trust essentials: request, consequence, scope, evidence, decision, and audit trail.
+- It supports high-risk review without putting a full diff in front of every low-risk decision.
+- It gives `Review`, `Deny`, and `Ask for changes` a natural home from the thread action rail.
+- It maps cleanly to existing code surfaces: `InboxApprovalDetail`, `DiffView`, and `ChatApprovalArtifactCard`.
+
+### What Needs Care
+
+- The pinned decision bar must never cover the exact evidence the user needs to inspect.
+- Medium and high risk approvals need enough friction; low risk approvals should stay quick.
+- The diff view must remain readable on phone width, with file context and line changes that do not require horizontal scrolling for basic review.
+- `Deny` and `Ask for changes` should be distinct actions; rejecting silently is not enough for agent steering.
+- Resolved, expired, offline, biometric-blocked, and send-error states need the same calm treatment, not one-off alerts.
+
+### Mobbin Pass — 2026-07-05
+
+| Example | What it does well | Adapt for Lancer | Do not copy directly |
+| --- | --- | --- | --- |
+| [Airwallex approval detail](https://mobbin.com/screens/64c52224-dd85-4916-a31d-97a03c55a5c1) | Keeps scope and approval decision close together | Use request, scope, and decision in one review surface | Banking chrome and financial density |
+| [Remote Global HR approval](https://mobbin.com/screens/0cbdcc18-5e9d-4678-8d0f-b8c2af3c49ab) | Actor, request, and status are easy to parse | Show agent, machine, repo, and age clearly | HR workflow language |
+| [Revolut Business approval](https://mobbin.com/screens/9a34e3c2-65fa-49e0-9a6f-5833c749d333) | Proportional seriousness without visual panic | Use higher friction only for high/critical risk | Finance-specific visual weight |
+| [GitHub mobile review](https://mobbin.com/screens/f078a659-e648-4b5a-b312-f3be58eece15) | Changed files and review state are familiar to developers | Use file summaries and diff drill-in | Full PR workflow complexity |
+
+**Net:** borrow approval hierarchy from Airwallex/Remote/Revolut, borrow changed-files review from GitHub, but keep the screen visually in the Cursor-dark Work Thread family.
+
+### Proposed Page Model
+
+1. **Thread interruption** — Work Thread shows an approval artifact with `Review`, `Deny`, and follow-up composer.
+2. **Review sheet** — request, consequence, scope, evidence, and pinned actions.
+3. **Diff drill-in** — file summary plus readable mobile diff; approve remains contextual to the patch.
+4. **Ask for changes** — send instruction back into the same thread instead of silently denying.
+5. **Resolved review** — read-only decision, actor, time, audit ID, and no duplicate approve action.
+
+### What Stays From Lancer
+
+| Capability | Review treatment |
+| --- | --- |
+| Risk model | Text badge plus consequence copy; color is secondary |
+| Biometric gate | Critical approvals trigger after review, before final approve |
+| Diff review | Drill-in from review, not a separate root |
+| Deny / request changes | Always available; request changes resumes the agent in-thread |
+| Audit trail | Visible after decision and in resolved state |
+| Offline / expired / already handled | Same review surface, disabled invalid actions |
+| Redaction | Evidence snippets must use redacted command/env/output values |
+
+### Open Design Decision
+
+For medium-risk approvals, decide whether `Approve` appears immediately in the review sheet or stays disabled until the evidence area has been opened once. My recommendation: immediate approve for medium risk, forced diff/evidence open only for high and critical risk.
 
 ## Current Screenshots
 

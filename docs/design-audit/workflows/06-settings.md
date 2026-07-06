@@ -1,7 +1,76 @@
 # Workflow 06: Settings
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — native grouped settings** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Settings should be a **native grouped settings surface**, not an operations dashboard and not a marketing/paywall surface.
+
+The key decision: Settings owns defaults and account/trust controls. Daily work, urgent approvals, machine recovery, and proof artifacts belong in Home, Workspaces, Work Thread, and Review.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board — Settings](../lancer-core-wireframes-2026-07-05/index.html#settings)
+- [Preview image](../lancer-core-wireframes-2026-07-05/preview.png)
+
+### What Is Good About This Direction
+
+- It is predictable: account, notifications, security, pairing, diagnostics, data, legal.
+- It keeps the Cursor-like product surfaces simple by moving defaults and trust controls out of daily flows.
+- It keeps safety controls separate from plan/billing state.
+- It makes notification recovery easy to find without repeating onboarding.
+- It gives provider keys, diagnostics, audit export, and destructive reset a home without making the main app feel technical.
+
+### What Needs Care
+
+- Governance should be defaults and audit export here, not a daily status dashboard.
+- Billing/plan copy must only appear when production-ready and accurate.
+- Provider keys and SSH keys are advanced, but still need a discoverable place.
+- Terminal preferences should be hidden or reframed so V1 does not imply a phone IDE.
+- Destructive reset/remove actions need native confirmation with concrete consequences.
+
+### Mobbin Pass — 2026-07-05
+
+| Example | What it does well | Adapt for Lancer | Do not copy directly |
+| --- | --- | --- | --- |
+| [MLS settings](https://mobbin.com/screens/5d8c6859-3a48-46a0-b27e-3373c9eb1b87) | Calm grouped settings with account and preference rows | Native grouped root structure | Consumer sports content |
+| [Revolut settings](https://mobbin.com/screens/ff9a098a-d3c2-4a8f-bd86-8714c55af083) | Dense trust/account settings stay scannable | Security, trusted devices, and privacy grouping | Finance-app upsell weight |
+| [Luma settings](https://mobbin.com/screens/7c388e5a-ce70-4a2b-9609-89705d72a01f) | Simple account/settings page with restrained chrome | Keep Lancer root settings quiet | Event/social app vocabulary |
+| [Mercury security](https://mobbin.com/screens/60d9ab3c-a4d3-46f1-8799-a913ddcaafa7) | Security actions are clear and serious | Biometric, trusted machine, and audit controls | Banking-specific compliance tone |
+| [Up security](https://mobbin.com/screens/8479be0c-6b89-4ebd-aef2-ef1a38576d5f) | Security settings are plain-language and grouped | Notification/security recovery states | Consumer banking styling |
+
+**Net:** use standard grouped settings and restrained trust copy. Do not use Settings to sell, operate daily work, or duplicate Home/Review.
+
+### Proposed Page Model
+
+1. **Settings root** — account/local mode, appearance, notifications, security, pairing/trusted devices, diagnostics, data/legal.
+2. **Security & approvals** — biometric, default autonomy, policy/audit log, trusted machines, provider keys.
+3. **Notifications** — permission recovery, critical/high/medium/low severity defaults, quiet hours.
+4. **Diagnostics** — relay, daemon, push, policy, support bundle.
+5. **Data/legal** — audit export, privacy, terms, licenses, security architecture.
+
+### What Stays From Lancer
+
+| Capability | Settings treatment |
+| --- | --- |
+| Account/local mode | Root profile row with accurate state |
+| Notifications | Root row plus detail page and denied-permission recovery |
+| Security defaults | Security & approvals detail |
+| Policy/governance | Defaults and audit export only; daily approvals stay in Review |
+| Trusted machines | Root pairing row and Security detail |
+| Provider/SSH keys | Advanced rows under Security or Developer section |
+| Diagnostics | Read-only health and support bundle |
+| Billing/plan | Only accurate production-ready state; never safety gating |
+| Reset/destructive actions | Bottom section with native confirmation |
+
+### Open Design Decision
+
+Hide the current `Policy Bridge` hero from the Settings root. My recommendation: keep policy controls as rows under **Security & approvals**; the hero visually competes with Home and makes Settings feel like a governance dashboard.
+
+## Superseded June 30 Direction
+
+The June 30 direction below is mostly aligned in spirit, but the July 5 direction is stricter: Settings should be even more native, quieter, and less promotional.
 
 ## Current Screenshots
 

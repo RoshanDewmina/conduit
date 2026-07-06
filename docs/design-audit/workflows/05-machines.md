@@ -1,7 +1,79 @@
 # Workflow 05: Machines
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — Workspaces-first machine management** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Machines should move away from a fleet dashboard and become a **Cursor-style Workspaces surface**:
+
+- first screen is a sparse list of repos/workspaces, like Cursor’s `Workspaces` screen;
+- rows show only the work-relevant machine state: active work count, needs-review count, online/offline hint;
+- machine health, trust, pairing, diagnostics, and destructive actions live in a drill-in sheet;
+- `Add` opens a simple sheet with `Add Repo`, `Pair Machine`, and hosted/cloud runner when available;
+- Home keeps the daily ledger; Workspaces is where users choose where work lives and which machine can run it.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board — Workspaces](../lancer-core-wireframes-2026-07-05/index.html#workspaces)
+- [Preview image](../lancer-core-wireframes-2026-07-05/preview.png)
+
+### What Is Good About This Direction
+
+- It matches the Cursor reference the user likes: title, search, plus, simple folder rows, counts, chevrons.
+- It keeps machine management available without making the main screen feel like infrastructure admin.
+- It aligns with existing code that already has workspace routes (`SidebarDestination.workspace`, `WorkspaceDetailView`) as well as Fleet/Machines.
+- It gives offline machine states a clear promotion path without keeping a permanent machine dashboard on screen.
+- It makes `Add Repo` and `Pair Machine` feel like one setup action family.
+
+### What Needs Care
+
+- Renaming the visible root from `Machines` to `Workspaces` is a product decision; the code route can remain `.machines` until implementation.
+- Users still need a trustworthy way to inspect paired devices, fingerprints, diagnostics, and remove/revoke.
+- If a user has multiple machines but one repo, the workspace row must make the active run target clear.
+- Offline or daemon-stopped machines should rise into `Needs you`, not stay hidden in a detail sheet.
+- Terminal entry points must stay off the V1 route; diagnostics are read-only unless explicitly product-approved.
+
+### Mobbin Pass — 2026-07-05
+
+| Example | What it does well | Adapt for Lancer | Do not copy directly |
+| --- | --- | --- | --- |
+| [Slack workspace switcher](https://mobbin.com/screens/112f6d5f-bf16-4634-b0b6-a4099cbb2376) | Simple workspace identity and switching | Top-level workspace/repo rows with minimal chrome | Channel/team messaging model |
+| [monday.com workspace list](https://mobbin.com/screens/fd6532d8-69ef-402b-b404-a39bd53e65be) | Workspace list stays simple while supporting many objects | Folder rows with counts and clear add action | Project-management dashboards |
+| [GitHub repository list](https://mobbin.com/screens/45c7e3cf-c9fb-4efa-b721-5d34e90c8128) | Repos are scannable with owner/state metadata | Repo/workspace rows with activity and status | Full GitHub taxonomy |
+| [Evernote connected devices](https://mobbin.com/screens/c7b180aa-48f0-4f00-9699-3cb138b19997) | Devices show identity and management actions clearly | Machine detail sheet: last seen, trusted, remove | Notes-app account framing |
+| [Telegram connected devices](https://mobbin.com/screens/26a2393a-80c7-4507-a497-d5908a9f5c81) | Active devices and revoke actions are understandable | Revoke/remove treatment for paired machines | Messaging-session language |
+
+**Net:** borrow the Workspaces list from Slack/monday/GitHub, and borrow connected-device trust management from Evernote/Telegram only for machine detail and recovery.
+
+### Proposed Page Model
+
+1. **Workspaces list** — folder/repo rows: `All Repos`, `conduit`, `personal-web`, `Add Repo`.
+2. **Workspace detail** — recent threads/runs in that repo plus available run targets.
+3. **Machine detail sheet** — online/offline, agents, trust, diagnostics, remove.
+4. **Offline recovery** — promoted when a machine blocks work; explains what still works and how to fix it.
+5. **Add sheet** — `Add Repo`, `Pair Machine`, `Use Cloud Runner` if available.
+
+### What Stays From Lancer
+
+| Capability | Workspaces treatment |
+| --- | --- |
+| Paired machines | Shown as run targets inside workspace detail and machine detail sheet |
+| Relay / daemon health | One-line row metadata unless degraded |
+| Offline / reconnect | Promoted row when it blocks work; full recovery in detail |
+| Agent/vendor availability | Machine detail and run-target picker, not top-level dashboard |
+| Trust / fingerprint / revoke | Machine detail only |
+| Diagnostics | Read-only detail disclosure |
+| Pairing | Add sheet and onboarding flow |
+| Active work | Workspace row count and detail rows link to Work Thread |
+
+### Open Design Decision
+
+Use **Workspaces** as the visible label for this root, while keeping `Machines` as the implementation route name until the code is migrated. My recommendation: rename the product surface now; otherwise the app keeps advertising infrastructure when the user is mostly choosing where to run work.
+
+## Superseded June 30 Direction
+
+The June 30 Machines direction below is still useful for trust, pairing, offline, and diagnostics requirements. The July 5 direction changes the top-level shape from fleet dashboard to Workspaces-first list.
 
 ## Current Screenshots
 

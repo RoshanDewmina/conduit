@@ -1,0 +1,1079 @@
+<title>Lancer Workflow — Workspaces</title>
+<style>
+  :root {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0b0c;
+      --surface: #17171a;
+      --surface-2: #1c1c1f;
+      --ink: #ececee;
+      --muted: #a3a3a8;
+      --line: #2b2b2f;
+      --accent: #55c2f0;
+      --ok: #45bd82;
+      --warn: #d69a3a;
+      --danger: #ff6f92;
+      --shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c;
+    --surface: #17171a;
+    --surface-2: #1c1c1f;
+    --ink: #ececee;
+    --muted: #a3a3a8;
+    --line: #2b2b2f;
+    --accent: #55c2f0;
+    --ok: #45bd82;
+    --warn: #d69a3a;
+    --danger: #ff6f92;
+    --shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="light"] {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .tap:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  .col {
+    max-width: 760px;
+  }
+
+  /* ---- header ---- */
+
+  header.doc-head {
+    margin-bottom: 44px;
+  }
+
+  .breadcrumb {
+    font-size: 12.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .breadcrumb .sep { margin: 0 8px; opacity: .5; }
+  .breadcrumb .here { color: var(--ink); font-weight: 650; }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    font-weight: 780;
+  }
+
+  .thesis {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 22px;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 650;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .pill.status-approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .pill.status-approved::before { content: "●"; font-size: 8px; }
+
+  .pill.source { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; font-size: 12px; }
+
+  /* ---- section scaffolding ---- */
+
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  .section-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  p { line-height: 1.6; }
+  .col p { max-width: 66ch; }
+
+  /* ---- screens strip ---- */
+
+  .screens-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .screens-scroll {
+    overflow-x: auto;
+    background: var(--surface-2);
+  }
+
+  .screens-scroll img {
+    display: block;
+    width: 1800px;
+    max-width: none;
+    height: auto;
+  }
+
+  .screens-caption {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .legend-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+
+  .legend-item .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-right: 8px;
+  }
+
+  .legend-item .name { font-size: 13.5px; font-weight: 650; }
+
+  /* ---- flow steps ---- */
+
+  .flow {
+    display: grid;
+    gap: 22px;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+  }
+
+  .flow-step .badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin: 3px 0 6px;
+  }
+
+  .flow-step p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .flow-step p strong { color: var(--ink); font-weight: 650; }
+
+  /* ---- mobbin citation cards ---- */
+
+  .cite-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cite-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+  }
+
+  .cite-card .src {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .cite-card .src a {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .cite-card .src a:hover { text-decoration: underline; }
+
+  .cite-card .lesson {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cite-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .cite-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- rationale ---- */
+
+  .bug-callout {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 20px 0;
+  }
+
+  .bug-callout .mark {
+    color: var(--danger);
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .bug-callout p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .bug-callout .label {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--danger);
+    margin-bottom: 5px;
+  }
+
+  /* ---- issues table ---- */
+
+  .issues {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .issue-row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+
+  .issue-row .state {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .state.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .state.resolved { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+  .issue-row .body strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .issue-row .body span { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .issue-row .body .cite { display: block; margin-top: 5px; font-size: 12px; }
+
+  /* ---- footer ---- */
+
+  footer {
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer .files {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 720px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 32px 1fr; }
+    .issue-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---- coded phone mockups (fixed light styling — these reproduce a specific
+     light-mode app state, like a photo, and don't invert with the viewer's theme) ---- */
+
+  .phone-strip {
+    display: flex;
+    gap: 22px;
+    padding: 26px 24px;
+  }
+
+  .phone-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slot-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: #7a7a76;
+    margin: 0;
+  }
+
+  .mock .phone {
+    width: 270px;
+    height: 586px;
+    border: 1px solid #dedede;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    background: #fbfbfa;
+    box-shadow: 0 18px 44px rgba(20,20,18,.16);
+    color: #171717;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+
+  .mock .iphone-status {
+    height: 50px;
+    padding: 18px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mock .home-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 16px;
+  }
+
+  .mock .circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #d8d8d5;
+    background: linear-gradient(#fff, #f2f2f0);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    color: #111;
+  }
+
+  .mock .right-actions { display: flex; gap: 8px; }
+  .mock .small-circle { width: 38px; height: 38px; font-size: 17px; }
+
+  .mock .home-title {
+    padding: 14px 22px 20px;
+    font-size: 21px;
+    font-weight: 760;
+  }
+
+  .mock .home-content {
+    padding: 0 22px 110px;
+    height: 380px;
+    overflow: hidden;
+  }
+
+  .mock .group { margin-bottom: 24px; }
+  .mock .group-title { color: #6f6f6f; font-size: 13.5px; margin: 0 0 12px; }
+
+  .mock .row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ececea;
+  }
+
+  .mock .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+    background: #d7d7d5;
+  }
+
+  .mock .dot.active { background: #158bc0; }
+  .mock .dot.warn { background: #d18b2b; }
+
+  .mock .row-title {
+    font-size: 15.5px;
+    line-height: 1.15;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .meta {
+    color: #6f6f6f;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .check { color: #008767; font-weight: 800; margin-right: 6px; }
+  .mock .diff { align-self: center; font-size: 12.5px; white-space: nowrap; color: #6f6f6f; padding-top: 16px; }
+  .mock .add { color: #12966b; }
+  .mock .del { color: #ff5d87; }
+
+  .mock .composer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 16px;
+    height: 52px;
+    border-radius: 28px;
+    border: 1px solid #d8d8d5;
+    background: rgba(255,255,255,.9);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .mock .composer span {
+    flex: 1;
+    min-width: 0;
+    color: #a7a7a4;
+    font-size: 15.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .pill-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ededeb;
+    display: grid;
+    place-items: center;
+    color: #6b6b69;
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .mock .sheet {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 340px;
+    border-radius: 30px 30px 24px 24px;
+    border: 1px solid #dfdfdc;
+    background: rgba(255,255,255,.97);
+    padding: 16px 16px 20px;
+    box-shadow: 0 -16px 44px rgba(0,0,0,.15);
+  }
+
+  .mock .grabber {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d8d8d5;
+    margin: -4px auto 16px;
+  }
+
+  .mock .sheet-title {
+    text-align: center;
+    font-weight: 760;
+    font-size: 16.5px;
+    margin-bottom: 16px;
+  }
+
+  .mock .sheet-row {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #ebebe8;
+    font-size: 15.5px;
+  }
+
+  .mock .sheet-row:last-child { border-bottom: 0; }
+  .mock .sheet-row small { display: block; color: #6f6f6f; font-size: 11px; margin-top: 2px; }
+
+  /* ---- iOS opportunity cards ---- */
+
+  .ios-grid { display: grid; gap: 14px; }
+
+  .ios-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+  }
+
+  .ios-card .glyph {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ios-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .ios-card .api {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .ios-card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .ios-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- additional mock components for Workspaces panels ---- */
+
+  .mock .workspace-row {
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid #ececea;
+    color: #171717;
+  }
+
+  .mock .folder {
+    width: 22px;
+    height: 17px;
+    border: 2px solid #9f9f9c;
+    border-radius: 4px;
+    position: relative;
+  }
+
+  .mock .folder::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: -7px;
+    width: 10px;
+    height: 7px;
+    border: 2px solid #9f9f9c;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+    background: #fbfbfa;
+  }
+
+  .mock .workspace-name {
+    font-size: 15.5px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-meta {
+    color: #6f6f6f;
+    font-size: 12px;
+    line-height: 1.25;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-count {
+    color: #6f6f6f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+  }
+
+  .mock .health-line {
+    border: 1px solid #e4e4e1;
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,.7);
+  }
+
+  .mock .health-line strong { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .mock .health-line span { color: #6f6f6f; font-size: 12.5px; line-height: 1.4; }
+
+  .mock .dot.danger { background: #ff5d87; }
+</style>
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="breadcrumb">Lancer <span class="sep">/</span> Workflows <span class="sep">/</span> <span class="here">02 — Workspaces</span></p>
+    <h1>Workspaces</h1>
+    <p class="thesis">Where work lives and which machine can run it. A repo-first list, not a fleet dashboard &mdash; machine health, trust, and pairing all live one level deeper.</p>
+    <div class="meta-row">
+      <span class="pill status-approved">Approved direction</span>
+      <span class="pill source">lancer-core-wireframes-2026-07-05/index.html#workspaces</span>
+      <span class="pill source">workflows/05-machines.md</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="section-eyebrow">The five screens</p>
+    <h2>Exactly as built on the board</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Workspaces list</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle" style="overflow:hidden;"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#d979ff,#69e8f3);"></div></div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">+</div></div>
+              </div>
+              <div class="home-title">Workspaces</div>
+              <div class="home-content">
+                <div class="workspace-row">
+                  <div class="folder"></div>
+                  <div><div class="workspace-name">All Repos</div><div class="workspace-meta">1 needs review &middot; 1 machine online</div></div>
+                  <div class="workspace-count"><span>1</span><span>&rsaquo;</span></div>
+                </div>
+                <div class="workspace-row">
+                  <div class="folder"></div>
+                  <div><div class="workspace-name">conduit</div><div class="workspace-meta">hermes-box &middot; checks passed</div></div>
+                  <div class="workspace-count"><span>1</span><span>&rsaquo;</span></div>
+                </div>
+                <div class="workspace-row">
+                  <div class="folder"></div>
+                  <div><div class="workspace-name">personal-web</div><div class="workspace-meta">No active work</div></div>
+                  <div class="workspace-count"><span>&rsaquo;</span></div>
+                </div>
+                <div class="workspace-row">
+                  <div class="folder"></div>
+                  <div><div class="workspace-name" style="color:#666;">Add Repo</div><div class="workspace-meta">Pair a machine or choose a saved path</div></div>
+                  <div class="workspace-count"></div>
+                </div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Workspace detail</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">&hellip;</div></div>
+              </div>
+              <div class="home-title">conduit</div>
+              <div class="home-content">
+                <div class="group">
+                  <p class="group-title">Today</p>
+                  <div class="row">
+                    <div class="dot active"></div>
+                    <div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">&#10003;</span>Checks Passed &middot; +858 -38</div></div>
+                  </div>
+                  <div class="row">
+                    <div class="dot warn"></div>
+                    <div><div class="row-title">Approval waiting</div><div class="meta">High risk &middot; policy/evaluate.go</div></div>
+                    <div class="diff">Review</div>
+                  </div>
+                </div>
+                                <div class="group">
+                  <p class="group-title">Repo setup</p>
+                  <div class="workspace-row" style="min-height:52px;">
+                    <div class="folder"></div>
+                    <div><div class="workspace-name">Playbook</div><div class="workspace-meta">Working dir, proof cmd, protected zones</div></div>
+                    <div class="workspace-count"><span>&rsaquo;</span></div>
+                  </div>
+                </div>
+                <div class="group">
+                  <p class="group-title">Run targets</p>
+                  <div class="workspace-row" style="min-height:52px;">
+                    <div class="dot active" style="margin:0;"></div>
+                    <div><div class="workspace-name">hermes-box</div><div class="workspace-meta">Online &middot; Codex, Claude, Kimi</div></div>
+                    <div class="workspace-count"><span>&rsaquo;</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>New work in conduit&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Machine detail sheet</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-title" style="padding-top:80px;opacity:.35;">conduit</div>
+              <div class="home-content" style="opacity:.35;">
+                <div class="workspace-row"><div class="folder"></div><div><div class="workspace-name">hermes-box</div><div class="workspace-meta">Online &middot; Codex, Claude, Kimi</div></div><div>&rsaquo;</div></div>
+              </div>
+              <div class="sheet">
+                <div class="grabber"></div>
+                <div class="sheet-title">hermes-box</div>
+                <div class="health-line"><strong>Online</strong><span>Relay connected &middot; last seen just now</span></div>
+                <div class="health-line"><strong>Agents</strong><span>Codex, Claude Code, OpenCode, Kimi</span></div>
+                <div class="health-line"><strong>Trust</strong><span>Paired to this phone &middot; fingerprint saved</span></div>
+                <div class="sheet-row"><span></span><div>Diagnostics<small>Daemon, relay, push, policy</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span></span><div>Remove Machine<small>Requires confirmation</small></div><span>&rsaquo;</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">D &middot; Offline / recovery</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">+</div></div>
+              </div>
+              <div class="home-title">Workspaces</div>
+              <div class="home-content">
+                <div class="group">
+                  <p class="group-title">Needs you</p>
+                  <div class="row">
+                    <div class="dot danger"></div>
+                    <div><div class="row-title">hermes-box offline</div><div class="meta">Last seen 18m ago &middot; 1 queued decision</div></div>
+                    <div class="diff">Fix</div>
+                  </div>
+                </div>
+                <div class="health-line"><strong>What still works</strong><span>You can read cached threads. New runs wait until the machine reconnects.</span></div>
+                <div class="health-line"><strong>Likely fix</strong><span>Start lancerd on the Mac or check relay connection.</span></div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>Ask about offline work&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">E &middot; Add repo / pair machine</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-title" style="padding-top:80px;opacity:.35;">Workspaces</div>
+              <div class="home-content" style="opacity:.35;">
+                <div class="workspace-row"><div class="folder"></div><div><div class="workspace-name">conduit</div><div class="workspace-meta">1 machine online</div></div><div>&rsaquo;</div></div>
+              </div>
+              <div class="sheet">
+                <div class="grabber"></div>
+                <div class="sheet-title">Add</div>
+                <div class="sheet-row"><span>&#128193;</span><div>Add Repo<small>Choose a path on a paired machine</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>&#128421;</span><div>Pair Machine<small>Use a setup code from lancerd</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>&#9729;</span><div>Use Cloud Runner<small>Available when hosted agents are enabled</small></div><span>&rsaquo;</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">F &middot; Cross-host policy check</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div></div>
+              </div>
+              <div class="home-title">conduit</div>
+              <div class="home-content" style="height:430px;">
+                <div class="health-line" style="border-color:rgba(209,139,43,.45);background:rgba(209,139,43,.08);"><strong>Policy drift across machines</strong><span>hermes-box is Strict &middot; cloud-runner is still Balanced.</span></div>
+                <div class="group">
+                  <p class="group-title">Run targets</p>
+                  <div class="workspace-row" style="min-height:58px;"><div class="dot warn" style="margin:0;"></div><div><div class="workspace-name">hermes-box</div><div class="workspace-meta">Strict &middot; hook_unreachable: hold</div></div><div class="workspace-count"><span style="color:#d18b2b;">Drift</span></div></div>
+                  <div class="workspace-row" style="min-height:58px;"><div class="dot active" style="margin:0;"></div><div><div class="workspace-name">cloud-runner</div><div class="workspace-meta">Balanced &middot; hook_unreachable: allow</div></div><div class="workspace-count"><span style="color:#d18b2b;">Drift</span></div></div>
+                </div>
+                <div class="health-line"><strong>Recommended</strong><span>Align both machines to Strict or document why they differ.</span></div>
+                <div class="workspace-row" style="min-height:54px;"><span class="settings-icon">&#128203;</span><div><div class="workspace-name">View policy diff</div><div class="workspace-meta">See exactly which rules diverge</div></div><div class="workspace-count">&rsaquo;</div></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Scroll to see all six &middot; built in code from the board's own CSS values, not a screenshot</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">How someone actually uses it</p>
+    <h2>Choosing where work runs</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="badge">A</div>
+        <div>
+          <h3>Open Workspaces &mdash; a folder list, not a fleet</h3>
+          <p>Top row is always <strong>All Repos</strong> with an aggregate needs-review count. Below it, one row per repo &mdash; name, current machine, and a quiet status line ("checks passed," "no active work"). <strong>Add Repo</strong> sits at the bottom as the last row, not a floating button.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">B</div>
+        <div>
+          <h3>Tap into a repo</h3>
+          <p>Same ledger shape as Home, scoped to one repo: <strong>Today</strong>'s runs and approvals, then <strong>Run targets</strong> &mdash; the machines that can actually execute work here, each showing which agents are installed.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">C</div>
+        <div>
+          <h3>Check on a machine</h3>
+          <p>Tap a run target and a sheet drops in: online status, which agents are available, trust/fingerprint, then <strong>Diagnostics</strong> and <strong>Remove Machine</strong> below a visual break &mdash; separating "look" from "act."</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">D</div>
+        <div>
+          <h3>Something's unreachable</h3>
+          <p>An offline machine doesn't hide in a detail sheet &mdash; it's promoted straight into <strong>Needs you</strong> with a "Fix" action, tells you exactly what still works (cached threads) versus what's blocked (new runs), and names a likely cause before you go looking.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">E</div>
+        <div>
+          <h3>Add a repo or a machine</h3>
+          <p>One <strong>Add</strong> sheet, three rows: a path on a machine you already trust, a fresh code-pairing flow (same mechanism as onboarding), or a cloud runner if hosted agents are on. One setup action family instead of two separate flows.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">F</div>
+        <div>
+          <h3>Spot policy drift before it bites</h3>
+          <p><strong>Cross-host policy-consistency check</strong> surfaces when two machines running the same repo disagree on governance rules &mdash; a warm banner on the workspace detail, per-machine drift badges, and a one-tap path into Policy Diff Review. Fleet trust shouldn&rsquo;t silently diverge.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">What Mobbin taught us, and why</p>
+    <h2>Two different jobs, two different reference sets</h2>
+    <div class="cite-grid">
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/112f6d5f-bf16-4634-b0b6-a4099cbb2376" target="_blank" rel="noopener">Slack workspace switcher</a> &amp; <a href="https://mobbin.com/screens/fd6532d8-69ef-402b-b404-a39bd53e65be" target="_blank" rel="noopener">monday.com workspace list</a><span class="lesson">List shape</span></div>
+        <p>Simple identity rows that stay legible even as the object count grows. Why the top-level list is folder rows with counts and a chevron &mdash; nothing heavier.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/45c7e3cf-c9fb-4efa-b721-5d34e90c8128" target="_blank" rel="noopener">GitHub repository list</a><span class="lesson">Row metadata</span></div>
+        <p>Repos are scannable with owner/state metadata, not a dashboard tile per repo. Directly informs the "checks passed" / "no active work" one-line meta under each name.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/c7b180aa-48f0-4f00-9699-3cb138b19997" target="_blank" rel="noopener">Evernote connected devices</a> &amp; <a href="https://mobbin.com/screens/26a2393a-80c7-4507-a497-d5908a9f5c81" target="_blank" rel="noopener">Telegram connected devices</a><span class="lesson">Trust &amp; revoke</span></div>
+        <p>Device identity and management actions (remove/revoke) shown clearly, but only once you're already looking at one device &mdash; never on the list itself. This is exactly why remove/diagnostics live in the machine detail sheet, not the workspace row.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/e7b43201-3ade-493f-8672-76efbd8bff8f" target="_blank" rel="noopener">Starlink Network &rarr; Devices</a><span class="lesson">Developer-trusted framing</span></div>
+        <p>Dense, technical host rows built for people who already understand what a "host" is &mdash; a stronger model for machine rows than consumer smart-home device lists. The explicit warning attached to this reference: don't turn Lancer into an SSH client just because the audience overlaps.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">Why this shape, not the old one</p>
+    <h2>The old Machines screen had three contradictions, not just too much chrome</h2>
+    <p>Machines used to be a fleet dashboard: every paired host as a card, vendor spend, health metrics, up front. Beyond being noisier than Cursor's Workspaces reference, the current-state audit found real correctness problems this redesign is built to close, not just restyle.</p>
+    <div class="bug-callout">
+      <div class="mark">!</div>
+      <div>
+        <span class="label">Contradictory connection copy &middot; P0 trust, documented</span>
+        <p>The sidebar footer hardcodes <span class="mono">Relay connected &middot; 3 hosts</span> regardless of reality, while the Machines screen shows whatever host is actually seeded &mdash; two different claims about the same connection state, visible on screen at the same time. A workspace-first redesign doesn't fix this by itself; it still needs the sidebar footer wired to real counts.</p>
+      </div>
+    </div>
+    <p>Two more, lower-severity but real: the <strong>relay path</strong> (one live host) and <strong>SSH slots</strong> (<span class="mono">FleetStore</span>) currently use different status semantics for what should be one machine-status vocabulary, and <span class="mono">onOpenTerminal</span> still exists as a drill-in from the fleet view &mdash; a live terminal entry point that must not reach V1 navigation. Neither is solved by the Workspaces relabeling alone; both are implementation-gate items, not design decisions.</p>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">Open decision &mdash; not yet resolved</p>
+    <h2>"Workspaces" is more than renaming a screen</h2>
+    <p class="col">The nav-discrepancy investigation (from the Command Home artifact) flagged this directly, and it lands squarely on this workflow: the current <span class="mono">Machines</span> view is genuinely <strong>host-first</strong> (<span class="mono">FleetView</span> lists machines, repos are inside them); the wireframe wants <strong>repo-first</strong> (workspaces list repos, machines are a property of each one). That's the reverse of the current data model, not a label swap on the same screen.</p>
+    <div class="issues">
+      <div class="issue-row">
+        <span class="state open">Real decision</span>
+        <div class="body">
+          <strong>Repo-first vs. host-first is a data-model change</strong>
+          <span>Current: <span class="mono">FleetView.swift</span> + <span class="mono">FleetStore.swift</span>, organized by machine. Proposed: organized by repo, with machines as a property of each workspace. This needs an explicit product decision before implementation, not just a visual pass.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">Doc still says "the code route can remain .machines"</span>
+        <div class="body">
+          <strong>The workflow doc already anticipated a staged rename</strong>
+          <span>Its own recommendation: rename the visible product surface now, migrate the code route name later. That's a reasonable sequencing call, but it should be made explicitly, not discovered mid-implementation.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state resolved">Corrected in this artifact</span>
+        <div class="body">
+          <strong>Pairing entry point file was stale</strong>
+          <span>The workflow doc cites <span class="mono">BridgePairingView.swift</span>, which no longer exists. The real current file is <span class="mono">Packages/LancerKit/Sources/OnboardingFeature/OnboardingPairing.swift</span> &mdash; verified directly against the repo before writing this page, not copied from the doc.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">iOS 27 / WWDC 2026 &mdash; what applies here</p>
+    <h2>Trust actions are exactly what Apple's own risk model is for</h2>
+    <p class="col">Cross-checked against the full platform research pass. Workspaces has a sharper fit than Home for one of these &mdash; pairing and removing a machine are literally the "Destructive"/trust-elevating actions Apple's own agentic-security session names.</p>
+    <div class="ios-grid">
+      <div class="ios-card">
+        <div class="glyph">AA</div>
+        <div>
+          <h3>Pair / Remove Machine as authenticated intents</h3>
+          <span class="api">IntentAuthenticationPolicy = .requiresAuthentication &middot; WWDC26 Session 347</span>
+          <p>Apple's own risk taxonomy calls a destructive, trust-changing action "High" by default. <strong>Remove Machine</strong> is exactly that, and <strong>Pair Machine</strong> is its inverse (granting trust, not just removing it) &mdash; both are stronger candidates for this policy than almost anything on Home, since they permanently change what a machine can do, not just what's on screen right now.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">VA</div>
+        <div>
+          <h3>"Hey Siri, is hermes-box online?"</h3>
+          <span class="api">.appEntityIdentifier(EntityIdentifier(for:identifier:)) &middot; View Annotations API</span>
+          <p>Workspace and machine rows are, again, the "multiple meaningful items visible at once" case. Tagging each machine row lets a status query resolve to a specific host instead of a generic app launch &mdash; genuinely more useful here than on Home, since "is X online" is a question people actually ask about infrastructure.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">ET</div>
+        <div>
+          <h3>A future machine-status widget needs this from day one</h3>
+          <span class="api">allowedExecutionTargets: ExecutionTargets &middot; WWDC26 Session 345</span>
+          <p>If a Home Screen widget ever shows machine status with a "reconnect" button, that write has to land in the main app's data model, not a sandboxed widget-extension copy &mdash; this API is the explicit fix for exactly that failure mode. Worth deciding at design time, not discovering after a widget ships silently broken.</p>
+        </div>
+      </div>
+    </div>
+    <p class="col" style="color:var(--muted);font-size:14px;margin-top:6px;">Full source doc: <span class="mono">docs/design-audit/2026-07-05-ios27-wwdc26-platform-capabilities.md</span> &mdash; none of these three block V1.</p>
+  </section>
+
+  <footer>
+    <p>Sources for this page</p>
+    <div class="files">
+      <span>docs/design-audit/lancer-core-wireframes-2026-07-05/index.html#workspaces</span>
+      <span>docs/design-audit/workflows/05-machines.md</span>
+      <span>Packages/LancerKit/Sources/AppFeature/FleetView.swift, FleetStore.swift, WorkspaceDetailView.swift</span>
+      <span>Packages/LancerKit/Sources/OnboardingFeature/OnboardingPairing.swift</span>
+      <span>Packages/LancerKit/Sources/PersistenceKit/HostRepository.swift</span>
+      <span>docs/design-audit/2026-07-05-ios27-wwdc26-platform-capabilities.md</span>
+    </div>
+  </footer>
+
+</div>

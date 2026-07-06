@@ -1,7 +1,50 @@
 # Workflow 03: Work Thread
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — Cursor-dark transcript with Lancer proof artifacts** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Work Thread should follow the Cursor mobile chat reference more closely than the June 30 “delivery timeline” direction. The approved model is a **dark transcript with structured Lancer artifacts**:
+
+- dark, full-screen reading surface;
+- large circular back and menu controls;
+- centered thread title with machine/host affordance;
+- user prompt bubble when useful;
+- agent output as readable prose, not a terminal dump;
+- code paths and commands styled inline with mono highlights;
+- native artifact cards for to-dos, proof, changed files, approvals, and failed proof;
+- sticky action rail above the composer (`View PR`, `Mark Ready`, `Review`, `Retry`, etc.);
+- bottom `Follow up...` composer always available for governed steering;
+- raw command output collapsed behind “Show output,” not shown by default.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board](../lancer-core-wireframes-2026-07-05/index.html#thread)
+- [Work Thread Cursor wireframe](../work-thread-cursor-2026-07-05/index.html)
+- [Preview image](../work-thread-cursor-2026-07-05/preview.png)
+
+Going forward, the **Core wireframe board** is the working visual file. The single-flow board above is preserved as the first approved source, but new iterations should happen in the combined board.
+
+### What Stays From Lancer
+
+The UI should look and feel Cursor-simple, but it must expose Lancer’s extra power as native artifacts:
+
+| Capability | Work Thread treatment |
+| --- | --- |
+| Agent transcript | Main scroll surface; prose-first, readable, dark |
+| Plans / task briefs | Rounded transcript card, matching Cursor’s prompt/attachment card treatment |
+| To-dos | Compact checklist card; completed items dimmed and struck through |
+| Proof ready | Green proof card with tests/checks/files summary |
+| Changed files | `Changes N` card with file rows and diffstat |
+| PR / ready actions | Sticky action rail above composer |
+| Risky approval | Amber approval card with sticky `Review` / `Deny` actions |
+| Failed proof | Red failure card with last good step, failed command, retry/fix actions |
+| Raw logs / terminal | Collapsed detail only; never the default reading mode |
+
+### Superseded Assumption
+
+The June 30 doc framed Work Thread as a “run timeline + activity log” and warned against chat-first UI. Cursor’s actual mobile thread shows a better target: keep the chat/transcript shape, but make it **less chatty and more artifact-rich**. Do not replace the thread with a delivery-app timeline.
 
 ## Current Screenshots
 
@@ -90,6 +133,10 @@ V1 product language calls this surface **Work Thread**: a read-only **activity l
 Reinforced pattern: **phase summary first, chronological detail second, raw detail last.** Delivery and activity-log apps (Bolt, Glovo, Shop, monday.com, Alan) all avoid dumping logs as the default view.
 
 **Net:** Work Thread should feel like a **run timeline + activity log**, not a chat clone. Terminal styling belongs inside collapsed "Show output" disclosures, not as the primary assistant voice.
+
+## Superseded June 30 Direction
+
+The June 30 direction below is useful background, especially the “no terminal-first surface” constraint, but the July 5 Cursor-dark transcript direction above wins where they conflict.
 
 ## Chosen Direction
 

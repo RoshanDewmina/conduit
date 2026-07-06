@@ -1,7 +1,54 @@
 # Workflow 01: Onboarding / Pairing
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — Cursor-simple first run and code pairing** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Onboarding should use the same simple, direct UI language as the rest of the new board:
+
+- one product proof preview, not abstract feature rows;
+- code-only pairing as the primary V1 path;
+- inline field-adjacent pairing errors that preserve typed digits;
+- account/local choice after pairing context is established;
+- policy defaults as simple guardrail choices;
+- notification pre-prompt plus denied-permission recovery;
+- QR/camera pairing remains deferred for V1.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board — Onboarding](../lancer-core-wireframes-2026-07-05/index.html#onboarding)
+- [Preview image](../lancer-core-wireframes-2026-07-05/preview.png)
+
+### What Stays From Lancer
+
+| Capability | Onboarding treatment |
+| --- | --- |
+| Pair machine | Code-only `lancerd pair` instruction and 6-digit field |
+| Local/self-hosted mode | Account choice with respectful local path |
+| Standard account | Recovery/device-management option, not required for local pairing |
+| Approval safety | Policy-default step after account/local choice |
+| Notifications | Pre-prompt and denied-recovery path |
+| Pairing failures | Inline error below code field, typed digits retained |
+| QR scanner | Deferred; not primary V1 path |
+
+### Mobbin Pass — 2026-07-05
+
+| Example | What it does well | Adapt for Lancer | Do not copy directly |
+| --- | --- | --- | --- |
+| [Meta Quest pairing](https://mobbin.com/screens/599405f7-6102-4ed5-a213-c68d6ec5b339) | Device pairing recovery is clear | Keep code visible and provide retry/help | VR product illustration |
+| [Xbox code setup](https://mobbin.com/screens/3fb1af14-fe6a-4289-9541-ee54c3c202ac) | Simple code entry and device-linking copy | Pair phone to machine with plain language | Entertainment-device framing |
+| [Fitbit code pairing](https://mobbin.com/screens/be8ade76-085a-4e3b-854e-a776073f1151) | Minimal code field tied to a physical device | Six-digit code field and instruction | Wearable setup chrome |
+| [Wise code verification](https://mobbin.com/screens/320bb9c4-7858-4a3b-8735-a2d0a9e3c14b) | Verification feels secure and calm | High-trust inline verification and errors | Banking/legal weight |
+| [ChatGPT notifications](https://mobbin.com/flows/379443da-330d-446c-8876-cc58bc9a70cd) | Notification setup and recovery are direct | Approval-alert pre-prompt and Settings recovery | ChatGPT product wording |
+
+### Open Implementation Note
+
+Use the product preview in the board as the first static asset. It should be replaced later with a real post-implementation screenshot once Home, Review, and Work Thread ship.
+
+## Superseded June 30 Direction
+
+The June 30 direction below is mostly retained, but the July 5 board is the approved visual source and simplifies the first-run hierarchy around one product proof plus code pairing.
 
 ## Current Screenshots
 

@@ -1,7 +1,55 @@
 # Workflow 02: Home / Attention Overview
 
-Status: **awaiting your approval** (doc-only; no SwiftUI implementation in this phase)  
-Updated: 2026-06-30
+Status: **approved direction — Cursor-style ledger** (doc/wireframe only; no SwiftUI implementation in this phase)  
+Updated: 2026-07-05
+
+## Locked Direction — 2026-07-05
+
+Command Home should move from the current dashboard/card treatment to a **Cursor-style daily ledger**:
+
+- sparse white canvas;
+- simple top chrome: back/sidebar, search, menu;
+- selected workspace/repo as the page title;
+- grouped rows for `Needs you`, `Today`, and `Yesterday`;
+- bottom composer always present except Settings;
+- machine/repo/agent/model selection in bottom sheets, not inline dashboard modules;
+- no big hero headline like “4 agents need you”;
+- no default `YOUR MACHINES` card stack on Home.
+
+The approved wireframe artifact is:
+
+- [Core wireframe board](../lancer-core-wireframes-2026-07-05/index.html#home)
+- [Command Home ledger wireframe](../command-home-ledger-2026-07-05/index.html)
+- [Preview image](../command-home-ledger-2026-07-05/preview.png)
+
+Going forward, the **Core wireframe board** is the working visual file. The single-flow board above is preserved as the first approved source, but new iterations should happen in the combined board.
+
+### What Stays From Lancer
+
+The simpler UI does **not** remove Lancer’s feature depth. It changes where that depth appears:
+
+| Capability | Home treatment |
+| --- | --- |
+| Blocked questions | Promoted row in `Needs you`: `Blocked · pick a phrasing` |
+| Risky approvals | Promoted row in `Needs you`: `Approval waiting · high risk` |
+| Failed proof / tests | Promoted row in `Needs you` or top of `Today`: `Tests failed after retry` |
+| Proof ready | Row state: `Proof ready`, opens Work Thread proof detail |
+| Checks passed | Quiet row metadata with checkmark and optional diffstat |
+| Machine/repo context | Page title, row subtitle, or composer picker sheet |
+| Multi-agent/model choice | Composer bottom sheet, not a Home module |
+| Changed files / PR / Mark Ready | Work Thread detail, not Home |
+
+### Page Model
+
+1. **Home ledger** — daily triage list, closest to the Cursor screenshots.
+2. **Work item detail** — opens from a row; carries proof, changed files, PR/ready actions, and a follow-up composer.
+3. **Composer expanded sheet** — one input with two selectors: where it runs and which agent/model handles it.
+4. **Run-on picker sheet** — recent machine/repo combos first, then all machines/repos.
+5. **All-clear state** — still a ledger, but with a calm “No decisions right now” row and one clear next action via the composer.
+
+### Open Design Decision
+
+Keep `Needs you` as a top group for now. It gives Lancer one place to promote blocked questions, failed proof, and high-risk approvals without reverting to a dashboard headline. If it starts to feel too sectioned, fold urgent items into `Today` while keeping the same row styling.
 
 ## Current Screenshots
 
@@ -99,11 +147,15 @@ Additional all-clear / inbox references:
 
 **Net:** Home should feel like **GitHub/Linear inbox clarity** on the attention block, **Todoist/GitHub calm** on all-clear, and **incident.io restraint** on risk — not a metrics dashboard.
 
+## Superseded June 30 Direction
+
+The June 30 direction below is useful background, but the July 5 Cursor-style ledger direction above wins where they conflict.
+
 ## Chosen Direction
 
 **Scope:** Targeted redesign of Home hierarchy + sidebar footer + attention data wiring. **Not** a full app shell rewrite in V1 — keep sidebar / split structure.
 
-Home is an **attention-first control overview**:
+Home was previously framed as an **attention-first control overview**:
 
 | Operating state | Top of Home | Primary action |
 | --- | --- | --- |

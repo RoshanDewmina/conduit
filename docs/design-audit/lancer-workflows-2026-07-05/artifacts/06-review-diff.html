@@ -1,0 +1,1192 @@
+<title>Lancer Workflow — Review &amp; Diff</title>
+<style>
+  :root {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0b0c;
+      --surface: #17171a;
+      --surface-2: #1c1c1f;
+      --ink: #ececee;
+      --muted: #a3a3a8;
+      --line: #2b2b2f;
+      --accent: #55c2f0;
+      --ok: #45bd82;
+      --warn: #d69a3a;
+      --danger: #ff6f92;
+      --shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c;
+    --surface: #17171a;
+    --surface-2: #1c1c1f;
+    --ink: #ececee;
+    --muted: #a3a3a8;
+    --line: #2b2b2f;
+    --accent: #55c2f0;
+    --ok: #45bd82;
+    --warn: #d69a3a;
+    --danger: #ff6f92;
+    --shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="light"] {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .tap:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  .col {
+    max-width: 760px;
+  }
+
+  /* ---- header ---- */
+
+  header.doc-head {
+    margin-bottom: 44px;
+  }
+
+  .breadcrumb {
+    font-size: 12.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .breadcrumb .sep { margin: 0 8px; opacity: .5; }
+  .breadcrumb .here { color: var(--ink); font-weight: 650; }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    font-weight: 780;
+  }
+
+  .thesis {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 22px;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 650;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .pill.status-approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .pill.status-approved::before { content: "●"; font-size: 8px; }
+
+  .pill.source { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; font-size: 12px; }
+
+  /* ---- section scaffolding ---- */
+
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  .section-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  p { line-height: 1.6; }
+  .col p { max-width: 66ch; }
+
+  /* ---- screens strip ---- */
+
+  .screens-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .screens-scroll {
+    overflow-x: auto;
+    background: var(--surface-2);
+  }
+
+  .screens-scroll img {
+    display: block;
+    width: 1800px;
+    max-width: none;
+    height: auto;
+  }
+
+  .screens-caption {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .legend-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+
+  .legend-item .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-right: 8px;
+  }
+
+  .legend-item .name { font-size: 13.5px; font-weight: 650; }
+
+  /* ---- flow steps ---- */
+
+  .flow {
+    display: grid;
+    gap: 22px;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+  }
+
+  .flow-step .badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin: 3px 0 6px;
+  }
+
+  .flow-step p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .flow-step p strong { color: var(--ink); font-weight: 650; }
+
+  /* ---- mobbin citation cards ---- */
+
+  .cite-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cite-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+  }
+
+  .cite-card .src {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .cite-card .src a {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .cite-card .src a:hover { text-decoration: underline; }
+
+  .cite-card .lesson {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cite-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .cite-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- rationale ---- */
+
+  .bug-callout {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 20px 0;
+  }
+
+  .bug-callout .mark {
+    color: var(--danger);
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .bug-callout p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .bug-callout .label {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--danger);
+    margin-bottom: 5px;
+  }
+
+  /* ---- issues table ---- */
+
+  .issues {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .issue-row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+
+  .issue-row .state {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .state.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .state.resolved { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+  .issue-row .body strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .issue-row .body span { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .issue-row .body .cite { display: block; margin-top: 5px; font-size: 12px; }
+
+  /* ---- footer ---- */
+
+  footer {
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer .files {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 720px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 32px 1fr; }
+    .issue-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---- coded phone mockups (fixed light styling — these reproduce a specific
+     light-mode app state, like a photo, and don't invert with the viewer's theme) ---- */
+
+  .phone-strip {
+    display: flex;
+    gap: 22px;
+    padding: 26px 24px;
+  }
+
+  .phone-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slot-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: #7a7a76;
+    margin: 0;
+  }
+
+  .mock .phone {
+    width: 270px;
+    height: 586px;
+    border: 1px solid #dedede;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    background: #fbfbfa;
+    box-shadow: 0 18px 44px rgba(20,20,18,.16);
+    color: #171717;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+
+  .mock .iphone-status {
+    height: 50px;
+    padding: 18px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mock .home-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 16px;
+  }
+
+  .mock .circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #d8d8d5;
+    background: linear-gradient(#fff, #f2f2f0);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    color: #111;
+  }
+
+  .mock .right-actions { display: flex; gap: 8px; }
+  .mock .small-circle { width: 38px; height: 38px; font-size: 17px; }
+
+  .mock .home-title {
+    padding: 14px 22px 20px;
+    font-size: 21px;
+    font-weight: 760;
+  }
+
+  .mock .home-content {
+    padding: 0 22px 110px;
+    height: 380px;
+    overflow: hidden;
+  }
+
+  .mock .group { margin-bottom: 24px; }
+  .mock .group-title { color: #6f6f6f; font-size: 13.5px; margin: 0 0 12px; }
+
+  .mock .row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ececea;
+  }
+
+  .mock .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+    background: #d7d7d5;
+  }
+
+  .mock .dot.active { background: #158bc0; }
+  .mock .dot.warn { background: #d18b2b; }
+
+  .mock .row-title {
+    font-size: 15.5px;
+    line-height: 1.15;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .meta {
+    color: #6f6f6f;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .check { color: #008767; font-weight: 800; margin-right: 6px; }
+  .mock .diff { align-self: center; font-size: 12.5px; white-space: nowrap; color: #6f6f6f; padding-top: 16px; }
+  .mock .add { color: #12966b; }
+  .mock .del { color: #ff5d87; }
+
+  .mock .composer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 16px;
+    height: 52px;
+    border-radius: 28px;
+    border: 1px solid #d8d8d5;
+    background: rgba(255,255,255,.9);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .mock .composer span {
+    flex: 1;
+    min-width: 0;
+    color: #a7a7a4;
+    font-size: 15.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .pill-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ededeb;
+    display: grid;
+    place-items: center;
+    color: #6b6b69;
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .mock .sheet {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 340px;
+    border-radius: 30px 30px 24px 24px;
+    border: 1px solid #dfdfdc;
+    background: rgba(255,255,255,.97);
+    padding: 16px 16px 20px;
+    box-shadow: 0 -16px 44px rgba(0,0,0,.15);
+  }
+
+  .mock .grabber {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d8d8d5;
+    margin: -4px auto 16px;
+  }
+
+  .mock .sheet-title {
+    text-align: center;
+    font-weight: 760;
+    font-size: 16.5px;
+    margin-bottom: 16px;
+  }
+
+  .mock .sheet-row {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #ebebe8;
+    font-size: 15.5px;
+  }
+
+  .mock .sheet-row:last-child { border-bottom: 0; }
+  .mock .sheet-row small { display: block; color: #6f6f6f; font-size: 11px; margin-top: 2px; }
+
+  /* ---- iOS opportunity cards ---- */
+
+  .ios-grid { display: grid; gap: 14px; }
+
+  .ios-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+  }
+
+  .ios-card .glyph {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ios-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .ios-card .api {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .ios-card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .ios-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- additional mock components for Review panels (dark Work-Thread chrome,
+     ported verbatim from the wireframe's own .dark values) ---- */
+
+  .mock .phone.dark {
+    background: #111112;
+    color: #e9e9ea;
+    border-color: #202023;
+    box-shadow: 0 28px 90px rgba(0,0,0,.52);
+  }
+
+  .mock .phone.dark .circle {
+    border-color: #333336;
+    background: linear-gradient(#353536, #262628);
+    color: #fff;
+  }
+
+  .mock .phone.dark .composer {
+    border-color: #414145;
+    background: rgba(52,52,54,.88);
+  }
+
+  .mock .phone.dark .composer span { color: #929296; }
+
+  .mock .phone.dark .pill-icon {
+    background: rgba(255,255,255,.08);
+    color: #a2a2a6;
+  }
+
+  .mock .nav-dark {
+    height: 66px;
+    padding: 10px 14px 12px;
+    display: grid;
+    grid-template-columns: 40px 1fr 40px;
+    gap: 8px;
+    align-items: center;
+    border-bottom: 1px solid #29292b;
+    background: linear-gradient(180deg, #19191a, #111112 86%);
+  }
+
+  .mock .nav-title {
+    text-align: center;
+    font-size: 13.5px;
+    line-height: 1.15;
+    font-weight: 720;
+    color: #e9e9ea;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .scroll {
+    height: 352px;
+    padding: 18px 14px 96px;
+    overflow: hidden;
+  }
+
+  .mock .text {
+    color: #e9e9ea;
+    font-size: 13.5px;
+    line-height: 1.4;
+    margin: 0 0 14px;
+  }
+
+  .mock .card {
+    border: 1px solid #38383b;
+    background: rgba(26,26,27,.9);
+    border-radius: 16px;
+    overflow: hidden;
+    margin: 14px 0 18px;
+  }
+
+  .mock .card-head {
+    padding: 10px 12px;
+    border-bottom: 1px solid #29292b;
+    color: #e9e9ea;
+    font-size: 12.5px;
+  }
+
+  .mock .card.approval {
+    border-color: rgba(209,139,43,.42);
+    background: rgba(209,139,43,.09);
+  }
+
+  .mock .artifact-body {
+    padding: 12px;
+    color: #e9e9ea;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .mock .review-copy {
+    color: #a2a2a6;
+    font-size: 11.5px;
+    line-height: 1.4;
+    margin: -3px 0 10px;
+  }
+
+  .mock .review-card {
+    border: 1px solid #38383b;
+    background: #1b1b1d;
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .mock .review-kicker {
+    color: #d18b2b;
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .mock .review-title {
+    color: #e9e9ea;
+    font-size: 16.5px;
+    line-height: 1.12;
+    font-weight: 760;
+    margin-bottom: 8px;
+  }
+
+  .mock .review-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .mock .kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid #28282b;
+    padding-top: 7px;
+    font-size: 11.5px;
+    color: #a2a2a6;
+  }
+
+  .mock .kv strong {
+    color: #e9e9ea;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    font-weight: 560;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mock .diff-view {
+    border: 1px solid #38383b;
+    background: #101011;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .mock .diff-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 10px;
+    background: #1d1d1f;
+    color: #e9e9ea;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+  }
+
+  .mock .diff-head .add { color: #12966b; }
+
+  .mock .line {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 6px;
+    padding: 3px 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #bcbcc1;
+    border-top: 1px solid rgba(255,255,255,.03);
+  }
+
+  .mock .line.add { background: rgba(69,189,130,.10); color: #81d7a8; }
+  .mock .line.del { background: rgba(255,93,135,.09); color: #ff8ca8; }
+  .mock .line .num { color: #66666c; }
+
+  .mock .decision-bar {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 72px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .mock .decision {
+    border: 1px solid #444448;
+    background: rgba(49,49,51,.94);
+    color: #e9e9ea;
+    border-radius: 20px;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 650;
+    box-shadow: 0 8px 28px rgba(0,0,0,.28);
+  }
+
+  .mock .decision.primary {
+    background: rgba(69,189,130,.18);
+    border-color: rgba(69,189,130,.42);
+    color: #c8f2d9;
+  }
+
+  .mock .decision.danger {
+    background: rgba(255,93,135,.14);
+    border-color: rgba(255,93,135,.34);
+    color: #ffd1dc;
+  }
+
+  .mock .sheet.dark {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 306px;
+    border-radius: 28px 28px 22px 22px;
+    border: 1px solid #38383b;
+    background: #151516;
+    color: #e9e9ea;
+    padding: 14px 14px 18px;
+    box-shadow: 0 -24px 70px rgba(0,0,0,.46);
+  }
+
+  .mock .sheet.dark .grabber { background: #48484c; }
+</style>
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="breadcrumb">Lancer <span class="sep">/</span> Workflows <span class="sep">/</span> <span class="here">04 — Review &amp; Diff</span></p>
+    <h1>Review &amp; Diff</h1>
+    <p class="thesis">Approval is an interruption inside the Work Thread, not a separate inbox product. One focused review surface; the diff is a drill-in you open only when you actually need it.</p>
+    <div class="meta-row">
+      <span class="pill status-approved">Approved direction</span>
+      <span class="pill source">lancer-core-wireframes-2026-07-05/index.html#review</span>
+      <span class="pill source">workflows/04-review-approvals-diff.md</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="section-eyebrow">The four panels</p>
+    <h2>Cursor-dark review drill-in, exactly as boarded</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Review sheet from thread</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents monitor</div><div class="circle">&hellip;</div></div>
+              <div class="scroll" style="opacity:.35;">
+                <p class="text">The agent paused before applying a patch that touches approval security.</p>
+                <div class="card approval"><div class="card-head">Approval waiting</div><div class="artifact-body">High risk patch</div></div>
+              </div>
+              <div class="sheet dark">
+                <div class="grabber"></div>
+                <div class="sheet-title">Review</div>
+                <div class="review-card">
+                  <div class="review-kicker">High risk approval</div>
+                  <div class="review-title">Allow Codex to apply a patch?</div>
+                  <p class="review-copy">This touches approval policy and daemon tests. Review the changed files before approving.</p>
+                  <div class="review-grid">
+                    <div class="kv"><span>Machine</span><strong>hermes-box</strong></div>
+                    <div class="kv"><span>Repo</span><strong>command-center</strong></div>
+                    <div class="kv"><span>Branch</span><strong>fable/approval-security</strong></div>
+                    <div class="kv"><span>Files</span><strong>5 files &middot; +858 -38</strong></div>
+                  </div>
+                </div>
+                <div class="review-card">
+                  <div class="review-kicker" style="color:#a2a2a6;">Evidence</div>
+                  <p class="review-copy">Matched rule: patch touches approval decision code. Raw command output is collapsed.</p>
+                  <div class="kv"><span>Command</span><strong>apply_patch</strong></div>
+                </div>
+              </div>
+              <div class="decision-bar"><div class="decision danger">Deny</div><div class="decision primary">Review diff</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Diff drill-in</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Approval diff</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="review-card">
+                  <div class="review-kicker">Review required</div>
+                  <div class="review-title">5 files changed</div>
+                  <p class="review-copy">Approve unlocks the agent to apply this patch on hermes-box.</p>
+                </div>
+                <div class="diff-view">
+                  <div class="diff-head"><span>policy/evaluate.go</span><span class="add">+35</span></div>
+                  <div class="line del"><span class="num">-</span><span>return allowDefault()</span></div>
+                  <div class="line add"><span class="num">+</span><span>return holdWhenHookUnreachable()</span></div>
+                  <div class="line"><span class="num">&nbsp;</span><span>recordDecisionAudit(result)</span></div>
+                  <div class="line add"><span class="num">+</span><span>assertFailClosed(policy)</span></div>
+                </div>
+                <div class="diff-view">
+                  <div class="diff-head"><span>daemon_test.go</span><span class="add">+48</span></div>
+                  <div class="line add"><span class="num">+</span><span>func TestHookUnreachableHolds(t *testing.T)</span></div>
+                  <div class="line add"><span class="num">+</span><span>require.Equal(t, Hold, decision)</span></div>
+                </div>
+              </div>
+              <div class="decision-bar"><div class="decision">Back</div><div class="decision primary">Approve patch</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Ask for changes / resolved</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Review</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="review-card">
+                  <div class="review-kicker" style="color:#ff8ca8;">Not approved yet</div>
+                  <div class="review-title">Request changes</div>
+                  <p class="review-copy">Send a precise instruction instead of approving. The agent resumes in the same thread.</p>
+                </div>
+                <div class="card">
+                  <div class="artifact-body" style="font-size:14px;color:#b8b8bd;">Ask it to add the regression test first&hellip;</div>
+                </div>
+                <div class="review-card">
+                  <div class="review-kicker" style="color:#81d7a8;">After decision</div>
+                  <p class="review-copy">Decision, actor, time, and audit ID stay visible. Duplicate approval is disabled.</p>
+                  <div class="kv"><span>Decision</span><strong>Changes requested</strong></div>
+                  <div class="kv"><span>By</span><strong>Roshan &middot; 10:22</strong></div>
+                </div>
+              </div>
+              <div class="decision-bar"><div class="decision danger">Deny</div><div class="decision primary">Send changes</div></div>
+              <div class="composer"><div class="pill-icon">+</div><span>Ask for changes&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">D &middot; Policy Diff Review</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Policy diff</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="review-card">
+                  <div class="review-kicker">Governance change</div>
+                  <div class="review-title">Balanced &rarr; Strict on hermes-box</div>
+                  <p class="review-copy">Review policy edits like a code diff. Second approver required before the new rules apply fleet-wide.</p>
+                  <div class="kv"><span>Changed by</span><strong>Roshan &middot; 10:14</strong></div>
+                  <div class="kv"><span>Scope</span><strong>1 machine &middot; 3 rules</strong></div>
+                </div>
+                <div class="diff-view">
+                  <div class="diff-head"><span>policy.yaml &middot; network_writes</span><span class="add">changed</span></div>
+                  <div class="line del"><span class="num">-</span><span>ask: medium</span></div>
+                  <div class="line add"><span class="num">+</span><span>ask: high</span></div>
+                  <div class="line del"><span class="num">-</span><span>hook_unreachable: allow</span></div>
+                  <div class="line add"><span class="num">+</span><span>hook_unreachable: hold</span></div>
+                </div>
+                <div class="diff-view">
+                  <div class="diff-head"><span>policy.yaml &middot; destructive_ops</span><span class="add">changed</span></div>
+                  <div class="line del"><span class="num">-</span><span>biometric: optional</span></div>
+                  <div class="line add"><span class="num">+</span><span>biometric: required</span></div>
+                </div>
+              </div>
+              <div class="decision-bar"><div class="decision">Request changes</div><div class="decision primary">Approve policy</div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Scroll to see all four &middot; built in code from the board's own CSS values, not a screenshot</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">How someone actually uses it</p>
+    <h2>Decide without leaving the thread</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="badge">A</div>
+        <div>
+          <h3>The thread interrupts itself</h3>
+          <p>An approval-waiting card appears inline in the Work Thread. Tapping <strong>Review diff</strong> drops in a sheet with request, scope (machine, repo, branch, files), and collapsed evidence &mdash; the matched policy rule, not raw command output. <strong>Deny</strong> sits right next to it; nothing here requires opening a separate app section.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">B</div>
+        <div>
+          <h3>Diff is a drill-in, not a tab</h3>
+          <p>Only from the review sheet: file-by-file diffs with readable mobile line wrapping, red/green without horizontal scrolling. <strong>Approve patch</strong> stays contextual to what's on screen &mdash; there is no always-on code browser competing for space.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">C</div>
+        <div>
+          <h3>Deny has a middle option</h3>
+          <p><strong>Ask for changes</strong> sends a precise instruction back into the same thread instead of a silent reject &mdash; the agent resumes where it left off. Once decided, the surface flips to read-only: decision, actor, and timestamp persist, and the approve action is gone for good.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">D</div>
+        <div>
+          <h3>Policy changes get the same diff treatment</h3>
+          <p><strong>Policy Diff Review</strong> (reachable from Settings &rarr; Security) shows what changed between policy runs &mdash; red/green rule deltas, who edited, which machines are affected. High-risk governance edits require a second approver before they apply, using the same review anatomy as patch approval.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">What Mobbin taught us, and why</p>
+    <h2>Borrow approval hierarchy, borrow diff literacy, keep Cursor-dark chrome</h2>
+    <div class="cite-grid">
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/64c52224-dd85-4916-a31d-97a03c55a5c1" target="_blank" rel="noopener">Airwallex approval detail</a><span class="lesson">Scope near decision</span></div>
+        <p>Keeps request scope and the approve/reject action close together on one surface, confirmed again in a fresh search. Directly informs why machine/repo/branch/files sit in the same review card as the decision bar, not a separate step.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/0cbdcc18-5e9d-4678-8d0f-b8c2af3c49ab" target="_blank" rel="noopener">Remote Global HR approval</a><span class="lesson">Actor &amp; state clarity</span></div>
+        <p>Actor, request, and review-state read at a glance without extra taps. Basis for the resolved state in panel C showing decision, actor, and time as plain text rather than an icon-only status.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/9a34e3c2-65fa-49e0-9a6f-5833c749d333" target="_blank" rel="noopener">Revolut Business approval</a><span class="lesson">Proportional friction</span></div>
+        <p>Feels serious without visual panic &mdash; higher friction only for genuinely higher risk. Backs the proportional-gate rule: low risk stays quick, high/critical risk forces the diff or biometric before Approve enables.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/f078a659-e648-4b5a-b312-f3be58eece15" target="_blank" rel="noopener">GitHub mobile review</a><span class="lesson">Diff literacy</span></div>
+        <p>Changed-files summaries and inline diff are already familiar to developers. Panel B copies this shape (file header, +/&minus; count, per-line color) while deliberately not importing PR comments or full review threads.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src">Manus diff/editor view <span class="lesson"><a href="https://mobbin.com/screens/6834fa59-ee3a-4969-a6cc-c27bb0c9ad56" target="_blank" rel="noopener">Manus diff view</a> &middot; closest analog, not copied</span></div>
+        <p>Fresh search surfaced Manus's own patch view (red/green diff under a live coding-agent action) &mdash; the nearest existing product to "an agent showing you its own diff." It confirms the shape is sound but its chrome is generic-agent, not Cursor-dark; kept as validation, not a template.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">Why this shape, not a heavier one</p>
+    <h2>One anatomy, proportional friction, diff only when needed</h2>
+    <p>The design bet: request, scope, evidence, and decision live on one reusable surface; the diff is a drill-in reached only from that surface, never a default view. That keeps low-risk approvals fast while still giving high-risk patches a real inspection step. The current-state audit found the code hasn't converged on that bet yet.</p>
+    <div class="bug-callout">
+      <div class="mark">!</div>
+      <div>
+        <span class="label">Dual approval designs &middot; P0 IA, documented</span>
+        <p><span class="mono">InboxBoardCard</span> inline triage, <span class="mono">InboxApprovalDetail</span> sheet, and <span class="mono">DSReviewSheet</span> on Home are three separate presentations of the same decision today, with overlapping but not shared anatomy. This wireframe's whole premise &mdash; one reusable review surface &mdash; requires consolidating these into one component before it's true in code, not just on the board.</p>
+      </div>
+    </div>
+    <div class="issues">
+      <div class="issue-row">
+        <span class="state open">P0 security</span>
+        <div class="body">
+          <strong>Secrets in evidence</strong>
+          <span>Code paths already render command/output snippets in the evidence card; redaction must be enforced before any evidence-forward review sheet ships wider.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">P1 trust</span>
+        <div class="body">
+          <strong>Inline approve bypasses evidence</strong>
+          <span>List-row Approve on non-patch kinds can fire without ever opening the detail sheet &mdash; the proportional gate (medium+ risk should force the full review) is designed but not yet enforced everywhere.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">P1</span>
+        <div class="body">
+          <strong>Deny without reply</strong>
+          <span>Secondary action on non-patch approvals is an immediate silent <span class="mono">rejected</span> today; the spec's "Ask for changes" affordance (panel C) doesn't exist on that path yet.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state resolved">Corrected in this artifact</span>
+        <div class="body">
+          <strong>Biometric gate file path was stale</strong>
+          <span>The workflow doc cites <span class="mono">Sources/LancerCore/BiometricGate.swift</span>, which doesn't exist. The real current file is <span class="mono">Packages/LancerKit/Sources/SecurityKit/BiometricGate.swift</span> (alongside <span class="mono">SecurityKit/ApprovalDecisionAuth.swift</span>, added in the approval-security-hardening merge) &mdash; verified directly against the repo, not copied from the doc.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">iOS 27 / WWDC 2026 &mdash; what applies here</p>
+    <h2>Apple's own agentic-risk session is built for exactly this screen</h2>
+    <p class="col">Cross-checked against the full platform research pass. Approving a high-risk patch is the single best fit for this material anywhere in the app &mdash; it's literally the "Destructive"-tier action Apple's own taxonomy exists to gate.</p>
+    <div class="ios-grid">
+      <div class="ios-card">
+        <div class="glyph">AA</div>
+        <div>
+          <h3>Approve as an authenticated intent, compared against the existing gate</h3>
+          <span class="api">IntentAuthenticationPolicy = .requiresAuthentication &middot; WWDC26 Session 347</span>
+          <p>Apple's risk taxonomy classes destructive/exfiltration actions as High by default, forcing device authentication &mdash; the exact tier a high-risk patch approval sits in. Lancer already ships this instinct as a hand-rolled risk-tiered biometric gate (commit <span class="mono">695d2440</span>, <span class="mono">SecurityKit/BiometricGate.swift</span> + <span class="mono">ApprovalDecisionAuth.swift</span>): the categories line up closely enough that Lancer's policy engine gains an externally-validated vocabulary to cite, not just an internally-invented one.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">VA</div>
+        <div>
+          <h3>"Hey Siri, explain this file"</h3>
+          <span class="api">.appEntityIdentifier(EntityIdentifier(for:identifier:)) &middot; View Annotations API</span>
+          <p>Panel B's diff-file rows are exactly the "multiple meaningful items visible at once" case View Annotations targets. Tagging each file header lets a spoken reference to "this file" or "this diff" resolve to the specific changed file on screen, not a generic app launch. <em>(The <code>.appEntityIdentifier</code> modifier shipped in iOS 18.4; what's new in WWDC26 is Apple's Siri integration guidance around View Annotations.)</em></p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">DM</div>
+        <div>
+          <h3>Deterministic-over-probabilistic validates the policy engine, not the prompt</h3>
+          <span class="api">.onToolCall / .historyTransform vs. "spotlighting" &middot; WWDC26 Session 347</span>
+          <p>Apple explicitly downgrades prompt-level mitigation ("spotlighting" untrusted content) below deterministic gates that block execution outright. That's the same architecture choice behind panel A's "Matched rule" evidence &mdash; a daemon-side policy hold, not an instruction to the agent to be careful &mdash; giving Lancer's fail-closed design an external citation.</p>
+        </div>
+      </div>
+    </div>
+    <p class="col" style="color:var(--muted);font-size:14px;margin-top:6px;">Full source doc: <span class="mono">docs/design-audit/2026-07-05-ios27-wwdc26-platform-capabilities.md</span> &mdash; none of these three block V1.</p>
+  </section>
+
+  <footer>
+    <p>Sources for this page</p>
+    <div class="files">
+      <span>docs/design-audit/lancer-core-wireframes-2026-07-05/index.html#review</span>
+      <span>docs/design-audit/workflows/04-review-approvals-diff.md</span>
+      <span>Packages/LancerKit/Sources/InboxFeature/InboxView.swift</span>
+      <span>Packages/LancerKit/Sources/DesignSystem/Components/InboxApprovalDetail.swift</span>
+      <span>Packages/LancerKit/Sources/DesignSystem/Components/DSReviewSheet.swift</span>
+      <span>Packages/LancerKit/Sources/DiffFeature/DiffView.swift</span>
+      <span>Packages/LancerKit/Sources/LancerCore/Approval.swift</span>
+      <span>Packages/LancerKit/Sources/SecurityKit/BiometricGate.swift, ApprovalDecisionAuth.swift</span>
+      <span>docs/design-audit/2026-07-05-ios27-wwdc26-platform-capabilities.md</span>
+    </div>
+  </footer>
+
+</div>

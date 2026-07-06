@@ -1,0 +1,2768 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lancer Core Wireframes</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #eeeeec;
+      --ink: #171717;
+      --muted: #6f6f6f;
+      --line: #dededb;
+      --soft: #f8f8f6;
+      --dark-page: #0b0b0c;
+      --dark-phone: #111112;
+      --dark-surface: #1b1b1d;
+      --dark-surface-2: #272729;
+      --dark-line: #38383b;
+      --dark-ink: #e9e9ea;
+      --dark-muted: #a2a2a6;
+      --blue: #158bc0;
+      --ok: #45bd82;
+      --warn: #d18b2b;
+      --danger: #ff5d87;
+      --shadow: 0 26px 80px rgba(0, 0, 0, 0.18);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+    }
+
+    a { color: inherit; }
+
+    .top {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 28px 28px 10px;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(27px, 4vw, 44px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .summary {
+      max-width: 900px;
+      margin: 12px 0 0;
+      color: #535353;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .62);
+      color: #333;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    section {
+      max-width: 1500px;
+      margin: 0 auto 34px;
+      padding: 0 28px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 18px 0 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .status {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .notes {
+      max-width: 440px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      text-align: right;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(270px, 1fr));
+      gap: 24px;
+      overflow-x: auto;
+      align-items: start;
+      padding-bottom: 12px;
+    }
+
+    .board.three {
+      grid-template-columns: repeat(3, minmax(276px, 1fr));
+      max-width: 940px;
+    }
+
+    .panel { min-width: 270px; }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 10px 6px;
+    }
+
+    .phone {
+      width: 270px;
+      height: 586px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 38px;
+      overflow: hidden;
+      position: relative;
+      background: #fbfbfa;
+      box-shadow: var(--shadow);
+    }
+
+    .phone.dark {
+      width: 276px;
+      height: 600px;
+      border-color: #202023;
+      background: var(--dark-phone);
+      color: var(--dark-ink);
+      box-shadow: 0 28px 90px rgba(0, 0, 0, .52);
+    }
+
+    .iphone-status {
+      height: 50px;
+      padding: 18px 26px 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .home-chrome {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px 18px;
+    }
+
+    .circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid #d8d8d5;
+      background: linear-gradient(#fff, #f2f2f0);
+      display: grid;
+      place-items: center;
+      font-size: 23px;
+      color: #111;
+    }
+
+    .dark .circle {
+      border-color: #333336;
+      background: linear-gradient(#353536, #262628);
+      color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    .right-actions { display: flex; gap: 10px; }
+    .small-circle { width: 42px; height: 42px; font-size: 19px; }
+
+    .home-title {
+      padding: 16px 24px 24px;
+      font-size: 23px;
+      font-weight: 760;
+    }
+
+    .home-content {
+      padding: 0 24px 120px;
+      height: 382px;
+      overflow: hidden;
+    }
+
+    .group { margin-bottom: 28px; }
+    .group-title { color: var(--muted); font-size: 15px; margin: 0 0 14px; }
+
+    .row {
+      min-height: 58px;
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 0 0 16px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #ececea;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 10px;
+      background: #d7d7d5;
+    }
+
+    .dot.active { background: var(--blue); }
+    .dot.warn { background: var(--warn); }
+    .dot.danger { background: var(--danger); }
+
+    .row-title {
+      font-size: 17px;
+      line-height: 1.15;
+      margin-bottom: 7px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .check { color: #008767; font-weight: 800; margin-right: 8px; }
+    .diff { align-self: center; font-size: 14px; white-space: nowrap; color: var(--muted); padding-top: 20px; }
+    .add { color: #12966b; }
+    .del { color: var(--danger); }
+
+    .composer {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 18px;
+      height: 58px;
+      border-radius: 32px;
+      border: 1px solid #d8d8d5;
+      background: rgba(255,255,255,.88);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      box-shadow: 0 10px 34px rgba(0,0,0,.08);
+    }
+
+    .dark .composer {
+      left: 14px;
+      right: 14px;
+      height: 56px;
+      border-color: #414145;
+      background: rgba(52,52,54,.88);
+      box-shadow: 0 10px 36px rgba(0,0,0,.32);
+    }
+
+    .composer span {
+      flex: 1;
+      min-width: 0;
+      color: #a7a7a4;
+      font-size: 18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dark .composer span { color: #929296; font-size: 17px; }
+
+    .pill-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #ededeb;
+      display: grid;
+      place-items: center;
+      color: #6b6b69;
+      font-size: 24px;
+      flex: 0 0 auto;
+    }
+
+    .dark .pill-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(255,255,255,.08);
+      color: var(--dark-muted);
+      font-size: 22px;
+    }
+
+    .sheet {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: -4px;
+      height: 372px;
+      border-radius: 32px 32px 26px 26px;
+      border: 1px solid #dfdfdc;
+      background: rgba(255,255,255,.96);
+      padding: 18px 18px 22px;
+      box-shadow: 0 -18px 50px rgba(0,0,0,.15);
+    }
+
+    .sheet.dark {
+      border-color: var(--dark-line);
+      background: #151516;
+      color: var(--dark-ink);
+      box-shadow: 0 -24px 70px rgba(0,0,0,.46);
+    }
+
+    .grabber {
+      width: 52px;
+      height: 6px;
+      border-radius: 999px;
+      background: #d8d8d5;
+      margin: -4px auto 18px;
+    }
+
+    .sheet.dark .grabber { background: #48484c; }
+
+    .sheet-title {
+      text-align: center;
+      font-weight: 760;
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
+
+    .sheet-row {
+      min-height: 54px;
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid #ebebe8;
+      font-size: 17px;
+    }
+
+    .sheet.dark .sheet-row { border-color: #27272a; }
+    .sheet-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .sheet.dark .sheet-row small { color: var(--dark-muted); }
+
+    .nav-dark {
+      height: 76px;
+      padding: 10px 16px 14px;
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid #29292b;
+      background: linear-gradient(180deg, #19191a, #111112 86%);
+    }
+
+    .nav-title {
+      text-align: center;
+      font-size: 17px;
+      line-height: 1.15;
+      font-weight: 720;
+      color: var(--dark-ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .scroll {
+      height: 386px;
+      padding: 28px 16px 124px;
+      overflow: hidden;
+    }
+
+    .user-bubble {
+      margin: 0 0 24px auto;
+      max-width: 218px;
+      padding: 14px 16px;
+      border-radius: 24px;
+      background: linear-gradient(#2b2b2d, #222224);
+      color: var(--dark-ink);
+      line-height: 1.28;
+      font-size: 18px;
+    }
+
+    .event {
+      color: var(--dark-muted);
+      font-size: 17px;
+      line-height: 1.34;
+      margin-bottom: 12px;
+    }
+
+    .event strong { color: var(--dark-ink); font-weight: 760; }
+
+    .text {
+      color: var(--dark-ink);
+      font-size: 17px;
+      line-height: 1.4;
+      margin: 0 0 18px;
+    }
+
+    .text h3 {
+      margin: 22px 0 10px;
+      font-size: 23px;
+      line-height: 1.12;
+    }
+
+    .code {
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      background: #2b2b2d;
+      border-radius: 2px;
+      padding: 0 3px;
+      color: #e0e0e2;
+    }
+
+    .card {
+      border: 1px solid var(--dark-line);
+      background: rgba(26,26,27,.9);
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 18px 0 24px;
+    }
+
+    .card-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid #29292b;
+      color: var(--dark-ink);
+      font-size: 16px;
+    }
+
+    .file-row,
+    .todo-row {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid #29292b;
+      color: var(--dark-ink);
+      font-size: 14px;
+    }
+
+    .file-row:last-child,
+    .todo-row:last-child { border-bottom: 0; }
+
+    .todo-row {
+      grid-template-columns: 24px 1fr;
+      color: #77777b;
+      text-decoration: line-through;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+
+    .done {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #77777b;
+      color: #111;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .rail {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 78px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .action {
+      border-radius: 22px;
+      border: 1px solid #444448;
+      background: rgba(49,49,51,.88);
+      color: var(--dark-ink);
+      padding: 10px 13px;
+      font-size: 15px;
+      white-space: nowrap;
+      box-shadow: 0 8px 28px rgba(0,0,0,.28);
+      backdrop-filter: blur(16px);
+    }
+
+    .rail-spacer { flex: 1; }
+    .down {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(49,49,51,.88);
+      border: 1px solid #444448;
+      color: var(--dark-ink);
+    }
+
+    .proof {
+      border-color: rgba(69,189,130,.32);
+      background: rgba(69,189,130,.08);
+    }
+
+    .approval {
+      border-color: rgba(209,139,43,.42);
+      background: rgba(209,139,43,.09);
+    }
+
+    .failure {
+      border-color: rgba(255,93,135,.42);
+      background: rgba(255,93,135,.08);
+    }
+
+    .artifact-body {
+      padding: 14px;
+      color: var(--dark-ink);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .subtle { color: var(--dark-muted); }
+
+    .review-copy {
+      color: var(--dark-muted);
+      font-size: 13px;
+      line-height: 1.4;
+      margin: -4px 0 12px;
+    }
+
+    .review-card {
+      border: 1px solid var(--dark-line);
+      background: var(--dark-surface);
+      border-radius: 18px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .review-kicker {
+      color: var(--warn);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+
+    .review-title {
+      color: var(--dark-ink);
+      font-size: 20px;
+      line-height: 1.12;
+      font-weight: 760;
+      margin-bottom: 9px;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      border-top: 1px solid #28282b;
+      padding-top: 8px;
+      font-size: 13px;
+      color: var(--dark-muted);
+    }
+
+    .kv strong {
+      color: var(--dark-ink);
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      font-weight: 560;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .diff-view {
+      border: 1px solid var(--dark-line);
+      background: #101011;
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .diff-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      padding: 11px 12px;
+      background: #1d1d1f;
+      color: var(--dark-ink);
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .line {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      padding: 4px 12px;
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      color: #bcbcc1;
+      border-top: 1px solid rgba(255,255,255,.03);
+    }
+
+    .line.add { background: rgba(69,189,130,.10); color: #81d7a8; }
+    .line.del { background: rgba(255,93,135,.09); color: #ff8ca8; }
+    .line .num { color: #66666c; }
+
+    .decision-bar {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 78px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .decision {
+      border: 1px solid #444448;
+      background: rgba(49,49,51,.94);
+      color: var(--dark-ink);
+      border-radius: 22px;
+      padding: 11px 10px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 650;
+      box-shadow: 0 8px 28px rgba(0,0,0,.28);
+    }
+
+    .decision.primary {
+      background: rgba(69,189,130,.18);
+      border-color: rgba(69,189,130,.42);
+      color: #c8f2d9;
+    }
+
+    .decision.danger {
+      background: rgba(255,93,135,.14);
+      border-color: rgba(255,93,135,.34);
+      color: #ffd1dc;
+    }
+
+    .phone:not(.dark) .decision {
+      border-color: #d4d4d1;
+      background: rgba(255,255,255,.94);
+      color: #333;
+    }
+
+    .phone:not(.dark) .decision.primary {
+      background: rgba(69,189,130,.18);
+      border-color: rgba(69,189,130,.42);
+      color: #087244;
+    }
+
+    .sources {
+      margin: 18px 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .onboarding-card {
+      border: 1px solid #e4e4e1;
+      border-radius: 20px;
+      padding: 14px;
+      margin: 0 0 14px;
+      background: rgba(255,255,255,.72);
+    }
+
+    .mini-proof {
+      height: 148px;
+      border-radius: 20px;
+      background: #141416;
+      color: var(--dark-ink);
+      padding: 14px;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+
+    .mini-proof .mini-row {
+      border: 1px solid #333337;
+      border-radius: 12px;
+      padding: 7px 9px;
+      margin-bottom: 7px;
+      font-size: 12px;
+      color: var(--dark-muted);
+      background: #1d1d1f;
+    }
+
+    .code-field {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 7px;
+      margin: 12px 0 8px;
+    }
+
+    .digit {
+      height: 42px;
+      border: 1px solid #d7d7d4;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 18px;
+      background: #fff;
+    }
+
+    .ia-map {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .ia-card {
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 132px;
+    }
+
+    .ia-card strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .ia-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .workspace-row {
+      min-height: 72px;
+      display: grid;
+      grid-template-columns: 30px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      border-bottom: 1px solid #ececea;
+      color: var(--ink);
+    }
+
+    .folder {
+      width: 26px;
+      height: 20px;
+      border: 2px solid #9f9f9c;
+      border-radius: 4px;
+      position: relative;
+    }
+
+    .folder::before {
+      content: "";
+      position: absolute;
+      left: -2px;
+      top: -8px;
+      width: 12px;
+      height: 8px;
+      border: 2px solid #9f9f9c;
+      border-bottom: 0;
+      border-radius: 4px 4px 0 0;
+      background: #fbfbfa;
+    }
+
+    .workspace-name {
+      font-size: 18px;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .workspace-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.25;
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .workspace-count {
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+    }
+
+    .health-line {
+      border: 1px solid #e4e4e1;
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: rgba(255,255,255,.7);
+    }
+
+    .health-line strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .health-line span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 10px 0 14px;
+    }
+
+    .mini-chip {
+      border: 1px solid #dededb;
+      background: #fff;
+      color: #4f4f4d;
+      border-radius: 999px;
+      padding: 6px 9px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .dark .mini-chip {
+      border-color: #3a3a3d;
+      background: #242426;
+      color: var(--dark-muted);
+    }
+
+    .preview-pane {
+      border: 1px solid var(--dark-line);
+      background: #09090a;
+      border-radius: 16px;
+      height: 168px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .preview-bar {
+      height: 16px;
+      border-radius: 999px;
+      background: #2b2b2e;
+    }
+
+    .preview-body {
+      border-radius: 12px;
+      background: linear-gradient(135deg, #202023, #131315);
+      border: 1px solid #303034;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .annotation-pin {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255,93,135,.24);
+      border: 2px solid var(--danger);
+      left: 132px;
+      top: 54px;
+    }
+
+    .mask-outline {
+      position: absolute;
+      width: 96px;
+      height: 40px;
+      border-radius: 8px;
+      background: rgba(255,93,135,.22);
+      border: 2px dashed var(--danger);
+      left: 90px;
+      top: 40px;
+    }
+
+    .mask-outline::after {
+      content: "";
+      position: absolute;
+      inset: -5px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,93,135,.45);
+    }
+
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #2b2b2e;
+      color: var(--dark-ink);
+      font-size: 14px;
+    }
+
+    .timeline-row small {
+      display: block;
+      color: var(--dark-muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .search-field {
+      height: 42px;
+      border-radius: 21px;
+      border: 1px solid #323236;
+      background: #1c1c1e;
+      color: var(--dark-muted);
+      display: flex;
+      align-items: center;
+      padding: 0 13px;
+      font-size: 15px;
+      margin-bottom: 14px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .compare-pane {
+      border: 1px solid #353538;
+      background: #171719;
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 116px;
+      color: var(--dark-muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .device-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .device-tile {
+      position: relative;
+      border: 1px solid #303034;
+      background: linear-gradient(135deg, #1c1c1e, #131315);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 78px;
+    }
+
+    .device-tile .device-label {
+      color: var(--dark-ink);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .device-tile .device-sub {
+      color: var(--dark-muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .status-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .status-badge.ok { background: rgba(69,189,130,.2); color: var(--ok); border: 1px solid rgba(69,189,130,.5); }
+    .status-badge.fail { background: rgba(255,93,135,.2); color: var(--danger); border: 1px solid rgba(255,93,135,.5); }
+
+    .replay-stack {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .replay-row {
+      display: grid;
+      grid-template-columns: 62px 1fr;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #303034;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .replay-row .replay-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .replay-row.before .replay-tag { color: var(--danger); }
+    .replay-row.after .replay-tag { color: var(--ok); }
+
+    .replay-row .replay-thumb {
+      height: 46px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #202023, #131315);
+      border: 1px solid #303034;
+    }
+
+    .desktop-mini {
+      border: 1px solid #3a3a3d;
+      background: #18181a;
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .desktop-bar {
+      height: 28px;
+      background: #27272a;
+      color: var(--dark-muted);
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+    }
+
+    .desktop-body {
+      padding: 14px;
+      color: var(--dark-ink);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .watch-mini {
+      width: 118px;
+      height: 142px;
+      border-radius: 34px;
+      border: 1px solid #3a3a3d;
+      background: #050506;
+      margin: 0 auto 12px;
+      padding: 20px 12px;
+      color: var(--dark-ink);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .widget-mini {
+      border: 1px solid #3a3a3d;
+      background: #1e1e20;
+      border-radius: 22px;
+      padding: 14px;
+      color: var(--dark-ink);
+      margin-bottom: 12px;
+    }
+
+    .handoff-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .handoff-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.62);
+      padding: 16px;
+      min-height: 150px;
+    }
+
+    .handoff-card strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .handoff-card span,
+    .handoff-card li {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    .handoff-card ul {
+      margin: 0;
+      padding: 0 0 0 16px;
+    }
+
+    .state-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.62);
+      margin-top: 18px;
+      font-size: 13px;
+    }
+
+    .state-table th,
+    .state-table td {
+      text-align: left;
+      vertical-align: top;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      line-height: 1.38;
+    }
+
+    .state-table th {
+      color: #3a3a3a;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .state-table tr:last-child td { border-bottom: 0; }
+
+    @media (max-width: 760px) {
+      .section-head { display: block; }
+      .notes { max-width: 100%; text-align: left; margin-top: 8px; }
+      .board.three { max-width: none; }
+      .ia-map { grid-template-columns: 1fr; }
+      .handoff-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="eyebrow">Lancer core wireframes - July 5, 2026</div>
+    <h1>One working board for the core mobile flows</h1>
+    <p class="summary">This is the single file to keep updating as we lock the product direction. The visual target is Cursor-simple: sparse home, dark transcript, and review/diff surfaces that feel like a continuation of the work thread instead of a separate dashboard.</p>
+    <nav class="nav">
+      <a href="#onboarding">Onboarding</a>
+      <a href="#home">Command Home</a>
+      <a href="#workspaces">Workspaces</a>
+      <a href="#thread">Work Thread</a>
+      <a href="#launch-setup">Launch Setup</a>
+      <a href="#artifact-views">Artifacts</a>
+      <a href="#proof-gaps">Proof Suite Gaps</a>
+      <a href="#ship-history">Ship / History</a>
+      <a href="#fast-follow">Fast Follows</a>
+      <a href="#command-context">Command &amp; Context</a>
+      <a href="#proactive-signals">Proactive Signals</a>
+      <a href="#workspace-depth">Workspace Depth</a>
+      <a href="#platform-intelligence">Platform Intelligence</a>
+      <a href="#review">Review / Diff</a>
+      <a href="#settings">Settings</a>
+      <a href="#final-ia">Final IA</a>
+      <a href="#handoff">Build Handoff</a>
+    </nav>
+  </header>
+
+  <section id="onboarding">
+    <div class="section-head">
+      <div>
+        <h2>Onboarding / Pair Machine</h2>
+        <p class="status">Final direction: one product proof, code-only pairing, account choice after pairing, policy defaults, notification recovery.</p>
+      </div>
+      <p class="notes">Good: explains the product before asking for trust. Risk: pairing failure states need to be very visible and preserve the typed code.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Product proof + code</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:18px;">
+            <div class="mini-proof">
+              <div style="font-weight:760;margin-bottom:10px;">conduit</div>
+              <div class="mini-row">hermes-box · online · Codex ready</div>
+              <div class="mini-row" style="border-color:rgba(209,139,43,.45);">Approval waiting · high risk patch</div>
+              <div class="mini-row">Proof ready · checks passed · +858 -38</div>
+            </div>
+            <div class="onboarding-card">
+              <div class="review-title" style="color:var(--ink);font-size:22px;">Steer AI coding agents from your phone.</div>
+              <p class="review-copy" style="color:var(--muted);margin:7px 0 0;">Review risky actions and keep work moving without opening a laptop.</p>
+            </div>
+            <div class="onboarding-card">
+              <div class="workspace-name" style="font-size:16px;">On your machine, run <span class="code">lancerd pair</span></div>
+              <div class="code-field"><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div></div>
+              <div class="workspace-meta">Where do I find my code?</div>
+            </div>
+          </div>
+          <div class="decision-bar" style="bottom:16px;"><div class="decision" style="color:#333;background:#fff;">Skip</div><div class="decision primary">Pair</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Pairing error / retry</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:70px;">
+            <div class="onboarding-card">
+              <div class="workspace-name" style="font-size:17px;">Enter the code from your machine</div>
+              <div class="code-field"><div class="digit">4</div><div class="digit">1</div><div class="digit">8</div><div class="digit">0</div><div class="digit">6</div><div class="digit">2</div></div>
+              <div style="color:#cf365a;font-size:13px;line-height:1.35;">That code did not match. Check your machine and try again.</div>
+            </div>
+            <div class="health-line"><strong>Still stuck?</strong><span>Run <span class="code">lancerd pair</span> again to generate a fresh code. The current code stays visible while you retry.</span></div>
+          </div>
+          <div class="decision-bar" style="bottom:18px;"><div class="decision" style="color:#333;background:#fff;">Get help</div><div class="decision primary">Try again</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Account choice</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:58px;">
+            <div class="review-title" style="color:var(--ink);font-size:25px;">How should Lancer remember you?</div>
+            <p class="review-copy" style="color:var(--muted);margin:8px 0 20px;">Use an account for recovery and device management, or keep this phone paired locally.</p>
+            <div class="health-line"><strong>Lancer account</strong><span>Recovery, device list, hosted features when enabled.</span></div>
+            <div class="health-line"><strong>Self-hosted offline</strong><span>Pair directly with your own machine. No account required.</span></div>
+            <div class="workspace-meta" style="text-align:center;margin-top:16px;">I already have an account</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Policy defaults</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:58px;">
+            <div class="review-title" style="color:var(--ink);font-size:25px;">Choose the starting guardrails.</div>
+            <p class="review-copy" style="color:var(--muted);margin:8px 0 20px;">You can change this later in Settings. Safety prompts are always available.</p>
+            <div class="health-line"><strong>Balanced</strong><span>Ask before risky writes, secrets, network, and destructive actions.</span></div>
+            <div class="health-line"><strong>Always ask</strong><span>Pause for every action that changes files or environment.</span></div>
+            <div class="health-line"><strong>Fast lane</strong><span>Allow low-risk edits; still stop for high-risk actions.</span></div>
+          </div>
+          <div class="decision-bar" style="bottom:18px;"><div class="decision primary" style="grid-column:1 / -1;">Continue</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Notifications recovery</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:70px;">
+            <div class="review-title" style="color:var(--ink);font-size:25px;">Get approval alerts.</div>
+            <p class="review-copy" style="color:var(--muted);margin:8px 0 20px;">Lancer only interrupts when an agent needs a decision or proof fails.</p>
+            <div class="health-line"><strong>Notifications are off</strong><span>Turn them on in iOS Settings, or continue and manage this later.</span></div>
+            <div class="workspace-row" style="min-height:58px;"><span>settings</span><div><div class="workspace-name" style="font-size:16px;">Open iOS Settings</div><div class="workspace-meta">Enable approval alerts</div></div><div class="workspace-count">›</div></div>
+          </div>
+          <div class="decision-bar" style="bottom:18px;"><div class="decision" style="color:#333;background:#fff;">Later</div><div class="decision primary">Open Settings</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references behind this direction: <a href="https://mobbin.com/screens/599405f7-6102-4ed5-a213-c68d6ec5b339">Meta Quest pairing</a>, <a href="https://mobbin.com/screens/3fb1af14-fe6a-4289-9541-ee54c3c202ac">Xbox code setup</a>, <a href="https://mobbin.com/screens/be8ade76-085a-4e3b-854e-a776073f1151">Fitbit code pairing</a>, <a href="https://mobbin.com/screens/320bb9c4-7858-4a3b-8735-a2d0a9e3c14b">Wise code verification</a>, and <a href="https://mobbin.com/flows/379443da-330d-446c-8876-cc58bc9a70cd">ChatGPT notifications</a>. Carry forward code clarity, inline errors, and permission recovery; do not copy consumer device illustration weight.</p>
+  </section>
+
+  <section id="home">
+    <div class="section-head">
+      <div>
+        <h2>Command Home / Attention Overview</h2>
+        <p class="status">Approved direction: Cursor-style daily ledger. Home is a calm list of work and decisions, not a dashboard.</p>
+      </div>
+      <p class="notes">Good: low cognitive load, fast scan, composer always available. Risk: urgent items need enough metadata without becoming cards.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Daily ledger</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">+</div></div>
+          </div>
+          <div class="home-title">conduit</div>
+          <div class="home-content">
+            <div class="group">
+              <p class="group-title">Needs you</p>
+              <div class="row">
+                <div class="dot warn"></div>
+                <div><div class="row-title">Approval waiting</div><div class="meta">High risk · patch · hermes-box</div></div>
+                <div class="diff">Review</div>
+              </div>
+            </div>
+            <div class="group">
+              <p class="group-title">Today</p>
+              <div class="row">
+                <div class="dot active"></div>
+                <div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">✓</span>Checks Passed</div></div>
+                <div class="diff"><span class="add">+858</span> <span class="del">-38</span></div>
+              </div>
+              <div class="row">
+                <div class="dot"></div>
+                <div><div class="row-title">Lancer app notifications</div><div class="meta"><span class="check">✓</span>Checks Passed · +831 -39</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. All clear still has action</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">≡</div></div>
+          </div>
+          <div class="home-title">conduit</div>
+          <div class="home-content">
+            <div class="group">
+              <p class="group-title">Today</p>
+              <div class="row">
+                <div class="dot"></div>
+                <div><div class="row-title">No decisions right now</div><div class="meta">1 machine connected · no failed proof</div></div>
+              </div>
+              <div class="row">
+                <div class="dot"></div>
+                <div><div class="row-title">Start work from here</div><div class="meta">Pick repo, machine, and model in composer</div></div>
+              </div>
+            </div>
+            <div class="group">
+              <p class="group-title">Yesterday</p>
+              <div class="row">
+                <div class="dot"></div>
+                <div><div class="row-title">Siri iOS27 fast follow</div><div class="meta"><span class="check">✓</span>Checks Passed · +1,263 -70</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Composer expanded</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">≡</div></div>
+          </div>
+          <div class="home-title">conduit</div>
+          <div class="home-content">
+            <div class="row"><div class="dot active"></div><div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">✓</span>Checks Passed</div></div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div style="color:#6f6f6f;font-size:15px;margin-bottom:8px;">conduit&nbsp; master&nbsp;⌄ &nbsp; cloud&nbsp;⌄</div>
+            <div style="font-size:24px;color:#a5a5a2;margin:4px 0 84px;">Plan, ask, build...</div>
+            <div class="composer" style="position:static;box-shadow:none;"><div class="pill-icon">+</div><span>Composer 2.5</span><div class="pill-icon">mic</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Run-on picker</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="padding-top:108px;opacity:.45;">
+            <div class="row"><div class="dot"></div><div><div class="row-title">Parallel agents</div><div class="meta">Checks Passed</div></div></div>
+            <div class="row"><div class="dot"></div><div><div class="row-title">Lancer notifications</div><div class="meta">Checks Passed · +831 -39</div></div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-title">Run on</div>
+            <div style="color:#777;font-size:16px;margin-bottom:14px;">Active</div>
+            <div class="sheet-row"><span>cloud</span><div>Cursor Cloud<small>conduit · master</small></div><span>✓</span></div>
+            <div style="color:#777;font-size:16px;margin:24px 0 8px;">More</div>
+            <div class="sheet-row"><span>mac</span><div>Hermes Mac mini<small>3 repos · online</small></div><span>›</span></div>
+            <div class="sheet-row"><span>ssh</span><div>Remote Control<small>Pair or reconnect</small></div><span>›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Model picker</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="padding-top:108px;opacity:.45;">
+            <div class="row"><div class="dot"></div><div><div class="row-title">Parallel agents</div><div class="meta">Checks Passed</div></div></div>
+            <div class="row"><div class="dot"></div><div><div class="row-title">Lancer notifications</div><div class="meta">Checks Passed · +831 -39</div></div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-title">Model</div>
+            <div style="height:45px;border:1px solid #dededb;border-radius:22px;display:flex;align-items:center;padding:0 14px;color:#999;font-size:18px;margin-bottom:22px;">⌕&nbsp;&nbsp;Search</div>
+            <div style="color:#777;font-size:16px;margin-bottom:8px;">Active</div>
+            <div class="sheet-row"><span></span><div>Composer 2.5</div><span>✓</span></div>
+            <div style="color:#777;font-size:16px;margin:24px 0 8px;">More</div>
+            <div class="sheet-row"><span></span><div>GPT-5.5 <small>Medium</small></div><span>...</span></div>
+            <div class="sheet-row"><span></span><div>Codex 5.3 <small>Medium</small></div><span>...</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="workspaces">
+    <div class="section-head">
+      <div>
+        <h2>Workspaces / Machines</h2>
+        <p class="status">Final direction: Cursor-style Workspaces list. Repos and workspaces are the first thing; machine health, pairing, and diagnostics live one level deeper.</p>
+      </div>
+      <p class="notes">Good: matches Cursor, removes fleet-dashboard weight, and keeps machine trust available. Risk: offline machine states still need clear promotion when they block work.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Workspaces list</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle" style="overflow:hidden;"><div style="width:35px;height:35px;border-radius:50%;background:linear-gradient(135deg,#d979ff,#69e8f3);"></div></div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">+</div></div>
+          </div>
+          <div class="home-title">Workspaces</div>
+          <div class="home-content">
+            <div class="workspace-row">
+              <div class="folder"></div>
+              <div><div class="workspace-name">All Repos</div><div class="workspace-meta">1 needs review · 1 machine online</div></div>
+              <div class="workspace-count"><span>1</span><span>›</span></div>
+            </div>
+            <div class="workspace-row">
+              <div class="folder"></div>
+              <div><div class="workspace-name">conduit</div><div class="workspace-meta">hermes-box · checks passed</div></div>
+              <div class="workspace-count"><span>1</span><span>›</span></div>
+            </div>
+            <div class="workspace-row">
+              <div class="folder"></div>
+              <div><div class="workspace-name">personal-web</div><div class="workspace-meta">No active work</div></div>
+              <div class="workspace-count"><span>›</span></div>
+            </div>
+            <div class="workspace-row">
+              <div class="folder"></div>
+              <div><div class="workspace-name" style="color:#666;">Add Repo</div><div class="workspace-meta">Pair a machine or choose a saved path</div></div>
+              <div class="workspace-count"></div>
+            </div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Workspace detail</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">...</div></div>
+          </div>
+          <div class="home-title">conduit</div>
+          <div class="home-content">
+            <div class="group">
+              <p class="group-title">Today</p>
+              <div class="row">
+                <div class="dot active"></div>
+                <div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">✓</span>Checks Passed · +858 -38</div></div>
+              </div>
+              <div class="row">
+                <div class="dot warn"></div>
+                <div><div class="row-title">Approval waiting</div><div class="meta">High risk · policy/evaluate.go</div></div>
+                <div class="diff">Review</div>
+              </div>
+            </div>
+            <div class="group">
+              <p class="group-title">Run targets</p>
+              <div class="workspace-row" style="min-height:58px;">
+                <div class="dot active" style="margin:0;"></div>
+                <div><div class="workspace-name" style="font-size:16px;">hermes-box</div><div class="workspace-meta">Online · Codex, Claude, Kimi</div></div>
+                <div class="workspace-count"><span>›</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>New work in conduit...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Machine detail sheet</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-title" style="padding-top:90px;opacity:.35;">conduit</div>
+          <div class="home-content" style="opacity:.35;">
+            <div class="workspace-row"><div class="folder"></div><div><div class="workspace-name">hermes-box</div><div class="workspace-meta">Online · Codex, Claude, Kimi</div></div><div>›</div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-title">hermes-box</div>
+            <div class="health-line"><strong>Online</strong><span>Relay connected · last seen just now</span></div>
+            <div class="health-line"><strong>Agents</strong><span>Codex, Claude Code, OpenCode, Kimi</span></div>
+            <div class="health-line"><strong>Trust</strong><span>Paired to this phone · fingerprint saved</span></div>
+            <div class="sheet-row"><span></span><div>Diagnostics<small>Daemon, relay, push, policy</small></div><span>›</span></div>
+            <div class="sheet-row"><span></span><div>Remove Machine<small>Requires confirmation</small></div><span>›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Offline / recovery</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">⌕</div><div class="circle small-circle">+</div></div>
+          </div>
+          <div class="home-title">Workspaces</div>
+          <div class="home-content">
+            <div class="group">
+              <p class="group-title">Needs you</p>
+              <div class="row">
+                <div class="dot danger"></div>
+                <div><div class="row-title">hermes-box offline</div><div class="meta">Last seen 18m ago · 1 queued decision</div></div>
+                <div class="diff">Fix</div>
+              </div>
+            </div>
+            <div class="health-line"><strong>What still works</strong><span>You can read cached threads. New runs wait until the machine reconnects.</span></div>
+            <div class="health-line"><strong>Likely fix</strong><span>Start lancerd on the Mac or check relay connection.</span></div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Ask about offline work...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Add repo / pair machine</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-title" style="padding-top:90px;opacity:.35;">Workspaces</div>
+          <div class="home-content" style="opacity:.35;">
+            <div class="workspace-row"><div class="folder"></div><div><div class="workspace-name">conduit</div><div class="workspace-meta">1 machine online</div></div><div>›</div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-title">Add</div>
+            <div class="sheet-row"><span>folder</span><div>Add Repo<small>Choose a path on a paired machine</small></div><span>›</span></div>
+            <div class="sheet-row"><span>mac</span><div>Pair Machine<small>Use a setup code from lancerd</small></div><span>›</span></div>
+            <div class="sheet-row"><span>cloud</span><div>Use Cloud Runner<small>Available when hosted agents are enabled</small></div><span>›</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references behind this proposal: <a href="https://mobbin.com/screens/112f6d5f-bf16-4634-b0b6-a4099cbb2376">Slack workspace switcher</a>, <a href="https://mobbin.com/screens/fd6532d8-69ef-402b-b404-a39bd53e65be">monday.com workspace list</a>, <a href="https://mobbin.com/screens/45c7e3cf-c9fb-4efa-b721-5d34e90c8128">GitHub repository list</a>, <a href="https://mobbin.com/screens/c7b180aa-48f0-4f00-9699-3cb138b19997">Evernote connected devices</a>, and <a href="https://mobbin.com/screens/26a2393a-80c7-4507-a497-d5908a9f5c81">Telegram connected devices</a>. Carry forward simple workspace rows first; use device-management patterns only for detail, recovery, and revoke states.</p>
+  </section>
+
+  <section id="thread">
+    <div class="section-head">
+      <div>
+        <h2>Work Thread</h2>
+        <p class="status">Approved direction: Cursor-dark transcript with Lancer proof artifacts. The thread is prose-first, artifact-rich, and never terminal-first.</p>
+      </div>
+      <p class="notes">Good: matches Cursor, keeps follow-up natural, makes proof feel native. Risk: sticky actions must not hide content while scrolling.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Transcript opening</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="user-bubble">I want you to run parallel agents and then get these done please</div>
+            <div class="event">Worked&nbsp; <strong>3m 6s</strong></div>
+            <div class="event">Created plan <strong>Parallel Agent Execution</strong></div>
+            <p class="text"><strong>No commit or push is needed</strong> from this session.</p>
+            <p class="text">Existing dirty worktree on <span class="code">fable/approval-security-hardening</span> is untouched per repo rules.</p>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Follow up...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Running / plan card</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card">
+              <div class="card-head">Parallel execution plan - 7 task briefs</div>
+              <div class="artifact-body">Implement the plan as specified. To-dos already exist; mark them in progress as you work.</div>
+            </div>
+            <div class="event">Worked&nbsp; <strong>47m 12s</strong></div>
+            <div class="event">Edited <strong>5 files</strong>, 1 other tool <span class="add">+219</span></div>
+            <div class="card">
+              <div class="card-head">To-dos 2/8</div>
+              <div class="todo-row"><span class="done">✓</span><span>Create isolated worktrees</span></div>
+              <div class="todo-row" style="text-decoration:none;color:var(--dark-ink);"><span class="done" style="background:var(--warn);">!</span><span>Run lane B proof</span></div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Stop</div><div class="action">Review plan</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Follow up...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Proof / changes complete</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card proof">
+              <div class="card-head">Proof ready</div>
+              <div class="artifact-body">Checks passed on device handoff. Five parallel lanes completed and merged into review branch.</div>
+            </div>
+            <div class="text"><h3>Worktree locations</h3>Isolated lanes remain at <span class="code">/Users/roshansilva/Documents/cc-lane-{02,04,05}</span>.</div>
+            <div class="card">
+              <div class="card-head">Changes 5</div>
+              <div class="file-row"><span>file</span><span>handoff-audit.md</span><span><span class="add">+47</span> <span class="del">-0</span></span></div>
+              <div class="file-row"><span>file</span><span>daemon_test.go</span><span><span class="add">+48</span> <span class="del">-0</span></span></div>
+              <div class="file-row"><span>file</span><span>policy/evaluate.go</span><span><span class="add">+35</span> <span class="del">-0</span></span></div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">View PR&nbsp; <span class="add">+858</span> <span class="del">-38</span></div><div class="action">Mark Ready</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Follow up...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Approval interruption</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <p class="text">The agent paused before applying a patch that touches approval security.</p>
+            <div class="card approval">
+              <div class="card-head">Approval waiting</div>
+              <div class="artifact-body"><strong>High risk patch</strong><br><span class="subtle">Touches policy evaluation and daemon tests. Review the diff before approving.</span></div>
+            </div>
+            <p class="text">Raw tool output is hidden. Open it only if you need the exact command transcript.</p>
+          </div>
+          <div class="rail"><div class="action">Review</div><div class="action">Deny</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Ask for changes...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Failed proof / recovery</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card failure">
+              <div class="card-head">Proof failed</div>
+              <div class="artifact-body"><strong>swift test failed</strong><br><span class="subtle">1 regression in ApprovalDecisionAuthTests. Last good step: build passed.</span></div>
+            </div>
+            <p class="text">The run is stopped before marking ready. The failing command and log are collapsed.</p>
+            <div class="card">
+              <div class="card-head">Show output</div>
+              <div class="artifact-body"><span class="code">xcodebuild test ...</span></div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Retry proof</div><div class="action">Fix failure</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Follow up...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">F. Proof ready &mdash; high risk, verify surfaced</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">policy/evaluate.go fix</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card proof">
+              <div class="card-head">Proof ready</div>
+              <div class="artifact-body">Touches <span class="code">policy/evaluate.go</span> &mdash; risk-scored high. Independent verification is one tap away, not required.</div>
+            </div>
+            <div class="file-row"><span>file</span><span>policy/evaluate.go</span><span><span class="add">+35</span> <span class="del">-4</span></span></div>
+          </div>
+          <div class="rail"><div class="action">PR</div><div class="action">Ready</div><div class="action" style="border-color:rgba(69,189,130,.42);color:#c8f2d9;">Verify&hellip;</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Follow up...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">"Verify with&hellip;" only earns a permanent rail slot when the mission's own risk score is high/critical &mdash; the same tier that already gates the biometric approval. On low/medium-risk missions it stays one level down, behind the nav-bar overflow (the "..." control already present on every thread panel), so it never adds friction to the common case.</p>
+  </section>
+
+  <section id="launch-setup">
+    <div class="section-head">
+      <div>
+        <h2>Launch Setup / Composer Details</h2>
+        <p class="status">Added views: share intake, launch contract, mission defaults, repo playbook, readiness check, and provider capability badges.</p>
+      </div>
+      <p class="notes">These stay inside composer, Workspaces, or Settings. They should never become a Mission Draft root or agent-router dashboard. Tap-to-Segment Bug Capture (attach a screenshot, tap the broken element) reuses the same Vision-mask interaction shown in Work Thread Artifact Views panel C &mdash; input-time and output-time uses of one capability, not two builds.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Share / universal link intake</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-title">New work</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line"><strong>Imported from GitHub</strong><span>github.com/lancer/pull/142 · opened from share sheet</span></div>
+            <div class="onboarding-card">
+              <div class="workspace-name" style="font-size:17px;">Fix the checkout crash from this PR thread</div>
+              <p class="review-copy" style="color:var(--muted);margin:8px 0 0;">Lancer attaches the link and drafts context into the same composer. No evidence inbox.</p>
+            </div>
+            <div class="chip-row"><span class="mini-chip">conduit</span><span class="mini-chip">hermes-box</span><span class="mini-chip">Codex</span></div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Ask Lancer...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Launch contract chips</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:94px;opacity:.45;">
+            <div class="row"><div class="dot active"></div><div><div class="row-title">New work</div><div class="meta">Drafting launch contract</div></div></div>
+          </div>
+          <div class="sheet" style="height:430px;">
+            <div class="grabber"></div>
+            <div class="sheet-title">Launch</div>
+            <div class="onboarding-card" style="padding:12px;margin-bottom:10px;">
+              <div class="workspace-name" style="font-size:16px;">Add Siri shortcut and prove it works.</div>
+              <div class="chip-row">
+                <span class="mini-chip">repo conduit</span><span class="mini-chip">hermes-box</span><span class="mini-chip">Codex</span><span class="mini-chip">Normal</span><span class="mini-chip">Proof: tests + screenshot</span><span class="mini-chip">Ask on risk</span>
+              </div>
+            </div>
+            <div class="sheet-row"><span>rule</span><div>Protected paths<small>billing/, policy/, secrets</small></div><span>›</span></div>
+            <div class="sheet-row"><span>test</span><div>Done criteria<small>Build, tests, changed files, proof card</small></div><span>›</span></div>
+            <div class="sheet-row"><span>bell</span><div>Interruptions<small>Risk, failed proof, unclear question</small></div><span>›</span></div>
+          </div>
+          <div class="decision-bar" style="bottom:16px;"><div class="decision">Cancel</div><div class="decision primary">Start</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Mission defaults</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div></div>
+          <div class="home-title" style="font-size:21px;">Mission defaults</div>
+          <div class="home-content" style="height:430px;">
+            <div class="group">
+              <p class="group-title">Run mode</p>
+              <div class="workspace-row" style="min-height:58px;"><span></span><div><div class="workspace-name" style="font-size:16px;">Normal</div><div class="workspace-meta">Ask for risky changes; continue on safe work</div></div><div class="workspace-count">✓</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span></span><div><div class="workspace-name" style="font-size:16px;">Hands-off until proof</div><div class="workspace-meta">Interrupt only for risk or failure</div></div><div class="workspace-count">›</div></div>
+            </div>
+            <div class="group">
+              <p class="group-title">Limits</p>
+              <div class="workspace-row" style="min-height:58px;"><span>time</span><div><div class="workspace-name" style="font-size:16px;">Time limit</div><div class="workspace-meta">1 hour</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span>retry</span><div><div class="workspace-name" style="font-size:16px;">Retry limit</div><div class="workspace-meta">2 attempts</div></div><div class="workspace-count">›</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Repo playbook</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div><div class="right-actions"><div class="circle small-circle">+</div></div></div>
+          <div class="home-title" style="font-size:21px;">conduit Playbook</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line"><strong>Used by composer defaults</strong><span>These are operational defaults, not a notebook.</span></div>
+            <div class="workspace-row" style="min-height:58px;"><span>cwd</span><div><div class="workspace-name" style="font-size:16px;">Working directory</div><div class="workspace-meta">/Users/roshan/Documents/command-center</div></div><div class="workspace-count">›</div></div>
+            <div class="workspace-row" style="min-height:58px;"><span>test</span><div><div class="workspace-name" style="font-size:16px;">Proof command</div><div class="workspace-meta">swift test · go test ./...</div></div><div class="workspace-count">›</div></div>
+            <div class="workspace-row" style="min-height:58px;"><span>pr</span><div><div class="workspace-name" style="font-size:16px;">PR branch</div><div class="workspace-meta">master protected</div></div><div class="workspace-count">›</div></div>
+            <div class="workspace-row" style="min-height:58px;"><span>lock</span><div><div class="workspace-name" style="font-size:16px;">Protected zones</div><div class="workspace-meta">policy/, secrets, billing</div></div><div class="workspace-count">›</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Readiness + provider badges</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:42px;">
+            <div class="review-title" style="color:var(--ink);font-size:23px;">Ready, with one warning.</div>
+            <p class="review-copy" style="color:var(--muted);margin:6px 0 14px;">Run can start, but proof will be weaker until a preview URL is set.</p>
+            <div class="health-line"><strong>Machine online</strong><span>hermes-box · daemon reachable</span></div>
+            <div class="health-line"><strong>Agent available</strong><span>Codex supports resume and diffs · no image input</span></div>
+            <div class="health-line" style="border-color:rgba(209,139,43,.45);background:rgba(209,139,43,.08);"><strong>Preview URL missing</strong><span>Add one to enable screenshot proof and QA annotation.</span></div>
+            <div class="chip-row"><span class="mini-chip">resume</span><span class="mini-chip">diffs</span><span class="mini-chip">cost unknown</span><span class="mini-chip">no image input</span></div>
+          </div>
+          <div class="decision-bar" style="bottom:18px;"><div class="decision">Set up</div><div class="decision primary">Continue</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/c4fac039-b407-46a1-ad92-86017a1fff96">Digg share/import style</a>, <a href="https://mobbin.com/screens/986622b3-4e5f-4c3e-9ea8-ee6d5e7803b3">Mercury settings/checklist density</a>, and <a href="https://mobbin.com/screens/43382779-a524-44ae-a418-b6bf7eb93cf0">N26 warning setup</a>. Lancer keeps the interaction but uses repo/machine/proof language.</p>
+  </section>
+
+  <section id="artifact-views">
+    <div class="section-head">
+      <div>
+        <h2>Work Thread Artifact Views</h2>
+        <p class="status">Added views: question cards, preview cockpit, tap-to-isolate annotation (Vision-mask upgrade, 2026-07-05), contextual commands, light automations, and voice everywhere.</p>
+      </div>
+      <p class="notes">These are thread artifacts. They add capability without changing the primary shape of the Work Thread.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Question card</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Siri shortcut</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <p class="text">The agent needs one decision before it edits the App Intent.</p>
+            <div class="card approval">
+              <div class="card-head">Question</div>
+              <div class="artifact-body"><strong>Which phrasing should the shortcut use?</strong><br><span class="subtle">One variant is simpler; the other matches existing intent names.</span></div>
+              <div class="file-row"><span></span><div>Keep it simple</div><span>›</span></div>
+              <div class="file-row"><span></span><div>Support both phrasings</div><span>›</span></div>
+              <div class="file-row"><span>mic</span><div>Dictate a different answer</div><span>›</span></div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Answer</div><div class="action">Context</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Reply...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Preview cockpit</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Preview proof</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="preview-pane">
+              <div class="preview-bar" style="width:70%;"></div>
+              <div class="preview-body"></div>
+            </div>
+            <div class="card proof">
+              <div class="card-head">Preview loaded</div>
+              <div class="artifact-body"><strong>localhost:3000 checkout</strong><br><span class="subtle">Tap the preview to annotate. Screenshots become proof artifacts.</span></div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Annotate</div><div class="action">Rerun proof</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Describe what you see...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Tap-to-isolate annotation</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout proof</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="preview-pane">
+              <div class="preview-bar" style="width:58%;"></div>
+              <div class="preview-body"><div class="mask-outline"></div></div>
+            </div>
+            <div class="card failure">
+              <div class="card-head">Isolated: Save button</div>
+              <div class="artifact-body">Real bounding box, not a hand-drawn circle. <span class="subtle">Voice note attached.</span></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision">Cancel</div><div class="decision primary">Send fix request</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Command cards + automations</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Failed proof</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card failure"><div class="card-head">swift test failed</div><div class="artifact-body">Last good step: build passed. One regression in approval auth tests.</div></div>
+            <div class="card">
+              <div class="card-head">Available actions</div>
+              <div class="file-row"><span>↻</span><div>Rerun proof</div><span>›</span></div>
+              <div class="file-row"><span>fix</span><div>Ask agent to fix failure</div><span>›</span></div>
+              <div class="file-row"><span>bell</span><div>Remind me in 30m</div><span>›</span></div>
+              <div class="file-row"><span>pause</span><div>Pause until morning</div><span>›</span></div>
+            </div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Give another instruction...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Provider picker detail</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:108px;opacity:.45;">
+            <div class="row"><div class="dot"></div><div><div class="row-title">New work</div><div class="meta">Choose agent</div></div></div>
+          </div>
+          <div class="sheet">
+            <div class="grabber"></div>
+            <div class="sheet-title">Agent</div>
+            <div class="sheet-row"><span></span><div>Codex<small>resume · diffs · cost unknown · no image input</small></div><span>✓</span></div>
+            <div class="sheet-row"><span></span><div>Claude Code<small>strong image input · exact resume varies</small></div><span>›</span></div>
+            <div class="sheet-row"><span></span><div>OpenCode<small>local-first · no hosted proof export</small></div><span>›</span></div>
+            <div class="sheet-row"><span></span><div>Kimi<small>long context · capability audit required</small></div><span>›</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/9fcf016e-ec3d-4674-ae2b-10f95063f103">Manus task/agent detail</a>, <a href="https://mobbin.com/screens/5911d6e4-808e-40e9-8fbb-300e7c9c4e9e">Linear detail density</a>, and <a href="https://mobbin.com/screens/507274d1-b1c6-4c00-998b-9d1a3bf1112e">Todoist task actions</a>.</p>
+  </section>
+
+  <section id="proof-gaps">
+    <div class="section-head">
+      <div>
+        <h2>Proof Suite Gaps — Device Matrix, Visual Diff, Auto Bug Replay</h2>
+        <p class="status">Closes 3 confirmed gaps found in the 2026-07-05 feature-checklist verification pass: these were named as headline Proof Suite members from the very first brainstorm but were never actually drawn on this board. All three are thread artifacts, reached from the same proof card rail as Question Card / QA Annotation.</p>
+      </div>
+      <p class="notes">This is the feature family the owner explicitly called out as genuinely differentiated — video timeline, annotation, evidence — not parity chrome. Keep these as artifacts inside Work Thread, not a new root.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Device Matrix Proof</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout proof</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="device-grid">
+              <div class="device-tile"><span class="status-badge ok">&#10003;</span><div class="device-label">iPhone 17 Pro</div><div class="device-sub">Light &middot; default</div></div>
+              <div class="device-tile"><span class="status-badge ok">&#10003;</span><div class="device-label">iPad split view</div><div class="device-sub">Light &middot; default</div></div>
+              <div class="device-tile"><span class="status-badge ok">&#10003;</span><div class="device-label">Dark mode</div><div class="device-sub">iPhone 17 Pro</div></div>
+              <div class="device-tile"><span class="status-badge fail">&#33;</span><div class="device-label">Large text (AX5)</div><div class="device-sub">Button clipped</div></div>
+            </div>
+            <div class="card failure">
+              <div class="card-head">1 of 4 failed</div>
+              <div class="artifact-body">Large-text layout clips the primary action.</div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">View frame</div><div class="action">Send back</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Visual Diff Review</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Settings screen</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="compare-grid">
+              <div class="compare-pane"><strong>Before</strong><br>Stacked rows<br>16pt labels<br>No grouping</div>
+              <div class="compare-pane" style="border-color:rgba(69,189,130,.42);"><strong>After</strong><br>Grouped sections<br>17pt labels<br>Matches system</div>
+            </div>
+            <div class="card">
+              <div class="card-head">Visual diff &middot; 2 screens</div>
+              <div class="artifact-body">Spacing and grouping only &mdash; no new copy or logic.</div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision danger">Send back</div><div class="decision primary">Accept</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Auto Bug Replay</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout crash</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <p class="text">Mission started from a crash report.</p>
+            <div class="replay-stack">
+              <div class="replay-row before"><div class="replay-tag">Before</div><div><div class="replay-thumb"></div></div></div>
+              <div class="replay-row after"><div class="replay-tag">After</div><div><div class="replay-thumb"></div></div></div>
+            </div>
+            <div class="card proof">
+              <div class="card-head">Fixed &mdash; verified by replay</div>
+              <div class="artifact-body">Same repro steps, no error at <span class="code">a37920a8</span>.</div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Play before</div><div class="action">Play after</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/dc0fd8d2-c542-4035-ab72-d35e73fb3941">Airtable status-badge tile grid</a> (Device Matrix), <a href="https://mobbin.com/screens/581c0f2a-743c-4464-bb1a-c5ac3c2c2625">Photoroom before/after slider</a> and <a href="https://mobbin.com/screens/f078a659-e648-4b5a-b312-f3be58eece15">GitHub diff review</a> (Visual Diff Review), and <a href="https://mobbin.com/screens/54258d9f-cc90-4f59-b111-d7c0cdada5d2">Turo before/after damage report</a> (Auto Bug Replay).</p>
+  </section>
+
+  <section id="ship-history">
+    <div class="section-head">
+      <div>
+        <h2>Shipping / History / Search</h2>
+        <p class="status">Added views: Git/PR/Merge, Flight Recorder, Work Search, sync honesty, billing/account truth, and proof sharing.</p>
+      </div>
+      <p class="notes">These complete the loop after proof. They should feel like continuations of Work Thread, not a separate release-management product.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Ship actions after proof</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Ship it</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card proof"><div class="card-head">Proof passed</div><div class="artifact-body">2 files changed · branch fix/checkout-crash · tests green.</div></div>
+            <div class="card">
+              <div class="file-row"><span>1</span><div>Commit<small>Suggested message ready</small></div><span>›</span></div>
+              <div class="file-row"><span>2</span><div>Push<small>origin/fix-checkout-crash</small></div><span>›</span></div>
+              <div class="file-row"><span>3</span><div>Create PR<small>Attach proof summary</small></div><span>›</span></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision">Back</div><div class="decision primary">Create PR</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Merge gate</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">PR #142</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card proof"><div class="card-head">Ready to merge</div><div class="artifact-body">CI green · proof attached · no high-risk unresolved changes.</div></div>
+            <div class="review-card"><div class="review-kicker">Protected branch</div><div class="review-title">Merge into master?</div><p class="review-copy">Merging requires one extra confirmation and audit entry.</p><div class="kv"><span>Method</span><strong>squash</strong></div></div>
+          </div>
+          <div class="decision-bar"><div class="decision danger">Not now</div><div class="decision primary">Merge</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Flight recorder</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Flight recorder</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="timeline-row"><span class="done">✓</span><div>Launch contract<small>repo, proof, interrupt rules</small></div><span>9:12</span></div>
+            <div class="timeline-row"><span class="done">✓</span><div>Question answered<small>Keep shortcut simple</small></div><span>9:16</span></div>
+            <div class="timeline-row"><span class="dot active" style="margin:5px 0 0;"></span><div>Proof chapter 2<small>screenshot + tests</small></div><span>9:22</span></div>
+            <div class="timeline-row"><span class="done">✓</span><div>Commit pushed<small>origin/fix-siri-shortcut</small></div><span>9:28</span></div>
+          </div>
+          <div class="rail"><div class="action">Jump to event</div><div class="rail-spacer"></div><div class="down">⌄</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Work search</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Search</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="search-field">⌕ Stripe fallback</div>
+            <div class="chip-row"><span class="mini-chip">Active</span><span class="mini-chip">Merged</span><span class="mini-chip">Failed</span><span class="mini-chip">Proof</span></div>
+            <div class="card">
+              <div class="file-row"><span></span><div>Checkout fallback fix<small>2 proof matches · PR #142</small></div><span>›</span></div>
+              <div class="file-row"><span></span><div>Payment config audit<small>1 diff match · denied</small></div><span>›</span></div>
+              <div class="file-row"><span></span><div>Weekly digest<small>Stripe mentioned in summary</small></div><span>›</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Sync, billing, proof share</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div></div>
+          <div class="home-title" style="font-size:21px;">Account</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line" style="border-color:rgba(209,139,43,.45);background:rgba(209,139,43,.08);"><strong>Last synced 4m ago</strong><span>Pull to refresh. Approval state remains host-owned.</span></div>
+            <div class="workspace-row" style="min-height:58px;"><span>plan</span><div><div class="workspace-name" style="font-size:16px;">Away Mode Solo</div><div class="workspace-meta">Hosted features only; safety always available</div></div><div class="workspace-count">›</div></div>
+            <div class="workspace-row" style="min-height:58px;"><span>share</span><div><div class="workspace-name" style="font-size:16px;">Share proof link</div><div class="workspace-meta">Redacted, view-only, expires</div></div><div class="workspace-count">›</div></div>
+            <div class="workspace-row" style="min-height:58px;"><span>export</span><div><div class="workspace-name" style="font-size:16px;">Export audit log</div><div class="workspace-meta">Decisions and proof history</div></div><div class="workspace-count">›</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/56ecba1b-7986-4493-a50c-d735a05ed8f4">Squarespace search/history</a>, <a href="https://mobbin.com/screens/97c3615a-5eca-4a3b-a5f5-f2f2a194bcda">Discord search results</a>, and <a href="https://mobbin.com/screens/e983e9a8-04cd-4504-95b9-16d2acf266bc">Bevel timeline/history density</a>.</p>
+  </section>
+
+  <section id="fast-follow">
+    <div class="section-head">
+      <div>
+        <h2>Fast-Follow Contextual Views</h2>
+        <p class="status">Added views: cross-vendor verify (picker, agree, disagree), run comparison, proof becomes regression, time travel/fork, Clips/lancer.proof, Siri/widgets/Watch, and true handoff.</p>
+      </div>
+      <p class="notes">Cross-vendor verify is deliberately sequential and asymmetric &mdash; one vendor produces, a different vendor only critiques, never re-solves. That is a different job from Run Comparison (peer attempts, same vendor) and Multi-Agent Showdown (parallel race, still a gap &mdash; not drawn until this ships).</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Verify with&hellip; picker</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout crash fix</div><div class="circle">...</div></div>
+          <div class="home-content" style="height:180px;padding-top:0;opacity:.35;">
+            <div class="card"><div class="card-head">Claude Code result</div><div class="artifact-body">Fix applied &middot; proof passed &middot; +47 -12</div></div>
+          </div>
+          <div class="sheet" style="height:320px;background:var(--dark-surface);border-color:#2c2c2f;">
+            <div class="grabber" style="background:#3a3a3d;"></div>
+            <div class="sheet-title" style="color:var(--dark-ink);">Verify with</div>
+            <div class="sheet-row" style="border-color:#2c2c2f;color:var(--dark-ink);"><span></span><div>Codex<small style="color:var(--dark-muted);">resume &middot; diffs</small></div><span>&rsaquo;</span></div>
+            <div class="sheet-row" style="border-color:#2c2c2f;color:var(--dark-ink);"><span></span><div>OpenCode<small style="color:var(--dark-muted);">local-first</small></div><span>&rsaquo;</span></div>
+            <div class="sheet-row" style="border-color:#2c2c2f;color:var(--dark-ink);"><span></span><div>Kimi<small style="color:var(--dark-muted);">verified 4d ago</small></div><span>&rsaquo;</span></div>
+          </div>
+          <div class="decision-bar" style="bottom:16px;"><div class="decision">Cancel</div><div class="decision primary">Send for review</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Verdict &mdash; agrees</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Codex verify</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card"><div class="card-head">Claude Code result</div><div class="artifact-body">Fix applied &middot; proof passed &middot; +47 -12</div></div>
+            <div class="card proof"><div class="card-head">Codex review &middot; no issues found</div><div class="artifact-body">Ran <span class="code">swift test</span>, read all 5 files.</div></div>
+          </div>
+          <div class="decision-bar"><div class="decision">View critique</div><div class="decision primary">Accept</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Verdict &mdash; disagrees</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Codex verify</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="review-card">
+              <div class="review-kicker" style="color:var(--danger);">Codex found a concern</div>
+              <div class="review-title">Confirmed: fix passes proof.</div>
+              <p class="review-copy">Flagged: fallback key is read before the nil check on line 42. Also checked: no other callers of this function.</p>
+            </div>
+            <div class="diff-view">
+              <div class="diff-head"><span>payment-config.go</span><span class="add">+35</span></div>
+              <div class="line add"><span class="num">+</span><span>fallback = stripeLegacyKey</span></div>
+              <div class="line del"><span class="num">-</span><span>if key != nil { use(key) }</span></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision">Dismiss concern</div><div class="decision primary">Send back to Claude</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">D. Run comparison</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Compare attempts</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="compare-grid">
+              <div class="compare-pane"><strong>Attempt A</strong><br>+47 -12<br>Full rewrite<br>Proof passed</div>
+              <div class="compare-pane" style="border-color:rgba(69,189,130,.42);"><strong>Attempt B</strong><br>+9 -3<br>Minimal patch<br>Proof passed</div>
+            </div>
+            <p class="text">Keep the smaller patch and discard the older worktree.</p>
+          </div>
+          <div class="decision-bar"><div class="decision">Keep A</div><div class="decision primary">Keep B</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">E. Proof becomes regression</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Regression watch</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card proof"><div class="card-head">Proof passed</div><div class="artifact-body"><strong>Save this as a future regression?</strong><br><span class="subtle">When this flow is touched again, Lancer can rerun the same proof.</span></div></div>
+            <div class="card"><div class="file-row"><span>eye</span><div>Checkout flow<small>Watched after this run</small></div><span>›</span></div></div>
+          </div>
+          <div class="decision-bar"><div class="decision">Not now</div><div class="decision primary">Save</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">F. Time travel / fork / Clips</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Fork from event</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="timeline-row"><span class="done">✓</span><div>Before broad rewrite<small>worktree snapshot available</small></div><span>9:18</span></div>
+            <div class="timeline-row"><span class="dot active" style="margin:5px 0 0;"></span><div>Clip attached<small>clips.new/abc123 · transcript redacted</small></div><span>9:22</span></div>
+            <div class="card"><div class="card-head">lancer.proof</div><div class="artifact-body">Export portable proof or start a new mission from this timestamp.</div></div>
+          </div>
+          <div class="decision-bar"><div class="decision">Export proof</div><div class="decision primary">Fork</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">G. Siri / widgets / Watch / Handoff</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Platform surfaces</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="watch-mini"><strong>Watch</strong><br><br>2 agents active<br><br><span style="color:var(--danger);">Emergency Stop</span></div>
+            <div class="widget-mini"><strong>Widget</strong><br><span class="subtle">2 need you · proof ready</span></div>
+            <div class="desktop-mini"><div class="desktop-bar">Lancer Mac</div><div class="desktop-body">Open exact hunk from phone review. Same proof, same scroll position.</div></div>
+            <div class="card"><div class="artifact-body"><strong>Siri:</strong> "Tell Lancer to approve the simple phrasing."</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references for cross-vendor verify: <a href="https://mobbin.com/screens/7d0e3233-6bc5-4ece-a886-fbabceb14776">GitHub inline "Request reviews"</a> (contextual placement, not a modal), <a href="https://mobbin.com/screens/b778369a-80d7-4740-bf86-90ac2caf139f">Gemini corroboration card</a> (quiet agree state), <a href="https://mobbin.com/screens/6a9f1187-f3a1-4971-87ba-18a93092616a">Sift "Incorrect." interstitial</a> (loud disagree state), and <a href="https://mobbin.com/screens/14efd075-e797-44ea-9698-610847dcca3a">Fabric model picker</a> (vendor sheet). These views intentionally stay lower in the board: they are differentiators, but the V1 app should still open to Home, Workspaces, and Work Thread.</p>
+  </section>
+
+  <section id="command-context">
+    <div class="section-head">
+      <div>
+        <h2>Command &amp; Context — gaps confirmed by the 2026-07-05 checklist verification</h2>
+        <p class="status">Three items named across the July 4 brainstorm but never wireframed: a global action launcher distinct from Work Search, ingesting a whole external thread as one input, and missions that originate outside the app entirely.</p>
+      </div>
+      <p class="notes">All three are entry points into the same composer/mission model &mdash; none of them are new roots.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Command palette</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:60px;opacity:.4;">
+            <div class="row"><div class="dot active"></div><div><div class="row-title">Checkout crash fix</div><div class="meta">Proof ready</div></div></div>
+            <div class="row"><div class="dot"></div><div><div class="row-title">conduit workspace</div><div class="meta">3 repos</div></div></div>
+          </div>
+          <div class="sheet" style="height:460px;">
+            <div class="grabber"></div>
+            <div class="search-field" style="background:#fff;border-color:#dededb;color:var(--ink);margin-bottom:12px;">&#9906; Jump to a mission, repo, or command</div>
+            <div class="sheet-row"><span>go</span><div>Checkout crash fix<small>Jump to thread &middot; proof ready</small></div><span>&rsaquo;</span></div>
+            <div class="sheet-row"><span>run</span><div>Run tests in conduit<small>Command &middot; go test ./...</small></div><span>&rsaquo;</span></div>
+            <div class="sheet-row"><span>new</span><div>Start new mission<small>Opens the composer</small></div><span>&rsaquo;</span></div>
+            <div class="sheet-row"><span>go</span><div>hermes-box<small>Machine &middot; online</small></div><span>&rsaquo;</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Whole-thread context ingestion</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-title">New work</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line"><strong>Imported from Slack</strong><span>#incident-142 &middot; 14 messages &middot; shared from share sheet</span></div>
+            <div class="onboarding-card">
+              <div class="workspace-name" style="font-size:17px;">Investigate the checkout 500 spike from this thread</div>
+              <p class="review-copy" style="color:var(--muted);margin:8px 0 0;">Lancer reads the whole thread, not one message &mdash; timestamps, stack traces, and the resolution attempt already tried.</p>
+            </div>
+            <div class="chip-row"><span class="mini-chip">14 messages</span><span class="mini-chip">2 stack traces</span><span class="mini-chip">1 prior attempt</span></div>
+          </div>
+          <div class="composer"><div class="pill-icon">+</div><span>Ask Lancer...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Slack/Teams-triggered mission</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout 500 spike</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <p class="text">Started from Slack, not the app.</p>
+            <div class="card">
+              <div class="card-head">Started via @lancer mention</div>
+              <div class="artifact-body">#incident-142 &middot; requested by @sam &middot; "@lancer investigate the checkout errors"</div>
+            </div>
+            <div class="event">Worked&nbsp; <strong>4m 18s</strong></div>
+            <p class="text">Result will post back to the same Slack thread when ready.</p>
+          </div>
+          <div class="rail"><div class="action">Open thread</div><div class="action">Reply in Slack</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/88e2278e-1340-4561-a6ed-f876b05558ab">Craft Quick Open overlay</a> (Command Palette) and <a href="https://mobbin.com/screens/c353df04-5e84-4642-bc22-e1910ab1b328">Slack inline bot action</a> (Slack-triggered mission).</p>
+  </section>
+
+  <section id="proactive-signals">
+    <div class="section-head">
+      <div>
+        <h2>Proactive Signals &amp; Code Depth</h2>
+        <p class="status">Lancer surfacing things the user didn't ask about yet, plus one depth-of-review gap in Changed Files.</p>
+      </div>
+      <p class="notes">These feed into Away Digest as candidate missions &mdash; they do not create their own inbox.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Dependency / security alert intake</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div></div>
+          <div class="home-title" style="font-size:21px;">Flagged for you</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line" style="border-color:rgba(255,93,135,.4);background:rgba(255,93,135,.06);"><strong>3 high-severity dependencies</strong><span>Dependabot &middot; conduit &middot; jsonwebtoken, minimist, lodash</span></div>
+            <div class="health-line"><strong>1 secret scan finding</strong><span>Snyk &middot; hermes-box &middot; low confidence, needs review</span></div>
+            <div class="chip-row"><span class="mini-chip">Create mission</span><span class="mini-chip">Snooze 7 days</span><span class="mini-chip">Ignore</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Container / dev-service status</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">conduit &middot; services</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="timeline-row"><span class="done" style="background:var(--ok);">&#10003;</span><div>postgres<small>docker compose &middot; up 3h</small></div><span>&nbsp;</span></div>
+            <div class="timeline-row"><span class="done" style="background:var(--ok);">&#10003;</span><div>redis<small>docker compose &middot; up 3h</small></div><span>&nbsp;</span></div>
+            <div class="timeline-row"><span class="done" style="background:var(--danger);">!</span><div>worker<small>exited 1 &middot; 2m ago</small></div><span>&nbsp;</span></div>
+          </div>
+          <div class="rail"><div class="action">Restart worker</div><div class="action">View logs</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Inline git blame</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">payment-config.go</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="card">
+              <div class="card-head">Changed 5 lines</div>
+              <div class="file-row"><span>+</span><div>fallback = stripeLegacyKey</div><span>&rsaquo;</span></div>
+            </div>
+            <div class="card failure" style="margin-top:-14px;">
+              <div class="card-head">Blame</div>
+              <div class="artifact-body">Added 3 weeks ago by this same fix &mdash; fixing the Stripe fallback outage. Touching it again may reopen that bug.</div>
+            </div>
+          </div>
+          <div class="rail"><div class="action">Ask agent why</div><div class="action">Keep as-is</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/77e142f0-d885-4f5a-8c80-77bc1aba10cb">NordVPN Dark Web Monitor alerts</a> (dependency/security intake) and <a href="https://mobbin.com/screens/1742b6b0-7249-403c-9459-b1effd2573a2">Xbox service status</a> (container/dev-service status).</p>
+  </section>
+
+  <section id="workspace-depth">
+    <div class="section-head">
+      <div>
+        <h2>Workspace Depth — two ALIVE pillars never wireframed</h2>
+        <p class="status">Confirmed alive (not cut, not a non-goal conflict) by the 24-pillar mobile-primary-cockpit inventory, but never actually drawn on any board until now.</p>
+      </div>
+      <p class="notes">Both live inside a Workspace, one level deeper than the repo list &mdash; not new sidebar roots.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. Touch-native repo browser</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div></div>
+          <div class="home-title" style="font-size:21px;">conduit</div>
+          <div class="home-content" style="height:430px;">
+            <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">daemon</div><div class="workspace-meta">Go &middot; 42 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+            <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">Packages/LancerKit</div><div class="workspace-meta">Swift &middot; 118 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+            <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">docs</div><div class="workspace-meta">Markdown &middot; 64 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+            <div class="workspace-row"><span>file</span><div><div class="workspace-name">ARCHITECTURE.md</div><div class="workspace-meta">Modified 2h ago</div></div><div class="workspace-count">&rsaquo;</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Project memory / notebook</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome"><div class="circle">&#8592;</div><div class="right-actions"><div class="circle small-circle">+</div></div></div>
+          <div class="home-title" style="font-size:21px;">conduit notes</div>
+          <div class="home-content" style="height:430px;">
+            <div class="group">
+              <p class="group-title">Pinned</p>
+              <div class="workspace-row"><span>note</span><div><div class="workspace-name">Why we chose the blind relay</div><div class="workspace-meta">Design rationale, not a Playbook default</div></div><div class="workspace-count">&rsaquo;</div></div>
+            </div>
+            <div class="group">
+              <p class="group-title">Recent</p>
+              <div class="workspace-row"><span>note</span><div><div class="workspace-name">Stripe fallback is fragile</div><div class="workspace-meta">Added after last week's outage</div></div><div class="workspace-count">&rsaquo;</div></div>
+              <div class="workspace-row"><span>note</span><div><div class="workspace-name">Client wants dark mode first</div><div class="workspace-meta">From a client call, not a repo default</div></div><div class="workspace-count">&rsaquo;</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Distinct from Repo Playbook: Playbook is operational config (test command, protected paths); this is free-form knowledge the agent should read but not treat as a rule. Mobbin references: <a href="https://mobbin.com/screens/1c72e007-0c2a-4cf4-8933-4256990d9a18">GitHub repo folder tree</a> and <a href="https://mobbin.com/screens/ff5bb02d-d35d-4eb6-80ce-e6668947104a">Apple Notes pinned list</a>.</p>
+  </section>
+
+  <section id="platform-intelligence">
+    <div class="section-head">
+      <div>
+        <h2>Platform Intelligence &mdash; 11 named ideas consolidated to 3 patterns</h2>
+        <p class="status">The 2026-07-05 checklist flagged 5 on-device-AI ideas, 3 Siri ideas, and 3 full-screen-widget ideas as one capability each, fragmented into too many roadmap lines. These 3 panels are the actual patterns &mdash; applied contextually, not built as separate destinations.</p>
+      </div>
+      <p class="notes">Session-survives-disconnect and landscape Dynamic Island are minor Away Status/Live Activity state variants, not separate builds &mdash; noted here rather than drawn as their own screens.</p>
+    </div>
+    <div class="board">
+      <div class="panel">
+        <p class="label">A. On-device compression, applied in context</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-title">Away Digest</div>
+          <div class="home-content" style="height:430px;">
+            <div class="onboarding-card" style="border-color:var(--blue);background:rgba(21,139,192,.06);">
+              <div class="workspace-name" style="font-size:15px;color:var(--blue);">&#10022; On-device summary</div>
+              <p class="review-copy" style="color:var(--ink);margin:6px 0 0;">"Checkout fix passed on iPhone and iPad. One console warning remains. Ready to review." <span style="color:var(--muted);">Tap to hear it read aloud.</span></p>
+            </div>
+            <div class="chip-row"><span class="mini-chip">Drafted from screenshot</span><span class="mini-chip">Diff captioned</span><span class="mini-chip">Read aloud</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Siri &mdash; status query, answer, and next step</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-content" style="height:520px;padding-top:40px;">
+            <div class="review-title" style="color:var(--ink);font-size:19px;">"What's the status of the checkout fix?"</div>
+            <div class="onboarding-card" style="margin-top:14px;">
+              <div class="workspace-name" style="font-size:16px;">Proof ready. One console warning.</div>
+              <p class="review-copy" style="color:var(--muted);margin:6px 0 0;">Checkout crash fix &middot; conduit &middot; 12 min ago</p>
+            </div>
+            <div class="chip-row"><span class="mini-chip">Approve the simple phrasing</span><span class="mini-chip">Read the diff</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. One widget template, four states</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Widget gallery</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="device-grid">
+              <div class="widget-mini" style="margin:0;"><strong>Quick Mission</strong><br><span class="subtle">Plan, ask, build&hellip;</span></div>
+              <div class="widget-mini" style="margin:0;"><strong>Proof Ready</strong><br><span class="subtle">Checkout fix &middot; view</span></div>
+              <div class="widget-mini" style="margin:0;"><strong>Decide Now</strong><br><span class="subtle">1 approval waiting</span></div>
+              <div class="widget-mini" style="margin:0;"><strong>Fleet-wide</strong><br><span class="subtle">2 machines &middot; 3 active</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references used as supporting patterns: <a href="https://mobbin.com/screens/ec0028ee-2399-499b-b6a0-1722bc8d1997">Beside AI Summary card</a> (on-device compression), <a href="https://mobbin.com/screens/6775dfc7-2f2d-4207-9fe8-83f53480c663">Natural AI voice-query response + follow-up chips</a> (Siri), and <a href="https://mobbin.com/screens/0d622223-1bbb-4f67-9ba4-46396cccfd96">Alipay widget variant gallery</a> (one template, many states).</p>
+  </section>
+
+  <section id="review">
+    <div class="section-head">
+      <div>
+        <h2>Review / Approvals / Diff</h2>
+        <p class="status">Final direction: Cursor-dark review drill-in. Approval is an interruption inside the Work Thread, with a focused review surface and diff only as needed.</p>
+      </div>
+      <p class="notes">Good: keeps trust high without creating an inbox-shaped product. Risk: high-risk gates need enough friction, but low-risk asks should stay fast.</p>
+    </div>
+    <div class="board three">
+      <div class="panel">
+        <p class="label">A. Review sheet from thread</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Parallel agents&nbsp; monitor</div><div class="circle">...</div></div>
+          <div class="scroll" style="opacity:.35;">
+            <p class="text">The agent paused before applying a patch that touches approval security.</p>
+            <div class="card approval"><div class="card-head">Approval waiting</div><div class="artifact-body">High risk patch</div></div>
+          </div>
+          <div class="sheet dark">
+            <div class="grabber"></div>
+            <div class="sheet-title">Review</div>
+            <div class="review-card">
+              <div class="review-kicker">High risk approval</div>
+              <div class="review-title">Allow Codex to apply a patch?</div>
+              <p class="review-copy">This touches approval policy and daemon tests. Review the changed files before approving.</p>
+              <div class="review-grid">
+                <div class="kv"><span>Machine</span><strong>hermes-box</strong></div>
+                <div class="kv"><span>Repo</span><strong>command-center</strong></div>
+                <div class="kv"><span>Branch</span><strong>fable/approval-security</strong></div>
+                <div class="kv"><span>Files</span><strong>5 files · +858 -38</strong></div>
+              </div>
+            </div>
+            <div class="review-card">
+              <div class="review-kicker" style="color:var(--dark-muted);">Evidence</div>
+              <p class="review-copy">Matched rule: patch touches approval decision code. Raw command output is collapsed.</p>
+              <div class="kv"><span>Command</span><strong>apply_patch</strong></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision danger">Deny</div><div class="decision primary">Review diff</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Diff drill-in</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Approval diff</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="review-card">
+              <div class="review-kicker">Review required</div>
+              <div class="review-title">5 files changed</div>
+              <p class="review-copy">Approve unlocks the agent to apply this patch on hermes-box.</p>
+            </div>
+            <div class="diff-view">
+              <div class="diff-head"><span>policy/evaluate.go</span><span class="add">+35</span></div>
+              <div class="line del"><span class="num">-</span><span>return allowDefault()</span></div>
+              <div class="line add"><span class="num">+</span><span>return holdWhenHookUnreachable()</span></div>
+              <div class="line"><span class="num"> </span><span>recordDecisionAudit(result)</span></div>
+              <div class="line add"><span class="num">+</span><span>assertFailClosed(policy)</span></div>
+            </div>
+            <div class="diff-view">
+              <div class="diff-head"><span>daemon_test.go</span><span class="add">+48</span></div>
+              <div class="line add"><span class="num">+</span><span>func TestHookUnreachableHolds(t *testing.T)</span></div>
+              <div class="line add"><span class="num">+</span><span>require.Equal(t, Hold, decision)</span></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision">Back</div><div class="decision primary">Approve patch</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Ask for changes / resolved</p>
+        <div class="phone dark">
+          <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+          <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Review</div><div class="circle">...</div></div>
+          <div class="scroll">
+            <div class="review-card">
+              <div class="review-kicker" style="color:var(--danger);">Not approved yet</div>
+              <div class="review-title">Request changes</div>
+              <p class="review-copy">Send a precise instruction instead of approving. The agent resumes in the same thread.</p>
+            </div>
+            <div class="card">
+              <div class="artifact-body" style="font-size:18px;color:#b8b8bd;">Ask it to add the regression test first...</div>
+            </div>
+            <div class="review-card">
+              <div class="review-kicker" style="color:var(--ok);">After decision</div>
+              <p class="review-copy">Decision, actor, time, and audit ID stay visible. Duplicate approval is disabled.</p>
+              <div class="kv"><span>Decision</span><strong>Changes requested</strong></div>
+              <div class="kv"><span>By</span><strong>Roshan · 10:22</strong></div>
+            </div>
+          </div>
+          <div class="decision-bar"><div class="decision danger">Deny</div><div class="decision primary">Send changes</div></div>
+          <div class="composer"><div class="pill-icon">+</div><span>Ask for changes...</span><div class="pill-icon">mic</div></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sources">Mobbin references behind this proposal: <a href="https://mobbin.com/screens/64c52224-dd85-4916-a31d-97a03c55a5c1">Airwallex approval detail</a>, <a href="https://mobbin.com/screens/0cbdcc18-5e9d-4678-8d0f-b8c2af3c49ab">Remote Global HR approval</a>, <a href="https://mobbin.com/screens/9a34e3c2-65fa-49e0-9a6f-5833c749d333">Revolut Business approval</a>, and <a href="https://mobbin.com/screens/f078a659-e648-4b5a-b312-f3be58eece15">GitHub mobile review</a>. Carry forward scope, evidence, and persistent decisions, but keep the visual language Cursor-dark.</p>
+  </section>
+
+  <section id="settings">
+    <div class="section-head">
+      <div>
+        <h2>Settings</h2>
+        <p class="status">Final direction: native grouped settings. Settings owns defaults, trust, notifications, diagnostics, account, and legal; daily work stays out.</p>
+      </div>
+      <p class="notes">Good: predictable, low-maintenance, and high-trust. Risk: advanced developer controls need a home without making V1 feel like a desktop preferences panel.</p>
+    </div>
+    <div class="board three">
+      <div class="panel">
+        <p class="label">A. Root grouped list</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">?</div></div>
+          </div>
+          <div class="home-title">Settings</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line"><strong>Roshan</strong><span>Local pairing only · no hosted billing</span></div>
+            <div class="group">
+              <p class="group-title">General</p>
+              <div class="workspace-row" style="min-height:54px;"><span>moon</span><div><div class="workspace-name" style="font-size:16px;">Appearance</div><div class="workspace-meta">System</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:54px;"><span>bell</span><div><div class="workspace-name" style="font-size:16px;">Notifications</div><div class="workspace-meta">Critical and high risk</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:54px;"><span>lock</span><div><div class="workspace-name" style="font-size:16px;">Security &amp; approvals</div><div class="workspace-meta">Biometric, policy defaults</div></div><div class="workspace-count">›</div></div>
+            </div>
+            <div class="group">
+              <p class="group-title">Machines</p>
+              <div class="workspace-row" style="min-height:54px;"><span>mac</span><div><div class="workspace-name" style="font-size:16px;">Pairing &amp; trusted devices</div><div class="workspace-meta">1 machine paired</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:54px;"><span>steth</span><div><div class="workspace-name" style="font-size:16px;">Diagnostics</div><div class="workspace-meta">Relay, daemon, push</div></div><div class="workspace-count">›</div></div>
+            </div>
+            <div class="group">
+              <p class="group-title">Data</p>
+              <div class="workspace-row" style="min-height:54px;"><span>doc</span><div><div class="workspace-name" style="font-size:16px;">Export audit log</div><div class="workspace-meta">Decisions and proof history</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:54px;"><span>info</span><div><div class="workspace-name" style="font-size:16px;">Privacy &amp; legal</div><div class="workspace-meta">Terms, licenses, security</div></div><div class="workspace-count">›</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">B. Security &amp; approvals</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+            <div class="right-actions"><div class="circle small-circle">?</div></div>
+          </div>
+          <div class="home-title" style="font-size:21px;">Security &amp; approvals</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line"><strong>Safety is always on</strong><span>Security defaults are never paywalled. Higher-risk actions require review.</span></div>
+            <div class="group">
+              <p class="group-title">Approvals</p>
+              <div class="workspace-row" style="min-height:58px;"><span>face</span><div><div class="workspace-name" style="font-size:16px;">Biometric for critical approvals</div><div class="workspace-meta">On</div></div><div class="workspace-count">✓</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span>rule</span><div><div class="workspace-name" style="font-size:16px;">Default autonomy</div><div class="workspace-meta">Always ask for risky actions</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span>audit</span><div><div class="workspace-name" style="font-size:16px;">Policy audit log</div><div class="workspace-meta">View and export</div></div><div class="workspace-count">›</div></div>
+            </div>
+            <div class="group">
+              <p class="group-title">Trust</p>
+              <div class="workspace-row" style="min-height:58px;"><span>mac</span><div><div class="workspace-name" style="font-size:16px;">Trusted machines</div><div class="workspace-meta">hermes-box · fingerprint saved</div></div><div class="workspace-count">›</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span>key</span><div><div class="workspace-name" style="font-size:16px;">Provider keys</div><div class="workspace-meta">Stored on device</div></div><div class="workspace-count">›</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="label">C. Notification recovery</p>
+        <div class="phone">
+          <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+          <div class="home-chrome">
+            <div class="circle">&#8592;</div>
+          </div>
+          <div class="home-title">Notifications</div>
+          <div class="home-content" style="height:430px;">
+            <div class="health-line" style="border-color:rgba(209,139,43,.45);background:rgba(209,139,43,.08);"><strong>Notifications are off</strong><span>Turn them on in iOS Settings to get approval alerts when agents pause.</span></div>
+            <div class="workspace-row" style="min-height:58px;"><span>settings</span><div><div class="workspace-name" style="font-size:16px;">Open iOS Settings</div><div class="workspace-meta">Required for push approval alerts</div></div><div class="workspace-count">›</div></div>
+            <div class="group" style="margin-top:26px;">
+              <p class="group-title">Push when action is</p>
+              <div class="workspace-row" style="min-height:58px;"><span>!</span><div><div class="workspace-name" style="font-size:16px;">Critical</div><div class="workspace-meta">Secrets, network, destructive</div></div><div class="workspace-count">Always</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span></span><div><div class="workspace-name" style="font-size:16px;">High</div><div class="workspace-meta">Deletes, broad writes</div></div><div class="workspace-count">On</div></div>
+              <div class="workspace-row" style="min-height:58px;"><span></span><div><div class="workspace-name" style="font-size:16px;">Medium</div><div class="workspace-meta">Ordinary writes and patches</div></div><div class="workspace-count">Off</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="sources">Mobbin references behind this proposal: <a href="https://mobbin.com/screens/5d8c6859-3a48-46a0-b27e-3373c9eb1b87">MLS settings</a>, <a href="https://mobbin.com/screens/ff9a098a-d3c2-4a8f-bd86-8714c55af083">Revolut settings</a>, <a href="https://mobbin.com/screens/7c388e5a-ce70-4a2b-9609-89705d72a01f">Luma settings</a>, <a href="https://mobbin.com/screens/60d9ab3c-a4d3-46f1-8799-a913ddcaafa7">Mercury security</a>, and <a href="https://mobbin.com/screens/8479be0c-6b89-4ebd-aef2-ef1a38576d5f">Up security</a>. Carry forward native grouped settings and trust clarity; avoid finance-style upsell and keep safety separate from plan state.</p>
+  </section>
+
+  <section id="final-ia">
+    <div class="section-head">
+      <div>
+        <h2>Final IA / Navigation</h2>
+        <p class="status">Final direction: fewer roots, more depth. Keep the everyday app shaped like Cursor: Home, Workspaces, Search/Recent, Settings, with threads and review as drill-ins.</p>
+      </div>
+      <p class="notes">This is the cleanup map for older surfaces. It keeps every feature, but removes competing roots and duplicate names.</p>
+    </div>
+    <div class="ia-map">
+      <div class="ia-card"><strong>Home</strong><span>Daily ledger. Needs you, Today, Yesterday, all-clear, bottom composer. Replaces dashboard-style Home and first-level Inbox urgency.</span></div>
+      <div class="ia-card"><strong>Workspaces</strong><span>Repo/folder list plus run targets. Visible replacement for Machines; paired machines remain in detail sheets and Settings trust surfaces.</span></div>
+      <div class="ia-card"><strong>Work Thread</strong><span>Dark transcript, proof artifacts, to-dos, changes, sticky action rail, follow-up composer. No terminal-first route.</span></div>
+      <div class="ia-card"><strong>Review</strong><span>Approval and diff drill-in from Home or Work Thread. Inbox remains the data model, not a visible daily root.</span></div>
+      <div class="ia-card"><strong>Search / Recent</strong><span>Drawer or top search. Finds threads, workspaces, approvals, changed files, and machines without adding a new root.</span></div>
+      <div class="ia-card"><strong>Settings</strong><span>Account, notifications, security defaults, trusted machines, diagnostics, data/legal. Governance lives here as defaults and audit export.</span></div>
+      <div class="ia-card"><strong>Onboarding</strong><span>Product proof, code-only pairing, account/local choice, policy defaults, notification recovery. QR remains deferred.</span></div>
+      <div class="ia-card"><strong>Removed as roots</strong><span>Needs Attention, Inbox, Governance, Activity, Control, Terminal, Files, Diff, Preview. Their features move into Home, Review, Workspaces, Settings, or detail sheets.</span></div>
+    </div>
+    <p class="sources">Implementation translation: route names can migrate gradually, but visible IA should say `Home`, `Workspaces`, and `Settings`; `Work Thread`, `Review`, machine detail, and onboarding are contextual screens.</p>
+  </section>
+
+  <section id="handoff">
+    <div class="section-head">
+      <div>
+        <h2>Build Handoff / Do Not Miss</h2>
+        <p class="status">Final checklist for translating the board into SwiftUI without reintroducing dashboard sprawl.</p>
+      </div>
+      <p class="notes">Everything here preserves current Lancer capability while keeping the visible app as simple as the Cursor reference.</p>
+    </div>
+
+    <div class="handoff-grid">
+      <div class="handoff-card">
+        <strong>Visible Roots</strong>
+        <span>Home, Workspaces, Settings. Search/Recent is an overlay or drawer action, not a fourth product area. Work Thread and Review are contextual drill-ins.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Demote / Remove Roots</strong>
+        <span>Needs Attention, Inbox, Governance, Activity, Control, Terminal, Files, Diff, and Preview stop appearing as primary navigation. Their features move into ledger rows, review sheets, workspace details, settings rows, or artifact cards.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Core Components</strong>
+        <ul>
+          <li>Ledger row</li>
+          <li>Bottom composer</li>
+          <li>Launch contract chips</li>
+          <li>Workspace row</li>
+          <li>Run target picker</li>
+          <li>Question card</li>
+          <li>Thread artifact card</li>
+          <li>Approval review sheet</li>
+          <li>Mobile diff block</li>
+          <li>Grouped settings row</li>
+        </ul>
+      </div>
+      <div class="handoff-card">
+        <strong>Implementation Order</strong>
+        <span>1. Lock route labels and navigation. 2. Build shared rows/cards. 3. Add preservation primitives. 4. Convert Home. 5. Convert Work Thread artifacts. 6. Consolidate Review/Diff. 7. Rename Machines to Workspaces visually. 8. Quiet Settings. 9. Align onboarding.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Trust Rules</strong>
+        <span>No fake metrics. No terminal-first phone IDE. No buried high-risk approval. No paywall around safety. No approval success until the daemon/backend confirms it.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Empty States</strong>
+        <span>Home all clear, no workspaces, no paired machine, no active thread, no approvals, notification denied, offline phone, daemon stopped, expired approval, failed proof.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Copy Tone</strong>
+        <span>Plain, concrete, terse. Say what the agent wants, what changed, what proof passed, what is blocked, and what the user can do next. Avoid marketing, dashboards, and internal agent jargon.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Designer Pass</strong>
+        <span>Keep radius, type, spacing, and buttons close to Cursor mobile. Add only enough Lancer-specific affordance for trust: risk, machine, repo, branch, proof, changed files, audit ID.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Folded Feature Families</strong>
+        <span>Launch contract, share intake, repo playbook, readiness check, mission defaults, run budget, provider capability badges, question ladder, preview cockpit, QA annotation, command cards, PR/merge, work search, and flight recorder stay alive as composer chips, Work Thread artifacts, workspace details, review sheets, or Settings rows.</span>
+      </div>
+      <div class="handoff-card">
+        <strong>Fast-Follow Artifacts</strong>
+        <span>Cross-vendor second review, proof becomes regression, run comparison, time-travel/fork, Clips/lancer.proof, weekly digest, Siri/widgets/Watch, true handoff, and client proof export should remain on the roadmap but not become primary mobile roots.</span>
+      </div>
+    </div>
+
+    <table class="state-table">
+      <thead>
+        <tr>
+          <th>Surface</th>
+          <th>Must Cover</th>
+          <th>Primary Action</th>
+          <th>Do Not Reintroduce</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Onboarding</td>
+          <td>Product proof, 6-digit pairing, invalid/expired/unreachable code, account/local choice, policy defaults, notification recovery.</td>
+          <td>Pair and continue</td>
+          <td>QR-first setup, abstract value rows, hidden pairing errors.</td>
+        </tr>
+        <tr>
+          <td>Home</td>
+          <td>Needs you, Today, Yesterday, all-clear, pending approval, failed proof, offline machine, composer sheets, weekly digest entry.</td>
+          <td>Review or start work</td>
+          <td>Dashboard cards, graph metrics, separate Inbox root.</td>
+        </tr>
+        <tr>
+          <td>Workspaces</td>
+          <td>Repo list, add repo, pair machine, machine detail, trusted device, diagnostics, offline recovery, active work counts, repo playbook, readiness check.</td>
+          <td>Open workspace or pair</td>
+          <td>Fleet admin dashboard, terminal entry, fake connected hosts.</td>
+        </tr>
+        <tr>
+          <td>Work Thread</td>
+          <td>User prompt, launch contract, agent prose, plans, question cards, to-dos, changed files, proof status, preview proof, QA annotation, command cards, approval interruption, failed proof, PR/merge actions, follow-up composer.</td>
+          <td>Follow up, review, mark ready</td>
+          <td>Raw terminal-first logs, giant timelines, action bars covering content.</td>
+        </tr>
+        <tr>
+          <td>Review / Diff</td>
+          <td>Risk, request, consequence, scope, evidence, diff, approve, deny, request changes, biometric, expired/resolved/error states, cross-vendor second review hook.</td>
+          <td>Approve, deny, or ask for changes</td>
+          <td>Inline approve for medium+ risk, hidden audit trail, separate review inbox product.</td>
+        </tr>
+        <tr>
+          <td>Settings</td>
+          <td>Account/local mode, notifications, security defaults, mission defaults, trusted machines, diagnostics, provider keys, audit export, billing/sync honesty, privacy/legal.</td>
+          <td>Adjust defaults or recover permissions</td>
+          <td>Governance dashboard root, paywall-first copy, daily operations controls.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="sources">This is the build checklist that should move into the implementation handoff. If code and docs disagree, use this board plus the workflow docs as the current product direction.</p>
+  </section>
+</body>
+</html>
