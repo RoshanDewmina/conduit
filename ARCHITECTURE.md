@@ -89,6 +89,11 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 
 ### Deferred to V2 — code retained, NOT deleted
 - **Hosted-cloud execution UI:** `ProviderDetailView`, `HostedProvisioningView`, `HostedRunnerStatusView`, `SelfHostVsHostedView` (orphaned, 0 refs) and the `agent-runner`/multi-cloud dispatch depth (Fly real; GCP needs an image; Lightsail bootstrap only). Compiles, stays in tree, unwired in V1. **Do not delete.**
+- **Siri / App Intents Phase 2 (RelevantEntities, App Shortcuts relevance, run-start intent):**
+  implemented and device-tested (`cursor/siri-phase2-fixes-9257`, PRs #16/#24), but **intentionally
+  not merged to master** (owner decision, 2026-07-06) — these are iOS 27-only APIs, and master
+  targets iOS 26.0 until iOS 27 actually ships. Revisit merging this branch when the deployment
+  target moves to 27.0+. This is a parked fast-follow, not a stalled/forgotten PR.
 
 ### Planned (not started)
 - First-class **Loop** primitive (`lancer_loop_start`/`lancer_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
