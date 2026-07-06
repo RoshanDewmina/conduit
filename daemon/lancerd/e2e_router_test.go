@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"log"
 	"path/filepath"
 	"strings"
@@ -502,6 +503,54 @@ func TestRelayPairPersistence(t *testing.T) {
 	}
 	if read.PublicKey != cfg.PublicKey {
 		t.Errorf("PublicKey = %q, want %q", read.PublicKey, cfg.PublicKey)
+	}
+}
+
+// TestRelayPairingOverwriteRejected verifies a second, different pairing is
+// refused unless the caller explicitly opts into replace.
+func TestRelayPairingOverwriteRejected(t *testing.T) {
+	dir := withStateDir(t)
+	t.Setenv("LANCER_STATE_DIR", dir)
+
+	first := &relayPairConfig{
+		RelayURL:   "wss://relay.example.com",
+		Code:       "111111",
+		PrivateKey: "first-priv",
+		PublicKey:  "first-pub",
+	}
+	if err := writeRelayPairing(first); err != nil {
+		t.Fatalf("writeRelayPairing first: %v", err)
+	}
+
+	second := &relayPairConfig{
+		RelayURL:   "wss://relay.example.com",
+		Code:       "222222",
+		PrivateKey: "second-priv",
+		PublicKey:  "second-pub",
+	}
+	if err := writeRelayPairing(second); err == nil {
+		t.Fatal("expected overwrite without force to fail")
+	} else if !errors.Is(err, ErrRelayPairingOccupied) {
+		t.Fatalf("expected ErrRelayPairingOccupied, got %v", err)
+	}
+
+	read, err := readRelayPairing()
+	if err != nil {
+		t.Fatalf("readRelayPairing: %v", err)
+	}
+	if read.Code != first.Code {
+		t.Fatalf("pairing mutated without force: code = %q, want %q", read.Code, first.Code)
+	}
+
+	if err := replaceRelayPairing(second); err != nil {
+		t.Fatalf("replaceRelayPairing: %v", err)
+	}
+	read, err = readRelayPairing()
+	if err != nil {
+		t.Fatalf("readRelayPairing after replace: %v", err)
+	}
+	if read.Code != second.Code {
+		t.Fatalf("code after replace = %q, want %q", read.Code, second.Code)
 	}
 }
 

@@ -55,11 +55,10 @@ type qrPairingPayload struct {
 	AccountSecret    string `json:"accountSecret,omitempty"`
 }
 
-func printRelayInstructions() {
+func printRelayInstructions(force bool) error {
 	code, err := generatePairingCode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error generating code: %v\n", err)
-		return
+		return fmt.Errorf("error generating code: %w", err)
 	}
 
 	relayURL := resolveRelayURL()
@@ -70,8 +69,7 @@ func printRelayInstructions() {
 	// the same identity the phone scanned.
 	priv, pub, err := generateKeyPair()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
-		return
+		return fmt.Errorf("error generating keypair: %w", err)
 	}
 
 	pubB64 := base64URLEncode(pub[:])
@@ -95,24 +93,26 @@ func printRelayInstructions() {
 	}
 	qrData, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error marshalling QR payload: %v\n", err)
-		return
+		return fmt.Errorf("error marshalling QR payload: %w", err)
 	}
 
 	qr, err := qrcode.New(string(qrData), qrcode.Medium)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error generating QR code: %v\n", err)
-		return
+		return fmt.Errorf("error generating QR code: %w", err)
 	}
 
 	// Persist the pairing config so the resident daemon connects to the relay.
-	if err := writeRelayPairing(&relayPairConfig{
+	write := writeRelayPairing
+	if force {
+		write = replaceRelayPairing
+	}
+	if err := write(&relayPairConfig{
 		RelayURL:   relayURL,
 		Code:       code,
 		PrivateKey: privB64,
 		PublicKey:  pubB64,
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to persist relay pairing: %v\n", err)
+		return err
 	}
 
 	// ANSI QR uses terminal block characters by design; keep the surrounding
@@ -138,4 +138,5 @@ func printRelayInstructions() {
 			fmt.Println("Account device binding complete. No account password was requested.")
 		}
 	}
+	return nil
 }

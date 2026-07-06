@@ -57,21 +57,45 @@ func main() {
 		}
 
 	case "pair":
-		printRelayInstructions()
-
-	case "relay-attach":
-		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: lancerd relay-attach <pairing-code>")
+		force := false
+		for _, arg := range os.Args[2:] {
+			if arg == "--force" {
+				force = true
+			}
+		}
+		if err := printRelayInstructions(force); err != nil {
+			fmt.Fprintln(os.Stderr, "lancerd pair:", err)
 			os.Exit(1)
 		}
-		code := os.Args[2]
+
+	case "relay-attach":
+		force := false
+		var code string
+		for _, arg := range os.Args[2:] {
+			switch arg {
+			case "--force":
+				force = true
+			default:
+				if code == "" {
+					code = arg
+				}
+			}
+		}
+		if code == "" {
+			fmt.Fprintln(os.Stderr, "usage: lancerd relay-attach [--force] <pairing-code>")
+			os.Exit(1)
+		}
 		relayURL := resolveRelayURL()
 		priv, pub, err := generateKeyPair()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
 			os.Exit(1)
 		}
-		if err := writeRelayPairing(&relayPairConfig{
+		write := writeRelayPairing
+		if force {
+			write = replaceRelayPairing
+		}
+		if err := write(&relayPairConfig{
 			RelayURL:   relayURL,
 			Code:       code,
 			PrivateKey: base64URLEncode(priv[:]),

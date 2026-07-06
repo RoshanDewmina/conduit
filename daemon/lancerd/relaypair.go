@@ -3,12 +3,18 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
+
+// ErrRelayPairingOccupied is returned when a new pairing would replace an
+// existing, different relay pairing. Callers that intentionally replace must
+// pass allowReplace=true (CLI --force, RPC force flag).
+var ErrRelayPairingOccupied = errors.New("relay pairing already configured")
 
 type relayPairConfig struct {
 	RelayURL   string `json:"relayURL"`
@@ -45,19 +51,29 @@ func readRelayPairing() (*relayPairConfig, error) {
 }
 
 func writeRelayPairing(cfg *relayPairConfig) error {
+	return writeRelayPairingAllowReplace(cfg, false)
+}
+
+func replaceRelayPairing(cfg *relayPairConfig) error {
+	return writeRelayPairingAllowReplace(cfg, true)
+}
+
+func writeRelayPairingAllowReplace(cfg *relayPairConfig, allowReplace bool) error {
 	path, err := relayPairingPath()
 	if err != nil {
 		return err
 	}
 	// The daemon has exactly ONE pairing slot: every phone paired to the old
-	// code is silently orphaned the moment this file changes (the resident's
-	// watcher hot-swaps the live relay client within ~5s, and the old phones
-	// keep dialing a code no daemon listens on, forever, with no error on
-	// either side — root cause of the 2026-07-04 "phone never re-paired after
-	// daemon restart" incident). Warn loudly whenever an existing, different
-	// pairing is being replaced so the operator knows a re-pair of every
-	// phone is now required.
-	if old, err := readRelayPairing(); err == nil && old.Code != cfg.Code {
+	// code is orphaned the moment this file changes (the resident's watcher
+	// hot-swaps the live relay client within ~5s). Refuse silent overwrites so
+	// operators must explicitly force a replace (and see the orphan warning).
+	if old, err := readRelayPairing(); err == nil && !sameRelayPairing(old, cfg) {
+		if !allowReplace {
+			fmt.Fprintf(os.Stderr,
+				"lancerd: REFUSING to replace existing relay pairing (code %s) — phones paired to the old code would be orphaned; delete %s or pass --force to replace\n",
+				old.Code, path)
+			return fmt.Errorf("%w (existing code %s)", ErrRelayPairingOccupied, old.Code)
+		}
 		fmt.Fprintf(os.Stderr,
 			"lancerd: REPLACING existing relay pairing (code %s -> %s) — phones paired to the old code are orphaned and must re-pair\n",
 			old.Code, cfg.Code)
@@ -67,6 +83,13 @@ func writeRelayPairing(cfg *relayPairConfig) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+func sameRelayPairing(a, b *relayPairConfig) bool {
+	return a.RelayURL == b.RelayURL &&
+		a.Code == b.Code &&
+		a.PrivateKey == b.PrivateKey &&
+		a.PublicKey == b.PublicKey
 }
 
 type relayPairWatcher struct {

@@ -7,6 +7,7 @@ import "encoding/json"
 // default/env resolution (LANCER_RELAY_URL) applies, matching the CLI.
 type pairBeginParams struct {
 	RelayURL string `json:"relayURL,omitempty"`
+	Force    bool   `json:"force,omitempty"`
 }
 
 // pairBeginResult is the agent.pair.begin RPC result. Field names/shapes are
@@ -56,12 +57,12 @@ func beginPairing(params pairBeginParams) (*pairBeginResult, error) {
 		return nil, err
 	}
 
-	if err := writeRelayPairing(&relayPairConfig{
+	if err := writeRelayPairingAllowReplace(&relayPairConfig{
 		RelayURL:   relayURL,
 		Code:       code,
 		PrivateKey: privB64,
 		PublicKey:  pubB64,
-	}); err != nil {
+	}, params.Force); err != nil {
 		return nil, err
 	}
 
