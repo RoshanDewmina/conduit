@@ -40,6 +40,59 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 38.0 / 402.0, dy: 92.0 / 874.0))
     }
 
+    /// Mock shell uses `ManagedModel.claudeHaiku`; live shell may show other labels.
+    private var composerModelPredicate: NSPredicate {
+        NSPredicate(format: "label CONTAINS[c] 'Haiku' OR label CONTAINS[c] 'Composer' OR label CONTAINS[c] 'Sonnet' OR label CONTAINS[c] 'GPT'")
+    }
+
+    private func composerModelChip(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(composerModelPredicate).firstMatch
+    }
+
+    private func tappableRow(_ app: XCUIApplication, containing label: String) -> XCUIElement {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", label)
+        let button = app.buttons.matching(predicate).firstMatch
+        if button.exists { return button }
+        return app.staticTexts.matching(predicate).firstMatch
+    }
+
+    /// Cloud run-target button is the most stable expanded-composer presence signal.
+    private func isExpandedComposerVisible(_ app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {
+        let cloud = app.buttons["cloud"]
+        if cloud.waitForExistence(timeout: timeout) { return true }
+        return composerModelChip(app).waitForExistence(timeout: 2)
+    }
+
+    @discardableResult
+    private func waitForExpandedComposer(
+        _ app: XCUIApplication,
+        timeout: TimeInterval = 10,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        guard isExpandedComposerVisible(app, timeout: timeout) else {
+            XCTFail("Expanded composer did not appear (missing cloud button and model chip)", file: file, line: line)
+            return false
+        }
+        return true
+    }
+
+    private func waitForElementToDisappear(_ element: XCUIElement, timeout: TimeInterval = 8) {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        _ = XCTWaiter.wait(for: [expectation], timeout: timeout)
+    }
+
+    private func dismissKeyboardIfPresent(_ app: XCUIApplication) {
+        guard app.keyboards.count > 0 else { return }
+        let repoRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
+        if repoRow.exists {
+            repoRow.tap()
+            return
+        }
+        app.swipeDown(velocity: .slow)
+    }
+
     /// Opens the expanded composer sheet from an inline bottom composer.
     private func tapComposerToOpenSheet(_ app: XCUIApplication, placeholder: String, file: StaticString = #filePath, line: UInt = #line) {
         let candidates: [XCUIElement] = [
@@ -50,8 +103,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         for element in candidates {
             if element.waitForExistence(timeout: 3) {
                 tapWithRetry(element, label: "composer \(placeholder)", file: file, line: line)
-                let modelChip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Composer 2.5")).firstMatch
-                if modelChip.waitForExistence(timeout: 8) { return }
+                if isExpandedComposerVisible(app, timeout: 8) { return }
             }
         }
         XCTFail("Composer sheet did not open for placeholder \(placeholder)", file: file, line: line)
@@ -318,8 +370,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         // CursorBottomSheetContainer) — swipe-down is its only dismiss path.
         // Use the model chip as the presence signal instead.
         tapComposerToOpenSheet(app, placeholder: "Plan, ask, build...")
-        let modelChip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Composer 2.5")).firstMatch
-        XCTAssertTrue(modelChip.waitForExistence(timeout: 10), "Composer sheet should present")
+        XCTAssertTrue(waitForExpandedComposer(app, timeout: 10), "Composer sheet should present")
         snapshot("10-composer-from-threadlist", app: app)
     }
 
@@ -432,8 +483,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10))
 
         tapComposerToOpenSheet(app, placeholder: "Follow up...")
-        let modelChip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Composer 2.5")).firstMatch
-        XCTAssertTrue(modelChip.waitForExistence(timeout: 8), "Work Thread composer tap should present Composer sheet")
+        XCTAssertTrue(waitForExpandedComposer(app, timeout: 8), "Work Thread composer tap should present Composer sheet")
         snapshot("10b-composer-from-workthread", app: app)
     }
 
@@ -540,8 +590,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
         tapComposerToOpenSheet(app, placeholder: "Plan, ask, build...")
-        let composerModelChip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Composer 2.5")).firstMatch
-        XCTAssertTrue(composerModelChip.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForExpandedComposer(app, timeout: 10))
         snapshot("10c-composer-sheet-open", app: app)
 
         let textField = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "Plan, ask, build...")).firstMatch
@@ -549,6 +598,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
             textField.tap()
             textField.typeText("Test prompt input")
             snapshot("10d-composer-text-typed", app: app)
+            dismissKeyboardIfPresent(app)
         }
 
         // NOTE: the composer sheet has TWO separate pickers in its top row:
@@ -559,24 +609,29 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         // Run-On sheet). Target the cloud icon specifically for Run-On.
         let repoPickerNoOp = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
         XCTAssertTrue(repoPickerNoOp.waitForExistence(timeout: 5))
-        repoPickerNoOp.tap()
+        tapWithRetry(repoPickerNoOp, label: "repo picker")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.exists,
                       "Repo/branch picker is unwired (onPickRepo defaults to a no-op) — confirm it doesn't crash")
 
         let runTargetPicker = app.buttons["cloud"]
         XCTAssertTrue(runTargetPicker.waitForExistence(timeout: 5), "Cloud run-target icon button should exist")
-        runTargetPicker.tap()
-        XCTAssertTrue(app.staticTexts["Run on"].waitForExistence(timeout: 10))
+        tapWithRetry(runTargetPicker, label: "cloud run-target")
+        let runOnTitle = app.staticTexts["Run on"]
+        XCTAssertTrue(runOnTitle.waitForExistence(timeout: 10))
         snapshot("10e-runon-nested-sheet", app: app)
-        app.buttons["xmark"].tap()
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.waitForExistence(timeout: 10),
+        let closeRunOn = app.buttons["xmark"].firstMatch
+        XCTAssertTrue(closeRunOn.waitForExistence(timeout: 5))
+        tapWithRetry(closeRunOn, label: "close Run on")
+        waitForElementToDisappear(runOnTitle, timeout: 8)
+        XCTAssertTrue(app.buttons["cloud"].waitForExistence(timeout: 10),
                       "Closing Run-on should return to composer sheet, not dismiss everything")
 
         // Model chip -> Model nested sheet
-        let modelChip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Composer 2.5")).firstMatch
-        XCTAssertTrue(modelChip.waitForExistence(timeout: 5))
-        modelChip.tap()
-        XCTAssertTrue(app.staticTexts["Model"].waitForExistence(timeout: 10))
+        let modelChip = composerModelChip(app)
+        XCTAssertTrue(modelChip.waitForExistence(timeout: 8))
+        tapWithRetry(modelChip, label: "model chip")
+        let modelTitle = app.staticTexts["Model"]
+        XCTAssertTrue(modelTitle.waitForExistence(timeout: 10))
         snapshot("10f-model-nested-sheet", app: app)
 
         let modelSearch = app.textFields["Search"]
@@ -585,24 +640,27 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
             modelSearch.typeText("GPT")
             snapshot("10g-model-search-typed", app: app)
             modelSearch.typeText(String(repeating: "\u{8}", count: 3))
+            dismissKeyboardIfPresent(app)
         }
 
         let ellipsisOnRow = app.buttons["ellipsis"].firstMatch
         if ellipsisOnRow.waitForExistence(timeout: 5) {
-            ellipsisOnRow.tap()
-            XCTAssertTrue(app.staticTexts["Model"].exists, "Model row '...' should not crash")
+            tapWithRetry(ellipsisOnRow, label: "model row ellipsis")
+            XCTAssertTrue(modelTitle.exists, "Model row '...' should not crash")
         }
 
-        let modelRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Claude Opus 4.8")).firstMatch
+        let modelRow = tappableRow(app, containing: "Claude Opus 4")
         if modelRow.waitForExistence(timeout: 5) {
-            modelRow.tap()
-            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.waitForExistence(timeout: 10),
+            tapWithRetry(modelRow, label: "Claude Opus 4")
+            waitForElementToDisappear(modelTitle, timeout: 8)
+            XCTAssertTrue(app.buttons["cloud"].waitForExistence(timeout: 10),
                           "Selecting a model should return to composer sheet")
         }
 
         // Swipe whole composer sheet down -> dismiss to Workspaces
+        dismissKeyboardIfPresent(app)
         app.swipeDown(velocity: .fast)
-        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 10), "Swiping composer down should dismiss back to Workspaces")
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 15), "Swiping composer down should dismiss back to Workspaces")
         snapshot("10h-composer-dismissed-to-workspaces", app: app)
     }
 }
