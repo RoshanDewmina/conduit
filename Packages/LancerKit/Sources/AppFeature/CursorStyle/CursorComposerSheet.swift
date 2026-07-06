@@ -7,10 +7,14 @@ import SwiftUI
 /// (repo picker "lancer-ios main", cloud run-target picker, "Composer 2.5"
 /// model pill) — presentation/wiring (tap-to-expand, `.sheet`) is added by a
 /// later pass.
+///
+/// Pass `threadID` to enable draft persistence: the draft is loaded on appear,
+/// saved on every text change, and cleared when the prompt is sent.
 public struct CursorComposerSheet: View {
     @Environment(\.cursorScheme) private var cursorScheme
     @State private var text: String = ""
 
+    private let threadID: String?
     private let repoName: String
     private let branchName: String
     private let modelName: String
@@ -23,6 +27,7 @@ public struct CursorComposerSheet: View {
     private let onSend: ((String) -> Void)?
 
     public init(
+        threadID: String? = nil,
         repoName: String = "lancer-ios",
         branchName: String = "main",
         modelName: String = "Composer 2.5",
@@ -34,6 +39,7 @@ public struct CursorComposerSheet: View {
         onDictate: @escaping () -> Void = {},
         onSend: ((String) -> Void)? = nil
     ) {
+        self.threadID = threadID
         self.repoName = repoName
         self.branchName = branchName
         self.modelName = modelName
@@ -118,6 +124,20 @@ public struct CursorComposerSheet: View {
             }
         }
         .environment(\.cursorScheme, .light)
+        .onAppear {
+            if let id = threadID {
+                let draft = CursorComposerDraftStore.shared.loadDraft(threadID: id)
+                if !draft.isEmpty { text = draft }
+            }
+        }
+        .onChange(of: text) { _, newValue in
+            guard let id = threadID else { return }
+            if newValue.isEmpty {
+                CursorComposerDraftStore.shared.clearDraft(threadID: id)
+            } else {
+                CursorComposerDraftStore.shared.saveDraft(threadID: id, text: newValue)
+            }
+        }
     }
 
     private func chevronDown(_ colors: CursorColors) -> some View {
@@ -129,6 +149,9 @@ public struct CursorComposerSheet: View {
     private func submitIfNeeded() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if let id = threadID {
+            CursorComposerDraftStore.shared.clearDraft(threadID: id)
+        }
         onSend?(trimmed)
         text = ""
     }

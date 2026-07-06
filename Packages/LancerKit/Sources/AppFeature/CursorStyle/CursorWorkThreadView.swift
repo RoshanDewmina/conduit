@@ -7,6 +7,8 @@ import SwiftUI
 /// data only — no daemon/network wiring. Forces `.light` to match the rest of
 /// the app.
 public struct CursorWorkThreadView: View {
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     @State private var isTodosExpanded = false
     @State private var isActionRailExpanded = true
 
@@ -30,6 +32,19 @@ public struct CursorWorkThreadView: View {
         self.onOpenComposer = onOpenComposer
     }
 
+    /// True in seed/mock mode (no bridge) so UI tests always see the banner.
+    /// In live mode, only true while `pendingApprovalID` is non-nil.
+    private var showsApprovalBanner: Bool {
+        guard let liveBridge else { return true }
+        return liveBridge.pendingApprovalID != nil
+    }
+
+    /// Body text for the banner — generic default since the bridge exposes
+    /// only an opaque `ApprovalID` rather than a human-readable title.
+    private var approvalBannerBodyText: String {
+        "Pending approval"
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             header
@@ -50,7 +65,9 @@ public struct CursorWorkThreadView: View {
         .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                approvalBanner
+                if showsApprovalBanner {
+                    approvalBanner
+                }
 
                 if isActionRailExpanded {
                     CursorActionRail(
@@ -96,7 +113,7 @@ public struct CursorWorkThreadView: View {
             CursorArtifactCard {
                 HStack(spacing: 10) {
                     CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
-                    Text("Deploy to production")
+                    Text(approvalBannerBodyText)
                         .font(CursorType.bodyText)
                         .foregroundColor(CursorColors.light.secondaryText)
                         .lineLimit(1)
