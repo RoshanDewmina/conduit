@@ -75,7 +75,8 @@ public struct CursorAppShell: View {
                 },
                 onOpenComposer: { showingComposerSheet = true },
                 onOpenProfile: { showingProfileDrawer = true },
-                onOpenSearch: { showingSearchOverlay = true }
+                onOpenSearch: { showingSearchOverlay = true },
+                onOpenReview: { path.append(CursorRoute.reviewDiff) }
             )
             .navigationDestination(for: CursorRoute.self) { route in
                 destinationView(for: route)

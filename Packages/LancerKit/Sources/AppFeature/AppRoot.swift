@@ -551,6 +551,7 @@ public struct AppRoot: View {
             if selectedFleetSlot == nil {
                 fleetStore.relayInboxVM = vm
             }
+            workspacesRevision = UUID()
         }
         // The daemon resolved a pending approval without ever hearing back from
         // this client (its 120s fail-closed timeout fired). Mark it expired so
@@ -573,6 +574,7 @@ public struct AppRoot: View {
                 vm.approvals[idx].decision = .expired
                 vm.approvals[idx].decidedAt = .now
             }
+            workspacesRevision = UUID()
         }
     }
 
@@ -993,6 +995,7 @@ public struct AppRoot: View {
         }
         cursorLiveBridge.onDecide = { [self] id, decision in
             inboxVM.decide(id, decision: decision)
+            workspacesRevision = UUID()
         }
         cursorLiveBridge.onOpenSettings = { showingCursorSettings = true }
         cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }

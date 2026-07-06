@@ -207,15 +207,15 @@ final class TapInjectionProofTests: XCTestCase {
         // Bypass first-launch onboarding (a fresh install otherwise shows the
         // onboarding view, where the relay auto-pair never runs). Setting the
         // @AppStorage("onboardingSeen") default via the argument domain reaches the
-        // post-onboarding shell WITHOUT seeding demo approvals, so the only Inbox
-        // card is the relay-delivered one.
+        // post-onboarding shell WITHOUT seeding demo approvals, so the only
+        // approval is the relay-delivered one.
         app.launchArguments += ["-onboardingSeen", "YES"]
-        // Pair to the live relay headlessly (DEBUG seam) and land on the Inbox so
-        // the relay-delivered card is on screen the moment it arrives.
+        // Pair to the live relay headlessly (DEBUG seam) and route through the
+        // live Cursor shell so relay approvals surface on Workspaces.
+        app.launchEnvironment["LANCER_CURSOR_SHELL_LIVE"] = "1"
         app.launchEnvironment["LANCER_RELAY_URL"] = env["LANCER_RELAY_URL"] ?? ""
         app.launchEnvironment["LANCER_RELAY_CODE"] = env["LANCER_RELAY_CODE"] ?? ""
         app.launchEnvironment["LANCER_PUSH_BACKEND_URL"] = env["LANCER_PUSH_BACKEND_URL"] ?? ""
-        app.launchEnvironment["LANCER_DESTINATION"] = "inbox"
         addUIInterruptionMonitor(withDescription: "Notification permission") { alert in
             let allow = alert.buttons["Allow"]
             if allow.exists {
@@ -232,19 +232,20 @@ final class TapInjectionProofTests: XCTestCase {
         app.tap()
         defer { app.terminate() }
 
-        // The host fires a medium-risk fileWrite escalation, which the Inbox
-        // board card renders as "Review" (not "Approve") — medium+ risk always
-        // routes through the detail sheet (see InboxView.pendingCard's
-        // requiresFullReview). Wait for that board card, open the sheet, then
-        // wait for the sheet's actual approve control.
-        let boardPrimary = app.buttons["board.primary"].firstMatch
-        XCTAssertTrue(boardPrimary.waitForExistence(timeout: 120),
-                      "A relay-delivered escalation should surface a board card in the Inbox")
-        boardPrimary.tap()
+        // The host fires a medium-risk fileWrite escalation. The live Cursor shell
+        // surfaces it on Workspaces via `approval-banner`; tap through to Review
+        // and approve with the stable accessibility identifier.
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 120),
+                      "Live Cursor shell should land on Workspaces after relay pairing")
+
+        let approvalBanner = app.buttons["approval-banner"].firstMatch
+        XCTAssertTrue(approvalBanner.waitForExistence(timeout: 120),
+                      "A relay-delivered escalation should surface the Workspaces approval banner")
+        approvalBanner.tap()
 
         let approve = app.buttons["approval.approve"].firstMatch
         XCTAssertTrue(approve.waitForExistence(timeout: 15),
-                      "Opening the medium-risk board card should surface the sheet's approve button")
+                      "Opening Review from the approval banner should surface the approve button")
         approve.tap()
 
         // The decision rides the relay back to the daemon; the card should leave

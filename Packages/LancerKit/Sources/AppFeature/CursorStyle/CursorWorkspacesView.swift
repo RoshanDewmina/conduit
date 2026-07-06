@@ -11,17 +11,25 @@ public struct CursorWorkspacesView: View {
     private let onOpenComposer: () -> Void
     private let onOpenProfile: () -> Void
     private let onOpenSearch: () -> Void
+    private let onOpenReview: () -> Void
 
     public init(
         onSelectWorkspace: @escaping (String) -> Void = { _ in },
         onOpenComposer: @escaping () -> Void = {},
         onOpenProfile: @escaping () -> Void = {},
-        onOpenSearch: @escaping () -> Void = {}
+        onOpenSearch: @escaping () -> Void = {},
+        onOpenReview: @escaping () -> Void = {}
     ) {
         self.onSelectWorkspace = onSelectWorkspace
         self.onOpenComposer = onOpenComposer
         self.onOpenProfile = onOpenProfile
         self.onOpenSearch = onOpenSearch
+        self.onOpenReview = onOpenReview
+    }
+
+    private var showsApprovalBanner: Bool {
+        guard let liveBridge else { return false }
+        return liveBridge.pendingApprovalID != nil
     }
 
     public var body: some View {
@@ -42,6 +50,10 @@ public struct CursorWorkspacesView: View {
                     phase: liveBridge.connectionPhase,
                     onPair: liveBridge.onRequestPairing
                 )
+            }
+
+            if showsApprovalBanner {
+                approvalBanner
             }
 
             Text("Workspaces")
@@ -94,6 +106,29 @@ public struct CursorWorkspacesView: View {
             CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
+    }
+
+    private var approvalBanner: some View {
+        Button(action: onOpenReview) {
+            CursorArtifactCard {
+                HStack(spacing: 10) {
+                    CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
+                    Text("Pending approval")
+                        .font(CursorType.bodyText)
+                        .foregroundColor(CursorColors.light.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(CursorColors.light.secondaryText)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("approval-banner")
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     private var avatarCircle: some View {
