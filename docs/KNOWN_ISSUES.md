@@ -127,13 +127,11 @@ doc is now stale on its "OPEN" column:
 C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
 **compliant** with current Apple/OWASP-MASVS guidance.
 
-**Documented security follow-up (P0 external-beta blocker, device validation needed):**
-- **BiometricGate no-passcode fallback still degrades open.** `SecurityKit/BiometricGate.swift:16-24`
-  now falls back to `.deviceOwnerAuthentication` when biometry is not enrolled, and the `.biometryLockout`
-  branch requires passcode. If `canEvaluatePolicy` fails for other reasons, the gate still returns success
-  for simulator/no-passcode compatibility. **Required before external beta:** add a device-tested policy that fails closed
-  on real devices without passcode, while preserving explicit simulator/test bypass behavior. Defense-in-depth
-  bonus: bind SSH-key Keychain items with `SecAccessControl` where feasible.
+**BiometricGate no-passcode policy (P0 — fixed 2026-07-06 on `codex/tier-0-live-cursor-shell`):**
+- `SecurityKit/BiometricGate.swift` now **fails closed** when biometry is unavailable except
+  `.biometryNotEnrolled`, which falls back to device-owner passcode. Covered by
+  `BiometricGateTests` (`passcode-not-set`, `biometry-unavailable` cases).
+  **Owner-gated:** validate on a real no-passcode test device before external beta sign-off.
 
 **Approval-trust-boundary hardening pass — 2026-07-04 (branch `fable/approval-security-hardening`), against the 2026-07-02 Codex read-only audit's 6 findings:**
 
@@ -314,9 +312,10 @@ are now archived under `docs/_archive/`.
 
 ## 6. Remaining P0/P1/P2 after this audit
 
-- **P0:** `BiometricGate` still degrades open on real no-passcode devices; Emergency Stop is still
-  client-orchestrated rather than a daemon-side atomic primitive. Both block external beta unless
-  the owner explicitly signs off on a release-blocking exception.
+- **P0 (fixed 2026-07-06, owner device validation pending):** `BiometricGate` fail-closed on
+  no-passcode / biometry-unavailable; daemon-side atomic Emergency Stop latch in `dispatch.go`
+  (`agent.emergencyStop` RPC). Verified: `swift test --filter BiometricGate`, `go test ./...`
+  from `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
 - **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
   logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
   testing on a real phone. **Fixed:** early-return now logs

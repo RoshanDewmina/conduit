@@ -70,8 +70,8 @@ Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026
 
 | Gap | Severity | Status |
 |-----|----------|--------|
-| Biometric gate degrades open on no-passcode devices | P0 | **External-beta blocker** |
-| Emergency Stop not atomic | P0 | **External-beta blocker** |
+| Biometric gate degrades open on no-passcode devices | P0 | **Fixed** (`531685b6`) — owner device validation pending |
+| Emergency Stop not atomic | P0 | **Fixed** (`531685b6`) — daemon latch + RPC |
 | JWT HS256-only | P1 | Open |
 | Dormant StoreKit vs Stripe entitlement | P1 | Open |
 | Watch app not embedded | P1 | Open |
