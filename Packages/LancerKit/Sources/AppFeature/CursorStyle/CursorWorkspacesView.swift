@@ -42,6 +42,13 @@ public struct CursorWorkspacesView: View {
                 ]
             )
 
+            if let liveBridge, liveBridge.connectionPhase != .connected {
+                CursorConnectionBanner(
+                    phase: liveBridge.connectionPhase,
+                    onPair: liveBridge.onRequestPairing
+                )
+            }
+
             Text("Workspaces")
                 .font(CursorType.pageTitle)
                 .foregroundColor(colors.primaryText)

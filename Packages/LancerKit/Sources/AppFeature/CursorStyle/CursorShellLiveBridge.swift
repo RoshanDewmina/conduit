@@ -11,6 +11,13 @@ import AgentKit
 @MainActor
 @Observable
 public final class CursorShellLiveBridge {
+    public enum ConnectionPhase: Sendable, Equatable {
+        case connected
+        case reconnecting
+        case offline
+        case needsPairing
+    }
+
     public struct WorkspaceRow: Identifiable, Sendable {
         public let id: String
         public let name: String
@@ -32,6 +39,8 @@ public final class CursorShellLiveBridge {
     /// OpenRouter / vendor model slug used for the next dispatch from the composer.
     public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
     public var composerModelLabel: String = ManagedModel.claudeHaiku.label
+    public var connectionPhase: ConnectionPhase = .connected
+    public var threadAttention: [String: CursorThreadAttention] = [:]
 
     public var onDispatch: ((String, String, String?) async -> Void)?
     public var onContinue: ((String, String, String?) async -> Void)?
