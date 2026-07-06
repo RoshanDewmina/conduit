@@ -522,9 +522,8 @@ public struct AppRoot: View {
         // inbox VM so the firewall request actually renders.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EApprovalReceived"))) { note in
             guard let data = note.userInfo?["approvalData"] as? E2ERelayMessage.ApprovalData else { return }
-            if case .ready(let env) = environment {
-                configureGlobalInbox(env: env)
-            }
+            guard case .ready(let env) = environment else { return }
+            configureGlobalInbox(env: env)
             let approval = Approval(
                 id: ApprovalID(UUID(uuidString: data.approvalID) ?? UUID()),
                 sessionID: SessionID(),
@@ -536,31 +535,26 @@ public struct AppRoot: View {
                 toolName: data.toolName,
                 contentHash: data.contentHash
             )
-            // Tag this approval with the machine it arrived from BEFORE inserting
-            // it into the inbox VM, so the eventual decision routes back to that
-            // specific machine's bridge (ApprovalRelay.forwardDecisionOnly step 0).
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
             }
-            if case .ready(let env) = environment {
-                Task { @MainActor in
-                    let repo = approvalRepository ?? ApprovalRepository(env.database)
-                    try? await repo.upsert(approval)
+            Task { @MainActor in
+                let repo = approvalRepository ?? ApprovalRepository(env.database)
+                try? await repo.upsert(approval)
+                let vm = activeInboxViewModel
+                if !vm.approvals.contains(where: { $0.id == approval.id }) {
+                    vm.approvals.insert(approval, at: 0)
                 }
+                if selectedFleetSlot == nil {
+                    fleetStore.relayInboxVM = vm
+                }
+                #if DEBUG
+                if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
+                    cursorLiveBridge.pendingApprovalID = approval.id
+                }
+                #endif
+                workspacesRevision = UUID()
             }
-            let vm = activeInboxViewModel
-            if !vm.approvals.contains(where: { $0.id == approval.id }) {
-                vm.approvals.insert(approval, at: 0)
-            }
-            // Only a true relay-only setup (no fleet/SSH slot) needs this —
-            // a slot's own inboxVM is already covered by FleetStore's
-            // per-slot loop, so pointing relayInboxVM at it too would be
-            // redundant (harmless, since attentionItems dedupes by approval
-            // id, but there's no reason to point it at slot state at all).
-            if selectedFleetSlot == nil {
-                fleetStore.relayInboxVM = vm
-            }
-            workspacesRevision = UUID()
         }
         // The daemon resolved a pending approval without ever hearing back from
         // this client (its 120s fail-closed timeout fired). Mark it expired so
@@ -744,6 +738,7 @@ public struct AppRoot: View {
             #if DEBUG
             if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
                 CursorAppShell(liveBridge: cursorLiveBridge)
+                    .id(cursorLiveBridge.pendingApprovalID)
                     .onAppear {
                         configureGlobalInbox(env: env)
                         setupCursorLiveBridge(env: env)
