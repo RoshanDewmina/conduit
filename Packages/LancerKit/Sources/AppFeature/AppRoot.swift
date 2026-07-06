@@ -2273,6 +2273,14 @@ public struct AppRoot: View {
             client.beginPairingSession()
             client.pairingCode = code
             Task { @MainActor in
+                if client.pairingState == .paired {
+                    addRelayMachine(
+                        client: client,
+                        record: RelayMachineRecord(id: client.machineID, displayName: "Relay host"),
+                        env: env
+                    )
+                    return
+                }
                 for await state in client.$pairingState.values {
                     if state == .paired {
                         addRelayMachine(
