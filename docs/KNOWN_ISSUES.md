@@ -127,11 +127,11 @@ doc is now stale on its "OPEN" column:
 C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
 **compliant** with current Apple/OWASP-MASVS guidance.
 
-**Documented security follow-up (P2, device validation needed):**
+**Documented security follow-up (P0 external-beta blocker, device validation needed):**
 - **BiometricGate no-passcode fallback still degrades open.** `SecurityKit/BiometricGate.swift:16-24`
   now falls back to `.deviceOwnerAuthentication` when biometry is not enrolled, and the `.biometryLockout`
   branch requires passcode. If `canEvaluatePolicy` fails for other reasons, the gate still returns success
-  for simulator/no-passcode compatibility. **Recommended fix:** add a device-tested policy that fails closed
+  for simulator/no-passcode compatibility. **Required before external beta:** add a device-tested policy that fails closed
   on real devices without passcode, while preserving explicit simulator/test bypass behavior. Defense-in-depth
   bonus: bind SSH-key Keychain items with `SecAccessControl` where feasible.
 
@@ -171,7 +171,7 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   exception:** Watch decisions rely on wrist-detection + watch passcode (see AppRoot watch
   `onDecision` comment + SECURITY_ARCHITECTURE §5.1). Tests: `ApprovalDecisionAuthTests` (macOS) +
   `InboxDecisionGateTests` (iOS-gated, wired into the CI simulator step). Note: the pre-existing
-  P2 above (BiometricGate degrades open with no passcode enrolled) bounds this gate's strength too.
+  P0 above (BiometricGate degrades open with no passcode enrolled) bounds this gate's strength too.
   `AgentStore.respondToApproval` (AgentKit hosted-runtime path) is currently caller-less/dormant and
   was not gated.
 - ✅ **App Attest on device binding (audit finding — was: QR secret + auth alone binds).**
@@ -181,7 +181,7 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   completed bind). Full verification per Apple's steps (chain to pinned Apple App Attest root CA,
   nonce, keyId, App ID, counter, aaguid) in `app_attest.go`; single-use per-user server nonces via
   `POST /v1/devices/attest-challenge`; iOS `AccountSessionController.bindDaemonDevice` attests via
-  `DCAppAttestService` (iOS 27 target — no DeviceCheck fallback needed). **Fail-closed startup
+  `DCAppAttestService` (iOS 26 target — no DeviceCheck fallback needed). **Fail-closed startup
   check** mirrors `relaySecretStartupCheck`: production deployment without
   `APP_ATTEST_TEAM_ID`/`APP_ATTEST_BUNDLE_ID` → `log.Fatal`. Regressions:
   `TestBindRejectsWithoutValidAttestation` (correct QR secret + missing/garbage attestation → 401;
@@ -312,7 +312,9 @@ are now archived under `docs/_archive/`.
 
 ## 6. Remaining P0/P1/P2 after this audit
 
-- **P0:** none found in code (builds green, security GO, no confirmed exploitable issue).
+- **P0:** `BiometricGate` still degrades open on real no-passcode devices; Emergency Stop is still
+  client-orchestrated rather than a daemon-side atomic primitive. Both block external beta unless
+  the owner explicitly signs off on a release-blocking exception.
 - **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
   logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
   testing on a real phone. **Fixed:** early-return now logs
