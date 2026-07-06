@@ -238,6 +238,48 @@ func TestE2ERouterContinue(t *testing.T) {
 	}
 }
 
+func TestE2ERouterEmergencyStop(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAllow)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	run := srv.runDispatch(dispatchParams{Agent: "opencode", CWD: "/tmp", Prompt: "start"})
+	if run.Status != "started" {
+		t.Fatalf("dispatch: want started, got %q", run.Status)
+	}
+
+	router.handleMessage("agentEmergencyStop", nil)
+
+	msgType, data := client.lastMessage()
+	if msgType != "emergencyStopResult" {
+		t.Fatalf("expected emergencyStopResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string                 `json:"type"`
+		Payload map[string]interface{} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload["emergencyStopped"] != true || env.Payload["stoppedRuns"] != float64(1) {
+		t.Fatalf("payload = %#v, want emergencyStopped=true stoppedRuns=1", env.Payload)
+	}
+	if status := srv.dispatcher.runStatus(run.RunID); status != "cancelled" {
+		t.Fatalf("run status = %q, want cancelled", status)
+	}
+}
+
 // TestE2ERouterSessionContinue verifies that an inbound agentSessionContinue
 // message reaches server.runObservedSessionContinue (the same core logic the
 // SSH transport's agent.observedSession.continue uses) and replies with

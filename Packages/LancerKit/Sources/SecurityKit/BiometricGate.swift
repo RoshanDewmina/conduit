@@ -3,103 +3,130 @@ import LocalAuthentication
 import LancerCore
 
 /// Async gate over `LAContext` biometric authentication.
-/// Gracefully skips on simulators and devices without biometrics enrolled.
 public actor BiometricGate: Sendable {
     public static let shared = BiometricGate()
-    private init() {}
+
+    private let authenticator: any BiometricGateAuthenticating
+
+    init(authenticator: any BiometricGateAuthenticating = LiveBiometricGateAuthenticator()) {
+        self.authenticator = authenticator
+    }
 
     public func unlock(
         reason: String = "Authenticate to use your SSH key"
     ) async throws {
-        let ctx = LAContext()
-        var nsError: NSError?
-        guard ctx.canEvaluatePolicy(
-            .deviceOwnerAuthenticationWithBiometrics, error: &nsError
-        ) else {
-            if let nsError, let laErr = nsError as? LAError,
-               laErr.code == .biometryNotEnrolled {
-                try await passcodeFallback(reason: reason)
-                return
+        switch await authenticator.canEvaluateBiometrics() {
+        case .available:
+            break
+        case .unavailable(let failure):
+            guard failure.code == .biometryNotEnrolled else {
+                throw authError(from: failure)
             }
-            return  // Simulator or no passcode — degrade gracefully
+            try await passcodeFallback(reason: reason)
+            return
         }
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
-            ctx.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: reason
-            ) { success, error in
-                if let error {
-                    if let laError = error as? LAError {
-                        switch laError.code {
-                        case .userCancel, .appCancel, .systemCancel:
-                            cont.resume(throwing: LancerError.cancelled)
-                        case .biometryNotAvailable, .biometryNotEnrolled:
-                            cont.resume()
-                        case .biometryLockout:
-                            // Biometry IS enrolled but is locked out (too many failed
-                            // attempts). Silently succeeding here would let anyone who
-                            // deliberately fails Face/Touch ID five times force the gate
-                            // open (app-lock + SSH key use). Require the device passcode
-                            // instead — fail closed if it isn't satisfied.
-                            let passcodeCtx = LAContext()
-                            passcodeCtx.evaluatePolicy(
-                                .deviceOwnerAuthentication,
-                                localizedReason: reason
-                            ) { ok, passcodeError in
-                                if ok {
-                                    cont.resume()
-                                } else if let passcodeError = passcodeError as? LAError,
-                                          passcodeError.code == .userCancel
-                                            || passcodeError.code == .appCancel
-                                            || passcodeError.code == .systemCancel {
-                                    cont.resume(throwing: LancerError.cancelled)
-                                } else {
-                                    cont.resume(throwing: LancerError.authFailed(
-                                        reason: passcodeError?.localizedDescription
-                                            ?? "Authentication failed"
-                                    ))
-                                }
-                            }
-                        default:
-                            cont.resume(throwing: LancerError.authFailed(
-                                reason: laError.localizedDescription
-                            ))
-                        }
-                    } else {
-                        cont.resume(throwing: LancerError.authFailed(
-                            reason: error.localizedDescription
-                        ))
-                    }
-                } else if success {
-                    cont.resume()
-                } else {
-                    cont.resume(throwing: LancerError.authFailed(
-                        reason: "Biometric authentication denied"
-                    ))
-                }
+
+        switch await authenticator.evaluateBiometrics(reason: reason) {
+        case .success:
+            return
+        case .failure(let failure):
+            switch failure.code {
+            case .userCancel, .appCancel, .systemCancel:
+                throw LancerError.cancelled
+            case .biometryNotEnrolled, .biometryLockout:
+                try await passcodeFallback(reason: reason)
+            default:
+                throw authError(from: failure)
             }
         }
     }
 
     private func passcodeFallback(reason: String) async throws {
+        switch await authenticator.evaluateDeviceOwnerAuthentication(reason: reason) {
+        case .success:
+            return
+        case .failure(let failure):
+            throw authError(from: failure)
+        }
+    }
+
+    private func authError(from failure: BiometricGateAuthFailure) -> LancerError {
+        if failure.code == .userCancel
+            || failure.code == .appCancel
+            || failure.code == .systemCancel {
+            return .cancelled
+        }
+        return .authFailed(reason: failure.reason)
+    }
+}
+
+protocol BiometricGateAuthenticating: Sendable {
+    func canEvaluateBiometrics() async -> BiometricGateAvailability
+    func evaluateBiometrics(reason: String) async -> BiometricGateEvaluationResult
+    func evaluateDeviceOwnerAuthentication(reason: String) async -> BiometricGateEvaluationResult
+}
+
+enum BiometricGateAvailability: Sendable, Equatable {
+    case available
+    case unavailable(BiometricGateAuthFailure)
+}
+
+enum BiometricGateEvaluationResult: Sendable, Equatable {
+    case success
+    case failure(BiometricGateAuthFailure)
+}
+
+struct BiometricGateAuthFailure: Sendable, Equatable {
+    let code: LAError.Code?
+    let reason: String
+}
+
+private struct LiveBiometricGateAuthenticator: BiometricGateAuthenticating {
+    func canEvaluateBiometrics() async -> BiometricGateAvailability {
         let ctx = LAContext()
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
-            ctx.evaluatePolicy(
-                .deviceOwnerAuthentication,
-                localizedReason: reason
-            ) { success, error in
-                if let error {
-                    cont.resume(throwing: LancerError.authFailed(
-                        reason: error.localizedDescription
-                    ))
-                } else if success {
-                    cont.resume()
+        var nsError: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &nsError) else {
+            return .unavailable(Self.failure(from: nsError))
+        }
+        return .available
+    }
+
+    func evaluateBiometrics(reason: String) async -> BiometricGateEvaluationResult {
+        let ctx = LAContext()
+        return await evaluate(ctx, policy: .deviceOwnerAuthenticationWithBiometrics, reason: reason)
+    }
+
+    func evaluateDeviceOwnerAuthentication(reason: String) async -> BiometricGateEvaluationResult {
+        let ctx = LAContext()
+        return await evaluate(ctx, policy: .deviceOwnerAuthentication, reason: reason)
+    }
+
+    private func evaluate(
+        _ ctx: LAContext,
+        policy: LAPolicy,
+        reason: String
+    ) async -> BiometricGateEvaluationResult {
+        await withCheckedContinuation { continuation in
+            ctx.evaluatePolicy(policy, localizedReason: reason) { success, error in
+                if success {
+                    continuation.resume(returning: .success)
                 } else {
-                    cont.resume(throwing: LancerError.authFailed(
-                        reason: "Authentication required"
-                    ))
+                    continuation.resume(returning: .failure(Self.failure(from: error)))
                 }
             }
         }
+    }
+
+    private static func failure(from error: (any Error)?) -> BiometricGateAuthFailure {
+        if let laError = error as? LAError {
+            return BiometricGateAuthFailure(
+                code: laError.code,
+                reason: laError.localizedDescription
+            )
+        }
+        return BiometricGateAuthFailure(
+            code: nil,
+            reason: error?.localizedDescription ?? "Authentication failed"
+        )
     }
 }

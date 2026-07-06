@@ -466,6 +466,10 @@ func (s *server) applyRunControl(runID, action string) {
 	}
 }
 
+func (s *server) applyEmergencyStop() int {
+	return s.dispatcher.emergencyStop()
+}
+
 // startScheduler runs the schedule ticker until ctx-like stop; call from daemon/legacy serve.
 func (s *server) startScheduler(stop <-chan struct{}) {
 	go func() {
@@ -941,6 +945,10 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		_ = json.Unmarshal(msg.Params, &p)
 		s.writeResult(msg.ID, map[string]bool{"cancelled": s.dispatcher.cancel(p.RunID)})
 
+	case "agent.emergencyStop":
+		stopped := s.applyEmergencyStop()
+		s.writeResult(msg.ID, map[string]interface{}{"emergencyStopped": true, "stoppedRuns": stopped})
+
 	case "agent.pause":
 		var p struct {
 			RunID string `json:"runId"`
@@ -1035,10 +1043,10 @@ func (s *server) handleMessage(msg *rpcMessage) {
 
 	case "agent.secret.store":
 		var p struct {
-			Name   string `json:"name"`
-			Type   string `json:"type"`
-			Scope  string `json:"scope"`
-			Value  string `json:"value"`
+			Name  string `json:"name"`
+			Type  string `json:"type"`
+			Scope string `json:"scope"`
+			Value string `json:"value"`
 		}
 		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Name == "" || p.Value == "" {
 			s.writeError(msg.ID, -32602, "invalid params")

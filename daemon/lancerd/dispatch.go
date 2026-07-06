@@ -879,13 +879,14 @@ type QuotaGuardResult struct {
 }
 
 type dispatcher struct {
-	mu            sync.Mutex
-	runs          map[string]*dispatchRun
-	spentUSD      float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
-	providerSpend map[string]*providerSpend
-	launch        launchFunc
-	audit         func(AuditEntry) // run-control audit sink; no-op until wired by the server
-	emit          emitFunc         // run-output/status notifier; nil until wired by the server
+	mu               sync.Mutex
+	runs             map[string]*dispatchRun
+	emergencyStopped bool
+	spentUSD         float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
+	providerSpend    map[string]*providerSpend
+	launch           launchFunc
+	audit            func(AuditEntry) // run-control audit sink; no-op until wired by the server
+	emit             emitFunc         // run-output/status notifier; nil until wired by the server
 	// hookWired reports whether a per-action PreToolUse hook is verifiably wired
 	// for the given agent binary (argv[0]). Nil ⇒ treat as not wired (fail-closed:
 	// launches escalate). Set by the server from the real install state.
@@ -1005,6 +1006,64 @@ func (d *dispatcher) runStatus(runID string) string {
 		return run.Status
 	}
 	return ""
+}
+
+func emergencyStoppedResult() dispatchResult {
+	return dispatchResult{Status: "emergencyStopped", Message: "emergency stop is active"}
+}
+
+func (d *dispatcher) emergencyStopActive() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.emergencyStopped
+}
+
+func (d *dispatcher) attachLaunchHandle(runID string, handle *procHandle) bool {
+	kill := false
+	d.mu.Lock()
+	if run := d.runs[runID]; run != nil {
+		if d.emergencyStopped || run.Status == "cancelled" {
+			run.Status = "cancelled"
+			kill = true
+		} else {
+			run.handle = handle
+		}
+	} else {
+		kill = true
+	}
+	d.mu.Unlock()
+	if kill && handle != nil {
+		handle.kill()
+		return false
+	}
+	return !kill
+}
+
+func (d *dispatcher) emergencyStop() int {
+	type stoppedRun struct {
+		id     string
+		agent  string
+		handle *procHandle
+	}
+	var stopped []stoppedRun
+	d.mu.Lock()
+	d.emergencyStopped = true
+	for _, run := range d.runs {
+		if run.Status != "running" && run.Status != "paused" {
+			continue
+		}
+		run.Status = "cancelled"
+		stopped = append(stopped, stoppedRun{id: run.ID, agent: run.Agent, handle: run.handle})
+	}
+	d.mu.Unlock()
+
+	for _, run := range stopped {
+		if run.handle != nil {
+			run.handle.kill()
+		}
+		d.emitAudit(AuditEntry{Action: "run-stopped", Agent: run.agent, Kind: "run-control", ApprovalID: run.id})
+	}
+	return len(stopped)
 }
 
 // runForCWD returns the ID of an active (running) dispatched run whose cwd and
@@ -1286,6 +1345,11 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	// retention, status tracking) silently no-ops against a nil run.
 	id := newUUID()
 	d.mu.Lock()
+	if d.emergencyStopped {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "dispatch-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
+		return emergencyStoppedResult()
+	}
 	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
 	d.mu.Unlock()
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
@@ -1296,11 +1360,12 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		audit(AuditEntry{Action: "dispatch-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
-	d.mu.Lock()
-	if run := d.runs[id]; run != nil {
-		run.handle = handle
+	if !d.attachLaunchHandle(id, handle) {
+		audit(AuditEntry{Action: "dispatch-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, ApprovalID: id})
+		res := emergencyStoppedResult()
+		res.RunID = id
+		return res
 	}
-	d.mu.Unlock()
 	audit(AuditEntry{Action: "dispatch-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
 }
@@ -1378,6 +1443,11 @@ type continueFallback struct {
 func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
 	d.mu.Lock()
 	run := d.runs[runID]
+	if d.emergencyStopped {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "continue-emergency-stopped", Kind: "dispatch", Command: prompt})
+		return emergencyStoppedResult()
+	}
 	d.mu.Unlock()
 
 	var agent, cwd, model string
@@ -1431,14 +1501,28 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 	}
 
 	id := newUUID()
+	d.mu.Lock()
+	if d.emergencyStopped {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "continue-emergency-stopped", Agent: agent, Kind: "dispatch", Command: prompt})
+		return emergencyStoppedResult()
+	}
+	d.runs[id] = &dispatchRun{ID: id, Agent: agent, Prompt: prompt, CWD: cwd, Model: model, Status: "running", BudgetUSD: budget}
+	d.mu.Unlock()
 	handle, err := d.launch(argv, cwd, id, d.wrapEmitForRun(id, false))
 	if err != nil {
+		d.mu.Lock()
+		delete(d.runs, id)
+		d.mu.Unlock()
 		audit(AuditEntry{Action: "continue-error", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
-	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: agent, Prompt: prompt, CWD: cwd, Model: model, Status: "running", BudgetUSD: budget, handle: handle}
-	d.mu.Unlock()
+	if !d.attachLaunchHandle(id, handle) {
+		audit(AuditEntry{Action: "continue-emergency-stopped", Agent: agent, Kind: "dispatch", Command: prompt, ApprovalID: id})
+		res := emergencyStoppedResult()
+		res.RunID = id
+		return res
+	}
 	audit(AuditEntry{Action: "continue-launched", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }
@@ -1475,6 +1559,10 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	if !ok {
 		return dispatchResult{Status: "error", Message: "resume-by-id not supported for agent: " + p.Vendor}
 	}
+	if d.emergencyStopActive() {
+		audit(AuditEntry{Action: "observed-continue-emergency-stopped", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt})
+		return emergencyStoppedResult()
+	}
 
 	// Budget gate (shared daily total vs this run's cap).
 	d.mu.Lock()
@@ -1509,14 +1597,28 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	}
 
 	id := newUUID()
+	d.mu.Lock()
+	if d.emergencyStopped {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "observed-continue-emergency-stopped", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt})
+		return emergencyStoppedResult()
+	}
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD}
+	d.mu.Unlock()
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
+		d.mu.Lock()
+		delete(d.runs, id)
+		d.mu.Unlock()
 		audit(AuditEntry{Action: "observed-continue-error", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
-	d.mu.Lock()
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, handle: handle}
-	d.mu.Unlock()
+	if !d.attachLaunchHandle(id, handle) {
+		audit(AuditEntry{Action: "observed-continue-emergency-stopped", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, ApprovalID: id})
+		res := emergencyStoppedResult()
+		res.RunID = id
+		return res
+	}
 	audit(AuditEntry{Action: "observed-continue-launched", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: id})
 	return dispatchResult{RunID: id, Status: "started", Decision: "allow", Rule: rule}
 }
@@ -1575,6 +1677,11 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 	// launch runs, or a fast-exiting process's terminal-status event races
 	// past a nil run and worktree cleanup silently no-ops.
 	d.mu.Lock()
+	if d.emergencyStopped {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "conversation-append-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
+		return emergencyStoppedResult()
+	}
 	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
 	d.mu.Unlock()
 	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
@@ -1585,11 +1692,12 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
-	d.mu.Lock()
-	if run := d.runs[runID]; run != nil {
-		run.handle = handle
+	if !d.attachLaunchHandle(runID, handle) {
+		audit(AuditEntry{Action: "conversation-append-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, ApprovalID: runID})
+		res := emergencyStoppedResult()
+		res.RunID = runID
+		return res
 	}
-	d.mu.Unlock()
 	audit(AuditEntry{Action: "conversation-append-launched", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule, ApprovalID: runID})
 	return dispatchResult{RunID: runID, Status: "started", Decision: "allow", Rule: rule, CWD: expandHome(p.CWD)}
 }
