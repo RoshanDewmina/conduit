@@ -58,6 +58,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
         // SwiftTerm — iOS-only UI dep, isolated to TerminalEngine
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
+        // RevenueCat — StoreKit wrapper for the one-time Pro IAP (receipt validation + entitlements).
+        .package(url: "https://github.com/RevenueCat/purchases-ios", from: "5.0.0"),
     ],
     targets: [
         // ── Engines ──────────────────────────────────────────────────────
@@ -205,6 +207,7 @@ let package = Package(
                 "SyncKit",
                 "NotificationsKit",
                 "SSHTransport",
+                .product(name: "RevenueCat", package: "purchases-ios", condition: .when(platforms: [.iOS])),
             ],
             swiftSettings: swiftSettings
         ),
