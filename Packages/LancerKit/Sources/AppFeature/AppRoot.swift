@@ -724,6 +724,7 @@ public struct AppRoot: View {
             }
             await DebugSeeder.resetForUITestIfRequested(env: env)
             await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
+            workspacesRevision = UUID()
 #endif
         }
     }
@@ -947,6 +948,8 @@ public struct AppRoot: View {
                 editedToolInput: edited,
                 contentHash: contentHash
             )
+        } onPendingApprovalsChanged: { [self] _, _, _ in
+            workspacesRevision = UUID()
         }
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
@@ -1018,7 +1021,15 @@ public struct AppRoot: View {
                 )
             }
             cursorLiveBridge.reloadWorkspaceThreads(threads.isEmpty ? ["command-center": []] : threads)
-            let pending = activeInboxViewModel.approvals.filter(\.isPending)
+            let fromMemory = activeInboxViewModel.approvals.filter(\.isPending)
+            let pending: [Approval]
+            if !fromMemory.isEmpty {
+                pending = fromMemory
+            } else if let approvalRepository {
+                pending = (try? await approvalRepository.pending()) ?? []
+            } else {
+                pending = []
+            }
             cursorLiveBridge.pendingApprovalID = pending.first?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
             cursorLiveBridge.threadAttention = threadAttentionMap(
