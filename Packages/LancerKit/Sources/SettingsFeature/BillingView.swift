@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import StoreKit
 import LancerCore
 import DesignSystem
 import AgentKit
@@ -65,13 +64,13 @@ public struct BillingView: View {
                                     Text("Pro not purchased")
                                         .font(.dsSansPt(15, weight: .semibold))
                                         .foregroundStyle(t.text)
-                                    Text("unlock at \(pm.product?.displayPrice ?? "$14.99") once")
+                                    Text("unlock at \(pm.displayPrice ?? "$14.99") once")
                                         .font(.dsMonoPt(11))
                                         .foregroundStyle(t.text3)
                                 }
                                 Spacer()
                                 DSButton(
-                                    "unlock lancer pro · \(pm.product?.displayPrice ?? "$14.99") once",
+                                    "unlock lancer pro · \(pm.displayPrice ?? "$14.99") once",
                                     variant: .primary,
                                     size: .sm,
                                     mono: true,

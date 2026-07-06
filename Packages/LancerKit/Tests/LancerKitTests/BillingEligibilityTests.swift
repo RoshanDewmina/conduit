@@ -15,4 +15,19 @@ struct BillingEligibilityTests {
         #expect(!BillingEligibility.isExternalStripeEligible(storefrontCountryCode: "CA"))
         #expect(!BillingEligibility.isExternalStripeEligible(storefrontCountryCode: nil))
     }
+
+    @Test("Pro entitlement active when RevenueCat reports active")
+    func proEntitlementActive() {
+        #expect(BillingEligibility.isProEntitlementActive(true))
+        #expect(!BillingEligibility.isProEntitlementActive(false))
+    }
+
+    @Test("free tier allows two hosts before paywall")
+    func hostPaywallThreshold() {
+        #expect(!BillingEligibility.requiresPaywallForAdditionalHost(existingHostCount: 1, isPro: false))
+        #expect(BillingEligibility.requiresPaywallForAdditionalHost(existingHostCount: 2, isPro: false))
+        #expect(!BillingEligibility.requiresPaywallForAdditionalHost(existingHostCount: 2, isPro: true))
+        #expect(!BillingEligibility.requiresPaywallForProFeature(isPro: true))
+        #expect(BillingEligibility.requiresPaywallForProFeature(isPro: false))
+    }
 }

@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import StoreKit
 import DesignSystem
 
 public struct PaywallSheet: View {
@@ -69,13 +68,7 @@ public struct PaywallSheet: View {
 
                         // Price display
                         HStack(alignment: .lastTextBaseline, spacing: 4) {
-                            Group {
-                                if let product = pm.product {
-                                    Text(product.displayPrice)
-                                } else {
-                                    Text("$14.99")
-                                }
-                            }
+                            Text(pm.displayPrice ?? "$14.99")
                             .font(.dsDisplayPt(38, weight: .bold))
                             .foregroundStyle(t.text)
 
@@ -100,11 +93,11 @@ public struct PaywallSheet: View {
                             .disabled({
                                 switch pm.purchaseState {
                                 case .purchasing, .purchased: return true
-                                default: return pm.product == nil
+                                default: return pm.displayPrice == nil
                                 }
                             }())
 
-                            if pm.product == nil, case .unknown = pm.purchaseState {
+                            if pm.displayPrice == nil, case .unknown = pm.purchaseState {
                                 Text("loading price…")
                                     .font(.dsMonoPt(11))
                                     .foregroundStyle(t.text3)

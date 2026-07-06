@@ -26,9 +26,11 @@ public struct RelayMachineRow: Identifiable, Sendable {
 /// so there's a single, consistent "Paired Machines" surface.
 public struct RelayMachinesListView: View {
     let machines: [RelayMachineRow]
+    let isPro: Bool
     let onPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     let onUnpair: (RelayMachineID) -> Void
     let onRename: (RelayMachineID, String) -> Void
+    let onRequestProUpgrade: ((String) -> Void)?
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -37,14 +39,18 @@ public struct RelayMachinesListView: View {
 
     public init(
         machines: [RelayMachineRow],
+        isPro: Bool = true,
         onPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void,
         onUnpair: @escaping (RelayMachineID) -> Void,
-        onRename: @escaping (RelayMachineID, String) -> Void = { _, _ in }
+        onRename: @escaping (RelayMachineID, String) -> Void = { _, _ in },
+        onRequestProUpgrade: ((String) -> Void)? = nil
     ) {
         self.machines = machines
+        self.isPro = isPro
         self.onPaired = onPaired
         self.onUnpair = onUnpair
         self.onRename = onRename
+        self.onRequestProUpgrade = onRequestProUpgrade
     }
 
     public var body: some View {
@@ -66,10 +72,17 @@ public struct RelayMachinesListView: View {
 
                     sectionHead(machines.isEmpty ? "GET STARTED" : "ADD ANOTHER")
                     card {
-                        NavigationLink {
-                            E2ERelayPairingView(existingMachineCount: machines.count, onPaired: onPaired)
-                        } label: {
-                            addMachineRow
+                        if BillingEligibility.requiresPaywallForAdditionalHost(existingHostCount: machines.count, isPro: isPro) {
+                            Button { onRequestProUpgrade?("Unlimited hosts") } label: {
+                                addMachineRow
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            NavigationLink {
+                                E2ERelayPairingView(existingMachineCount: machines.count, onPaired: onPaired)
+                            } label: {
+                                addMachineRow
+                            }
                         }
                     }
                     .padding(.bottom, 36)

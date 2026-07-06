@@ -240,17 +240,31 @@ public struct AppRoot: View {
                       primaryActionTitle: "Got it"),
     ]
 
-    private var isPro: Bool {
-        #if DEBUG
-        // Debug builds default to the REAL purchase state so paywall/Pro gates are
-        // exercised exactly as in Release. Opt in to a force-unlock for UX evaluation
-        // with LANCER_FORCE_PRO=1. No DEBUG path ever grants free Pro in Release.
-        if ProcessInfo.processInfo.environment["LANCER_FORCE_PRO"] == "1" { return true }
-        #endif
-        switch pm.purchaseState {
-        case .purchased: return true
-        // .unknown = purchase state not yet loaded; keep locked rather than granting free Pro.
-        default: return false
+    private func presentPaywall(featureName: String) {
+        paywallFeatureName = featureName
+        showingPaywall = true
+    }
+
+    private func requestRelayPairing(env: AppEnvironment) {
+        if BillingEligibility.requiresPaywallForAdditionalHost(
+            existingHostCount: relayFleetStore.machines.count,
+            isPro: pm.isPro
+        ) {
+            presentPaywall(featureName: "Unlimited hosts")
+            return
+        }
+        drawerRoute = .relayPairing
+    }
+
+    private func requestSSHHostAdd(env: AppEnvironment) {
+        Task { @MainActor in
+            let sshHostCount = (try? await env.hostRepo.all().count) ?? 0
+            let totalHosts = relayFleetStore.machines.count + sshHostCount
+            if BillingEligibility.requiresPaywallForAdditionalHost(existingHostCount: totalHosts, isPro: pm.isPro) {
+                presentPaywall(featureName: "Unlimited hosts")
+                return
+            }
+            drawerRoute = .addHost
         }
     }
 
@@ -712,8 +726,10 @@ public struct AppRoot: View {
                     userInfo: ["approvalId": approvalID]
                 )
             }
-            await env.syncEngine.start()
-            await env.conversationSyncEngine.start()
+            if pm.isPro {
+                await env.syncEngine.start()
+                await env.conversationSyncEngine.start()
+            }
         }
         .task {
 #if DEBUG
@@ -817,6 +833,10 @@ public struct AppRoot: View {
     /// machine id — that falls through to "unavailable", same visible behavior
     /// as before (Work Thread's terminal is deferred to V2 regardless of transport).
     private func openWorkspace(for agent: DispatchAgent?) {
+        if BillingEligibility.requiresPaywallForProFeature(isPro: pm.isPro) {
+            presentPaywall(featureName: "SFTP file browser")
+            return
+        }
         guard let hostIDString = agent?.hostID, let uuid = UUID(uuidString: hostIDString) else {
             showingRelayWorkspaceUnavailable = true
             return
@@ -857,8 +877,8 @@ public struct AppRoot: View {
                 detents: [.medium, .large]
             ) {
                 MachineConnectionChooser(
-                    onRelay: { drawerRoute = .relayPairing },
-                    onSSH: { drawerRoute = .addHost }
+                    onRelay: { requestRelayPairing(env: env) },
+                    onSSH: { requestSSHHostAdd(env: env) }
                 )
             }
         case .relayPairing:
@@ -1641,6 +1661,16 @@ public struct AppRoot: View {
     }
 
     private func inboxDestination(env: AppEnvironment) -> some View {
+        Group {
+            if pm.isPro {
+                inboxContent(env: env)
+            } else {
+                GlobalInboxGateView(onUpgrade: { presentPaywall(featureName: "AI agent approval inbox") })
+            }
+        }
+    }
+
+    private func inboxContent(env: AppEnvironment) -> some View {
         let actions = bridgeSessionActions()
         return InboxView(
             viewModel: activeInboxViewModel,
@@ -1743,7 +1773,8 @@ public struct AppRoot: View {
             onApplyNormalizedPolicy: { policy in
                 let actions = bridgeSessionActions()
                 Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
-            }
+            },
+            onRequestProUpgrade: { featureName in presentPaywall(featureName: featureName) }
         )
     }
 
@@ -2723,6 +2754,7 @@ private struct SettingsWithLibraryView: View {
     @Bindable var sidebarShellState: SidebarShellState
     var onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil
     var onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
+    var onRequestProUpgrade: ((String) -> Void)? = nil
     @State private var showLimits = false
 
     var body: some View {
@@ -2749,7 +2781,8 @@ private struct SettingsWithLibraryView: View {
             // in-content back affordance here.
             onBack: nil,
             onApplyPolicyPreset: onApplyPolicyPreset,
-            onApplyNormalizedPolicy: onApplyNormalizedPolicy
+            onApplyNormalizedPolicy: onApplyNormalizedPolicy,
+            onRequestProUpgrade: onRequestProUpgrade
         )
         .sheet(isPresented: $showLimits) {
             if let store = quotaGuardStore {

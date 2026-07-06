@@ -487,8 +487,10 @@ public struct SettingsView: View {
     /// the same way the former standalone Governance root wired them.
     public var onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil
     public var onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
+    public var onRequestProUpgrade: ((String) -> Void)? = nil
     @AppStorage(LancerAppearance.storageKey) private var colorSchemePref: String = LancerAppearance.light.rawValue
     @State private var showResetConfirmation = false
+    @State private var showPolicyHome = false
     @State private var purchases = PurchaseManager.shared
     @Environment(\.lancerTokens) private var t
 
@@ -517,7 +519,8 @@ public struct SettingsView: View {
         onAccountSignedOut: (() -> Void)? = nil,
         onBack: (() -> Void)? = nil,
         onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil,
-        onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
+        onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil,
+        onRequestProUpgrade: ((String) -> Void)? = nil
     ) {
         _vm = State(initialValue: viewModel)
         self.syncEngine = syncEngine
@@ -542,6 +545,7 @@ public struct SettingsView: View {
         self.onBack = onBack
         self.onApplyPolicyPreset = onApplyPolicyPreset
         self.onApplyNormalizedPolicy = onApplyNormalizedPolicy
+        self.onRequestProUpgrade = onRequestProUpgrade
     }
 
     public var body: some View {
@@ -560,6 +564,13 @@ public struct SettingsView: View {
                     resetSection
                     versionFooter
                 }
+            }
+            .navigationDestination(isPresented: $showPolicyHome) {
+                PolicyHomeView(
+                    hosts: ["All hosts"],
+                    onApplyPreset: onApplyPolicyPreset ?? { _, _ in },
+                    onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
+                )
             }
             .alert("Reset app", isPresented: $showResetConfirmation) {
                 Button("Cancel", role: .cancel) {}
@@ -645,17 +656,19 @@ public struct SettingsView: View {
 
     // MARK: - Policy & Governance (folded in from the former Governance root — accent, not green)
 
+    private func openPolicyHome(featureName: String = "Policy presets") {
+        if BillingEligibility.requiresPaywallForProFeature(isPro: purchases.isPro) {
+            onRequestProUpgrade?(featureName)
+        } else {
+            showPolicyHome = true
+        }
+    }
+
     @ViewBuilder
     private var policyGovernanceSection: some View {
         sectionHead("POLICY & GOVERNANCE")
         VStack(spacing: 11) {
-            NavigationLink {
-                PolicyHomeView(
-                    hosts: ["All hosts"],
-                    onApplyPreset: onApplyPolicyPreset ?? { _, _ in },
-                    onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
-                )
-            } label: {
+            Button { openPolicyHome(featureName: "Policy bridge") } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text("POLICY BRIDGE")
@@ -697,15 +710,10 @@ public struct SettingsView: View {
                     settingsNavRow("Default autonomy", icon: "slider.horizontal.3", detail: autonomyLabel)
                 }
                 divider
-                NavigationLink {
-                    PolicyHomeView(
-                        hosts: ["All hosts"],
-                        onApplyPreset: onApplyPolicyPreset ?? { _, _ in },
-                        onApplyNormalized: onApplyNormalizedPolicy ?? { _ in }
-                    )
-                } label: {
+                Button { openPolicyHome(featureName: "Policy presets") } label: {
                     settingsNavRow("Policy presets", icon: "checklist", detail: "rules · cross-provider matrix")
                 }
+                .buttonStyle(.plain)
                 if let auditRepository {
                     divider
                     NavigationLink {
@@ -825,7 +833,14 @@ public struct SettingsView: View {
         sectionHead("CONNECTION")
         settingsCard {
             NavigationLink {
-                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair, onRename: onRelayRename)
+                RelayMachinesListView(
+                    machines: relayMachines,
+                    isPro: purchases.isPro,
+                    onPaired: onRelayPaired,
+                    onUnpair: onRelayUnpair,
+                    onRename: onRelayRename,
+                    onRequestProUpgrade: onRequestProUpgrade
+                )
             } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
             }
@@ -851,8 +866,27 @@ public struct SettingsView: View {
             sectionHead("DATA")
             VStack(spacing: 11) {
                 if let syncEngine {
-                    SyncStatusView(engine: syncEngine, conversationEngine: conversationSyncEngine)
+                    if purchases.isPro {
+                        SyncStatusView(engine: syncEngine, conversationEngine: conversationSyncEngine)
+                            .padding(.horizontal, 16)
+                    } else {
+                        settingsCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                settingsNavRow("iCloud sync (Pro)", icon: "icloud", detail: "host configs · conversation mirror")
+                                Text("CloudKit sync unlocks with Lancer Pro.")
+                                    .font(.dsMonoPt(10))
+                                    .foregroundStyle(t.text3)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 12)
+                                DSButton("unlock lancer pro", variant: .primary, size: .sm, mono: true) {
+                                    onRequestProUpgrade?("CloudKit sync")
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
+                            }
+                        }
                         .padding(.horizontal, 16)
+                    }
                 }
                 if let daemonChannel {
                     settingsCard {
