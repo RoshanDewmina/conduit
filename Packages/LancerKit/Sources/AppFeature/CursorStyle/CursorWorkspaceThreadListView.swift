@@ -53,7 +53,8 @@ public struct CursorWorkspaceThreadListView: View {
                 title: row.title,
                 repoName: row.repoName,
                 isActive: index == 0,
-                statusLine: .noChanges
+                statusLine: .noChanges,
+                attention: liveBridge?.threadAttention[row.id]
             )
         }
     }

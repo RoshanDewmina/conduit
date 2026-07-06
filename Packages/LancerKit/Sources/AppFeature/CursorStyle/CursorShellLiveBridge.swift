@@ -11,6 +11,13 @@ import LancerCore
 public final class CursorShellLiveBridge {
     public static let allReposWorkspaceName = "All Repos"
 
+    public enum ConnectionPhase: Sendable, Equatable {
+        case connected
+        case reconnecting
+        case offline
+        case needsPairing
+    }
+
     public struct WorkspaceRow: Identifiable, Sendable {
         public let id: String
         public let name: String
@@ -29,6 +36,12 @@ public final class CursorShellLiveBridge {
     public var pendingApprovalID: ApprovalID?
     public var composerCWD: String = ""
     public var selectedThreadID: String?
+    /// OpenRouter / vendor model slug used for the next dispatch from the composer.
+    public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
+    public var composerModelLabel: String = ManagedModel.claudeHaiku.label
+    public var connectionPhase: ConnectionPhase = .connected
+    public var threadAttention: [String: CursorThreadAttention] = [:]
+    public var relayMachineCount: Int = 0
 
     public var onDispatch: ((String, String) async -> Void)?
     public var onContinue: ((String, String) async -> Void)?
