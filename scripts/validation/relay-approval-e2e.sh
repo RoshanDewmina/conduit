@@ -82,8 +82,8 @@ for i in $(seq 1 120); do
   sleep 2
 done
 [ "$PAIRED" = 1 ] && echo "  PAIRED ✓" || echo "  WARN: pairing not observed in daemon log"
-# Let the app settle on Workspaces (live Cursor shell) before the escalation arrives.
-sleep 4
+# Let the app settle on Workspaces and finish relay bridge startup before the escalation arrives.
+sleep 8
 
 echo "=== fire fileWrite escalation (blocks awaiting the phone's decision) ==="
 HOME="$ISO" "$LANCERD" agent-hook \

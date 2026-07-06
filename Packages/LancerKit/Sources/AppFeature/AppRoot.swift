@@ -699,6 +699,7 @@ public struct AppRoot: View {
         .task {
             configureGlobalInbox(env: env)
             setupCursorLiveBridge(env: env)
+            configureRelayFleetStore(env: env)
             sidebarState.configure(chatRepo: env.chatRepo)
             await sidebarState.loadRecent()
             await configureCloudServices(env: env)
