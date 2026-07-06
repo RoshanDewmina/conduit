@@ -36,6 +36,7 @@ public struct CursorAppShell: View {
 
     @State private var showingProfileDrawer = false
     @State private var showingSettingsFromProfile = false
+    @State private var showingPairingSheet = false
     @State private var showingSearchOverlay = false
     @State private var showingRepoPicker = false
     @State private var showingComposerSheet = false
@@ -102,6 +103,13 @@ public struct CursorAppShell: View {
         .sheet(isPresented: $showingComposerSheet) {
             composerSheetChain
         }
+        .sheet(isPresented: $showingPairingSheet) {
+            CursorRelayPairingSheet(
+                onSubmitCode: { _ in },
+                onCancel: { showingPairingSheet = false }
+            )
+            .presentationDetents([.large])
+        }
     }
 
     // MARK: Pushed destinations
@@ -167,11 +175,27 @@ public struct CursorAppShell: View {
             }
         )
         .sheet(isPresented: $showingSettingsFromProfile) {
-            if let liveBridge, liveBridge.onOpenSettings != nil {
-                CursorSettingsView(onOpenRealSettings: openRealSettingsFromProfile)
-            } else {
-                CursorSettingsView()
+            CursorSettingsView(
+                relayMachineCount: 0,
+                onOpenRealSettings: liveBridge != nil ? handleSettingsDestination : nil
+            )
+        }
+    }
+
+    /// Routes a `SettingsDestination` tap from `CursorSettingsView` when the
+    /// live bridge is active. `.pairing` presents the Cursor pairing sheet at
+    /// the shell level; all other destinations hand off to the real AppRoot
+    /// settings via `liveBridge.onOpenSettings`.
+    private func handleSettingsDestination(_ destination: SettingsDestination) {
+        switch destination {
+        case .pairing:
+            showingSettingsFromProfile = false
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                showingPairingSheet = true
             }
+        default:
+            openRealSettingsFromProfile()
         }
     }
 
