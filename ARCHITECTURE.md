@@ -2,9 +2,9 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-27 (lean cleanup sweep, live-loop/TestFlight reconciliation)
-Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
-Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
+Last updated: 2026-07-06 (Tier 0 live Cursor shell reconciliation)
+Target platform: iOS 26.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on). iOS 27-only affordances are fast-follow candidates and must stay gated or out of the shipping path while the deployment target remains 26.0.
+Status: live relay loop exists in the sidebar app; Cursor-style shell is merged behind DEBUG launch flags and is being wired/proven for the Tier 0 phone loop.
 
 ---
 
@@ -21,7 +21,7 @@ the reason for rejection.
 
 ---
 
-## 0.1 Current state snapshot (authoritative — 2026-06-27)
+## 0.1 Current state snapshot (authoritative — 2026-07-06)
 
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
@@ -65,13 +65,14 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is exactly what's in `docs/V1_PRODUCT_SPEC.md` / `docs/V1_STATE_AND_ACTION_MATRIX.md` / `docs/V1_IMPLEMENTATION_PLAN.md` (the Codex-research → ChatGPT-synthesis → locked-spec chain): the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
+- **Cursor-style shell, DEBUG-gated:** the Cursor mobile shell is now in-tree under `AppFeature/CursorStyle`. `LANCER_CURSOR_SHELL=1` keeps the seeded design-review prototype. `LANCER_CURSOR_SHELL_LIVE=1` routes through `AppRoot` with `CursorShellLiveBridge` callbacks for pairing, conversation-backed workspace/thread hydration, dispatch, continue/follow-up, approval decisions, and real Settings handoff. The live shell is not the release default until the Tier 0 path is proven against `lancerd`.
 - **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior and `CKDatabaseSubscription` silent-push delivery remain unverified on physical hardware** — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
 - **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
 - **Governance folded into Settings** (2026-07-01, reversing the 2026-06-24 standalone-root promotion): policy presets/matrix, the audit trail, and team & roles live under Settings' "Policy & Governance" section — one entry point, not a 5th sidebar root, keeping the locked four-root IA (Home/Work/Machines/Settings) accurate.
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
 - **lancerd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
-- **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop. Biometric gate and app-lock were removed for V1 (2026-07-01, owner decision) — approvals commit on tap and the app never shows a lock screen.
+- **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop (client-orchestrated, not yet an atomic daemon-side primitive — see gap below). **Biometric gate reinstated (2026-07-04, commit `695d2440`, `fable/approval-security-hardening`):** risk-tiered — `ApprovalDecisionAuth.requiresUnlock` (`Packages/LancerKit/Sources/SecurityKit/ApprovalDecisionAuth.swift`) gates high/critical and unknown-risk approval decisions behind Face ID/Touch ID/passcode across the inbox, notification actions, and `ApprovalRelay`; low/medium decisions stay one-tap by design. Watch decisions deliberately bypass phone-side local auth (wrist detection + the Watch's own passcode). **Known residual gap:** `BiometricGate` still degrades open (returns success) on a device with no passcode configured at all — tracked, not yet fixed.
 - **V1 reach + device proof (2026-06-19 → 2026-06-23):**
   - **opencode approval gating** — lancerd-dispatched `opencode` runs gate every tool call through the policy engine via a `LANCER_GATE=1`-guarded gate. **Correction (2026-07-01/02):** the original mechanism here (a `hooks.json` + PreToolUse-command bash script) was never real OpenCode config — verified live that OpenCode 1.17.x doesn't read it at all, so every opencode tool call ran completely ungated for an unknown period, silently. Replaced with the real extension point, a `tool.execute.before` **plugin** auto-discovered from `~/.config/opencode/plugins/`, wired into `lancerd install`. Re-verified live end-to-end (escalate → resolution in `~/.lancer/audit.log`, hash-chain intact, tool call blocks until the daemon decides). `daemon/lancerd/opencode_plugin_install.go` + `docs/opencode-lancer-gate-plugin.js`.
   - **Push-driven Live Activity** — `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New `daemon/push-backend/liveactivity.go` ActivityKit sender with the strict APNs contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). **APNs payload privacy:** the alert body no longer carries the raw command (`body := ev.Command` removed) — redacted risk/tool summary only; full detail fetched in-app post-unlock.
@@ -101,9 +102,10 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, and root `ship-plan/` → `docs/_archive/` (tab/gallery-era or superseded planning).
 
 ### Current priorities (in order)
-1. **Keep the live loop repeatable:** rerun the governed-approval path on physical devices before each external beta/release candidate. Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
-2. **External readiness:** TestFlight is uploaded; remaining gates are beta validation, App Review metadata, StoreKit sandbox proof, remote-host E2E, and owner-operated DNS/release publishing.
-3. Optional V1 polish: empty/error/a11y sweep, pixel polish, and daemon-side verification for audit "Verify chain" if it stays in V1.
+1. **Prove Tier 0 through the live Cursor shell:** launch with `LANCER_CURSOR_SHELL_LIVE=1` and verify pair → dispatch → approval → follow-up against the real daemon/relay path, not seeded shell state.
+2. **Block external beta on P0 correctness:** `BiometricGate` must fail closed on real no-passcode devices, and Emergency Stop needs a daemon-side atomic primitive or an explicit release-blocking exception.
+3. **Keep the live loop repeatable:** rerun the governed-approval path on physical devices before each external beta/release candidate. Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
+4. **External readiness:** TestFlight is uploaded; remaining gates are beta validation, App Review metadata, StoreKit sandbox proof, remote-host E2E, and owner-operated DNS/release publishing.
 
 ---
 
@@ -156,7 +158,7 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Lancer
 - **Bundle ID:** `dev.lancer.mobile` (app), `dev.lancer.kit` (frameworks)
-- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
 - **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
@@ -754,7 +756,7 @@ malware; that is out of scope and we will not pretend otherwise.
 
 | Risk | Control |
 |---|---|
-| Device theft | Optional biometric gate at app launch and before key use. Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
+| Device theft | Risk-tiered biometric gate at approval-decision time (high/critical and unknown-risk decisions only; low/medium stay one-tap by design) — reinstated 2026-07-04, `695d2440`. Known gap: `BiometricGate` degrades open on a device with no passcode configured at all (tracked, unfixed). Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
 | Server breach | Control plane stores nothing decryptable about hosts or sessions. BYOK keys never touch the server. Push notification payloads carry only host id + opaque event id. |
 | Untrusted host | First-connect host key fingerprint shown to user with QR/text confirm. TOFU with explicit warn-on-change. `accept-anything` is **never** the default. |
 | Compromised workspace | `lancerd` runs as the user; never sudo. Daemon binary SHA-256 verified pre-launch against the app's embedded manifest. |

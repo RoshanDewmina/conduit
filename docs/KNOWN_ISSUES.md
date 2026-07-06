@@ -210,8 +210,10 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   `import PreviewFeature` in `AppRoot.swift:18`, zero type usage; removed dir + Package.swift target/product/dep).
 - ✅ `PreviewFeature` **REMOVED** (commit 59e7ae3d): module dir + Package.swift target/product/AppFeature dep all deleted.
 - ✅ **CORRECTION:** `FilesFeature` is **NOT orphaned** — `FilePreviewView` has a real production route via
-  `AgentFilesView` → `AgentDetailView.swift:405` ("Files" tool row) + `AgentRunDetailView.swift:215`. **Keep.**
-  (An earlier draft of this doc wrongly listed it as orphaned.)
+  `SessionWorkspaceContainer.swift:604` (relay-backed file preview) and `RelayFileBrowserView.swift`. **Keep.**
+  (An earlier draft of this doc wrongly listed it as orphaned; a later draft's citation —
+  `AgentDetailView.swift:405`/`AgentFilesView` — was itself stale, since both were superseded by
+  `RelayFileBrowserView`/`SessionWorkspaceContainer` and no longer exist in the tree. Corrected 2026-07-06.)
 - ✅ `QuotaGuardView` is **reachable** (`AppRoot.swift:489`) — keep (also wrongly listed orphaned earlier).
 - 🟡 **Follow-up:** after PreviewFeature removal, `PreviewKit` is consumed only by the test target — evaluate
   it for removal separately.
