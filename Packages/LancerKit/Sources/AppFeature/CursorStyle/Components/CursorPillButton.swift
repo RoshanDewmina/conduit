@@ -65,6 +65,7 @@ public struct CursorPillButton: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
     }
 
     private func labelColor(_ colors: CursorColors) -> Color {

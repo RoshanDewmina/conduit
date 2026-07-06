@@ -106,28 +106,18 @@ public struct CursorWorkThreadView: View {
                         .foregroundColor(CursorColors.light.secondaryText)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("approval-banner")
         .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
         .padding(.top, CursorMetrics.actionRailVerticalPadding)
     }
 
     // MARK: Composer
 
-    /// The whole composer area is tappable to open the fuller composer sheet,
-    /// rather than editing inline — matches the Home/Workspaces composer-tap
-    /// convention. The real `CursorBottomComposer` is rendered for visual
-    /// fidelity but has hit-testing disabled so its `TextField` never steals
-    /// first responder; an invisible button on top forwards the tap.
     private var composer: some View {
-        ZStack {
-            CursorBottomComposer(placeholder: "Follow up...")
-                .allowsHitTesting(false)
-            Button(action: onOpenComposer) {
-                Color.clear
-            }
-            .buttonStyle(.plain)
-        }
+        CursorBottomComposer(placeholder: "Follow up...", onTap: onOpenComposer)
     }
 
     // MARK: Header

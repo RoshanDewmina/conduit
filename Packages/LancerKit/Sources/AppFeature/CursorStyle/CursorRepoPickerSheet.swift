@@ -159,6 +159,10 @@ private struct CursorRepoPickerRow: View {
                     .frame(height: CursorMetrics.rowHairlineHeight)
                     .padding(.leading, CursorMetrics.rowHairlineLeadingInsetWithIcon)
             }
+            // Same dead-tap-zone fix as CursorListRow/CursorThreadRow: without
+            // this, a tap in the `Spacer()` gap between the repo name and the
+            // trailing branch chevron doesn't register as hitting the Button.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

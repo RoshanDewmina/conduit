@@ -88,12 +88,7 @@ public struct CursorHomeView: View {
         }
         .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            CursorBottomComposer()
-                .overlay(
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onOpenComposer)
-                )
+            CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
     }

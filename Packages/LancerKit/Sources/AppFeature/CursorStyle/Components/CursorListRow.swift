@@ -66,6 +66,15 @@ public struct CursorListRow: View {
                 .frame(height: CursorMetrics.rowHairlineHeight)
                 .padding(.leading, iconSystemName != nil ? CursorMetrics.rowHairlineLeadingInsetWithIcon : CursorMetrics.rowHorizontalPadding)
         }
+        // Without this, a tap in the `Spacer()` gap between the title and
+        // trailing content (or anywhere else with no rendered glyph) misses
+        // every gesture recognizer entirely — the accessibility frame still
+        // reports the full row, so a tap synthesized at its center (which is
+        // exactly where that gap usually falls) silently no-ops instead of
+        // firing whatever Button wraps this row. Confirmed via XCUITest: a
+        // synthesized tap on this row's accessibility element never fired
+        // the wrapping Button's action until this was added.
+        .contentShape(Rectangle())
     }
 }
 #endif

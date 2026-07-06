@@ -8,6 +8,7 @@ import SwiftUI
 /// or account creation happens. Not yet wired into `AppRoot`; that happens in
 /// a separate pass.
 public struct CursorOnboardingView: View {
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
     @State private var step: Int = 0
     @State private var showInvalidCodePreview: Bool = false
     private let onComplete: () -> Void
@@ -35,7 +36,10 @@ public struct CursorOnboardingView: View {
         case 1:
             CursorOnboardingPairingStep(
                 showInvalidCodePreview: $showInvalidCodePreview,
-                onContinue: { advance() }
+                onContinue: {
+                    liveBridge?.onRequestPairing?()
+                    advance()
+                }
             )
         case 2:
             CursorOnboardingNotificationsStep(

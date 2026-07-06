@@ -8,7 +8,11 @@ import SwiftUI
 /// no policy hero or operations dashboard. Static seed data only — no
 /// daemon/network wiring, row taps are no-ops. Not yet wired into navigation.
 public struct CursorSettingsView: View {
-    public init() {}
+    private let onOpenRealSettings: (() -> Void)?
+
+    public init(onOpenRealSettings: (() -> Void)? = nil) {
+        self.onOpenRealSettings = onOpenRealSettings
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -37,15 +41,16 @@ public struct CursorSettingsView: View {
                     row(
                         title: "Trusted machines",
                         trailingCount: 3,
-                        showChevron: true
+                        showChevron: true,
+                        action: openRealSettings
                     )
 
                     CursorSectionHeader("Notifications")
                     row(title: "Notifications", showChevron: true)
 
                     CursorSectionHeader("Security & Approvals")
-                    row(title: "Policy defaults", showChevron: true)
-                    row(title: "Audit log", showChevron: true)
+                    row(title: "Policy defaults", showChevron: true, action: openRealSettings)
+                    row(title: "Audit log", showChevron: true, action: openRealSettings)
 
                     CursorSectionHeader("Diagnostics")
                     row(title: "Diagnostics & support", showChevron: true)
@@ -72,6 +77,10 @@ public struct CursorSettingsView: View {
         .environment(\.cursorScheme, .light)
     }
 
+    private func openRealSettings() {
+        onOpenRealSettings?()
+    }
+
     /// Wraps `CursorListRow` in a plain-style `Button` so every row has a real
     /// (if inert) tap target matching its chevron affordance — legitimate for
     /// this visual-only pass since there's nothing to navigate to yet.
@@ -80,9 +89,10 @@ public struct CursorSettingsView: View {
         titleColor: Color? = nil,
         trailingCount: Int? = nil,
         trailingText: String? = nil,
-        showChevron: Bool
+        showChevron: Bool,
+        action: @escaping () -> Void = {}
     ) -> some View {
-        Button(action: {}) {
+        Button(action: action) {
             CursorListRow(
                 title: title,
                 titleColor: titleColor,
