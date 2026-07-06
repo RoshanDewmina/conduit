@@ -522,6 +522,9 @@ public struct AppRoot: View {
         // inbox VM so the firewall request actually renders.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EApprovalReceived"))) { note in
             guard let data = note.userInfo?["approvalData"] as? E2ERelayMessage.ApprovalData else { return }
+            if case .ready(let env) = environment {
+                configureGlobalInbox(env: env)
+            }
             let approval = Approval(
                 id: ApprovalID(UUID(uuidString: data.approvalID) ?? UUID()),
                 sessionID: SessionID(),
@@ -538,6 +541,12 @@ public struct AppRoot: View {
             // specific machine's bridge (ApprovalRelay.forwardDecisionOnly step 0).
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
+            }
+            if case .ready(let env) = environment {
+                Task { @MainActor in
+                    let repo = approvalRepository ?? ApprovalRepository(env.database)
+                    try? await repo.upsert(approval)
+                }
             }
             let vm = activeInboxViewModel
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
@@ -735,6 +744,10 @@ public struct AppRoot: View {
             #if DEBUG
             if ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL_LIVE"] == "1" {
                 CursorAppShell(liveBridge: cursorLiveBridge)
+                    .onAppear {
+                        configureGlobalInbox(env: env)
+                        setupCursorLiveBridge(env: env)
+                    }
                     .task(id: workspacesRevision) { await refreshCursorLiveBridge(env: env) }
                     .sheet(isPresented: $showingCursorSettings) {
                         settingsDestination(env: env)
