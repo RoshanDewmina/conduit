@@ -111,5 +111,50 @@ import Testing
         #expect(store.machine(overflow.id) == nil)
         #expect(store.connectionState(for: overflow.id) == nil)
     }
+
+    // Regression for the 2026-07-06 fix (relay-approval-e2e.sh silently
+    // failing): machines that failed to restore permanently occupy a fleet
+    // slot without this fix, so a device cycled through a few reinstalls
+    // (Keychain survives `simctl uninstall`/app deletion even though
+    // UserDefaults doesn't) eventually fills the cap with unusable ghosts and
+    // rejects every subsequent real pairing. `isFull` must not count them.
+    @Test("unrestorable (pairingInvalid) machines don't count toward the fleet cap")
+    func invalidMachinesDontBlockNewPairings() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        for _ in 0..<relayFleetMaxMachines {
+            #expect(store.add(makeMachine().machine, pairingUsable: false))
+        }
+        #expect(store.invalidMachines.count == relayFleetMaxMachines)
+        #expect(!store.isFull)
+
+        let (fresh, _) = makeMachine()
+        #expect(store.add(fresh))
+        #expect(store.machine(fresh.id) != nil)
+    }
+
+    @Test("removeAllInvalid clears only the pairingInvalid machines")
+    func removeAllInvalidClearsOnlyDeadMachines() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (ghost1, _) = makeMachine()
+        let (ghost2, _) = makeMachine()
+        let (live, liveClient) = makeMachine()
+        #expect(store.add(ghost1, pairingUsable: false))
+        #expect(store.add(ghost2, pairingUsable: false))
+        #expect(store.add(live))
+        liveClient.setStateForTesting(pairing: .paired, connection: .connected)
+
+        #expect(store.invalidMachines.count == 2)
+        store.removeAllInvalid()
+
+        #expect(store.invalidMachines.isEmpty)
+        #expect(store.machine(ghost1.id) == nil)
+        #expect(store.machine(ghost2.id) == nil)
+        #expect(store.machine(live.id) != nil)
+        #expect(store.isConnected(live.id))
+    }
 }
 #endif

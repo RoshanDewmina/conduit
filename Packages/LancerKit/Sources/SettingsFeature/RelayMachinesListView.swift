@@ -29,6 +29,16 @@ public struct RelayMachinesListView: View {
     let onPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     let onUnpair: (RelayMachineID) -> Void
     let onRename: (RelayMachineID, String) -> Void
+    /// Count of listed machines whose pairing has permanently failed to
+    /// restore or hard-failed live (`ConnectionStateStore.MachineState
+    /// .pairingInvalid` in `AppFeature`, not visible from this module) — none
+    /// of these can reconnect without a fresh re-pair. Surfaced as a single
+    /// bulk "Clear invalid pairings" action instead of requiring "Unpair" on
+    /// each dead entry: a device reinstalled a few times (Keychain persists
+    /// across `simctl uninstall`/app deletion even though UserDefaults
+    /// doesn't) otherwise accumulates one unrecoverable ghost per reinstall.
+    let invalidCount: Int
+    let onClearInvalid: () -> Void
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.dismiss) private var dismiss
@@ -39,12 +49,16 @@ public struct RelayMachinesListView: View {
         machines: [RelayMachineRow],
         onPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void,
         onUnpair: @escaping (RelayMachineID) -> Void,
-        onRename: @escaping (RelayMachineID, String) -> Void = { _, _ in }
+        onRename: @escaping (RelayMachineID, String) -> Void = { _, _ in },
+        invalidCount: Int = 0,
+        onClearInvalid: @escaping () -> Void = {}
     ) {
         self.machines = machines
         self.onPaired = onPaired
         self.onUnpair = onUnpair
         self.onRename = onRename
+        self.invalidCount = invalidCount
+        self.onClearInvalid = onClearInvalid
     }
 
     public var body: some View {
@@ -61,6 +75,16 @@ public struct RelayMachinesListView: View {
                                 if index > 0 { hairline }
                                 machineRow(machine)
                             }
+                        }
+                    }
+
+                    if invalidCount > 0 {
+                        sectionHead("NEEDS RE-PAIR")
+                        card {
+                            Button(role: .destructive, action: onClearInvalid) {
+                                clearInvalidRow
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -135,6 +159,28 @@ public struct RelayMachinesListView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .accessibilityElement(children: .contain)
+    }
+
+    private var clearInvalidRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.dsSansPt(15))
+                .foregroundStyle(t.danger)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Clear \(invalidCount) invalid pairing\(invalidCount == 1 ? "" : "s")")
+                    .font(.dsSansPt(15, weight: .medium))
+                    .foregroundStyle(t.danger)
+                Text("These can't reconnect — a fresh pairing is required.")
+                    .font(.dsSansPt(12))
+                    .foregroundStyle(t.text3)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Clear \(invalidCount) invalid pairing\(invalidCount == 1 ? "" : "s")")
     }
 
     private var addMachineRow: some View {

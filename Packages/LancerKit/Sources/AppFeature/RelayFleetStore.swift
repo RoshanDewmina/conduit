@@ -130,6 +130,28 @@ public final class RelayFleetStore {
         Task { await RelayMachineMigration.writeIndex(records) }
     }
 
+    /// Machines that are permanently `.pairingInvalid` — a persisted pairing
+    /// that failed to restore (e.g. Keychain survived an app reinstall but
+    /// UserDefaults didn't) or a live pairing attempt that hard-failed. None
+    /// of these can ever reconnect without a fresh re-pair, so they only ever
+    /// leave the list via `remove`/`removeAllInvalid` — they don't self-heal.
+    public var invalidMachines: [Machine] {
+        machines.filter { connectionStates.state(for: $0.id) == .pairingInvalid }
+    }
+
+    /// Bulk-removes every currently-`.pairingInvalid` machine. Exposed as a
+    /// single "Clear invalid pairings" Settings action rather than requiring
+    /// the user to tap "Unpair" on each dead entry individually — a device
+    /// that's been reinstalled a few times (Keychain persists across
+    /// `simctl uninstall`/app deletion even though UserDefaults doesn't)
+    /// otherwise accumulates one unrecoverable ghost per reinstall with no
+    /// bulk way to clean them out.
+    public func removeAllInvalid() {
+        for machine in invalidMachines {
+            remove(machine.id)
+        }
+    }
+
     // MARK: - Liveness reads (all delegated to ConnectionStateStore)
 
     public func connectionState(for id: RelayMachineID) -> ConnectionStateStore.MachineState? {

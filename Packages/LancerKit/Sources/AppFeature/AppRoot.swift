@@ -1764,6 +1764,13 @@ public struct AppRoot: View {
                 relayFleetStore.remove(id)
             },
             onRelayRename: { id, name in relayFleetStore.updateDisplayName(name, for: id) },
+            invalidRelayMachineCount: relayFleetStore.invalidMachines.count,
+            onClearInvalidRelayMachines: {
+                for machine in relayFleetStore.invalidMachines {
+                    ApprovalRelay.shared.relayBridges.removeValue(forKey: machine.id)
+                }
+                relayFleetStore.removeAllInvalid()
+            },
             accountSession: env.accountSession,
             quotaGuardStore: env.quotaGuardStore,
             onResetApp: {
@@ -2767,6 +2774,8 @@ private struct SettingsWithLibraryView: View {
     var onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in }
     var onRelayUnpair: (RelayMachineID) -> Void = { _ in }
     var onRelayRename: (RelayMachineID, String) -> Void = { _, _ in }
+    var invalidRelayMachineCount: Int = 0
+    var onClearInvalidRelayMachines: () -> Void = {}
     let accountSession: AccountSessionController
     var quotaGuardStore: QuotaGuardStore? = nil
     var onResetApp: (() -> Void)? = nil
@@ -2793,6 +2802,8 @@ private struct SettingsWithLibraryView: View {
             onRelayPaired: onRelayPaired,
             onRelayUnpair: onRelayUnpair,
             onRelayRename: onRelayRename,
+            invalidRelayMachineCount: invalidRelayMachineCount,
+            onClearInvalidRelayMachines: onClearInvalidRelayMachines,
             onResetApp: onResetApp,
             onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
             onEmergencyStop: onEmergencyStop,

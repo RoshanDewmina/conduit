@@ -163,19 +163,25 @@ public struct TrustPrivacyView: View {
     private let relayMachines: [RelayMachineRow]
     private let onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     private let onRelayUnpair: (RelayMachineID) -> Void
+    private let invalidRelayMachineCount: Int
+    private let onClearInvalidRelayMachines: () -> Void
 
     public init(
         accountSession: AccountSessionController? = nil,
         backendURL: String = "",
         relayMachines: [RelayMachineRow] = [],
         onRelayPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in },
-        onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in }
+        onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in },
+        invalidRelayMachineCount: Int = 0,
+        onClearInvalidRelayMachines: @escaping () -> Void = {}
     ) {
         self.accountSession = accountSession
         self.backendURL = backendURL
         self.relayMachines = relayMachines
         self.onRelayPaired = onRelayPaired
         self.onRelayUnpair = onRelayUnpair
+        self.invalidRelayMachineCount = invalidRelayMachineCount
+        self.onClearInvalidRelayMachines = onClearInvalidRelayMachines
     }
 
     public var body: some View {
@@ -307,7 +313,10 @@ public struct TrustPrivacyView: View {
         sectionHead("PAIRINGS & REVOCATION")
         card {
             NavigationLink {
-                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair)
+                RelayMachinesListView(
+                    machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair,
+                    invalidCount: invalidRelayMachineCount, onClearInvalid: onClearInvalidRelayMachines
+                )
             } label: {
                 trustNavRow(icon: "lock.rotation", title: "Relay pairing",
                             detail: "End-to-end encrypted relay between this phone and your daemon.")
@@ -475,6 +484,8 @@ public struct SettingsView: View {
     let onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void
     let onRelayUnpair: (RelayMachineID) -> Void
     let onRelayRename: (RelayMachineID, String) -> Void
+    let invalidRelayMachineCount: Int
+    let onClearInvalidRelayMachines: () -> Void
     public var statusHeaderAgents: [AgentInfo] = []
     public var onTapStatusHeader: () -> Void = {}
     public var onResetApp: (() -> Void)? = nil
@@ -508,6 +519,8 @@ public struct SettingsView: View {
         onRelayPaired: @escaping (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in },
         onRelayUnpair: @escaping (RelayMachineID) -> Void = { _ in },
         onRelayRename: @escaping (RelayMachineID, String) -> Void = { _, _ in },
+        invalidRelayMachineCount: Int = 0,
+        onClearInvalidRelayMachines: @escaping () -> Void = {},
         statusHeaderAgents: [AgentInfo] = [],
         onTapStatusHeader: @escaping () -> Void = {},
         onResetApp: (() -> Void)? = nil,
@@ -532,6 +545,8 @@ public struct SettingsView: View {
         self.onRelayPaired = onRelayPaired
         self.onRelayUnpair = onRelayUnpair
         self.onRelayRename = onRelayRename
+        self.invalidRelayMachineCount = invalidRelayMachineCount
+        self.onClearInvalidRelayMachines = onClearInvalidRelayMachines
         self.statusHeaderAgents = statusHeaderAgents
         self.onTapStatusHeader = onTapStatusHeader
         self.onResetApp = onResetApp
@@ -789,7 +804,9 @@ public struct SettingsView: View {
                     backendURL: backendURL,
                     relayMachines: relayMachines,
                     onRelayPaired: onRelayPaired,
-                    onRelayUnpair: onRelayUnpair
+                    onRelayUnpair: onRelayUnpair,
+                    invalidRelayMachineCount: invalidRelayMachineCount,
+                    onClearInvalidRelayMachines: onClearInvalidRelayMachines
                 )
             } label: {
                 settingsNavRow("Security & Trust", icon: "lock", detail: "pairings · revoke")
@@ -825,7 +842,10 @@ public struct SettingsView: View {
         sectionHead("CONNECTION")
         settingsCard {
             NavigationLink {
-                RelayMachinesListView(machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair, onRename: onRelayRename)
+                RelayMachinesListView(
+                    machines: relayMachines, onPaired: onRelayPaired, onUnpair: onRelayUnpair, onRename: onRelayRename,
+                    invalidCount: invalidRelayMachineCount, onClearInvalid: onClearInvalidRelayMachines
+                )
             } label: {
                 settingsNavRow("Relay pairing", icon: "lock.rotation", detail: "E2E encrypted relay")
             }
