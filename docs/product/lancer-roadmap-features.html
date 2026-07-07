@@ -239,12 +239,13 @@
 <body>
   <div class="wrap">
     <header class="doc">
-      <p class="eyebrow">Lancer product · updated 2026-07-06</p>
+      <p class="eyebrow">Lancer product · updated 2026-07-07</p>
       <h1>Features &amp; Roadmap</h1>
       <p class="lede">
         Single-page view of scope, engineering gates, and wireframe targets.
         Production UI is the <strong>Cursor shell</strong> (Home / Workspaces / Settings) — not the legacy sidebar.
-        Evidence below is from Jul-6 UITests only; mock vs live is labeled on every screenshot.
+        Wave 2 + Wave 3 (workspace detail, repo-first grouping, relay bulk-clear, UITest coverage) landed on
+        <code>origin/master</code> Jul 6–7. Evidence below now spans Jul-6/7 UITests; mock vs live is labeled on every screenshot.
       </p>
       <div class="meta-pills">
         <span class="pill live">Live shell evidence</span>
@@ -272,10 +273,18 @@
         pair → dispatch → approval → continue. Freeze Away Launch Composer, Proof Suite, Git/PR ship actions, and further IA redesign until this passes on a physical device.
       </p>
       <div class="status-grid">
-        <div class="stat-card"><strong class="partial">Partial</strong><span>Live shell wiring (<code>LANCER_CURSOR_SHELL_LIVE=1</code>)</span></div>
+        <div class="stat-card"><strong class="partial">Partial</strong><span>Live shell wiring (<code>LANCER_CURSOR_SHELL_LIVE=1</code>) — nav-teardown bug fixed 07-07</span></div>
         <div class="stat-card"><strong class="pass" style="color:var(--green)">PASS</strong><span>Relay E2E harness (simulator)</span></div>
         <div class="stat-card"><strong class="open" style="color:var(--muted)">Open</strong><span>Physical device governed loop</span></div>
-        <div class="stat-card"><strong style="color:var(--amber)">Jul 21</strong><span>Validation gate deadline (10/5/3/1)</span></div>
+        <div class="stat-card"><strong style="color:var(--amber)">Jul 21</strong><span>Validation gate deadline (10/5/3/1) — 14 days out, no evidence yet</span></div>
+      </div>
+      <div class="stat-card" style="border-color:#5c4a12;background:#1a1608;margin-top:12px">
+        <strong style="color:var(--amber);font-size:15px">Two Cursor sessions built overlapping Tier-1 work in parallel</strong>
+        <span>PR #27 (<code>cursor/user-ready-tier0-9aec</code>, draft) and the Wave 2/3 stream now merged to <code>origin/master</code>
+        both independently extended <code>CursorShellLiveBridge</code> — one added an "All Repos" grouped-thread aggregate,
+        the other added multi-host <code>RunTarget</code>/<code>hostID</code> support. Neither existed at their common ancestor,
+        so reconciling PR #27 is a real hand-merge of the core bridge class (source + 2 test files + 1 shell script), not a
+        mechanical rebase. Not yet done.</span>
       </div>
       <table>
         <thead><tr><th>Step</th><th>Status</th><th>Evidence</th></tr></thead>
@@ -350,10 +359,13 @@
           <tr data-tier="mock"><td>PR detail + inline diff</td><td><span class="badge mock">Mock</span></td><td>06-review-diff</td><td>1 test</td></tr>
           <tr data-tier="mock"><td>Search overlay</td><td><span class="badge mock">Mock</span></td><td>08-ship-history</td><td>1 test</td></tr>
           <tr data-tier="partial"><td>Profile drawer + settings</td><td><span class="badge partial">Mock + live handoff</span></td><td>10-settings</td><td>3 tests</td></tr>
-          <tr data-tier="mock"><td>Composer chain (run-on, model)</td><td><span class="badge mock">Mock</span></td><td>04-launch-setup</td><td>2 tests (flake on sim)</td></tr>
-          <tr data-tier="planned"><td>Connection health ladder</td><td><span class="badge open">Planned</span></td><td>03-workspaces</td><td>Orca borrow — P0</td></tr>
-          <tr data-tier="planned"><td>Approval banner above composer</td><td><span class="badge open">Planned</span></td><td>05-work-thread</td><td>T3 pattern — P0</td></tr>
+          <tr data-tier="mock"><td>Composer chain (run-on, model)</td><td><span class="badge mock">Mock</span></td><td>04-launch-setup</td><td>2 tests (flake on sim, fix landed)</td></tr>
+          <tr data-tier="partial"><td>Connection health ladder</td><td><span class="badge partial">Shipped on 2 diverged branches</span></td><td>03-workspaces</td><td>Orca borrow — needs reconciliation</td></tr>
+          <tr data-tier="partial"><td>Approval banner above composer</td><td><span class="badge partial">Shipped, live-gated</span></td><td>05-work-thread</td><td>T3 pattern — race-condition fixed</td></tr>
           <tr data-tier="shipped"><td>3-root IA (no legacy sidebar)</td><td><span class="badge shipped">Verified</span></td><td>MASTER-REPORT</td><td>LegacyUIRemovalTests PASS</td></tr>
+          <tr data-tier="shipped"><td>Workspace detail sheet (run targets)</td><td><span class="badge shipped">Shipped</span></td><td>03-workspaces</td><td>UITest lane added</td></tr>
+          <tr data-tier="shipped"><td>Repo-first "All Repos" thread grouping</td><td><span class="badge shipped">Shipped (T1-5)</span></td><td>03-workspaces</td><td>Section headers by repo</td></tr>
+          <tr data-tier="shipped"><td>Relay: bulk-clear invalid pairings</td><td><span class="badge shipped">Shipped</span></td><td>10-settings</td><td>Settings destination</td></tr>
         </tbody>
       </table>
     </section>
@@ -469,7 +481,8 @@
     <section id="sources">
       <h2>Canonical sources</h2>
       <ul style="color:var(--muted);font-size:14px;line-height:1.8">
-        <li><a href="../STATUS_LEDGER.md">STATUS_LEDGER.md</a> — owner hub, branch status</li>
+        <li><a href="../STATUS_LEDGER.md">STATUS_LEDGER.md</a> — owner hub, branch status (restructured 07-06, doc purge committed 07-07)</li>
+        <li><a href="../AGENT_READ_FIRST.md">AGENT_READ_FIRST.md</a> — agent read order, new 07-06</li>
         <li><a href="FEATURE_BACKLOG.md">FEATURE_BACKLOG.md</a> — full sortable backlog (68 items)</li>
         <li><a href="2026-07-05-lancer-feature-master-plan.md">Feature master plan</a> — scope decisions + IA</li>
         <li><a href="2026-07-06-feature-implementation-gap-matrix.md">Gap matrix</a> — shipped vs mocked</li>
@@ -478,7 +491,7 @@
     </section>
 
     <footer>
-      Generated 2026-07-06 · Serve from <code>docs/</code>:
+      Generated 2026-07-06, updated 2026-07-07 · Serve from <code>docs/</code>:
       <code>python3 -m http.server 8765</code> →
       <a href="http://localhost:8765/product/lancer-roadmap-features.html">localhost:8765/product/lancer-roadmap-features.html</a>
     </footer>
