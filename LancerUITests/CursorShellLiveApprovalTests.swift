@@ -38,7 +38,9 @@ final class CursorShellLiveApprovalTests: XCTestCase {
         XCTAssertTrue(thread.waitForExistence(timeout: 15), "Expected a thread row in the workspace list")
         thread.tap()
 
-        let banner = app.buttons["approval-banner"]
+        let banner = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "pending approval")
+        ).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 30),
                       "Live shell should surface approval banner when pending approvals exist")
         banner.tap()
