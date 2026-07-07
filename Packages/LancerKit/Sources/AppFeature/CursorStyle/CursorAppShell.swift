@@ -45,6 +45,7 @@ public struct CursorAppShell: View {
     @State private var showingRunOnSheet = false
     @State private var showingModelSheet = false
     @State private var composerPlaceholder = "Plan, ask, build..."
+    @State private var detailWorkspace: CursorShellLiveBridge.WorkspaceRow? = nil
 
     public init(liveBridge: CursorShellLiveBridge? = nil) {
         self.liveBridge = liveBridge
@@ -73,8 +74,17 @@ public struct CursorAppShell: View {
         NavigationStack(path: $path) {
             CursorWorkspacesView(
                 onSelectWorkspace: { name in
-                    liveBridge?.composerCWD = name == "All Repos" ? "" : name
-                    path.append(CursorRoute.workspaceThreadList(name))
+                    // Repo rows from a live bridge with run targets → show the
+                    // Workspace Detail sheet so the user can see which machines
+                    // have a checkout before drilling into threads.
+                    if name != "All Repos",
+                       let workspace = liveBridge?.workspaces.first(where: { $0.name == name }),
+                       !workspace.runTargets.isEmpty {
+                        detailWorkspace = workspace
+                    } else {
+                        liveBridge?.composerCWD = name == "All Repos" ? "" : name
+                        path.append(CursorRoute.workspaceThreadList(name))
+                    }
                 },
                 onOpenComposer: { openComposer(placeholder: "Plan, ask, build...") },
                 onOpenProfile: { showingProfileDrawer = true },
@@ -110,6 +120,15 @@ public struct CursorAppShell: View {
                 .presentationBackground(.clear)
                 .presentationDragIndicator(.hidden)
                 .presentationCornerRadius(CursorMetrics.floatingCardCornerRadius)
+        }
+        .sheet(item: $detailWorkspace) { workspace in
+            CursorWorkspaceDetailSheet(
+                workspace: workspace,
+                onClose: { detailWorkspace = nil }
+            )
+            .environment(\.cursorShellLiveBridge, liveBridge)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.hidden)
         }
     }
 
@@ -183,7 +202,9 @@ public struct CursorAppShell: View {
         .sheet(isPresented: $showingSettingsFromProfile) {
             CursorSettingsView(
                 relayMachineCount: liveBridge?.relayMachineCount ?? 0,
-                onPaired: liveBridge?.onPaired
+                invalidMachineCount: liveBridge?.invalidMachineCount ?? 0,
+                onPaired: liveBridge?.onPaired,
+                onClearInvalid: liveBridge?.onClearInvalid
             )
         }
     }
