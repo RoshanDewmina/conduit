@@ -417,6 +417,53 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         snapshot("05c-all-repos-thread-list", app: app)
     }
 
+    // MARK: 5d. Workspace detail sheet (mock run targets)
+
+    /// Verifies that `LANCER_CURSOR_MOCK_RUN_TARGETS=1` causes the mock shell
+    /// to present `CursorWorkspaceDetailSheet` when the `lancer-ios` row is
+    /// tapped, and that the sheet contains the expected run-target rows.
+    func testWorkspaces_WorkspaceDetailSheetShowsRunTargets() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_MOCK_RUN_TARGETS"] = "1"
+        app.launch()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        snapshot("05d-workspaces-before-detail-tap", app: app)
+
+        // Tap the lancer-ios row — with mock run targets this should present
+        // the Workspace Detail sheet instead of pushing the thread list.
+        let lancerRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
+        XCTAssertTrue(lancerRow.waitForExistence(timeout: 10), "lancer-ios row should be visible")
+        tapWithRetry(lancerRow, label: "lancer-ios workspace row")
+
+        // Sheet title matches the workspace name.
+        XCTAssertTrue(
+            app.staticTexts["lancer-ios"].waitForExistence(timeout: 10),
+            "Workspace detail sheet should show workspace name as title"
+        )
+        snapshot("05d-workspace-detail-sheet", app: app)
+
+        // At least one run-target row with the documented accessibility id.
+        let targetRow = app.buttons.matching(identifier: "workspace-detail-target-row").firstMatch
+        XCTAssertTrue(
+            targetRow.waitForExistence(timeout: 5),
+            "Detail sheet must contain at least one workspace-detail-target-row"
+        )
+
+        // Dismiss with xmark and confirm we're back on Workspaces.
+        let xmark = app.buttons["xmark"].firstMatch
+        XCTAssertTrue(xmark.waitForExistence(timeout: 5), "xmark dismiss button must exist on detail sheet")
+        tapWithRetry(xmark, label: "xmark")
+        XCTAssertTrue(
+            app.staticTexts["Workspaces"].waitForExistence(timeout: 10),
+            "Dismissing detail sheet should return to Workspaces"
+        )
+        snapshot("05d-back-to-workspaces-after-detail", app: app)
+    }
+
     func testRepoPickerSheet_SearchAndSelect() throws {
         let app = launchSkipOnboarding()
         defer { app.terminate() }

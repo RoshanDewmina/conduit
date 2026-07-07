@@ -33,6 +33,57 @@ public struct CursorWorkspaceThreadListView: View {
         self.onOpenMenu = onOpenMenu
     }
 
+    // MARK: - Live "All Repos" grouped path
+
+    /// Groups threads from every workspace keyed by repo name for the All Repos section-header layout.
+    private struct RepoGroup: Identifiable {
+        let repoName: String
+        let threads: [CursorThreadRowModel]
+        var id: String { repoName }
+    }
+
+    /// All live threads across every workspace in the bridge (used when workspaceName == "All Repos").
+    private var allLiveThreads: [CursorShellLiveBridge.ThreadRow] {
+        guard let liveBridge else { return [] }
+        return liveBridge.threadsByWorkspace.values.flatMap { $0 }
+    }
+
+    /// True when the All Repos view should render grouped-by-repo sections from live data.
+    private var showRepoGrouped: Bool {
+        workspaceName == "All Repos" && liveBridge != nil && !allLiveThreads.isEmpty
+    }
+
+    /// Live threads grouped by repoName, in first-seen order (deterministic for a given bridge snapshot).
+    private var liveThreadsGroupedByRepo: [RepoGroup] {
+        var order: [String] = []
+        var grouped: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
+        for row in allLiveThreads {
+            if grouped[row.repoName] == nil {
+                order.append(row.repoName)
+                grouped[row.repoName] = []
+            }
+            grouped[row.repoName]!.append(row)
+        }
+        return order.map { repoName in
+            let rows = grouped[repoName]!
+            return RepoGroup(
+                repoName: repoName,
+                threads: rows.enumerated().map { index, row in
+                    CursorThreadRowModel(
+                        id: UUID(uuidString: row.id) ?? UUID(),
+                        title: row.title,
+                        repoName: row.repoName,
+                        isActive: index == 0,
+                        statusLine: .noChanges,
+                        attention: liveBridge?.threadAttention[row.id]
+                    )
+                }
+            )
+        }
+    }
+
+    // MARK: - Single-workspace live / seed paths
+
     private var todayThreads: [CursorThreadRowModel] {
         if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
             return liveThreadsSection(liveBridge.threads(for: workspaceName))
@@ -200,20 +251,33 @@ public struct CursorWorkspaceThreadListView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    CursorSectionHeader("Today")
-                    ForEach(todayThreads) { model in
-                        Button(action: { onSelectThread(model.title) }) {
-                            CursorThreadRow(model: model, showRepoTag: false)
+                    if showRepoGrouped {
+                        ForEach(liveThreadsGroupedByRepo) { group in
+                            CursorSectionHeader(group.repoName)
+                                .accessibilityIdentifier("repo-section-\(group.repoName)")
+                            ForEach(group.threads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
-                    }
+                    } else {
+                        CursorSectionHeader("Today")
+                        ForEach(todayThreads) { model in
+                            Button(action: { onSelectThread(model.title) }) {
+                                CursorThreadRow(model: model, showRepoTag: false)
+                            }
+                            .buttonStyle(.plain)
+                        }
 
-                    CursorSectionHeader("Yesterday")
-                    ForEach(yesterdayThreads) { model in
-                        Button(action: { onSelectThread(model.title) }) {
-                            CursorThreadRow(model: model, showRepoTag: false)
+                        CursorSectionHeader("Yesterday")
+                        ForEach(yesterdayThreads) { model in
+                            Button(action: { onSelectThread(model.title) }) {
+                                CursorThreadRow(model: model, showRepoTag: false)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
