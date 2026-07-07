@@ -21,41 +21,54 @@ public struct CursorBottomComposer: View {
 
     private let placeholder: String
     private let style: CursorCollapsedComposerStyle
+    private let hasDraft: Bool
     private let onTap: (() -> Void)?
 
     public init(
         placeholder: String = "Plan, ask, build...",
         style: CursorCollapsedComposerStyle = .compact,
+        hasDraft: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
         self.placeholder = placeholder
         self.style = style
+        self.hasDraft = hasDraft
         self.onTap = onTap
     }
 
     public var body: some View {
         let colors = CursorColors.resolve(cursorScheme)
-        Group {
-            if let onTap {
-                ZStack {
-                    composerChrome(colors: colors, editable: false)
-                        .allowsHitTesting(false)
-                    Button(action: onTap) {
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                            .frame(height: CursorMetrics.composerHeight)
-                            .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if let onTap {
+                    ZStack {
+                        composerChrome(colors: colors, editable: false)
+                            .allowsHitTesting(false)
+                        Button(action: onTap) {
+                            Color.clear
+                                .frame(maxWidth: .infinity)
+                                .frame(height: CursorMetrics.composerHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(placeholder)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("cursor-composer-tap")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(placeholder)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityIdentifier("cursor-composer-tap")
+                } else {
+                    composerChrome(colors: colors, editable: true)
                 }
-            } else {
-                composerChrome(colors: colors, editable: true)
+            }
+            .padding(.horizontal, CursorMetrics.composerHorizontalMargin)
+
+            if hasDraft {
+                Text("Draft saved")
+                    .font(CursorType.logLine)
+                    .foregroundColor(colors.mutedText)
+                    .padding(.horizontal, CursorMetrics.composerHorizontalMargin + CursorMetrics.composerInnerHorizontalPadding)
+                    .padding(.top, 4)
             }
         }
-        .padding(.horizontal, CursorMetrics.composerHorizontalMargin)
         .padding(.bottom, CursorMetrics.composerBottomPadding)
     }
 

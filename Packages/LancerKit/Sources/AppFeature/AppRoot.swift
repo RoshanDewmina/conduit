@@ -467,6 +467,13 @@ public struct AppRoot: View {
         // inbox VM so the firewall request actually renders.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EApprovalReceived"))) { note in
             guard let data = note.userInfo?["approvalData"] as? E2ERelayMessage.ApprovalData else { return }
+            // Fresh installs may receive a relay approval before the .task{} that
+            // calls configureGlobalInbox(env:) has run — configure it defensively
+            // here too so the notification never drops onto the static fallback
+            // InboxViewModel instead of the live one.
+            if case .ready(let env) = environment {
+                configureGlobalInbox(env: env)
+            }
             let approval = Approval(
                 id: ApprovalID(UUID(uuidString: data.approvalID) ?? UUID()),
                 sessionID: SessionID(),
@@ -483,6 +490,15 @@ public struct AppRoot: View {
             // specific machine's bridge (ApprovalRelay.forwardDecisionOnly step 0).
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
+            }
+            // Persist to the durable store too, not just the in-memory VM — a
+            // relay-only setup has no SSH ApprovalIngest writing this approval
+            // anywhere else, so without this it silently vanishes on relaunch.
+            if case .ready(let env) = environment {
+                Task { @MainActor in
+                    let repo = approvalRepository ?? ApprovalRepository(env.database)
+                    try? await repo.upsert(approval)
+                }
             }
             let vm = activeInboxViewModel
             if !vm.approvals.contains(where: { $0.id == approval.id }) {
@@ -1547,6 +1563,18 @@ public struct AppRoot: View {
             client.beginPairingSession()
             client.pairingCode = code
             Task { @MainActor in
+                // connect() below can complete pairing synchronously before this
+                // loop starts consuming $pairingState — check the current value
+                // first or the .paired transition is missed forever and the
+                // headless observer just hangs.
+                if client.pairingState == .paired {
+                    addRelayMachine(
+                        client: client,
+                        record: RelayMachineRecord(id: client.machineID, displayName: "Relay host"),
+                        env: env
+                    )
+                    return
+                }
                 for await state in client.$pairingState.values {
                     if state == .paired {
                         addRelayMachine(

@@ -143,3 +143,7 @@ daemon/lancerd/dist/
 __pycache__/
 tier0-live-loop/
 tier1-cursor-shell/
+
+# Cloned competitor repos for research only — not part of this codebase
+research_repos/
+.study/
