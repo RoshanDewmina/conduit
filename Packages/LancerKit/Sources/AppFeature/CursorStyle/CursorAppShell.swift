@@ -107,27 +107,39 @@ public struct CursorAppShell: View {
         NavigationStack(path: $path) {
             CursorWorkspacesView(
                 onSelectWorkspace: { name in
-                    // Repo rows with run targets → show the Workspace Detail
-                    // sheet so the user can see which machines have a checkout
-                    // before drilling into threads. Live bridge is checked first;
-                    // the DEBUG mock seam (LANCER_CURSOR_MOCK_RUN_TARGETS=1)
-                    // covers the no-bridge mock shell path for UITests.
-                    if name != "All Repos" {
-                        if let workspace = liveBridge?.workspaces.first(where: { $0.name == name }),
-                           !workspace.runTargets.isEmpty {
-                            detailWorkspace = workspace
-                            return
-                        }
-                        #if DEBUG
-                        if let workspace = mockWorkspaces.first(where: { $0.name == name }),
-                           !workspace.runTargets.isEmpty {
-                            detailWorkspace = workspace
-                            return
-                        }
-                        #endif
-                    }
+                    // Tapping a repo always opens its thread list, matching the
+                    // reference product's behavior exactly — a repo row is not
+                    // an interstitial. Run-target info (which machine has a
+                    // checkout) is reachable via long-press instead of gating
+                    // the primary tap (see onShowWorkspaceDetail below).
                     liveBridge?.composerCWD = name == "All Repos" ? "" : name
+                    // Being at a workspace's thread list means no specific
+                    // thread is selected. Without this, a `selectedThreadID`
+                    // left over from a thread visited earlier in the session
+                    // silently hijacks the NEXT composer send into
+                    // `onContinue` on that stale thread instead of a fresh
+                    // dispatch — `onContinue` has no navigation logic at all,
+                    // so the send appears to do nothing and you're left
+                    // exactly where you were ("it just goes back to
+                    // workspace" — reproduced 2026-07-07).
+                    liveBridge?.selectedThreadID = nil
                     path.append(CursorRoute.workspaceThreadList(name))
+                },
+                onShowWorkspaceDetail: { name in
+                    // Live bridge is checked first; the DEBUG mock seam
+                    // (LANCER_CURSOR_MOCK_RUN_TARGETS=1) covers the no-bridge
+                    // mock shell path for UITests.
+                    if let workspace = liveBridge?.workspaces.first(where: { $0.name == name }),
+                       !workspace.runTargets.isEmpty {
+                        detailWorkspace = workspace
+                        return
+                    }
+                    #if DEBUG
+                    if let workspace = mockWorkspaces.first(where: { $0.name == name }),
+                       !workspace.runTargets.isEmpty {
+                        detailWorkspace = workspace
+                    }
+                    #endif
                 },
                 onOpenComposer: { openComposer(placeholder: "Plan, ask, build...") },
                 onOpenProfile: { showingProfileDrawer = true },
@@ -145,8 +157,16 @@ public struct CursorAppShell: View {
         .sheet(isPresented: $showingSearchOverlay) {
             CursorSearchOverlay(
                 onClose: { showingSearchOverlay = false },
-                onSelectResult: { title in
+                onSelectResult: { conversationID, title in
                     showingSearchOverlay = false
+                    if let bridge = liveBridge {
+                        bridge.selectedThreadID = conversationID
+                        bridge.activeThreadPrompt = ""
+                        bridge.activeThreadResponse = ""
+                        bridge.activeThreadError = nil
+                        bridge.activeThreadIsWorking = false
+                        Task { await bridge.onOpenThread?(conversationID) }
+                    }
                     path.append(CursorRoute.workThread(title))
                 }
             )
@@ -198,6 +218,18 @@ public struct CursorAppShell: View {
                            let row = bridge.threads(for: name).first(where: { $0.title == title }) {
                             bridge.selectedThreadID = row.id
                             bridge.composerCWD = row.repoName
+                            // Clear stale state from whatever was last viewed,
+                            // then load this thread's real persisted content —
+                            // without the clear, a fast tap can show the
+                            // PREVIOUS thread's response for a frame; without
+                            // the load, an old completed thread always showed
+                            // "No output recorded" regardless of its real
+                            // saved content.
+                            bridge.activeThreadPrompt = ""
+                            bridge.activeThreadResponse = ""
+                            bridge.activeThreadError = nil
+                            bridge.activeThreadIsWorking = false
+                            Task { await bridge.onOpenThread?(row.id) }
                         }
                         path.append(CursorRoute.workThread(title))
                     },
@@ -271,12 +303,36 @@ public struct CursorAppShell: View {
             onPickModel: { showingModelSheet = true },
             onSend: liveBridge == nil ? nil : { prompt in
                 guard let liveBridge else { return }
-                let cwd = liveBridge.composerCWD.isEmpty ? "command-center" : liveBridge.composerCWD
+                let repoName = liveBridge.composerCWD.isEmpty ? "command-center" : liveBridge.composerCWD
                 let model = liveBridge.composerModelSlug
                 if let threadID = liveBridge.selectedThreadID {
+                    // Same real-state update as a fresh dispatch — without
+                    // this a follow-up sent from an existing thread doesn't
+                    // update the prompt bubble/narration at all (onContinue
+                    // itself had no wiring here until this pass either).
+                    liveBridge.activeThreadPrompt = prompt
                     Task { await liveBridge.onContinue?(threadID, prompt, model) }
                 } else {
+                    // `repoName` is a display name, not a path — the daemon can't
+                    // resolve a bare relative name to a real directory (it only
+                    // expands `~`). Prefer the real absolute cwd of that repo's
+                    // most recent known conversation; "~" (home) is the only safe
+                    // fallback for a repo with no history yet, never the bare name.
+                    let cwd = liveBridge.repoPaths[repoName] ?? "~"
+                    // Reset stale state from whatever thread was last viewed —
+                    // otherwise a fresh dispatch briefly shows the PREVIOUS
+                    // thread's response text under the new prompt.
+                    liveBridge.activeThreadPrompt = prompt
+                    liveBridge.activeThreadResponse = ""
+                    liveBridge.activeRunID = nil
+                    liveBridge.selectedThreadID = nil
+                    liveBridge.activeThreadError = nil
                     Task { await liveBridge.onDispatch?(prompt, cwd, model) }
+                    // A fresh dispatch has no existing thread to navigate into —
+                    // without this, closing the composer sheet just reveals
+                    // whatever was underneath it (usually Workspaces root),
+                    // regardless of whether the dispatch even succeeds.
+                    path.append(CursorRoute.workThread(prompt))
                 }
                 showingComposerSheet = false
             }

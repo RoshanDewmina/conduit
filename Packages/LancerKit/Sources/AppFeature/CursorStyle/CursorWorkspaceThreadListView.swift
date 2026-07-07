@@ -84,18 +84,36 @@ public struct CursorWorkspaceThreadListView: View {
 
     // MARK: - Single-workspace live / seed paths
 
+    // Real date-bucketed grouping. Previously `todayThreads` returned every
+    // live thread unconditionally (no date check at all) and `yesterdayThreads`
+    // returned `[]` whenever there was any live data — so a 3-day-old
+    // conversation rendered under "Today" and "Yesterday" never showed
+    // anything for a live workspace. `updatedAt` is nil-safe: a row with no
+    // timestamp sorts into "Earlier" rather than defaulting to "Today".
     private var todayThreads: [CursorThreadRowModel] {
         if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
-            return liveThreadsSection(liveBridge.threads(for: workspaceName))
+            return liveThreadsSection(liveBridge.threads(for: workspaceName).filter {
+                $0.updatedAt.map { Calendar.current.isDateInToday($0) } ?? false
+            })
         }
         return seedTodayThreads
     }
 
     private var yesterdayThreads: [CursorThreadRowModel] {
         if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
-            return []
+            return liveThreadsSection(liveBridge.threads(for: workspaceName).filter {
+                $0.updatedAt.map { Calendar.current.isDateInYesterday($0) } ?? false
+            })
         }
         return seedYesterdayThreads
+    }
+
+    private var earlierThreads: [CursorThreadRowModel] {
+        guard let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty else { return [] }
+        return liveThreadsSection(liveBridge.threads(for: workspaceName).filter { row in
+            guard let updatedAt = row.updatedAt else { return true }
+            return !Calendar.current.isDateInToday(updatedAt) && !Calendar.current.isDateInYesterday(updatedAt)
+        })
     }
 
     private func liveThreadsSection(_ rows: [CursorShellLiveBridge.ThreadRow]) -> [CursorThreadRowModel] {
@@ -263,20 +281,34 @@ public struct CursorWorkspaceThreadListView: View {
                             }
                         }
                     } else {
-                        CursorSectionHeader("Today")
-                        ForEach(todayThreads) { model in
-                            Button(action: { onSelectThread(model.title) }) {
-                                CursorThreadRow(model: model, showRepoTag: false)
+                        if !todayThreads.isEmpty {
+                            CursorSectionHeader("Today")
+                            ForEach(todayThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
 
-                        CursorSectionHeader("Yesterday")
-                        ForEach(yesterdayThreads) { model in
-                            Button(action: { onSelectThread(model.title) }) {
-                                CursorThreadRow(model: model, showRepoTag: false)
+                        if !yesterdayThreads.isEmpty {
+                            CursorSectionHeader("Yesterday")
+                            ForEach(yesterdayThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        }
+
+                        if !earlierThreads.isEmpty {
+                            CursorSectionHeader("Earlier")
+                            ForEach(earlierThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }

@@ -422,7 +422,14 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     /// Verifies that `LANCER_CURSOR_MOCK_RUN_TARGETS=1` causes the mock shell
     /// to present `CursorWorkspaceDetailSheet` when the `lancer-ios` row is
     /// tapped, and that the sheet contains the expected run-target rows.
-    func testWorkspaces_WorkspaceDetailSheetShowsRunTargets() throws {
+    /// Tapping a repo row must always open its thread list — matching the
+    /// reference product exactly, a repo row is never an interstitial. The
+    /// Workspace Detail / run-targets sheet is a secondary affordance reached
+    /// by long-press, not the primary tap action (2026-07-07: an earlier
+    /// version of this test asserted tap-opens-the-detail-sheet, which was
+    /// itself the bug — this test enshrined the wrong behavior instead of
+    /// catching it).
+    func testWorkspaces_TapOpensThreadList_LongPressOpensDetailSheet() throws {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
         app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
@@ -431,22 +438,36 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
-        snapshot("05d-workspaces-before-detail-tap", app: app)
+        snapshot("05d-workspaces-before-tap", app: app)
 
-        // Tap the lancer-ios row — with mock run targets this should present
-        // the Workspace Detail sheet instead of pushing the thread list.
         let lancerRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
         XCTAssertTrue(lancerRow.waitForExistence(timeout: 10), "lancer-ios row should be visible")
-        tapWithRetry(lancerRow, label: "lancer-ios workspace row")
 
-        // Sheet title matches the workspace name.
+        // Plain tap → thread list, even though this workspace has run targets.
+        tapWithRetry(lancerRow, label: "lancer-ios workspace row")
         XCTAssertTrue(
             app.staticTexts["lancer-ios"].waitForExistence(timeout: 10),
-            "Workspace detail sheet should show workspace name as title"
+            "Tapping a repo row should push the thread list with the workspace name as its title"
         )
-        snapshot("05d-workspace-detail-sheet", app: app)
+        XCTAssertFalse(
+            app.buttons["xmark"].waitForExistence(timeout: 2),
+            "A plain tap must not present the Workspace Detail sheet (no xmark dismiss button)"
+        )
+        snapshot("05d-thread-list-after-tap", app: app)
 
-        // At least one run-target row with the documented accessibility id.
+        // Back to Workspaces, then long-press for the detail sheet.
+        let backButton = app.navigationBars.buttons.firstMatch
+        if backButton.waitForExistence(timeout: 5) { tapWithRetry(backButton, label: "back to Workspaces") }
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 10))
+
+        let lancerRowAgain = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
+        XCTAssertTrue(lancerRowAgain.waitForExistence(timeout: 10))
+        lancerRowAgain.press(forDuration: 0.6)
+
+        XCTAssertTrue(
+            app.staticTexts["lancer-ios"].waitForExistence(timeout: 10),
+            "Long-press should present the Workspace Detail sheet with the workspace name as title"
+        )
         let targetRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@", "workspace-detail-target-row"))
             .firstMatch
@@ -457,6 +478,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
             targetRow.waitForExistence(timeout: 5) || hostLabel.waitForExistence(timeout: 2),
             "Detail sheet must contain at least one workspace-detail-target-row"
         )
+        snapshot("05d-workspace-detail-sheet-longpress", app: app)
 
         // Dismiss with xmark and confirm we're back on Workspaces.
         let xmark = app.buttons["xmark"].firstMatch

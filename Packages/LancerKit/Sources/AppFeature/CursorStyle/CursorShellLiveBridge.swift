@@ -74,8 +74,38 @@ public final class CursorShellLiveBridge {
     public var workspaces: [WorkspaceRow] = []
     public var threadsByWorkspace: [String: [ThreadRow]] = [:]
     public var pendingApprovalID: ApprovalID?
+    /// Looks up the REAL `Approval` (command, cwd, risk, agent, tool name…)
+    /// behind `pendingApprovalID` — without this, CursorReviewDiffView had no
+    /// way to render anything but hardcoded example content, meaning a real
+    /// approval showed the WRONG command/risk/scope to the user deciding on
+    /// it (2026-07-07 — found live: a fileWrite request rendered as a fake
+    /// "terraform apply on production" example). A live function rather than
+    /// a cached copy so it's never stale relative to `activeInboxViewModel`.
+    public var lookupApproval: ((ApprovalID) -> Approval?)?
+    /// `composerCWD` only ever holds a repo's display NAME (the last path
+    /// component), never an absolute path — see `CursorAppShell.swift`'s repo
+    /// navigation/thread-select call sites. `repoPaths` maps that display name
+    /// back to the real, daemon-resolved absolute cwd of its most recent known
+    /// conversation, so a fresh dispatch (no existing thread/cwd to reuse) can
+    /// still launch in the right directory instead of sending the bare name
+    /// itself as `cwd` (which the daemon's `expandHome` can't resolve — it only
+    /// expands `~`, so a bare repo name fails `cmd.Start()` with a bogus
+    /// relative-to-launchd's-own-cwd path).
+    public var repoPaths: [String: String] = [:]
     public var composerCWD: String = ""
     public var selectedThreadID: String?
+    /// Real state for the work-thread screen currently on top of the nav
+    /// stack — replaces what used to be 100% hardcoded mock content
+    /// (CursorWorkThreadView.swift) with the actual dispatched prompt and its
+    /// live/streamed response. `activeRunID` is set the instant a dispatch
+    /// starts so the app-level run-output notification handlers (AppRoot's
+    /// `lancerE2ERunOutput`/`lancerE2ERunStatus`) know which run to mirror
+    /// onto `activeThreadResponse`.
+    public var activeThreadPrompt: String = ""
+    public var activeThreadResponse: String = ""
+    public var activeRunID: String?
+    public var activeThreadIsWorking: Bool = false
+    public var activeThreadError: String?
     /// OpenRouter / vendor model slug used for the next dispatch from the composer.
     public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
     public var composerModelLabel: String = ManagedModel.claudeHaiku.label
@@ -84,6 +114,17 @@ public final class CursorShellLiveBridge {
 
     public var onDispatch: ((String, String, String?) async -> Void)?
     public var onContinue: ((String, String, String?) async -> Void)?
+    /// Loads a selected EXISTING thread's real, already-persisted content
+    /// (prompt + assistant text of its most recent turn) into
+    /// `activeThread*` — without this, opening an old thread always showed
+    /// the generic "No output recorded" placeholder even for a thread with a
+    /// real, complete saved response (2026-07-07).
+    public var onOpenThread: ((String) async -> Void)?
+    /// Real full-text search over conversation history (title/prompt/
+    /// assistant-text/artifact-text, via the existing `chat_fts` table) — the
+    /// search overlay previously filtered a 5-row hardcoded list client-side
+    /// and never searched anything real (2026-07-07).
+    public var onSearch: ((String) async -> [ChatConversationSearchResult])?
     public var onDecide: ((ApprovalID, Approval.Decision) async -> Void)?
     public var onRequestPairing: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?

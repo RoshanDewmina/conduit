@@ -9,6 +9,7 @@ public struct CursorWorkspacesView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
     private let onSelectWorkspace: (String) -> Void
+    private let onShowWorkspaceDetail: (String) -> Void
     private let onOpenComposer: () -> Void
     private let onOpenProfile: () -> Void
     private let onOpenSearch: () -> Void
@@ -16,12 +17,14 @@ public struct CursorWorkspacesView: View {
 
     public init(
         onSelectWorkspace: @escaping (String) -> Void = { _ in },
+        onShowWorkspaceDetail: @escaping (String) -> Void = { _ in },
         onOpenComposer: @escaping () -> Void = {},
         onOpenProfile: @escaping () -> Void = {},
         onOpenSearch: @escaping () -> Void = {},
         onRequestPairing: @escaping () -> Void = {}
     ) {
         self.onSelectWorkspace = onSelectWorkspace
+        self.onShowWorkspaceDetail = onShowWorkspaceDetail
         self.onOpenComposer = onOpenComposer
         self.onOpenProfile = onOpenProfile
         self.onOpenSearch = onOpenSearch
@@ -77,6 +80,9 @@ public struct CursorWorkspacesView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("workspace-row")
+                            .onLongPressGesture {
+                                onShowWorkspaceDetail(workspace.name)
+                            }
                         }
                     } else {
                         seedWorkspaceRows

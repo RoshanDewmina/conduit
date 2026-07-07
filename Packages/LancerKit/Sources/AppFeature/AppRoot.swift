@@ -407,16 +407,37 @@ public struct AppRoot: View {
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunOutput"))) { note in
-            guard let params = note.userInfo?["params"] as? RunOutputParams else { return }
+            guard let params = note.userInfo?["params"] as? RunOutputParams else {
+                Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").error("lancerE2ERunOutput: bad params in notification")
+                return
+            }
             runOutputStore.appendOutput(params)
+            Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("lancerE2ERunOutput: runId=\(params.runId, privacy: .public) activeRunID=\(cursorLiveBridge.activeRunID ?? "nil", privacy: .public) textLen=\(runOutputStore.run(params.runId)?.text.count ?? -1, privacy: .public)")
+            if params.runId == cursorLiveBridge.activeRunID {
+                cursorLiveBridge.activeThreadResponse = runOutputStore.run(params.runId)?.text ?? ""
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2EToolStart"))) { note in
             guard let params = note.userInfo?["params"] as? ToolStartParams else { return }
             runOutputStore.appendToolStart(params)
+            if params.runId == cursorLiveBridge.activeRunID {
+                cursorLiveBridge.activeThreadResponse = runOutputStore.run(params.runId)?.text ?? ""
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunStatus"))) { note in
-            guard let params = note.userInfo?["params"] as? RunStatusParams else { return }
+            guard let params = note.userInfo?["params"] as? RunStatusParams else {
+                Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").error("lancerE2ERunStatus: bad params in notification")
+                return
+            }
             runOutputStore.updateStatus(params)
+            Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("lancerE2ERunStatus: runId=\(params.runId, privacy: .public) activeRunID=\(cursorLiveBridge.activeRunID ?? "nil", privacy: .public) status=\(params.status, privacy: .public) exitCode=\(params.exitCode ?? -999, privacy: .public) storedTextLen=\(runOutputStore.run(params.runId)?.text.count ?? -1, privacy: .public)")
+            if params.runId == cursorLiveBridge.activeRunID,
+               params.status == "exited" || params.status == "failed" {
+                cursorLiveBridge.activeThreadIsWorking = false
+                if params.status == "failed" || params.exitCode != 0 {
+                    cursorLiveBridge.activeThreadError = runOutputStore.run(params.runId)?.text
+                }
+            }
             if case .ready(let env) = environment,
                params.status == "exited" || params.status == "failed" {
                 // Persist the run's accumulated output back onto the turn so the
@@ -951,13 +972,6 @@ public struct AppRoot: View {
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
-        #if DEBUG
-        // UI tests seed high/critical-risk approvals; bypass LocalAuthentication so
-        // tap-injection proofs can exercise the decision path headlessly.
-        if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
-            liveVM.decisionAuthorizer = { _ in true }
-        }
-        #endif
         // Wire Home's attention feed to the SAME live-observed VM immediately,
         // not only after the first live relay approval notification arrives
         // (the previous behavior — see the narrower reassignment in the
@@ -975,9 +989,14 @@ public struct AppRoot: View {
 
     @MainActor
     private func setupCursorLiveBridge(env: AppEnvironment) {
+        cursorLiveBridge.lookupApproval = { [self] id in
+            activeInboxViewModel.approvals.first(where: { $0.id == id })
+        }
         cursorLiveBridge.onDispatch = { [self] prompt, cwd, model in
             let agentID = defaultDispatchAgentID(env: env)
-            _ = await performDispatch(
+            cursorLiveBridge.activeThreadError = nil
+            cursorLiveBridge.activeThreadIsWorking = true
+            let outcome = await performDispatch(
                 agentID: agentID,
                 cwd: cwd,
                 prompt: prompt,
@@ -985,11 +1004,48 @@ public struct AppRoot: View {
                 model: model,
                 env: env
             )
+            switch outcome {
+            case .started(let run):
+                Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("onDispatch: started runId=\(run.runId, privacy: .public) conversationID=\(run.conversationID ?? "nil", privacy: .public)")
+                cursorLiveBridge.activeRunID = run.runId
+                cursorLiveBridge.selectedThreadID = run.conversationID
+            case .blocked(let message):
+                Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("onDispatch: blocked message=\(message, privacy: .public)")
+                // Previously silent — a denied/errored dispatch left the user
+                // staring at a screen that never changed, with no indication
+                // anything had gone wrong (this is the exact "nothing
+                // happened" symptom traced back to a bad cwd on 2026-07-07,
+                // before the underlying cwd bug itself was found and fixed).
+                cursorLiveBridge.activeThreadIsWorking = false
+                cursorLiveBridge.activeThreadError = message
+            }
             workspacesRevision = UUID()
         }
+        cursorLiveBridge.onOpenThread = { [self] conversationID in
+            cursorLiveBridge.activeThreadError = nil
+            guard let lastTurn = try? await env.chatRepo.turns(conversationID: conversationID).last else {
+                // A thread can legitimately have zero turns yet (e.g. selected
+                // right as it's being created) — leave activeThread* alone
+                // rather than stomping in-flight state with a false "empty".
+                return
+            }
+            cursorLiveBridge.activeThreadPrompt = lastTurn.prompt
+            cursorLiveBridge.activeThreadResponse = lastTurn.assistantText
+            cursorLiveBridge.activeRunID = lastTurn.runID
+            cursorLiveBridge.activeThreadIsWorking = (lastTurn.status == .running)
+            if lastTurn.status == .failed {
+                cursorLiveBridge.activeThreadError = lastTurn.errorMessage
+            }
+        }
         cursorLiveBridge.onContinue = { [self] conversationID, prompt, model in
-            guard let conv = try? await env.chatRepo.conversation(id: conversationID) else { return }
-            _ = await performContinueConversation(
+            guard let conv = try? await env.chatRepo.conversation(id: conversationID) else {
+                cursorLiveBridge.activeThreadError = "Couldn't find that conversation to continue."
+                return
+            }
+            cursorLiveBridge.activeThreadError = nil
+            cursorLiveBridge.activeThreadIsWorking = true
+            cursorLiveBridge.activeThreadResponse = ""
+            let outcome = await performContinueConversation(
                 conversationID: conv.id,
                 baseSeq: conv.lastHostSeq,
                 prompt: prompt,
@@ -998,7 +1054,18 @@ public struct AppRoot: View {
                 model: model ?? conv.model,
                 env: env
             )
+            switch outcome {
+            case .started(let run):
+                cursorLiveBridge.activeRunID = run.runId
+            case .blocked(let message):
+                cursorLiveBridge.activeThreadIsWorking = false
+                cursorLiveBridge.activeThreadError = message
+            }
             workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onSearch = { query in
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+            return (try? await env.chatRepo.search(query)) ?? []
         }
         cursorLiveBridge.onDecide = { [self] id, decision in
             if let slot = fleetStore.slot(forApprovalID: id) {
@@ -1038,9 +1105,17 @@ public struct AppRoot: View {
             var threads: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
             // machineID → hostName, keyed by repo name. OrderedSet semantics via dict key.
             var runTargetIDsByRepo: [String: [String: String]] = [:]
+            // repo display name → its most recent conversation's real absolute cwd
+            // (`recent()` is newest-first, so first-seen wins). A fresh dispatch
+            // with no existing thread has no `conv.cwd` of its own to reuse — this
+            // is how it still gets a real path instead of the bare repo name.
+            var repoPaths: [String: String] = [:]
             for conv in conversations {
                 let repo = (conv.cwd as NSString).lastPathComponent.isEmpty ? conv.cwd : (conv.cwd as NSString).lastPathComponent
                 counts[repo, default: 0] += 1
+                if repoPaths[repo] == nil, !conv.cwd.isEmpty {
+                    repoPaths[repo] = conv.cwd
+                }
                 threads[repo, default: []].append(
                     CursorShellLiveBridge.ThreadRow(
                         id: conv.id,
@@ -1073,6 +1148,7 @@ public struct AppRoot: View {
                 threadCounts: counts,
                 runTargetsByRepo: runTargetsByRepo
             )
+            cursorLiveBridge.repoPaths = repoPaths
             for (name, rows) in threads {
                 let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
                 cursorLiveBridge.reloadThreads(workspaceName: name, rows: sorted)
@@ -1780,7 +1856,6 @@ public struct AppRoot: View {
         case .ed25519(let keyID):
             let keyStore = env.keyStore
             startSession(host: host, env: env) {
-                try await BiometricGate.shared.unlock()
                 let key = try await keyStore.loadEd25519(tag: keyID.uuidString)
                 return .ed25519(key)
             }
@@ -1875,15 +1950,6 @@ public struct AppRoot: View {
                         // call actually resolved the gate, so the inbox reflects
                         // watch decisions and a stale watch tap can't flip a
                         // decided gate (MAJOR-15 + B3).
-                        //
-                        // DELIBERATE exception to the phone-side local-auth gate
-                        // (ApprovalDecisionAuth): WCSession decisions only arrive
-                        // from a paired watch that is unlocked and on-wrist —
-                        // wrist detection + the watch passcode are Apple's auth
-                        // boundary for that surface (trusted enough to unlock the
-                        // paired iPhone itself), and a Face ID prompt on a phone
-                        // in the user's pocket would just strand the decision.
-                        // Documented in docs/legal/SECURITY_ARCHITECTURE.md §5.1.
                         let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
                         guard changed else { return }
                         Notifications.shared.clearDeliveredApproval(id: id.uuidString)

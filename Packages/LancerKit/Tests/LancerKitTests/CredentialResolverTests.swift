@@ -37,7 +37,7 @@ struct CredentialResolverTests {
         }
     }
 
-    @Test("Ed25519 path unlocks biometrics and loads key from store")
+    @Test("Ed25519 path loads key from store")
     func ed25519Path() async throws {
         let service = "dev.lancer.test.keys.\(UUID().uuidString)"
         let keyStore = KeyStore(service: service, inMemory: true)
@@ -45,12 +45,10 @@ struct CredentialResolverTests {
         let keyID = KeyID()
         _ = try await keyStore.importEd25519(tag: keyID.uuidString, rawPrivate: privateKey.rawRepresentation)
 
-        // BiometricGate.shared degrades gracefully when no biometrics enrolled (simulator).
         let credential = try await CredentialResolver.resolve(
             authMethod: .ed25519(keyID: keyID),
             passwordProvider: { "" },
-            keyStore: keyStore,
-            biometricUnlock: {}
+            keyStore: keyStore
         )
 
         try await keyStore.delete(tag: keyID.uuidString)

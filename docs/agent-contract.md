@@ -75,8 +75,10 @@ be corrected.
 
 - TOFU: unknown host keys must surface a user-confirmation sheet via
   `HostKeyStore`. Never `acceptAnything()`.
-- Private keys live in the Keychain via `KeyStore`, gated by
-  `BiometricGate`. Never read them from disk or copy them off-device.
+- Private keys live in the Keychain via `KeyStore`. Never read them from disk
+  or copy them off-device. Loading a key does **not** require a biometric
+  prompt — `BiometricGate` was removed entirely (2026-07-07, permanent); don't
+  reintroduce it.
 - Connection timeouts use the `withThrowingTimeout` task-group pattern
   (see `SSHSession`). No raw `DispatchQueue.asyncAfter`.
 

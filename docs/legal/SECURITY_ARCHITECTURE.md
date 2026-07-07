@@ -251,34 +251,18 @@ grace-eligible.
 All Keychain items have `kSecAttrSynchronizable: false` — they never sync to
 iCloud.
 
-### 5.1 Approval-decision local authentication
+### 5.1 Approval-decision authentication (removed 2026-07-07)
 
-Since 2026-07-04, committing an approve/reject decision on a **high or
-critical-risk** approval requires a fresh biometric/passcode unlock
-(`ApprovalDecisionAuth` in SecurityKit, backed by `BiometricGate`); the gate
-runs *before* the decision is persisted or forwarded. Scope, stated precisely:
-
-- **Gated:** the in-app inbox cards (`InboxViewModel` / `LiveInboxViewModel.decide`),
-  notification-action routing, and the `ApprovalRelay.enqueue` entry point that
-  serves Live Activity / Dynamic Island buttons, Siri/Shortcuts
-  (`CommandGateway`) and the cold-launch action drain. Live Activity buttons
-  are widget intents, which `UNNotificationActionOptions.authenticationRequired`
-  does **not** cover — hence the explicit gate.
-- **Unknown risk fails closed:** a decision for an approval with no local row
-  (so no tier to read) requires the unlock.
-- **Not gated (by design):** low/medium-risk decisions — the same tier split as
-  the daemon's `PermitsNoClientGrace`; prompting on every routine approval
-  would defeat the product's core loop. Notification actions still require an
-  unlocked device via `authenticationRequired`.
-- **Documented exception — Apple Watch:** watch decisions arrive over WCSession
-  only from a paired watch that is unlocked and on-wrist; wrist detection + the
-  watch passcode are Apple's auth boundary for that surface (trusted enough to
-  unlock the paired iPhone itself). No phone-side Face ID prompt is inserted
-  for watch taps.
-- **Residual (pre-existing, P2):** `BiometricGate` degrades open on devices
-  with no passcode/biometry enrolled and on the simulator (see
-  `docs/KNOWN_ISSUES.md` §2) — the gate is only as strong as `BiometricGate`
-  itself until that fail-closed hardening lands.
+Face ID / biometric gating was removed from the app entirely — a permanent
+product decision, not a temporary regression. There is no local-auth check
+before an approve/reject decision commits (any risk tier) and no biometric
+check before an Ed25519 private key is loaded from Keychain for an SSH
+session. `BiometricGate`, `ApprovalDecisionAuth`, and every call site
+(`InboxViewModel`/`LiveInboxViewModel.decide`, `ApprovalRelay.enqueue`,
+`CredentialResolver.resolve`, `AppRoot.openSession`) were deleted, not
+disabled. The remaining boundary is whatever unlocked the phone itself
+(device passcode/Face ID at the OS level) — Lancer does not add a second
+factor on top of that for approvals or SSH key use.
 
 ---
 
@@ -345,7 +329,7 @@ termination and HTTP logs are under your control.
 | Attacker guesses/observes the pairing code | No SSH credentials in the code; relay key-pinning rejects a different key claiming an already-pinned role; per-IP rate limiting bounds brute-force guessing; unconfirmed codes expire after 10 minutes (§2.2) |
 | Attacker MiTM SSH connection | SSH key authentication; X25519 key bindings verified out-of-band |
 | Relay is compromised | Relay sees only ciphertext — key material stays on device and host |
-| Phone is lost or stolen | Face ID / device passcode gate Keychain access; `whenUnlockedThisDeviceOnly` prevents iCloud sync |
+| Phone is lost or stolen | `whenUnlockedThisDeviceOnly` prevents iCloud sync of Keychain items; iOS's own device-passcode/Face ID lock is the only gate on approvals and SSH key use — Lancer does not add a second factor (see §5.1) |
 | Host is compromised | Lancer cannot prevent this — attack is outside the threat model; user is responsible for host security |
 | Malicious push from relay | Payloads require valid ChaCha20-Poly1305 decryption with session key; relay cannot forge valid payloads |
 | Traffic analysis | Relay sees routing IDs and timing — metadata is not encrypted; self-host relay to reduce exposure |

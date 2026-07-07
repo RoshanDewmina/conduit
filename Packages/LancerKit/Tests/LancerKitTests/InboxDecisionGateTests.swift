@@ -4,11 +4,11 @@ import Foundation
 import LancerCore
 @testable import InboxFeature
 
-/// Regression tests for the local-auth gate on approval decisions: a
-/// high/critical-risk approve/reject whose unlock fails (locked device,
-/// cancelled prompt) must leave the gate pending and never reach the wire.
+/// Regression tests for `InboxViewModel.decide()`: a decision commits
+/// synchronously regardless of risk tier (no local-auth gate — Face ID/biometric
+/// approval gating was removed from this app entirely).
 @MainActor
-@Suite("Inbox decision local-auth gate")
+@Suite("Inbox decision commit")
 struct InboxDecisionGateTests {
 
     private func makeApproval(risk: Approval.Risk) -> Approval {
@@ -22,57 +22,43 @@ struct InboxDecisionGateTests {
         )
     }
 
-    private func drainMainQueue() async {
-        for _ in 0..<20 { await Task.yield() }
-    }
-
-    @Test("high-risk decision with failed unlock stays pending and never hits the sink")
-    func highRiskFailedUnlockBlocks() async {
+    @Test("high-risk decision commits synchronously and hits the sink")
+    func highRiskCommitsSynchronously() async {
         let approval = makeApproval(risk: .high)
         let vm = InboxViewModel(approvals: [approval])
-        vm.decisionAuthorizer = { _ in false }
         var sinkFired = false
         vm.decisionSink = { _, _, _, _ in sinkFired = true }
 
         vm.decide(approval.id, decision: .approved)
-        await drainMainQueue()
 
-        #expect(vm.approvals[0].isPending)
-        #expect(!sinkFired)
-    }
-
-    @Test("high-risk decision with successful unlock commits")
-    func highRiskUnlockedCommits() async {
-        let approval = makeApproval(risk: .high)
-        let vm = InboxViewModel(approvals: [approval])
-        var prompted = false
-        vm.decisionAuthorizer = { _ in
-            prompted = true
-            return true
-        }
-        var sinkFired = false
-        vm.decisionSink = { _, _, _, _ in sinkFired = true }
-
-        vm.decide(approval.id, decision: .approved)
-        await drainMainQueue()
-
-        #expect(prompted)
         #expect(!vm.approvals[0].isPending)
         #expect(sinkFired)
     }
 
-    @Test("low-risk decision commits synchronously without consulting the authorizer")
-    func lowRiskSkipsGate() async {
+    @Test("low-risk decision commits synchronously and hits the sink")
+    func lowRiskCommitsSynchronously() async {
         let approval = makeApproval(risk: .low)
         let vm = InboxViewModel(approvals: [approval])
-        vm.decisionAuthorizer = { _ in
-            Issue.record("authorizer must not run for a low-risk decision")
-            return false
-        }
+        var sinkFired = false
+        vm.decisionSink = { _, _, _, _ in sinkFired = true }
 
         vm.decide(approval.id, decision: .rejected)
 
         #expect(!vm.approvals[0].isPending)
+        #expect(sinkFired)
+    }
+
+    @Test("decision for an unknown id is a no-op")
+    func unknownIDIsNoOp() async {
+        let approval = makeApproval(risk: .high)
+        let vm = InboxViewModel(approvals: [approval])
+        var sinkFired = false
+        vm.decisionSink = { _, _, _, _ in sinkFired = true }
+
+        vm.decide(ApprovalID(), decision: .approved)
+
+        #expect(vm.approvals[0].isPending)
+        #expect(!sinkFired)
     }
 }
 #endif

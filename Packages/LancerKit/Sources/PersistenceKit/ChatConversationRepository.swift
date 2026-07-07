@@ -138,6 +138,19 @@ public actor ChatConversationRepository {
             if let turn = try Row.fetchOne(db, sql: "SELECT conversation_id FROM chat_turns WHERE run_id = ?", arguments: [runID]),
                let convID: String = turn["conversation_id"] {
                 try Self.syncFTS(db, conversationID: convID)
+                // The conversation itself is created with status=active and,
+                // before this, nothing ever moved it out of that state — every
+                // conversation showed a perpetual "Working" attention badge
+                // forever, even ones from days earlier, because nothing wrote
+                // back here once its run actually finished. Mirror the turn's
+                // terminal status onto the parent conversation in the same
+                // transaction so CursorThreadAttention reflects reality.
+                if status == .completed || status == .failed {
+                    let conversationStatus: ChatConversation.Status = status == .completed ? .completed : .failed
+                    try db.execute(sql: """
+                        UPDATE chat_conversations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    """, arguments: [conversationStatus.rawValue, convID])
+                }
             }
         }
     }
