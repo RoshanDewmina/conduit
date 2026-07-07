@@ -63,6 +63,11 @@ for i in $(seq 1 10); do grep -q "connected to relay as daemon" "$LOG" && break;
 echo "=== launch XCUITest (builds+installs+runs; app pairs via LANCER_RELAY_CODE) ==="
 # TEST_RUNNER_* env is forwarded to the XCUITest runner (prefix stripped), where
 # the test copies it into app.launchEnvironment.
+#
+# -derivedDataPath is pinned to a harness-private directory OUTSIDE
+# /tmp/lancer-relay-e2e (which this script rm -rf's on every run) rather than
+# the shared per-project DerivedData: concurrent xcodebuild activity elsewhere
+# on the machine races the same build.db and fails with "database is locked".
 TEST_RUNNER_LANCER_RELAY_E2E=1 \
 TEST_RUNNER_LANCER_RELAY_URL="$RELAY_BASE" \
 TEST_RUNNER_LANCER_RELAY_CODE="$CODE" \
@@ -70,6 +75,7 @@ TEST_RUNNER_LANCER_PUSH_BACKEND_URL="$BACKEND" \
 xcodebuild test \
   -project "$REPO/Lancer.xcodeproj" -scheme Lancer \
   -destination "id=$UDID" \
+  -derivedDataPath /tmp/lancer-relay-e2e-derived-data \
   -only-testing:LancerUITests/TapInjectionProofTests/testRelayApprovalUnblocksHostHook \
   >/tmp/lancer-relay-e2e/xcodebuild.log 2>&1 &
 XCB_PID=$!

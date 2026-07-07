@@ -10,7 +10,12 @@ DerivedData incidents at least 4 times:
 
 ```bash
 df -h / /tmp
+./scripts/check-disk-budget.sh
 ```
+
+`check-disk-budget.sh` fails (exit 1) if free space drops below 20GB, `Lancer-*` DerivedData
+exceeds 15GB, or a worktree lives outside the approved `/Volumes/LancerDev/worktrees/` root — it
+lists branch + merge status per offending worktree and never deletes anything itself.
 
 If free space is under ~15GB, clean stale caches before proceeding rather than mid-build:
 
@@ -19,6 +24,25 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/Lancer-*
 rm -rf /tmp/LancerDerivedData*
 ./scripts/check-worktree-sprawl.sh
 ```
+
+### Migration to /Volumes/LancerDev
+
+The repo is migrating build/tmp caches off the internal disk onto `/Volumes/LancerDev` — set these
+once that volume is mounted, so Xcode/tooling stop writing gigabytes of DerivedData back onto the
+internal SSD:
+
+```bash
+export LANCER_DERIVED_DATA=/Volumes/LancerDev/lancer-tmp/DerivedData
+export TMPDIR=/Volumes/LancerDev/lancer-tmp/
+```
+
+`LANCER_DERIVED_DATA` is a convention for this repo's tooling/scripts, not an Xcode-recognized env
+var by itself — point Xcode's actual DerivedData location there via **Settings → Locations →
+Derived Data → Custom**, or `-derivedDataPath "$LANCER_DERIVED_DATA"` on any `xcodebuild`
+invocation, so the two stay in sync. Until `/Volumes/LancerDev` exists, `check-disk-budget.sh`
+falls back to its defaults (internal disk, `~/Library/Developer/Xcode/DerivedData`) and will flag
+every current worktree as outside the approved root — that is expected pre-migration, not a script
+bug.
 
 ## Physical device reinstall
 

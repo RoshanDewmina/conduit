@@ -81,6 +81,7 @@ public struct CursorWorkspacesView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("workspace-row")
                         }
                     } else {
                         seedWorkspaceRows

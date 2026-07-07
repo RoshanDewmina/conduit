@@ -1,0 +1,5 @@
+Query chain:
+ →Find: Target Application 'dev.lancer.mobile'
+  ↪︎Find: Descendants matching type Button
+    ↪︎Find: Elements matching predicate '"cursor.review.approve" IN identifiers'
+      ↪︎Find: First Match
