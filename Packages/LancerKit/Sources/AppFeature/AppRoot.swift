@@ -491,13 +491,31 @@ public struct AppRoot: View {
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
             }
-            // Persist to the durable store too, not just the in-memory VM — a
-            // relay-only setup has no SSH ApprovalIngest writing this approval
-            // anywhere else, so without this it silently vanishes on relaunch.
+            // Persist to the durable store, not just the in-memory VM below —
+            // this is NOT optional durability polish: LiveInboxViewModel.decide()
+            // (InboxViewModel+Live.swift) guards its DB UPDATE on `WHERE id=?
+            // AND decision IS NULL`, and only calls `onDecision` (which forwards
+            // the decision over the relay) when that UPDATE actually matched a
+            // row. Without this row existing, a relay-only approval's Approve tap
+            // flips the LOCAL UI (via `applyDecision`, unconditional) but the
+            // decision never reaches the daemon — reproduced via
+            // relay-approval-e2e.sh 2026-07-07: xcodebuild rc=0 (UI showed
+            // "Approved") yet the host hook never unblocked and the audit log
+            // never gained an "approve" entry. This upsert previously raced
+            // `onPendingApprovalsChanged`'s count==0 branch and popped the
+            // Review sheet shut before Approve could be tapped at all (a
+            // separate bug, fixed above by cross-checking the in-memory list
+            // before clearing `pendingApprovalID` rather than by removing this
+            // write).
             if case .ready(let env) = environment {
                 Task { @MainActor in
                     let repo = approvalRepository ?? ApprovalRepository(env.database)
-                    try? await repo.upsert(approval)
+                    do {
+                        try await repo.upsert(approval)
+                        Self.logger.info("lancerE2EApprovalReceived: upsert OK id=\(approval.id.uuidString, privacy: .public)")
+                    } catch {
+                        Self.logger.error("lancerE2EApprovalReceived: upsert FAILED id=\(approval.id.uuidString, privacy: .public) error=\(String(describing: error), privacy: .public)")
+                    }
                 }
             }
             let vm = activeInboxViewModel
@@ -879,6 +897,7 @@ public struct AppRoot: View {
         let liveVM = LiveInboxViewModel(
             repository: approvalRepo,
             onDecision: { id, decision, edited, contentHash in
+            Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("onDecision: fired id=\(id.uuidString, privacy: .public) decision=\(decision.rawValue, privacy: .public)")
             // Prefer the channel of the slot that owns this approval (multi-slot
             // correct). On a dead/absent channel fall back to the relay's single
             // forwarding chokepoint (backend POST + SSH-drain queue) rather than
@@ -886,6 +905,7 @@ public struct AppRoot: View {
             // (MAJOR-5). LiveInboxViewModel persists the decision before firing
             // onDecision, so no DB write is needed here.
             if let slot = await MainActor.run(body: { self.fleetStore.slot(forApprovalID: id) }) {
+                Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").info("onDecision: routed via fleet slot id=\(id.uuidString, privacy: .public)")
                 do {
                     try await slot.channel.respond(
                         approvalId: id.uuidString,
@@ -910,7 +930,20 @@ public struct AppRoot: View {
                     if let idString, let uuid = UUID(uuidString: idString) {
                         cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
                     } else if count == 0 {
-                        cursorLiveBridge.pendingApprovalID = nil
+                        // Cross-check against the in-memory list before trusting a
+                        // DB-observation "0 pending" snapshot: a relay approval is
+                        // inserted into `vm.approvals` synchronously (below) before
+                        // its `repo.upsert` write lands, so an observation re-emit
+                        // racing that write can report count==0 for an approval we
+                        // already know is genuinely pending — clearing
+                        // pendingApprovalID on that stale signal pops the live
+                        // Review sheet shut before the user can act (reproduced via
+                        // relay-approval-e2e.sh 2026-07-07: button existed, then the
+                        // sheet closed ~seconds later, confirmed via the XCUITest's
+                        // failure-moment UI-hierarchy dump showing Workspaces root).
+                        if !self.activeInboxViewModel.approvals.contains(where: \.isPending) {
+                            cursorLiveBridge.pendingApprovalID = nil
+                        }
                     }
                 }
             }
