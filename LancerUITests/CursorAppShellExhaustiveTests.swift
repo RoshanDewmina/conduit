@@ -139,9 +139,17 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     }
 
     private func tapApprovalBanner(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
-        let banner = app.buttons["approval-banner"].firstMatch
-        XCTAssertTrue(banner.waitForExistence(timeout: timeout), "Missing approval-banner button", file: file, line: line)
-        tapWithRetry(banner, label: "approval-banner", file: file, line: line)
+        // Mock shell: APPROVE routes to Review (no live bridge). Live shell: prefer the
+        // dedicated overlay target when present.
+        let overlay = app.buttons["approval-banner"].firstMatch
+        let approve = app.buttons["APPROVE"].firstMatch
+        if overlay.waitForExistence(timeout: 2) {
+            tapWithRetry(overlay, label: "approval-banner", file: file, line: line)
+        } else if approve.waitForExistence(timeout: timeout) {
+            tapWithRetry(approve, label: "APPROVE", file: file, line: line)
+        } else {
+            XCTFail("Missing approval-banner or APPROVE control", file: file, line: line)
+        }
     }
 
     private func tapButtonContaining(_ app: XCUIApplication, _ substring: String, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
@@ -524,7 +532,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         let app = launchSkipOnboarding()
         defer { app.terminate() }
         openReviewDiff(app)
-        app.buttons["Approve"].tap()
+        app.buttons["cursor.review.approve"].tap()
         XCTAssertTrue(app.staticTexts["Approved"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Decided by You")).firstMatch.waitForExistence(timeout: 5))
         snapshot("08b-reviewdiff-approved", app: app)
