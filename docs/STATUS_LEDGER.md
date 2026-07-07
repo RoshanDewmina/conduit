@@ -3,6 +3,14 @@
 **Last updated:** 2026-07-06 (Cursor shell design reconciliation)  
 **Open this file first** for current priority, canonical doc map, and branch status.
 
+> **Known stale as of 2026-07-07:** the branch table and "Jul 5–6 session delta" below predate two
+> commits (`784e66af`, `9e18d679`) that landed real-data-wiring fixes to the Cursor shell (the
+> Review/approval screen, work-thread, and search were found to be 100% mock content) and removed
+> Face ID/biometric gating from the app entirely. They also predate an unresolved daemon dispatch
+> bug found the same session. Only the two BiometricGate-specific lines below have been corrected
+> inline — the rest of this file needs a full refresh against current `git log`/`gh pr list`, not a
+> read-as-is. Don't trust "Fixed"/"Shipped"/"PASS" claims here without cross-checking the live repo.
+
 Living trackers (update these when code or tests change):
 
 - Implementation status → [`docs/product/2026-07-06-feature-implementation-gap-matrix.md`](product/2026-07-06-feature-implementation-gap-matrix.md)
@@ -101,7 +109,7 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 | Item | State |
 |------|-------|
 | `master` | Cursor shell in-tree; live bridge partial; iOS **26.0** deployment target; wave2 merged (`7c5c0b0d` PR #30) — `CursorAppShellExhaustiveTests` 20/20 PASS |
-| `codex/tier-0-live-cursor-shell` | Tier 0 wiring + P0 BiometricGate + atomic emergency stop (commits on branch) |
+| `codex/tier-0-live-cursor-shell` | Tier 0 wiring + atomic emergency stop (commits on branch); BiometricGate P0 is moot — removed entirely on `master` 2026-07-07 |
 | Siri Phase 2 (`cursor/siri-phase2-fixes-9257`, PRs #16/#24) | Implemented, **not merged** — iOS 27 APIs vs iOS 26 target (`ARCHITECTURE.md` §0.1) |
 | `claude/amazing-mayer-246fef` | Active worktree — **do not wholesale merge** |
 | Jul 4–5 docs + wireframes | Untracked on `master` — index here, commit separately |
@@ -114,7 +122,7 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 
 | Gap | Severity | Status |
 |-----|----------|--------|
-| BiometricGate fail-open (no passcode) | P0 | **Fixed** on `codex/tier-0-live-cursor-shell` (`531685b6`); owner device validation pending |
+| BiometricGate fail-open (no passcode) | P0 | **Moot — removed entirely** on `master` 2026-07-07 (commit `9e18d679`); nothing left to validate |
 | Emergency stop non-atomic | P0 | **Fixed** on same branch — daemon latch + RPC |
 | JWT HS256-only | P1 | Open |
 | StoreKit IAP dormant vs Stripe cloud entitlement | P1 | Open — billing reconciliation needed |
