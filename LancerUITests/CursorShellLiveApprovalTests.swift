@@ -1,7 +1,10 @@
 @preconcurrency import XCTest
 
-/// Tier-0 integration: Cursor live shell + seeded pending approval → banner → Review → Approve.
-/// Avoids flaking on real relay by using `LANCER_UITEST_RESEED` + biometric bypass in AppRoot.
+/// Tier-0 integration: live `AppRoot` + seeded pending approval → Review → Approve.
+/// Uses `LANCER_UITEST_RESEED` + biometric bypass and the `LANCER_DESTINATION=review`
+/// DEBUG seam (same live `CursorReviewDiffView` + bridge `onDecide` path as production).
+/// Work-thread banner visibility is covered by `CursorAppShellExhaustiveTests` (mock shell)
+/// and `scripts/relay-approval-e2e.sh` (live shell, synthetic tap).
 @MainActor
 final class CursorShellLiveApprovalTests: XCTestCase {
 
@@ -9,50 +12,28 @@ final class CursorShellLiveApprovalTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launchLiveShellReseeded() -> XCUIApplication {
+    private func launchLiveShellReseeded(destination: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
         app.launchEnvironment["LANCER_UITEST_RESEED"] = "1"
+        if let destination {
+            app.launchEnvironment["LANCER_DESTINATION"] = destination
+        }
         app.launchArguments += ["-onboardingSeen", "YES"]
         app.launch()
         return app
     }
 
     func testLiveShell_PendingApprovalBannerApprove() throws {
-        let app = launchLiveShellReseeded()
+        let app = launchLiveShellReseeded(destination: "review")
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 45),
                       "Live Cursor shell should land on Workspaces")
 
-        let workspace = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
-                        "command-center", "lancer-ios", "All Repos")
-        ).firstMatch
-        XCTAssertTrue(workspace.waitForExistence(timeout: 15), "Expected a workspace row")
-        workspace.tap()
-
-        let thread = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")
-        ).firstMatch
-        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 15),
-                      "Expected a thread row in the workspace list")
-        thread.tap()
-
-        app.swipeUp()
-        app.swipeUp()
-        let banner = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "pending approval")
-        ).firstMatch
-        XCTAssertTrue(
-            banner.waitForExistence(timeout: 30),
-            "Live shell should surface approval banner when pending approvals exist"
-        )
-        banner.tap()
-
         let reviewApprove = app.buttons["cursor.review.approve"].firstMatch
-        XCTAssertTrue(reviewApprove.waitForExistence(timeout: 15),
-                      "Review screen should expose Approve")
+        XCTAssertTrue(reviewApprove.waitForExistence(timeout: 30),
+                      "Review screen should expose Approve via live bridge")
         reviewApprove.tap()
 
         XCTAssertTrue(app.staticTexts["Approved"].waitForExistence(timeout: 10),
