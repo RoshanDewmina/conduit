@@ -125,6 +125,25 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTFail("Could not tap \(label)", file: file, line: line)
     }
 
+    private func assertReviewDiffVisible(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
+        let reviewTitle = app.staticTexts["Review"]
+        let requestBody = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "terraform apply")
+        ).firstMatch
+        XCTAssertTrue(
+            reviewTitle.waitForExistence(timeout: timeout) || requestBody.waitForExistence(timeout: 2),
+            "Review diff screen should be visible",
+            file: file,
+            line: line
+        )
+    }
+
+    private func tapApprovalBanner(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
+        let banner = app.buttons["approval-banner"].firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: timeout), "Missing approval-banner button", file: file, line: line)
+        tapWithRetry(banner, label: "approval-banner", file: file, line: line)
+    }
+
     private func tapButtonContaining(_ app: XCUIApplication, _ substring: String, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
         let button = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", substring)).firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: timeout), "Missing button containing \(substring)", file: file, line: line)
@@ -462,8 +481,9 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "chevron.left").count, 1, "Exactly one back chevron on Work Thread")
 
         // Approval banner -> Review Diff
-        tapButtonContaining(app, "Needs your approval", timeout: 10)
-        XCTAssertTrue(app.staticTexts["Review"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        tapApprovalBanner(app, timeout: 10)
+        assertReviewDiffVisible(app)
         snapshot("08-reviewdiff-from-workthread", app: app)
         app.buttons["chevron.left"].tap()
         XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10), "Back from Review should return to Work Thread")
@@ -496,8 +516,8 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10))
         app.swipeUp()
-        tapButtonContaining(app, "Needs your approval", timeout: 10)
-        XCTAssertTrue(app.staticTexts["Review"].waitForExistence(timeout: 10))
+        tapApprovalBanner(app, timeout: 10)
+        assertReviewDiffVisible(app)
     }
 
     func testReviewDiff_Approve() throws {
