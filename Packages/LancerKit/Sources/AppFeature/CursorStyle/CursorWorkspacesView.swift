@@ -111,6 +111,7 @@ private struct CursorWorkspacesLiveBody: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("workspace-row")
                         }
                     }
 

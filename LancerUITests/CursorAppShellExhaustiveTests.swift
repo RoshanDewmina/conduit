@@ -235,7 +235,11 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
         XCTAssertTrue(app.staticTexts["All Repos"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["command-center"].waitForExistence(timeout: 10))
+        // Device-tolerant: assert a real workspace row rendered, not a specific
+        // repo name — the paired daemon on a physical device reports whatever
+        // repo it actually runs from, not the harness's "command-center" fixture.
+        XCTAssertTrue(app.buttons.matching(identifier: "workspace-row").firstMatch.waitForExistence(timeout: 10),
+                      "Live shell should surface at least one real workspace row from the paired daemon")
         snapshot("03-live-shell-workspaces", app: app)
 
         avatarCoordinate(app).tap()
@@ -250,6 +254,24 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["GENERAL"].waitForExistence(timeout: 10),
                       "Live shell Settings rows should open the real AppRoot Settings destination")
         snapshot("03-live-shell-real-settings", app: app)
+    }
+
+    /// Reseeded live shell should surface pending approvals on Workspaces (not only
+    /// inside a pushed Work Thread) so relay E2E and notification deep-links have a
+    /// root-level CTA.
+    func testLiveShell_ApprovalBannerOnWorkspaces() throws {
+        let app = launchLiveShell()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        let banner = app.buttons["approval-banner"].firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 30),
+                      "Reseeded pending approvals should surface the Workspaces approval banner")
+        snapshot("03-live-shell-approval-banner", app: app)
+        banner.tap()
+        XCTAssertTrue(app.staticTexts["Review"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["approval.approve"].waitForExistence(timeout: 10))
+        snapshot("03-live-shell-review-from-banner", app: app)
     }
 
     func testProfileDrawer_SignOutReturnsToOnboarding() throws {
