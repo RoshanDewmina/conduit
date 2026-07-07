@@ -111,5 +111,41 @@ import Testing
         #expect(store.machine(overflow.id) == nil)
         #expect(store.connectionState(for: overflow.id) == nil)
     }
+
+    @Test("invalidMachines returns only pairingInvalid machines")
+    func invalidMachinesFiltersCorrectly() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (valid, _) = makeMachine()
+        let (invalid, _) = makeMachine()
+        store.add(valid, pairingUsable: true)
+        store.add(invalid, pairingUsable: false)
+
+        #expect(store.invalidMachines.count == 1)
+        #expect(store.invalidMachines.first?.id == invalid.id)
+    }
+
+    @Test("removeAllInvalid() removes only pairingInvalid machines and leaves valid ones")
+    func removeAllInvalidLeavesValidMachines() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (valid, _) = makeMachine()
+        let (invalid1, _) = makeMachine()
+        let (invalid2, _) = makeMachine()
+        store.add(valid, pairingUsable: true)
+        store.add(invalid1, pairingUsable: false)
+        store.add(invalid2, pairingUsable: false)
+
+        #expect(store.machines.count == 3)
+        store.removeAllInvalid()
+
+        #expect(store.machines.count == 1)
+        #expect(store.machines.first?.id == valid.id)
+        #expect(store.invalidMachines.isEmpty)
+        #expect(store.connectionState(for: invalid1.id) == nil)
+        #expect(store.connectionState(for: invalid2.id) == nil)
+    }
 }
 #endif

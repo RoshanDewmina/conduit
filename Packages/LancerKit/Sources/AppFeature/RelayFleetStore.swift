@@ -74,6 +74,22 @@ public final class RelayFleetStore {
         machines.filter { connectionStates.state(for: $0.id) != .pairingInvalid }.count
     }
 
+    /// Machines permanently stuck in `.pairingInvalid` — their stored pairing
+    /// cannot be restored without a fresh re-pair. The UI surfaces these so the
+    /// user can bulk-clear them and free capacity for new real pairings.
+    public var invalidMachines: [Machine] {
+        machines.filter { connectionStates.state(for: $0.id) == .pairingInvalid }
+    }
+
+    /// Removes every machine currently in the `.pairingInvalid` state: tears
+    /// down its live connection and deletes its persisted pairing so it cannot
+    /// silently reappear on next launch.
+    public func removeAllInvalid() {
+        for m in invalidMachines {
+            remove(m.id)
+        }
+    }
+
     public func machine(_ id: RelayMachineID) -> Machine? {
         machines.first { $0.id == id }
     }

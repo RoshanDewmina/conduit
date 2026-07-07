@@ -655,6 +655,7 @@ public struct AppRoot: View {
             if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
                 cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
                 workspacesRevision = UUID()
             }
 #endif
@@ -729,6 +730,7 @@ public struct AppRoot: View {
         case "inbox", "approval", "review":
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
             showingApprovalReview = true
         case "settings", "governance": showingCursorSettings = true
         default: break
@@ -939,14 +941,21 @@ public struct AppRoot: View {
         cursorLiveBridge.onPaired = { [self] client, record in
             addRelayMachine(client: client, record: record, env: env)
         }
+        cursorLiveBridge.onClearInvalid = { [self] in
+            relayFleetStore.removeAllInvalid()
+        }
     }
 
     @ViewBuilder
     private func cursorSettingsSheet(env: AppEnvironment) -> some View {
         CursorSettingsView(
             relayMachineCount: relayFleetStore.machines.count,
+            invalidMachineCount: relayFleetStore.invalidMachines.count,
             onPaired: { client, record in
                 addRelayMachine(client: client, record: record, env: env)
+            },
+            onClearInvalid: {
+                relayFleetStore.removeAllInvalid()
             }
         )
     }
@@ -1000,6 +1009,7 @@ public struct AppRoot: View {
             }
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
             cursorLiveBridge.threadAttention = threadAttentionMap(
                 conversations: conversations,
                 pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending)
