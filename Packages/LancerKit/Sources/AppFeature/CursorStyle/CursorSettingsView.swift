@@ -13,16 +13,23 @@ public struct CursorSettingsView: View {
     @State private var showingPairing = false
     @State private var activeDestination: SettingsDestination?
     @State private var showingResetConfirmation = false
+    @State private var showingClearInvalidConfirmation = false
 
     private let relayMachineCount: Int
+    private let invalidMachineCount: Int
     private let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
+    private let onClearInvalid: (() -> Void)?
 
     public init(
         relayMachineCount: Int = 0,
-        onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil
+        invalidMachineCount: Int = 0,
+        onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil,
+        onClearInvalid: (() -> Void)? = nil
     ) {
         self.relayMachineCount = relayMachineCount
+        self.invalidMachineCount = invalidMachineCount
         self.onPaired = onPaired
+        self.onClearInvalid = onClearInvalid
     }
 
     public var body: some View {
@@ -64,6 +71,17 @@ public struct CursorSettingsView: View {
                         accessibilityIdentifier: "cursor.settings.row.trusted-machines"
                     ) {
                         showingPairing = true
+                    }
+                    if invalidMachineCount > 0 {
+                        row(
+                            title: "Clear dead pairings",
+                            titleColor: CursorColors.light.dangerRed,
+                            trailingText: "\(invalidMachineCount) invalid",
+                            showChevron: false,
+                            accessibilityIdentifier: "cursor.settings.row.clear-dead-pairings"
+                        ) {
+                            showingClearInvalidConfirmation = true
+                        }
                     }
 
                     CursorSectionHeader("Notifications")
@@ -154,6 +172,12 @@ public struct CursorSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes local pairing, threads, and cached settings from this device. Your hosts and audit history on paired machines are not affected.")
+        }
+        .alert("Clear dead pairings?", isPresented: $showingClearInvalidConfirmation) {
+            Button("Clear", role: .destructive) { onClearInvalid?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes \(invalidMachineCount) pairing\(invalidMachineCount == 1 ? "" : "s") that failed to restore. Re-pair from the machine to reconnect.")
         }
     }
 

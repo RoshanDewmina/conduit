@@ -8,26 +8,36 @@ public struct CursorApprovalBanner: View {
     let count: Int
     let onApprove: () -> Void
     let onReject: () -> Void
+    let onOpenReview: (() -> Void)?
 
     public init(
         count: Int,
         onApprove: @escaping () -> Void,
-        onReject: @escaping () -> Void
+        onReject: @escaping () -> Void,
+        onOpenReview: (() -> Void)? = nil
     ) {
         self.count = count
         self.onApprove = onApprove
         self.onReject = onReject
+        self.onOpenReview = onOpenReview
     }
 
     public var body: some View {
         let colors = CursorColors.resolve(cursorScheme)
         HStack(spacing: 8) {
-            Image(systemName: "bell.badge")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(colors.riskMedium)
-            Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
-                .font(CursorType.statusPill)
-                .foregroundColor(colors.secondaryText)
+            HStack(spacing: 8) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.riskMedium)
+                Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
+                    .font(CursorType.statusPill)
+                    .foregroundColor(colors.secondaryText)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onOpenReview?()
+            }
+            .accessibilityAddTraits(onOpenReview == nil ? [] : .isButton)
             Spacer()
             Button {
                 Haptics.selection()

@@ -48,6 +48,8 @@ public struct CursorReviewDiffView: View {
         }
         .background(CursorColors.light.background.ignoresSafeArea())
         .environment(\.cursorScheme, .light)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("review-diff-screen")
     }
 
     // MARK: Header

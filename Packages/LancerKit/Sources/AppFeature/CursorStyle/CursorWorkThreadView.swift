@@ -107,15 +107,10 @@ public struct CursorWorkThreadView: View {
         CursorApprovalBanner(
             count: 1,
             onApprove: handleApprovalApprove,
-            onReject: handleApprovalReject
+            onReject: handleApprovalReject,
+            onOpenReview: onOpenReview
         )
-        .overlay(alignment: .leading) {
-            Button(action: onOpenReview) {
-                Color.clear.frame(width: 170, height: 36)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("approval-banner")
-        }
+        .accessibilityIdentifier("approval-banner")
         .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
         .padding(.top, CursorMetrics.actionRailVerticalPadding)
     }

@@ -36,6 +36,7 @@ public struct CursorIconButton: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(systemImageName)
     }
 }
 #endif
