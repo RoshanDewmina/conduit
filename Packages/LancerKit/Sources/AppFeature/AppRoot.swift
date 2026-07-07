@@ -929,7 +929,11 @@ public struct AppRoot: View {
             workspacesRevision = UUID()
         }
         cursorLiveBridge.onDecide = { [self] id, decision in
-            activeInboxViewModel.decide(id, decision: decision)
+            if let slot = fleetStore.slot(forApprovalID: id) {
+                slot.inboxVM.decide(id, decision: decision)
+            } else {
+                activeInboxViewModel.decide(id, decision: decision)
+            }
         }
         cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
         cursorLiveBridge.onPaired = { [self] client, record in
@@ -976,6 +980,10 @@ public struct AppRoot: View {
             }
             cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.threadAttention = threadAttentionMap(
+                conversations: conversations,
+                pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending)
+            )
             cursorLiveBridge.connectionPhase = Self.connectionPhase(
                 for: relayFleetStore,
                 fleetStore: fleetStore
@@ -983,6 +991,25 @@ public struct AppRoot: View {
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
+    }
+
+    @MainActor
+    private func threadAttentionMap(
+        conversations: [ChatConversation],
+        pendingApprovals: [Approval]
+    ) -> [String: CursorThreadAttention] {
+        var map: [String: CursorThreadAttention] = [:]
+        for conv in conversations {
+            let hasApproval = pendingApprovals.contains { approval in
+                approval.cwd == conv.cwd || approval.agentSessionID == conv.id
+            }
+            if hasApproval {
+                map[conv.id] = .needsApproval
+            } else if conv.status == .active {
+                map[conv.id] = .working
+            }
+        }
+        return map
     }
 
     private func defaultDispatchAgentID(env: AppEnvironment) -> String {
