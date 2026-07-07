@@ -1,6 +1,7 @@
 /**
- * Mobile Agent Mission Control — brainstorm wireframes
- * Open in Cursor: Canvas panel → mobile-agent-brainstorm
+ * Mobile Agent Mission Control — FULL brainstorm compilation
+ * Sessions: Cursor brainstorm · Fable ideas · deep spec · competitors · iOS 27 · lfg VPS
+ * Open in Cursor Canvas panel
  */
 import {
   BarChart,
@@ -19,79 +20,26 @@ import {
   Spacer,
   Stack,
   Stat,
+  Table,
   Text,
+  TodoListCard,
   computeDAGLayout,
   mergeStyle,
   useCanvasState,
   useHostTheme,
+  type TodoItem,
 } from 'cursor/canvas';
 
-/* ── phone chrome tokens (fixed light — like a screenshot) ── */
-const PHONE = {
-  w: 260,
-  h: 560,
-  bg: '#fbfbfa',
-  ink: '#171717',
-  muted: '#6f6f6f',
-  line: '#ececea',
-  accent: '#158bc0',
-  ok: '#12966b',
-  warn: '#d18b2b',
-  danger: '#c92457',
-  surface: '#ffffff',
-};
+const PHONE = { w: 255, h: 540, bg: '#fbfbfa', ink: '#171717', muted: '#6f6f6f', line: '#ececea', accent: '#158bc0', ok: '#12966b', warn: '#d18b2b', danger: '#c92457' };
+type Section = 'overview' | 'wireframes' | 'specs' | 'personas' | 'steals' | 'wild' | 'mvp';
 
-const TAB_BAR = ['Home', 'Workspaces', 'Settings'];
-
-function PhoneFrame({
-  label,
-  children,
-  badge,
-}: {
-  label: string;
-  children: JSX.Element;
-  badge?: string;
-}) {
+function PhoneFrame({ label, children, badge }: { label: string; children: JSX.Element; badge?: string }) {
   return (
     <Stack gap={8} style={{ alignItems: 'center', flex: '0 0 auto' }}>
-      <Text tone="secondary" style={{ fontSize: 11, fontFamily: 'ui-monospace, monospace', letterSpacing: '0.04em' }}>
-        {label}
-      </Text>
-      <div
-        style={{
-          width: PHONE.w,
-          height: PHONE.h,
-          borderRadius: 36,
-          border: '1px solid #dedede',
-          background: PHONE.bg,
-          boxShadow: '0 18px 44px rgba(20,20,18,.16)',
-          overflow: 'hidden',
-          position: 'relative',
-          color: PHONE.ink,
-          fontFamily: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-        }}
-      >
-        <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700 }}>
-          <span>9:41</span>
-          <span style={{ opacity: 0.5 }}>●●●</span>
-        </div>
-        {badge && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 48,
-              right: 12,
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '3px 8px',
-              borderRadius: 999,
-              background: 'rgba(21,139,192,.12)',
-              color: PHONE.accent,
-            }}
-          >
-            {badge}
-          </div>
-        )}
+      <Text tone="secondary" style={{ fontSize: 10, fontFamily: 'ui-monospace, monospace', maxWidth: PHONE.w, textAlign: 'center' }}>{label}</Text>
+      <div style={{ width: PHONE.w, height: PHONE.h, borderRadius: 34, border: '1px solid #dedede', background: PHONE.bg, boxShadow: '0 16px 40px rgba(20,20,18,.14)', overflow: 'hidden', position: 'relative', color: PHONE.ink, fontFamily: '-apple-system, system-ui, sans-serif' }}>
+        <div style={{ padding: '14px 18px 0', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700 }}><span>9:41</span><span style={{ opacity: 0.45 }}>●●●</span></div>
+        {badge && <div style={{ position: 'absolute', top: 44, right: 10, fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: 'rgba(21,139,192,.12)', color: PHONE.accent }}>{badge}</div>}
         {children}
       </div>
     </Stack>
@@ -100,388 +48,266 @@ function PhoneFrame({
 
 function TabBar({ active }: { active: number }) {
   return (
-    <div
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 72,
-        borderTop: `1px solid ${PHONE.line}`,
-        background: 'rgba(255,255,255,.95)',
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        paddingBottom: 8,
-        fontSize: 10,
-        fontWeight: 600,
-      }}
-    >
-      {TAB_BAR.map((t, i) => (
-        <span key={t} style={{ color: i === active ? PHONE.accent : PHONE.muted }}>
-          {t}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function LedgerRow({
-  dot,
-  title,
-  meta,
-  trailing,
-}: {
-  dot?: 'active' | 'warn' | 'idle';
-  title: string;
-  meta: string;
-  trailing?: string;
-}) {
-  const dotColor = dot === 'active' ? PHONE.accent : dot === 'warn' ? PHONE.warn : '#d7d7d5';
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '12px 1fr auto',
-        gap: 8,
-        alignItems: 'start',
-        paddingBottom: 10,
-        marginBottom: 8,
-        borderBottom: `1px solid ${PHONE.line}`,
-      }}
-    >
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, marginTop: 6 }} />
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{title}</div>
-        <div style={{ fontSize: 11, color: PHONE.muted }}>{meta}</div>
-      </div>
-      {trailing && <div style={{ fontSize: 11, color: PHONE.muted, paddingTop: 14 }}>{trailing}</div>}
-    </div>
-  );
-}
-
-function Composer({ placeholder = 'Plan, ask, build…' }: { placeholder?: string }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: 12,
-        right: 12,
-        bottom: 80,
-        height: 46,
-        borderRadius: 24,
-        border: '1px solid #d8d8d5',
-        background: 'rgba(255,255,255,.95)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 10px',
-        boxShadow: '0 8px 24px rgba(0,0,0,.08)',
-      }}
-    >
-      <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ededeb', display: 'grid', placeItems: 'center', fontSize: 16 }}>+</div>
-      <span style={{ flex: 1, color: '#a7a7a4', fontSize: 14 }}>{placeholder}</span>
-      <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ededeb', display: 'grid', placeItems: 'center', fontSize: 14 }}>🎤</div>
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 68, borderTop: `1px solid ${PHONE.line}`, background: 'rgba(255,255,255,.96)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', paddingBottom: 6, fontSize: 9, fontWeight: 600 }}>
+      {['Home', 'Workspaces', 'Settings'].map((t, i) => <span key={t} style={{ color: i === active ? PHONE.accent : PHONE.muted }}>{t}</span>)}
     </div>
   );
 }
 
 function Chip({ children, accent }: { children: string; accent?: boolean }) {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        fontSize: 10,
-        fontWeight: 600,
-        padding: '4px 8px',
-        borderRadius: 999,
-        marginRight: 4,
-        marginBottom: 4,
-        border: `1px solid ${accent ? PHONE.accent : '#d8d8d5'}`,
-        background: accent ? 'rgba(21,139,192,.1)' : '#fff',
-        color: accent ? PHONE.accent : PHONE.muted,
-      }}
-    >
-      {children}
-    </span>
-  );
+  return <span style={{ display: 'inline-block', fontSize: 9, fontWeight: 600, padding: '3px 7px', borderRadius: 999, marginRight: 3, marginBottom: 3, border: `1px solid ${accent ? PHONE.accent : '#d8d8d5'}`, background: accent ? 'rgba(21,139,192,.1)' : '#fff', color: accent ? PHONE.accent : PHONE.muted }}>{children}</span>;
 }
 
 function ArtifactCard({ title, body, tone }: { title: string; body: string; tone?: 'ok' | 'warn' | 'info' }) {
   const border = tone === 'ok' ? PHONE.ok : tone === 'warn' ? PHONE.warn : PHONE.line;
   return (
-    <div style={{ border: `1px solid ${border}`, borderRadius: 12, padding: '10px 12px', marginBottom: 8, background: '#fff' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: tone === 'ok' ? PHONE.ok : tone === 'warn' ? PHONE.warn : PHONE.ink }}>{title}</div>
-      <div style={{ fontSize: 11, color: PHONE.muted, lineHeight: 1.35 }}>{body}</div>
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '8px 10px', marginBottom: 6, background: '#fff' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 2, color: tone === 'ok' ? PHONE.ok : tone === 'warn' ? PHONE.warn : PHONE.ink }}>{title}</div>
+      <div style={{ fontSize: 10, color: PHONE.muted, lineHeight: 1.3 }}>{body}</div>
     </div>
   );
 }
 
-/* ── screen wireframes ── */
+const strip = { display: 'flex', gap: 16, overflowX: 'auto', padding: '8px 4px 16px', alignItems: 'flex-start' } as const;
 
-function ScreenHomeDigest() {
+function WfHomeDigest() {
   return (
-    <PhoneFrame label="A · Away Digest (Home)" badge="CORE">
-      <div style={{ padding: '8px 18px 0', fontSize: 20, fontWeight: 760 }}>conduit</div>
-      <div style={{ padding: '0 18px', height: 360, overflow: 'hidden' }}>
-        <div style={{ fontSize: 12, color: PHONE.muted, margin: '12px 0 8px' }}>Needs you</div>
-        <LedgerRow dot="warn" title="Approval waiting" meta="High risk · patch · hermes-box" trailing="Review" />
-        <div style={{ fontSize: 12, color: PHONE.muted, margin: '12px 0 8px' }}>Running</div>
-        <LedgerRow dot="active" title="Fix auth redirect bug" meta="Claude · Mac mini · 4m ago" trailing="+42 -3" />
-        <div style={{ fontSize: 12, color: PHONE.muted, margin: '12px 0 8px' }}>Done since you left</div>
-        <LedgerRow dot="idle" title="Dependency audit" meta="✓ Proof ready · 3/3 checks" trailing="Ship" />
+    <PhoneFrame label="01 · Away Digest" badge="HOME">
+      <div style={{ padding: '6px 16px 0', fontSize: 18, fontWeight: 760 }}>Mission control</div>
+      <div style={{ padding: '0 16px', height: 340 }}>
+        <div style={{ fontSize: 11, color: PHONE.muted, margin: '10px 0 6px' }}>Needs you</div>
+        <ArtifactCard title="⚠ Approval · 3 files" body="High risk · VPS" tone="warn" />
+        <div style={{ fontSize: 11, color: PHONE.muted, margin: '10px 0 6px' }}>Running</div>
+        <ArtifactCard title="● Fix auth redirect" body="Claude · 4m · +42 −3" />
+        <div style={{ fontSize: 11, color: PHONE.muted, margin: '10px 0 6px' }}>Done</div>
+        <ArtifactCard title="✓ Dependency audit" body="Proof ready · 3/3" tone="ok" />
       </div>
-      <Composer />
+      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 76, height: 42, borderRadius: 22, border: '1px solid #d8d8d5', background: '#fff', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 13, color: '#a7a7a4' }}>Plan, ask, build…</div>
       <TabBar active={0} />
     </PhoneFrame>
   );
 }
 
-function ScreenLaunchContract() {
+function WfLaunchContract() {
   return (
-    <PhoneFrame label="B · Launch Contract" badge="DELEGATE">
-      <div style={{ padding: '12px 16px 0', fontSize: 16, fontWeight: 700 }}>New mission</div>
-      <div style={{ padding: '8px 16px 0' }}>
-        <div style={{ fontSize: 13, color: PHONE.muted, marginBottom: 8, minHeight: 48, border: `1px dashed ${PHONE.line}`, borderRadius: 10, padding: 10 }}>
-          Fix the login redirect loop on staging…
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <Chip accent>conduit</Chip>
-          <Chip accent>Mac mini</Chip>
-          <Chip>Claude</Chip>
-          <Chip>Implement</Chip>
-        </div>
-        <div style={{ fontSize: 11, color: PHONE.muted, marginBottom: 4 }}>Proof expected</div>
-        <div style={{ marginBottom: 10 }}>
-          <Chip accent>Tests pass</Chip>
-          <Chip>Visual diff</Chip>
-        </div>
-        <div style={{ fontSize: 11, color: PHONE.muted, marginBottom: 4 }}>Interrupt me for</div>
-        <Chip accent>Writes only</Chip>
-        <Chip>Budget: 30 min</Chip>
+    <PhoneFrame label="02 · Launch + Plan gate" badge="MVP">
+      <div style={{ padding: '10px 16px 0', fontSize: 15, fontWeight: 700 }}>New mission</div>
+      <div style={{ padding: '6px 16px' }}>
+        <div style={{ fontSize: 12, border: `1px dashed ${PHONE.line}`, borderRadius: 8, padding: 8, marginBottom: 8 }}>Fix flaky auth test…</div>
+        <Chip accent>repo</Chip><Chip accent>host</Chip><Chip>Claude</Chip><Chip accent>Plan first</Chip>
+        <ArtifactCard title="📋 Plan (approve before code)" body="Scope: auth.test.ts · Risk: low" tone="info" />
       </div>
-      <div style={{ position: 'absolute', left: 16, right: 16, bottom: 88 }}>
-        <div style={{ height: 40, borderRadius: 20, background: PHONE.accent, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14 }}>
-          Dispatch →
-        </div>
-      </div>
+      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 80, height: 36, borderRadius: 18, background: PHONE.accent, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13 }}>Approve plan → dispatch</div>
       <TabBar active={0} />
     </PhoneFrame>
   );
 }
 
-function ScreenWorkThread() {
+function WfArtifactStream() {
   return (
-    <PhoneFrame label="C · Work Thread (activity log)" badge="NOT CHAT">
-      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PHONE.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Fix auth redirect</div>
-          <div style={{ fontSize: 11, color: PHONE.ok }}>● Running on Mac mini</div>
-        </div>
-        <span style={{ fontSize: 11, color: PHONE.danger, fontWeight: 700 }}>Stop</span>
-      </div>
-      <div style={{ padding: '10px 16px 90px', height: 400, overflow: 'hidden' }}>
-        <ArtifactCard title="🔧 Read src/auth/redirect.ts" body="Examining redirect handler" />
-        <ArtifactCard title="✏️ Edit redirect.ts" body="Added staging URL allowlist" tone="info" />
-        <ArtifactCard title="▶ Run tests" body="auth.test.ts — 12 passed" tone="ok" />
-        <ArtifactCard title="📸 Visual diff" body="Login screen — pending review" tone="warn" />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-          <Chip accent>Re-run tests</Chip>
-          <Chip>Open PR</Chip>
-          <Chip>Ask for changes</Chip>
-        </div>
-      </div>
-      <Composer placeholder="Follow up…" />
-      <TabBar active={1} />
-    </PhoneFrame>
-  );
-}
-
-function ScreenQuestionCard() {
-  return (
-    <PhoneFrame label="D · Question Card" badge="STRUCTURED">
-      <div style={{ padding: '10px 16px', fontSize: 15, fontWeight: 700 }}>Fix auth redirect</div>
-      <div style={{ padding: '0 16px' }}>
-        <div style={{ border: `2px solid ${PHONE.warn}`, borderRadius: 14, padding: 14, background: 'rgba(209,139,43,.08)', marginTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: PHONE.warn, marginBottom: 6 }}>AGENT NEEDS YOU · Medium risk</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, lineHeight: 1.35 }}>
-            Staging uses a different OAuth client ID. Which should I use?
-          </div>
-          {['Use staging client (recommended)', 'Use prod client', 'Skip OAuth fix'].map((opt, i) => (
-            <div
-              key={opt}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 10,
-                border: `1px solid ${i === 0 ? PHONE.accent : PHONE.line}`,
-                background: i === 0 ? 'rgba(21,139,192,.08)' : '#fff',
-                marginBottom: 6,
-                fontSize: 13,
-                fontWeight: i === 0 ? 600 : 400,
-              }}
-            >
-              {opt}
-            </div>
-          ))}
-          <div style={{ fontSize: 11, color: PHONE.muted, marginTop: 8, textAlign: 'center' }}>or type more detail…</div>
-        </div>
+    <PhoneFrame label="03 · Artifact stream (#1)" badge="FOUNDATION">
+      <div style={{ padding: '8px 16px', borderBottom: `1px solid ${PHONE.line}`, fontSize: 14, fontWeight: 700 }}>Fix auth <span style={{ color: PHONE.ok, fontSize: 10 }}>● running</span></div>
+      <div style={{ padding: '8px 16px 72px' }}>
+        <ArtifactCard title="📋 Plan" body="Fix timeout in auth.test.ts" tone="info" />
+        <ArtifactCard title="✏️ Files" body="2 changed" />
+        <ArtifactCard title="▶ Tests" body="11/12 · 1 failing" tone="warn" />
+        <ArtifactCard title="❓ Question" body="Mock Redis or container?" tone="warn" />
+        <ArtifactCard title="✓ Done" body="All green" tone="ok" />
       </div>
       <TabBar active={1} />
     </PhoneFrame>
   );
 }
 
-function ScreenProofSuite() {
+function WfQuestionCard() {
   return (
-    <PhoneFrame label="E · Proof Suite" badge="VERIFY">
-      <div style={{ padding: '10px 16px', fontSize: 15, fontWeight: 700 }}>Proof rollup</div>
-      <div style={{ padding: '0 16px' }}>
-        <div style={{ borderRadius: 12, border: `1px solid ${PHONE.line}`, padding: 12, marginBottom: 10, background: '#fff' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>3 of 4 checks passed</div>
-          <div style={{ height: 6, borderRadius: 3, background: PHONE.line, overflow: 'hidden' }}>
-            <div style={{ width: '75%', height: '100%', background: PHONE.ok }} />
-          </div>
-        </div>
-        <ArtifactCard title="✓ Unit tests" body="12/12 passed · 2.1s" tone="ok" />
-        <ArtifactCard title="✓ Lint" body="No issues" tone="ok" />
-        <ArtifactCard title="✓ Build" body="iOS sim build succeeded" tone="ok" />
-        <ArtifactCard title="⚠ Visual diff" body="Login button shifted 2px — tap to review" tone="warn" />
-      </div>
-      <div style={{ position: 'absolute', left: 16, right: 16, bottom: 88, opacity: 0.45 }}>
-        <div style={{ height: 40, borderRadius: 20, background: '#999', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13 }}>
-          Mark Ready (blocked)
-        </div>
-      </div>
-      <TabBar active={1} />
-    </PhoneFrame>
-  );
-}
-
-function ScreenApproval() {
-  return (
-    <PhoneFrame label="F · Review / Approve" badge="GOVERN">
-      <div style={{ padding: '10px 16px 0', fontSize: 14, fontWeight: 700 }}>Approve file write</div>
-      <div style={{ padding: '4px 16px', fontSize: 11, color: PHONE.danger, fontWeight: 700 }}>HIGH RISK · Face ID required</div>
-      <div style={{ padding: '8px 16px', fontSize: 11, color: PHONE.muted }}>Blast radius: 1 file in src/auth/</div>
-      <div style={{ margin: '0 16px', borderRadius: 10, border: `1px solid ${PHONE.line}`, background: '#1e1e1e', color: '#d4d4d4', fontFamily: 'ui-monospace, monospace', fontSize: 10, padding: 10, lineHeight: 1.5, maxHeight: 180, overflow: 'hidden' }}>
-        <div><span style={{ color: '#f97583' }}>-</span> redirectUrl = prodClient</div>
-        <div><span style={{ color: '#7ee787' }}>+</span> redirectUrl = stagingClient</div>
-        <div style={{ color: '#6f6f6f' }}>  if env === 'staging'</div>
-      </div>
-      <div style={{ position: 'absolute', left: 16, right: 16, bottom: 88, display: 'flex', gap: 8 }}>
-        <div style={{ flex: 1, height: 40, borderRadius: 20, border: `1px solid ${PHONE.line}`, display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 13 }}>Deny</div>
-        <div style={{ flex: 1, height: 40, borderRadius: 20, background: PHONE.accent, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13 }}>🔒 Approve</div>
-      </div>
-      <TabBar active={0} />
-    </PhoneFrame>
-  );
-}
-
-function ScreenAwayStatus() {
-  return (
-    <PhoneFrame label="G · Lock screen / Away" badge="STEP AWAY">
-      <div style={{ padding: '60px 20px 0', textAlign: 'center' }}>
-        <div style={{ fontSize: 48, fontWeight: 200, letterSpacing: -2 }}>9:41</div>
-        <div style={{ fontSize: 13, color: PHONE.muted, marginTop: 4 }}>Tuesday, July 7</div>
-      </div>
-      <div style={{ margin: '24px 16px', borderRadius: 16, background: 'rgba(255,255,255,.9)', border: `1px solid ${PHONE.line}`, padding: 14, boxShadow: '0 8px 24px rgba(0,0,0,.06)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 700 }}>LANCER</span>
-          <span style={{ fontSize: 11, color: PHONE.ok, fontWeight: 700 }}>● LIVE</span>
-        </div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Fix auth redirect — still running</div>
-        <div style={{ fontSize: 11, color: PHONE.muted }}>Mac mini · Claude · 4m · tests passing</div>
-        <div style={{ marginTop: 10, height: 4, borderRadius: 2, background: PHONE.line }}>
-          <div style={{ width: '65%', height: '100%', background: PHONE.accent, borderRadius: 2 }} />
-        </div>
-      </div>
-      <div style={{ margin: '0 16px', borderRadius: 14, border: `1px solid ${PHONE.warn}`, background: 'rgba(209,139,43,.1)', padding: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: PHONE.warn }}>1 approval waiting</div>
-        <div style={{ fontSize: 11, color: PHONE.muted }}>Tap to review · high risk write</div>
-      </div>
-    </PhoneFrame>
-  );
-}
-
-function ScreenShip() {
-  return (
-    <PhoneFrame label="H · Ship from phone" badge="CLOSE LOOP">
-      <div style={{ padding: '10px 16px', fontSize: 15, fontWeight: 700 }}>Ready to ship</div>
-      <div style={{ padding: '0 16px' }}>
-        <ArtifactCard title="PR #142 opened" body="fix/auth-redirect-staging · +42 -3" tone="ok" />
-        <ArtifactCard title="All proof checks passed" body="Tests · lint · visual diff" tone="ok" />
-        <div style={{ fontSize: 11, color: PHONE.muted, margin: '12px 0 6px' }}>Return-to-desk recap</div>
-        <div style={{ fontSize: 12, lineHeight: 1.45, color: PHONE.ink, border: `1px solid ${PHONE.line}`, borderRadius: 10, padding: 10, background: '#fff' }}>
-          Changed OAuth client for staging. All tests pass. PR ready — nothing blocked.
-        </div>
-      </div>
-      <div style={{ position: 'absolute', left: 16, right: 16, bottom: 88 }}>
-        <div style={{ height: 40, borderRadius: 20, background: PHONE.ok, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14 }}>
-          Merge PR →
-        </div>
-      </div>
-      <TabBar active={1} />
-    </PhoneFrame>
-  );
-}
-
-function ScreenVoiceCamera() {
-  return (
-    <PhoneFrame label="I · Phone-native input" badge="MOBILE-ONLY">
-      <div style={{ padding: '10px 16px', fontSize: 15, fontWeight: 700 }}>Attach context</div>
-      <div style={{ padding: '0 16px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-          {[
-            { icon: '📷', label: 'Screenshot' },
-            { icon: '🎥', label: 'Screen record' },
-            { icon: '🎤', label: 'Voice note' },
-            { icon: '📎', label: 'Share link' },
-          ].map((item) => (
-            <div key={item.label} style={{ border: `1px solid ${PHONE.line}`, borderRadius: 12, padding: '14px 10px', textAlign: 'center', background: '#fff' }}>
-              <div style={{ fontSize: 22, marginBottom: 4 }}>{item.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</div>
-            </div>
+    <PhoneFrame label="04 · Question card" badge="TAP">
+      <div style={{ padding: '10px 16px' }}>
+        <div style={{ border: `2px solid ${PHONE.warn}`, borderRadius: 12, padding: 12, background: 'rgba(209,139,43,.08)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: PHONE.warn }}>NEEDS YOU</div>
+          <div style={{ fontSize: 13, fontWeight: 600, margin: '8px 0' }}>REST or GraphQL?</div>
+          {['REST (recommended)', 'GraphQL', 'At desk'].map((o, i) => (
+            <div key={o} style={{ padding: '8px 10px', borderRadius: 8, border: `1px solid ${i === 0 ? PHONE.accent : PHONE.line}`, marginBottom: 4, fontSize: 12 }}>{o}</div>
           ))}
         </div>
-        <div style={{ border: `1px solid ${PHONE.line}`, borderRadius: 12, padding: 10, background: '#fff' }}>
-          <div style={{ fontSize: 11, color: PHONE.muted, marginBottom: 6 }}>Screenshot annotated</div>
-          <div style={{ height: 80, borderRadius: 8, background: 'linear-gradient(135deg,#e8e8e6,#f5f5f3)', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 24, left: 40, width: 60, height: 40, border: `2px solid ${PHONE.danger}`, borderRadius: 6 }} />
-            <div style={{ position: 'absolute', top: 68, left: 30, fontSize: 9, color: PHONE.danger, fontWeight: 700 }}>button misaligned</div>
-          </div>
-        </div>
       </div>
-      <TabBar active={0} />
+      <TabBar active={1} />
     </PhoneFrame>
   );
 }
 
-/* ── user journey DAG ── */
+function WfLockApprove() {
+  return (
+    <PhoneFrame label="05 · Live Activity + lock approve (#2)" badge="iOS">
+      <div style={{ padding: '50px 16px 0', textAlign: 'center' }}>
+        <div style={{ fontSize: 42, fontWeight: 200 }}>9:41</div>
+        <div style={{ margin: '16px 0', borderRadius: 14, border: `1px solid ${PHONE.warn}`, padding: 12, background: 'rgba(255,255,255,.95)', textAlign: 'left' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: PHONE.warn }}>NEEDS YOU · Write tier</div>
+          <div style={{ fontSize: 13, fontWeight: 600, margin: '6px 0' }}>Modify 3 files in /src/auth</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            <div style={{ flex: 1, height: 32, borderRadius: 16, border: `1px solid ${PHONE.line}`, display: 'grid', placeItems: 'center', fontSize: 11 }}>Deny</div>
+            <div style={{ flex: 1, height: 32, borderRadius: 16, background: PHONE.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700 }}>🔒 Approve</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: PHONE.muted }}>Island: running → needs you</div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function WfProofVideo() {
+  return (
+    <PhoneFrame label="06 · Proof video + annotate (#3)" badge="DEMO">
+      <div style={{ padding: '8px 16px', fontSize: 14, fontWeight: 700 }}>Proof · checkout</div>
+      <div style={{ margin: '0 16px', height: 110, borderRadius: 10, background: '#e0e0dd', position: 'relative' }}>
+        <div style={{ position: 'absolute', bottom: 8, left: 8, right: 8, height: 4, borderRadius: 2, background: 'rgba(0,0,0,.12)' }}>
+          <div style={{ width: '40%', height: '100%', background: PHONE.accent, borderRadius: 2 }} />
+        </div>
+        <div style={{ position: 'absolute', top: 36, left: 48, width: 48, height: 28, border: `2px solid ${PHONE.danger}`, borderRadius: 4 }} />
+      </div>
+      <div style={{ padding: '8px 16px' }}>
+        <div style={{ height: 26, borderRadius: 13, border: `1px solid ${PHONE.line}`, padding: '0 10px', fontSize: 11, color: PHONE.muted, display: 'flex', alignItems: 'center' }}>🔍 search "submit"</div>
+        <div style={{ fontSize: 10, color: PHONE.muted, marginTop: 6 }}>🎤 feedback → {`{ts, region, note}`}</div>
+      </div>
+      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 76, height: 34, borderRadius: 17, background: PHONE.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700 }}>Send feedback</div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+function WfCheckpoint() {
+  return (
+    <PhoneFrame label="07 · Checkpoint + burn (#6)" badge="TRUST">
+      <div style={{ padding: '8px 16px', fontSize: 14, fontWeight: 700 }}>Session</div>
+      <div style={{ padding: '0 16px' }}>
+        <ArtifactCard title="📋 Plan" body="Checkpoint 1" />
+        <div style={{ fontSize: 9, color: PHONE.accent, margin: '4px 0' }}>⬤ tap to revert here</div>
+        <ArtifactCard title="✏️ Bad edit" body="Revert 4 changes?" tone="warn" />
+      </div>
+      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 76, height: 34, borderRadius: 17, border: `2px solid ${PHONE.danger}`, color: PHONE.danger, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700 }}>🔥 Burn all</div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+function WfRecapPacket() {
+  return (
+    <PhoneFrame label="08 · Recap packet (#7)" badge="RE-ENTRY">
+      <div style={{ padding: '10px 16px', fontSize: 15, fontWeight: 700 }}>Recap</div>
+      <div style={{ padding: '0 16px', fontSize: 12, lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 700 }}>Changed</div><div style={{ color: PHONE.muted, marginBottom: 8 }}>OAuth staging · +42 −3</div>
+        <div style={{ fontWeight: 700 }}>Proven</div><div style={{ color: PHONE.ok, marginBottom: 8 }}>12/12 tests · video</div>
+        <div style={{ fontWeight: 700 }}>Open</div><div style={{ color: PHONE.warn }}>1 PR comment</div>
+      </div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+function WfProofRollup() {
+  return (
+    <PhoneFrame label="09 · Proof rollup" badge="GATE">
+      <div style={{ padding: '10px 16px', fontSize: 14, fontWeight: 700 }}>3 of 4 passed</div>
+      <div style={{ padding: '0 16px' }}>
+        <ArtifactCard title="✓ Tests" body="12/12" tone="ok" />
+        <ArtifactCard title="⚠ Visual" body="review" tone="warn" />
+      </div>
+      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 76, height: 34, borderRadius: 17, background: '#999', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12, opacity: 0.5 }}>Mark ready (blocked)</div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+function WfVPSSetup() {
+  return (
+    <PhoneFrame label="10 · VPS pair (lfg floor)" badge="SETUP">
+      <div style={{ padding: '16px', textAlign: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Pair host</div>
+        <div style={{ width: 110, height: 110, margin: '12px auto', border: `1px solid ${PHONE.line}`, borderRadius: 8, display: 'grid', placeItems: 'center', fontSize: 10, color: PHONE.muted }}>QR</div>
+        <div style={{ fontSize: 10, color: PHONE.muted }}>curl | bash · tailscale serve · tmux</div>
+        <div style={{ marginTop: 10, fontSize: 10, color: PHONE.accent }}>Beat lfg: push + artifacts + Live Activity</div>
+      </div>
+      <TabBar active={2} />
+    </PhoneFrame>
+  );
+}
+
+function WfTestBench() {
+  return (
+    <PhoneFrame label="11 · Test bench (DEFER #4)" badge="POST">
+      <div style={{ margin: '8px 16px', height: 300, borderRadius: 10, border: `1px solid ${PHONE.line}`, background: '#fff' }} />
+      <div style={{ fontSize: 10, color: PHONE.muted, textAlign: 'center' }}>Shake → annotate → bug report</div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+function WfBranchTaste() {
+  return (
+    <PhoneFrame label="12 · Branch tasting (DEFER W4)" badge="WILD">
+      <div style={{ padding: '10px 16px', fontSize: 14, fontWeight: 700 }}>Pick winner</div>
+      <div style={{ padding: '0 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {['REST', 'GraphQL'].map((b) => (
+          <div key={b} style={{ border: `1px solid ${PHONE.line}`, borderRadius: 10, padding: 8, fontSize: 10 }}>
+            <div style={{ fontWeight: 700 }}>{b}</div>
+            <div style={{ height: 36, background: '#e8e8e6', borderRadius: 4, margin: '4px 0' }} />
+            <div style={{ color: PHONE.ok }}>✓ 12 tests</div>
+          </div>
+        ))}
+      </div>
+      <TabBar active={1} />
+    </PhoneFrame>
+  );
+}
+
+const TOP7 = [
+  { n: 1, name: 'Artifact stream', mvp: '5 card types from host events', risk: 'CLI parser drift' },
+  { n: 2, name: 'Live Activity + lock approve', mvp: 'Fleet state + Face ID tiers', risk: 'Approval fatigue' },
+  { n: 3, name: 'Proof video + annotate', mvp: 'Playwright + search + feedback object', risk: 'Big build; web only' },
+  { n: 4, name: 'Test bench + shake', mvp: 'CUT — open URL is free', risk: 'Thin vs Safari' },
+  { n: 5, name: 'Speculative queue', mvp: 'CUT — queue in question cards', risk: 'Cost blowups' },
+  { n: 6, name: 'Checkpoint + burn', mvp: 'Git snapshot + kill all', risk: 'Worktree only' },
+  { n: 7, name: 'Recap packet', mvp: '4 sections; Handoff later', risk: 'Underwhelm' },
+];
+
+const PERSONA_ROWS = [
+  ['Feature', 'Solo', 'Team', 'VPS'],
+  ['1 Artifact stream', '1', '2', '1'],
+  ['2 Lock approve', '2', '4', '2'],
+  ['3 Proof annotate', '4', '1', '3'],
+  ['6 Checkpoint', '3', '3', '4'],
+  ['7 Recap', '5', '5', '5'],
+  ['4 Test bench', '6', '6', '6'],
+  ['5 Speculative', '7', '7', '7'],
+];
+
+const STEALS = [
+  { s: 'Conductor', ok: 'Workspace=PR · Plan mode · Checks tab', no: 'Desktop UI' },
+  { s: 'Claude RC', ok: 'QR · push modes · metadata', no: 'Chat mirror' },
+  { s: 'Codex', ok: 'Decision console · stream · Face ID', no: 'Computer Use V1' },
+  { s: 'Cursor iOS', ok: 'Inbox · lock taxonomy', no: 'Single vendor' },
+  { s: 'Omnara', ok: 'Voice · preview · worktrees', no: 'Weak governance' },
+  { s: 'lfg', ok: 'curl · tailscale · tmux · multi-CLI', no: 'Re-ship PWA' },
+  { s: 'iOS 27', ok: 'Siri · Annotations · on-device summary', no: 'Gimmick APIs' },
+];
+
+const WILD = ['Agent parliament', 'Speculative branches (W3)', 'Branch tasting (W4)', 'Phone test device (W1)', 'On-call 2am card', 'Audio morning briefing', 'Commute offline queue', 'Two-key deploy', 'Proof → regression', 'Whiteboard-to-plan'];
+const REJECTS = ['Phone terminal', 'Chat bubbles', 'Agent mood', 'Per-agent spam', 'AR viz', 'Streaks', 'Mobile editing', 'Geofence dispatch', 'Fleet kanban'];
+
+const MVP_ITEMS: TodoItem[] = [
+  { id: '1', content: 'Ship: Artifact stream', status: 'in_progress' },
+  { id: '2', content: 'Ship: Live Activity + lock approve', status: 'pending' },
+  { id: '3', content: 'Ship: Checkpoint + burn', status: 'pending' },
+  { id: '4', content: 'Ship: Recap packet', status: 'pending' },
+  { id: '5', content: 'Fast-follow: Proof video + annotate', status: 'pending' },
+  { id: 'c1', content: 'Cut: Speculative queue', status: 'cancelled' },
+  { id: 'c2', content: 'Cut: Test bench (defer)', status: 'cancelled' },
+];
+
 const FLOW = computeDAGLayout({
-  nodes: [
-    { id: 'Home' },
-    { id: 'Launch' },
-    { id: 'Running' },
-    { id: 'Question' },
-    { id: 'Proof' },
-    { id: 'Approve' },
-    { id: 'Ship' },
-  ],
-  edges: [
-    { from: 'Home', to: 'Launch' },
-    { from: 'Launch', to: 'Running' },
-    { from: 'Running', to: 'Question' },
-    { from: 'Running', to: 'Proof' },
-    { from: 'Question', to: 'Running' },
-    { from: 'Proof', to: 'Approve' },
-    { from: 'Approve', to: 'Ship' },
-    { from: 'Ship', to: 'Home' },
-  ],
-  direction: 'horizontal',
-  nodeWidth: 72,
-  nodeHeight: 28,
-  rankGap: 28,
-  nodeGap: 10,
+  nodes: [{ id: 'Digest' }, { id: 'Launch' }, { id: 'Stream' }, { id: 'Proof' }, { id: 'Approve' }, { id: 'Ship' }],
+  edges: [{ from: 'Digest', to: 'Launch' }, { from: 'Launch', to: 'Stream' }, { from: 'Stream', to: 'Proof' }, { from: 'Stream', to: 'Approve' }, { from: 'Proof', to: 'Ship' }, { from: 'Approve', to: 'Stream' }, { from: 'Ship', to: 'Digest' }],
+  direction: 'horizontal', nodeWidth: 64, nodeHeight: 26, rankGap: 22, nodeGap: 8,
 });
 
 function FlowDiagram() {
@@ -489,169 +315,147 @@ function FlowDiagram() {
   return (
     <div style={{ position: 'relative', width: FLOW.width, height: FLOW.height, margin: '0 auto' }}>
       <svg width={FLOW.width} height={FLOW.height} style={{ position: 'absolute', inset: 0 }}>
-        {FLOW.edges.map((e, i) =>
-          e.isBackEdge ? (
-            <path key={i} d={e.path} fill="none" stroke={theme.accent} strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6} />
-          ) : (
-            <path key={i} d={e.path} fill="none" stroke={theme.border} strokeWidth={1.5} />
-          ),
-        )}
+        {FLOW.edges.map((e, i) => <path key={i} d={e.path} fill="none" stroke={e.isBackEdge ? theme.accent : theme.border} strokeWidth={1.5} strokeDasharray={e.isBackEdge ? '4 3' : undefined} />)}
       </svg>
-      {FLOW.nodes.map((n) => (
-        <div
-          key={n.id}
-          style={{
-            position: 'absolute',
-            left: n.x,
-            top: n.y,
-            width: n.width,
-            height: n.height,
-            borderRadius: 8,
-            border: `1px solid ${theme.border}`,
-            background: theme.surface,
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 10,
-            fontWeight: 700,
-          }}
-        >
-          {n.id}
-        </div>
-      ))}
+      {FLOW.nodes.map((n) => <div key={n.id} style={{ position: 'absolute', left: n.x, top: n.y, width: n.width, height: n.height, borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.surface, display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700 }}>{n.id}</div>)}
     </div>
   );
 }
 
-/* ── main canvas ── */
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: 'overview', label: 'Overview' }, { key: 'wireframes', label: 'Wireframes' }, { key: 'specs', label: 'Top 7' },
+  { key: 'personas', label: 'Personas' }, { key: 'steals', label: 'Steals' }, { key: 'wild', label: 'Wild' }, { key: 'mvp', label: 'MVP' },
+];
 
 export default function MobileAgentBrainstormCanvas() {
-  const [section, setSection] = useCanvasState<'all' | 'core' | 'govern' | 'mobile'>('brainstorm.section', 'all');
+  const [section, setSection] = useCanvasState<Section>('mc.section', 'overview');
   const theme = useHostTheme();
-
-  const showCore = section === 'all' || section === 'core';
-  const showGovern = section === 'all' || section === 'govern';
-  const showMobile = section === 'all' || section === 'mobile';
-
-  const phoneStripStyle = {
-    display: 'flex',
-    gap: 20,
-    overflowX: 'auto',
-    padding: '8px 4px 16px',
-    alignItems: 'flex-start',
-  };
+  const show = (s: Section) => section === 'overview' || section === s;
 
   return (
-    <Stack gap={20}>
+    <Stack gap={16}>
       <div>
         <H1>Mobile Agent Mission Control</H1>
-        <Text tone="secondary">
-          Brainstorm wireframes — agents run on your machine, phone steers & approves. Not a phone IDE.
-        </Text>
-        <Row gap={8} style={{ marginTop: 12, flexWrap: 'wrap' }}>
-          {(['all', 'core', 'govern', 'mobile'] as const).map((key) => (
-            <Button key={key} variant={section === key ? 'filled' : 'outline'} onClick={() => setSection(key)}>
-              {key === 'all' ? 'All screens' : key === 'core' ? 'Core loop' : key === 'govern' ? 'Governance' : 'Mobile-only'}
-            </Button>
-          ))}
+        <Text tone="secondary">Full compilation · Cursor + Fable brainstorms · 2026-07-07</Text>
+        <Row gap={6} style={{ marginTop: 10, flexWrap: 'wrap' }}>
+          {SECTIONS.map(({ key, label }) => <Button key={key} variant={section === key ? 'filled' : 'outline'} onClick={() => setSection(key)}>{label}</Button>)}
         </Row>
       </div>
 
-      <Grid columns={4} gap={12}>
-        <Stat value={3} label="App roots" tone="info" />
-        <Stat value={9} label="Wireframe screens" tone="neutral" />
-        <Stat value="Host" label="Agent runs on" tone="success" />
-        <Stat value="Phone" label="You steer from" tone="warning" />
-      </Grid>
+      {show('overview') && (
+        <>
+          <Callout tone="info" title="Principle">Phone = judgment instrument, not smaller IDE. Convert reading code into making a call.</Callout>
+          <Callout tone="success" title="MVP pitch">Agent keeps working · lock-screen permission · undo from pocket · recap when back.</Callout>
+          <Grid columns={4} gap={10}>
+            <Stat value={12} label="Wireframes" tone="info" />
+            <Stat value={7} label="Top features" tone="neutral" />
+            <Stat value={3} label="Personas" tone="success" />
+            <Stat value="lfg" label="VPS floor" tone="warning" />
+          </Grid>
+          <Card><CardHeader>Flow</CardHeader><CardBody><FlowDiagram /></CardBody></Card>
+          <Card>
+            <CardHeader>lfg floor — beat, don't re-ship</CardHeader>
+            <CardBody>
+              <Text tone="secondary" style={{ fontSize: 13 }}>curl → loopback → tailscale serve → tmux → PWA. We win with: APNs push, Live Activity, artifact cards, proof annotate, lock approve.</Text>
+            </CardBody>
+          </Card>
+        </>
+      )}
 
-      <Callout tone="info" title="Product thesis">
-        Delegate with a Launch Contract → step away (session survives on host) → get interrupted only for questions & approvals → verify with Proof Suite → ship from phone.
-      </Callout>
-
-      <Card>
-        <CardHeader>End-to-end flow</CardHeader>
-        <CardBody>
-          <FlowDiagram />
-          <Text tone="tertiary" style={{ marginTop: 12, fontSize: 12, textAlign: 'center' }}>
-            Dashed edge = loop back (follow-up, re-run). Phone disconnects anytime — host keeps running.
-          </Text>
-        </CardBody>
-      </Card>
-
-      {showCore && (
-        <CollapsibleSection title="Core loop — Home, Launch, Work Thread" defaultOpen>
-          <div style={phoneStripStyle}>
-            <ScreenHomeDigest />
-            <ScreenLaunchContract />
-            <ScreenWorkThread />
-            <ScreenQuestionCard />
-            <ScreenProofSuite />
+      {show('wireframes') && (
+        <CollapsibleSection title="12 wireframes (scroll →)" defaultOpen>
+          <div style={strip}>
+            <WfHomeDigest /><WfLaunchContract /><WfArtifactStream /><WfQuestionCard />
+            <WfLockApprove /><WfProofVideo /><WfCheckpoint /><WfRecapPacket />
+            <WfProofRollup /><WfVPSSetup /><WfTestBench /><WfBranchTaste />
           </div>
         </CollapsibleSection>
       )}
 
-      {showGovern && (
-        <CollapsibleSection title="Governance & ship — trust + close the loop" defaultOpen>
-          <div style={phoneStripStyle}>
-            <ScreenApproval />
-            <ScreenProofSuite />
-            <ScreenShip />
-          </div>
-          <Divider />
-          <BarChart
-            title="Where competitors converge vs Lancer wedge"
-            categories={['Approvals', 'Proof', 'Policy engine', 'Audit log', 'Cross-vendor']}
-            series={[
-              { name: 'Market parity', data: [85, 70, 20, 15, 30], tone: 'neutral' },
-              { name: 'Lancer depth', data: [90, 75, 95, 90, 85], tone: 'info' },
-            ]}
-            height={180}
-          />
-        </CollapsibleSection>
+      {show('specs') && (
+        <Card>
+          <CardHeader>Fable top 7 specs</CardHeader>
+          <CardBody>
+            <Stack gap={8}>
+              {TOP7.map((s) => (
+                <div key={s.n} style={mergeStyle({ border: `1px solid ${theme.border}`, borderRadius: 10, padding: 10, background: theme.surface })}>
+                  <Pill tone="info">#{s.n} {s.name}</Pill>
+                  <Text tone="secondary" style={{ fontSize: 12, marginTop: 4 }}>MVP: {s.mvp}</Text>
+                  <Text tone="secondary" style={{ fontSize: 12 }}>Risk: {s.risk}</Text>
+                </div>
+              ))}
+            </Stack>
+          </CardBody>
+        </Card>
       )}
 
-      {showMobile && (
-        <CollapsibleSection title="Mobile-native affordances" defaultOpen>
-          <div style={phoneStripStyle}>
-            <ScreenAwayStatus />
-            <ScreenVoiceCamera />
-          </div>
-        </CollapsibleSection>
-      )}
-
-      <Card>
-        <CardHeader>3-root information architecture</CardHeader>
-        <CardBody>
-          <Grid columns={3} gap={12}>
+      {show('personas') && (
+        <>
+          <Grid columns={3} gap={10}>
             {[
-              { root: 'Home', desc: 'Away Digest — needs you, running, done. Composer to launch.', screens: 'A, B' },
-              { root: 'Workspaces', desc: 'Repo-first threads, work log, proof, ship actions.', screens: 'C–H' },
-              { root: 'Settings', desc: 'Policy, audit, machines, notifications, billing.', screens: '—' },
-            ].map((r) => (
-              <div key={r.root} style={mergeStyle({ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 14, background: theme.surface })}>
-                <H3>{r.root}</H3>
-                <Text tone="secondary" style={{ fontSize: 13 }}>{r.desc}</Text>
-                <Pill tone="neutral" style={{ marginTop: 8 }}>Screens {r.screens}</Pill>
+              { p: 'Solo', t: 'Stream · Lock approve · Checkpoint', pay: '$10/mo relay' },
+              { p: 'Team', t: 'Proof annotate · Stream · Recap', pay: 'Per-seat audit' },
+              { p: 'VPS', t: 'Stream · Lock · Proof video', pay: 'Open daemon + relay' },
+            ].map((x) => (
+              <div key={x.p} style={mergeStyle({ border: `1px solid ${theme.border}`, borderRadius: 10, padding: 12, background: theme.surface })}>
+                <H3>{x.p}</H3>
+                <Text tone="secondary" style={{ fontSize: 12 }}>{x.t}</Text>
+                <Text tone="secondary" style={{ fontSize: 12 }}>{x.pay}</Text>
               </div>
             ))}
           </Grid>
-        </CardBody>
-      </Card>
+          <Card><CardHeader>Rank by persona</CardHeader><CardBody><Table headers={PERSONA_ROWS[0]} rows={PERSONA_ROWS.slice(1)} /></CardBody></Card>
+        </>
+      )}
 
-      <Card>
-        <CardHeader>What to avoid</CardHeader>
-        <CardBody>
-          <Stack gap={8}>
-            <Callout tone="warning" title="Not a phone IDE">No full terminal, no typing code on screen. Agents do the implementation.</Callout>
-            <Callout tone="warning" title="Not chat bubbles">Work Thread = structured artifacts (tool calls, diffs, proof), not iMessage.</Callout>
-            <Callout tone="warning" title="Not per-agent noise">One Away Status on lock screen, not a Live Activity per agent.</Callout>
-          </Stack>
-        </CardBody>
-      </Card>
+      {show('steals') && (
+        <Card>
+          <CardHeader>Competitor steals</CardHeader>
+          <CardBody>
+            {STEALS.map((x) => (
+              <div key={x.s} style={{ marginBottom: 8, fontSize: 12 }}>
+                <Pill tone="info">{x.s}</Pill> <Text tone="secondary">+ {x.ok} · − {x.no}</Text>
+              </div>
+            ))}
+            <Divider />
+            <BarChart title="Wedge vs parity" categories={['Approve', 'Proof', 'Policy', 'Audit', 'iOS']} series={[{ name: 'Market', data: [85, 70, 25, 15, 40], tone: 'neutral' }, { name: 'Us', data: [90, 85, 95, 90, 95], tone: 'info' }]} height={150} />
+          </CardBody>
+        </Card>
+      )}
 
-      <Text tone="tertiary" style={{ fontSize: 12 }}>
-        Based on Lancer Away Mode brainstorm · 2026-07-07 · Open this file in Cursor Canvas to interact with filters
-      </Text>
-      <Spacer size={24} />
+      {show('wild') && (
+        <>
+          <Card><CardHeader>Wild but useful</CardHeader><CardBody><Grid columns={2} gap={6}>{WILD.map((w) => <Pill key={w} tone="neutral">{w}</Pill>)}</Grid></CardBody></Card>
+          <Card><CardHeader>Reject list</CardHeader><CardBody>{REJECTS.map((r) => <Text key={r} tone="secondary" style={{ fontSize: 12, display: 'block' }}>✕ {r}</Text>)}</CardBody></Card>
+          <Callout tone="warning" title="Gold standard">Scrubbable proof video · annotate feedback · artifact stream · recurring tasks · Live Activity · weekly use only</Callout>
+        </>
+      )}
+
+      {show('mvp') && (
+        <>
+          <Callout tone="success" title="MVP = #1+#2+#6+#7 → fast-follow #3">Cut #4 (open URL free) and #5 (queue in question cards).</Callout>
+          <TodoListCard title="MVP checklist" items={MVP_ITEMS} />
+          <Card>
+            <CardHeader>Earlier themes (still valid)</CardHeader>
+            <CardBody>
+              <Text tone="secondary" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                Away Digest · Launch Contract · Question Cards · Proof Suite · Governance · Voice/camera · Share sheet · Repo Playbook · Flight Recorder · Cross-vendor verify · Emergency stop · 3-root IA
+              </Text>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader>iOS 27 fast-follow</CardHeader>
+            <CardBody>
+              <Text tone="secondary" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                Siri + View Annotations · IndexedEntity/Spotlight · LongRunningIntent · on-device diff summary · Widget · Watch · StandBy · AppIntentsTesting
+              </Text>
+            </CardBody>
+          </Card>
+        </>
+      )}
+
+      <Text tone="tertiary" style={{ fontSize: 11 }}>.cursor/canvases/mobile-agent-brainstorm.canvas.tsx</Text>
+      <Spacer size={16} />
     </Stack>
   );
 }
