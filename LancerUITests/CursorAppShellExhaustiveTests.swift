@@ -140,16 +140,20 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     }
 
     private func tapApprovalBanner(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
-        // Mock shell: APPROVE routes to Review (no live bridge). Live shell: prefer the
-        // dedicated overlay target when present.
-        let overlay = app.buttons["approval-banner"].firstMatch
-        let approve = app.buttons["APPROVE"].firstMatch
-        if overlay.waitForExistence(timeout: 2) {
-            tapWithRetry(overlay, label: "approval-banner", file: file, line: line)
-        } else if approve.waitForExistence(timeout: timeout) {
-            tapWithRetry(approve, label: "APPROVE", file: file, line: line)
+        // Mock shell: tapping the status copy opens Review via `onOpenReview`.
+        let statusCopy = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "pending approval")
+        ).firstMatch
+        if statusCopy.waitForExistence(timeout: timeout) {
+            tapWithRetry(statusCopy, label: "pending approval", file: file, line: line)
+            return
+        }
+        // Live shell fallback: dedicated banner container or APPROVE.
+        let banner = app.otherElements["approval-banner"].firstMatch
+        if banner.waitForExistence(timeout: 2) {
+            tapWithRetry(banner, label: "approval-banner", file: file, line: line)
         } else {
-            XCTFail("Missing approval-banner or APPROVE control", file: file, line: line)
+            tapButtonContaining(app, "APPROVE", timeout: timeout, file: file, line: line)
         }
     }
 

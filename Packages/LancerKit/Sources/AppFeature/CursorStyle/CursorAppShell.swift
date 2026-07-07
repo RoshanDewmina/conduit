@@ -144,6 +144,9 @@ public struct CursorAppShell: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
         }
+        #if DEBUG
+        .task { applyDebugRouteIfNeeded() }
+        #endif
     }
 
     // MARK: Pushed destinations
