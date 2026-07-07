@@ -5,7 +5,6 @@ import LancerCore
 @testable import SessionFeature
 
 @Suite("ApprovalActionIntentPolicy")
-@available(iOS 17.0, *)
 struct ApprovalActionIntentPolicyTests {
 
     @Test("reject never requires authentication")
@@ -41,6 +40,7 @@ struct ApprovalActionIntentPolicyTests {
     }
 
     @Test("intent declares system authentication policy for lock-screen approve baseline")
+    @available(iOS 17.0, *)
     func intentStaticPolicyRequiresAuthentication() {
         #expect(ApprovalActionIntent.authenticationPolicy == .requiresAuthentication)
     }
