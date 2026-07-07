@@ -1563,6 +1563,18 @@ public struct AppRoot: View {
             client.beginPairingSession()
             client.pairingCode = code
             Task { @MainActor in
+                // connect() below can complete pairing synchronously before this
+                // loop starts consuming $pairingState — check the current value
+                // first or the .paired transition is missed forever and the
+                // headless observer just hangs.
+                if client.pairingState == .paired {
+                    addRelayMachine(
+                        client: client,
+                        record: RelayMachineRecord(id: client.machineID, displayName: "Relay host"),
+                        env: env
+                    )
+                    return
+                }
                 for await state in client.$pairingState.values {
                     if state == .paired {
                         addRelayMachine(
