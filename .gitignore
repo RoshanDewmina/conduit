@@ -141,3 +141,5 @@ daemon/lancerd/dist/
 # Git worktrees
 .worktrees/
 __pycache__/
+tier0-live-loop/
+tier1-cursor-shell/

@@ -101,31 +101,36 @@ public struct CursorWorkThreadView: View {
 
     // MARK: Needs-approval banner
 
-    /// Governed-approval interruption surfaced above the sticky action rail —
-    /// Work Thread's own screenshots don't show this state, but the daemon's
-    /// approval gate can trip mid-run, so the thread needs a way to demand
-    /// attention without leaving the screen.
+    /// Governed-approval quick actions above the sticky action rail. Live shell
+    /// gates on `pendingApprovalID`; mock shell always shows for UI tests.
     private var approvalBanner: some View {
-        Button(action: onOpenReview) {
-            CursorArtifactCard {
-                HStack(spacing: 10) {
-                    CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
-                    Text("Pending approval")
-                        .font(CursorType.bodyText)
-                        .foregroundColor(colors.secondaryText)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(colors.secondaryText)
-                }
+        CursorApprovalBanner(
+            count: 1,
+            onApprove: handleApprovalApprove,
+            onReject: handleApprovalReject
+        )
+        .overlay(alignment: .leading) {
+            Button(action: onOpenReview) {
+                Color.clear.frame(width: 170, height: 36)
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("approval-banner")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("approval-banner")
         .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
         .padding(.top, CursorMetrics.actionRailVerticalPadding)
+    }
+
+    private func handleApprovalApprove() {
+        if let liveBridge, let approvalID = liveBridge.pendingApprovalID {
+            Task { await liveBridge.onDecide?(approvalID, .approved) }
+        } else {
+            onOpenReview()
+        }
+    }
+
+    private func handleApprovalReject() {
+        guard let liveBridge, let approvalID = liveBridge.pendingApprovalID else { return }
+        Task { await liveBridge.onDecide?(approvalID, .rejected) }
     }
 
     // MARK: Composer
