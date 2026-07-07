@@ -161,7 +161,7 @@ correction before it's fully accurate.
 | Voice Everywhere (dictation) | Core loop | footnote across artifacts | `SpeechAnalyzer`/`SpeechTranscriber` already iOS 26 baseline, no iOS 27 wait needed |
 | Light Automations (4 variants) | Core loop | `artifacts/05-work-thread.html` | only 2 of 4 drawn (finding 1.8) — finish on next pass |
 | Provider Capability Badges | Core loop | `artifacts/03-workspaces.html` | — |
-| Governance/Security: risk-tiered biometric gate | Governance | `artifacts/06-review-diff.html`, `10-settings.html` | **already shipped in real code** (commit `695d2440`); degrade-open gap tracked §7 |
+| ~~Governance/Security: risk-tiered biometric gate~~ | Governance | `artifacts/06-review-diff.html`, `10-settings.html` | **removed entirely 2026-07-07** (permanent product decision, commit `9e18d679`) — no longer in scope |
 | Governance/Security: policy engine, hash-chained audit (existing) | Governance | `10-settings.html` | shipped; the actual moat per §3 |
 | Governance/Security: drift detector | Governance | `10-settings.html` | shipped |
 | Workspaces (repo-first, replaces Machines) | Whole-app | `artifacts/03-workspaces.html` | data-model decision (repo-first vs. host-first) still genuinely open, see §9 |
@@ -213,7 +213,7 @@ code does. Carried forward from the July-4 verification docs, still open per thi
 
 | Gap | Severity | What's wrong |
 |---|---|---|
-| Biometric gate degrades open on no-passcode devices | **P0 — security** | Returns success instead of throwing on unlocked devices with no passcode set, allowing high-risk actions with zero friction. |
+| ~~Biometric gate degrades open on no-passcode devices~~ | **Moot — 2026-07-07** | Biometric gating was removed entirely (commit `9e18d679`); nothing left to degrade. |
 | Emergency Stop is not atomic | **P0 — correctness** | Loops client-side per-run instead of one daemon-side RPC; LancerMac's Pause-All button is wired as a disabled stub waiting on this same primitive. |
 | JWT verification is HS256-only | **P1 — security** | RS256/ES256 (JWKS) path referenced in docs doesn't exist in code yet. |
 | Dormant `StoreKit` "Lancer Pro" IAP gates nothing | **P1 — correctness** | Built and wired to gate nothing real, while a separate, real Stripe cloud entitlement (`hasCloudEntitlement`) does the actual gating — two uncoordinated billing mechanisms is a real bug risk, not just a UI simplification (D16). |

@@ -303,10 +303,13 @@ were **purged 2026-07-06** with the rest of `docs/_archive/`.
 
 ## 6. Remaining P0/P1/P2 after this audit
 
-- **P0 (fixed 2026-07-06, owner device validation pending):** `BiometricGate` fail-closed on
-  no-passcode / biometry-unavailable; daemon-side atomic Emergency Stop latch in `dispatch.go`
-  (`agent.emergencyStop` RPC). Verified: `swift test --filter BiometricGate`, `go test ./...`
-  from `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
+- ~~P0 (fixed 2026-07-06): `BiometricGate` fail-closed on no-passcode / biometry-unavailable~~ —
+  **moot as of 2026-07-07:** `BiometricGate` was removed from the app entirely (commit `9e18d679`,
+  permanent product decision), so there is no fail-closed policy left to validate. See
+  `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
+- **P0 (fixed 2026-07-06, owner device validation pending):** daemon-side atomic Emergency Stop
+  latch in `dispatch.go` (`agent.emergencyStop` RPC). Verified: `go test ./...` from
+  `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
 - **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
   logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
   testing on a real phone. **Fixed:** early-return now logs

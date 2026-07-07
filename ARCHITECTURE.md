@@ -773,7 +773,7 @@ malware; that is out of scope and we will not pretend otherwise.
 
 | Risk | Control |
 |---|---|
-| Device theft | Risk-tiered biometric gate at approval-decision time (high/critical and unknown-risk decisions only; low/medium stay one-tap by design) — reinstated 2026-07-04, `695d2440`. Known gap: `BiometricGate` degrades open on a device with no passcode configured at all (tracked, unfixed). Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
+| Device theft | No app-level biometric gate — removed entirely 2026-07-07, `9e18d679` (permanent product decision; see §0.1 and `docs/legal/SECURITY_ARCHITECTURE.md` §5.1). The OS-level device lock is the only boundary on approval decisions and SSH key use. Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
 | Server breach | Control plane stores nothing decryptable about hosts or sessions. BYOK keys never touch the server. Push notification payloads carry only host id + opaque event id. |
 | Untrusted host | First-connect host key fingerprint shown to user with QR/text confirm. TOFU with explicit warn-on-change. `accept-anything` is **never** the default. |
 | Compromised workspace | `lancerd` runs as the user; never sudo. Daemon binary SHA-256 verified pre-launch against the app's embedded manifest. |
