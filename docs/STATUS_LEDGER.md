@@ -100,7 +100,7 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 
 | Item | State |
 |------|-------|
-| `master` | Cursor shell in-tree; live bridge partial; iOS **26.0** deployment target |
+| `master` | Cursor shell in-tree; live bridge partial; iOS **26.0** deployment target; wave2 merged (`7c5c0b0d` PR #30) — `CursorAppShellExhaustiveTests` 20/20 PASS |
 | `codex/tier-0-live-cursor-shell` | Tier 0 wiring + P0 BiometricGate + atomic emergency stop (commits on branch) |
 | Siri Phase 2 (`cursor/siri-phase2-fixes-9257`, PRs #16/#24) | Implemented, **not merged** — iOS 27 APIs vs iOS 26 target (`ARCHITECTURE.md` §0.1) |
 | `claude/amazing-mayer-246fef` | Active worktree — **do not wholesale merge** |
