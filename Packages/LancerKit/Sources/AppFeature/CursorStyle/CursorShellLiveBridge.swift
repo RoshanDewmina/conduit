@@ -87,7 +87,9 @@ public final class CursorShellLiveBridge {
     public var onDecide: ((ApprovalID, Approval.Decision) async -> Void)?
     public var onRequestPairing: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
+    public var onClearInvalid: (() -> Void)?
     public var relayMachineCount: Int = 0
+    public var invalidMachineCount: Int = 0
 
     public init() {}
 
