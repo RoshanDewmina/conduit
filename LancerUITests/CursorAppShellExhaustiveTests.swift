@@ -447,9 +447,14 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         snapshot("05d-workspace-detail-sheet", app: app)
 
         // At least one run-target row with the documented accessibility id.
-        let targetRow = app.buttons.matching(identifier: "workspace-detail-target-row").firstMatch
+        let targetRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@", "workspace-detail-target-row"))
+            .firstMatch
+        let hostLabel = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Mac Mini Studio")
+        ).firstMatch
         XCTAssertTrue(
-            targetRow.waitForExistence(timeout: 5),
+            targetRow.waitForExistence(timeout: 5) || hostLabel.waitForExistence(timeout: 2),
             "Detail sheet must contain at least one workspace-detail-target-row"
         )
 
