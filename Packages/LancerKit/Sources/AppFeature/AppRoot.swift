@@ -957,6 +957,8 @@ public struct AppRoot: View {
             let conversations = try await env.chatRepo.recent(limit: 200)
             var counts: [String: Int] = [:]
             var threads: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
+            // machineID → hostName, keyed by repo name. OrderedSet semantics via dict key.
+            var runTargetIDsByRepo: [String: [String: String]] = [:]
             for conv in conversations {
                 let repo = (conv.cwd as NSString).lastPathComponent.isEmpty ? conv.cwd : (conv.cwd as NSString).lastPathComponent
                 counts[repo, default: 0] += 1
@@ -965,14 +967,32 @@ public struct AppRoot: View {
                         id: conv.id,
                         title: conv.title,
                         repoName: repo,
-                        updatedAt: conv.updatedAt
+                        updatedAt: conv.updatedAt,
+                        hostID: conv.hostID,
+                        hostName: conv.hostName.isEmpty ? nil : conv.hostName
                     )
                 )
+                // Accumulate distinct (hostID, hostName) pairs per repo.
+                if let hid = conv.hostID, !hid.isEmpty {
+                    if runTargetIDsByRepo[repo] == nil { runTargetIDsByRepo[repo] = [:] }
+                    // Only record the first-seen hostName for a given hostID.
+                    if runTargetIDsByRepo[repo]![hid] == nil {
+                        runTargetIDsByRepo[repo]![hid] = conv.hostName
+                    }
+                }
+            }
+            // Build sorted RunTarget arrays per repo.
+            var runTargetsByRepo: [String: [CursorShellLiveBridge.RunTarget]] = [:]
+            for (repo, idToName) in runTargetIDsByRepo {
+                runTargetsByRepo[repo] = idToName
+                    .sorted { $0.value < $1.value }
+                    .map { CursorShellLiveBridge.RunTarget(machineID: $0.key, hostName: $0.value) }
             }
             let names = Array(counts.keys).sorted()
             cursorLiveBridge.reloadWorkspaces(
                 from: names.isEmpty ? ["command-center"] : names,
-                threadCounts: counts
+                threadCounts: counts,
+                runTargetsByRepo: runTargetsByRepo
             )
             for (name, rows) in threads {
                 let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }

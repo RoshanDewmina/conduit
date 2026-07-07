@@ -18,10 +18,32 @@ public final class CursorShellLiveBridge {
         case needsPairing
     }
 
+    /// A machine that has a checkout of this repo and can run agents against it.
+    public struct RunTarget: Identifiable, Sendable, Equatable {
+        public let id: String          // machineID (hostID string)
+        public let machineID: String
+        public let hostName: String
+
+        public init(machineID: String, hostName: String) {
+            self.id = machineID
+            self.machineID = machineID
+            self.hostName = hostName
+        }
+    }
+
     public struct WorkspaceRow: Identifiable, Sendable {
         public let id: String
         public let name: String
         public let threadCount: Int
+        /// Distinct machines that have at least one conversation in this repo.
+        public let runTargets: [RunTarget]
+
+        public init(id: String, name: String, threadCount: Int, runTargets: [RunTarget] = []) {
+            self.id = id
+            self.name = name
+            self.threadCount = threadCount
+            self.runTargets = runTargets
+        }
     }
 
     public struct ThreadRow: Identifiable, Sendable {
@@ -29,6 +51,24 @@ public final class CursorShellLiveBridge {
         public let title: String
         public let repoName: String
         public let updatedAt: Date?
+        public let hostID: String?
+        public let hostName: String?
+
+        public init(
+            id: String,
+            title: String,
+            repoName: String,
+            updatedAt: Date?,
+            hostID: String? = nil,
+            hostName: String? = nil
+        ) {
+            self.id = id
+            self.title = title
+            self.repoName = repoName
+            self.updatedAt = updatedAt
+            self.hostID = hostID
+            self.hostName = hostName
+        }
     }
 
     public var workspaces: [WorkspaceRow] = []
@@ -55,9 +95,18 @@ public final class CursorShellLiveBridge {
         threadsByWorkspace[workspaceName] ?? []
     }
 
-    public func reloadWorkspaces(from names: [String], threadCounts: [String: Int]) {
+    public func reloadWorkspaces(
+        from names: [String],
+        threadCounts: [String: Int],
+        runTargetsByRepo: [String: [RunTarget]] = [:]
+    ) {
         workspaces = names.map { name in
-            WorkspaceRow(id: name, name: name, threadCount: threadCounts[name] ?? 0)
+            WorkspaceRow(
+                id: name,
+                name: name,
+                threadCount: threadCounts[name] ?? 0,
+                runTargets: runTargetsByRepo[name] ?? []
+            )
         }
     }
 
