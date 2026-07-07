@@ -14,10 +14,11 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launchSkipOnboarding() -> XCUIApplication {
+    private func launchSkipOnboarding(route: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
         app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        if let route { app.launchEnvironment["LANCER_CURSOR_ROUTE"] = route }
         app.launch()
         return app
     }
@@ -126,12 +127,12 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     }
 
     private func assertReviewDiffVisible(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
-        let reviewTitle = app.staticTexts["Review"]
+        let screen = app.otherElements["review-diff-screen"]
         let requestBody = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] %@", "terraform apply")
         ).firstMatch
         XCTAssertTrue(
-            reviewTitle.waitForExistence(timeout: timeout) || requestBody.waitForExistence(timeout: 2),
+            screen.waitForExistence(timeout: timeout) || requestBody.waitForExistence(timeout: timeout),
             "Review diff screen should be visible",
             file: file,
             line: line
@@ -517,7 +518,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
 
     // MARK: 8. Review/Diff decisions (each on a fresh launch)
 
-    private func openReviewDiff(_ app: XCUIApplication) {
+    private func openReviewDiffFromWorkThread(_ app: XCUIApplication) {
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
         app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["lancer-ios"].waitForExistence(timeout: 10))
@@ -529,9 +530,9 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     }
 
     func testReviewDiff_Approve() throws {
-        let app = launchSkipOnboarding()
+        let app = launchSkipOnboarding(route: "reviewDiff")
         defer { app.terminate() }
-        openReviewDiff(app)
+        assertReviewDiffVisible(app)
         app.buttons["cursor.review.approve"].tap()
         XCTAssertTrue(app.staticTexts["Approved"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Decided by You")).firstMatch.waitForExistence(timeout: 5))
@@ -539,27 +540,27 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     }
 
     func testReviewDiff_Deny() throws {
-        let app = launchSkipOnboarding()
+        let app = launchSkipOnboarding(route: "reviewDiff")
         defer { app.terminate() }
-        openReviewDiff(app)
+        assertReviewDiffVisible(app)
         app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Deny")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Denied"].waitForExistence(timeout: 5))
         snapshot("08c-reviewdiff-denied", app: app)
     }
 
     func testReviewDiff_Reply() throws {
-        let app = launchSkipOnboarding()
+        let app = launchSkipOnboarding(route: "reviewDiff")
         defer { app.terminate() }
-        openReviewDiff(app)
+        assertReviewDiffVisible(app)
         app.buttons["Reply"].tap()
         XCTAssertTrue(app.staticTexts["Reply sent"].waitForExistence(timeout: 5))
         snapshot("08d-reviewdiff-replied", app: app)
     }
 
     func testReviewDiff_ViewFullDiffNoOp() throws {
-        let app = launchSkipOnboarding()
+        let app = launchSkipOnboarding(route: "reviewDiff")
         defer { app.terminate() }
-        openReviewDiff(app)
+        assertReviewDiffVisible(app)
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "View full diff")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()

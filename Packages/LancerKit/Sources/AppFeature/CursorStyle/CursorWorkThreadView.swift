@@ -111,7 +111,7 @@ public struct CursorWorkThreadView: View {
         )
         .overlay(alignment: .leading) {
             Button(action: onOpenReview) {
-                Color.clear.frame(width: 170, height: 36)
+                Color.clear.frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("approval-banner")

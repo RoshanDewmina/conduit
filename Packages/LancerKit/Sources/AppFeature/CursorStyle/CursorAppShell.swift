@@ -67,6 +67,20 @@ public struct CursorAppShell: View {
         .environment(\.cursorShellLiveBridge, liveBridge)
     }
 
+    #if DEBUG
+    private func applyDebugRouteIfNeeded() {
+        guard hasCompletedOnboarding, path.isEmpty else { return }
+        switch ProcessInfo.processInfo.environment["LANCER_CURSOR_ROUTE"] {
+        case "reviewDiff":
+            path.append(CursorRoute.reviewDiff)
+        case "workThread":
+            path.append(CursorRoute.workThread("Fix onboarding pairing flow"))
+        default:
+            break
+        }
+    }
+    #endif
+
     // MARK: Root stack
 
     private var mainStack: some View {
