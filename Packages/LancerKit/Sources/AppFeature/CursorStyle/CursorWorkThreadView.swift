@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's mobile Work Thread transcript: a user prompt bubble
 /// followed by narration prose, a plan card, a to-dos card, and a changes card,
@@ -7,6 +8,9 @@ import SwiftUI
 /// data only — no daemon/network wiring. Forces `.light` to match the rest of
 /// the app.
 public struct CursorWorkThreadView: View {
+    @Environment(\.cursorScheme) private var cursorScheme
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     @State private var isTodosExpanded = false
     @State private var isActionRailExpanded = true
 
@@ -15,6 +19,15 @@ public struct CursorWorkThreadView: View {
     private let onViewPR: () -> Void
     private let onOpenReview: () -> Void
     private let onOpenComposer: () -> Void
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
+    /// Mock shell always shows the banner for UI tests; live shell only when a
+    /// pending approval is wired through `CursorShellLiveBridge`.
+    private var showsApprovalBanner: Bool {
+        guard let liveBridge else { return true }
+        return liveBridge.pendingApprovalID != nil
+    }
 
     public init(
         missionTitle: String = "Fix onboarding pairing flow",
@@ -47,10 +60,12 @@ public struct CursorWorkThreadView: View {
                 .padding(.bottom, 12)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
+        .background(colors.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                approvalBanner
+                if showsApprovalBanner {
+                    approvalBanner
+                }
 
                 if isActionRailExpanded {
                     CursorActionRail(
@@ -82,52 +97,50 @@ public struct CursorWorkThreadView: View {
         // correct regardless of what its host `NavigationStack` does.
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .environment(\.cursorScheme, .light)
     }
 
     // MARK: Needs-approval banner
 
-    /// Governed-approval interruption surfaced above the sticky action rail —
-    /// Work Thread's own screenshots don't show this state, but the daemon's
-    /// approval gate can trip mid-run, so the thread needs a way to demand
-    /// attention without leaving the screen.
+    /// Governed-approval quick actions above the sticky action rail. Live shell
+    /// gates on `pendingApprovalID`; mock shell always shows for UI tests.
     private var approvalBanner: some View {
-        Button(action: onOpenReview) {
-            CursorArtifactCard {
-                HStack(spacing: 10) {
-                    CursorStatusBadge(kind: .risk(level: .high), label: "Needs your approval")
-                    Text("Deploy to production")
-                        .font(CursorType.bodyText)
-                        .foregroundColor(CursorColors.light.secondaryText)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(CursorColors.light.secondaryText)
-                }
+        CursorApprovalBanner(
+            count: 1,
+            onApprove: handleApprovalApprove,
+            onReject: handleApprovalReject
+        )
+        .overlay(alignment: .leading) {
+            Button(action: onOpenReview) {
+                Color.clear.frame(width: 170, height: 36)
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("approval-banner")
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
         .padding(.top, CursorMetrics.actionRailVerticalPadding)
     }
 
+    private func handleApprovalApprove() {
+        if let liveBridge, let approvalID = liveBridge.pendingApprovalID {
+            Task { await liveBridge.onDecide?(approvalID, .approved) }
+        } else {
+            onOpenReview()
+        }
+    }
+
+    private func handleApprovalReject() {
+        guard let liveBridge, let approvalID = liveBridge.pendingApprovalID else { return }
+        Task { await liveBridge.onDecide?(approvalID, .rejected) }
+    }
+
     // MARK: Composer
 
-    /// The whole composer area is tappable to open the fuller composer sheet,
-    /// rather than editing inline — matches the Home/Workspaces composer-tap
-    /// convention. The real `CursorBottomComposer` is rendered for visual
-    /// fidelity but has hit-testing disabled so its `TextField` never steals
-    /// first responder; an invisible button on top forwards the tap.
     private var composer: some View {
-        ZStack {
-            CursorBottomComposer(placeholder: "Follow up...")
-                .allowsHitTesting(false)
-            Button(action: onOpenComposer) {
-                Color.clear
-            }
-            .buttonStyle(.plain)
-        }
+        CursorBottomComposer(
+            placeholder: "Follow up...",
+            style: .followUp,
+            onTap: onOpenComposer
+        )
     }
 
     // MARK: Header
@@ -328,7 +341,7 @@ public struct CursorWorkThreadView: View {
                         .foregroundColor(CursorColors.light.primaryText)
                     Text("3")
                         .font(CursorType.cardTitle)
-                        .foregroundColor(CursorColors.light.secondaryText)
+                        .foregroundColor(colors.secondaryText)
                 }
                 .padding(.bottom, 10)
 

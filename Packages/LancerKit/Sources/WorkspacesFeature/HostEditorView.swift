@@ -278,7 +278,7 @@ public struct HostEditorView: View {
                     }
 
                     // ── Save button
-                    DSButton("save host", variant: .accent, fullWidth: true, action: {
+                    CursorPillButton(title: "save host", style: .primary, fullWidth: true, action: {
                         Task { await vm.save() }
                     })
                     .disabled(!vm.isValid)

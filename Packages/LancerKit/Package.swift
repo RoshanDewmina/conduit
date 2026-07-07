@@ -177,7 +177,6 @@ let package = Package(
                 "PersistenceKit",
                 "DiffKit",
                 "DiffFeature",
-                "SettingsFeature",
                 "SSHTransport",
                 "SecurityKit",
             ],

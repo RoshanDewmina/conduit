@@ -3,8 +3,8 @@
 > Defines the product boundary between **Lancer for Mac** (`LancerMac`, the new native
 > management/companion app) and the existing iPhone app. The Mac app is a **manager and
 > health surface for the Host Service**, not a second place to run agent work. Grounded in
-> `ARCHITECTURE.md` §0.1 (current-state snapshot) and §4.1 (the iPhone home is a
-> **sidebar/Command Home shell**, not a tab bar) and the plan at
+> `ARCHITECTURE.md` §0.1 (current-state snapshot) and §4.1 (iPhone home is the **Cursor shell** —
+> Home / Workspaces / Settings — not a tab bar) and the plan at
 > `.claude/plans/you-are-working-on-curried-pixel.md`.
 >
 > **Architecture in one line:** `Lancer.app` (Mac) manages the lifecycle of the existing

@@ -64,6 +64,7 @@ public struct AddHostView: View {
     @State private var saveError: String?
 
     @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @FocusState private var pasteFieldFocused: Bool
 
     private enum AuthChoice: String, CaseIterable, Identifiable {
@@ -113,31 +114,43 @@ public struct AddHostView: View {
     // MARK: - Body
 
     public var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
 
-            VStack(spacing: 0) {
-                // ── Header
-                DSDetailHeader("add host", onBack: onCancel)
+            Text("Add machine")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(Color.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
 
-                Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
-                    .font(.dsMonoPt(11))
-                    .foregroundStyle(t.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text("This is the machine your coding agents control. Approvals for risky actions will come back to this phone.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            if showClipboardBanner, let result = clipboardBannerResult {
+                clipboardBanner(result)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
-                // ── Clipboard banner (V3) — BYO only
-                if showClipboardBanner, let result = clipboardBannerResult {
-                    clipboardBanner(result)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // ── Body
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                         // ── Paste field section
                         pasteSection
                             .padding(.horizontal, 16)
@@ -168,13 +181,13 @@ public struct AddHostView: View {
                         }
 
                         Spacer(minLength: 40)
-                    }
                 }
-
-                footerCTA
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            footerCTA
+                .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+        .background(Color(red: 0.961, green: 0.957, blue: 0.941).ignoresSafeArea())
         .navigationBarHidden(true)
         .animation(.easeInOut(duration: 0.2), value: showClipboardBanner)
         .animation(.easeInOut(duration: 0.2), value: parsed != nil)
@@ -284,13 +297,7 @@ public struct AddHostView: View {
                     .foregroundStyle(t.ok)
             }
 
-            DSButton(
-                "use hosted runtime",
-                systemImage: "sparkles",
-                variant: .primary,
-                mono: true,
-                fullWidth: true
-            ) {
+            CursorPillButton(title: "use hosted runtime", style: .primary, fullWidth: true) {
                 Haptics.success()
                 onUseHosted?()
             }
@@ -405,11 +412,11 @@ public struct AddHostView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    DSChip("user · \(p.user)", tone: .ok, variant: .solid, size: .sm)
-                    DSChip("host · \(p.host)", tone: .ok, variant: .solid, size: .sm)
-                    DSChip("port · \(p.port)", tone: .ok, variant: .solid, size: .sm)
+                    CursorStatusBadge(kind: .success, label: "user · \(p.user)")
+                    CursorStatusBadge(kind: .success, label: "host · \(p.host)")
+                    CursorStatusBadge(kind: .success, label: "port · \(p.port)")
                     if let idf = p.identityFile {
-                        DSChip("key · \(URL(fileURLWithPath: idf).lastPathComponent)", tone: .accent, variant: .solid, size: .sm)
+                        CursorStatusBadge(kind: .risk(level: .low), label: "key · \(URL(fileURLWithPath: idf).lastPathComponent)")
                     }
                 }
             }
@@ -459,10 +466,10 @@ public struct AddHostView: View {
 
             HStack(spacing: 8) {
                 Spacer()
-                DSButton("dismiss", variant: .ghost, size: .sm, mono: true) {
+                CursorPillButton(title: "dismiss", style: .secondary) {
                     withAnimation { clipboardBannerDismissed = true }
                 }
-                DSButton("connect to \(result.host)", variant: .secondary, size: .sm, mono: true) {
+                CursorPillButton(title: "connect to \(result.host)", style: .secondary) {
                     fillFromResult(result)
                     withAnimation { clipboardBannerDismissed = true }
                 }
@@ -616,11 +623,11 @@ public struct AddHostView: View {
                     )
 
                 HStack(spacing: 8) {
-                    DSButton("copy public", variant: .secondary, size: .sm, mono: true) {
+                    CursorPillButton(title: "copy public", style: .secondary) {
                         UIPasteboard.general.string = keyInfo.openSSH
                     }
                     if let p = parsed {
-                        DSButton("ssh-copy-id", variant: .secondary, size: .sm, mono: true) {
+                        CursorPillButton(title: "ssh-copy-id", style: .secondary) {
                             let oneLiner = "echo '\(keyInfo.openSSH)' | ssh-copy-id -i /dev/stdin \(p.user)@\(p.host)\(p.port != 22 ? " -p \(p.port)" : "")"
                             UIPasteboard.general.string = oneLiner
                             showCopiedSSHCopyId = true
@@ -635,12 +642,9 @@ public struct AddHostView: View {
                         .foregroundStyle(t.danger)
                 }
 
-                DSButton(
-                    "generate ed25519 key",
-                    systemImage: "key.fill",
-                    variant: .secondary,
-                    size: .sm,
-                    mono: true,
+                CursorPillButton(
+                    title: "generate ed25519 key",
+                    style: .secondary,
                     isLoading: isGeneratingKey
                 ) {
                     keyGenTask = Task { await generateKey() }
@@ -775,10 +779,10 @@ public struct AddHostView: View {
             Rectangle().fill(t.border).frame(height: 1)
             HStack {
                 Spacer()
-                DSButton(
-                    "connect & save",
-                    variant: .primary,
-                    size: .lg,
+                CursorPillButton(
+                    title: "connect & save",
+                    style: .primary,
+                    fullWidth: true,
                     isLoading: isSaving
                 ) {
                     Task { await connectAndSave() }

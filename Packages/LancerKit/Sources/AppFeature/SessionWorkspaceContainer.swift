@@ -34,7 +34,7 @@ public struct SessionWorkspaceContainer: View {
             showDrawer = true
         })
         .sheet(isPresented: $showDrawer) {
-            LancerDrawer(detents: [.medium, .large], surface: .workspace) {
+            CursorDrawer(detents: [.medium, .large]) {
                 WorkspaceDrawer(
                     tab: $tab,
                     viewModel: viewModel,
@@ -166,8 +166,8 @@ private struct WorkspaceDrawer: View {
 public struct RelayWorkspaceUnavailableView: View {
     private let onConnectSSH: (() -> Void)?
 
+    @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.lancerTokens) private var t
 
     public init(onConnectSSH: (() -> Void)? = nil) {
         self.onConnectSSH = onConnectSSH
@@ -180,86 +180,73 @@ public struct RelayWorkspaceUnavailableView: View {
     }
 
     private static let features: [SSHFeature] = [
-        SSHFeature(
-            systemImage: "terminal",
-            title: "Terminal",
-            subtitle: "A full interactive shell with Warp-style command blocks"
-        ),
-        SSHFeature(
-            systemImage: "folder",
-            title: "File browser",
-            subtitle: "Browse and open files on the machine"
-        ),
-        SSHFeature(
-            systemImage: "network",
-            title: "Port forwarding",
-            subtitle: "Reach a dev server running on the host"
-        ),
+        SSHFeature(systemImage: "terminal", title: "Terminal", subtitle: "Interactive shell with command blocks"),
+        SSHFeature(systemImage: "folder", title: "File browser", subtitle: "Browse and open files on the machine"),
+        SSHFeature(systemImage: "network", title: "Port forwarding", subtitle: "Reach a dev server running on the host"),
     ]
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "lock.laptopcomputer")
-                    .font(.dsDisplayPt(28, weight: .semibold))
-                    .foregroundStyle(t.accent)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(colors.statusDotActive)
                 Text("Unlock the full workspace")
-                    .font(.dsSansPt(21, weight: .semibold))
-                    .foregroundStyle(t.text)
+                    .font(CursorType.cardTitle)
+                    .foregroundColor(colors.primaryText)
                 Text("These features need a direct SSH connection to this machine — they aren't available over relay.")
-                    .font(.dsSansPt(15))
-                    .foregroundStyle(t.text2)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 0) {
-                ForEach(Array(Self.features.enumerated()), id: \.offset) { index, feature in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: feature.systemImage)
-                            .font(.dsSansPt(17, weight: .medium))
-                            .foregroundStyle(t.accent)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(feature.title)
-                                .font(.dsSansPt(15, weight: .medium))
-                                .foregroundStyle(t.text)
-                            Text(feature.subtitle)
-                                .font(.dsSansPt(13))
-                                .foregroundStyle(t.text3)
-                                .fixedSize(horizontal: false, vertical: true)
+            CursorArtifactCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(Self.features.enumerated()), id: \.offset) { index, feature in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: feature.systemImage)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(colors.secondaryText)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.title)
+                                    .font(CursorType.bodyEmphasis)
+                                    .foregroundColor(colors.primaryText)
+                                Text(feature.subtitle)
+                                    .font(CursorType.rowSecondary)
+                                    .foregroundColor(colors.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if index < Self.features.count - 1 {
+                            Rectangle()
+                                .fill(colors.hairline)
+                                .frame(height: 1)
                         }
                     }
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if index < Self.features.count - 1 {
-                        Divider().background(t.border)
-                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 1)
-            )
 
             Text("Relay still handles dispatch, output, and approvals for this machine.")
-                .font(.dsSansPt(13))
-                .foregroundStyle(t.text3)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 10) {
-                DSButton("Connect this machine over SSH", variant: .accent, size: .lg, fullWidth: true) {
-                    onConnectSSH?()
-                    dismiss()
-                }
-                DSButton("Not now", variant: .ghost, size: .lg, fullWidth: true) {
-                    dismiss()
-                }
+            if let onConnectSSH {
+                CursorPillButton(title: "Connect over SSH", style: .primary, action: onConnectSSH)
+                    .frame(maxWidth: .infinity)
             }
+
+            CursorPillButton(title: "Not now", style: .secondary) { dismiss() }
+                .frame(maxWidth: .infinity)
         }
-        .padding(24)
-        .background(t.bg)
+        .padding(20)
+        .background(colors.background)
+        .environment(\.cursorScheme, .light)
     }
 }
 
@@ -290,37 +277,32 @@ private struct WorkspaceEnvironmentView: View {
                         .foregroundStyle(t.danger)
                 }
 
-                DSSectionGroup("Workspace") {
-                    DSNavigationRow(
-                        "Changes",
-                        subtitle: changesSubtitle,
-                        value: changesValue,
-                        systemImage: "plusminus",
-                        action: onOpenReview
-                    )
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow(
-                        "Host",
-                        subtitle: "Connected through SSH",
-                        value: host.name,
-                        systemImage: "laptopcomputer",
-                        action: onSwitchHost
-                    )
-                    DSDivider().padding(.leading, 50)
-                    branchRow
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow(
-                        "Commit or push",
-                        subtitle: "Stage, commit, then push the current branch",
-                        systemImage: "arrow.up.to.line.compact",
-                        action: { isShowingCommit = true }
-                    )
+                CursorSectionHeader("Workspace")
+                CursorArtifactCard {
+                    VStack(spacing: 0) {
+                        Button(action: onOpenReview) {
+                            CursorListRow(iconSystemName: "plusminus", title: "Changes", trailingText: changesValue, showChevron: true)
+                        }.buttonStyle(.plain)
+                        Button(action: onSwitchHost) {
+                            CursorListRow(iconSystemName: "laptopcomputer", title: "Host", trailingText: host.name, showChevron: true)
+                        }.buttonStyle(.plain)
+                        branchRow
+                        Button(action: { isShowingCommit = true }) {
+                            CursorListRow(iconSystemName: "arrow.up.to.line.compact", title: "Commit or push", showChevron: true)
+                        }.buttonStyle(.plain)
+                    }
                 }
 
-                DSSectionGroup("Sources") {
-                    DSNavigationRow("Files", subtitle: "Browse this host", systemImage: "folder", action: onOpenFiles)
-                    DSDivider().padding(.leading, 50)
-                    DSNavigationRow("Browser", subtitle: "Open a local dev preview", systemImage: "globe", action: onOpenBrowser)
+                CursorSectionHeader("Sources")
+                CursorArtifactCard {
+                    VStack(spacing: 0) {
+                        Button(action: onOpenFiles) {
+                            CursorListRow(iconSystemName: "folder", title: "Files", showChevron: true)
+                        }.buttonStyle(.plain)
+                        Button(action: onOpenBrowser) {
+                            CursorListRow(iconSystemName: "globe", title: "Browser", showChevron: true)
+                        }.buttonStyle(.plain)
+                    }
                 }
 
                 if isLoading {
@@ -413,11 +395,8 @@ private struct WorkspaceEnvironmentView: View {
 
     private func chooseBranch(_ branch: String) {
         guard branch != status?.branch else { return }
-        if WorkspaceBranchGuard.needsConfirmation(
-            currentBranch: status?.branch ?? "",
-            targetBranch: branch,
-            isClean: status?.isClean ?? false
-        ) {
+        let isClean = status?.isClean ?? false
+        if branch != (status?.branch ?? "") && !isClean {
             pendingBranch = branch
         } else {
             checkout(branch)
@@ -600,7 +579,7 @@ private struct HostFilesView: View {
         .task { path = initialPath; await load() }
         .task(id: path) { await load() }
         .sheet(item: $preview) { preview in
-            DSReviewSheet(preview.entry.name) {
+            CursorBottomSheetContainer(title: preview.entry.name) {
                 FilePreviewView(filename: preview.entry.name, content: preview.content, path: preview.entry.path)
             }
             .presentationDetents([.medium, .large])

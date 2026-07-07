@@ -1,29 +1,66 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Visual clone of Cursor's mobile per-repo thread list: unlike `CursorHomeView`
 /// (a cross-repo aggregate), this is scoped to a single workspace, with a
 /// back-chevron + search + hamburger header instead of the avatar+search+plus
-/// header Home/Workspaces use. Static seed data only — no daemon/network wiring.
+/// header Home/Workspaces use. Uses live bridge threads when wired; seed data
+/// fallback for mock UI tests.
 public struct CursorWorkspaceThreadListView: View {
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
+
     private let workspaceName: String
     private let onBack: () -> Void
     private let onSelectThread: (String) -> Void
     private let onOpenComposer: () -> Void
+    private let onOpenSearch: () -> Void
+    private let onOpenMenu: () -> Void
 
     public init(
         workspaceName: String,
         onBack: @escaping () -> Void = {},
         onSelectThread: @escaping (String) -> Void = { _ in },
-        onOpenComposer: @escaping () -> Void = {}
+        onOpenComposer: @escaping () -> Void = {},
+        onOpenSearch: @escaping () -> Void = {},
+        onOpenMenu: @escaping () -> Void = {}
     ) {
         self.workspaceName = workspaceName
         self.onBack = onBack
         self.onSelectThread = onSelectThread
         self.onOpenComposer = onOpenComposer
+        self.onOpenSearch = onOpenSearch
+        self.onOpenMenu = onOpenMenu
     }
 
     private var todayThreads: [CursorThreadRowModel] {
+        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
+            return liveThreadsSection(liveBridge.threads(for: workspaceName))
+        }
+        return seedTodayThreads
+    }
+
+    private var yesterdayThreads: [CursorThreadRowModel] {
+        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
+            return []
+        }
+        return seedYesterdayThreads
+    }
+
+    private func liveThreadsSection(_ rows: [CursorShellLiveBridge.ThreadRow]) -> [CursorThreadRowModel] {
+        rows.enumerated().map { index, row in
+            CursorThreadRowModel(
+                id: UUID(uuidString: row.id) ?? UUID(),
+                title: row.title,
+                repoName: row.repoName,
+                isActive: index == 0,
+                statusLine: .noChanges,
+                attention: liveBridge?.threadAttention[row.id]
+            )
+        }
+    }
+
+    private var seedTodayThreads: [CursorThreadRowModel] {
         switch workspaceName {
         case "push-backend":
             return [
@@ -88,7 +125,7 @@ public struct CursorWorkspaceThreadListView: View {
         }
     }
 
-    private var yesterdayThreads: [CursorThreadRowModel] {
+    private var seedYesterdayThreads: [CursorThreadRowModel] {
         switch workspaceName {
         case "push-backend":
             return [
@@ -148,8 +185,8 @@ public struct CursorWorkspaceThreadListView: View {
                     CursorIconButton(systemImageName: "chevron.left", action: onBack)
                 ),
                 trailing: [
-                    CursorIconButton(systemImageName: "magnifyingglass", action: {}),
-                    CursorIconButton(systemImageName: "line.3.horizontal", action: {})
+                    CursorIconButton(systemImageName: "magnifyingglass", action: onOpenSearch),
+                    CursorIconButton(systemImageName: "line.3.horizontal", action: onOpenMenu)
                 ]
             )
 
@@ -183,12 +220,7 @@ public struct CursorWorkspaceThreadListView: View {
         }
         .background(CursorColors.light.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            CursorBottomComposer()
-                .overlay(
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onOpenComposer)
-                )
+            CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
     }

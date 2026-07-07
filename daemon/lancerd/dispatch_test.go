@@ -398,3 +398,83 @@ func TestBudgetExceededIsAudited(t *testing.T) {
 		t.Fatalf("budget-exceeded stop was not audited; got %v (run %s)", actions, res.RunID)
 	}
 }
+
+func TestEmergencyStopStopsRunsAndBlocksLaunches(t *testing.T) {
+	var killed int
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() { killed++ }, pause: func() {}, resume: func() {}}, nil
+	}
+
+	first := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "one"}, allowEval, noAudit)
+	second := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "two"}, allowEval, noAudit)
+	if first.Status != "started" || second.Status != "started" {
+		t.Fatalf("setup dispatches failed: first=%+v second=%+v", first, second)
+	}
+	if !d.pause(second.RunID) {
+		t.Fatal("setup pause failed")
+	}
+
+	if stopped := d.emergencyStop(); stopped != 2 {
+		t.Fatalf("emergencyStop stopped %d runs, want 2", stopped)
+	}
+	if killed != 2 {
+		t.Fatalf("emergencyStop killed %d handles, want 2", killed)
+	}
+	if d.runStatus(first.RunID) != "cancelled" || d.runStatus(second.RunID) != "cancelled" {
+		t.Fatalf("runs not marked cancelled: first=%q second=%q", d.runStatus(first.RunID), d.runStatus(second.RunID))
+	}
+
+	blocked := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "after stop"}, allowEval, noAudit)
+	if blocked.Status != "emergencyStopped" {
+		t.Fatalf("dispatch after emergency stop = %q, want emergencyStopped", blocked.Status)
+	}
+}
+
+func TestEmergencyStopDuringLaunchKillsLateHandle(t *testing.T) {
+	var killed int
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		if stopped := d.emergencyStop(); stopped != 1 {
+			t.Fatalf("emergencyStop during launch stopped %d runs, want 1", stopped)
+		}
+		return &procHandle{kill: func() { killed++ }, pause: func() {}, resume: func() {}}, nil
+	}
+
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "race"}, allowEval, noAudit)
+	if res.Status != "emergencyStopped" {
+		t.Fatalf("dispatch racing emergency stop = %q, want emergencyStopped", res.Status)
+	}
+	if killed != 1 {
+		t.Fatalf("late launch handle killed %d times, want 1", killed)
+	}
+	if d.runStatus(res.RunID) != "cancelled" {
+		t.Fatalf("racing run status = %q, want cancelled", d.runStatus(res.RunID))
+	}
+}
+
+func TestEmergencyStopBlocksSessionLaunches(t *testing.T) {
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	first := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "start"}, allowEval, noAudit)
+	if first.Status != "started" {
+		t.Fatalf("setup dispatch = %q, want started", first.Status)
+	}
+	d.emergencyStop()
+
+	if res := d.continueRun(first.RunID, "continue", continueFallback{}, allowEval, noAudit); res.Status != "emergencyStopped" {
+		t.Fatalf("continue after emergency stop = %q, want emergencyStopped", res.Status)
+	}
+	if res := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "session-1", CWD: "/tmp", Prompt: "resume",
+	}, allowEval, noAudit); res.Status != "emergencyStopped" {
+		t.Fatalf("observed resume after emergency stop = %q, want emergencyStopped", res.Status)
+	}
+	if res := d.launchConversationTurn("conversation-run-1", conversationLaunchParams{
+		Agent: "claudeCode", CWD: "/tmp", Prompt: "conversation",
+	}, allowEval, noAudit); res.Status != "emergencyStopped" {
+		t.Fatalf("conversation launch after emergency stop = %q, want emergencyStopped", res.Status)
+	}
+}

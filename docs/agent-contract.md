@@ -2,7 +2,7 @@
 
 > Rules every contributor — human or AI — follows when changing this repo.
 
-Last updated: 2026-05-27
+Last updated: 2026-07-06
 
 This document is the canonical short-form for the engineering rules in
 `README.md` and the architectural constraints in `ARCHITECTURE.md`. When
@@ -25,13 +25,14 @@ be corrected.
 
 ## 2. Platform contract
 
-- Deployment target: **iOS 27.0** (`project.yml` and `Package.swift`).
+- Deployment target: **iOS 26.0** (`project.yml` and `Package.swift`).
 - Toolchain: Xcode 27.x, Swift 6.2, SwiftPM-first.
 - Strict concurrency and existential-any are on by default — do not add
   upcoming-feature flags for them.
 - iOS 27-only APIs (`glassEffect`, `@Observable`, new ScrollView/safeArea
-  modifiers, `BGContinuedProcessingTask`, Foundation Models, etc.) can be
-  used without `#available` gating once the rest of the file requires iOS 27.
+  modifiers, `BGContinuedProcessingTask`, Foundation Models, etc.) are
+  fast-follow candidates while the deployment target remains iOS 26.0. Gate
+  them or keep them out of the shipping path.
 
 ## 3. Code change rules
 

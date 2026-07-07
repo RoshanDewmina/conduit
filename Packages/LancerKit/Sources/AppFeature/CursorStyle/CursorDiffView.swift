@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// One line of a unified diff: a context line present on both sides, an added
 /// line (new-file only), or a removed line (old-file only).

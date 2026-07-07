@@ -6,7 +6,7 @@ Use this reference for Lancer interactive board and IA prototype work.
 
 Two boards are easy to confuse:
 
-- Repo migration board source: `/Users/roshansilva/Documents/command-center/docs/audit/migration-board/index.html`
+- Feature backlog (canonical scope/IA): `docs/product/FEATURE_BACKLOG.md`
 - Exported interactive board Roshan usually views: `/Users/roshansilva/Downloads/Lancer GitHub repo/Lancer Board.dc.html`
 
 When the user says the new designs are not shown, treat it as a rendered-board debugging task. Static source changes are not enough.

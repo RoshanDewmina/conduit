@@ -37,4 +37,4 @@ Grouped by category. Fill in the "Suggested default" column with real values bef
 
 > No placeholders were found in `marketing/` files — all marketing content is currently placeholder-free.
 
-> The `docs/audit/APP_STORE_SUBMISSION_PREP.md` file references `docs/app-store-metadata.md` for app metadata — check that file for any additional domain/URL placeholders if it exists.
+> App Store metadata placeholders: see `docs/distribution/APP_STORE_CONNECT_METADATA.md` for any additional domain/URL placeholders.

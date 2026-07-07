@@ -4,57 +4,39 @@ Use this compact map after reading the required live files. It is a navigation a
 
 ## Canonical Rules
 
-- Local wiki/workflow: `/Users/roshansilva/.hermes/knowledge-base/AGENTS.md`
+- Owner hub: `docs/STATUS_LEDGER.md`
+- Agent index: `docs/AGENT_READ_FIRST.md`
 - Repo engineering rules: `docs/agent-contract.md`
-- Claude/OpenCode execution convention and app verification notes: `CLAUDE.md`
-- General repo entrypoints: `README.md`, `ARCHITECTURE.md`
-- Architecture source of truth: `ARCHITECTURE.md`
+- Claude/OpenCode execution convention: `CLAUDE.md`
+- General repo entrypoints: `README.md`, `ARCHITECTURE.md` §0.1 + §4.1
 - Launch truth: `docs/PUBLISH_READINESS_CHECKLIST.md`
 - Verified issues: `docs/KNOWN_ISSUES.md`
-- Validation procedure: `docs/validation-playbook.md`
-- Most recent V1 evidence snapshot: `docs/test-runs/2026-06-18-v1-verification.md`
-
-## Active V1 Plans
-
-Start at:
-
-```text
-docs/superpowers/plans/2026-06-18-v1-implementation-handoff-index.md
-```
-
-Important linked plans:
-
-- `2026-06-18-chat-history-search-continuation-v1.md`
-- `2026-06-18-sidebar-shell-swift-v1.md`
-- `2026-06-18-chat-artifacts-approvals-v1.md`
-- `2026-06-18-fleet-thread-routing-v1.md`
-- `2026-06-18-v1-launch-hardening-testflight.md`
-- `2026-06-18-session-resume-followup-mvp.md`
+- Feature scope: `docs/product/2026-07-05-lancer-feature-master-plan.md`
+- Implementation gaps: `docs/product/2026-07-06-feature-implementation-gap-matrix.md`
+- Wireframes: `docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md`
+- Tier 0 screenshot evidence: `docs/test-runs/user-ready-tier0-2026-07-06/`, `docs/test-runs/composer-verify-2026-07-06/`
 
 ## Current Product Direction
 
-- A new user should land in chat.
-- Recent threads must survive app restart.
-- Search should find prior prompts, assistant output, and artifacts.
-- Follow-up continuation should create ordered turns rather than mutating old output streams.
-- Fleet shows hosts/agents/status/spend/stop controls and opens related threads.
-- Approvals appear in Inbox and inline with the related chat context.
-- Activity/history is not a root destination.
+- **Navigation:** Cursor-style **3-root IA** — Home / Workspaces / Settings (`AppFeature/CursorStyle/`).
+- **Launch seams:** `LANCER_CURSOR_SHELL=1` (mock), `LANCER_CURSOR_SHELL_LIVE=1` (live bridge).
+- Legacy sidebar / Command Home is **deprecated** — not current design.
+- Phone steers and approves — not a phone IDE. Governance + cross-vendor dispatch is the moat.
+- Tier 0 exit bar: pair → dispatch → approval → continue through live Cursor shell + real `lancerd`.
 
 ## Common Code Areas
 
-- App shell and navigation: `Packages/LancerKit/Sources/AppFeature/`
+- Cursor shell: `Packages/LancerKit/Sources/AppFeature/CursorStyle/` (`CursorAppShell`, live bridge)
+- App root / routing: `Packages/LancerKit/Sources/AppFeature/AppRoot.swift`
 - Chat transcript and artifacts: `Packages/LancerKit/Sources/SessionFeature/Chat/`
 - Settings: `Packages/LancerKit/Sources/SettingsFeature/`
-- Core protocol types: `Packages/LancerKit/Sources/LancerCore/`
-- SSH transport: `Packages/LancerKit/Sources/SSHTransport/`
+- Design system: `Packages/LancerKit/Sources/DesignSystem/`
 - Relay bridge/router: `Packages/LancerKit/Sources/SessionFeature/E2ERelayBridge.swift`, `daemon/lancerd/e2e_router.go`
 - Agent dispatch: `daemon/lancerd/dispatch.go`, `daemon/lancerd/server.go`
 
 ## Drift Checks
 
-- Generated reports can lag local code.
-- `docs/current-state-audit.md` is archived/stale per `docs/agent-contract.md`.
-- `docs/remaining-work.md` is superseded and should not drive work.
-- Session-resume docs and current adapter code may disagree; inspect code before concluding.
-- `docs/LANCER_PROJECT_DOSSIER.md` is useful as a broad briefing, but newer June 18 plans may supersede its IA/status details.
+- `docs/LANCER_PROJECT_DOSSIER.md` is archived — do not cite.
+- July-4 `docs/product/2026-07-04-*` (except `v1-paid-away-workflow-spec.md`) — historical only.
+- Removed bundles (`docs/design-audit/workflows/`, `lancer-core-wireframes`, `proof-to-ship-wireframes`, `docs/lancer-ui-prototype/`, etc.) — do not link.
+- `enum Tab` and legacy sidebar IA — vestigial; Cursor shell is canonical.

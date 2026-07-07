@@ -61,7 +61,18 @@ public final class RelayFleetStore {
         }
     }
 
-    public var isFull: Bool { isRelayFleetFull(count: machines.count) }
+    /// Machines whose persisted pairing permanently failed to restore (hydrated
+    /// with `pairingUsable: false`, or whose live pairing attempt hard-failed)
+    /// can never become live without a fresh re-pair — counting them against
+    /// the cap means a device that's cycled through a few uninstall/re-pair
+    /// generations (Keychain survives uninstall even though the UserDefaults
+    /// code/URL don't) permanently fills the fleet with dead entries and
+    /// silently rejects every subsequent real pairing at `add()` below.
+    public var isFull: Bool { isRelayFleetFull(count: usableMachineCount) }
+
+    private var usableMachineCount: Int {
+        machines.filter { connectionStates.state(for: $0.id) != .pairingInvalid }.count
+    }
 
     public func machine(_ id: RelayMachineID) -> Machine? {
         machines.first { $0.id == id }

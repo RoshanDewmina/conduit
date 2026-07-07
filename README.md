@@ -8,6 +8,8 @@ the missing client between them.
 
 > Read the full design at [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
+**Start here (2026-07-06):** [`docs/STATUS_LEDGER.md`](docs/STATUS_LEDGER.md) — current priority, what's shipped, branches, and which doc is canonical. Agents: [`docs/AGENT_READ_FIRST.md`](docs/AGENT_READ_FIRST.md). Feature list: [`docs/product/FEATURE_BACKLOG.md`](docs/product/FEATURE_BACKLOG.md).
+
 ## Repository layout
 
 ```
@@ -67,8 +69,10 @@ Three rules keep the codebase honest:
 
 ## Status
 
-> **Current direction (2026-06-20):** the app home is a **sidebar / Command Home shell**; New Chat and
-> durable threads remain a primary action and depth destinations — *not* a tab bar. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
+> **Current direction (2026-07-06):** the app shell is the **Cursor-style 3-root IA** (Home /
+> Workspaces / Settings) under `AppFeature/CursorStyle/`. `LANCER_CURSOR_SHELL=1` (mock) and
+> `LANCER_CURSOR_SHELL_LIVE=1` (live bridge) are the DEBUG launch seams. Legacy sidebar / Command
+> Home is **deprecated**. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
 > and §4.1 for the authoritative picture; the milestone table below is historical milestone history.
 
 | M  | Title             | Status |
@@ -87,12 +91,13 @@ Three rules keep the codebase honest:
 | M11 | Temporal wall    | 🚧 Phase 0+1+UX landed 2026-05-27; Phase 2 pending |
 | M12 | Live Block I/O   | 🚧 core implementation landed 2026-05-28; real-host TUI validation pending |
 
-Last updated 2026-06-17. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the product and module
+Last updated 2026-07-06. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the product and module
 architecture, [`docs/PUBLISH_READINESS_CHECKLIST.md`](./docs/PUBLISH_READINESS_CHECKLIST.md) for
 launch gates, and [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) for the current audit tracker.
 
-Historical state audits have been archived under [`docs/_archive/`](./docs/_archive/). Do not use
-`docs/current-state-audit.md` as source of truth.
+Historical state audits were **purged July 2026** (formerly under `docs/_archive/`). Do not use
+`docs/current-state-audit.md` or other removed point-in-time audits as source of truth — see
+[`docs/STATUS_LEDGER.md`](./docs/STATUS_LEDGER.md).
 
 ## Heritage
 

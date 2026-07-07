@@ -517,7 +517,10 @@ public final class E2ERelayBridge: ObservableObject {
         case "approvalPending":
             guard let env = try? JSONDecoder().decode(
                 E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.ApprovalData>.self, from: message.payload
-            ) else { return }
+            ) else {
+                Self.logger.error("handleRelayMessage: approvalPending decode failed for machine=\(self.machineID.uuidString, privacy: .public)")
+                return
+            }
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EApprovalReceived"),
                 object: nil,

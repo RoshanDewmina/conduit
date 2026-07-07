@@ -85,6 +85,7 @@ extension DSConnectError {
     }
 }
 
+#if os(iOS)
 // MARK: - DSTypedErrorCard
 
 public struct DSTypedErrorCard: View {
@@ -106,14 +107,12 @@ public struct DSTypedErrorCard: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // DotMatrix + badge row
             HStack(spacing: 12) {
                 DotMatrixView(state: .error, cols: 12, rows: 4, cell: 7, dot: 3)
                     .frame(width: 100, height: 36)
-                DSChip(error.badgeLabel, tone: error.badgeTone, variant: .soft)
+                CursorStatusBadge(kind: .risk(level: .critical), label: error.badgeLabel)
             }
 
-            // Title + body
             VStack(alignment: .leading, spacing: 6) {
                 Text(error.title)
                     .font(.dsMonoPt(15, weight: .semibold))
@@ -127,10 +126,9 @@ public struct DSTypedErrorCard: View {
                     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             }
 
-            // Actions
             VStack(spacing: 8) {
                 if let onPrimary {
-                    DSButton(error.primaryAction, variant: .primary, size: .md, mono: true, fullWidth: true, action: onPrimary)
+                    CursorPillButton(title: error.primaryAction, style: .primary, fullWidth: true, action: onPrimary)
                 }
                 if let onSecondary {
                     Button(action: onSecondary) {
@@ -151,3 +149,4 @@ public struct DSTypedErrorCard: View {
         )
     }
 }
+#endif

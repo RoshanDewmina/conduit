@@ -372,7 +372,7 @@ private struct LancerTokensModifier: ViewModifier {
 }
 
 // MARK: - DI — always-dark Island palette
-// Shared by AgentIsland and AgentStatusHeader. Never scheme-adaptive — the island is always dark.
+// HUD strip tokens. Never scheme-adaptive — the island is always dark.
 
 #if os(iOS)
 enum DI {

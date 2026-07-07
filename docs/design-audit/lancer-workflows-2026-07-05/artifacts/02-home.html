@@ -1,0 +1,991 @@
+<title>Lancer Workflow — Command Home</title>
+<style>
+  :root {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0b0c;
+      --surface: #17171a;
+      --surface-2: #1c1c1f;
+      --ink: #ececee;
+      --muted: #a3a3a8;
+      --line: #2b2b2f;
+      --accent: #55c2f0;
+      --ok: #45bd82;
+      --warn: #d69a3a;
+      --danger: #ff6f92;
+      --shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c;
+    --surface: #17171a;
+    --surface-2: #1c1c1f;
+    --ink: #ececee;
+    --muted: #a3a3a8;
+    --line: #2b2b2f;
+    --accent: #55c2f0;
+    --ok: #45bd82;
+    --warn: #d69a3a;
+    --danger: #ff6f92;
+    --shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="light"] {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .tap:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  .col {
+    max-width: 760px;
+  }
+
+  /* ---- header ---- */
+
+  header.doc-head {
+    margin-bottom: 44px;
+  }
+
+  .breadcrumb {
+    font-size: 12.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .breadcrumb .sep { margin: 0 8px; opacity: .5; }
+  .breadcrumb .here { color: var(--ink); font-weight: 650; }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    font-weight: 780;
+  }
+
+  .thesis {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 22px;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 650;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .pill.status-approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .pill.status-approved::before { content: "●"; font-size: 8px; }
+
+  .pill.source { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; font-size: 12px; }
+
+  /* ---- section scaffolding ---- */
+
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  .section-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  p { line-height: 1.6; }
+  .col p { max-width: 66ch; }
+
+  /* ---- screens strip ---- */
+
+  .screens-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .screens-scroll {
+    overflow-x: auto;
+    background: var(--surface-2);
+  }
+
+  .screens-scroll img {
+    display: block;
+    width: 1800px;
+    max-width: none;
+    height: auto;
+  }
+
+  .screens-caption {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .legend-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+
+  .legend-item .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-right: 8px;
+  }
+
+  .legend-item .name { font-size: 13.5px; font-weight: 650; }
+
+  /* ---- flow steps ---- */
+
+  .flow {
+    display: grid;
+    gap: 22px;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+  }
+
+  .flow-step .badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin: 3px 0 6px;
+  }
+
+  .flow-step p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .flow-step p strong { color: var(--ink); font-weight: 650; }
+
+  /* ---- mobbin citation cards ---- */
+
+  .cite-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cite-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+  }
+
+  .cite-card .src {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .cite-card .src a {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .cite-card .src a:hover { text-decoration: underline; }
+
+  .cite-card .lesson {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cite-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .cite-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- rationale ---- */
+
+  .bug-callout {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 20px 0;
+  }
+
+  .bug-callout .mark {
+    color: var(--danger);
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .bug-callout p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .bug-callout .label {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--danger);
+    margin-bottom: 5px;
+  }
+
+  /* ---- issues table ---- */
+
+  .issues {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .issue-row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+
+  .issue-row .state {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .state.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .state.resolved { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+  .issue-row .body strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .issue-row .body span { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .issue-row .body .cite { display: block; margin-top: 5px; font-size: 12px; }
+
+  /* ---- footer ---- */
+
+  footer {
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer .files {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 720px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 32px 1fr; }
+    .issue-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---- coded phone mockups (fixed light styling — these reproduce a specific
+     light-mode app state, like a photo, and don't invert with the viewer's theme) ---- */
+
+  .phone-strip {
+    display: flex;
+    gap: 22px;
+    padding: 26px 24px;
+  }
+
+  .phone-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slot-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: #7a7a76;
+    margin: 0;
+  }
+
+  .mock .phone {
+    width: 270px;
+    height: 586px;
+    border: 1px solid #dedede;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    background: #fbfbfa;
+    box-shadow: 0 18px 44px rgba(20,20,18,.16);
+    color: #171717;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+
+  .mock .iphone-status {
+    height: 50px;
+    padding: 18px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mock .home-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 16px;
+  }
+
+  .mock .circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #d8d8d5;
+    background: linear-gradient(#fff, #f2f2f0);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    color: #111;
+  }
+
+  .mock .right-actions { display: flex; gap: 8px; }
+  .mock .small-circle { width: 38px; height: 38px; font-size: 17px; }
+
+  .mock .home-title {
+    padding: 14px 22px 20px;
+    font-size: 21px;
+    font-weight: 760;
+  }
+
+  .mock .home-content {
+    padding: 0 22px 110px;
+    height: 380px;
+    overflow: hidden;
+  }
+
+  .mock .group { margin-bottom: 24px; }
+  .mock .group-title { color: #6f6f6f; font-size: 13.5px; margin: 0 0 12px; }
+
+  .mock .row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ececea;
+  }
+
+  .mock .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+    background: #d7d7d5;
+  }
+
+  .mock .dot.active { background: #158bc0; }
+  .mock .dot.warn { background: #d18b2b; }
+
+  .mock .row-title {
+    font-size: 15.5px;
+    line-height: 1.15;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .meta {
+    color: #6f6f6f;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .check { color: #008767; font-weight: 800; margin-right: 6px; }
+  .mock .diff { align-self: center; font-size: 12.5px; white-space: nowrap; color: #6f6f6f; padding-top: 16px; }
+  .mock .add { color: #12966b; }
+  .mock .del { color: #ff5d87; }
+
+  .mock .composer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 16px;
+    height: 52px;
+    border-radius: 28px;
+    border: 1px solid #d8d8d5;
+    background: rgba(255,255,255,.9);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .mock .composer span {
+    flex: 1;
+    min-width: 0;
+    color: #a7a7a4;
+    font-size: 15.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .pill-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ededeb;
+    display: grid;
+    place-items: center;
+    color: #6b6b69;
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .mock .sheet {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 340px;
+    border-radius: 30px 30px 24px 24px;
+    border: 1px solid #dfdfdc;
+    background: rgba(255,255,255,.97);
+    padding: 16px 16px 20px;
+    box-shadow: 0 -16px 44px rgba(0,0,0,.15);
+  }
+
+  .mock .grabber {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d8d8d5;
+    margin: -4px auto 16px;
+  }
+
+  .mock .sheet-title {
+    text-align: center;
+    font-weight: 760;
+    font-size: 16.5px;
+    margin-bottom: 16px;
+  }
+
+  .mock .sheet-row {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #ebebe8;
+    font-size: 15.5px;
+  }
+
+  .mock .sheet-row:last-child { border-bottom: 0; }
+  .mock .sheet-row small { display: block; color: #6f6f6f; font-size: 11px; margin-top: 2px; }
+
+  /* ---- iOS opportunity cards ---- */
+
+  .ios-grid { display: grid; gap: 14px; }
+
+  .ios-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+  }
+
+  .ios-card .glyph {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ios-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .ios-card .api {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .ios-card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .ios-card p strong { color: var(--ink); font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="breadcrumb">Lancer <span class="sep">/</span> Workflows <span class="sep">/</span> <span class="here">01 — Command Home</span></p>
+    <h1>Command Home</h1>
+    <p class="thesis">The first screen. A calm daily ledger, not a dashboard — what needs a decision, what's running, and one way to start something new, in that order.</p>
+    <div class="meta-row">
+      <span class="pill status-approved">Approved direction</span>
+      </div>
+  </header>
+
+  <section>
+    <p class="section-eyebrow">The five screens</p>
+    <h2>Exactly as built on the board</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Daily ledger</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">+</div></div>
+              </div>
+              <div class="home-title">conduit</div>
+              <div class="home-content">
+                <div class="group">
+                  <p class="group-title">Needs you</p>
+                  <div class="row">
+                    <div class="dot warn"></div>
+                    <div><div class="row-title">Approval waiting</div><div class="meta">High risk &middot; patch &middot; hermes-box</div></div>
+                    <div class="diff">Review</div>
+                  </div>
+                </div>
+                <div class="group">
+                  <p class="group-title">Today</p>
+                  <div class="row">
+                    <div class="dot active"></div>
+                    <div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">&#10003;</span>Checks Passed</div></div>
+                    <div class="diff"><span class="add">+858</span> <span class="del">-38</span></div>
+                  </div>
+                  <div class="row">
+                    <div class="dot"></div>
+                    <div><div class="row-title">Lancer app notifications</div><div class="meta"><span class="check">&#10003;</span>Checks Passed &middot; +831 -39</div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; All clear, still action</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">&#8801;</div></div>
+              </div>
+              <div class="home-title">conduit</div>
+              <div class="home-content">
+                <div class="group">
+                  <p class="group-title">Today</p>
+                  <div class="row">
+                    <div class="dot"></div>
+                    <div><div class="row-title">No decisions right now</div><div class="meta">1 machine connected &middot; no failed proof</div></div>
+                  </div>
+                  <div class="row">
+                    <div class="dot"></div>
+                    <div><div class="row-title">Start work from here</div><div class="meta">Pick repo, machine, and model in composer</div></div>
+                  </div>
+                </div>
+                <div class="group">
+                  <p class="group-title">Yesterday</p>
+                  <div class="row">
+                    <div class="dot"></div>
+                    <div><div class="row-title">Siri iOS27 fast follow</div><div class="meta"><span class="check">&#10003;</span>Checks Passed &middot; +1,263 -70</div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>Plan, ask, build&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Composer expanded</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome">
+                <div class="circle">&#8592;</div>
+                <div class="right-actions"><div class="circle small-circle">&#8981;</div><div class="circle small-circle">&#8801;</div></div>
+              </div>
+              <div class="home-title">conduit</div>
+              <div class="home-content">
+                <div class="row"><div class="dot active"></div><div><div class="row-title">Parallel agents</div><div class="meta"><span class="check">&#10003;</span>Checks Passed</div></div></div>
+              </div>
+              <div class="sheet">
+                <div class="grabber"></div>
+                <div style="color:#6f6f6f;font-size:13.5px;margin-bottom:8px;">conduit&nbsp; master&nbsp;&#8964; &nbsp; cloud&nbsp;&#8964;</div>
+                <div style="font-size:21px;color:#a5a5a2;margin:4px 0 70px;">Plan, ask, build&hellip;</div>
+                <div class="composer" style="position:static;box-shadow:none;"><div class="pill-icon">+</div><span>Composer 2.5</span><div class="pill-icon">&#127908;</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">D &middot; Run-on picker</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="padding-top:96px;opacity:.4;">
+                <div class="row"><div class="dot"></div><div><div class="row-title">Parallel agents</div><div class="meta">Checks Passed</div></div></div>
+                <div class="row"><div class="dot"></div><div><div class="row-title">Lancer notifications</div><div class="meta">Checks Passed &middot; +831 -39</div></div></div>
+              </div>
+              <div class="sheet">
+                <div class="grabber"></div>
+                <div class="sheet-title">Run on</div>
+                <div style="color:#777;font-size:14px;margin-bottom:12px;">Active</div>
+                <div class="sheet-row"><span>&#9729;</span><div>Cursor Cloud<small>conduit &middot; master</small></div><span>&#10003;</span></div>
+                <div style="color:#777;font-size:14px;margin:20px 0 6px;">More</div>
+                <div class="sheet-row"><span>&#128421;</span><div>Hermes Mac mini<small>3 repos &middot; online</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>&#128225;</span><div>Remote Control<small>Pair or reconnect</small></div><span>&rsaquo;</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">E &middot; Model picker</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="padding-top:96px;opacity:.4;">
+                <div class="row"><div class="dot"></div><div><div class="row-title">Parallel agents</div><div class="meta">Checks Passed</div></div></div>
+                <div class="row"><div class="dot"></div><div><div class="row-title">Lancer notifications</div><div class="meta">Checks Passed &middot; +831 -39</div></div></div>
+              </div>
+              <div class="sheet">
+                <div class="grabber"></div>
+                <div class="sheet-title">Model</div>
+                <div style="height:40px;border:1px solid #dededb;border-radius:20px;display:flex;align-items:center;padding:0 12px;color:#999;font-size:15.5px;margin-bottom:18px;">&#9906;&nbsp;&nbsp;Search</div>
+                <div style="color:#777;font-size:14px;margin-bottom:6px;">Active</div>
+                <div class="sheet-row"><span></span><div>Composer 2.5</div><span>&#10003;</span></div>
+                <div style="color:#777;font-size:14px;margin:20px 0 6px;">More</div>
+                <div class="sheet-row"><span></span><div>GPT-5.5 <small>Medium</small></div><span>&hellip;</span></div>
+                <div class="sheet-row"><span></span><div>Codex 5.3 <small>Medium</small></div><span>&hellip;</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Scroll to see all five &middot; built in code from the board's own CSS values, not a screenshot &mdash; resizes cleanly, no raster artifacts</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">How someone actually uses it</p>
+    <h2>One workspace, top to bottom</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="badge">A</div>
+        <div>
+          <h3>Open the app &mdash; something needs you</h3>
+          <p>You land on Home for whichever workspace you were last in (<strong>conduit</strong>, in this case) &mdash; scoped to one repo, not a global inbox. <strong>Needs you</strong> sits at the very top: one row, "Approval waiting &middot; High risk &middot; patch &middot; hermes-box," with a single "Review" tap target. Below it, <strong>Today</strong> shows finished and running work as quiet rows &mdash; a checkmark, a diffstat, nothing louder.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">B</div>
+        <div>
+          <h3>Open the app &mdash; nothing needs you</h3>
+          <p>This is the state you'll see most once the app is working well, so it doesn't go blank. "No decisions right now" stays as a row, "Start work from here" nudges toward the composer, and <strong>Yesterday</strong>'s activity stays visible underneath. Calm, but never empty.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">C</div>
+        <div>
+          <h3>Start something</h3>
+          <p>Tap the composer ("Plan, ask, build&hellip;") and it expands into a sheet with two inline selectors sitting above the text field &mdash; which repo/branch, and where it runs. Type once; everything else is two taps.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">D</div>
+        <div>
+          <h3>Pick where it runs</h3>
+          <p>Tapping the run-target selector opens "Run on": your active target first (Cursor Cloud, in this example), then more machines and Remote Control/SSH below. Recent and relevant before exhaustive.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">E</div>
+        <div>
+          <h3>Pick which agent</h3>
+          <p>Same shallow pattern for the model picker &mdash; a search field, the active model checked, more options below. No modal-within-modal, no separate router screen.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">What Mobbin taught us, and why</p>
+    <h2>Every reference maps to one decision</h2>
+    <div class="cite-grid">
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/c52d3c07-2f2f-422d-b9f1-28457b741bf5" target="_blank" rel="noopener">GitHub Inbox</a><span class="lesson">Row shape</span></div>
+        <p>Actionable feed &mdash; repo, age, title, one status snippet, swipe-to-done. This is why <strong>Needs you</strong> is one plain row with a single action, not a card with a headline number.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/67ef057b-19a1-4507-a636-6bf67241a9dd" target="_blank" rel="noopener">GitHub "All done here!"</a> &amp; <a href="https://mobbin.com/screens/9372f97b-a422-49e6-b9fa-4eb3d6b281fe" target="_blank" rel="noopener">Todoist Today-empty</a><span class="lesson">All-clear state</span></div>
+        <p>Calm empty states that stay structured instead of going blank or cartoonish. This is why Panel B keeps showing rows &mdash; "No decisions right now" is still a row, not a void.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/f688fc71-2060-49c2-be67-bc6ab5e53bee" target="_blank" rel="noopener">Linear Inbox</a><span class="lesson">Status dots</span></div>
+        <p>Dense triage with small unread dots instead of heavy badges. The colored <span class="mono">.dot</span> convention (active / warn / danger) used on every row across the <em>entire</em> board started here.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/58cf61e8-ef30-48f7-9e6d-cc3114595778" target="_blank" rel="noopener">incident.io</a><span class="lesson">Risk without panic</span></div>
+        <p>Severity, owner, and time shown cleanly, with no outage-siren styling. Why "high risk" reads as a text label plus a small warn dot &mdash; never a red banner. Risk should read as information, not alarm.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/flows/7226c577-2b21-403e-bc99-20cb31808c50" target="_blank" rel="noopener">Slack workspace flow</a> &amp; <a href="https://mobbin.com/screens/837966ac-94b9-458d-a2b1-a6b276e861e4" target="_blank" rel="noopener">Notion sidebar</a><span class="lesson">Context placement</span></div>
+        <p>Workspace context kept separate from the task list itself. Why "which repo/machine am I in" lives in the page title and composer selectors, never repeated on every row.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">Why this shape, not the old one</p>
+    <h2>The ledger fixes a real bug, not just a look</h2>
+    <p>The previous Home was a dashboard: a greeting, a big "4 agents need you" headline, a machine-card stack up front. That's not only noisier &mdash; it was hiding a real defect the ledger model closes by construction.</p>
+    <div class="bug-callout">
+      <div class="mark">!</div>
+      <div>
+        <span class="label">Split-brain attention &middot; documented, not hypothetical</span>
+        <p>The old headline read from <span class="mono">pendingApprovalCount</span> while the attention cards read from a separate <span class="mono">FleetStore.attentionItems</span> projection &mdash; two sources that can disagree, so the app could shout "4 agents need you" while showing zero actionable rows underneath. The ledger's headline, rows, and sidebar badge are specified to share <strong>one</strong> attention projection, so they can't desync.</p>
+      </div>
+    </div>
+    <p>The composer-with-inline-selectors model is the same instinct applied to starting work: no routing wizard, no separate "choose your agent" screen &mdash; one input, two taps to constrain it, matching how Cursor treats the same moment.</p>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">Navigation reality check</p>
+    <h2>What the sidebar actually is, as of today</h2>
+    <p class="col">This workflow doc originally proposed a "four-root" sidebar (Home, Work, Machines, Settings) as a target state. A background investigation just closed that question against the real code &mdash; here's what's actually true right now, not what any doc assumed.</p>
+    <div class="issues">
+      <div class="issue-row">
+        <span class="state resolved">Confirmed</span>
+        <div class="body">
+          <strong>Sidebar has exactly 2 nav rows: Home, Machines</strong>
+          <span>Plus a "New Chat" CTA button (not a row), Settings reached via the header/gear icon (not a row), and an Archived link at the bottom.</span>
+          <span class="cite mono">LancerSidebarView.swift:30-266</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state resolved">Already fixed</span>
+        <div class="body">
+          <strong>Inbox / Needs Attention &mdash; folded into Home</strong>
+          <span>Removed as a sidebar row on 2026-07-01. Its badge and coachmark now live on Home's own row.</span>
+          <span class="cite mono">commit cc1f6aff</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state resolved">Already fixed</span>
+        <div class="body">
+          <strong>Governance &mdash; folded into Settings</strong>
+          <span>Removed as a sidebar row on 2026-06-30, a day earlier than the Inbox fold.</span>
+          <span class="cite mono">commit 814c219c</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">Stale doc</span>
+        <div class="body">
+          <strong>ARCHITECTURE.md &sect;4.1 still describes the old 5-destination sidebar</strong>
+          <span>Never updated after either fold landed. Needs a correction pass, independent of any wireframe decision.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">Stale asset</span>
+        <div class="body">
+          <strong>The "current" sidebar screenshots predate both folds</strong>
+          <span>Captured 2026-06-30 22:34 &mdash; one minute before the Governance fold and 13 hours before the Inbox fold. They show a sidebar that no longer exists.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">Real decision</span>
+        <div class="body">
+          <strong>Machines &rarr; "Workspaces" is more than a rename</strong>
+          <span>The wireframe wants a repo-first list; the current Machines view is host-first (<span class="mono">FleetView</span>). That reframing is a real product change, not label swapping &mdash; and Work Thread's "no terminal-first route" claim conflicts with documented invariants protecting the terminal-blocks pipeline. Both deserve their own sign-off, not a line item buried in a sidebar cleanup.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">iOS 27 / WWDC 2026 &mdash; what applies here</p>
+    <h2>Three concrete opportunities, none of them gating V1</h2>
+    <p class="col">Cross-checked against the full platform research pass. Most iOS 27 findings apply to Proof Suite or Work Thread, not Home &mdash; these three are the ones that actually touch this screen.</p>
+    <div class="ios-grid">
+      <div class="ios-card">
+        <div class="glyph">VA</div>
+        <div>
+          <h3>Siri can reference a specific row, not just the app</h3>
+          <span class="api">.appEntityIdentifier(EntityIdentifier(for:identifier:)) &middot; View Annotations API</span>
+          <p>Apple's own guidance is to use this exact modifier when <strong>multiple meaningful items are visible at once</strong> &mdash; precisely what <strong>Needs you</strong> / <strong>Today</strong> / <strong>Yesterday</strong> are. Tag each row and "Hey Siri, review the high-risk one" or "approve the checkout patch" could resolve to that specific row instead of just opening the app. No third-party app has shipped this yet (iOS 27 is still in beta), so treat as prototype-worthy, not proven.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">AA</div>
+        <div>
+          <h3>The same risk dot could gate the Siri action, for free</h3>
+          <span class="api">IntentAuthenticationPolicy = .requiresAuthentication &middot; WWDC26 Session 347</span>
+          <p>Apple's own risk taxonomy for agentic features &mdash; Destructive/Exfiltration = High, Data Manipulation/Injection = Medium &mdash; maps directly onto the <span class="mono">.dot.warn</span> already on the Approval-waiting row. If Siri could ever act on that row, forcing Face ID for the high-risk case is the same decision the reinstated biometric gate already makes &mdash; just enforced at the OS level instead of only inside the app. One taxonomy, cited externally, instead of two invented separately.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">W</div>
+        <div>
+          <h3>A bigger Home Screen tile for the single top item &mdash; corrected framing</h3>
+          <span class="api">.systemExtraLargePortrait widget family &middot; WWDC26 Session 277</span>
+          <p>Earlier research called this a "full-screen widget" &mdash; that framing doesn't hold up. The real capability is a larger portrait widget family (ported from visionOS), still placed like any Home Screen widget, not a Lock-Screen-covering surface. Still useful: it's a legitimate bigger presentation of the same Away Digest data Panel A already computes, reusing one data source at two sizes &mdash; not a new pipeline.</p>
+        </div>
+      </div>
+    </div>
+    <p class="col" style="color:var(--muted);font-size:14px;margin-top:6px;">Platform notes are curated inline below (WWDC 2026 research source purged 2026-07-06).</p>
+  </section>
+
+  <footer>
+    <p>Sources for this page</p>
+    <div class="files">
+      <span>docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md</span>
+      <span>Packages/LancerKit/Sources/AppFeature/LancerSidebarView.swift, SidebarShellState.swift</span>
+      <span>ARCHITECTURE.md &sect;4.1</span>
+    </div>
+  </footer>
+
+</div>

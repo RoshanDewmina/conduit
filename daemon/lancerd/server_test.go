@@ -142,6 +142,47 @@ func TestRunControlRPCs(t *testing.T) {
 	call("agent.pause", "paused", "no-such-run", false)
 }
 
+func TestEmergencyStopRPCStopsRunsAndReturnsCount(t *testing.T) {
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	s.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	run := s.dispatcher.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/tmp", Prompt: "x"},
+		func(ApprovalEvent) (string, string, bool) { return "allow", "ok", false }, func(AuditEntry) {})
+	if run.RunID == "" {
+		t.Fatalf("dispatch did not start a run: %+v", run)
+	}
+
+	resultCh := make(chan rpcMessage, 1)
+	s.setEmitter(func(data []byte) error {
+		var m rpcMessage
+		_ = json.Unmarshal(data, &m)
+		select {
+		case resultCh <- m:
+		default:
+		}
+		return nil
+	})
+	s.handleMessage(&rpcMessage{JSONRPC: "2.0", ID: 1, Method: "agent.emergencyStop"})
+
+	select {
+	case res := <-resultCh:
+		m, ok := res.Result.(map[string]interface{})
+		if !ok {
+			t.Fatalf("result = %#v, want object", res.Result)
+		}
+		if m["emergencyStopped"] != true || m["stoppedRuns"] != float64(1) {
+			t.Fatalf("result = %#v, want emergencyStopped=true stoppedRuns=1", res.Result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("agent.emergencyStop: no result emitted")
+	}
+	if status := s.dispatcher.runStatus(run.RunID); status != "cancelled" {
+		t.Fatalf("run status = %q, want cancelled", status)
+	}
+}
+
 // TestPostApprovalPush verifies that postApprovalPush POSTs to /approval with the correct payload.
 func TestPostApprovalPush(t *testing.T) {
 	var received []byte

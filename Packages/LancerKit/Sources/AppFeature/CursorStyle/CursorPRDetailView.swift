@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// A file row in Ship & History's file list — filename, muted path, and a
 /// colored diffstat, with an expand chevron that reveals its diff inline.
@@ -21,7 +22,11 @@ public struct CursorPRDetailView: View {
     @State private var expandedFileID: CursorPRFileModel.ID?
     @State private var showMenu = false
 
-    public init() {}
+    private let onBack: () -> Void
+
+    public init(onBack: @escaping () -> Void = {}) {
+        self.onBack = onBack
+    }
 
     private let prTitle = "fix(relay): retry backoff on reconnect"
     private let prNumber = "#142"
@@ -75,7 +80,7 @@ public struct CursorPRDetailView: View {
 
     private var header: some View {
         CursorHeaderBar(
-            leading: AnyView(CursorIconButton(systemImageName: "chevron.left", action: {})),
+            leading: AnyView(CursorIconButton(systemImageName: "chevron.left", action: onBack)),
             trailing: [
                 CursorIconButton(systemImageName: "link", action: {}),
                 CursorIconButton(systemImageName: "ellipsis", action: {

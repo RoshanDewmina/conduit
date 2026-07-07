@@ -541,7 +541,7 @@ public struct SessionView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    DSButton("Skip", variant: .ghost, size: .sm) { showTmuxSheet = false }
+                    CursorPillButton(title: "Skip", style: .secondary, action: { showTmuxSheet = false })
                 }
                 .padding(.horizontal, t.s6)
                 .padding(.top, t.s7)
@@ -731,10 +731,10 @@ private struct SessionPasswordRetrySheet: View {
                 Spacer()
 
                 VStack(spacing: 10) {
-                    DSButton("Reconnect", variant: .primary) {
+                    CursorPillButton(title: "Reconnect", style: .primary, action: {
                         if !password.isEmpty { onSubmit(password) }
-                    }
-                    DSButton("Cancel", variant: .secondary, action: onCancel)
+                    })
+                    CursorPillButton(title: "Cancel", style: .secondary, action: onCancel)
                 }
             }
             .padding()
@@ -794,8 +794,8 @@ private struct SessionHostKeyConfirmSheet: View {
                 Spacer()
 
                 VStack(spacing: 10) {
-                    DSButton("Trust & Connect", variant: .primary, action: onTrust)
-                    DSButton("Cancel", variant: .secondary, action: onReject)
+                    CursorPillButton(title: "Trust & Connect", style: .primary, action: onTrust)
+                    CursorPillButton(title: "Cancel", style: .secondary, action: onReject)
                 }
             }
             .padding()

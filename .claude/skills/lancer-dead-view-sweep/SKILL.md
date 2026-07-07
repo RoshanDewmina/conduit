@@ -28,7 +28,8 @@ app can't reach is dead. Computing reachability removes the back-and-forth.
 
 ## Workflow
 
-1. **Build the reachable set.** Root: `AppRoot.swift` (sidebar / New Chat shell) plus the
+1. **Build the reachable set.** Root: `AppRoot.swift` with **Cursor shell** (`LANCER_CURSOR_SHELL` /
+   `LANCER_CURSOR_SHELL_LIVE`) plus legacy sidebar paths still on `master` until Tier 0 retires them.
    `LANCER_DESTINATION` deep-link cases in it. A view is *referenced* if its type name appears in
    another source file via `NavigationLink`, `.sheet`, `.fullScreenCover`, a route enum case, or a
    plain initializer call.
@@ -36,7 +37,7 @@ app can't reach is dead. Computing reachability removes the back-and-forth.
 2. **Find candidates.** For each `struct <Name>: View` in `Packages/LancerKit/Sources`:
    `rg -l '\b<Name>\b' Packages/LancerKit/Sources --glob '!**/*Tests*'` — if the only hit is the
    file that defines it (and `#Preview` providers), it has **0 external references** → candidate.
-   Also scan `docs/_archive/` and any `screenshots/` dirs for assets naming a candidate view.
+   Also scan any `screenshots/` dirs for assets naming a candidate view.
 
 3. **Filter false positives:**
    - Preview providers / `#Preview` blocks do not count as references.

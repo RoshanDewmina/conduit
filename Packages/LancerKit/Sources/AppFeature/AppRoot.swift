@@ -39,9 +39,7 @@ public final class AppEnvironment {
     public let tombstoneRepo: SyncTombstoneRepository
     public let approvalRepo: ApprovalRepository
     public let auditRepo: AuditRepository
-    public let loopStore: LoopStore
     public let quotaGuardStore: QuotaGuardStore
-    public let hostHealthStore: HostHealthStore
     public let chatRepo: ChatConversationRepository
     public let workspaceRepo: WorkspaceRepository
     public let accountSession: AccountSessionController
@@ -80,9 +78,7 @@ public final class AppEnvironment {
         )
         self.approvalRepo = ApprovalRepository(database)
         self.auditRepo = AuditRepository(database)
-        self.loopStore = LoopStore(loopRepo: LoopRepository(database))
         self.quotaGuardStore = QuotaGuardStore()
-        self.hostHealthStore = HostHealthStore()
         // Relay machine hydration (migrate legacy pairing + restore each paired
         // machine's client/bridge) now happens asynchronously after launch, from
         // the machines index — see `AppRoot.hydrateRelayFleetStore`.
@@ -142,7 +138,6 @@ private enum AppDrawerRoute: Identifiable {
     case relayPairing
     case addHost
     case editHost(Host)
-    case activity
 
     var id: String {
         switch self {
@@ -150,7 +145,6 @@ private enum AppDrawerRoute: Identifiable {
         case .relayPairing: "relay-pairing"
         case .addHost: "add-host"
         case .editHost(let host): "edit-host-\(host.id)"
-        case .activity: "activity"
         }
     }
 }
@@ -160,19 +154,11 @@ public struct AppRoot: View {
     @State private var sessionViewModel: SessionViewModel?
     @State private var drawerRoute: AppDrawerRoute?
     @State private var workspacesRevision = UUID()
-    /// One-shot hint set by Home's "+ New workspace" / a workspace screen's
-    /// "New chat here" — consumed by `NewChatTabView.restoreLastSelectionOrDefault()`
-    /// via `onMachineHintConsumed`, then cleared so it doesn't leak into the
-    /// next unrelated New Chat entry.
-    @State private var pendingNewChatMachineKey: String?
-    @State private var pendingNewChatCwd: String?
-    @State private var allWorkspaces: [Workspace] = []
     @State private var passwordPromptHost: Host?
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var runOutputStore = RunOutputStore()
-    @State private var hudStore = AgentHUDStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
@@ -196,6 +182,11 @@ public struct AppRoot: View {
         preferredScheme ?? systemScheme
     }
 
+    /// Cursor-styled surfaces follow the same appearance control as the sidebar shell.
+    private var cursorResolvedScheme: CursorScheme {
+        effectiveScheme == .dark ? .dark : .light
+    }
+
     @State private var scenePhaseObserver: ScenePhaseObserver?
     @State private var watchConnector = PhoneWatchConnector()
     @State private var pm = PurchaseManager.shared
@@ -208,34 +199,14 @@ public struct AppRoot: View {
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var relayFleetStore = RelayFleetStore()
+    @State private var cursorLiveBridge = CursorShellLiveBridge()
+    @State private var showingCursorSettings = false
+    @State private var showingCursorRelayPairing = false
+    /// Presents the Cursor-style approval review sheet (replaces legacy Inbox).
+    @State private var showingApprovalReview = false
     /// Idempotency guard for `configureRelayFleetStore` — it used to check
     /// `e2eBridge == nil`, but there's no single bridge anymore.
     @State private var configuredRelayFleetStore = false
-    @State private var sidebarState = SidebarShellState()
-    @GestureState private var drawerDrag: CGFloat = 0
-    @State private var coachTour = CoachmarkTourState(steps: AppRoot.coachmarkSteps)
-
-    /// One-time interactive tour shown after onboarding. Targets resolve against
-    /// the sidebar anchors; steps with an unresolved target render centered.
-    private static let coachmarkSteps: [CoachmarkStep] = [
-        CoachmarkStep(id: "newChat", targetID: "newChat",
-                      title: "Start a new thread",
-                      body: "Tap here to spin up a fresh chat and dispatch an agent on one of your machines.",
-                      systemImage: "plus.bubble"),
-        CoachmarkStep(id: "inbox", targetID: "inbox",
-                      title: "Approvals live here",
-                      body: "Risky commands and spend limits that need your sign-off appear in the Inbox — approve or reject in a tap.",
-                      usesPixelBoxHero: true),
-        CoachmarkStep(id: "terminal", targetID: "terminal",
-                      title: "Your machines & terminal",
-                      body: "Connect a machine to open a live, Warp-style terminal and watch agents work in real time.",
-                      systemImage: "desktopcomputer"),
-        CoachmarkStep(id: "settings", targetID: "settings",
-                      title: "You're all set",
-                      body: "Connection, security, and billing all live in Settings. Enjoy Lancer!",
-                      systemImage: "checkmark.circle",
-                      primaryActionTitle: "Got it"),
-    ]
 
     private var isPro: Bool {
         #if DEBUG
@@ -279,32 +250,33 @@ public struct AppRoot: View {
             _environment = State(initialValue: .failure(error.localizedDescription))
         }
         #if DEBUG
-        // UI-audit hook: launch directly into the sidebar shell. The legacy tab
-        // router was removed; destinations are now the sole root navigation model.
-        if let destination = ProcessInfo.processInfo.environment["LANCER_DESTINATION"] {
-            // Launch seam lands directly in the shell — skip onboarding so the
-            // destination is actually reached.
+        // UI-test / relay E2E launch seam — skip onboarding so the destination
+        // overlay (Inbox sheet, Settings sheet) can appear on first frame.
+        if ProcessInfo.processInfo.environment["LANCER_DESTINATION"] != nil {
             UserDefaults.standard.set(true, forKey: "onboardingSeen")
-            let state = SidebarShellState()
-            switch destination {
-            case "inbox": state.navigate(to: .needsAttention)
-            // Governance folded into Settings (no longer a standalone sidebar root);
-            // keep the launch seam value working by landing on Settings.
-            case "governance": state.navigate(to: .settings)
-            case "machines": state.navigate(to: .machines)
-            case "sessions": state.navigate(to: .home)
-            case "settings": state.navigate(to: .settings)
-            default: state.navigate(to: .home)
-            }
-            _sidebarState = State(initialValue: state)
         }
         #endif
     }
 
     @ViewBuilder
     public var body: some View {
+        #if DEBUG
+        if usesMockCursorShell {
+            CursorAppShell()
+        } else {
+            mainBody.environment(\.lancerTokens, tokens)
+        }
+        #else
         mainBody.environment(\.lancerTokens, tokens)
+        #endif
     }
+
+    #if DEBUG
+    /// Mock Cursor shell for UI tests (`LANCER_CURSOR_SHELL=1`) and design review.
+    private var usesMockCursorShell: Bool {
+        ProcessInfo.processInfo.environment["LANCER_CURSOR_SHELL"] == "1"
+    }
+    #endif
 
     // The content tree, split out of mainBody so the Swift type-checker handles the
     // view hierarchy and the long .task/.onChange/.onReceive modifier chain as two
@@ -418,25 +390,19 @@ public struct AppRoot: View {
             // a notification is about ONE actionable thing, not "browse everything."
             // Inbox itself is unchanged and still reachable for browsing history.
             guard case .ready(let env) = environment,
-                  let approvalIDString = note.userInfo?["approvalId"] as? String,
-                  let approval = activeInboxViewModel.approvals.first(where: { $0.id.uuidString.lowercased() == approvalIDString.lowercased() })
+                  let approvalIDString = note.userInfo?["approvalId"] as? String
             else {
-                sidebarState.navigate(to: .needsAttention)
+                showingApprovalReview = true
                 return
             }
-            let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
-            Task { @MainActor in
-                if let conversation = await FleetThreadMapper.findConversation(
-                    hostName: hostName,
-                    agentID: approval.agent.rawValue,
-                    cwd: approval.cwd,
-                    chatRepo: env.chatRepo
-                ) {
-                    sidebarState.navigate(to: .thread(id: conversation.id))
-                } else {
-                    sidebarState.navigate(to: .needsAttention)
-                }
+            if let approval = activeInboxViewModel.approvals.first(where: { $0.id.uuidString.lowercased() == approvalIDString.lowercased() }) {
+                cursorLiveBridge.pendingApprovalID = approval.id
+            } else if let uuid = UUID(uuidString: approvalIDString) {
+                cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
             }
+            workspacesRevision = UUID()
+            showingApprovalReview = true
+            _ = env
         }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
         // Feed them into runOutputStore so the presented RunDetailView streams live.
@@ -603,23 +569,27 @@ public struct AppRoot: View {
             if onboardingSeen {
                 rootContainer(env: env)
             } else {
-                OnboardingRedesignView(
-                    onContinue: {
-                        onboardingSeen = true
-                        sidebarState.navigate(to: .home)
-                    },
-                    accountSession: env.accountSession,
-                    onPaired: { client, record in addRelayMachine(client: client, record: record, env: env) }
-                )
+                CursorOnboardingView(onComplete: { onboardingSeen = true })
+                    .environment(\.cursorScheme, cursorResolvedScheme)
+                    .environment(\.cursorShellLiveBridge, cursorLiveBridge)
+                    .sheet(isPresented: $showingCursorRelayPairing) {
+                        CursorRelayPairingSheet(
+                            existingMachineCount: relayFleetStore.machines.count,
+                            onPaired: { client, record in
+                                addRelayMachine(client: client, record: record, env: env)
+                                showingCursorRelayPairing = false
+                            }
+                        )
+                    }
             }
         }
         .sheet(isPresented: $showingQuotaGuard) {
-            LancerDrawer(title: "Usage & limits", detents: [.large]) {
+            CursorDrawer(title: "Usage & limits", detents: [.large]) {
                 QuotaGuardView(store: env.quotaGuardStore)
             }
         }
         .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 RelayWorkspaceUnavailableView(onConnectSSH: { drawerRoute = .addMachine })
             }
         }
@@ -672,80 +642,99 @@ public struct AppRoot: View {
         })
         .task {
             configureGlobalInbox(env: env)
-            sidebarState.configure(chatRepo: env.chatRepo)
-            await sidebarState.loadRecent()
+            setupCursorLiveBridge(env: env)
+            // Relay auto-pair + bridge registration must complete before the host
+            // can deliver an escalation over the production relay (relay-approval-e2e).
             await configureCloudServices(env: env)
-            // MAJOR-6: replay any approval action tapped from a lock-screen banner
-            // while the app was killed (its NotificationCenter post had no live
-            // subscriber). Done after configureCloudServices so the relay backend
-            // is configured.
-            await drainPendingApprovalActions(env: env)
-            for approvalID in OpenApprovalBuffer.shared.drain() {
-                // Cold launch: route to Inbox, then re-post so the now-mounted
-                // InboxView observer opens the detail sheet. REVIEW intent only —
-                // never auto-decides (ApprovalActionBuffer handles decisions separately).
-                sidebarState.navigate(to: .needsAttention)
-                NotificationCenter.default.post(
-                    name: .lancerOpenApproval, object: nil,
-                    userInfo: ["approvalId": approvalID]
-                )
-            }
-            await env.syncEngine.start()
-            await env.conversationSyncEngine.start()
-        }
-        .task {
 #if DEBUG
             if ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1" {
                 await DebugSeeder.seedIfNeeded(env: env)
             }
             await DebugSeeder.resetForUITestIfRequested(env: env)
             await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
+            if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
+                cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+            cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+                workspacesRevision = UUID()
+            }
 #endif
+            // MAJOR-6: replay any approval action tapped from a lock-screen banner
+            // while the app was killed (its NotificationCenter post had no live
+            // subscriber). Done after configureCloudServices so the relay backend
+            // is configured.
+            await drainPendingApprovalActions(env: env)
+#if DEBUG
+            applyDebugLaunchSeams()
+#endif
+            for approvalID in OpenApprovalBuffer.shared.drain() {
+                if let uuid = UUID(uuidString: approvalID) {
+                    cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
+                }
+                showingApprovalReview = true
+            }
+            await env.syncEngine.start()
+            await env.conversationSyncEngine.start()
         }
     }
 
     @ViewBuilder
     private func rootContainer(env: AppEnvironment) -> some View {
-        Group {
-            if horizontalSizeClass == .regular {
-                regularRoot(env: env)
-            } else {
-                compactRoot(env: env)
-            }
-        }
-        // Agent status header — a slim, in-layout strip shown only while a live
-        // session exists (the store returns no agents when idle). Each tab renders
-        // it below its own title row — passed as statusHeaderAgents to every tab
-        // view so placement is consistent. Hidden behind the live SessionView cover.
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: hudStore.agents.isEmpty)
-        // Single source of truth for "needs attention": fleetStore.attentionItems is
-        // also what Home's attention list renders from, so the headline/sidebar badge
-        // and the list can never disagree (previously this read activeInboxViewModel,
-        // a single-slot fallback chain that could report a nonzero count while the
-        // fleet-wide attention list rendered nothing).
+        cursorShellRoot(env: env)
         .onChange(of: fleetStore.attentionItems.count, initial: true) { _, count in
-            hudStore.pendingApprovals = count
-            sidebarState.pendingApprovalCount = count
-            // Keep the real Dynamic Island / lock-screen Live Activity badge
-            // live — this is the glanceable signal while Lancer is backgrounded.
-            // Carry the most severe risk among current attention items so the
-            // widget can visually distinguish a high/critical approval from a
-            // routine one instead of rendering them identically.
             let highestRisk = fleetStore.attentionItems.map(\.severity.rawValue).max()
             if #available(iOS 16.2, *) {
                 Task { await LancerLiveActivityManager.shared.updatePendingApprovals(count, highestRisk: highestRisk) }
             }
         }
-        .onChange(of: fleetStore.slots.count, initial: true) { _, count in
-            sidebarState.fleetSlotCount = count
-        }
-        // One-time interactive coach-mark tour. Overlay stays installed (cheap,
-        // inert while inactive) but auto-start is OFF: on-device it mis-rendered
-        // and trapped all input (auto-opened the drawer, then ate every tap with
-        // no visible step to advance). ponytail: re-enable auto-start only after
-        // the tour is verified working on a physical device.
-        .coachmarkTour(coachTour)
+        .environment(\.cursorScheme, cursorResolvedScheme)
+        .environment(\.cursorShellLiveBridge, cursorLiveBridge)
     }
+
+    @ViewBuilder
+    private func cursorShellRoot(env: AppEnvironment) -> some View {
+        CursorAppShell(liveBridge: cursorLiveBridge)
+            .task(id: workspacesRevision) { await refreshCursorLiveBridge(env: env) }
+            .sheet(isPresented: $showingCursorSettings) {
+                cursorSettingsSheet(env: env)
+            }
+            .sheet(isPresented: $showingCursorRelayPairing) {
+                CursorRelayPairingSheet(
+                    existingMachineCount: relayFleetStore.machines.count,
+                    onPaired: { client, record in
+                        addRelayMachine(client: client, record: record, env: env)
+                        showingCursorRelayPairing = false
+                    }
+                )
+            }
+            .sheet(isPresented: $showingApprovalReview) {
+                CursorReviewDiffView(onBack: { showingApprovalReview = false })
+                    .environment(\.cursorShellLiveBridge, cursorLiveBridge)
+            }
+            .fullScreenCover(isPresented: $isShowingLiveSession) {
+                if let vm = activeSessionViewModel {
+                    SessionWorkspaceContainer(
+                        viewModel: vm,
+                        onSwitchHost: { isShowingLiveSession = false }
+                    )
+                    .environment(\.lancerTokens, tokens)
+                }
+            }
+    }
+
+    #if DEBUG
+    @MainActor
+    private func applyDebugLaunchSeams() {
+        guard let dest = ProcessInfo.processInfo.environment["LANCER_DESTINATION"] else { return }
+        switch dest {
+        case "inbox", "approval", "review":
+            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+            cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            showingApprovalReview = true
+        case "settings", "governance": showingCursorSettings = true
+        default: break
+        }
+    }
+    #endif
 
     private var activeInboxViewModel: InboxViewModel {
         selectedFleetSlot?.inboxVM ?? liveInboxVM ?? inboxVM
@@ -798,7 +787,6 @@ public struct AppRoot: View {
             sessionViewModel = slot.sessionViewModel
             daemonChannel = slot.channel
             approvalIngest = slot.ingest
-            hudStore.session = slot.sessionViewModel
         }
     }
 
@@ -806,7 +794,7 @@ public struct AppRoot: View {
     private func drawerDestination(_ route: AppDrawerRoute, env: AppEnvironment) -> some View {
         switch route {
         case .addMachine:
-            LancerDrawer(
+            CursorDrawer(
                 title: "Add a machine",
                 subtitle: "Relay is the recommended path. SSH adds a live terminal.",
                 detents: [.medium, .large]
@@ -817,8 +805,8 @@ public struct AppRoot: View {
                 )
             }
         case .relayPairing:
-            LancerDrawer(detents: [.large]) {
-                E2ERelayPairingView(
+            CursorDrawer(detents: [.large]) {
+                CursorRelayPairingSheet(
                     existingMachineCount: relayFleetStore.machines.count,
                     onPaired: { client, record in
                         addRelayMachine(client: client, record: record, env: env)
@@ -826,7 +814,7 @@ public struct AppRoot: View {
                 )
             }
         case .addHost:
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 AddHostView(
                     repository: env.hostRepo,
                     keyStore: env.keyStore,
@@ -842,7 +830,7 @@ public struct AppRoot: View {
                 )
             }
         case .editHost(let host):
-            LancerDrawer(detents: [.large]) {
+            CursorDrawer(detents: [.large]) {
                 HostEditorView(
                     viewModel: HostEditorViewModel(
                         repository: env.hostRepo,
@@ -852,19 +840,6 @@ public struct AppRoot: View {
                         drawerRoute = nil
                         workspacesRevision = UUID()
                     }
-                )
-            }
-        case .activity:
-            LancerDrawer(
-                title: "Activity",
-                subtitle: "What Lancer recorded while you were away.",
-                detents: [.large]
-            ) {
-                ActivityView(
-                    actions: bridgeSessionActions(),
-                    auditRepository: env.auditRepo,
-                    daemonChannel: daemonChannel,
-                    showsHeader: false
                 )
             }
         }
@@ -904,6 +879,13 @@ public struct AppRoot: View {
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
+        #if DEBUG
+        // UI tests seed high/critical-risk approvals; bypass LocalAuthentication so
+        // tap-injection proofs can exercise the decision path headlessly.
+        if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
+            liveVM.decisionAuthorizer = { _ in true }
+        }
+        #endif
         // Wire Home's attention feed to the SAME live-observed VM immediately,
         // not only after the first live relay approval notification arrives
         // (the previous behavior — see the narrower reassignment in the
@@ -917,6 +899,124 @@ public struct AppRoot: View {
         // real, already-pending high-risk approval sat unreviewed. Safe to set
         // unconditionally per the dedupe-by-id note at the other call site.
         fleetStore.relayInboxVM = liveVM
+    }
+
+    @MainActor
+    private func setupCursorLiveBridge(env: AppEnvironment) {
+        cursorLiveBridge.onDispatch = { [self] prompt, cwd, model in
+            let agentID = defaultDispatchAgentID(env: env)
+            _ = await performDispatch(
+                agentID: agentID,
+                cwd: cwd,
+                prompt: prompt,
+                budgetUSD: nil,
+                model: model,
+                env: env
+            )
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onContinue = { [self] conversationID, prompt, model in
+            guard let conv = try? await env.chatRepo.conversation(id: conversationID) else { return }
+            _ = await performContinueConversation(
+                conversationID: conv.id,
+                baseSeq: conv.lastHostSeq,
+                prompt: prompt,
+                agentID: conv.agentID,
+                cwd: conv.cwd,
+                model: model ?? conv.model,
+                env: env
+            )
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onDecide = { [self] id, decision in
+            if let slot = fleetStore.slot(forApprovalID: id) {
+                slot.inboxVM.decide(id, decision: decision)
+            } else {
+                activeInboxViewModel.decide(id, decision: decision)
+            }
+        }
+        cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
+        cursorLiveBridge.onPaired = { [self] client, record in
+            addRelayMachine(client: client, record: record, env: env)
+        }
+    }
+
+    @ViewBuilder
+    private func cursorSettingsSheet(env: AppEnvironment) -> some View {
+        CursorSettingsView(
+            relayMachineCount: relayFleetStore.machines.count,
+            onPaired: { client, record in
+                addRelayMachine(client: client, record: record, env: env)
+            }
+        )
+    }
+
+    @MainActor
+    private func refreshCursorLiveBridge(env: AppEnvironment) async {
+        do {
+            let conversations = try await env.chatRepo.recent(limit: 200)
+            var counts: [String: Int] = [:]
+            var threads: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
+            for conv in conversations {
+                let repo = (conv.cwd as NSString).lastPathComponent.isEmpty ? conv.cwd : (conv.cwd as NSString).lastPathComponent
+                counts[repo, default: 0] += 1
+                threads[repo, default: []].append(
+                    CursorShellLiveBridge.ThreadRow(
+                        id: conv.id,
+                        title: conv.title,
+                        repoName: repo,
+                        updatedAt: conv.updatedAt
+                    )
+                )
+            }
+            let names = Array(counts.keys).sorted()
+            cursorLiveBridge.reloadWorkspaces(
+                from: names.isEmpty ? ["command-center"] : names,
+                threadCounts: counts
+            )
+            for (name, rows) in threads {
+                let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+                cursorLiveBridge.reloadThreads(workspaceName: name, rows: sorted)
+            }
+            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+            cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+            cursorLiveBridge.threadAttention = threadAttentionMap(
+                conversations: conversations,
+                pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending)
+            )
+            cursorLiveBridge.connectionPhase = Self.connectionPhase(
+                for: relayFleetStore,
+                fleetStore: fleetStore
+            )
+        } catch {
+            // Best-effort hydration for the Cursor live shell.
+        }
+    }
+
+    @MainActor
+    private func threadAttentionMap(
+        conversations: [ChatConversation],
+        pendingApprovals: [Approval]
+    ) -> [String: CursorThreadAttention] {
+        var map: [String: CursorThreadAttention] = [:]
+        for conv in conversations {
+            let hasApproval = pendingApprovals.contains { approval in
+                approval.cwd == conv.cwd || approval.agentSessionID == conv.id
+            }
+            if hasApproval {
+                map[conv.id] = .needsApproval
+            } else if conv.status == .active {
+                map[conv.id] = .working
+            }
+        }
+        return map
+    }
+
+    private func defaultDispatchAgentID(env: AppEnvironment) -> String {
+        if let online = dispatchAgents().first(where: { !$0.isOffline }) {
+            return online.id
+        }
+        return dispatchAgents().first?.id ?? "claude"
     }
 
     /// Bridge RPC actions for the selected (or first) fleet slot.
@@ -1001,119 +1101,6 @@ public struct AppRoot: View {
             }
         }
         return agents
-    }
-
-    @MainActor
-    /// Fetch an agent's live slash-commands for the composer autocomplete. Prefers a
-    /// connected SSH slot's daemon channel; falls back to the relay bridge so a
-    /// relay-paired host (no direct SSH) still lights up live commands. Returns []
-    /// if neither transport is available — Lancer's own app-commands still
-    /// autocomplete client-side.
-    private func loadAgentCommands(cwd: String, vendor: String) async -> [AgentCommand] {
-        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first,
-           let cmds = try? await slot.channel.listCommands(cwd: cwd, vendor: vendor), !cmds.isEmpty {
-            return cmds
-        }
-        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
-            return (try? await bridge.relayListCommands(cwd: cwd, vendor: vendor)) ?? []
-        }
-        return []
-    }
-
-    /// Continue a persisted conversation from History. A ledger-backed conversation
-    /// (Task 6/7 — `syncState != .localOnly`) appends through the host's conversation
-    /// ledger so another device sees the turn too; a legacy pre-ledger conversation
-    /// falls back to continuing directly via the run's channel. Returns nil if no
-    /// live transport can reach the conversation's host.
-    private func resumeConversation(_ conv: ChatConversation, lastRunID: String, prompt: String, env: AppEnvironment) async -> ActiveChatRun? {
-        if conv.syncState != .localOnly {
-            // Ledger conversations live on ONE host's SQLite ledger — unlike the
-            // legacy fallback below, there's no safe "any active machine" retry
-            // if the exact owning host (SSH slot, else the paired relay machine)
-            // isn't reachable.
-            if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
-               let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
-                let channel = slot.channel
-                let transport = ConversationTransport(
-                    append: { try await channel.appendConversation($0) },
-                    fetch: { try await channel.fetchConversation($0) },
-                    archive: { try await channel.archiveConversation($0) }
-                )
-                let outcome = await env.conversationSyncCoordinator.continueConversation(
-                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
-                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
-                    hostName: slot.hostName, hostID: slot.hostID.uuidString, transport: transport
-                )
-                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: slot.channel, title: conv.title) {
-                    return run
-                }
-                return nil
-            }
-            if let sourceHostID = conv.sourceHostID, let uuid = UUID(uuidString: sourceHostID),
-               let machine = relayFleetStore.machine(RelayMachineID(uuid)) {
-                let bridge = machine.bridge
-                let transport = ConversationTransport(
-                    append: { try await bridge.relayAppendConversation($0) },
-                    fetch: { try await bridge.relayFetchConversation($0) },
-                    archive: { try await bridge.relayArchiveConversation($0) }
-                )
-                let channel = RelayRunControl(
-                    send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
-                    onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p, agent: conv.agentID, cwd: conv.cwd, model: conv.model) }
-                )
-                let outcome = await env.conversationSyncCoordinator.continueConversation(
-                    conversationID: conv.id, baseSeq: conv.lastHostSeq, prompt: prompt,
-                    clientTurnID: Self.newClientTurnID(), model: conv.model, budgetUSD: conv.budgetUSD,
-                    hostName: machine.record.displayName, hostID: uuid.uuidString, transport: transport
-                )
-                if case .started(let run) = chatDispatchOutcome(from: outcome, channel: channel, title: conv.title) {
-                    return run
-                }
-                return nil
-            }
-            return nil
-        }
-
-        // Legacy (pre-ledger) conversation: continue from the persisted context
-        // (agent/cwd/model) directly via the run's channel, so a reopened chat
-        // still continues after the daemon forgot the run (process ended or
-        // daemon restarted) instead of "no longer has this run". Prefer the SSH
-        // slot that owns this host.
-        if let hostID = conv.hostID, let uuid = UUID(uuidString: hostID),
-           let slot = fleetStore.slots.first(where: { $0.id == uuid }) {
-            guard let result = try? await slot.channel.continueRun(
-                runId: lastRunID, prompt: prompt,
-                agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
-                  result.status == "started", let newRunID = result.runId else { return nil }
-            runOutputStore.register(runId: newRunID)
-            return ActiveChatRun(runId: newRunID, channel: slot.channel,
-                                 title: conv.title, subtitle: prompt, cwd: result.cwd ?? conv.cwd)
-        }
-        // Fall back to the first active relay machine's bridge (interim
-        // limitation — see AppRoot's report on first-machine-only fallbacks).
-        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
-            guard let result = try? await bridge.sendRunContinue(
-                runId: lastRunID, prompt: prompt,
-                agent: conv.agentID, cwd: conv.cwd, model: conv.model, budgetUSD: conv.budgetUSD),
-                  result.status == "started", let newRunID = result.runId else { return nil }
-            runOutputStore.register(runId: newRunID)
-            let channel = RelayRunControl(
-                send: { rid, action in await bridge.sendRunControl(runId: rid, action: action) },
-                onContinue: { rid, p in try await bridge.sendRunContinue(runId: rid, prompt: p) }
-            )
-            return ActiveChatRun(runId: newRunID, channel: channel, title: conv.title, subtitle: prompt, cwd: result.cwd ?? conv.cwd)
-        }
-        return nil
-    }
-
-    /// List a workspace's files/dirs for the composer's @-mention autocomplete.
-    /// Uses the relay bridge's read-only agent.fs.ls (the only fs-listing transport
-    /// today). Dirs get a trailing "/". Returns [] if no relay is active.
-    private func loadWorkspaceFiles(cwd: String) async -> [String] {
-        guard let bridge = relayFleetStore.firstConnectedMachine?.bridge,
-              let listing = try? await bridge.relayListDir(cwd) else { return [] }
-        return listing.entries.map { $0.isDir ? $0.name + "/" : $0.name }
     }
 
     /// A fresh idempotency key for one `agent.conversations.append` call —
@@ -1268,21 +1255,7 @@ public struct AppRoot: View {
         return nil
     }
 
-    /// Re-pulls a conversation from its host ledger and merges it into the
-    /// mirror — shared by `NewChatTabView`'s and `ChatHistoryView`'s sync
-    /// banners (Refresh/Resend) and by streaming-handoff polling. Returns the
-    /// fresh `nextSeq`, or `nil` if the conversation or its host transport
-    /// can't be resolved.
-    private func refreshConversationMirror(conversationID: String, env: AppEnvironment) async -> Int? {
-        guard let conv = try? await env.chatRepo.conversation(id: conversationID),
-              let transport = resolveTransport(forConversation: conv)
-        else { return nil }
-        return try? await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
-    }
-
-    /// Appends a follow-up turn to an existing ledger-backed conversation —
-    /// `NewChatTabView.sendFollowUp`'s ledger path, used whenever the active
-    /// run carries a `conversationID` (see `ActiveChatRun.conversationID`).
+    /// Appends a follow-up turn to an existing ledger-backed conversation.
     private func performContinueConversation(
         conversationID: String, baseSeq: Int, prompt: String, agentID: String, cwd: String, model: String?, env: AppEnvironment
     ) async -> ChatDispatchOutcome {
@@ -1314,188 +1287,6 @@ public struct AppRoot: View {
     // strip on inset pages).
     private var t: LancerTokens { tokens }
 
-    private func openDrawer() {
-        Task { await sidebarState.loadRecent() }
-        sidebarState.isDrawerOpen = true
-    }
-
-    /// Chat destinations render their own top chrome (a dark transcript header or
-    /// the composer landing's own bar), so the shell must NOT add its beige
-    /// hamburger inset above them — that was the beige seam over the dark chat.
-    private func isChatDestination(_ dest: SidebarDestination) -> Bool {
-        switch dest {
-        case .thread, .newChat: return true
-        default: return false
-        }
-    }
-
-    /// Left-edge swipe that opens the drawer. Attached only to a thin leading strip
-    /// (not the whole screen) so it can't intercept button taps in the page body.
-    private func openDragGesture(drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($drawerDrag) { value, state, _ in
-                state = max(0, value.translation.width)
-            }
-            .onEnded { value in
-                if value.predictedEndTranslation.width > drawerWidth * 0.3 { openDrawer() }
-            }
-    }
-
-    /// Leftward swipe on the scrim that closes the drawer (only attached while open).
-    private func closeDragGesture(drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($drawerDrag) { value, state, _ in
-                state = min(0, value.translation.width)
-            }
-            .onEnded { value in
-                if value.predictedEndTranslation.width < -drawerWidth * 0.3 {
-                    sidebarState.isDrawerOpen = false
-                }
-            }
-    }
-
-    private func compactRoot(env: AppEnvironment) -> some View {
-        GeometryReader { proxy in
-            let drawerWidth = min(340, proxy.size.width * 0.8)
-            let isOpen = sidebarState.isDrawerOpen
-            // A single 0…1 driver: the open/closed bool, nudged by the live drag so
-            // the card, scrim, corner radius, and scale all move together — the
-            // ChatGPT/Claude drawer feel comes from one transform, not four.
-            let resting = isOpen ? drawerWidth : 0
-            let translate = max(0, min(drawerWidth, resting + drawerDrag))
-            let progress = drawerWidth > 0 ? translate / drawerWidth : 0
-            ZStack(alignment: .leading) {
-                t.bg.ignoresSafeArea()
-
-                // Sidebar pinned left, revealed underneath as the content slides away.
-                LancerSidebarView(state: sidebarState, profileLabel: profileLabel(for: env)) { dest in
-                    sidebarState.navigate(to: dest)
-                }
-                .frame(width: drawerWidth)
-                .frame(maxHeight: .infinity, alignment: .top)
-
-                // Main content — slides right at full size (ChatGPT/Claude style:
-                // pure translation, no scale or corner rounding), dimmed by a scrim
-                // when the drawer is open.
-                NavigationStack {
-                    sidebarDetail(for: sidebarState.selectedDestination, env: env)
-                        // Every Lancer page brings its own header and the shell
-                        // supplies the hamburger below, so the system navigation
-                        // bar is never wanted — hiding it here (once) removes the
-                        // empty-bar hairline that showed on pages (Inbox, Machines)
-                        // which didn't individually hide it.
-                        .toolbar(.hidden, for: .navigationBar)
-                        // Do not place a glass control in the navigation toolbar:
-                        // UIKit wraps it in a second circular chrome layer. Root
-                        // surfaces own exactly one shared control instead.
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            // Chat destinations own their top chrome; Home and Machines
-                            // (CursorHomeView / CursorWorkspacesView) bring their own
-                            // complete header too. Everything else (Inbox, Settings)
-                            // gets the shell hamburger bar.
-                            if sidebarState.selectedDestination != .home,
-                               sidebarState.selectedDestination != .machines,
-                               !isChatDestination(sidebarState.selectedDestination) {
-                                HStack {
-                                    DSCircleButton(
-                                        "line.3.horizontal",
-                                        diameter: 40,
-                                        accessibilityLabel: "Open navigation",
-                                        action: openDrawer
-                                    )
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 8)
-                                .background(t.bg.opacity(0.96))
-                            }
-                        }
-                }
-                .background(t.bg)
-                .overlay {
-                    // Scrim dims the page as it slides aside; while open the whole
-                    // page is the tap-to-close target AND a swipe-to-close surface.
-                    // Strictly non-interactive when closed so it never swallows taps
-                    // on the page's own buttons.
-                    Color.black.opacity(0.32 * progress)
-                        .contentShape(Rectangle())
-                        .onTapGesture { sidebarState.isDrawerOpen = false }
-                        .gesture(isOpen ? closeDragGesture(drawerWidth: drawerWidth) : nil)
-                        // Outermost so it gates the WHOLE composed overlay (tap +
-                        // gesture + shape), not just the inner Color. Applied earlier
-                        // it left the tap-to-close gesture live while closed — an
-                        // invisible full-content tap-eater that killed every page
-                        // button (the real "dead buttons" cause).
-                        .allowsHitTesting(isOpen)
-                }
-                .offset(x: translate)
-                .shadow(color: .black.opacity(0.18 * progress), radius: 16, x: -8, y: 0)
-            }
-            // Swipe-to-OPEN lives on a thin leading-edge strip ONLY (never the whole
-            // screen) so the root no longer runs a global DragGesture that competed
-            // with — and on a real device swallowed — taps on the page's buttons.
-            .overlay(alignment: .leading) {
-                if !isOpen {
-                    Color.clear
-                        .frame(width: 20)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .gesture(openDragGesture(drawerWidth: drawerWidth))
-                }
-            }
-            .lancerMotion(LancerMotion.navigation, value: sidebarState.isDrawerOpen)
-        }
-        .ignoresSafeArea(.container)
-        .task {
-#if DEBUG
-            if ProcessInfo.processInfo.environment["LANCER_DRAWER_OPEN"] == "1" {
-                sidebarState.isDrawerOpen = true
-            }
-#endif
-        }
-        .fullScreenCover(isPresented: $isShowingLiveSession) {
-            if let vm = activeSessionViewModel {
-                SessionWorkspaceContainer(
-                    viewModel: vm,
-                    onSwitchHost: {
-                        isShowingLiveSession = false
-                        sidebarState.navigate(to: .machines)
-                    }
-                )
-                    .environment(\.lancerTokens, tokens)
-            }
-        }
-    }
-
-    private func regularRoot(env: AppEnvironment) -> some View {
-        ZStack {
-            t.bg.ignoresSafeArea()
-            NavigationSplitView {
-                LancerSidebarView(state: sidebarState, profileLabel: profileLabel(for: env)) { dest in
-                    sidebarState.navigate(to: dest)
-                }
-            } detail: {
-                NavigationStack {
-                    sidebarDetail(for: sidebarState.selectedDestination, env: env)
-                        .toolbar(.hidden, for: .navigationBar)
-                }
-            }
-            .task { await sidebarState.loadRecent() }
-        }
-        .fullScreenCover(isPresented: $isShowingLiveSession) {
-            if let vm = activeSessionViewModel {
-                SessionWorkspaceContainer(
-                    viewModel: vm,
-                    onSwitchHost: {
-                        isShowingLiveSession = false
-                        sidebarState.navigate(to: .machines)
-                    }
-                )
-                    .environment(\.lancerTokens, tokens)
-            }
-        }
-    }
-
     /// Tear down a fleet slot and remove it from Hosts ACTIVE.
     private func disconnectLiveSession(slotID: UUID? = nil) {
         let resolvedID = slotID ?? selectedFleetSlot?.id
@@ -1512,428 +1303,12 @@ public struct AppRoot: View {
                     sessionViewModel = nil
                     daemonChannel = nil
                     approvalIngest = nil
-                    hudStore.session = nil
                     isShowingLiveSession = false
                 } else if let fallback = fleetStore.slots.first {
                     selectFleetSlot(fallback.id)
                 }
             }
         }
-    }
-
-    private func inboxDestination(env: AppEnvironment) -> some View {
-        let actions = bridgeSessionActions()
-        return InboxView(
-            viewModel: activeInboxViewModel,
-            statusHeaderAgents: [],
-            onTapStatusHeader: {},
-            onSetPolicy: { yaml in try? await actions.savePolicyYAML(yaml) },
-            onOpenHistory: { drawerRoute = .activity }
-        )
-    }
-
-    /// Human-readable labels for a machine's `installedAgentVendors`, same
-    /// mapping/fallback as the dispatch-agent picker (see the `agentID switch`
-    /// above) so the Machines relay card converges to real installed agents
-    /// once the host reports them.
-    private func relayAgentDisplayLabels(for installedAgentVendors: [String]?) -> [String] {
-        let vendors = installedAgentVendors ?? ["claudeCode", "codex", "opencode", "kimi"]
-        return vendors.map { agentID in
-            switch agentID {
-            case "claudeCode": return "Claude Code"
-            case "codex": return "Codex"
-            case "kimi": return "Kimi"
-            default: return "OpenCode"
-            }
-        }
-    }
-
-    private func fleetDestination(env: AppEnvironment) -> some View {
-        CursorWorkspacesView()
-            .id(workspacesRevision)
-    }
-
-    /// Stop every running agent: disconnect SSH sessions and send a relay stop for
-    /// each non-terminal run.
-    private func performEmergencyStop() {
-        Task {
-            for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
-                await slot.sessionViewModel.disconnect()
-            }
-            for machine in relayFleetStore.machines where relayFleetStore.isConnected(machine.id) {
-                for run in runOutputStore.runs.values where !run.isTerminal {
-                    _ = await machine.bridge.sendRunControl(runId: run.runId, action: "stop")
-                }
-            }
-        }
-    }
-
-    /// Best-effort YAML for a normalized cross-provider policy. ponytail: the daemon
-    /// validates the real schema (fail-closed), so this stays a thin serializer — upgrade
-    /// to per-provider compilation when the matrix moves past MVP.
-    private func normalizedPolicyYAML(_ p: NormalizedPolicy) -> String {
-        var lines = ["# Normalized cross-provider policy", "rules:"]
-        for r in p.rules {
-            lines.append("  - id: \(r.id)")
-            lines.append("    description: \"\(r.description)\"")
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private func settingsDestination(env: AppEnvironment) -> some View {
-        SettingsWithLibraryView(
-            viewModel: SettingsViewModel(keyStore: env.aiKeyStore),
-            syncEngine: env.syncEngine,
-            conversationSyncEngine: env.conversationSyncEngine,
-            backendURL: Self.pushBackendURL(),
-            auditRepository: env.auditRepo,
-            approvalRepository: approvalRepository,
-            sshKeyStore: env.keyStore,
-            daemonChannel: daemonChannel,
-            relayMachines: relayFleetStore.machines.map {
-                RelayMachineRow(id: $0.id, displayName: $0.record.displayName, isConnected: relayFleetStore.isConnected($0.id))
-            },
-            onRelayPaired: { client, record in addRelayMachine(client: client, record: record, env: env) },
-            onRelayUnpair: { id in
-                ApprovalRelay.shared.relayBridges.removeValue(forKey: id)
-                relayFleetStore.remove(id)
-            },
-            onRelayRename: { id, name in relayFleetStore.updateDisplayName(name, for: id) },
-            accountSession: env.accountSession,
-            quotaGuardStore: env.quotaGuardStore,
-            onResetApp: {
-                let db = env.database
-                Task {
-                    try? await db.wipeAll()
-                    await MainActor.run {
-                        UserDefaults.standard.removeObject(forKey: "dev.lancer.debugSeeded")
-                        sidebarState.navigate(to: .home)
-                        onboardingSeen = false
-                    }
-                }
-            },
-            onEmergencyStop: { performEmergencyStop() },
-            onAccountSignedOut: {
-                onboardingSeen = false
-            },
-            sidebarShellState: sidebarState,
-            onApplyPolicyPreset: { preset, _ in
-                let actions = bridgeSessionActions()
-                Task { try? await actions.savePolicyYAML(preset.ruleYAML) }
-            },
-            onApplyNormalizedPolicy: { policy in
-                let actions = bridgeSessionActions()
-                Task { try? await actions.savePolicyYAML(normalizedPolicyYAML(policy)) }
-            }
-        )
-    }
-
-    @ViewBuilder
-    private func sidebarDetail(for dest: SidebarDestination, env: AppEnvironment) -> some View {
-        switch dest {
-        case .home:
-            homeDestination(env: env)
-        case .newChat:
-            NewChatTabView(
-                agents: dispatchAgents(),
-                runOutputStore: runOutputStore,
-                chatRepo: env.chatRepo,
-                workspaceRepo: env.workspaceRepo,
-                fleetStore: fleetStore,
-                conversationSyncCoordinator: env.conversationSyncCoordinator,
-                preferredMachineKey: pendingNewChatMachineKey,
-                preferredCwd: pendingNewChatCwd,
-                onMachineHintConsumed: {
-                    pendingNewChatMachineKey = nil
-                    pendingNewChatCwd = nil
-                },
-                onDispatch: { agentID, cwd, prompt, budget, model in
-                    await performDispatch(agentID: agentID, cwd: cwd, prompt: prompt, budgetUSD: budget, model: model, env: env)
-                },
-                onContinueConversation: { conversationID, baseSeq, prompt, agentID, cwd, model in
-                    await performContinueConversation(
-                        conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
-                        agentID: agentID, cwd: cwd, model: model, env: env
-                    )
-                },
-                onRefreshConversation: { conversationID in
-                    await refreshConversationMirror(conversationID: conversationID, env: env)
-                },
-                onNewTask: { sidebarState.navigate(to: .newChat) },
-                onOpenWorkspace: { agent in openWorkspace(for: agent) },
-                onOpenSidebar: openDrawer,
-                onConnectSSH: { drawerRoute = .addMachine },
-                loadCommands: { cwd, vendor in await loadAgentCommands(cwd: cwd, vendor: vendor) },
-                loadFiles: { cwd in await loadWorkspaceFiles(cwd: cwd) },
-                inboxViewModel: activeInboxViewModel,
-                onDecideApproval: { approvalID, decision in
-                    if let slot = fleetStore.slot(forApprovalID: approvalID) {
-                        slot.inboxVM.decide(approvalID, decision: decision)
-                    } else {
-                        activeInboxViewModel.decide(approvalID, decision: decision)
-                    }
-                }
-            )
-        case .thread(let id):
-            ChatHistoryView(
-                conversationID: id,
-                chatRepo: env.chatRepo,
-                runOutputStore: runOutputStore,
-                conversationSyncCoordinator: env.conversationSyncCoordinator,
-                onBack: { sidebarState.navigate(to: .home) },
-                onNewChat: { sidebarState.navigate(to: .newChat) },
-                onContinue: { conv, lastRunID, prompt in
-                    await resumeConversation(conv, lastRunID: lastRunID, prompt: prompt, env: env)
-                },
-                onRefreshConversation: { conversationID in
-                    await refreshConversationMirror(conversationID: conversationID, env: env)
-                }
-            )
-            .id(id)
-        case .needsAttention:
-            inboxDestination(env: env)
-        case .machines:
-            fleetDestination(env: env)
-        case .settings:
-            settingsDestination(env: env)
-        case .observedSession(let sessionId, let title, let hostName, let vendor, let cwd):
-            ObservedSessionView(
-                sessionId: sessionId,
-                title: title,
-                hostName: hostName,
-                vendor: vendor,
-                cwd: cwd,
-                loadTranscript: { sinceLine in await fetchObservedTranscript(sessionId: sessionId, sinceLine: sinceLine) },
-                onSendFollowUp: { prompt in
-                    await sendObservedSessionFollowUp(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
-                },
-                onImportToLancer: vendor.isEmpty ? nil : {
-                    await importObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, env: env)
-                },
-                onImported: { conversationID in sidebarState.navigate(to: .thread(id: conversationID)) },
-                onBack: { sidebarState.navigate(to: .home) }
-            )
-        case .workspace(let machineKey, let machineName, let path, let displayName, _):
-            WorkspaceDetailView(
-                machineName: machineName,
-                path: path,
-                displayName: displayName,
-                sessions: sidebarState.recentThreads.filter { $0.hostName == machineName && $0.cwd == path },
-                onOpenThread: { id in sidebarState.navigate(to: .thread(id: id)) },
-                onNewChatHere: {
-                    pendingNewChatMachineKey = machineKey
-                    pendingNewChatCwd = path
-                    sidebarState.navigate(to: .newChat)
-                },
-                onBack: { sidebarState.navigate(to: .home) }
-            )
-        }
-    }
-
-    private func homeDestination(env: AppEnvironment) -> some View {
-        CursorHomeView()
-            // Refreshes every time Home is (re)entered — e.g. after creating a new
-            // workspace from New Chat and navigating back — matching the simple
-            // reload-on-appear approach the previous Home view's own `.task` already
-            // used for observed sessions, rather than a more invasive change-notification.
-            .task(id: sidebarState.selectedDestination) {
-                await loadAllWorkspaces(env: env)
-            }
-    }
-
-    /// Every persisted `Workspace` across every currently-paired relay machine,
-    /// for `LancerHomeView`'s workspace cards. Best-effort per machine so one
-    /// unreachable host's repo query doesn't blank out every other machine's list.
-    private func loadAllWorkspaces(env: AppEnvironment) async {
-        var all: [Workspace] = []
-        for machine in relayFleetStore.machines {
-            if let list = try? await env.workspaceRepo.list(machineID: machine.id) {
-                all.append(contentsOf: list)
-            }
-        }
-        allWorkspaces = all
-    }
-
-    /// Lists sessions discovered on the host (Claude Code, etc.) for Home's
-    /// "Sessions on this Mac" section, for the given host name. Resolution order:
-    /// an SSH slot whose `hostName` matches (regardless of connection state,
-    /// matching the previous fallback-to-any-slot behavior but scoped to the
-    /// matching name), else a relay machine whose display name matches.
-    private func loadObservedSessions(hostName: String) async -> [ObservedSession] {
-        if let slot = fleetStore.slots.first(where: { $0.hostName == hostName }),
-           let sessions = try? await slot.channel.listSessions() {
-            return sessions
-        }
-        if let machine = relayFleetStore.machines.first(where: { $0.record.displayName == hostName }),
-           relayFleetStore.isConnected(machine.id) {
-            return (try? await machine.bridge.relayListSessions()) ?? []
-        }
-        return []
-    }
-
-    /// Fetches transcript turns for an observed session, using the same
-    /// transport-selection order as `loadObservedSessions`.
-    private func fetchObservedTranscript(sessionId: String, sinceLine: Int) async -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool) {
-        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first,
-           let result = try? await slot.channel.fetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
-            return result
-        }
-        if let bridge = relayFleetStore.firstConnectedMachine?.bridge,
-           let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: sinceLine) {
-            return result
-        }
-        return ([], 0, false)
-    }
-
-    /// Sends a follow-up prompt into an observed (not Lancer-dispatched) session
-    /// by its exact vendor session id + cwd. Mirrors `loadObservedSessions` /
-    /// `fetchObservedTranscript`: prefers a connected SSH fleet slot, falls back
-    /// to the relay bridge (`agentSessionContinue` / `sessionContinueResult`) so
-    /// a relay-only (V1) setup can continue an observed session too.
-    private func sendObservedSessionFollowUp(vendor: String, sessionId: String, cwd: String, prompt: String) async -> DispatchResult {
-        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first {
-            do {
-                return try await slot.channel.continueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
-            } catch {
-                return DispatchResult(status: "error", message: error.localizedDescription)
-            }
-        }
-        if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
-            do {
-                return try await bridge.relayContinueObservedSession(vendor: vendor, sessionId: sessionId, cwd: cwd, prompt: prompt)
-            } catch {
-                return DispatchResult(status: "error", message: error.localizedDescription)
-            }
-        }
-        return DispatchResult(status: "error", message: "No direct connection to this machine.")
-    }
-
-    /// Tapping a session in Home's "Sessions on this Mac" list used to land on
-    /// a read-only `.observedSession` view with a separate, explicit "Import
-    /// to Lancer" action before the session became a real, continuable
-    /// conversation — two steps for what's a single decision the tap already
-    /// made. Every mainstream chat app (ChatGPT/Codex, Telegram, LINE, Manus)
-    /// treats a list tap as "open this conversation," full stop, and relies on
-    /// swipe/long-press Archive or Delete for cleanup rather than a separate
-    /// "make this real" gate — `attachObservedSession` is already idempotent
-    /// (re-tapping the same session returns the same conversation, no
-    /// duplicates) and imported conversations are ordinary `ChatConversation`
-    /// rows, archivable/deletable the same way as any other thread. So: tap
-    /// now auto-imports and opens the real thread directly. Falls back to the
-    /// old read-only view only if the import itself fails (host unreachable,
-    /// etc.) — that view can still show the transcript and the error.
-    private func openObservedSessionAutoImporting(_ session: ObservedSession, env: AppEnvironment) async {
-        let hostName = relayFleetStore.machines.first?.record.displayName ?? "Mac"
-        let result = await importObservedSession(vendor: session.provider, sessionId: session.sessionId, cwd: session.cwd, env: env)
-        switch result {
-        case .success(let summary):
-            sidebarState.navigate(to: .thread(id: summary.conversationId))
-        case .failure:
-            sidebarState.navigate(to: .observedSession(
-                sessionId: session.sessionId,
-                title: session.title,
-                hostName: hostName,
-                vendor: session.provider,
-                cwd: session.cwd
-            ))
-        }
-    }
-
-    /// A liveness read can be momentarily false right after navigation or a
-    /// reconnect even though the same machine just answered an RPC — a bare
-    /// one-shot check here raced that and fell back to the read-only
-    /// observed-session view with a real, connected machine (found live
-    /// 2026-07-03). `ConnectionStateStore.waitForAnyConnected` tolerates the
-    /// race the sanctioned way: it waits only while a machine is genuinely
-    /// mid-reconnect and bails immediately when every pairing is known-bad.
-    private func activeRelayBridge() async -> E2ERelayBridge? {
-        guard let id = await relayFleetStore.connectionStates.waitForAnyConnected() else { return nil }
-        return relayFleetStore.machine(id)?.bridge
-    }
-
-    /// Imports an observed session's transcript into a durable, cross-device
-    /// Lancer conversation via `agent.conversations.attachObservedSession`.
-    /// Same transport-selection order as `sendObservedSessionFollowUp`.
-    ///
-    /// `attachObservedSession` creates the conversation server-side only —
-    /// unlike `startConversation`/`continueConversation`, nothing writes a
-    /// local mirror row for it. `onImported` navigates straight to
-    /// `.thread(id:)` by conversation ID, so without an explicit pull here the
-    /// thread view finds no local row and renders its "brand new empty
-    /// conversation" empty state even though the host already has the full
-    /// transcript (found live 2026-07-03: import created a real ledger row
-    /// with 87 events, but the phone showed "No activity in this work thread
-    /// yet"). Mirror the same `refreshConversation` pull `resolveTransport`
-    /// callers use elsewhere in this file — `refreshConversationMirror` can't
-    /// be reused as-is because it resolves the transport FROM an existing
-    /// local `ChatConversation` row, which is exactly what doesn't exist yet.
-    private func importObservedSession(vendor: String, sessionId: String, cwd: String, env: AppEnvironment) async -> Result<ObservedSessionImportSummary, ObservedSessionImportError> {
-        let request = ConversationAttachObservedSessionRequest(provider: vendor, sessionId: sessionId, cwd: cwd)
-        if let slot = fleetStore.slots.first(where: { fleetStore.connectionState(for: $0) == .connected })
-                ?? fleetStore.slots.first {
-            do {
-                let response = try await slot.channel.attachObservedSession(request)
-                let channel = slot.channel
-                await hydrateImportedConversationMirror(
-                    conversationID: response.conversationId,
-                    transport: ConversationTransport(
-                        append: { try await channel.appendConversation($0) },
-                        fetch: { try await channel.fetchConversation($0) },
-                        archive: { try await channel.archiveConversation($0) }
-                    ),
-                    env: env
-                )
-                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
-            } catch {
-                return .failure(ObservedSessionImportError(error.localizedDescription))
-            }
-        }
-        if let bridge = await activeRelayBridge() {
-            do {
-                let response = try await bridge.relayAttachObservedSession(request)
-                await hydrateImportedConversationMirror(
-                    conversationID: response.conversationId,
-                    transport: ConversationTransport(
-                        append: { try await bridge.relayAppendConversation($0) },
-                        fetch: { try await bridge.relayFetchConversation($0) },
-                        archive: { try await bridge.relayArchiveConversation($0) }
-                    ),
-                    env: env
-                )
-                return .success(ObservedSessionImportSummary(conversationId: response.conversationId, alreadyAttached: response.alreadyAttached))
-            } catch {
-                return .failure(ObservedSessionImportError(error.localizedDescription))
-            }
-        }
-        return .failure(ObservedSessionImportError("No direct connection to this machine."))
-    }
-
-    /// Pulls a just-imported observed session's full transcript into the
-    /// local mirror before `onImported` navigates to it. Best-effort: a
-    /// failure here doesn't undo the import (the host-side row is already
-    /// real and durable) — it just means the thread view falls back to its
-    /// existing on-open refresh path, if any, instead of showing content
-    /// immediately.
-    private func hydrateImportedConversationMirror(conversationID: String, transport: ConversationTransport, env: AppEnvironment) async {
-        do {
-            _ = try await env.conversationSyncCoordinator.refreshConversation(conversationID: conversationID, transport: transport)
-        } catch {
-            Self.logger.error("hydrateImportedConversationMirror: refresh failed for conversation=\(conversationID, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func profileLabel(for env: AppEnvironment) -> String {
-        // Prefer the user's name (captured at onboarding for both account and
-        // offline users), then fall back to email, then a neutral default.
-        if let name = env.accountSession.displayName { return name }
-        return env.accountSession.email ?? (env.accountSession.isOfflineSelfHosted ? "Self-hosted offline" : "Lancer")
-    }
-
-    private var homeSidebarAction: (() -> Void)? {
-        guard horizontalSizeClass != .regular else { return nil }
-        return { openDrawer() }
     }
 
     private func configureCloudServices(env: AppEnvironment) async {
@@ -1999,6 +1374,14 @@ public struct AppRoot: View {
         // machine simply won't find it in `relayFleetStore.machine(id)` and is
         // dropped (same fail-closed spirit as everywhere else in this feature).
         Task { await hydrateRelayFleetStore(env: env) }
+
+        // Reactively mirror connection-state transitions into the banner phase.
+        relayFleetStore.connectionStates.addObserver { [relayFleetStore, cursorLiveBridge, fleetStore] _, _ in
+            cursorLiveBridge.connectionPhase = AppRoot.connectionPhase(
+                for: relayFleetStore,
+                fleetStore: fleetStore
+            )
+        }
 
         // lancerE2EStatusUpdate is posted by every machine's bridge; route each
         // to the machine it named via userInfo["machineID"].
@@ -2187,8 +1570,6 @@ public struct AppRoot: View {
             // the authoritative ConnectionStateStore — which updates strictly
             // before this async loop observes the edge.
             for await active in bridge.$isActive.values {
-                sidebarState.relayConnected = relayFleetStore.connectionStates.anyConnected
-                if active { sidebarState.relayLastConnectedAt = Date() }
                 fleetStore.setRelayStateOnAllSlots(aggregateRelayState())
                 if active {
                     // When a relay machine goes live, ask the host which agent CLIs
@@ -2228,6 +1609,28 @@ public struct AppRoot: View {
             }
         }
         return states.max(by: { rank($0) < rank($1) }) ?? .none
+    }
+
+    /// Maps relay + SSH fleet liveness onto the Cursor shell connection banner.
+    private static func connectionPhase(
+        for relayFleetStore: RelayFleetStore,
+        fleetStore: FleetStore
+    ) -> CursorShellLiveBridge.ConnectionPhase {
+        let hasSSHConnected = fleetStore.slots.contains { $0.sessionViewModel.status == .connected }
+        if relayFleetStore.machines.isEmpty, fleetStore.slots.isEmpty {
+            return .needsPairing
+        }
+        if relayFleetStore.connectionStates.anyConnected || hasSSHConnected {
+            return .connected
+        }
+        let states = relayFleetStore.machines.compactMap { relayFleetStore.connectionState(for: $0.id) }
+        if !states.isEmpty, states.allSatisfy({ $0 == .pairingInvalid }) {
+            return .needsPairing
+        }
+        if states.contains(where: { $0 == .reconnecting || $0 == .hostOffline }) {
+            return .reconnecting
+        }
+        return .offline
     }
 
     /// Maps the authoritative per-machine connection state onto the
@@ -2408,12 +1811,9 @@ public struct AppRoot: View {
                 if self.fleetStore.slots.contains(where: { $0.id == slot.id }) {
                     self.selectFleetSlot(slot.id)
                 }
-                // Finding #5: post-connect lands on MONITORING (Fleet), not the
-                // full-screen block terminal. The session runs in the background
-                // as a monitored slot; the terminal becomes an intentional
-                // drill-in via the per-slot "open terminal" affordance (which
-                // sets `isShowingLiveSession`). Do NOT auto-present it here.
-                self.sidebarState.navigate(to: .machines)
+                // Post-connect: session runs as a monitored fleet slot; the Cursor
+                // shell stays on Workspaces — terminal is an intentional drill-in.
+                self.workspacesRevision = UUID()
                 // MAJOR-4: re-arm the approval pipeline after a reconnect. The
                 // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
                 // recreate + restart them and re-point the relay so new approvals
@@ -2496,7 +1896,6 @@ public struct AppRoot: View {
             await ingest.start()
             await MainActor.run {
                 env.quotaGuardStore.setChannel(channel)
-                env.hostHealthStore.startPolling(fleetStore: self.fleetStore)
             }
             await env.quotaGuardStore.refresh()
         }
@@ -2581,141 +1980,63 @@ private struct MachineConnectionChooser: View {
     }
 }
 
-private struct SettingsWithLibraryView: View {
-    let viewModel: SettingsViewModel
-    let syncEngine: SyncEngine?
-    var conversationSyncEngine: ConversationSyncEngine? = nil
-    let backendURL: String
-    let auditRepository: AuditRepository?
-    let approvalRepository: ApprovalRepository?
-    var sshKeyStore: KeyStore? = nil
-    var daemonChannel: DaemonChannel? = nil
-    var relayMachines: [RelayMachineRow] = []
-    var onRelayPaired: (E2ERelayClient, RelayMachineRecord) -> Void = { _, _ in }
-    var onRelayUnpair: (RelayMachineID) -> Void = { _ in }
-    var onRelayRename: (RelayMachineID, String) -> Void = { _, _ in }
-    let accountSession: AccountSessionController
-    var quotaGuardStore: QuotaGuardStore? = nil
-    var onResetApp: (() -> Void)? = nil
-    var onEmergencyStop: (() -> Void)? = nil
-    var onAccountSignedOut: (() -> Void)? = nil
-    // Sidebar back navigation — use @Bindable so the mutation goes through the
-    // observable directly, avoiding closure-capture staleness through deep view trees.
-    @Bindable var sidebarShellState: SidebarShellState
-    var onApplyPolicyPreset: ((PolicyPreset, String) -> Void)? = nil
-    var onApplyNormalizedPolicy: ((NormalizedPolicy) -> Void)? = nil
-    @State private var showLimits = false
-
-    var body: some View {
-        SettingsView(
-            viewModel: viewModel,
-            syncEngine: syncEngine,
-            conversationSyncEngine: conversationSyncEngine,
-            backendURL: backendURL,
-            auditRepository: auditRepository,
-            approvalRepository: approvalRepository,
-            sshKeyStore: sshKeyStore,
-            daemonChannel: daemonChannel,
-            relayMachines: relayMachines,
-            onRelayPaired: onRelayPaired,
-            onRelayUnpair: onRelayUnpair,
-            onRelayRename: onRelayRename,
-            onResetApp: onResetApp,
-            onShowLimits: quotaGuardStore != nil ? { showLimits = true } : nil,
-            onEmergencyStop: onEmergencyStop,
-            accountSession: accountSession,
-            onAccountSignedOut: onAccountSignedOut,
-            // Settings is a top-level sidebar destination. The compact shell
-            // provides the single glass navigation button, so suppress an
-            // in-content back affordance here.
-            onBack: nil,
-            onApplyPolicyPreset: onApplyPolicyPreset,
-            onApplyNormalizedPolicy: onApplyNormalizedPolicy
-        )
-        .sheet(isPresented: $showLimits) {
-            if let store = quotaGuardStore {
-                LancerDrawer(title: "Usage & limits", detents: [.large]) {
-                    QuotaGuardView(store: store)
-                }
-            }
-        }
-    }
-}
-
-private struct GlobalInboxGateView: View {
-    let onUpgrade: () -> Void
-    @Environment(\.lancerTokens) private var t
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 48))
-                .foregroundStyle(t.accent)
-            Text("AI Agent Inbox · Pro")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(t.text1)
-            Text("Review and approve AI agent actions from your sessions.")
-                .font(.body)
-                .foregroundStyle(t.text3)
-                .multilineTextAlignment(.center)
-            DSButton("Upgrade to Pro", systemImage: "sparkles", variant: .primary, action: onUpgrade)
-            Spacer()
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(t.surf0)
-        .navigationTitle("Inbox")
-    }
-}
-
 private struct PasswordPromptView: View {
     let host: Host
     let onConnect: (String) -> Void
 
     @State private var password = ""
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @FocusState private var passwordFocused: Bool
 
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
+        VStack(spacing: 0) {
+            CursorHeaderBar(
+                leading: AnyView(
+                    CursorIconButton(systemImageName: "xmark", action: { dismiss() })
+                ),
+                trailing: []
+            )
+            .overlay(alignment: .center) {
+                Text("Connect")
+                    .font(CursorType.sheetTitle)
+                    .foregroundColor(colors.primaryText)
+                    .padding(.top, CursorMetrics.headerTopPadding)
+            }
 
-            VStack(alignment: .leading, spacing: 0) {
-                DSDetailHeader("connect", onBack: { dismiss() })
-
-                // ── Host identity card
-                card {
-                    HStack(spacing: 12) {
-                        PixelAvatar(seed: host.name, size: 44)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(host.name)
-                                .font(.dsSansPt(16, weight: .semibold))
-                                .foregroundStyle(t.text)
-                                .lineLimit(1)
-                            Text(host.displayAddress)
-                                .font(.dsMonoPt(12))
-                                .foregroundStyle(t.text3)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(colors.composerBackground)
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Text(String(host.name.prefix(1)).uppercased())
+                                .font(CursorType.cardTitle)
+                                .foregroundColor(colors.primaryText)
+                        )
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(host.name)
+                            .font(CursorType.rowTitle)
+                            .foregroundColor(colors.primaryText)
+                            .lineLimit(1)
+                        Text(host.displayAddress)
+                            .font(CursorType.inlineCode)
+                            .foregroundColor(colors.secondaryText)
+                            .lineLimit(1)
                     }
-                    .padding(14)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 18)
+                .padding(14)
+                .background(colors.sheetBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                // ── Password
                 Text("PASSWORD")
-                    .font(.dsMonoPt(11))
-                    .tracking(0.8)
-                    .foregroundStyle(t.text3)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 6)
+                    .font(CursorType.sectionHeader)
+                    .foregroundColor(colors.mutedText)
                 SecureField("Password", text: $password)
-                    .font(.dsMonoPt(14))
+                    .font(CursorType.bodyText)
                     .textContentType(.password)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -2724,39 +2045,29 @@ private struct PasswordPromptView: View {
                     .onSubmit(connect)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 14)
-                    .background(t.surfaceSunk)
-                    .clipShape(RoundedRectangle(cornerRadius: t.r3, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: t.r3, style: .continuous)
-                            .strokeBorder(t.border, lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
+                    .background(colors.composerBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                Spacer()
-
-                // ── Connect CTA (content-width, centered — house style)
-                HStack {
-                    Spacer()
-                    DSButton("Connect", variant: .primary, size: .lg, action: connect)
-                        .disabled(password.isEmpty)
-                    Spacer()
-                }
-                .padding(.bottom, 28)
+                CursorPillButton(title: "Connect", style: .primary, action: connect)
+                    .disabled(password.isEmpty)
+                    .frame(maxWidth: .infinity)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            Spacer(minLength: 0)
         }
+        .background(colors.background.ignoresSafeArea())
+        .environment(\.cursorScheme, .light)
         .presentationDetents([.medium])
         .onAppear {
-            #if DEBUG
-            // Live-loop E2E (LANCER_DAEMON_E2E=1): prefill the localhost password
-            // from the launch env so the real connect flow can be driven without
-            // typing into a secure field. DEBUG-only; never affects shipping.
-            let e = ProcessInfo.processInfo.environment
-            if e["LANCER_DAEMON_E2E"] == "1", password.isEmpty,
-               let pw = e["LANCER_TEST_PW"], !pw.isEmpty {
+            passwordFocused = true
+#if DEBUG
+            if ProcessInfo.processInfo.environment["LANCER_DAEMON_E2E"] == "1",
+               let pw = ProcessInfo.processInfo.environment["LANCER_TEST_PW"], !pw.isEmpty {
                 password = pw
             }
-            #endif
-            passwordFocused = true
+#endif
         }
     }
 
@@ -2765,17 +2076,6 @@ private struct PasswordPromptView: View {
         let value = password
         dismiss()
         onConnect(value)
-    }
-
-    @ViewBuilder
-    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .background(t.surface)
-            .clipShape(RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                    .strokeBorder(t.border, lineWidth: 1)
-            )
     }
 }
 

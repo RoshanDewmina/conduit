@@ -163,7 +163,7 @@ public struct PortForwardView: View {
 
         HStack {
             Spacer()
-            DSButton("Start Tunnel", variant: .primary, action: {
+            CursorPillButton(title: "Start Tunnel", style: .primary, action: {
                 Task { await vm.addForward() }
             })
             Spacer()

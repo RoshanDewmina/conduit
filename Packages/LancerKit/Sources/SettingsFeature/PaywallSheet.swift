@@ -7,6 +7,7 @@ public struct PaywallSheet: View {
     public let featureName: String
     @Environment(\.dismiss) private var dismiss
     @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var pm = PurchaseManager.shared
 
     public init(featureName: String) {
@@ -15,7 +16,7 @@ public struct PaywallSheet: View {
 
     public var body: some View {
         ZStack(alignment: .topTrailing) {
-            t.bg.ignoresSafeArea()
+            CursorColors.resolve(cursorScheme).background.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -86,15 +87,12 @@ public struct PaywallSheet: View {
 
                         // CTA
                         VStack(spacing: 12) {
-                            DSButton(
-                                "unlock lancer pro",
-                                variant: .primary,
-                                mono: true,
-                                isLoading: {
-                                    if case .purchasing = pm.purchaseState { return true }
-                                    return false
-                                }(),
+                            let purchasing = { if case .purchasing = pm.purchaseState { return true }; return false }()
+                            CursorPillButton(
+                                title: "unlock lancer pro",
+                                style: .primary,
                                 fullWidth: true,
+                                isLoading: purchasing,
                                 action: { Task { await pm.purchase() } }
                             )
                             .disabled({
@@ -139,7 +137,7 @@ public struct PaywallSheet: View {
             }
 
             // Dismiss button
-            DSIconButton(.close, accessibilityLabel: "Close") { dismiss() }
+            CursorIconButton(systemImageName: "xmark", action: { dismiss() })
                 .padding(.top, 8)
                 .padding(.trailing, 8)
         }

@@ -2,9 +2,9 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-06-27 (lean cleanup sweep, live-loop/TestFlight reconciliation)
-Target platform: iOS 27.0+ deployment (project.yml and Package.swift); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on)
-Status: M1–M10 complete on master; M11 (temporal wall / unified PTY) Phase 0–1 + UX in progress
+Last updated: 2026-07-06 (Cursor shell design reconciliation)
+Target platform: iOS 26.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on). iOS 27-only affordances are fast-follow candidates and must stay gated or out of the shipping path while the deployment target remains 26.0.
+Status: **production UI target is the Cursor shell** (`AppFeature/CursorStyle`). Governed relay loop is shipped in code; Tier 0 proves `LANCER_CURSOR_SHELL_LIVE=1` end-to-end against real `lancerd`. Legacy sidebar / Command Home remains in tree until Tier 0 retires it.
 
 ---
 
@@ -21,12 +21,12 @@ the reason for rejection.
 
 ---
 
-## 0.1 Current state snapshot (authoritative — 2026-06-27)
+## 0.1 Current state snapshot (authoritative — 2026-07-06)
 
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
 > snapshot, **this snapshot wins** until they are rewritten. The former
-> `docs/LANCER_PROJECT_DOSSIER.md` is **archived** (`docs/_archive/`); this is its successor.
+> `docs/LANCER_PROJECT_DOSSIER.md` and the old `docs/_archive/` tree were **purged 2026-07-06**; this section + `docs/STATUS_LEDGER.md` are their successors.
 
 > **Strategic direction (2026-06-24, narrowed).** The broad "mobile control plane for coding agents"
 > category is commoditized (OpenAI Codex Remote, GitHub Agent HQ, Claude Code auto mode) and **Omnara**
@@ -42,7 +42,7 @@ the reason for rejection.
 **What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Sidebar / Command Home shell** (see §4.1).
+1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Cursor shell** (3-root IA: Home / Workspaces / Settings — see §4.1). Legacy sidebar / Command Home is deprecated (see §0.1 Deprecated).
 2. **`lancerd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/lancerd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
@@ -60,24 +60,25 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 > session holder.
 
 ### V1 scope (locked 2026-06-18; transport corrected 2026-06-19; terminal scope corrected 2026-06-30)
-- **V1 ships:** the sidebar/Command Home shell, the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, machine detail (≤3 live sessions), and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+- **V1 ships:** the **Cursor shell** UI (wireframed in `docs/design-audit/lancer-workflows-2026-07-05/`), the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
 - **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
-- **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is exactly what's in `docs/V1_PRODUCT_SPEC.md` / `docs/V1_STATE_AND_ACTION_MATRIX.md` / `docs/V1_IMPLEMENTATION_PLAN.md` (the Codex-research → ChatGPT-synthesis → locked-spec chain): the governed attention/approval loop, not terminal depth.
+- **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is defined in `docs/product/2026-07-05-lancer-feature-master-plan.md` and `docs/product/FEATURE_BACKLOG.md`: the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
+- **Cursor shell (production UI target):** in-tree under `AppFeature/CursorStyle`. `LANCER_CURSOR_SHELL=1` — seeded shell for UITests/design review. `LANCER_CURSOR_SHELL_LIVE=1` — live bridge via `CursorShellLiveBridge` (pairing, workspaces, dispatch, approval, continue, Settings). Wireframes: `docs/design-audit/lancer-workflows-2026-07-05/`. Tier 0 must prove against `lancerd` before this is the only root.
 - **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior and `CKDatabaseSubscription` silent-push delivery remain unverified on physical hardware** — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
-- **Sidebar/Command Home IA** with durable chat persistence (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn).
-- **Governance folded into Settings** (2026-07-01, reversing the 2026-06-24 standalone-root promotion): policy presets/matrix, the audit trail, and team & roles live under Settings' "Policy & Governance" section — one entry point, not a 5th sidebar root, keeping the locked four-root IA (Home/Work/Machines/Settings) accurate.
+- **Governed chat + approvals (shell-agnostic):** durable chat (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn) — works through legacy sidebar and Cursor live bridge.
+- **Governance in Settings:** policy presets/matrix, audit trail, team & roles under Settings' "Policy & Governance" — matches wireframe `10-settings.html`; not a separate root.
 - **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
 - **lancerd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
-- **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop. Biometric gate and app-lock were removed for V1 (2026-07-01, owner decision) — approvals commit on tap and the app never shows a lock screen.
+- **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop (client-orchestrated, not yet an atomic daemon-side primitive — see gap below). **Biometric gate reinstated (2026-07-04, commit `695d2440`, `fable/approval-security-hardening`):** risk-tiered — `ApprovalDecisionAuth.requiresUnlock` (`Packages/LancerKit/Sources/SecurityKit/ApprovalDecisionAuth.swift`) gates high/critical and unknown-risk approval decisions behind Face ID/Touch ID/passcode across the inbox, notification actions, and `ApprovalRelay`; low/medium decisions stay one-tap by design. Watch decisions deliberately bypass phone-side local auth (wrist detection + the Watch's own passcode). **Known residual gap:** `BiometricGate` still degrades open (returns success) on a device with no passcode configured at all — tracked, not yet fixed.
 - **V1 reach + device proof (2026-06-19 → 2026-06-23):**
   - **opencode approval gating** — lancerd-dispatched `opencode` runs gate every tool call through the policy engine via a `LANCER_GATE=1`-guarded gate. **Correction (2026-07-01/02):** the original mechanism here (a `hooks.json` + PreToolUse-command bash script) was never real OpenCode config — verified live that OpenCode 1.17.x doesn't read it at all, so every opencode tool call ran completely ungated for an unknown period, silently. Replaced with the real extension point, a `tool.execute.before` **plugin** auto-discovered from `~/.config/opencode/plugins/`, wired into `lancerd install`. Re-verified live end-to-end (escalate → resolution in `~/.lancer/audit.log`, hash-chain intact, tool call blocks until the daemon decides). `daemon/lancerd/opencode_plugin_install.go` + `docs/opencode-lancer-gate-plugin.js`.
   - **Push-driven Live Activity** — `LiveActivityManager` requests `pushType: .token`, streams `pushTokenUpdates` + `pushToStartTokenUpdates`, so the lock-screen / Dynamic Island update **while the app is closed** (was local-update-only → stale when backgrounded). New `daemon/push-backend/liveactivity.go` ActivityKit sender with the strict APNs contract (`<bundle>.push-type.liveactivity` topic, pinned `Date` encoding). **APNs payload privacy:** the alert body no longer carries the raw command (`body := ev.Command` removed) — redacted risk/tool summary only; full detail fetched in-app post-unlock.
   - **Cold-decision gate** — `ApprovalRelay` hydrates relay credentials from Keychain at decision time so an Approve tapped from a killed-app Live Activity forwards to lancerd (previously the singleton creds were empty cold → decision dropped).
   - **Watch WCSession polish** — `PhoneWatchConnector` pushes live `agentActive`/`pendingCount`/uptime (were hardcoded stubs); `InboxCountWidget` gains `.accessoryRectangular` + VoiceOver labels.
-  - **C2 physical-device live loop PASSED (2026-06-23):** app closed → gated action → APNs lock-screen push → approve from the lock screen → decision round-tripped to `lancerd` → agent resumed. The fixes covered bundle id, relay device registration, `/approval` auth, sandbox APNs fallback, and foreground re-registration. Evidence: `docs/test-runs/2026-06-22-full-device-test.md`.
+  - **C2 physical-device live loop PASSED (2026-06-23):** app closed → gated action → APNs lock-screen push → approve from the lock screen → decision round-tripped to `lancerd` → agent resumed. The fixes covered bundle id, relay device registration, `/approval` auth, sandbox APNs fallback, and foreground re-registration. Evidence summarized in this section (detailed test-run logs purged 2026-07-06).
   - **TestFlight uploaded:** a TestFlight build has been uploaded; remaining release work is beta validation / App Review / owner-operated store metadata, not "make the app build."
 
 ### Partial / deployment- or device-gated (🔶)
@@ -88,22 +89,29 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 
 ### Deferred to V2 — code retained, NOT deleted
 - **Hosted-cloud execution UI:** `ProviderDetailView`, `HostedProvisioningView`, `HostedRunnerStatusView`, `SelfHostVsHostedView` (orphaned, 0 refs) and the `agent-runner`/multi-cloud dispatch depth (Fly real; GCP needs an image; Lightsail bootstrap only). Compiles, stays in tree, unwired in V1. **Do not delete.**
+- **Siri / App Intents Phase 2 (RelevantEntities, App Shortcuts relevance, run-start intent):**
+  implemented and device-tested (`cursor/siri-phase2-fixes-9257`, PRs #16/#24), but **intentionally
+  not merged to master** (owner decision, 2026-07-06) — these are iOS 27-only APIs, and master
+  targets iOS 26.0 until iOS 27 actually ships. Revisit merging this branch when the deployment
+  target moves to 27.0+. This is a parked fast-follow, not a stalled/forgotten PR.
 
 ### Planned (not started)
 - First-class **Loop** primitive (`lancer_loop_start`/`lancer_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
 - Cross-vendor breadth beyond the four CLIs; open-sourcing `lancerd`.
 
 ### Deprecated / removed
-- **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — replaced by the sidebar shell (§4.1).
+- **Legacy sidebar / Command Home shell** (`LancerSidebarView`, `SidebarShellState`, drawer IA) — superseded by Cursor shell (§4.1). Retained on `master` until Tier 0 live proof completes; do not extend or screenshot as current design.
+- **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — vestigial; never reintroduce.
 - Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
 - Deleted dead files (2026-06-27 lean sweep): `WorktreesFeature` whole target, `RunnerSetupView`, `EditScheduleSheet`, `LoopDetailView`, `GitStore`, unused Go agent-status helpers, unused quota/secrets/policy/audit helpers, stale StoreKit Conduit metadata, and the one-time `scripts/rebrand-lancer.py`.
-- `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `LANCER_PROJECT_DOSSIER.md` → `docs/_archive/` (point-in-time, superseded).
-- `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, and root `ship-plan/` → `docs/_archive/` (tab/gallery-era or superseded planning).
+- `docs/current-state-audit.md`, `docs/remaining-work.md`, `APP_AUDIT.md`, `cloud-execution-engine-plan.md`, `LANCER_PROJECT_DOSSIER.md` — **purged 2026-07-06** (point-in-time, superseded by §0.1 + `docs/STATUS_LEDGER.md`).
+- `docs/design-handoff/PAGES.md`, `docs/design-handoff/BACKEND_COVERAGE.md`, `docs/PRODUCTION_READINESS_PLAN.md`, and root `ship-plan/` — **purged 2026-07-06** (tab/gallery-era or superseded planning).
 
 ### Current priorities (in order)
-1. **Keep the live loop repeatable:** rerun the governed-approval path on physical devices before each external beta/release candidate. Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
-2. **External readiness:** TestFlight is uploaded; remaining gates are beta validation, App Review metadata, StoreKit sandbox proof, remote-host E2E, and owner-operated DNS/release publishing.
-3. Optional V1 polish: empty/error/a11y sweep, pixel polish, and daemon-side verification for audit "Verify chain" if it stays in V1.
+1. **Prove Tier 0 through the live Cursor shell:** launch with `LANCER_CURSOR_SHELL_LIVE=1` and verify pair → dispatch → approval → follow-up against the real daemon/relay path, not seeded shell state.
+2. **Block external beta on P0 correctness:** `BiometricGate` must fail closed on real no-passcode devices, and Emergency Stop needs a daemon-side atomic primitive or an explicit release-blocking exception.
+3. **Keep the live loop repeatable:** rerun the governed-approval path on physical devices before each external beta/release candidate. Step-by-step: **`docs/LIVE_LOOP_RUNBOOK.md`**.
+4. **External readiness:** TestFlight is uploaded; remaining gates are beta validation, App Review metadata, StoreKit sandbox proof, remote-host E2E, and owner-operated DNS/release publishing.
 
 ---
 
@@ -156,7 +164,7 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Lancer
 - **Bundle ID:** `dev.lancer.mobile` (app), `dev.lancer.kit` (frameworks)
-- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
 - **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
@@ -250,33 +258,36 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation — **sidebar / Command Home shell** (redesigned 2026-06-20)
+### 4.1 Top-level navigation — **Cursor shell** (approved 2026-07-05)
 
-The home is **not** a tab bar. It is a **sidebar/drawer shell** (ChatGPT/Claude-app
-style) whose default surface is **Command Home**. Source of truth:
-`AppFeature/AppRoot.swift` (`compactRoot` = drawer overlay on iPhone, `regularRoot`
-= `NavigationSplitView` on iPad), `LancerSidebarView.swift`, `SidebarShellState.swift`.
+The home is **not** a tab bar. Production UI target is the **Cursor-style shell**
+(`AppFeature/CursorStyle/`), wireframed in
+`docs/design-audit/lancer-workflows-2026-07-05/` (MASTER-REPORT + `artifacts/01`–`12`).
 
-Navigation is driven by `SidebarDestination`, not `enum Tab`:
+**3 visible roots:** Home (Away Digest), Workspaces, Settings. Inbox/approvals fold into
+Home as ledger rows; governance folds into Settings. No fourth root.
 
-| Sidebar destination | Surface | Notes |
-|---|---|---|
-| **Home** (`.home`) | `LancerHomeView` — attention, machines, recent work | **Default first surface.** Opens New Chat from its primary action. |
-| **New Chat** (`.newChat`) | `NewChatTabView` — dispatch + live run transcript | Durable, backed by `ChatConversationRepository`. |
-| **Thread** (`.thread(id)`) | `NewChatTabView(initialConversationID:)` | Resume a persisted conversation from the sidebar's Recent list. |
-| **Needs Attention** (`.needsAttention`) | `InboxView` (approvals) | Inbox is the system of record for approvals; History/Activity is a sheet off Inbox, not a root. |
-| **Machines** (`.machines`) | `FleetView` — hosts + active session slots (≤3) | Machine detail opens a slot's live block terminal as an intentional drill-in. |
-| **Settings** (`.settings`) | `SettingsWithLibraryView` | Connection / Notifications / Security / Advanced / Account. |
+| Root | Wireframe | Swift surface (Cursor shell) | Notes |
+|---|---|---|---|
+| **Home** | `artifacts/02-home.html` | `CursorHomeView` | Away Digest / needs-you-first ledger (V1 target; not fully wired). |
+| **Workspaces** | `artifacts/03-workspaces.html` | `CursorWorkspacesView` → thread list → work thread | Repo-first IA target; live bridge hydrates from `ChatConversationRepository`. |
+| **Settings** | `artifacts/10-settings.html` | Profile drawer → `SettingsWithLibraryView` | Policy, connection, account — real Settings handoff in live mode. |
 
-> **Deprecated:** the earlier `enum Tab { inbox, fleet, newchat, settings }` **tab bar**
-> and the `Inbox / Fleet / Activity / Settings` and `Inbox / Fleet / Control / Settings`
-> layouts. The `Tab` enum still exists in `AppRoot.swift` but is **vestigial** — only
-> `rootDestination(.inbox)` is reached, from inside `sidebarDetail`. `Activity` and
-> `Control` are **not** root surfaces; Activity history lives in Recent Threads / the Inbox
-> History sheet / audit detail. Do **not** reintroduce a tab bar.
+**Depth surfaces (not roots):** Onboarding (`01`), Launch setup / composer (`04`), Work Thread
++ proof (`05`), Review & Diff / approvals (`06`), Ship & History (`08`), Search overlay.
+
+**Launch flags** (`AppRoot.swift`):
+
+| Flag | Behavior |
+|---|---|
+| `LANCER_CURSOR_SHELL=1` | Seeded Cursor shell for UITests / design review (mock data). |
+| `LANCER_CURSOR_SHELL_LIVE=1` | Cursor shell with `CursorShellLiveBridge` → real pairing, dispatch, approval, continue, Settings. |
+
+> **Deprecated — do not cite as current design:** legacy **sidebar / Command Home**
+> (`LancerSidebarView`, `SidebarDestination`, drawer + Recent list). Still reachable on
+> `master` when Cursor flags are off; scheduled for retirement after Tier 0 proof.
 >
-> The chat-based session/terminal surface is a **depth** destination reached from
-> Machines/Inbox, never a root.
+> **Also deprecated:** `enum Tab` tab-bar IA (`Inbox/Fleet/Activity/Settings`). Vestigial only.
 
 ### 4.2 Session screen layout
 
@@ -754,7 +765,7 @@ malware; that is out of scope and we will not pretend otherwise.
 
 | Risk | Control |
 |---|---|
-| Device theft | Optional biometric gate at app launch and before key use. Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
+| Device theft | Risk-tiered biometric gate at approval-decision time (high/critical and unknown-risk decisions only; low/medium stay one-tap by design) — reinstated 2026-07-04, `695d2440`. Known gap: `BiometricGate` degrades open on a device with no passcode configured at all (tracked, unfixed). Keys are `whenUnlockedThisDeviceOnly`. Secure Enclave for Ed25519 where supported. |
 | Server breach | Control plane stores nothing decryptable about hosts or sessions. BYOK keys never touch the server. Push notification payloads carry only host id + opaque event id. |
 | Untrusted host | First-connect host key fingerprint shown to user with QR/text confirm. TOFU with explicit warn-on-change. `accept-anything` is **never** the default. |
 | Compromised workspace | `lancerd` runs as the user; never sudo. Daemon binary SHA-256 verified pre-launch against the app's embedded manifest. |

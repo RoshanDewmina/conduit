@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// One selectable repo row: an org/repo pair, plus the checked-out branch
 /// name for the currently active repo (used to render the trailing
@@ -159,6 +160,10 @@ private struct CursorRepoPickerRow: View {
                     .frame(height: CursorMetrics.rowHairlineHeight)
                     .padding(.leading, CursorMetrics.rowHairlineLeadingInsetWithIcon)
             }
+            // Same dead-tap-zone fix as CursorListRow/CursorThreadRow: without
+            // this, a tap in the `Spacer()` gap between the repo name and the
+            // trailing branch chevron doesn't register as hitting the Button.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

@@ -1,0 +1,1071 @@
+<title>Lancer Workflow — Onboarding / Pair Machine</title>
+<style>
+  :root {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0b0c;
+      --surface: #17171a;
+      --surface-2: #1c1c1f;
+      --ink: #ececee;
+      --muted: #a3a3a8;
+      --line: #2b2b2f;
+      --accent: #55c2f0;
+      --ok: #45bd82;
+      --warn: #d69a3a;
+      --danger: #ff6f92;
+      --shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c;
+    --surface: #17171a;
+    --surface-2: #1c1c1f;
+    --ink: #ececee;
+    --muted: #a3a3a8;
+    --line: #2b2b2f;
+    --accent: #55c2f0;
+    --ok: #45bd82;
+    --warn: #d69a3a;
+    --danger: #ff6f92;
+    --shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="light"] {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .tap:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  .col {
+    max-width: 760px;
+  }
+
+  /* ---- header ---- */
+
+  header.doc-head {
+    margin-bottom: 44px;
+  }
+
+  .breadcrumb {
+    font-size: 12.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .breadcrumb .sep { margin: 0 8px; opacity: .5; }
+  .breadcrumb .here { color: var(--ink); font-weight: 650; }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    font-weight: 780;
+  }
+
+  .thesis {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 22px;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 650;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .pill.status-approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .pill.status-approved::before { content: "●"; font-size: 8px; }
+
+  .pill.source { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; font-size: 12px; }
+
+  /* ---- section scaffolding ---- */
+
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  .section-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  p { line-height: 1.6; }
+  .col p { max-width: 66ch; }
+
+  /* ---- screens strip ---- */
+
+  .screens-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .screens-scroll {
+    overflow-x: auto;
+    background: var(--surface-2);
+  }
+
+  .screens-scroll img {
+    display: block;
+    width: 1800px;
+    max-width: none;
+    height: auto;
+  }
+
+  .screens-caption {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .legend-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+
+  .legend-item .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-right: 8px;
+  }
+
+  .legend-item .name { font-size: 13.5px; font-weight: 650; }
+
+  /* ---- flow steps ---- */
+
+  .flow {
+    display: grid;
+    gap: 22px;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+  }
+
+  .flow-step .badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin: 3px 0 6px;
+  }
+
+  .flow-step p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .flow-step p strong { color: var(--ink); font-weight: 650; }
+
+  /* ---- mobbin citation cards ---- */
+
+  .cite-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cite-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+  }
+
+  .cite-card .src {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .cite-card .src a {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .cite-card .src a:hover { text-decoration: underline; }
+
+  .cite-card .lesson {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cite-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .cite-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- rationale ---- */
+
+  .bug-callout {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 20px 0;
+  }
+
+  .bug-callout .mark {
+    color: var(--danger);
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .bug-callout p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .bug-callout .label {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--danger);
+    margin-bottom: 5px;
+  }
+
+  /* ---- issues table ---- */
+
+  .issues {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .issue-row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+
+  .issue-row .state {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .state.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .state.resolved { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+  .issue-row .body strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .issue-row .body span { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .issue-row .body .cite { display: block; margin-top: 5px; font-size: 12px; }
+
+  /* ---- footer ---- */
+
+  footer {
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer .files {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 720px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 32px 1fr; }
+    .issue-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---- coded phone mockups (fixed light styling — these reproduce a specific
+     light-mode app state, like a photo, and don't invert with the viewer's theme) ---- */
+
+  .phone-strip {
+    display: flex;
+    gap: 22px;
+    padding: 26px 24px;
+  }
+
+  .phone-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slot-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: #7a7a76;
+    margin: 0;
+  }
+
+  .mock .phone {
+    width: 270px;
+    height: 586px;
+    border: 1px solid #dedede;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    background: #fbfbfa;
+    box-shadow: 0 18px 44px rgba(20,20,18,.16);
+    color: #171717;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+
+  .mock .iphone-status {
+    height: 50px;
+    padding: 18px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mock .home-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 16px;
+  }
+
+  .mock .circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #d8d8d5;
+    background: linear-gradient(#fff, #f2f2f0);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    color: #111;
+  }
+
+  .mock .right-actions { display: flex; gap: 8px; }
+  .mock .small-circle { width: 38px; height: 38px; font-size: 17px; }
+
+  .mock .home-title {
+    padding: 14px 22px 20px;
+    font-size: 21px;
+    font-weight: 760;
+  }
+
+  .mock .home-content {
+    padding: 0 22px 110px;
+    height: 380px;
+    overflow: hidden;
+  }
+
+  .mock .group { margin-bottom: 24px; }
+  .mock .group-title { color: #6f6f6f; font-size: 13.5px; margin: 0 0 12px; }
+
+  .mock .row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ececea;
+  }
+
+  .mock .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+    background: #d7d7d5;
+  }
+
+  .mock .dot.active { background: #158bc0; }
+  .mock .dot.warn { background: #d18b2b; }
+
+  .mock .row-title {
+    font-size: 15.5px;
+    line-height: 1.15;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .meta {
+    color: #6f6f6f;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .check { color: #008767; font-weight: 800; margin-right: 6px; }
+  .mock .diff { align-self: center; font-size: 12.5px; white-space: nowrap; color: #6f6f6f; padding-top: 16px; }
+  .mock .add { color: #12966b; }
+  .mock .del { color: #ff5d87; }
+
+  .mock .composer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 16px;
+    height: 52px;
+    border-radius: 28px;
+    border: 1px solid #d8d8d5;
+    background: rgba(255,255,255,.9);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .mock .composer span {
+    flex: 1;
+    min-width: 0;
+    color: #a7a7a4;
+    font-size: 15.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .pill-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ededeb;
+    display: grid;
+    place-items: center;
+    color: #6b6b69;
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .mock .sheet {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 340px;
+    border-radius: 30px 30px 24px 24px;
+    border: 1px solid #dfdfdc;
+    background: rgba(255,255,255,.97);
+    padding: 16px 16px 20px;
+    box-shadow: 0 -16px 44px rgba(0,0,0,.15);
+  }
+
+  .mock .grabber {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d8d8d5;
+    margin: -4px auto 16px;
+  }
+
+  .mock .sheet-title {
+    text-align: center;
+    font-weight: 760;
+    font-size: 16.5px;
+    margin-bottom: 16px;
+  }
+
+  .mock .sheet-row {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #ebebe8;
+    font-size: 15.5px;
+  }
+
+  .mock .sheet-row:last-child { border-bottom: 0; }
+  .mock .sheet-row small { display: block; color: #6f6f6f; font-size: 11px; margin-top: 2px; }
+
+  /* ---- iOS opportunity cards ---- */
+
+  .ios-grid { display: grid; gap: 14px; }
+
+  .ios-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+  }
+
+  .ios-card .glyph {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ios-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .ios-card .api {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .ios-card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .ios-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- additional mock components for Onboarding panels ---- */
+
+  .mock .onboarding-card {
+    border: 1px solid #e4e4e1;
+    border-radius: 18px;
+    padding: 13px;
+    margin: 0 0 13px;
+    background: rgba(255,255,255,.72);
+  }
+
+  .mock .mini-proof {
+    height: 128px;
+    border-radius: 18px;
+    background: #141416;
+    color: #ececee;
+    padding: 13px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    margin-bottom: 13px;
+  }
+
+  .mock .mini-proof .mini-row {
+    border: 1px solid #333337;
+    border-radius: 11px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    font-size: 11.5px;
+    color: #a3a3a8;
+    background: #1d1d1f;
+  }
+
+  .mock .code-field {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin: 11px 0 8px;
+  }
+
+  .mock .digit {
+    height: 38px;
+    border: 1px solid #d7d7d4;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 16px;
+    background: #fff;
+    color: #171717;
+  }
+
+  .mock .decision-bar {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .mock .decision {
+    border: 1px solid #d4d4d1;
+    background: rgba(255,255,255,.94);
+    color: #333;
+    border-radius: 20px;
+    padding: 10px 9px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 650;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+
+  .mock .decision.primary {
+    background: rgba(69,189,130,.18);
+    border-color: rgba(69,189,130,.42);
+    color: #087244;
+  }
+
+  .mock .review-title {
+    color: #171717;
+    font-size: 19.5px;
+    line-height: 1.14;
+    font-weight: 760;
+    margin-bottom: 8px;
+  }
+
+  .mock .review-copy {
+    color: #6f6f6f;
+    font-size: 12.5px;
+    line-height: 1.42;
+    margin: 0 0 12px;
+  }
+
+  .mock .workspace-row {
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid #ececea;
+    color: #171717;
+  }
+
+  .mock .workspace-name {
+    font-size: 15px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-meta {
+    color: #6f6f6f;
+    font-size: 12px;
+    line-height: 1.25;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-count {
+    color: #6f6f6f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+  }
+
+  .mock .health-line {
+    border: 1px solid #e4e4e1;
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,.7);
+  }
+
+  .mock .health-line strong { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .mock .health-line span { color: #6f6f6f; font-size: 12.5px; line-height: 1.4; }
+</style>
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="breadcrumb">Lancer <span class="sep">/</span> Workflows <span class="sep">/</span> <span class="here">01 — Onboarding</span></p>
+    <h1>Onboarding / Pair Machine</h1>
+    <p class="thesis">One product proof, code-only pairing, then notifications, policy defaults, and an optional account &mdash; in that order. The phone earns trust before it asks for anything non-essential.</p>
+    <div class="meta-row">
+      <span class="pill status-approved">Approved direction (doc-only, not yet implemented)</span>
+      </div>
+  </header>
+
+  <section>
+    <p class="section-eyebrow">The five screens</p>
+    <h2>Exactly as built on the board</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Product proof + code</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:18px;">
+                <div class="mini-proof">
+                  <div style="font-weight:760;margin-bottom:8px;">conduit</div>
+                  <div class="mini-row">hermes-box &middot; online &middot; Codex ready</div>
+                  <div class="mini-row" style="border-color:rgba(209,139,43,.45);">Approval waiting &middot; high risk patch</div>
+                  <div class="mini-row">Proof ready &middot; checks passed &middot; +858 -38</div>
+                </div>
+                <div class="onboarding-card">
+                  <div class="review-title" style="font-size:19px;">Steer AI coding agents from your phone.</div>
+                  <p class="review-copy">Lancer connects to the coding-agent CLIs already running on your computer. Review risky actions and keep work moving without opening a laptop.</p>
+                </div>
+                <div class="onboarding-card">
+                  <div class="workspace-name" style="font-size:13.5px;">On your machine, run <span class="mono">lancerd pair</span></div>
+                  <div class="code-field"><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div><div class="digit"></div></div>
+                  <div class="workspace-meta">Where do I find my code?</div>
+                </div>
+              </div>
+              <div class="decision-bar" style="bottom:16px;"><div class="decision">Skip</div><div class="decision primary">Pair</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Pairing error / retry</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:70px;">
+                <div class="onboarding-card">
+                  <div class="workspace-name" style="font-size:14.5px;">Enter the code from your machine</div>
+                  <div class="code-field"><div class="digit">4</div><div class="digit">1</div><div class="digit">8</div><div class="digit">0</div><div class="digit">6</div><div class="digit">2</div></div>
+                  <div style="color:#cf365a;font-size:12px;line-height:1.35;">That code did not match. Check your machine and try again.</div>
+                </div>
+                <div class="health-line"><strong>Still stuck?</strong><span>Run <span class="mono">lancerd pair</span> again to generate a fresh code. The current code stays visible while you retry.</span></div>
+              </div>
+              <div class="decision-bar" style="bottom:18px;"><div class="decision">Get help</div><div class="decision primary">Try again</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Notifications</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:70px;">
+                <div class="review-title">Know when an agent needs you.</div>
+                <p class="review-copy">Example: &ldquo;Approval waiting on hermes-box &mdash; high-risk patch.&rdquo; Turn on alerts so the first real decision reaches you.</p>
+                <div class="health-line" style="display:none;"><strong>Notifications are off</strong><span>Turn them on in iOS Settings, or continue and manage this later.</span></div>
+                <div class="workspace-row" style="min-height:56px;"><div class="dot active" style="margin-top:0;"></div><div><div class="workspace-name" style="font-size:14px;">Open iOS Settings</div><div class="workspace-meta">Enable approval alerts</div></div><div class="workspace-count">&rsaquo;</div></div>
+              </div>
+              </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">D &middot; Policy defaults</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:58px;">
+                <div class="review-title">Starting guardrails</div>
+                <p class="review-copy"><strong>Balanced</strong> is recommended: ask before risky writes, secrets, network, and destructive actions. Customize anytime in Settings.</p>
+                <div class="health-line" style="border-color:rgba(69,189,130,.45);background:rgba(69,189,130,.08);"><strong>Balanced (recommended)</strong><span>Pre-selected. Safety prompts always available regardless of preset.</span></div>
+                <div class="workspace-meta" style="text-align:center;margin-top:14px;">Customize presets&hellip;</div>
+              </div>
+              <div class="decision-bar" style="bottom:18px;"><div class="decision">Customize</div><div class="decision primary">Continue with recommended</div></div>
+            </div>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">E &middot; Account (optional)</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:58px;">
+                <div class="review-title">Add a Lancer account?</div>
+                <p class="review-copy">Optional. Local pairing already works. An account helps with recovery and a second device later.</p>
+                <div class="health-line"><strong>Lancer account</strong><span>Recovery, device list, hosted features when enabled.</span></div>
+                <div class="health-line"><strong>Self-hosted offline</strong><span>Pair directly with your own machine. No account required.</span></div>
+                <div class="workspace-meta" style="text-align:center;margin-top:14px;">I already have an account</div>
+              </div>
+            </div>
+          <div class="decision-bar" style="bottom:18px;"><div class="decision">Later</div><div class="decision primary">Open Settings</div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Scroll to see all five &middot; built in code from the board's own CSS values, not a screenshot</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">How someone actually uses it</p>
+    <h2>Trust, then pair, then everything else</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="badge">A</div>
+        <div>
+          <h3>See the product before trusting it</h3>
+          <p>One dark proof card (a machine, a pending approval, a finished diff) sits above the headline, then the pairing card &mdash; <span class="mono">lancerd pair</span> instruction, 6-digit field, help link. No feature-row carousel competing for attention.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">B</div>
+        <div>
+          <h3>Wrong or expired code</h3>
+          <p>The typed digits stay on screen; the error moves from a muted center line to a red, field-adjacent sentence, plus a "still stuck?" recovery line naming the fix (<span class="mono">lancerd pair</span> again).</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">C</div>
+        <div>
+          <h3>Notifications, right after pairing</h3>
+          <p>Asked immediately after the machine relationship works &mdash; mechanism-critical, not an engagement nicety. Concrete example copy plus Turn on / Maybe later. &mdash; Lancer account vs. self-hosted offline &mdash; asked only once the machine relationship is established, not before.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">D</div>
+        <div>
+          <h3>Policy defaults, one tap</h3>
+          <p><strong>Balanced</strong> pre-selected with Continue with recommended; Customize opens the three presets (Balanced, Always ask, Fast lane &mdash; three plain-language risk defaults, changeable later in Settings.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="badge">E</div>
+        <div>
+          <h3>Account, optional and last</h3>
+          <p>Skippable offer after pairing and alerts are understood. Local/self-hosted mode needs no account; recovery and second-device sync are the only reasons to add one now.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">What Mobbin taught us, and why</p>
+    <h2>Fresh pass, 2026-07-05 &mdash; device pairing and permission recovery, not consumer onboarding</h2>
+    <div class="cite-grid">
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/d16fca7b-018c-41a5-83e3-80e63ae2d896" target="_blank" rel="noopener">GitHub device verification</a><span class="lesson">Developer-tool code pairing</span></div>
+        <p>6-digit monospaced field, expiry time, resend link &mdash; the lead analogy for panels A/B (software device-link, not consumer hardware).</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/cfd668c7-b29a-406a-9a3d-0685b3132bc8" target="_blank" rel="noopener">Lyft "What's the code?"</a><span class="lesson">Code field + help link</span></div>
+        <p>Big monospaced digits, a "Problems receiving the code?" link, and a spinner state on the field &mdash; directly informs the digit grid plus "Where do I find my code?" link on panel A.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/7a1579b5-0f97-440d-a262-d4505a561453" target="_blank" rel="noopener">Coupang Play device code entry</a><span class="lesson">Code-first, scan deferred</span></div>
+        <p>A dark, empty-box code field with a secondary "Scan" toggle confirms code-only can be the primary path while camera/QR stays one tap away &mdash; supports keeping QR deferred rather than removed.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/910a4c23-17b5-4615-aab3-7d2de619d855" target="_blank" rel="noopener">Tiimo first run</a><span class="lesson">Product proof above the fold</span></div>
+        <p>A real in-app screenshot inside a device frame, directly above the headline and sign-in options &mdash; the exact "show it, then ask" order panel A and panel C follow.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/18f1cb2e-a968-4e02-8b01-511229664247" target="_blank" rel="noopener">Best Buy sign-in benefits</a><span class="lesson">Account choice framing</span></div>
+        <p>A short benefit checklist next to an equally-weighted "Continue as guest" link &mdash; justifies panel C naming what an account buys (recovery, device list) beside a respectful offline path, no hierarchy trick.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/aede35f6-a5ad-4c3c-8a30-2e38e5b0f0b3" target="_blank" rel="noopener">Angi notification-denied modal</a><span class="lesson">Settings recovery</span></div>
+        <p>Plain copy plus a direct Settings button, Cancel as the only other option &mdash; the model for panel E's Later / Open Settings pair, replacing today's dead end after a denial.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">Why this shape, not the old one</p>
+    <h2>A real dead code path, not just weak copy</h2>
+    <div class="bug-callout">
+      <div class="mark">!</div>
+      <div>
+        <span class="label">Dead error state &middot; P2, confirmed in code</span>
+        <p><span class="mono">pairingMessage</span> exists as state in <span class="mono">OnboardingRedesignView</span> but is <strong>never set</strong> &mdash; the inline-error UI this redesign calls for has nowhere to attach today. Today's failures fall back to a muted, easy-to-miss centered status line instead.</p>
+      </div>
+    </div>
+    <div class="issues">
+      <div class="issue-row">
+        <span class="state open">P0</span>
+        <div class="body">
+          <strong>Value rows are abstract</strong>
+          <span>Three equal-weight marketing rows compete with pairing and never show the actual product before asking for trust. This is the redesign's whole reason for existing.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">P1</span>
+        <div class="body">
+          <strong>No in-app notification-denied recovery</strong>
+          <span>A deny today just closes the iOS sheet with no path back &mdash; the gap panel E is built to close.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">P1</span>
+        <div class="body">
+          <strong>QR / camera pairing still reachable in the tree</strong>
+          <span><span class="mono">QRScannerView.swift</span>, <span class="mono">OnboardingScanScreen.swift</span> &mdash; must stay unreachable in V1 release navigation, not just de-prioritized in design.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state open">P2</span>
+        <div class="body">
+          <strong>Implementation detail leaks into user copy</strong>
+          <span>"No Supabase" appears in offline-name hero copy today &mdash; an internal term users should never see.</span>
+        </div>
+      </div>
+      <div class="issue-row">
+        <span class="state resolved">Corrected in this artifact</span>
+        <div class="body">
+          <strong>Settings re-pair file was stale in the workflow doc's file map</strong>
+          <span>The doc cites <span class="mono">BridgePairingView.swift</span> under <span class="mono">OnboardingFeature/</span> &mdash; that file no longer exists in the tree. Current re-pair and pairing-status logic lives in <span class="mono">Packages/LancerKit/Sources/OnboardingFeature/OnboardingPairing.swift</span>, verified directly against the repo before writing this page.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">iOS 27 / WWDC 2026 &mdash; what applies here</p>
+    <h2>Pairing is the first trust grant, not a peripheral setting</h2>
+    <p class="col">Cross-checked against the full platform research pass; only findings that concretely touch a first-run pairing moment are included below.</p>
+    <div class="ios-grid">
+      <div class="ios-card">
+        <div class="glyph">AA</div>
+        <div>
+          <h3>Pair Machine as an authenticated intent, from day one</h3>
+          <span class="api">IntentAuthenticationPolicy = .requiresAuthentication &middot; WWDC26 Session 347</span>
+          <p>Apple's own agentic-security session names device authentication as the deterministic mitigation for actions that change what an agent can do. Pairing is the single highest-trust moment in the whole app &mdash; it grants a machine access, not just removes it &mdash; and is a stronger first candidate for this policy than almost any other Lancer intent.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">OC</div>
+        <div>
+          <h3>Camera-read codes, if QR ever comes back</h3>
+          <span class="api">OCRTool / BarcodeReaderTool &middot; WWDC26 Session 241</span>
+          <p>On-device vision tools can now read a barcode or on-screen digits directly during model generation. If the deferred QR/camera path is revisited post-V1, this removes the need for a bespoke scanner &mdash; point the camera at the machine's code and let the model transcribe it, rather than building custom OCR.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">NT</div>
+        <div>
+          <h3>Re-test the pre-prompt promise against new grouping</h3>
+          <span class="api">Notification coalescing + urgency-based grouping &middot; iOS 27</span>
+          <p>Notifications now coalesce per-app and get reordered by on-device urgency rather than strict chronology. Panel E's promise &mdash; "Lancer only interrupts when needed" &mdash; should be re-verified on a real iOS 27 device once shipped, since system grouping could reorder Lancer's own priority ahead of or behind other apps' alerts.</p>
+        </div>
+      </div>
+    </div>
+    <p class="col" style="color:var(--muted);font-size:14px;margin-top:6px;">Platform notes are curated inline below (WWDC 2026 research source purged 2026-07-06).</p>
+  </section>
+
+  <footer>
+    <p>Sources for this page</p>
+    <div class="files">
+      <span>docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md</span>
+      <span>Packages/LancerKit/Sources/OnboardingFeature/OnboardingRedesignGalleryView.swift</span>
+      <span>Packages/LancerKit/Sources/OnboardingFeature/OnboardingPairing.swift</span>
+      <span>Packages/LancerKit/Sources/OnboardingFeature/AccountEntryView.swift</span>
+      <span>Packages/LancerKit/Sources/OnboardingFeature/QRScannerView.swift, OnboardingScanScreen.swift</span>
+      <span>Packages/LancerKit/Sources/AppFeature/AppRoot.swift</span>
+    </div>
+  </footer>
+
+</div>

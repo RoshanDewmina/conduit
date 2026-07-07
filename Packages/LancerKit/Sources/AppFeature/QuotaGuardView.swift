@@ -6,6 +6,7 @@ import DesignSystem
 public struct QuotaGuardView: View {
     @State private var store: QuotaGuardStore
     @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.dismiss) private var dismiss
 
     public init(store: QuotaGuardStore) {
@@ -14,7 +15,7 @@ public struct QuotaGuardView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
-            t.bg.ignoresSafeArea()
+            CursorColors.resolve(cursorScheme).background.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -37,13 +38,11 @@ public struct QuotaGuardView: View {
     // MARK: - Header
 
     private var header: some View {
-        // Sheet chrome: a Back control to dismiss (this is presented as a sheet and
-        // previously had no explicit way out) + the refresh control as trailing.
-        DSDetailHeader("limits", breadcrumb: "per-provider budget caps & burn rate", onBack: { dismiss() }) {
-            DSIconButton(.settings, accessibilityLabel: "Refresh limits") {
+        CursorDetailHeader("limits", breadcrumb: "per-provider budget caps & burn rate", onBack: { dismiss() }) {
+            CursorIconButton(systemImageName: "arrow.clockwise", action: {
                 Haptics.selection()
                 Task { await store.refresh() }
-            }
+            })
             .disabled(store.isLoading)
         }
         .padding(.bottom, 4)
@@ -52,50 +51,48 @@ public struct QuotaGuardView: View {
     // MARK: - Hero Card
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("total spend today")
-                        .font(.dsMonoPt(10, weight: .medium))
-                        .tracking(1)
-                        .textCase(.uppercase)
-                        .foregroundStyle(t.text3)
+        CursorArtifactCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("total spend today")
+                            .font(CursorType.rowSecondary)
+                            .textCase(.uppercase)
+                            .foregroundColor(CursorColors.resolve(cursorScheme).secondaryText)
 
-                    Text(String(format: "$%.2f", store.totalSpendToday))
-                        .font(.dsSansPt(36, weight: .bold))
-                        .foregroundStyle(t.text)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
+                        Text(String(format: "$%.2f", store.totalSpendToday))
+                            .font(.dsSansPt(36, weight: .bold))
+                            .foregroundColor(CursorColors.resolve(cursorScheme).primaryText)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+
+                    Spacer()
+
+                    let worstPercent = store.providers.map { provider in
+                        guard let cap = provider.dailyCapUSD, cap > 0 else { return 0 }
+                        return Int((provider.spentTodayUSD / cap) * 100)
+                    }.max() ?? 0
+                    CursorProgressRing(
+                        fraction: Double(worstPercent) / 100.0,
+                        color: thresholdColor(for: Double(worstPercent) / 100.0),
+                        size: 64,
+                        lineWidth: 5
+                    )
                 }
 
-                Spacer()
-
-                let worstPercent = store.providers.map { provider in
-                    guard let cap = provider.dailyCapUSD, cap > 0 else { return 0 }
-                    return Int((provider.spentTodayUSD / cap) * 100)
-                }.max() ?? 0
-                ProgressRing(
-                    fraction: Double(worstPercent) / 100.0,
-                    color: thresholdColor(for: Double(worstPercent) / 100.0),
-                    size: 64,
-                    lineWidth: 5
-                )
+                if store.hasOverLimit {
+                    Label("At least one provider is over its daily cap", systemImage: "exclamationmark.circle.fill")
+                        .font(.dsMonoPt(11, weight: .medium))
+                        .foregroundStyle(t.danger)
+                } else if store.hasNearLimit {
+                    Label("At least one provider is near its daily cap", systemImage: "exclamationmark.triangle.fill")
+                        .font(.dsMonoPt(11, weight: .medium))
+                        .foregroundStyle(t.warn)
+                }
             }
-
-            if store.hasOverLimit {
-                Label("At least one provider is over its daily cap", systemImage: "exclamationmark.circle.fill")
-                    .font(.dsMonoPt(11, weight: .medium))
-                    .foregroundStyle(t.danger)
-            } else if store.hasNearLimit {
-                Label("At least one provider is near its daily cap", systemImage: "exclamationmark.triangle.fill")
-                    .font(.dsMonoPt(11, weight: .medium))
-                    .foregroundStyle(t.warn)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dsCard(padding: 14)
         .padding(.horizontal, 18)
     }
 
@@ -104,7 +101,7 @@ public struct QuotaGuardView: View {
     private var alertsSection: some View {
         Group {
             if !store.alerts.isEmpty {
-                DSListSectionHead("Alerts", count: store.alerts.count)
+                CursorSectionHeader("Alerts")
                 ForEach(store.alerts) { alert in
                     alertRow(alert)
                         .padding(.horizontal, 18)
@@ -162,7 +159,7 @@ public struct QuotaGuardView: View {
 
     private var providerCards: some View {
         Group {
-            DSListSectionHead("Providers", count: store.providers.count)
+            CursorSectionHeader("Providers")
             ForEach(store.providers) { provider in
                 providerCard(provider)
                     .padding(.horizontal, 18)
@@ -171,75 +168,74 @@ public struct QuotaGuardView: View {
     }
 
     private func providerCard(_ provider: QuotaGuard.ProviderQuota) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                if let pct = provider.percentUsed {
-                    ProgressRing(
-                        fraction: pct,
-                        color: providerThresholdColor(pct),
-                        size: 44,
-                        lineWidth: 4
-                    )
-                }
+        CursorArtifactCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    if let pct = provider.percentUsed {
+                        CursorProgressRing(
+                            fraction: pct,
+                            color: providerThresholdColor(pct),
+                            size: 44,
+                            lineWidth: 4
+                        )
+                    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(provider.displayName)
-                        .font(.dsSansPt(15, weight: .semibold))
-                        .foregroundStyle(t.text)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(provider.displayName)
+                            .font(.dsSansPt(15, weight: .semibold))
+                            .foregroundStyle(t.text)
 
-                    HStack(spacing: 8) {
-                        if let dailyCap = provider.dailyCapUSD {
-                            Text(String(format: "$%.2f / $%.2f daily", provider.spentTodayUSD, dailyCap))
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(t.text3)
+                        HStack(spacing: 8) {
+                            if let dailyCap = provider.dailyCapUSD {
+                                Text(String(format: "$%.2f / $%.2f daily", provider.spentTodayUSD, dailyCap))
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text3)
+                            }
+                            if let monthlyCap = provider.monthlyCapUSD {
+                                Text(String(format: "$%.2f / $%.2f mo", provider.spentThisMonthUSD, monthlyCap))
+                                    .font(.dsMonoPt(11))
+                                    .foregroundStyle(t.text3)
+                            }
                         }
-                        if let monthlyCap = provider.monthlyCapUSD {
-                            Text(String(format: "$%.2f / $%.2f mo", provider.spentThisMonthUSD, monthlyCap))
-                                .font(.dsMonoPt(11))
-                                .foregroundStyle(t.text3)
-                        }
+                    }
+
+                    Spacer()
+
+                    if let pct = provider.percentUsed {
+                        Text(String(format: "%.0f%%", pct * 100))
+                            .font(.dsMonoPt(13, weight: .bold))
+                            .foregroundStyle(providerThresholdColor(pct))
+                            .monospacedDigit()
                     }
                 }
 
-                Spacer()
-
-                if let pct = provider.percentUsed {
-                    Text(String(format: "%.0f%%", pct * 100))
-                        .font(.dsMonoPt(13, weight: .bold))
-                        .foregroundStyle(providerThresholdColor(pct))
-                        .monospacedDigit()
+                if let dailyCap = provider.dailyCapUSD {
+                    spendBar(
+                        label: "Daily",
+                        spent: provider.spentTodayUSD,
+                        cap: dailyCap,
+                        color: provider.isOverLimit ? t.danger : t.accent
+                    )
                 }
-            }
 
-            if let dailyCap = provider.dailyCapUSD {
-                spendBar(
-                    label: "Daily",
-                    spent: provider.spentTodayUSD,
-                    cap: dailyCap,
-                    color: provider.isOverLimit ? t.danger : t.accent
-                )
-            }
+                if let monthlyCap = provider.monthlyCapUSD {
+                    spendBar(
+                        label: "Monthly",
+                        spent: provider.spentThisMonthUSD,
+                        cap: monthlyCap,
+                        color: t.accent
+                    )
+                }
 
-            if let monthlyCap = provider.monthlyCapUSD {
-                spendBar(
-                    label: "Monthly",
-                    spent: provider.spentThisMonthUSD,
-                    cap: monthlyCap,
-                    color: t.accent
-                )
-            }
-
-            HStack(spacing: 12) {
-                metricBox(label: "burn rate", value: String(format: "$%.2f/hr", provider.burnRateUSDPerHour))
-                metricBox(label: "projected", value: String(format: "$%.2f", provider.projectedDailyTotal))
-                if let remaining = provider.quotaRemainingUSD {
-                    metricBox(label: "remaining", value: String(format: "$%.2f", max(0, remaining)))
+                HStack(spacing: 12) {
+                    metricBox(label: "burn rate", value: String(format: "$%.2f/hr", provider.burnRateUSDPerHour))
+                    metricBox(label: "projected", value: String(format: "$%.2f", provider.projectedDailyTotal))
+                    if let remaining = provider.quotaRemainingUSD {
+                        metricBox(label: "remaining", value: String(format: "$%.2f", max(0, remaining)))
+                    }
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .dsCard()
     }
 
     private func spendBar(label: String, spent: Double, cap: Double, color: Color) -> some View {

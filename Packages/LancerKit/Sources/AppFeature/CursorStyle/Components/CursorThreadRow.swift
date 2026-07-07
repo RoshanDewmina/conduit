@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import DesignSystem
 
 /// Status line under a thread row title: either a green "Checks Passed" with a
 /// colored diffstat, or a plain gray "No Changes".
@@ -14,19 +15,22 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
     public let repoName: String
     public let isActive: Bool
     public let statusLine: CursorThreadStatus
+    public let attention: CursorThreadAttention?
 
     public init(
         id: UUID = UUID(),
         title: String,
         repoName: String,
         isActive: Bool,
-        statusLine: CursorThreadStatus
+        statusLine: CursorThreadStatus,
+        attention: CursorThreadAttention? = nil
     ) {
         self.id = id
         self.title = title
         self.repoName = repoName
         self.isActive = isActive
         self.statusLine = statusLine
+        self.attention = attention
     }
 }
 
@@ -59,6 +63,9 @@ public struct CursorThreadRow: View {
 
                     HStack(spacing: CursorMetrics.threadRowStatusSpacing) {
                         statusLineView(colors: colors)
+                        if let attention = model.attention {
+                            attentionPill(attention, colors: colors)
+                        }
                         if showRepoTag {
                             repoTag(colors: colors)
                         }
@@ -75,6 +82,12 @@ public struct CursorThreadRow: View {
                 .frame(height: CursorMetrics.rowHairlineHeight)
                 .padding(.leading, CursorMetrics.threadRowHairlineLeadingInset)
         }
+        // See CursorListRow's identical fix: without this, the trailing
+        // `Spacer()` (and any other gap between rendered content) isn't
+        // hit-testable, so a tap centered on this row's accessibility frame
+        // — which XCUITest and the simulator's own synthesized taps both use
+        // — can silently miss the wrapping Button entirely.
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -95,6 +108,17 @@ public struct CursorThreadRow: View {
                 .font(CursorType.rowSecondary)
                 .foregroundColor(colors.mutedText)
         }
+    }
+
+    private func attentionPill(_ attention: CursorThreadAttention, colors: CursorColors) -> some View {
+        let pillColor = attention.color(for: cursorScheme)
+        return Text(attention.label)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(pillColor)
+            .padding(.horizontal, CursorMetrics.repoTagHorizontalPadding)
+            .padding(.vertical, CursorMetrics.repoTagVerticalPadding)
+            .background(Capsule().fill(pillColor.opacity(0.12)))
+            .accessibilityIdentifier("thread-attention-\(model.id.uuidString)")
     }
 
     private func repoTag(colors: CursorColors) -> some View {

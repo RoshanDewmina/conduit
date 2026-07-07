@@ -9,16 +9,18 @@ public struct DSStatusDot: View {
     let tone: DSStatusDotTone
     let pulse: Bool
     let size: CGFloat
+    let accessibilityLabel: String?
 
     @Environment(\.lancerTokens) private var t
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulseScale: CGFloat = 1
     @State private var pulseOpacity: Double = 0.6
 
-    public init(tone: DSStatusDotTone, pulse: Bool = false, size: CGFloat = 8) {
+    public init(tone: DSStatusDotTone, pulse: Bool = false, size: CGFloat = 8, accessibilityLabel: String? = nil) {
         self.tone = tone
         self.pulse = pulse
         self.size = size
+        self.accessibilityLabel = accessibilityLabel
     }
 
     public var body: some View {
@@ -43,6 +45,19 @@ public struct DSStatusDot: View {
                         }
                 }
             }
+            .accessibilityLabel(accessibilityLabel ?? toneAccessibilityLabel)
+    }
+
+    private var toneAccessibilityLabel: String {
+        switch tone {
+        case .ok: return "Status: OK"
+        case .warn: return "Status: warning"
+        case .danger: return "Status: error"
+        case .info: return "Status: informational"
+        case .accent: return "Status: active"
+        case .orange: return "Status: attention needed"
+        case .off: return "Status: inactive"
+        }
     }
 
     private var dotColor: Color {

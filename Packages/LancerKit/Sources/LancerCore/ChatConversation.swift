@@ -42,8 +42,7 @@ public struct ChatConversation: Codable, Sendable, Identifiable {
     }
 
     /// Where this device's copy of a conversation stands relative to the
-    /// host ledger (execution truth) and CloudKit (Apple-device mirror). See
-    /// docs/design-questions/2026-07-03-cross-device-conversation-sync-build-handoff.md.
+    /// host ledger (execution truth) and CloudKit (Apple-device mirror).
     public enum SyncState: String, Codable, Sendable {
         /// Never bound to a host ledger row — a pre-sync legacy conversation,
         /// or a brand-new local draft not yet sent.

@@ -59,8 +59,8 @@ public struct HostKeyConfirmSheet: View {
                 Spacer()
 
                 VStack(spacing: 10) {
-                    DSButton("Trust & Connect", variant: .primary, action: onTrust)
-                    DSButton("Cancel", variant: .secondary, action: onReject)
+                    CursorPillButton(title: "Trust & Connect", style: .primary, action: onTrust)
+                    CursorPillButton(title: "Cancel", style: .secondary, action: onReject)
                 }
             }
             .padding()

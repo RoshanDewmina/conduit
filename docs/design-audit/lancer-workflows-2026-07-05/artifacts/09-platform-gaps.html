@@ -1,0 +1,1284 @@
+<title>Lancer Workflow — Platform &amp; Gaps</title>
+<style>
+  :root {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b0b0c;
+      --surface: #17171a;
+      --surface-2: #1c1c1f;
+      --ink: #ececee;
+      --muted: #a3a3a8;
+      --line: #2b2b2f;
+      --accent: #55c2f0;
+      --ok: #45bd82;
+      --warn: #d69a3a;
+      --danger: #ff6f92;
+      --shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c;
+    --surface: #17171a;
+    --surface-2: #1c1c1f;
+    --ink: #ececee;
+    --muted: #a3a3a8;
+    --line: #2b2b2f;
+    --accent: #55c2f0;
+    --ok: #45bd82;
+    --warn: #d69a3a;
+    --danger: #ff6f92;
+    --shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+
+  :root[data-theme="light"] {
+    --paper: #eeeeec;
+    --surface: #ffffff;
+    --surface-2: #f8f8f6;
+    --ink: #171717;
+    --muted: #63635f;
+    --line: #dcdcda;
+    --accent: #0f7fb0;
+    --ok: #1f8a52;
+    --warn: #9c6412;
+    --danger: #c92457;
+    --shadow: 0 20px 50px rgba(20,20,18,.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: #fff; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, .tap:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  .col {
+    max-width: 760px;
+  }
+
+  /* ---- header ---- */
+
+  header.doc-head {
+    margin-bottom: 44px;
+  }
+
+  .breadcrumb {
+    font-size: 12.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .breadcrumb .sep { margin: 0 8px; opacity: .5; }
+  .breadcrumb .here { color: var(--ink); font-weight: 650; }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+    font-weight: 780;
+  }
+
+  .thesis {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 22px;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 650;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .pill.status-approved { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .pill.status-approved::before { content: "●"; font-size: 8px; }
+
+  .pill.source { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; font-size: 12px; }
+
+  /* ---- section scaffolding ---- */
+
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  .section-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  p { line-height: 1.6; }
+  .col p { max-width: 66ch; }
+
+  /* ---- screens strip ---- */
+
+  .screens-frame {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .screens-scroll {
+    overflow-x: auto;
+    background: var(--surface-2);
+  }
+
+  .screens-scroll img {
+    display: block;
+    width: 1800px;
+    max-width: none;
+    height: auto;
+  }
+
+  .screens-caption {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .legend-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+
+  .legend-item .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-right: 8px;
+  }
+
+  .legend-item .name { font-size: 13.5px; font-weight: 650; }
+
+  /* ---- flow steps ---- */
+
+  .flow {
+    display: grid;
+    gap: 22px;
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+  }
+
+  .flow-step .badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin: 3px 0 6px;
+  }
+
+  .flow-step p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .flow-step p strong { color: var(--ink); font-weight: 650; }
+
+  /* ---- mobbin citation cards ---- */
+
+  .cite-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cite-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+  }
+
+  .cite-card .src {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .cite-card .src a {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .cite-card .src a:hover { text-decoration: underline; }
+
+  .cite-card .lesson {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cite-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .cite-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- rationale ---- */
+
+  .bug-callout {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 20px 0;
+  }
+
+  .bug-callout .mark {
+    color: var(--danger);
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .bug-callout p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .bug-callout .label {
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--danger);
+    margin-bottom: 5px;
+  }
+
+  /* ---- issues table ---- */
+
+  .issues {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .issue-row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+
+  .issue-row .state {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .state.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .state.resolved { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+  .issue-row .body strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .issue-row .body span { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .issue-row .body .cite { display: block; margin-top: 5px; font-size: 12px; }
+
+  /* ---- footer ---- */
+
+  footer {
+    padding-top: 40px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer .files {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 720px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 32px 1fr; }
+    .issue-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---- coded phone mockups (fixed light/dark styling — these reproduce a specific
+     app state, like a photo, and don't invert with the viewer's theme) ---- */
+
+  .phone-strip {
+    display: flex;
+    gap: 22px;
+    padding: 26px 24px;
+    align-items: flex-start;
+  }
+
+  .phone-slot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 270px;
+  }
+
+  .slot-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: #7a7a76;
+    margin: 0;
+    text-align: center;
+  }
+
+  .slot-note {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    margin: 0;
+    text-align: center;
+    max-width: 258px;
+  }
+
+  .mock .phone {
+    width: 270px;
+    height: 586px;
+    border: 1px solid #dedede;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    background: #fbfbfa;
+    box-shadow: 0 18px 44px rgba(20,20,18,.16);
+    color: #171717;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+
+  .mock .phone.dark {
+    border: 1px solid #202023;
+    background: #111112;
+    color: #e9e9ea;
+    box-shadow: 0 22px 60px rgba(0,0,0,.5);
+  }
+
+  .mock .iphone-status {
+    height: 50px;
+    padding: 18px 22px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mock .home-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px 16px;
+  }
+
+  .mock .circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #d8d8d5;
+    background: linear-gradient(#fff, #f2f2f0);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    color: #111;
+  }
+
+  .mock .phone.dark .circle {
+    border-color: #333336;
+    background: linear-gradient(#353536, #262628);
+    color: #fff;
+  }
+
+  .mock .right-actions { display: flex; gap: 8px; }
+  .mock .small-circle { width: 38px; height: 38px; font-size: 17px; }
+
+  .mock .home-title {
+    padding: 14px 22px 20px;
+    font-size: 21px;
+    font-weight: 760;
+  }
+
+  .mock .home-content {
+    padding: 0 22px 110px;
+    height: 380px;
+    overflow: hidden;
+  }
+
+  .mock .group { margin-bottom: 24px; }
+  .mock .group-title { color: #6f6f6f; font-size: 13.5px; margin: 0 0 12px; }
+
+  .mock .row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ececea;
+  }
+
+  .mock .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 8px;
+    background: #d7d7d5;
+  }
+
+  .mock .dot.active { background: #158bc0; }
+  .mock .dot.warn { background: #d18b2b; }
+
+  .mock .row-title {
+    font-size: 15.5px;
+    line-height: 1.15;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .meta {
+    color: #6f6f6f;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .check { color: #008767; font-weight: 800; margin-right: 6px; }
+  .mock .diff { align-self: center; font-size: 12.5px; white-space: nowrap; color: #6f6f6f; padding-top: 16px; }
+  .mock .add { color: #12966b; }
+  .mock .del { color: #ff5d87; }
+
+  .mock .composer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 16px;
+    height: 52px;
+    border-radius: 28px;
+    border: 1px solid #d8d8d5;
+    background: rgba(255,255,255,.9);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  }
+
+  .mock .composer span {
+    flex: 1;
+    min-width: 0;
+    color: #a7a7a4;
+    font-size: 15.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .pill-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ededeb;
+    display: grid;
+    place-items: center;
+    color: #6b6b69;
+    font-size: 20px;
+    flex: 0 0 auto;
+  }
+
+  .mock .sheet {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    bottom: -4px;
+    height: 340px;
+    border-radius: 30px 30px 24px 24px;
+    border: 1px solid #dfdfdc;
+    background: rgba(255,255,255,.97);
+    padding: 16px 16px 20px;
+    box-shadow: 0 -16px 44px rgba(0,0,0,.15);
+  }
+
+  .mock .grabber {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d8d8d5;
+    margin: -4px auto 16px;
+  }
+
+  .mock .sheet-title {
+    text-align: center;
+    font-weight: 760;
+    font-size: 16.5px;
+    margin-bottom: 16px;
+  }
+
+  .mock .sheet-row {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #ebebe8;
+    font-size: 15.5px;
+  }
+
+  .mock .sheet-row:last-child { border-bottom: 0; }
+  .mock .sheet-row small { display: block; color: #6f6f6f; font-size: 11px; margin-top: 2px; }
+
+  /* ---- iOS opportunity cards ---- */
+
+  .ios-grid { display: grid; gap: 14px; }
+
+  .ios-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+  }
+
+  .ios-card .glyph {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ios-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .ios-card .api {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  .ios-card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .ios-card p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- additional mock components shared with Workspaces panels ---- */
+
+  .mock .workspace-row {
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid #ececea;
+    color: #171717;
+  }
+
+  .mock .phone.dark .workspace-row { color: #e9e9ea; border-bottom-color: #29292b; }
+
+  .mock .folder {
+    width: 22px;
+    height: 17px;
+    border: 2px solid #9f9f9c;
+    border-radius: 4px;
+    position: relative;
+  }
+
+  .mock .folder::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: -7px;
+    width: 10px;
+    height: 7px;
+    border: 2px solid #9f9f9c;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+    background: #fbfbfa;
+  }
+
+  .mock .workspace-name {
+    font-size: 15.5px;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-meta {
+    color: #6f6f6f;
+    font-size: 12px;
+    line-height: 1.25;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .workspace-count {
+    color: #6f6f6f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+  }
+
+  .mock .health-line {
+    border: 1px solid #e4e4e1;
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,.7);
+  }
+
+  .mock .health-line strong { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .mock .health-line span { color: #6f6f6f; font-size: 12.5px; line-height: 1.4; }
+
+  .mock .dot.danger { background: #ff5d87; }
+
+  /* ---- additional mock components for Command/Context, Proactive Signals,
+     and Platform Intelligence panels (ported from the wireframe board's own CSS) ---- */
+
+  .mock .search-field {
+    height: 38px;
+    border-radius: 19px;
+    border: 1px solid #dededb;
+    background: #fff;
+    color: #6f6f6f;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13.5px;
+  }
+
+  .mock .phone.dark .search-field {
+    border-color: #323236;
+    background: #1c1c1e;
+    color: #a2a2a6;
+  }
+
+  .mock .nav-dark {
+    height: 68px;
+    padding: 10px 14px 12px;
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    gap: 8px;
+    align-items: center;
+    border-bottom: 1px solid #29292b;
+    background: linear-gradient(180deg, #19191a, #111112 86%);
+  }
+
+  .mock .nav-title {
+    text-align: center;
+    font-size: 14.5px;
+    line-height: 1.15;
+    font-weight: 720;
+    color: #e9e9ea;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock .scroll {
+    height: 372px;
+    padding: 20px 15px 118px;
+    overflow: hidden;
+  }
+
+  .mock .text {
+    color: #e9e9ea;
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0 0 14px;
+  }
+
+  .mock .card {
+    border: 1px solid #38383b;
+    background: rgba(26,26,27,.9);
+    border-radius: 16px;
+    overflow: hidden;
+    margin: 12px 0 16px;
+  }
+
+  .mock .card.approval { border-color: rgba(209,139,43,.42); background: rgba(209,139,43,.09); }
+  .mock .card.failure { border-color: rgba(255,93,135,.42); background: rgba(255,93,135,.08); }
+
+  .mock .card-head {
+    padding: 10px 13px;
+    border-bottom: 1px solid #29292b;
+    color: #e9e9ea;
+    font-size: 13px;
+  }
+
+  .mock .file-row {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 13px;
+    border-bottom: 1px solid #29292b;
+    color: #e9e9ea;
+    font-size: 12.5px;
+  }
+  .mock .file-row:last-child { border-bottom: 0; }
+
+  .mock .artifact-body {
+    padding: 12px 13px;
+    color: #e9e9ea;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+
+  .mock .event {
+    color: #a2a2a6;
+    font-size: 12.5px;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+  .mock .event strong { color: #e9e9ea; font-weight: 700; }
+
+  .mock .rail {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 74px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mock .action {
+    border-radius: 20px;
+    border: 1px solid #444448;
+    background: rgba(49,49,51,.88);
+    color: #e9e9ea;
+    padding: 8px 11px;
+    font-size: 12px;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0,0,0,.26);
+  }
+
+  .mock .rail-spacer { flex: 1; }
+  .mock .down {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(49,49,51,.88);
+    border: 1px solid #444448;
+    color: #e9e9ea;
+    flex: 0 0 auto;
+  }
+
+  .mock .timeline-row {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid #2b2b2e;
+    color: #e9e9ea;
+    font-size: 12.5px;
+  }
+  .mock .timeline-row small { display: block; color: #a2a2a6; font-size: 11px; margin-top: 2px; }
+  .mock .timeline-row .done {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #111;
+  }
+
+  .mock .onboarding-card {
+    border: 1px solid #e4e4e1;
+    border-radius: 18px;
+    padding: 12px;
+    margin: 0 0 12px;
+    background: rgba(255,255,255,.72);
+  }
+
+  .mock .review-copy { color: #6f6f6f; font-size: 12.5px; line-height: 1.4; margin: 6px 0 0; }
+
+  .mock .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .mock .mini-chip {
+    border: 1px solid #dededb;
+    background: #fff;
+    color: #4f4f4d;
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .mock .phone.dark .mini-chip { border-color: #3a3a3d; background: #242426; color: #a2a2a6; }
+
+  .mock .review-title { color: #171717; font-size: 15px; font-weight: 700; margin: 0; }
+
+  .mock .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 22px 16px; }
+  .mock .widget-mini {
+    border: 1px solid #3a3a3d;
+    background: #1e1e20;
+    border-radius: 16px;
+    padding: 12px;
+    color: #e9e9ea;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .mock .widget-mini strong { font-size: 13px; }
+  .mock .widget-mini .subtle { color: #a2a2a6; }
+</style>
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="breadcrumb">Lancer <span class="sep">/</span> Workflows <span class="sep">/</span> <span class="here">06 — Platform &amp; Gaps</span></p>
+    <h1>Platform &amp; Gaps</h1>
+    <p class="thesis">Four small, confirmed gaps &mdash; a global command launcher, proactive signal intake, two workspace-depth screens, and one consolidated platform-intelligence pattern &mdash; each 2&ndash;3 panels, none a primary daily workflow.</p>
+    <div class="meta-row">
+      <span class="pill status-approved">Wireframed 2026-07-05</span>
+      <span class="pill source">#proactive-signals</span>
+      <span class="pill source">#workspace-depth</span>
+      <span class="pill source">#platform-intelligence</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="section-eyebrow">Gap 1 of 4 &middot; confirmed by the checklist verification pass</p>
+    <h2>Command &amp; Context</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Command palette</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:60px;opacity:.4;">
+                <div class="row"><div class="dot active"></div><div><div class="row-title">Checkout crash fix</div><div class="meta">Proof ready</div></div></div>
+                <div class="row"><div class="dot"></div><div><div class="row-title">conduit workspace</div><div class="meta">3 repos</div></div></div>
+              </div>
+              <div class="sheet" style="height:440px;">
+                <div class="grabber"></div>
+                <div class="search-field" style="margin-bottom:12px;">&#9906; Jump to a mission, repo, or command</div>
+                <div class="sheet-row"><span>go</span><div>Checkout crash fix<small>Jump to thread &middot; proof ready</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>run</span><div>Run tests in conduit<small>Command &middot; go test ./...</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>new</span><div>Start new mission<small>Opens the composer</small></div><span>&rsaquo;</span></div>
+                <div class="sheet-row"><span>go</span><div>hermes-box<small>Machine &middot; online</small></div><span>&rsaquo;</span></div>
+              </div>
+            </div>
+            <p class="slot-note">Global launcher, quick-jump mode within Work Search (canonical Search/Recent surface), not a separate inbox &mdash; jump to a mission, run a command, or start new, all from one field.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Whole-thread context ingestion</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-title">New work</div>
+              <div class="home-content" style="height:430px;">
+                <div class="health-line"><strong>Imported from Slack</strong><span>#incident-142 &middot; 14 messages &middot; shared from share sheet</span></div>
+                <div class="onboarding-card">
+                  <div class="workspace-name" style="font-size:16px;">Investigate the checkout 500 spike from this thread</div>
+                  <p class="review-copy">Lancer reads the whole thread, not one message &mdash; timestamps, stack traces, and the resolution attempt already tried.</p>
+                </div>
+                <div class="chip-row"><span class="mini-chip">14 messages</span><span class="mini-chip">2 stack traces</span><span class="mini-chip">1 prior attempt</span></div>
+              </div>
+              <div class="composer"><div class="pill-icon">+</div><span>Ask Lancer&hellip;</span><div class="pill-icon">&#127908;</div></div>
+            </div>
+            <p class="slot-note">Share-sheet import of a full external thread as one composer input, not a pasted single message.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Slack/Teams-triggered mission</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Checkout 500 spike</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <p class="text">Started from Slack, not the app.</p>
+                <div class="card">
+                  <div class="card-head">Started via @lancer mention</div>
+                  <div class="artifact-body">#incident-142 &middot; requested by @sam &middot; "@lancer investigate the checkout errors"</div>
+                </div>
+                <div class="event">Worked&nbsp; <strong>4m 18s</strong></div>
+                <p class="text">Result will post back to the same Slack thread when ready.</p>
+              </div>
+              <div class="rail"><div class="action">Open thread</div><div class="action">Reply in Slack</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+            </div>
+            <p class="slot-note">A mission that originates entirely outside the app; the phone shows it after the fact, replies post back to Slack.</p>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">All three are entry points into the same composer/mission model &mdash; none are new sidebar roots.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">Gap 2 of 4 &middot; feed Away Digest, don't create a second inbox</p>
+    <h2>Proactive Signals &amp; Code Depth</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Dependency / security alert intake</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome"><div class="circle">&#8592;</div></div>
+              <div class="home-title" style="font-size:20px;">Flagged for you</div>
+              <div class="home-content" style="height:430px;">
+                <div class="health-line" style="border-color:rgba(255,93,135,.4);background:rgba(255,93,135,.06);"><strong>3 high-severity dependencies</strong><span>Dependabot &middot; conduit &middot; jsonwebtoken, minimist, lodash</span></div>
+                <div class="health-line"><strong>1 secret scan finding</strong><span>Snyk &middot; hermes-box &middot; low confidence, needs review</span></div>
+                <div class="chip-row"><span class="mini-chip">Create mission</span><span class="mini-chip">Snooze 7 days</span><span class="mini-chip">Ignore</span></div>
+              </div>
+            </div>
+            <p class="slot-note">Dependabot/Snyk findings land as candidate missions with Create/Snooze/Ignore, not a stream of raw scanner noise.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Container / dev-service status</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">conduit &middot; services</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="timeline-row"><span class="done" style="background:#45bd82;">&#10003;</span><div>postgres<small>docker compose &middot; up 3h</small></div><span>&nbsp;</span></div>
+                <div class="timeline-row"><span class="done" style="background:#45bd82;">&#10003;</span><div>redis<small>docker compose &middot; up 3h</small></div><span>&nbsp;</span></div>
+                <div class="timeline-row"><span class="done" style="background:#ff5d87;">!</span><div>worker<small>exited 1 &middot; 2m ago</small></div><span>&nbsp;</span></div>
+              </div>
+              <div class="rail"><div class="action">Restart worker</div><div class="action">View logs</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+            </div>
+            <p class="slot-note">Docker Compose service health surfaced under Workspace Detail (repo-scoped, not Home), not a separate ops dashboard.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; Inline git blame</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">payment-config.go</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="card">
+                  <div class="card-head">Changed 5 lines</div>
+                  <div class="file-row"><span>+</span><div>fallback = stripeLegacyKey</div><span>&rsaquo;</span></div>
+                </div>
+                <div class="card failure" style="margin-top:-10px;">
+                  <div class="card-head">Blame</div>
+                  <div class="artifact-body">Added 3 weeks ago by this same fix &mdash; fixing the Stripe fallback outage. Touching it again may reopen that bug.</div>
+                </div>
+              </div>
+              <div class="rail"><div class="action">Ask agent why</div><div class="action">Keep as-is</div><div class="rail-spacer"></div><div class="down">&#8964;</div></div>
+            </div>
+            <p class="slot-note">Tap a changed line to see who touched it and why &mdash; a depth-of-review gap inside Changed Files (see Work Thread panel C file-row blame affordance), not a new root screen.</p>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">These feed Away Digest as candidate missions &mdash; they don't create their own inbox.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">Gap 3 of 4 &middot; confirmed alive by the 24-pillar inventory, never drawn until now</p>
+    <h2>Workspace Depth</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; Touch-native repo browser</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome"><div class="circle">&#8592;</div></div>
+              <div class="home-title" style="font-size:20px;">conduit</div>
+              <div class="home-content" style="height:430px;">
+                <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">daemon</div><div class="workspace-meta">Go &middot; 42 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+                <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">Packages/LancerKit</div><div class="workspace-meta">Swift &middot; 118 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+                <div class="workspace-row"><span class="folder"></span><div><div class="workspace-name">docs</div><div class="workspace-meta">Markdown &middot; 64 files</div></div><div class="workspace-count">&rsaquo;</div></div>
+                <div class="workspace-row"><div><div class="workspace-name">ARCHITECTURE.md</div><div class="workspace-meta">Modified 2h ago</div></div><div class="workspace-count">&rsaquo;</div></div>
+              </div>
+            </div>
+            <p class="slot-note">A folder/file tree one level inside a Workspace &mdash; a browser, not a code editor (that stays a locked non-goal).</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Project memory / notebook</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-chrome"><div class="circle">&#8592;</div><div class="right-actions"><div class="circle small-circle">+</div></div></div>
+              <div class="home-title" style="font-size:20px;">conduit notes</div>
+              <div class="home-content" style="height:430px;">
+                <div class="group">
+                  <p class="group-title">Pinned</p>
+                  <div class="workspace-row"><div><div class="workspace-name">Why we chose the blind relay</div><div class="workspace-meta">Design rationale, not a Playbook default</div></div><div class="workspace-count">&rsaquo;</div></div>
+                </div>
+                <div class="group">
+                  <p class="group-title">Recent</p>
+                  <div class="workspace-row"><div><div class="workspace-name">Stripe fallback is fragile</div><div class="workspace-meta">Added after last week's outage</div></div><div class="workspace-count">&rsaquo;</div></div>
+                  <div class="workspace-row"><div><div class="workspace-name">Client wants dark mode first</div><div class="workspace-meta">From a client call, not a repo default</div></div><div class="workspace-count">&rsaquo;</div></div>
+                </div>
+              </div>
+            </div>
+            <p class="slot-note">Free-form knowledge the agent reads but doesn't enforce &mdash; distinct from Repo Playbook's operational config.</p>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Both live one level inside a Workspace, not as new sidebar roots.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">Gap 4 of 4 &middot; 11 named ideas consolidated to 3 patterns</p>
+    <h2>Platform Intelligence</h2>
+    <div class="screens-frame">
+      <div class="screens-scroll mock">
+        <div class="phone-strip">
+
+          <div class="phone-slot">
+            <p class="slot-label">A &middot; On-device compression, applied in context</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-title">Away Digest</div>
+              <div class="home-content" style="height:430px;">
+                <div class="onboarding-card" style="border-color:#158bc0;background:rgba(21,139,192,.06);">
+                  <div class="workspace-name" style="font-size:14px;color:#158bc0;">&#10022; On-device summary</div>
+                  <p class="review-copy" style="color:#171717;">"Checkout fix passed on iPhone and iPad. One console warning remains. Ready to review." <span style="color:#6f6f6f;">Tap to hear it read aloud.</span></p>
+                </div>
+                <div class="chip-row"><span class="mini-chip">Drafted from screenshot</span><span class="mini-chip">Diff captioned</span><span class="mini-chip">Read aloud</span></div>
+              </div>
+            </div>
+            <p class="slot-note">Foundation Models summary, screenshot-drafted contract, semantic diff caption, and read-aloud &mdash; one card, one pattern, five formerly-separate ideas.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">B &middot; Siri &mdash; status query, answer, next step</p>
+            <div class="phone">
+              <div class="iphone-status"><span>8:21</span><span>cell wifi batt</span></div>
+              <div class="home-content" style="height:520px;padding-top:40px;">
+                <div class="review-title">"What's the status of the checkout fix?"</div>
+                <div class="onboarding-card" style="margin-top:14px;">
+                  <div class="workspace-name" style="font-size:15px;">Proof ready. One console warning.</div>
+                  <p class="review-copy">Checkout crash fix &middot; conduit &middot; 12 min ago</p>
+                </div>
+                <div class="chip-row"><span class="mini-chip">Approve the simple phrasing</span><span class="mini-chip">Read the diff</span></div>
+              </div>
+            </div>
+            <p class="slot-note">One voice-query pattern &mdash; answer plus follow-up chips &mdash; covers status questions, question-cards, and multi-step decision batches.</p>
+          </div>
+
+          <div class="phone-slot">
+            <p class="slot-label">C &middot; One widget template, four states</p>
+            <div class="phone dark">
+              <div class="iphone-status"><span>10:19</span><span>cell wifi batt</span></div>
+              <div class="nav-dark"><div class="circle">&#8592;</div><div class="nav-title">Widget gallery</div><div class="circle">&hellip;</div></div>
+              <div class="scroll">
+                <div class="device-grid">
+                  <div class="widget-mini"><strong>Quick Mission</strong><br><span class="subtle">Plan, ask, build&hellip;</span></div>
+                  <div class="widget-mini"><strong>Proof Ready</strong><br><span class="subtle">Checkout fix &middot; view</span></div>
+                  <div class="widget-mini"><strong>Decide Now</strong><br><span class="subtle">1 approval waiting</span></div>
+                  <div class="widget-mini"><strong>Fleet-wide</strong><br><span class="subtle">2 machines &middot; 3 active</span></div>
+                </div>
+              </div>
+            </div>
+            <p class="slot-note">Earlier research called this a "full-screen widget" &mdash; that framing doesn't hold up. The real capability is <code>.systemExtraLargePortrait</code> (larger portrait widget family ported from visionOS), still placed like any Home Screen widget, not a Lock-Screen-covering surface. Three widget ideas collapse into one template with four data states.</p>
+          </div>
+
+        </div>
+      </div>
+      <p class="screens-caption">Session-survives-disconnect and landscape Dynamic Island are minor Away Status/Live Activity state variants, not separate screens &mdash; noted, not drawn.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">What Mobbin taught us, and why</p>
+    <h2>Strongest citations across all four gaps</h2>
+    <div class="cite-grid">
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/88e2278e-1340-4561-a6ed-f876b05558ab" target="_blank" rel="noopener">Craft Quick Open</a> &amp; <a href="https://mobbin.com/screens/44992a64-b821-48c5-ade2-c3e80525b978" target="_blank" rel="noopener">Obsidian command palette</a><span class="lesson">Command palette</span></div>
+        <p>Both apps land on the same shape: a search field sitting above a scrollable list of recent/pinned commands with short subtitles. Confirms the sheet-row list is the right container, not a grid of icons.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/8498001a-8fb9-49b6-a6f1-e487c81256c7" target="_blank" rel="noopener">Things 3 Quick Find</a><span class="lesson">Jump-to, pre-populated</span></div>
+        <p>Quick Find opens with a "Recent" section already filled in before any text is typed &mdash; directly informs why the palette shows the active thread and workspace before the user types a query.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/c353df04-5e84-4642-bc22-e1910ab1b328" target="_blank" rel="noopener">Slack inline bot action</a><span class="lesson">External-origin mission</span></div>
+        <p>An @-mention that triggers a bot action inline, with the result staying in the same thread. The model for panel C: Lancer is a participant in Slack's thread, not the other way around.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/5a98517f-cbb6-4c8f-bdd4-9d6105dc3cd3" target="_blank" rel="noopener">NordVPN Dark Web Monitor alerts</a> &amp; <a href="https://mobbin.com/screens/77e142f0-d885-4f5a-8c80-77bc1aba10cb" target="_blank" rel="noopener">NordVPN alert list</a><span class="lesson">Dependency/security intake</span></div>
+        <p>Severity-first sort ("High risk first"), exposed-data chips, and a single "Review and resolve" CTA per finding &mdash; the direct source for the chip-row plus Create mission/Snooze/Ignore actions in panel A.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/1742b6b0-7249-403c-9459-b1effd2573a2" target="_blank" rel="noopener">Xbox service status</a><span class="lesson">Container/dev-service status</span></div>
+        <p>Per-service rows with a status glyph and short subtitle, no dashboard chrome. Matches the timeline-row treatment for postgres/redis/worker directly.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/1c72e007-0c2a-4cf4-8933-4256990d9a18" target="_blank" rel="noopener">GitHub repo folder tree</a> &amp; <a href="https://mobbin.com/screens/ff5bb02d-d35d-4eb6-80ce-e6668947104a" target="_blank" rel="noopener">Apple Notes pinned list</a><span class="lesson">Repo browser &amp; notebook</span></div>
+        <p>GitHub's folder-then-file row order justifies the browser hierarchy; Apple Notes' Pinned/Recent grouping justifies splitting the notebook the same way rather than one flat list.</p>
+      </div>
+      <div class="cite-card">
+        <div class="src"><a href="https://mobbin.com/screens/ec0028ee-2399-499b-b6a0-1722bc8d1997" target="_blank" rel="noopener">Beside AI Summary card</a>, <a href="https://mobbin.com/screens/6775dfc7-2f2d-4207-9fe8-83f53480c663" target="_blank" rel="noopener">natural voice-query response</a> &amp; <a href="https://mobbin.com/screens/0d622223-1bbb-4f67-9ba4-46396cccfd96" target="_blank" rel="noopener">Alipay widget gallery</a><span class="lesson">Platform intelligence, all 3 panels</span></div>
+        <p>One card each for the three consolidated patterns: an AI-labeled summary card, a spoken answer with follow-up chips, and one widget template shown across many states in a single gallery screen.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <p class="section-eyebrow">Why consolidated, not fragmented</p>
+    <h2>10+ ideas were on the roadmap as 10+ screens. They aren't 10+ screens.</h2>
+    <p>The 2026-07-05 checklist verification pass named 5 separate on-device-AI ideas, 3 separate Siri ideas, and 3 separate large-portrait widget ideas (<code>.systemExtraLargePortrait</code>) &mdash; 11 roadmap lines that would have shipped as 11 disconnected destinations. Each group is actually one capability applied to different content: one on-device compression pattern (summary, contract draft, diff caption, narration all use the same card), one Siri answer-plus-follow-up pattern, one widget template rendered in four data states. Command &amp; Context and Proactive Signals got the same treatment at smaller scale &mdash; three entry points into one composer/mission model, and three signal types feeding one Away Digest queue, not three new inboxes.</p>
+  </section>
+
+  <section>
+    <p class="section-eyebrow">iOS 27 / WWDC 2026 &mdash; new findings beyond Platform Intelligence</p>
+    <h2>Two capabilities relevant to the other three gaps</h2>
+    <p class="col">Platform Intelligence is already explicitly built from iOS 27 capabilities (Foundation Models, Siri App Intents, widget templates) &mdash; these two are net-new findings that apply to Command &amp; Context, Proactive Signals, and Workspace Depth instead.</p>
+    <div class="ios-grid">
+      <div class="ios-card">
+        <div class="glyph">SP</div>
+        <div>
+          <h3>Spotlight-backed local RAG for semantic jump-to</h3>
+          <span class="api">Spotlight Search Tool (Foundation Models) &middot; IndexedEntity</span>
+          <p>Fully local retrieval-augmented generation against the device's existing Spotlight index &mdash; "no embeddings, no vector database, no setup." If the command palette or repo browser ever want semantic search ("find the file about the checkout flow") instead of purely lexical matching, indexing missions/files as <span class="mono">IndexedEntity</span> and querying the Spotlight RAG tool is a zero-infrastructure path there.</p>
+        </div>
+      </div>
+      <div class="ios-card">
+        <div class="glyph">NG</div>
+        <div>
+          <h3>System notification grouping now leans on urgency, not just app/time</h3>
+          <span class="api">iOS 27 notification coalescing &amp; AI-prioritized grouping</span>
+          <p>Same-app notifications now coalesce into one updating entry, and grouping is reported to weight type/urgency over strict chronological order. Worth re-testing once dependency/security alerts and container-status pushes can arrive in the same burst &mdash; the system's own grouping could reorder Lancer's intended priority.</p>
+        </div>
+      </div>
+    </div>
+    <p class="col" style="color:var(--muted);font-size:14px;margin-top:6px;">Platform notes are curated inline below (WWDC 2026 research source purged 2026-07-06).</p>
+  </section>
+
+  <footer>
+    <p>Sources for this page</p>
+    <div class="files">
+      <span>docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md</span>
+      <span>docs/design-audit/2026-07-05-feature-checklist-for-wireframing.md</span>
+    </div>
+  </footer>
+
+</div>

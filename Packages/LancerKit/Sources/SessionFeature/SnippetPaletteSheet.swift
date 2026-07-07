@@ -205,7 +205,7 @@ private struct ArgumentFillSheet: View {
 
                         HStack {
                             Spacer()
-                            DSButton("Insert", variant: .primary, action: { onInsert(filledBody) })
+                            CursorPillButton(title: "Insert", style: .primary, action: { onInsert(filledBody) })
                             Spacer()
                         }
                         .padding(.horizontal, 20)
