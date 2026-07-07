@@ -32,6 +32,10 @@ public struct CursorAppShell: View {
     // `LANCER_DESTINATION`/`LANCER_SEED_DEMO` DEBUG-only launch seams.
     #if DEBUG
     @State private var hasCompletedOnboarding: Bool
+    // `LANCER_CURSOR_MOCK_RUN_TARGETS=1` seeds fake run targets for the mock
+    // shell (liveBridge == nil) so UITests can reach CursorWorkspaceDetailSheet
+    // without any real daemon connection.
+    private let mockWorkspaces: [CursorShellLiveBridge.WorkspaceRow]
     #else
     @State private var hasCompletedOnboarding = false
     #endif
@@ -52,6 +56,21 @@ public struct CursorAppShell: View {
         #if DEBUG
         let skipEnv = ProcessInfo.processInfo.environment["LANCER_SKIP_CURSOR_ONBOARDING"] == "1"
         _hasCompletedOnboarding = State(initialValue: liveBridge != nil || skipEnv)
+        if ProcessInfo.processInfo.environment["LANCER_CURSOR_MOCK_RUN_TARGETS"] == "1" {
+            mockWorkspaces = [
+                .init(
+                    id: "lancer-ios",
+                    name: "lancer-ios",
+                    threadCount: 4,
+                    runTargets: [
+                        .init(machineID: "mac-mini-studio", hostName: "Mac Mini Studio"),
+                        .init(machineID: "home-server",     hostName: "Home Server"),
+                    ]
+                )
+            ]
+        } else {
+            mockWorkspaces = []
+        }
         #else
         _hasCompletedOnboarding = State(initialValue: liveBridge != nil)
         #endif
@@ -88,17 +107,27 @@ public struct CursorAppShell: View {
         NavigationStack(path: $path) {
             CursorWorkspacesView(
                 onSelectWorkspace: { name in
-                    // Repo rows from a live bridge with run targets → show the
-                    // Workspace Detail sheet so the user can see which machines
-                    // have a checkout before drilling into threads.
-                    if name != "All Repos",
-                       let workspace = liveBridge?.workspaces.first(where: { $0.name == name }),
-                       !workspace.runTargets.isEmpty {
-                        detailWorkspace = workspace
-                    } else {
-                        liveBridge?.composerCWD = name == "All Repos" ? "" : name
-                        path.append(CursorRoute.workspaceThreadList(name))
+                    // Repo rows with run targets → show the Workspace Detail
+                    // sheet so the user can see which machines have a checkout
+                    // before drilling into threads. Live bridge is checked first;
+                    // the DEBUG mock seam (LANCER_CURSOR_MOCK_RUN_TARGETS=1)
+                    // covers the no-bridge mock shell path for UITests.
+                    if name != "All Repos" {
+                        if let workspace = liveBridge?.workspaces.first(where: { $0.name == name }),
+                           !workspace.runTargets.isEmpty {
+                            detailWorkspace = workspace
+                            return
+                        }
+                        #if DEBUG
+                        if let workspace = mockWorkspaces.first(where: { $0.name == name }),
+                           !workspace.runTargets.isEmpty {
+                            detailWorkspace = workspace
+                            return
+                        }
+                        #endif
                     }
+                    liveBridge?.composerCWD = name == "All Repos" ? "" : name
+                    path.append(CursorRoute.workspaceThreadList(name))
                 },
                 onOpenComposer: { openComposer(placeholder: "Plan, ask, build...") },
                 onOpenProfile: { showingProfileDrawer = true },

@@ -35,18 +35,25 @@ final class CursorShellLiveApprovalTests: XCTestCase {
         let thread = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")
         ).firstMatch
-        XCTAssertTrue(thread.waitForExistence(timeout: 15), "Expected a thread row in the workspace list")
+        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 15),
+                      "Expected a thread row in the workspace list")
         thread.tap()
 
-        let banner = app.buttons["approval-banner"]
-        XCTAssertTrue(banner.waitForExistence(timeout: 30),
-                      "Live shell should surface approval banner when pending approvals exist")
+        app.swipeUp()
+        app.swipeUp()
+        let banner = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "pending approval")
+        ).firstMatch
+        XCTAssertTrue(
+            banner.waitForExistence(timeout: 30),
+            "Live shell should surface approval banner when pending approvals exist"
+        )
         banner.tap()
 
-        let approve = app.buttons["cursor.review.approve"].firstMatch
-        XCTAssertTrue(approve.waitForExistence(timeout: 15),
+        let reviewApprove = app.buttons["cursor.review.approve"].firstMatch
+        XCTAssertTrue(reviewApprove.waitForExistence(timeout: 15),
                       "Review screen should expose Approve")
-        approve.tap()
+        reviewApprove.tap()
 
         XCTAssertTrue(app.staticTexts["Approved"].waitForExistence(timeout: 10),
                       "Approve should commit and show Approved status")

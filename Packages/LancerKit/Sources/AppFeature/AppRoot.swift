@@ -653,9 +653,15 @@ public struct AppRoot: View {
             await DebugSeeder.resetForUITestIfRequested(env: env)
             await DebugSeeder.seedDaemonE2EHostIfRequested(env: env)
             if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
-                cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
-            cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
-            cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
+                // Read pending approvals directly from the repo — the LiveInboxViewModel's
+                // observe() stream may not have emitted yet when this .task runs.
+                if let pending = try? await env.approvalRepo.pending().first {
+                    cursorLiveBridge.pendingApprovalID = pending.id
+                } else {
+                    cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+                }
+                cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
+                cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
                 workspacesRevision = UUID()
             }
 #endif
