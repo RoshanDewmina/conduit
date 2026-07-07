@@ -54,6 +54,8 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 | Feature scope + rationale | [`docs/product/2026-07-05-lancer-feature-master-plan.md`](product/2026-07-05-lancer-feature-master-plan.md) | Purged July-4 strategy docs (master plan §1 is the disposition record) |
 | Shipped vs mocked vs gap | [`docs/product/2026-07-06-feature-implementation-gap-matrix.md`](product/2026-07-06-feature-implementation-gap-matrix.md) | Stale "mock only" comments in code |
 | Sortable feature backlog | [`docs/product/FEATURE_BACKLOG.md`](product/FEATURE_BACKLOG.md) | Re-deriving from chat transcripts |
+| Implementation dispatch (lanes + worktrees) | [`docs/product/2026-07-06-implementation-dispatch-plan.md`](product/2026-07-06-implementation-dispatch-plan.md) | Ad-hoc agent prompts |
+| Owner relay test session | [`docs/product/OWNER_RELAY_TEST_GUIDE.md`](product/OWNER_RELAY_TEST_GUIDE.md) | Re-reading full runbook each time |
 | Wireframes / UI design | [`docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md`](design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md) | Superseded intermediate wireframe bundles (removed) |
 | Screenshot evidence (Tier 0) | [`docs/test-runs/user-ready-tier0-2026-07-06/`](test-runs/user-ready-tier0-2026-07-06/), [`docs/test-runs/composer-verify-2026-07-06/`](test-runs/composer-verify-2026-07-06/) | — |
 | 105-item wireframe checklist | [`docs/design-audit/2026-07-05-feature-checklist-for-wireframing.md`](design-audit/2026-07-05-feature-checklist-for-wireframing.md) | — |
