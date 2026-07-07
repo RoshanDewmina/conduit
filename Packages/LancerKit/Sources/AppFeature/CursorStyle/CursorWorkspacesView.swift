@@ -73,12 +73,7 @@ public struct CursorWorkspacesView: View {
 
                         ForEach(liveBridge.workspaces) { workspace in
                             Button(action: { onSelectWorkspace(workspace.name) }) {
-                                CursorListRow(
-                                    iconSystemName: "folder",
-                                    title: workspace.name,
-                                    trailingCount: workspace.threadCount > 0 ? workspace.threadCount : nil,
-                                    showChevron: true
-                                )
+                                workspaceRow(workspace)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("workspace-row")
@@ -100,6 +95,56 @@ public struct CursorWorkspacesView: View {
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer(onTap: onOpenComposer)
         }
+    }
+
+    @ViewBuilder
+    private func workspaceRow(_ workspace: CursorShellLiveBridge.WorkspaceRow) -> some View {
+        let colors = CursorColors.resolve(cursorScheme)
+        VStack(spacing: 0) {
+            HStack(spacing: CursorMetrics.rowSpacing) {
+                Image(systemName: "folder")
+                    .font(.system(size: CursorMetrics.rowIconSize - 6, weight: .regular))
+                    .foregroundColor(colors.secondaryText)
+                    .frame(width: CursorMetrics.rowIconSize, height: CursorMetrics.rowIconSize)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(workspace.name)
+                        .font(CursorType.rowTitle)
+                        .foregroundColor(colors.primaryText)
+                    if let meta = runTargetMetaLine(workspace) {
+                        Text(meta)
+                            .font(CursorType.rowSecondary)
+                            .foregroundColor(colors.secondaryText)
+                    }
+                }
+                Spacer()
+                if workspace.threadCount > 0 {
+                    Text("\(workspace.threadCount)")
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(colors.secondaryText)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.mutedText)
+            }
+            .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+            .padding(.vertical, CursorMetrics.rowVerticalPadding)
+            Rectangle()
+                .fill(colors.hairline)
+                .frame(height: CursorMetrics.rowHairlineHeight)
+                .padding(.leading, CursorMetrics.rowHairlineLeadingInsetWithIcon)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func runTargetMetaLine(_ workspace: CursorShellLiveBridge.WorkspaceRow) -> String? {
+        let targets = workspace.runTargets
+        guard !targets.isEmpty else { return nil }
+        if targets.count == 1 {
+            return targets[0].hostName
+        }
+        let names = targets.prefix(2).map(\.hostName).joined(separator: ", ")
+        let extra = targets.count > 2 ? " +\(targets.count - 2)" : ""
+        return "\(names)\(extra) · \(workspace.threadCount) threads"
     }
 
     private var avatarCircle: some View {
