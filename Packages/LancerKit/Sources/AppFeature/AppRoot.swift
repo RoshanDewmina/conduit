@@ -660,6 +660,9 @@ public struct AppRoot: View {
                 } else {
                     cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
                 }
+                if let all = try? await env.approvalRepo.all() {
+                    liveInboxVM?.approvals = all
+                }
                 cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
                 cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
                 workspacesRevision = UUID()
@@ -857,7 +860,9 @@ public struct AppRoot: View {
     private func configureGlobalInbox(env: AppEnvironment) {
         guard liveInboxVM == nil else { return }
         let approvalRepo = ApprovalRepository(env.database)
-        let liveVM = LiveInboxViewModel(repository: approvalRepo) { id, decision, edited, contentHash in
+        let liveVM = LiveInboxViewModel(
+            repository: approvalRepo,
+            onDecision: { id, decision, edited, contentHash in
             // Prefer the channel of the slot that owns this approval (multi-slot
             // correct). On a dead/absent channel fall back to the relay's single
             // forwarding chokepoint (backend POST + SSH-drain queue) rather than
@@ -883,7 +888,17 @@ public struct AppRoot: View {
                 editedToolInput: edited,
                 contentHash: contentHash
             )
-        }
+        },
+            onPendingApprovalsChanged: { [self] count, _, idString in
+                await MainActor.run {
+                    if let idString, let uuid = UUID(uuidString: idString) {
+                        cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
+                    } else if count == 0 {
+                        cursorLiveBridge.pendingApprovalID = nil
+                    }
+                }
+            }
+        )
         approvalRepository = approvalRepo
         liveInboxVM = liveVM
         inboxVM = liveVM
@@ -1013,7 +1028,11 @@ public struct AppRoot: View {
                 let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
                 cursorLiveBridge.reloadThreads(workspaceName: name, rows: sorted)
             }
-            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+            if let pendingFromVM = activeInboxViewModel.approvals.first(where: \.isPending)?.id {
+                cursorLiveBridge.pendingApprovalID = pendingFromVM
+            } else if let pendingList = try? await env.approvalRepo.pending() {
+                cursorLiveBridge.pendingApprovalID = pendingList.first?.id
+            }
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
             cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
             cursorLiveBridge.threadAttention = threadAttentionMap(

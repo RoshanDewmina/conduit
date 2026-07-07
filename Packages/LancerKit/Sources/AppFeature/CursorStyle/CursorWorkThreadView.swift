@@ -25,6 +25,11 @@ public struct CursorWorkThreadView: View {
     /// Mock shell always shows the banner for UI tests; live shell only when a
     /// pending approval is wired through `CursorShellLiveBridge`.
     private var showsApprovalBanner: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
+            return true
+        }
+        #endif
         guard let liveBridge else { return true }
         return liveBridge.pendingApprovalID != nil
     }

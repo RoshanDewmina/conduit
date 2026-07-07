@@ -32,6 +32,7 @@ public struct CursorApprovalBanner: View {
                 Text(count == 1 ? "1 pending approval" : "\(count) pending approvals")
                     .font(CursorType.statusPill)
                     .foregroundColor(colors.secondaryText)
+                    .accessibilityIdentifier("approval-banner-status")
             }
             .contentShape(Rectangle())
             .onTapGesture {
