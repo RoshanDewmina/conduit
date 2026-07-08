@@ -3,7 +3,10 @@ import SwiftUI
 import LancerCore
 import DesignSystem
 
-/// Terminal-style proof receipt card for a completed agent run (`lancer.proof/v0`).
+/// Proof receipt card for a completed agent run (`lancer.proof/v0`).
+/// A3-R4 Cursor-language pass: draws exclusively from `CursorColors`/
+/// `CursorType`/`CursorPillButton` (this card is only ever hosted by the
+/// Cursor-style `CursorWorkThreadView`).
 public struct ReceiptCardView: View {
     let artifact: ChatArtifact
     let receipt: ProofReceipt
@@ -15,7 +18,7 @@ public struct ReceiptCardView: View {
     @State private var filesExpanded = false
     @State private var commandsExpanded = false
     @State private var showingProofReel = false
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
 
     private var accepted: Bool { ReceiptCardModel.isAccepted(payloadJSON: artifact.payloadJSON) }
 

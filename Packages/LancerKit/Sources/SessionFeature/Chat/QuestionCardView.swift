@@ -5,16 +5,18 @@ import DesignSystem
 
 /// Chat-thread card that renders a `QuestionEvent` from the daemon and lets the
 /// user select options (Ladder) and/or enter free text, then submit an answer.
+/// A3-R4 Cursor-language pass: draws exclusively from `CursorColors`/`CursorType`
+/// (this card is only ever hosted by the Cursor-style `CursorWorkThreadView`).
 ///
 /// Visual contract:
-/// - Left gutter accent: `t.termAccent` while pending, `t.termOk` once answered.
-/// - Header: "Question › agent" label (same mono style as ReceiptCardView), plus
-///   a "Best effort" badge when `confidence == "bestEffort"`.
-/// - Each `QuestionItem` shows as a labeled option row (tappable DSChip-style
+/// - Left gutter accent: `orangeAccent` while pending, `successGreen` once answered.
+/// - Header: "Question › agent" label, plus a "Best effort" badge when
+///   `confidence == "bestEffort"`.
+/// - Each `QuestionItem` shows as a labeled option row (tappable pill-style
 ///   buttons); multi-select items allow multiple choices.
 /// - A free-text field appears when `allowFreeText` is true (always for
 ///   bestEffort / options-less items).
-/// - "Submit answer" button, enabled only when `isReadyToAnswer`.
+/// - "Submit answer" pill CTA, enabled only when `isReadyToAnswer`.
 /// - Answered state: gutter turns green, options/free-text become read-only,
 ///   the submitted selection is shown.
 public struct QuestionCardView: View {
@@ -22,7 +24,7 @@ public struct QuestionCardView: View {
     let onAnswer: (QuestionAnswerParams) -> Void
 
     @State private var state: QuestionCardModel.PresentationState?
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
 
     public init(
         artifact: ChatArtifact,
@@ -33,6 +35,8 @@ public struct QuestionCardView: View {
         self.onAnswer = onAnswer
         self._state = State(initialValue: initialState ?? QuestionCardModel.decode(from: artifact))
     }
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         if let s = state {
@@ -65,11 +69,11 @@ public struct QuestionCardView: View {
                 }
             }
         }
-        .background(t.termSurface)
-        .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                .strokeBorder(s.isAnswered ? t.termOk.opacity(0.35) : t.termBorder, lineWidth: 0.75)
+            RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous)
+                .strokeBorder(s.isAnswered ? colors.successGreen.opacity(0.35) : colors.hairline, lineWidth: 0.75)
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("question-card")
@@ -80,7 +84,7 @@ public struct QuestionCardView: View {
 
     private func gutterBar(answered: Bool) -> some View {
         Rectangle()
-            .fill(answered ? t.termOk.opacity(0.55) : t.termAccent)
+            .fill(answered ? colors.successGreen.opacity(0.55) : colors.orangeAccent)
             .frame(width: 3)
     }
 
@@ -91,15 +95,15 @@ public struct QuestionCardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     Text("Question")
-                        .foregroundStyle(t.termText2)
+                        .foregroundColor(colors.secondaryText)
                         .fontWeight(.semibold)
                     Text("›")
-                        .foregroundStyle(t.termText3)
+                        .foregroundColor(colors.mutedText)
                     Text(s.agent)
-                        .foregroundStyle(t.termText3)
+                        .foregroundColor(colors.mutedText)
                 }
-                .font(.dsMonoPt(10))
-                .tracking(10 * 0.12)
+                .font(CursorType.sectionHeader)
+                .tracking(0.5)
                 .textCase(.uppercase)
                 .lineLimit(1)
             }
@@ -118,28 +122,19 @@ public struct QuestionCardView: View {
 
     private var bestEffortBadge: some View {
         Text("Best effort")
-            .font(.dsMonoPt(10, weight: .semibold))
-            .foregroundStyle(t.termText2)
+            .font(CursorType.statusPill)
+            .foregroundColor(colors.secondaryText)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(t.termSurface2)
+            .background(colors.cardBackground)
             .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(t.termBorder, lineWidth: 0.5))
+            .overlay(Capsule().strokeBorder(colors.hairline, lineWidth: 0.5))
             .accessibilityIdentifier("question-best-effort-badge")
     }
 
     private var answeredBadge: some View {
-        HStack(spacing: 4) {
-            DSIconView(.check, size: 11, color: t.ok)
-            Text("Answered")
-                .font(.dsMonoPt(10, weight: .semibold))
-        }
-        .foregroundStyle(t.ok)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        .background(t.okSoft)
-        .clipShape(Capsule())
-        .accessibilityIdentifier("question-answered-badge")
+        CursorStatusBadge(kind: .success, label: "Answered")
+            .accessibilityIdentifier("question-answered-badge")
     }
 
     // MARK: - Item section
@@ -148,14 +143,14 @@ public struct QuestionCardView: View {
         VStack(alignment: .leading, spacing: 10) {
             if let header = item.header, !header.isEmpty {
                 Text(header.uppercased())
-                    .font(.dsMonoPt(10))
-                    .tracking(10 * 0.12)
-                    .foregroundStyle(t.termText3)
+                    .font(CursorType.sectionHeader)
+                    .tracking(0.5)
+                    .foregroundColor(colors.mutedText)
             }
 
             Text(item.question)
-                .font(.dsMonoPt(13))
-                .foregroundStyle(t.termText)
+                .font(CursorType.bodyText)
+                .foregroundColor(colors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
             if !item.options.isEmpty {
@@ -193,21 +188,22 @@ public struct QuestionCardView: View {
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(opt.label)
-                    .font(.dsMonoPt(12, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? t.accentFg : t.termText)
+                    .font(CursorType.pillLabel)
+                    .fontWeight(selected ? .semibold : .medium)
+                    .foregroundColor(selected ? colors.pillPrimaryText : colors.primaryText)
                 if let desc = opt.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.dsMonoPt(10))
-                        .foregroundStyle(selected ? t.accentFg.opacity(0.8) : t.termText3)
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(selected ? colors.pillPrimaryText.opacity(0.8) : colors.secondaryText)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(selected ? t.termAccent : t.termSurface2)
-            .clipShape(RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(selected ? colors.pillPrimaryBackground : colors.cardBackground)
+            .clipShape(Capsule())
             .overlay(
-                RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous)
-                    .strokeBorder(selected ? t.termAccent : t.termBorder, lineWidth: selected ? 0 : 0.75)
+                Capsule()
+                    .strokeBorder(selected ? Color.clear : colors.pillSecondaryBorder, lineWidth: selected ? 0 : CursorMetrics.pillButtonBorderWidth)
             )
         }
         .buttonStyle(.plain)
@@ -229,16 +225,16 @@ public struct QuestionCardView: View {
                 state = updated
             }
         ), axis: .vertical)
-        .font(.dsMonoPt(12))
-        .foregroundStyle(t.termText)
+        .font(CursorType.bodyText)
+        .foregroundColor(colors.primaryText)
         .disabled(s.isAnswered)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(t.termSurface2)
-        .clipShape(RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+        .background(colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous)
-                .strokeBorder(t.termBorder, lineWidth: 0.75)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(colors.hairline, lineWidth: 0.75)
         )
         .lineLimit(3...6)
         .accessibilityIdentifier("question-freetext-\(idx)")
@@ -249,23 +245,15 @@ public struct QuestionCardView: View {
     private func submitSection(_ s: QuestionCardModel.PresentationState) -> some View {
         let ready = QuestionCardModel.isReadyToAnswer(s)
         return VStack(spacing: 0) {
-            Button {
+            CursorPillButton(title: "Submit answer", style: .primary, fullWidth: true) {
                 guard var updated = state, QuestionCardModel.isReadyToAnswer(updated) else { return }
                 let answer = QuestionCardModel.buildAnswer(from: updated)
                 updated.isAnswered = true
                 updated.submittedAnswer = answer
                 state = updated
                 onAnswer(answer)
-            } label: {
-                Text("Submit answer")
-                    .font(.dsMonoPt(12, weight: .semibold))
-                    .foregroundStyle(t.accentFg)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(ready ? t.termAccent : t.termAccent.opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .opacity(ready ? 1 : 0.4)
             .disabled(!ready)
             .accessibilityIdentifier("question-submit")
         }
@@ -276,13 +264,13 @@ public struct QuestionCardView: View {
     private func answeredFooter(_ s: QuestionCardModel.PresentationState) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Answered".uppercased())
-                .font(.dsMonoPt(10))
-                .tracking(10 * 0.12)
-                .foregroundStyle(t.termText3)
+                .font(CursorType.sectionHeader)
+                .tracking(0.5)
+                .foregroundColor(colors.mutedText)
             ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
                 Text(QuestionCardModel.answeredSummary(for: item))
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.termText2)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.secondaryText)
             }
         }
         .padding(.horizontal, 12)
@@ -293,7 +281,7 @@ public struct QuestionCardView: View {
     // MARK: - Helpers
 
     private var sectionDivider: some View {
-        Rectangle().fill(t.termBorder).frame(height: 1)
+        CursorHairlineDivider()
     }
 }
 

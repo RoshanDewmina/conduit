@@ -132,11 +132,18 @@ import SwiftUI
 import DesignSystem
 
 /// Structured replay scrubber over a single run's proof receipt events.
+///
+/// A3-R4 Cursor-language pass: chrome (typography, card/background, hairline
+/// dividers, step/play controls) now reads `CursorColors`/`CursorType`
+/// exclusively via `cursorScheme`, matching the Work Thread / Review surfaces
+/// this sheet is presented from (`ReceiptCardView`, itself only ever hosted by
+/// `CursorWorkThreadView`). The scrubbing model (`ProofReelModel`) and the
+/// replay `Slider` from #51 are unchanged.
 public struct ProofReelView: View {
     let receipt: ProofReceipt
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
 
     @State private var scrubIndex: Int = 0
     @State private var isPlaying = false
@@ -148,6 +155,8 @@ public struct ProofReelView: View {
         self.receipt = receipt
         self.stops = ProofReelModel.stops(from: receipt)
     }
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         NavigationStack {
@@ -169,17 +178,18 @@ public struct ProofReelView: View {
                         .padding(.bottom, 16)
                 }
             }
-            .background(t.termSurface.ignoresSafeArea())
+            .background(colors.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
-                        .font(.dsMonoPt(12, weight: .semibold))
+                        .font(CursorType.pillLabel)
+                        .foregroundColor(colors.primaryText)
                 }
                 ToolbarItem(placement: .principal) {
                     Text("Proof Reel")
-                        .font(.dsMonoPt(12, weight: .semibold))
-                        .foregroundStyle(t.termText)
+                        .font(CursorType.sheetTitle)
+                        .foregroundColor(colors.primaryText)
                 }
             }
         }
@@ -200,35 +210,35 @@ public struct ProofReelView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(receipt.agent)
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.termText2)
+                    .font(CursorType.rowSecondary)
+                    .foregroundColor(colors.secondaryText)
                 if let duration = ReceiptCardModel.durationText(
                     startedAt: receipt.startedAt,
                     endedAt: receipt.endedAt
                 ) {
                     Text("·")
-                        .foregroundStyle(t.termText3)
+                        .foregroundColor(colors.mutedText)
                     Text(duration)
-                        .font(.dsMonoPt(11))
-                        .foregroundStyle(t.termText3)
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(colors.mutedText)
                 }
                 Spacer(minLength: 0)
                 if let code = receipt.exitCode {
-                    DSExitChip(code: code)
+                    exitChip(code: code)
                 }
             }
 
             if let goal = receipt.contract?.goal, !goal.isEmpty {
                 Text(goal)
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.termText)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.primaryText)
                     .lineLimit(2)
             }
 
             if !stops.isEmpty, let state = currentScrubState {
                 Text("Stop \(state.index + 1) of \(state.stopCount)")
-                    .font(.dsMonoPt(10))
-                    .foregroundStyle(t.termText3)
+                    .font(CursorType.rowSecondary)
+                    .foregroundColor(colors.mutedText)
                     .accessibilityIdentifier("proof-reel-stop-counter")
             }
         }
@@ -237,22 +247,16 @@ public struct ProofReelView: View {
     @ViewBuilder
     private var stopDetail: some View {
         if let state = currentScrubState {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(ProofReelModel.stopLabel(for: state.stop).uppercased())
-                    .font(.dsMonoPt(10))
-                    .tracking(10 * 0.12)
-                    .foregroundStyle(t.termText3)
+            CursorArtifactCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(ProofReelModel.stopLabel(for: state.stop).uppercased())
+                        .font(CursorType.sectionHeader)
+                        .tracking(0.6)
+                        .foregroundColor(colors.secondaryText)
 
-                stopContent(for: state.stop)
+                    stopContent(for: state.stop)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(t.termSurface2)
-            .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                    .strokeBorder(t.termBorder, lineWidth: 0.75)
-            )
             .accessibilityIdentifier("proof-reel-stop-detail")
         }
     }
@@ -263,37 +267,40 @@ public struct ProofReelView: View {
         case .command(let command):
             VStack(alignment: .leading, spacing: 8) {
                 Text(command.command)
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.termText)
+                    .font(CursorType.diffCode)
+                    .foregroundColor(colors.primaryText)
                     .textSelection(.enabled)
                 HStack(spacing: 8) {
                     if let kind = command.kind, !kind.isEmpty {
                         Text(kind)
-                            .font(.dsMonoPt(10, weight: .semibold))
-                            .foregroundStyle(t.termText3)
+                            .font(CursorType.rowSecondary)
+                            .foregroundColor(colors.mutedText)
                     }
                     if let startedAt = command.startedAt {
                         Text(startedAt)
-                            .font(.dsMonoPt(10))
-                            .foregroundStyle(t.termText3)
+                            .font(CursorType.rowSecondary)
+                            .foregroundColor(colors.mutedText)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     if let code = command.exitCode {
-                        DSExitChip(code: code)
+                        exitChip(code: code)
                     }
                 }
             }
         case .file(let file):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(file.path)
-                    .font(.dsMonoPt(12))
-                    .foregroundStyle(t.termText)
+                    .font(CursorType.diffCode)
+                    .foregroundColor(colors.primaryText)
                     .lineLimit(2)
                 Spacer(minLength: 0)
-                Text("+\(file.additions) -\(file.deletions)")
-                    .font(.dsMonoPt(11, weight: .semibold))
-                    .foregroundStyle(t.termText2)
+                Text("+\(file.additions)")
+                    .font(CursorType.statusPill)
+                    .foregroundColor(colors.successGreen)
+                + Text(" -\(file.deletions)")
+                    .font(CursorType.statusPill)
+                    .foregroundColor(colors.dangerRed)
             }
         case .criterion(let criterion):
             HStack(alignment: .top, spacing: 8) {
@@ -302,12 +309,12 @@ public struct ProofReelView: View {
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(criterion.text)
-                        .font(.dsMonoPt(12))
-                        .foregroundStyle(t.termText)
+                        .font(CursorType.bodyText)
+                        .foregroundColor(colors.primaryText)
                     if let evidence = criterion.evidence, !evidence.isEmpty {
                         Text(evidence)
-                            .font(.dsMonoPt(10))
-                            .foregroundStyle(t.termText3)
+                            .font(CursorType.rowSecondary)
+                            .foregroundColor(colors.mutedText)
                     }
                 }
             }
@@ -325,56 +332,77 @@ public struct ProofReelView: View {
                     in: 0 ... Double(stops.count - 1),
                     step: 1
                 )
-                .tint(t.termAccent)
+                .tint(colors.orangeAccent)
                 .accessibilityIdentifier("proof-reel-scrubber")
             }
 
             HStack(spacing: 10) {
-                DSButton(
-                    "",
-                    systemImage: "backward.fill",
-                    variant: .secondary,
-                    size: .sm,
-                    iconOnly: true,
+                CursorIconButton(
+                    systemImageName: "backward.fill",
+                    diameter: CursorMetrics.pillButtonHeight,
                     action: stepBackward
                 )
                 .disabled(scrubIndex == 0)
+                .opacity(scrubIndex == 0 ? 0.4 : 1)
                 .accessibilityIdentifier("proof-reel-step-back")
 
-                DSButton(
-                    isPlaying ? "Pause" : "Play",
-                    systemImage: isPlaying ? "pause.fill" : "play.fill",
-                    variant: .accent,
-                    size: .md,
-                    mono: true,
-                    fullWidth: true,
-                    action: togglePlayback
-                )
-                .disabled(stops.count <= 1)
-                .accessibilityIdentifier("proof-reel-play")
+                // CursorPillButton has no icon+label slot (token gap — see
+                // A3-R4 report); composed directly from Cursor tokens/metrics
+                // so it stays pixel-consistent with the pill family.
+                playPauseButton
+                    .disabled(stops.count <= 1)
+                    .accessibilityIdentifier("proof-reel-play")
 
-                DSButton(
-                    "",
-                    systemImage: "forward.fill",
-                    variant: .secondary,
-                    size: .sm,
-                    iconOnly: true,
+                CursorIconButton(
+                    systemImageName: "forward.fill",
+                    diameter: CursorMetrics.pillButtonHeight,
                     action: stepForward
                 )
                 .disabled(scrubIndex >= stops.count - 1)
+                .opacity(scrubIndex >= stops.count - 1 ? 0.4 : 1)
                 .accessibilityIdentifier("proof-reel-step-forward")
             }
         }
     }
 
+    private var playPauseButton: some View {
+        Button(action: togglePlayback) {
+            HStack(spacing: CursorMetrics.pillButtonSpacing) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(isPlaying ? "Pause" : "Play")
+                    .font(CursorType.pillLabel)
+            }
+            .foregroundColor(colors.pillPrimaryText)
+            .frame(maxWidth: .infinity)
+            .frame(height: CursorMetrics.pillButtonHeight)
+            .background(Capsule().fill(colors.pillPrimaryBackground))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func exitChip(code: Int) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: code == 0 ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 11, weight: .semibold))
+            Text(code == 0 ? "exit 0" : "exit \(code)")
+                .font(CursorType.statusPill)
+        }
+        .foregroundColor(code == 0 ? colors.successGreen : colors.dangerRed)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
+        .background((code == 0 ? colors.successGreen : colors.dangerRed).opacity(0.12))
+        .clipShape(Capsule())
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text("No replay events")
-                .font(.dsMonoPt(12, weight: .semibold))
-                .foregroundStyle(t.termText2)
+                .font(CursorType.cardTitle)
+                .foregroundColor(colors.secondaryText)
             Text("This receipt has no commands, files, or criteria to replay.")
-                .font(.dsMonoPt(11))
-                .foregroundStyle(t.termText3)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.mutedText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -420,13 +448,17 @@ public struct ProofReelView: View {
         Group {
             switch status {
             case .met:
-                DSIconView(.check, size: 12, color: t.termOk)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(colors.successGreen)
             case .unmet:
-                DSIconView(.close, size: 12, color: t.termErr)
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(colors.dangerRed)
             case .unknown:
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(t.termText3)
+                    .foregroundColor(colors.mutedText)
             }
         }
     }

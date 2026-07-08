@@ -765,6 +765,13 @@ public struct AppRoot: View {
             .sheet(isPresented: $showingApprovalReview) {
                 CursorReviewDiffView(onBack: { showingApprovalReview = false })
                     .environment(\.cursorShellLiveBridge, cursorLiveBridge)
+                    // A3-R4: Review must render in the user's real light/dark
+                    // appearance, not always light — CursorReviewDiffView no
+                    // longer forces `.environment(\.cursorScheme, .light)`
+                    // itself, so the sheet (like `cursorShellLiveBridge` above)
+                    // re-injects it explicitly rather than relying on sheet
+                    // content inheriting it from the presenting hierarchy.
+                    .environment(\.cursorScheme, cursorResolvedScheme)
             }
     }
 

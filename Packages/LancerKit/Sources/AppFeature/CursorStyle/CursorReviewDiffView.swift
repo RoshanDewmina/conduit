@@ -12,8 +12,33 @@ import os
 /// pending — a live test on 2026-07-07 showed a real fileWrite request
 /// rendered as that fake example, meaning the user had no way to see what
 /// they were actually approving.
+///
+/// ## The A3-R4 binding regression (screen-map evidence 12.05.34) and its fix
+///
+/// Once a decision is made, `AppRoot`'s `onPendingApprovalsChanged(count: 0, ...)`
+/// handler clears `liveBridge.pendingApprovalID`/`pendingApproval` back to `nil`
+/// (see AppRoot.swift, the `onPendingApprovalsChanged` closure) — by design,
+/// the approval is no longer "pending" once decided. But this view's `decision`
+/// local `@State` only ever moves forward (pending → approved/denied/replied)
+/// and never resets, so a second render after the clear showed a real, live
+/// contradiction: the Request/Scope/Risk/Evidence cards (which read `approval`
+/// directly, now nil) fell back to "No pending approval" / "—" placeholders,
+/// while the Decision card and audit line (driven by the frozen `decision`
+/// @State) kept showing "Approved · Decided by You". Root cause: the display
+/// fields and the decision-result fields were reading two different sources of
+/// truth — one live (and nil'd on completion), one a local snapshot (never
+/// nil'd) — with nothing keeping them in sync.
+///
+/// The fix: `boundApproval` snapshots the live `Approval` the moment it's
+/// non-nil (on appear and whenever `pendingApprovalID` changes) and freezes it
+/// once the ID is cleared post-decision, so Request/Scope/Risk/Evidence keep
+/// showing the SAME approval the Decision card/audit line describe. When a
+/// genuinely new approval arrives (a different id), the snapshot — and the
+/// local `decision` state — reset. This is a display-binding fix only; the
+/// actual approve/deny/reply relay call in `applyDecision` is unchanged.
 public struct CursorReviewDiffView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
+    @Environment(\.cursorScheme) private var cursorScheme
 
     private enum Decision: Equatable {
         case pending
@@ -23,6 +48,10 @@ public struct CursorReviewDiffView: View {
     }
 
     @State private var decision: Decision = .pending
+    /// Frozen snapshot of the bound approval — see the type-level doc comment
+    /// above for why this exists. Never cleared back to `nil` by a live signal;
+    /// only replaced when a genuinely new approval id is bound.
+    @State private var boundApproval: Approval?
 
     private let onBack: () -> Void
 
@@ -30,7 +59,13 @@ public struct CursorReviewDiffView: View {
         self.onBack = onBack
     }
 
-    private var approval: Approval? {
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
+    /// The live approval straight from the bridge — goes `nil` once AppRoot
+    /// clears `pendingApprovalID` after a decision is relayed. Use `approval`
+    /// (below) for display; this is only the raw signal used to refresh the
+    /// snapshot.
+    private var liveApproval: Approval? {
         guard let id = liveBridge?.pendingApprovalID else { return nil }
         // Prefer the Observable-tracked object (re-renders when set); the
         // lookup closure reads untracked AppRoot @State and is fallback only.
@@ -38,6 +73,24 @@ public struct CursorReviewDiffView: View {
             return resolved
         }
         return liveBridge?.lookupApproval?(id)
+    }
+
+    /// What every display card should render: the frozen snapshot once bound,
+    /// falling back to the live value before the first bind completes.
+    private var approval: Approval? { boundApproval ?? liveApproval }
+
+    /// Seeds/refreshes `boundApproval` from the live bridge. Safe to call from
+    /// both `onAppear` (first render may already have a non-nil id) and
+    /// `onChange(of: liveBridge?.pendingApprovalID)` (id changes after appear).
+    /// Never writes `nil` — once a decision clears the live id, the snapshot
+    /// stays frozen so display fields don't blank out from under the decision
+    /// footer. A genuinely new id resets both the snapshot and local decision.
+    private func syncBoundApproval() {
+        guard let live = liveApproval else { return }
+        if live.id != boundApproval?.id {
+            decision = .pending
+        }
+        boundApproval = live
     }
 
     public var body: some View {
@@ -60,13 +113,16 @@ public struct CursorReviewDiffView: View {
                 .padding(.bottom, 24)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
+        .background(colors.background.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review-diff-screen")
         .onAppear {
+            syncBoundApproval()
             Logger(subsystem: "dev.lancer.mobile", category: "CursorReviewDiffView")
                 .info("review onAppear: bridge=\(liveBridge != nil, privacy: .public) pendingID=\(liveBridge?.pendingApprovalID?.uuidString ?? "nil", privacy: .public) bound=\(approval != nil, privacy: .public)")
+        }
+        .onChange(of: liveBridge?.pendingApprovalID) { _, _ in
+            syncBoundApproval()
         }
     }
 
@@ -84,7 +140,7 @@ public struct CursorReviewDiffView: View {
         .overlay(alignment: .center) {
             Text("Review")
                 .font(CursorType.sheetTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.top, CursorMetrics.headerTopPadding)
         }
     }
@@ -105,7 +161,7 @@ public struct CursorReviewDiffView: View {
                 sectionLabel("Request")
                 Text(requestTitle)
                     .font(CursorType.bodyEmphasis)
-                    .foregroundColor(CursorColors.light.primaryText)
+                    .foregroundColor(colors.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -136,11 +192,11 @@ public struct CursorReviewDiffView: View {
             HStack(alignment: .top, spacing: 12) {
                 Text(label)
                     .font(CursorType.rowSecondary)
-                    .foregroundColor(CursorColors.light.secondaryText)
+                    .foregroundColor(colors.secondaryText)
                     .frame(width: 96, alignment: .leading)
                 Text(value)
                     .font(CursorType.inlineCode)
-                    .foregroundColor(CursorColors.light.primaryText)
+                    .foregroundColor(colors.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -148,7 +204,7 @@ public struct CursorReviewDiffView: View {
 
             if !isLast {
                 Rectangle()
-                    .fill(CursorColors.light.hairline)
+                    .fill(colors.hairline)
                     .frame(height: CursorMetrics.cardHairlineHeight)
             }
         }
@@ -184,7 +240,7 @@ public struct CursorReviewDiffView: View {
                 if let blastRadius = approval?.blastRadius, let summary = blastRadiusSummary(blastRadius) {
                     Text(summary)
                         .font(CursorType.bodyText)
-                        .foregroundColor(CursorColors.light.primaryText)
+                        .foregroundColor(colors.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -201,7 +257,7 @@ public struct CursorReviewDiffView: View {
                 if let hash = approval?.contentHash, !hash.isEmpty {
                     Text("content hash \(hash.prefix(12))…")
                         .font(CursorType.logLine)
-                        .foregroundColor(CursorColors.light.mutedText)
+                        .foregroundColor(colors.mutedText)
                 }
             }
         }
@@ -210,12 +266,12 @@ public struct CursorReviewDiffView: View {
     private var commandBlock: some View {
         Text(approval?.command ?? approval?.toolInput ?? approval?.patch ?? "(no command recorded)")
             .font(CursorType.diffCode)
-            .foregroundColor(CursorColors.light.primaryText)
+            .foregroundColor(colors.primaryText)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(CursorColors.light.background)
+            .background(colors.background)
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -254,7 +310,7 @@ public struct CursorReviewDiffView: View {
             }
             .accessibilityIdentifier("cursor.review.approve")
             CursorPillButton(
-                segments: [CursorPillButton.Segment("Deny", color: CursorColors.light.dangerRed)],
+                segments: [CursorPillButton.Segment("Deny", color: colors.dangerRed)],
                 style: .secondary
             ) {
                 applyDecision(.denied, relay: .rejected)
@@ -307,10 +363,10 @@ public struct CursorReviewDiffView: View {
 
     private var decisionColor: Color {
         switch decision {
-        case .approved: return CursorColors.light.successGreen
-        case .denied: return CursorColors.light.dangerRed
-        case .replied: return CursorColors.light.secondaryText
-        case .pending: return CursorColors.light.primaryText
+        case .approved: return colors.successGreen
+        case .denied: return colors.dangerRed
+        case .replied: return colors.secondaryText
+        case .pending: return colors.primaryText
         }
     }
 
@@ -319,7 +375,7 @@ public struct CursorReviewDiffView: View {
     private var auditLine: some View {
         Text(auditText)
             .font(CursorType.logLine)
-            .foregroundColor(CursorColors.light.mutedText)
+            .foregroundColor(colors.mutedText)
             .padding(.horizontal, 4)
     }
 
@@ -336,7 +392,7 @@ public struct CursorReviewDiffView: View {
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
             .font(CursorType.cardTitle)
-            .foregroundColor(CursorColors.light.secondaryText)
+            .foregroundColor(colors.secondaryText)
     }
 }
 #endif
