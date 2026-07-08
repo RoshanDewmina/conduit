@@ -763,6 +763,31 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         snapshot("10h-composer-dismissed-to-workspaces", app: app)
     }
 
+    func testReturnPacketMockShell() {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_ROUTE"] = "returnPacket"
+        app.launchEnvironment["LANCER_CURSOR_MOCK_RECEIPT"] = "1"
+        app.launchEnvironment["LANCER_RETURN_PACKET_AUTO_PRESENT"] = "1"
+        app.launch()
+
+        let packetScreen = app.otherElements["return-packet-screen"]
+        XCTAssertTrue(packetScreen.waitForExistence(timeout: 12), "Return packet screen should auto-present from mock receipt")
+        snapshot("return-packet-visible", app: app)
+
+        let command = app.staticTexts["return-packet-command"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "Continuation command should be visible")
+        let label = command.label
+        XCTAssertTrue(label.contains("--resume"), "Claude resume command should include --resume flag")
+        XCTAssertTrue(label.contains("sess-mock-ui"), "Continuation command should include vendor session id")
+
+        let copyButton = app.buttons["return-packet-copy"]
+        XCTAssertTrue(copyButton.waitForExistence(timeout: 5))
+        tapWithRetry(copyButton, label: "Copy return packet command")
+        snapshot("return-packet-copied", app: app)
+    }
+
     func testReceiptCardMockShell() {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"

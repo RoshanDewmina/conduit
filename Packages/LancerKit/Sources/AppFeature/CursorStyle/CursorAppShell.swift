@@ -161,6 +161,8 @@ public struct CursorAppShell: View {
             path.append(CursorRoute.workThread("Fix onboarding pairing flow"))
         case "receiptCard":
             path.append(CursorRoute.workThread("Receipt card UI test"))
+        case "returnPacket":
+            path.append(CursorRoute.workThread("Return packet UI test"))
         default:
             break
         }
