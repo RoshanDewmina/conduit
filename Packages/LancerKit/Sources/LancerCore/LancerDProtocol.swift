@@ -499,6 +499,118 @@ public struct SessionDiscoveredParams: Codable, Sendable {
     }
 }
 
+// MARK: - Question pipeline wire types
+
+/// Wire mirror of `QuestionOption` (daemon/lancerd/question.go).
+public struct QuestionOptionWire: Codable, Sendable, Equatable {
+    public let label: String
+    public let description: String?
+
+    public init(label: String, description: String? = nil) {
+        self.label = label
+        self.description = description
+    }
+}
+
+/// Wire mirror of `QuestionItem` (daemon/lancerd/question.go).
+public struct QuestionItemWire: Codable, Sendable, Equatable {
+    public let header: String?
+    public let question: String
+    public let options: [QuestionOptionWire]?
+    public let multiSelect: Bool?
+
+    public init(header: String? = nil, question: String, options: [QuestionOptionWire]? = nil, multiSelect: Bool? = nil) {
+        self.header = header
+        self.question = question
+        self.options = options
+        self.multiSelect = multiSelect
+    }
+}
+
+/// Wire mirror of `QuestionEvent` (daemon/lancerd/question.go) — params for
+/// the `agent.question.pending` JSON-RPC notification.
+public struct QuestionPendingParams: Codable, Sendable, Equatable {
+    public let id: String
+    public let agent: String
+    public let runId: String?
+    public let cwd: String?
+    public let toolUseID: String?
+    public let timestamp: String
+    public let questions: [QuestionItemWire]
+    public let allowFreeText: Bool
+    public let confidence: String
+
+    public init(
+        id: String, agent: String, runId: String? = nil, cwd: String? = nil,
+        toolUseID: String? = nil, timestamp: String = "",
+        questions: [QuestionItemWire] = [], allowFreeText: Bool = false,
+        confidence: String = "bestEffort"
+    ) {
+        self.id = id
+        self.agent = agent
+        self.runId = runId
+        self.cwd = cwd
+        self.toolUseID = toolUseID
+        self.timestamp = timestamp
+        self.questions = questions
+        self.allowFreeText = allowFreeText
+        self.confidence = confidence
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, agent, runId, cwd, toolUseID, timestamp, questions, allowFreeText, confidence
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? ""
+        runId = try c.decodeIfPresent(String.self, forKey: .runId)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        toolUseID = try c.decodeIfPresent(String.self, forKey: .toolUseID)
+        timestamp = try c.decodeIfPresent(String.self, forKey: .timestamp) ?? ""
+        questions = try c.decodeIfPresent([QuestionItemWire].self, forKey: .questions) ?? []
+        allowFreeText = try c.decodeIfPresent(Bool.self, forKey: .allowFreeText) ?? false
+        confidence = try c.decodeIfPresent(String.self, forKey: .confidence) ?? "bestEffort"
+    }
+}
+
+/// Wire mirror of `QuestionItemAnswer` (daemon/lancerd/question.go).
+public struct QuestionItemAnswerWire: Codable, Sendable, Equatable {
+    public let selectedLabels: [String]?
+    public let freeText: String?
+
+    public init(selectedLabels: [String]? = nil, freeText: String? = nil) {
+        self.selectedLabels = selectedLabels
+        self.freeText = freeText
+    }
+}
+
+/// Wire params for the `agent.question.answer` JSON-RPC method —
+/// mirrors `QuestionAnswer` (daemon/lancerd/question.go).
+public struct QuestionAnswerParams: Codable, Sendable, Equatable {
+    public let questionId: String
+    public let items: [QuestionItemAnswerWire]
+
+    public init(questionId: String, items: [QuestionItemAnswerWire]) {
+        self.questionId = questionId
+        self.items = items
+    }
+}
+
+/// Artifact payload stored for a `.question` ChatArtifact. The `event` field
+/// carries the full QuestionEvent; `answer` is nil until the question is resolved
+/// and non-nil once the user submits a response (QuestionCardModel.mergeAnswer).
+public struct QuestionArtifactPayload: Codable, Sendable, Equatable {
+    public let event: QuestionPendingParams
+    public var answer: QuestionAnswerParams?
+
+    public init(event: QuestionPendingParams, answer: QuestionAnswerParams? = nil) {
+        self.event = event
+        self.answer = answer
+    }
+}
+
 public enum DaemonEvent: Sendable {
     case approvalPending(ApprovalPendingParams)
     case agentStatus(AgentStatusSnapshot)
@@ -509,6 +621,7 @@ public enum DaemonEvent: Sendable {
     case toolStart(ToolStartParams)
     case artifact(AgentArtifactEvent)
     case sessionDiscovered(SessionDiscoveredParams)
+    case questionPending(QuestionPendingParams)
     case pong
     case unknown(method: String)
 }
@@ -572,6 +685,12 @@ extension DaemonEvent {
                   let p = try? JSONDecoder().decode(SessionDiscoveredParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .sessionDiscovered(p)
+        case "agent.question.pending":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(QuestionPendingParams.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .questionPending(p)
         case "pong":
             return .pong
         default:

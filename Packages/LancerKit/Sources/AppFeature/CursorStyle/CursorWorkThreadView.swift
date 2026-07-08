@@ -241,6 +241,10 @@ public struct CursorWorkThreadView: View {
                     }
                 )
             }
+        case .question:
+            QuestionCardView(artifact: artifact) { answer in
+                Task { await liveBridge?.onAnswerQuestion?(artifact, answer) }
+            }
         default:
             EmptyView()
         }

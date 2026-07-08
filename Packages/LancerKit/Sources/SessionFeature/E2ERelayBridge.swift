@@ -508,6 +508,23 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    /// Send a question answer through the E2E relay to the paired daemon.
+    /// Fire-and-forget — the daemon resolves the pending question via
+    /// `questionStore.resolve` on receipt of a `"questionAnswer"` relay message.
+    /// Mirrors `sendDecision` but without the ack wait: questions carry no risk
+    /// decision, so a dropped answer is an inconvenience, not a security event.
+    @discardableResult
+    public func sendQuestionAnswer(_ answer: QuestionAnswerParams) async -> Bool {
+        guard isActive else { return false }
+        do {
+            try await relayClient.send(type: "questionAnswer", payload: answer)
+            return true
+        } catch {
+            Self.logger.error("sendQuestionAnswer: relay send FAILED for questionId=\(answer.questionId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     // MARK: - Private
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
@@ -819,6 +836,19 @@ public final class E2ERelayBridge: ObservableObject {
                 conversationsArchiveContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             conversationsArchiveContinuation = nil
+
+        case "questionPending":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<QuestionPendingParams>.self, from: message.payload
+            ) else {
+                Self.logger.error("handleRelayMessage: questionPending decode failed for machine=\(self.machineID.uuidString, privacy: .public)")
+                return
+            }
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerE2EQuestionPending"),
+                object: nil,
+                userInfo: ["questionParams": env.payload, "machineID": self.machineID]
+            )
 
         case "agentConversationsAttachObservedSessionResult":
             let envelope = try? JSONDecoder().decode(

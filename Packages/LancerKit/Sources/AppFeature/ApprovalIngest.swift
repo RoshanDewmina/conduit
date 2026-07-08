@@ -81,6 +81,32 @@ public actor ChatRunPersistenceSink {
         Task { try? await chatRepo.associateApproval(approvalID: params.id, runID: runID) }
     }
 
+    /// Store an incoming `QuestionPendingParams` as a `.question` artifact so it
+    /// appears in the work-thread's artifact list. The payloadJSON encodes a
+    /// `QuestionArtifactPayload` with no answer yet; `QuestionCardModel.mergeAnswer`
+    /// updates it once the user submits a response.
+    public func handleQuestionPending(_ params: QuestionPendingParams) {
+        guard let runID = params.runId, !runID.isEmpty else { return }
+        Task {
+            guard let payloadData = try? JSONEncoder().encode(QuestionArtifactPayload(event: params)),
+                  let payloadJSON = String(data: payloadData, encoding: .utf8) else { return }
+            if let turn = try? await chatRepo.turnByRunID(runID) {
+                let artifact = ChatArtifact(
+                    id: "question:\(params.id)",
+                    conversationID: turn.conversationID,
+                    turnID: turn.id,
+                    runID: runID,
+                    kind: .question,
+                    title: "Question",
+                    payloadJSON: payloadJSON,
+                    status: .running
+                )
+                try? await chatRepo.upsertArtifact(artifact)
+                await Self.postThreadArtifactUpdate(conversationID: turn.conversationID)
+            }
+        }
+    }
+
     public func handleRunReceipt(_ receipt: ProofReceipt) {
         guard !receipt.runId.isEmpty else { return }
         guard let payloadData = try? JSONEncoder().encode(receipt),
@@ -171,6 +197,9 @@ public actor ApprovalIngest {
                     try? await repository.upsert(approval)
                     await chatPersistenceSink?.handleApprovalPending(params)
                     await Notifications.shared.notifyPendingApproval(approval, hostName: hostName)
+                }
+                if case .questionPending(let params) = event {
+                    await chatPersistenceSink?.handleQuestionPending(params)
                 }
             }
         }
