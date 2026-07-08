@@ -6,7 +6,8 @@ import SessionFeature
 
 /// Accumulates streamed output + lifecycle status for dispatched agent runs,
 /// keyed by runId. Fed by `ApprovalIngest` from `agent.run.output` /
-/// `agent.run.status` daemon notifications; read by `RunDetailView`.
+/// `agent.run.status` daemon notifications; read into the Cursor shell's
+/// `CursorShellLiveBridge.activeThreadResponse` for the live thread view.
 @MainActor @Observable
 public final class RunOutputStore {
 

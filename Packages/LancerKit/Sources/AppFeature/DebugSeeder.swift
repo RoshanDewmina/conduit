@@ -178,47 +178,6 @@ public enum DebugSeeder {
             try? await repo.upsert(snippet)
         }
     }
-    public static func makeDebugApprovals() -> [Approval] {
-        let session = SessionID()
-        return [
-            Approval(
-                id: ApprovalID(),
-                sessionID: session,
-                agent: .claudeCode,
-                kind: .command,
-                command: "rm -rf ./dist && npm run build:prod",
-                patch: nil,
-                cwd: "/home/ubuntu/myapp",
-                risk: .high,
-                createdAt: Date(timeIntervalSinceNow: -30)
-            ),
-            Approval(
-                id: ApprovalID(),
-                sessionID: session,
-                agent: .claudeCode,
-                kind: .command,
-                command: "git push origin main --force-with-lease",
-                patch: nil,
-                cwd: "/home/ubuntu/myapp",
-                risk: .medium,
-                createdAt: Date(timeIntervalSinceNow: -120)
-            ),
-            Approval(
-                id: ApprovalID(),
-                sessionID: session,
-                agent: .claudeCode,
-                kind: .command,
-                command: "systemctl restart app.service",
-                patch: nil,
-                cwd: "/home/ubuntu/myapp",
-                risk: .low,
-                createdAt: Date(timeIntervalSinceNow: -300),
-                decidedAt: Date(timeIntervalSinceNow: -295),
-                decision: .approved
-            ),
-        ]
-    }
-
     private static func seedApprovals(_ repo: ApprovalRepository) async {
         let session = SessionID()
         let approvals: [Approval] = [

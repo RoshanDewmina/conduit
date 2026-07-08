@@ -68,14 +68,14 @@ launch_session_harness() {
 
   env \
     SIMCTL_CHILD_LANCER_DAEMON_E2E=1 \
-    SIMCTL_CHILD_LANCER_DESTINATION=sessions \
+    SIMCTL_CHILD_LANCER_DESTINATION=review \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
     SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
     SIMCTL_CHILD_LANCER_TEST_PW="$PW" \
     SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted "$BUNDLE_ID"
 
-  echo "  App launched with LANCER_DAEMON_E2E=1 and LANCER_DESTINATION=sessions"
+  echo "  App launched with LANCER_DAEMON_E2E=1 and LANCER_DESTINATION=review"
   echo "  Waiting ${SLEEP_AGENT}s for the localhost host to seed..."
   sleep "$SLEEP_AGENT"
   echo ""
@@ -92,7 +92,7 @@ take_screenshot() {
 prompt_approval() {
   echo ""
   echo "============================================================"
-  echo "  An approval card should now be visible in the Inbox."
+  echo "  The Cursor Review sheet should now show the pending approval."
   echo ""
   echo "  1. In the simulator, look for the pending approval"
   echo "     (it shows the command claude wants to run)."
@@ -116,7 +116,7 @@ print_results() {
   echo "    • after-approval.png  — shows decision result"
   echo ""
   echo "  Expected outcome:"
-  echo "    • Before: Inbox has a pending approval card with the"
+  echo "    • Before: the Review sheet shows a pending approval with the"
   echo "      agent's requested tool action"
   echo "    • After: Card transitions to DECIDED state (approved/rejected)"
   echo "    • The agent on the host unblocks and continues"

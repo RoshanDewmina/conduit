@@ -131,31 +131,10 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 // MARK: - Root view
 
-/// Every secondary app flow enters through this route so presentation behavior
-/// does not drift across screens as new sheets are added.
-private enum AppDrawerRoute: Identifiable {
-    case addMachine
-    case relayPairing
-    case addHost
-    case editHost(Host)
-
-    var id: String {
-        switch self {
-        case .addMachine: "add-machine"
-        case .relayPairing: "relay-pairing"
-        case .addHost: "add-host"
-        case .editHost(let host): "edit-host-\(host.id)"
-        }
-    }
-}
-
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
     @State private var sessionViewModel: SessionViewModel?
-    @State private var drawerRoute: AppDrawerRoute?
     @State private var workspacesRevision = UUID()
-    @State private var passwordPromptHost: Host?
-    @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var relayApprovalsByID: [ApprovalID: Approval] = [:]
@@ -163,7 +142,6 @@ public struct AppRoot: View {
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
     @State private var approvalIngest: ApprovalIngest?
-    @State private var showingQuotaGuard = false
     @AppStorage("onboardingSeen") private var onboardingSeen = false
     @AppStorage(LancerAppearance.storageKey) private var colorSchemePref: String = LancerAppearance.light.rawValue
     @AppStorage(LancerAccentTheme.storageKey) private var accentPref: String = LancerAccentTheme.terracotta.rawValue
@@ -183,7 +161,7 @@ public struct AppRoot: View {
         preferredScheme ?? systemScheme
     }
 
-    /// Cursor-styled surfaces follow the same appearance control as the sidebar shell.
+    /// Cursor-styled surfaces resolve the same appearance control the rest of the app uses.
     private var cursorResolvedScheme: CursorScheme {
         effectiveScheme == .dark ? .dark : .light
     }
@@ -194,9 +172,6 @@ public struct AppRoot: View {
     @State private var agentStore: AgentStore?
     @State private var showingPaywall = false
     @State private var paywallFeatureName = ""
-    @State private var isShowingLiveSession = false
-    @State private var showingRelayWorkspaceUnavailable = false
-    @State private var relayFileBrowserMachineID: RelayMachineID?
     @State private var fleetStore = FleetStore()
     @State private var selectedFleetSlotID: UUID?
     @State private var relayFleetStore = RelayFleetStore()
@@ -395,7 +370,6 @@ public struct AppRoot: View {
             {
                 selectFleetSlot(slot.id)
             }
-            if activeSessionViewModel != nil { isShowingLiveSession = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerOpenApproval)) { note in
             // Route to the specific thread the approval belongs to (where the
@@ -419,7 +393,7 @@ public struct AppRoot: View {
             _ = env
         }
         // Relay run output/status: the E2ERelayBridge posts these as typed params.
-        // Feed them into runOutputStore so the presented RunDetailView streams live.
+        // Feed them into runOutputStore so the active Cursor thread streams live.
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunOutput"))) { note in
             guard let params = note.userInfo?["params"] as? RunOutputParams else {
                 Logger(subsystem: "dev.lancer.mobile", category: "AppRoot").error("lancerE2ERunOutput: bad params in notification")
@@ -673,63 +647,6 @@ public struct AppRoot: View {
                     }
             }
         }
-        .sheet(isPresented: $showingQuotaGuard) {
-            CursorDrawer(title: "Usage & limits", detents: [.large]) {
-                QuotaGuardView(store: env.quotaGuardStore)
-            }
-        }
-        .sheet(isPresented: $showingRelayWorkspaceUnavailable) {
-            CursorDrawer(detents: [.large]) {
-                RelayWorkspaceUnavailableView(onConnectSSH: { drawerRoute = .addMachine })
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { relayFileBrowserMachineID != nil },
-            set: { if !$0 { relayFileBrowserMachineID = nil } }
-        )) {
-            if let machineID = relayFileBrowserMachineID, let bridge = relayFleetStore.machine(machineID)?.bridge {
-                RelayFileBrowserView(bridge: bridge)
-                    .environment(\.lancerTokens, tokens)
-                    .preferredColorScheme(preferredScheme)
-            }
-        }
-        .sheet(item: $passwordPromptHost) { host in
-            PasswordPromptView(host: host) { password in
-                passwordPromptHost = nil
-                startSession(
-                    host: host,
-                    env: env,
-                    credentialProvider: { .password(password) }
-                )
-            }
-            .environment(\.lancerTokens, tokens)
-            .preferredColorScheme(preferredScheme)
-        }
-        .sheet(item: $drawerRoute) { route in
-            drawerDestination(route, env: env)
-        }
-        // Re-prompt after consecutive auth failures on an existing session,
-        // reusing the same SessionViewModel rather than creating a new one.
-        .sheet(isPresented: Binding(
-            get: { sessionViewModel?.awaitingPasswordRetry == true },
-            set: { if !$0 { sessionViewModel?.cancelPasswordRetry() } }
-        )) {
-            if let vm = sessionViewModel {
-                PasswordPromptView(host: vm.host) { password in
-                    Task { await vm.retryWithNewPassword(password) }
-                }
-                .environment(\.lancerTokens, tokens)
-                .preferredColorScheme(preferredScheme)
-            }
-        }
-        // NOTE: the TOFU host-key confirmation is presented from INSIDE
-        // `SessionView` (above the fullScreenCover) — see B1. Presenting it here
-        // on `readyRoot` could not appear over the cover and caused a hard hang.
-        .alert("Connection unavailable", isPresented: .constant(connectionError != nil), actions: {
-            Button("OK") { connectionError = nil }
-        }, message: {
-            Text(connectionError ?? "")
-        })
         .task {
             configureGlobalInbox(env: env)
             setupCursorLiveBridge(env: env)
@@ -849,15 +766,6 @@ public struct AppRoot: View {
                 CursorReviewDiffView(onBack: { showingApprovalReview = false })
                     .environment(\.cursorShellLiveBridge, cursorLiveBridge)
             }
-            .fullScreenCover(isPresented: $isShowingLiveSession) {
-                if let vm = activeSessionViewModel {
-                    SessionWorkspaceContainer(
-                        viewModel: vm,
-                        onSwitchHost: { isShowingLiveSession = false }
-                    )
-                    .environment(\.lancerTokens, tokens)
-                }
-            }
     }
 
     #if DEBUG
@@ -894,41 +802,6 @@ public struct AppRoot: View {
         return fleetStore.slots.first { $0.id == selectedFleetSlotID } ?? fleetStore.slots.first
     }
 
-    private var activeSessionViewModel: SessionViewModel? {
-        selectedFleetSlot?.sessionViewModel ?? sessionViewModel
-    }
-
-    /// A workspace is a direct SSH capability. Relay dispatch keeps its governed
-    /// control loop, but it does not become a shell or HTTP proxy — V1's Work
-    /// Thread is a read-only activity log, so this never opens the live
-    /// interactive terminal (`SessionView`), regardless of agent/host.
-    ///
-    /// `agent.hostID` is populated for relay agents with the owning machine's
-    /// `RelayMachineID` (see `dispatchAgents()`), so this now routes to the
-    /// correct machine's file browser instead of "the" single relay bridge. An
-    /// SSH agent's `hostID` is an SSH `HostID`, which never matches a relay
-    /// machine id — that falls through to "unavailable", same visible behavior
-    /// as before (Work Thread's terminal is deferred to V2 regardless of transport).
-    private func openWorkspace(for agent: DispatchAgent?) {
-        guard let hostIDString = agent?.hostID, let uuid = UUID(uuidString: hostIDString) else {
-            showingRelayWorkspaceUnavailable = true
-            return
-        }
-        presentRelayWorkspace(machineID: RelayMachineID(uuid))
-    }
-
-    /// A relay-backed agent has no live SSH terminal, but a paired relay can still
-    /// browse the host's files (read-only) over `agent.fs.ls`. Prefer that over the
-    /// dead-end "workspace unavailable" sheet when the machine's bridge is active.
-    @MainActor
-    private func presentRelayWorkspace(machineID: RelayMachineID) {
-        if relayFleetStore.isConnected(machineID) {
-            relayFileBrowserMachineID = machineID
-        } else {
-            showingRelayWorkspaceUnavailable = true
-        }
-    }
-
     @MainActor
     private func selectFleetSlot(_ id: UUID) {
         selectedFleetSlotID = id
@@ -936,61 +809,6 @@ public struct AppRoot: View {
             sessionViewModel = slot.sessionViewModel
             daemonChannel = slot.channel
             approvalIngest = slot.ingest
-        }
-    }
-
-    @ViewBuilder
-    private func drawerDestination(_ route: AppDrawerRoute, env: AppEnvironment) -> some View {
-        switch route {
-        case .addMachine:
-            CursorDrawer(
-                title: "Add a machine",
-                subtitle: "Relay is the recommended path. SSH adds a live terminal.",
-                detents: [.medium, .large]
-            ) {
-                MachineConnectionChooser(
-                    onRelay: { drawerRoute = .relayPairing },
-                    onSSH: { drawerRoute = .addHost }
-                )
-            }
-        case .relayPairing:
-            CursorDrawer(detents: [.large]) {
-                CursorRelayPairingSheet(
-                    existingMachineCount: relayFleetStore.machines.count,
-                    onPaired: { client, record in
-                        addRelayMachine(client: client, record: record, env: env)
-                    }
-                )
-            }
-        case .addHost:
-            CursorDrawer(detents: [.large]) {
-                AddHostView(
-                    repository: env.hostRepo,
-                    keyStore: env.keyStore,
-                    onCancel: { drawerRoute = nil },
-                    onConnectAndSave: { host in
-                        drawerRoute = nil
-                        workspacesRevision = UUID()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            openSession(host: host, env: env)
-                        }
-                    }
-                )
-            }
-        case .editHost(let host):
-            CursorDrawer(detents: [.large]) {
-                HostEditorView(
-                    viewModel: HostEditorViewModel(
-                        repository: env.hostRepo,
-                        keyStore: env.keyStore,
-                        existingHost: host
-                    ) { _ in
-                        drawerRoute = nil
-                        workspacesRevision = UUID()
-                    }
-                )
-            }
         }
     }
 
@@ -1399,8 +1217,8 @@ public struct AppRoot: View {
         }
         // Each paired relay machine contributes its own agent set. The 3-part id
         // ("relay|<machineID>|<agentID>") gives every machine a distinct hostID,
-        // which NewChatTabView's existing hostID-keyed grouping needs to show N
-        // separate machine sections in the picker.
+        // which the machine picker's hostID-keyed grouping needs to show N
+        // separate machine sections.
         for machine in relayFleetStore.machines {
             // Only offer agents the host actually has installed (reported over the
             // relay). Until that's known, show all four so a freshly-paired host
@@ -1442,9 +1260,9 @@ public struct AppRoot: View {
     }
 
     /// Maps a `ConversationSyncCoordinator.TurnOutcome` to the `ChatDispatchOutcome`
-    /// NewChatTabView already knows how to render, registering the run for
-    /// streaming and attaching the ledger's `conversationID`/`nextBaseSeq` so
-    /// follow-ups can continue through the ledger too (see `continueConversationTurn`).
+    /// the Cursor work-thread dispatch flow already knows how to render, registering
+    /// the run for streaming and attaching the ledger's `conversationID`/`nextBaseSeq`
+    /// so follow-ups can continue through the ledger too (see `continueConversationTurn`).
     private func chatDispatchOutcome(
         from outcome: ConversationSyncCoordinator.TurnOutcome, channel: any RunControlling, title: String
     ) -> ChatDispatchOutcome {
@@ -1636,7 +1454,6 @@ public struct AppRoot: View {
                     sessionViewModel = nil
                     daemonChannel = nil
                     approvalIngest = nil
-                    isShowingLiveSession = false
                 } else if let fallback = fleetStore.slots.first {
                     selectFleetSlot(fallback.id)
                 }
@@ -1696,11 +1513,6 @@ public struct AppRoot: View {
     private func configureRelayFleetStore(env: AppEnvironment) {
         guard !configuredRelayFleetStore else { return }
         configuredRelayFleetStore = true
-#if DEBUG
-        // Honor the UI-test relay seam: keep the seeded fake host/active state instead
-        // of letting real hydration/bridge setup clobber it.
-        if ProcessInfo.processInfo.environment["LANCER_FAKE_RELAY_HOST"] != nil { return }
-#endif
         // Migrate the legacy single pairing (if any) and restore every known
         // machine's client/bridge. Notification subscriptions below don't need
         // to wait on this completing — a notification for a not-yet-hydrated
@@ -2001,240 +1813,6 @@ public struct AppRoot: View {
         #endif
         return Bundle.main.infoDictionary?["LANCER_PUSH_BACKEND_URL"] as? String ?? ""
     }
-
-    private func openSession(host: Host, env: AppEnvironment) {
-        switch host.authMethod {
-        case .password:
-            passwordPromptHost = host
-        case .ed25519(let keyID):
-            let keyStore = env.keyStore
-            startSession(host: host, env: env) {
-                let key = try await keyStore.loadEd25519(tag: keyID.uuidString)
-                return .ed25519(key)
-            }
-        case .agent:
-            connectionError = "SSH agent forwarding is not implemented yet. Edit the host and choose password or Ed25519 key authentication."
-        }
-    }
-
-    private func startSession(
-        host: Host,
-        env: AppEnvironment,
-        credentialProvider: @escaping @Sendable () async throws -> SSHCredential
-    ) {
-        let sshSession = SSHSession(host: host)
-        let snapshotRepo = SessionSnapshotRepository(env.database)
-        let backendURL = Self.pushBackendURL()
-        // One stable id everywhere (MAJOR-8): the value sent to
-        // `registerDevice` MUST equal the relay decision POST `sessionId` so the
-        // backend per-session token lookup keys match.
-        let deviceSessionID = DeviceIdentity.sessionID()
-        // Capture the agent store as an explicit local strong reference. It is
-        // owned for the app lifetime by AppRoot's @State and never retains the
-        // session, so there is no cycle; a weak capture here only risked silently
-        // dropping usage records if the optional read deallocated. (#ImplicitStrongCapture)
-        let agentStoreRef = agentStore
-        Task {
-            let aiClient = await env.aiClient(managedOpenRouterKey: pm.managedOpenRouterKey)
-            let usageReporter: (@Sendable (UsageRecord) async -> Void)? = { record in
-                await agentStoreRef?.ingestUsage(record, runID: nil, agentID: nil)
-            }
-            let vm = SessionViewModel(
-                host: host,
-                sshSession: sshSession,
-                credentialProvider: credentialProvider,
-                hostKeyStore: env.hostKeyStore,
-                aiClient: aiClient,
-                onAIUsage: usageReporter,
-                blockRepo: env.blockRepo,
-                auditRepo: env.auditRepo,
-                snapshotRepo: snapshotRepo
-            )
-            let approvalRepo = ApprovalRepository(env.database)
-            let channel = DaemonChannel(session: sshSession)
-            let chatSink = ChatRunPersistenceSink(chatRepo: env.chatRepo)
-            let ingest = ApprovalIngest(channel: channel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore, chatPersistenceSink: chatSink)
-            let liveVM = LiveInboxViewModel(
-                repository: approvalRepo,
-                onDecision: { id, decision, editedToolInput, contentHash in
-                    try? await env.auditRepo.record(
-                        hostID: host.id,
-                        type: .approval,
-                        metadata: [
-                            "approvalId": id.uuidString,
-                            "decision": decision.rawValue,
-                            "source": "inbox",
-                        ]
-                    )
-                    // Route through the relay's single forwarding chokepoint so a
-                    // dead/re-armed channel falls back to the backend relay rather
-                    // than dropping the decision (MAJOR-5). LiveInboxViewModel only
-                    // fires onDecision when the DB row actually changed (B3).
-                    await ApprovalRelay.shared.forwardDecisionOnly(
-                        approvalID: id.uuidString,
-                        decision: decision,
-                        editedToolInput: editedToolInput,
-                        contentHash: contentHash
-                    )
-                },
-                onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, firstPending in
-                    await vm?.setLiveActivityPendingApprovals(
-                        pendingCount,
-                        agentName: agentName,
-                        approvalID: firstPending?.id.uuidString
-                    )
-                }
-            )
-            await MainActor.run {
-                self.watchConnector.onEmergencyStop = { [weak vm] in
-                    await vm?.disconnect()
-                }
-                self.watchConnector.onRunSnippet = { [weak vm] body in
-                    await vm?.runCommand(body)
-                }
-                self.watchConnector.startSyncing(
-                    approvalRepo: approvalRepo,
-                    blockRepo: env.blockRepo,
-                    snippetRepo: env.snippetRepo,
-                    sessionViewModel: vm,
-                    onDecision: { id, decision in
-                        // Persist the watch decision to the local DB first
-                        // (first-decision-wins). Only audit + forward when this
-                        // call actually resolved the gate, so the inbox reflects
-                        // watch decisions and a stale watch tap can't flip a
-                        // decided gate (MAJOR-15 + B3).
-                        let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
-                        guard changed else { return }
-                        Notifications.shared.clearDeliveredApproval(id: id.uuidString)
-                        try? await env.auditRepo.record(
-                            hostID: host.id,
-                            type: .approval,
-                            metadata: [
-                                "approvalId": id.uuidString,
-                                "decision": decision.rawValue,
-                                "source": "watch",
-                            ]
-                        )
-                        // The Watch has no in-memory Approval row to read a
-                        // contentHash off (its onDecision signature is (id, decision)
-                        // only) — fetch the just-decided row back from the DB so the
-                        // forwarded decision still echoes the hash lancerd verifies.
-                        let contentHash = (try? await approvalRepo.find(id: id))?.contentHash
-                        await ApprovalRelay.shared.forwardDecisionOnly(
-                            approvalID: id.uuidString,
-                            decision: decision,
-                            editedToolInput: nil,
-                            contentHash: contentHash
-                        )
-                    }
-                )
-                self.approvalRepository = approvalRepo
-                self.liveInboxVM = liveVM
-                self.inboxVM = liveVM  // replace static InboxViewModel
-                // Fleet: register the new slot (additive — single-slot path above
-                // is preserved for backwards compat with the current UI).
-                // When the store is full (maxSlots reached), the add is a no-op.
-                let slot = FleetStore.Slot(
-                    hostID: host.id,
-                    hostName: host.name,
-                    sessionViewModel: vm,
-                    channel: channel,
-                    ingest: ingest,
-                    inboxVM: liveVM
-                )
-                self.fleetStore.add(slot)
-                if self.fleetStore.slots.contains(where: { $0.id == slot.id }) {
-                    self.selectFleetSlot(slot.id)
-                }
-                // Post-connect: session runs as a monitored fleet slot; the Cursor
-                // shell stays on Workspaces — terminal is an intentional drill-in.
-                self.workspacesRevision = UUID()
-                // MAJOR-4: re-arm the approval pipeline after a reconnect. The
-                // DaemonChannel/ApprovalIngest die when the SSH client is swapped;
-                // recreate + restart them and re-point the relay so new approvals
-                // are ingested and decisions are delivered post-reconnect. Captures
-                // only Sendable values (no `vm`, so no retain cycle).
-                let fleet = self.fleetStore
-                let quotaGuard = env.quotaGuardStore
-                let chatRepo = env.chatRepo
-                vm.onReconnected = { [fleet, quotaGuard, runOutputStore, chatRepo, slotID = slot.id, sshSession, host, approvalRepo, backendURL, deviceSessionID] in
-                    if let existing = await fleet.slots.first(where: { $0.id == slotID }) {
-                        await existing.ingest.stop()
-                        await existing.channel.stop()
-                    }
-                    let newChannel = DaemonChannel(session: sshSession)
-                    let newChatSink = ChatRunPersistenceSink(chatRepo: chatRepo)
-                    let newIngest = ApprovalIngest(channel: newChannel, repository: approvalRepo, hostName: host.name, runOutputStore: runOutputStore, chatPersistenceSink: newChatSink)
-                    await fleet.rearm(slotID: slotID, channel: newChannel, ingest: newIngest)
-                    try? await newChannel.start()
-                    if !backendURL.isEmpty {
-                        // registerDevice stores the per-session relayToken on the channel
-                        // (currentRelayToken); setChannel below refreshes the relay from it.
-                        _ = try? await newChannel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)
-                    }
-                    await ApprovalRelay.shared.setChannel(newChannel)
-                    await quotaGuard.setChannel(newChannel)
-                    await newIngest.start()
-                }
-                self.scenePhaseObserver = ScenePhaseObserver(
-                    onBecomeActive: { [weak vm] in
-                        guard let vm else { return }
-                        await vm.handleSceneActive()
-                    },
-                    onBackground: { [weak vm] in
-                        guard let vm else { return }
-                        let wasConnected = vm.status == .connected
-                        await vm.handleSceneBackground()
-                        if wasConnected {
-                            await Notifications.shared.postSessionSuspended(
-                                hostName: vm.host.name
-                            )
-                        }
-                    }
-                )
-            }
-            await vm.connect()
-            if vm.status == .connected {
-                try? await env.hostRepo.touch(id: host.id)
-            }
-            let daemonPath = (try? await DaemonBootstrap.ensureInstalled(session: sshSession, manifest: DaemonBootstrap.loadManifest())) ?? "$HOME/.lancer/bin/lancerd"
-            try? await channel.start(daemonPath: daemonPath)  // launch lancerd serve on remote host
-            // First connect after onboarding: flush the chosen tier's starter policy
-            // to the daemon (it wasn't reachable during pairing). Idempotent — no-op
-            // once applied; a failed push retries on the next connect.
-            await OnboardingPolicy.applyPendingIfNeeded { yaml in
-                try await channel.savePolicyYAML(cwd: "", yaml: yaml)
-                try await channel.reloadPolicy(cwd: "")
-            }
-            // Register device with lancerd so APNs alerts reach this device when
-            // backgrounded. The handshake reply carries the per-session relay
-            // capability token — store it so backend-relayed decisions can
-            // authenticate (B2). Same `deviceSessionID` is used here and for the
-            // decision POST body so the backend looks up the right record.
-            if !backendURL.isEmpty {
-                let token = (try? await channel.registerDevice(pushBackendURL: backendURL, sessionID: deviceSessionID)) ?? nil
-                if let token { ApprovalRelay.shared.setRelayToken(token) }
-            }
-            // Forward any APNs token that arrived before the channel was ready.
-            if !backendURL.isEmpty, let hexToken = await Notifications.shared.pendingAPNSTokenHex {
-                try? await channel.registerAPNSToken(
-                    hexToken: hexToken,
-                    sessionID: deviceSessionID,
-                    pushBackendURL: backendURL
-                )
-            }
-            // Attach the relay so Live Activity / Dynamic Island decisions are
-            // forwarded to lancerd, and drain any decisions queued while the
-            // channel was absent (e.g. lock-screen tap before app foregrounded).
-            await ApprovalRelay.shared.setChannel(channel)
-            ApprovalRelay.shared.configureBackend(url: backendURL, sessionID: deviceSessionID)
-            await ingest.start()
-            await MainActor.run {
-                env.quotaGuardStore.setChannel(channel)
-            }
-            await env.quotaGuardStore.refresh()
-        }
-    }
 }
 
 extension Notification.Name {
@@ -2242,181 +1820,9 @@ extension Notification.Name {
     static let lancerSavedHostsDidChange = Notification.Name("lancerSavedHostsDidChange")
 }
 
-private struct MachineConnectionChooser: View {
-    let onRelay: () -> Void
-    let onSSH: () -> Void
-
-    @Environment(\.lancerTokens) private var t
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            choice(
-                title: "Pair over relay",
-                detail: "Recommended. Run agents and receive approvals without configuring SSH.",
-                icon: "link",
-                action: onRelay,
-                emphasized: true
-            )
-            choice(
-                title: "Connect over SSH",
-                detail: "Advanced. Adds a live terminal, files, diffs, and browser preview.",
-                icon: "terminal",
-                action: onSSH,
-                emphasized: false
-            )
-            Text("You can add SSH later from Machines. Relay never becomes a remote shell.")
-                .font(.dsSansPt(12))
-                .foregroundStyle(t.text3)
-                .padding(.top, 2)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-    }
-
-    private func choice(
-        title: String,
-        detail: String,
-        icon: String,
-        action: @escaping () -> Void,
-        emphasized: Bool
-    ) -> some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(emphasized ? t.accentFg : t.accent)
-                    .frame(width: 40, height: 40)
-                    .background(emphasized ? t.accent : t.accentSoft, in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.dsSansPt(16, weight: .semibold))
-                        .foregroundStyle(t.text)
-                    Text(detail)
-                        .font(.dsSansPt(12.5))
-                        .foregroundStyle(t.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(t.text4)
-                    .padding(.top, 14)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(t.surface, in: RoundedRectangle(cornerRadius: t.r4, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: t.r4, style: .continuous)
-                    .strokeBorder(emphasized ? t.accent.opacity(0.6) : t.border, lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .lancerGlassChrome(cornerRadius: t.r4, interactive: true)
-    }
-}
-
-private struct PasswordPromptView: View {
-    let host: Host
-    let onConnect: (String) -> Void
-
-    @State private var password = ""
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.cursorScheme) private var cursorScheme
-    @FocusState private var passwordFocused: Bool
-
-    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CursorHeaderBar(
-                leading: AnyView(
-                    CursorIconButton(systemImageName: "xmark", action: { dismiss() })
-                ),
-                trailing: []
-            )
-            .overlay(alignment: .center) {
-                Text("Connect")
-                    .font(CursorType.sheetTitle)
-                    .foregroundColor(colors.primaryText)
-                    .padding(.top, CursorMetrics.headerTopPadding)
-            }
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(colors.composerBackground)
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Text(String(host.name.prefix(1)).uppercased())
-                                .font(CursorType.cardTitle)
-                                .foregroundColor(colors.primaryText)
-                        )
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(host.name)
-                            .font(CursorType.rowTitle)
-                            .foregroundColor(colors.primaryText)
-                            .lineLimit(1)
-                        Text(host.displayAddress)
-                            .font(CursorType.inlineCode)
-                            .foregroundColor(colors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(14)
-                .background(colors.sheetBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                Text("PASSWORD")
-                    .font(CursorType.sectionHeader)
-                    .foregroundColor(colors.mutedText)
-                SecureField("Password", text: $password)
-                    .font(CursorType.bodyText)
-                    .textContentType(.password)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($passwordFocused)
-                    .submitLabel(.go)
-                    .onSubmit(connect)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 14)
-                    .background(colors.composerBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                CursorPillButton(title: "Connect", style: .primary, action: connect)
-                    .disabled(password.isEmpty)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-
-            Spacer(minLength: 0)
-        }
-        .background(colors.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
-        .presentationDetents([.medium])
-        .onAppear {
-            passwordFocused = true
-#if DEBUG
-            if ProcessInfo.processInfo.environment["LANCER_DAEMON_E2E"] == "1",
-               let pw = ProcessInfo.processInfo.environment["LANCER_TEST_PW"], !pw.isEmpty {
-                password = pw
-            }
-#endif
-        }
-    }
-
-    private func connect() {
-        guard !password.isEmpty else { return }
-        let value = password
-        dismiss()
-        onConnect(value)
-    }
-}
-
-/// A dispatched run NewChatTabView is rendering inline. Transport-agnostic: `channel`
-/// is whichever RunControlling the dispatch used (relay or a fleet slot's DaemonChannel),
-/// so the inline thread's Stop/Pause/Budget controls work the same either way.
+/// A dispatched run the Cursor work-thread is rendering inline. Transport-agnostic:
+/// `channel` is whichever RunControlling the dispatch used (relay or a fleet slot's
+/// DaemonChannel), so the inline thread's Stop/Pause/Budget controls work the same either way.
 public struct ActiveChatRun: Identifiable {
     public let runId: String
     public let channel: any RunControlling
@@ -2451,9 +1857,10 @@ public struct ActiveChatRun: Identifiable {
     public var id: String { runId }
 }
 
-/// What performDispatch resolved to, returned directly to the caller (NewChatTabView)
-/// instead of mutating shared AppRoot state — so the inline thread owns its own
-/// run lifecycle rather than a separate sheet-presented page reacting to it.
+/// What performDispatch resolved to, returned directly to the caller (the Cursor
+/// work-thread dispatch flow) instead of mutating shared AppRoot state — so the
+/// inline thread owns its own run lifecycle rather than a separate sheet-presented
+/// page reacting to it.
 public enum ChatDispatchOutcome {
     case started(ActiveChatRun)
     case blocked(String)
