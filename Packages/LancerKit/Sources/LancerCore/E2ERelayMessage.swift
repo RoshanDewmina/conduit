@@ -35,6 +35,8 @@ public enum E2ERelayMessage: Codable, Sendable {
     /// doesn't exist for a relay-only pairing — closed-app push-driven Live
     /// Activity updates never worked on relay-only devices.
     case activityTokenRegister(ActivityTokenRegisterData)
+    /// Terminal run proof — sent daemon → phone once per run (`lancer.proof/v0`).
+    case runReceipt(ProofReceipt)
     /// Ping/pong keepalive
     case ping
     case pong
@@ -164,13 +166,19 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let prompt: String
         public let model: String?
         public let budgetUSD: Double
+        /// Optional run contract (goal + done criteria + validation commands).
+        public let contract: ProofReceipt.Contract?
 
-        public init(agent: String, cwd: String, prompt: String, model: String? = nil, budgetUSD: Double = 0) {
+        public init(
+            agent: String, cwd: String, prompt: String, model: String? = nil,
+            budgetUSD: Double = 0, contract: ProofReceipt.Contract? = nil
+        ) {
             self.agent = agent
             self.cwd = cwd
             self.prompt = prompt
             self.model = model
             self.budgetUSD = budgetUSD
+            self.contract = contract
         }
     }
 

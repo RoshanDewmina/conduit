@@ -95,6 +95,8 @@ public struct CursorAppShell: View {
             path.append(CursorRoute.reviewDiff)
         case "workThread":
             path.append(CursorRoute.workThread("Fix onboarding pairing flow"))
+        case "receiptCard":
+            path.append(CursorRoute.workThread("Receipt card UI test"))
         default:
             break
         }
@@ -243,7 +245,10 @@ public struct CursorAppShell: View {
                     onBack: { popIfPossible() },
                     onViewPR: { path.append(CursorRoute.prDetail) },
                     onOpenReview: { path.append(CursorRoute.reviewDiff) },
-                    onOpenComposer: { openComposer(placeholder: "Follow up...") }
+                    onOpenComposer: { openComposer(placeholder: "Follow up...") },
+                    onOpenComposerPrefilled: { prefill in
+                        openComposer(placeholder: "Follow up...", prefill: prefill)
+                    }
                 )
             case .prDetail:
                 CursorPRDetailView(onBack: { popIfPossible() })
@@ -260,8 +265,9 @@ public struct CursorAppShell: View {
         path.removeLast()
     }
 
-    private func openComposer(placeholder: String) {
+    private func openComposer(placeholder: String, prefill: String? = nil) {
         composerPlaceholder = placeholder
+        liveBridge?.composerPrefillText = prefill
         showingComposerSheet = true
     }
 
@@ -295,13 +301,15 @@ public struct CursorAppShell: View {
     /// selection since there's no real state to persist yet.
     private var composerSheetChain: some View {
         CursorComposerSheet(
+            threadID: liveBridge?.selectedThreadID ?? "composer.new",
             repoName: liveBridge?.composerCWD.isEmpty == false ? (liveBridge?.composerCWD ?? "lancer-ios") : "lancer-ios",
             modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
             placeholder: composerPlaceholder,
+            prefillText: liveBridge?.composerPrefillText,
             onPickRepo: { showingRepoPicker = true },
             onPickRunTarget: { showingRunOnSheet = true },
             onPickModel: { showingModelSheet = true },
-            onSend: liveBridge == nil ? nil : { prompt in
+            onSend: liveBridge == nil ? nil : { payload in
                 guard let liveBridge else { return }
                 let repoName = liveBridge.composerCWD.isEmpty ? "command-center" : liveBridge.composerCWD
                 let model = liveBridge.composerModelSlug
@@ -310,8 +318,8 @@ public struct CursorAppShell: View {
                     // this a follow-up sent from an existing thread doesn't
                     // update the prompt bubble/narration at all (onContinue
                     // itself had no wiring here until this pass either).
-                    liveBridge.activeThreadPrompt = prompt
-                    Task { await liveBridge.onContinue?(threadID, prompt, model) }
+                    liveBridge.activeThreadPrompt = payload.prompt
+                    Task { await liveBridge.onContinue?(threadID, payload.prompt, model, payload.contract) }
                 } else {
                     // `repoName` is a display name, not a path — the daemon can't
                     // resolve a bare relative name to a real directory (it only
@@ -322,18 +330,19 @@ public struct CursorAppShell: View {
                     // Reset stale state from whatever thread was last viewed —
                     // otherwise a fresh dispatch briefly shows the PREVIOUS
                     // thread's response text under the new prompt.
-                    liveBridge.activeThreadPrompt = prompt
+                    liveBridge.activeThreadPrompt = payload.prompt
                     liveBridge.activeThreadResponse = ""
                     liveBridge.activeRunID = nil
                     liveBridge.selectedThreadID = nil
                     liveBridge.activeThreadError = nil
-                    Task { await liveBridge.onDispatch?(prompt, cwd, model) }
+                    Task { await liveBridge.onDispatch?(payload.prompt, cwd, model, payload.contract) }
                     // A fresh dispatch has no existing thread to navigate into —
                     // without this, closing the composer sheet just reveals
                     // whatever was underneath it (usually Workspaces root),
                     // regardless of whether the dispatch even succeeds.
-                    path.append(CursorRoute.workThread(prompt))
+                    path.append(CursorRoute.workThread(payload.prompt))
                 }
+                liveBridge?.composerPrefillText = nil
                 showingComposerSheet = false
             }
         )

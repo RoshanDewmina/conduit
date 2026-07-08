@@ -276,6 +276,48 @@ public actor ChatConversationRepository {
         }
     }
 
+    /// Persists the terminal run proof (`lancer.proof/v0`) as a done receipt
+    /// artifact on the turn that owns `runID`. Idempotent by stable artifact id.
+    @discardableResult
+    public func upsertReceipt(runID: String, payloadJSON: String) async throws -> String? {
+        try await db.dbWriter.write { db in
+            guard let turn = try Row.fetchOne(db, sql: "SELECT * FROM chat_turns WHERE run_id = ?", arguments: [runID]) else {
+                return nil
+            }
+            let convID: String = turn["conversation_id"]
+            let turnID: String = turn["id"]
+            let cappedPayload = String(payloadJSON.prefix(64 * 1024))
+            let payload = Self.redactionEnabled ? Redactor.shared.redact(cappedPayload).redacted : cappedPayload
+            let artifact = ChatArtifact(
+                id: "receipt:\(runID)",
+                conversationID: convID,
+                turnID: turnID,
+                runID: runID,
+                kind: .receipt,
+                title: "Run proof",
+                payloadJSON: payload,
+                status: .done
+            )
+            try db.execute(sql: """
+                INSERT INTO chat_artifacts
+                    (id, conversation_id, turn_id, run_id, kind, title, summary,
+                     payload_json, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    status = excluded.status,
+                    updated_at = CURRENT_TIMESTAMP
+            """, arguments: [
+                artifact.id, artifact.conversationID, artifact.turnID,
+                artifact.runID, artifact.kind.rawValue, artifact.title,
+                artifact.summary, payload, artifact.status.rawValue,
+                artifact.createdAt, artifact.updatedAt,
+            ])
+            try Self.syncFTS(db, conversationID: convID)
+            return convID
+        }
+    }
+
     // MARK: - Cross-device sync mirror (Task 6)
     //
     // These APIs are the ONLY way UI/sync code should write host-authoritative
@@ -629,10 +671,15 @@ public actor ChatConversationRepository {
     }
 
     private static func decodeArtifact(_ row: Row) -> ChatArtifact? {
-        ChatArtifact(
+        guard let kindRaw: String = row["kind"],
+              let kind = ChatArtifact.Kind(rawValue: kindRaw) else {
+            // Unknown artifact kinds are skipped (not thrown) for forward compat.
+            return nil
+        }
+        return ChatArtifact(
             id: row["id"] ?? "", conversationID: row["conversation_id"] ?? "",
             turnID: row["turn_id"] ?? "", runID: row["run_id"] ?? "",
-            kind: ChatArtifact.Kind(rawValue: row["kind"] ?? "tool") ?? .tool,
+            kind: kind,
             title: row["title"] ?? "", summary: row["summary"],
             payloadJSON: row["payload_json"] ?? "{}",
             status: ChatArtifact.Status(rawValue: row["status"] ?? "running") ?? .running,

@@ -31,7 +31,7 @@ public actor RecentPatch {
                     if params.approvalKind == .patch, let patch = params.patch {
                         await onPatch(patch)
                     }
-                case .pong, .agentStatus, .secretRequest, .runOutput, .runStatus, .sessionDiscovered:
+                case .pong, .agentStatus, .secretRequest, .runOutput, .runStatus, .runReceipt, .sessionDiscovered:
                     break
                 case .toolStart:
                     break

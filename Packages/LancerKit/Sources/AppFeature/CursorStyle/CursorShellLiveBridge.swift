@@ -106,14 +106,20 @@ public final class CursorShellLiveBridge {
     public var activeRunID: String?
     public var activeThreadIsWorking: Bool = false
     public var activeThreadError: String?
+    /// Artifacts for the active thread/run — receipt cards render from here.
+    public var activeThreadArtifacts: [ChatArtifact] = []
+    /// Prefill text for the next composer open (e.g. "Request another pass").
+    public var composerPrefillText: String?
+    /// Working directory used when building resume commands for receipts.
+    public var activeThreadCWD: String?
     /// OpenRouter / vendor model slug used for the next dispatch from the composer.
     public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
     public var composerModelLabel: String = ManagedModel.claudeHaiku.label
     public var connectionPhase: ConnectionPhase = .connected
     public var threadAttention: [String: CursorThreadAttention] = [:]
 
-    public var onDispatch: ((String, String, String?) async -> Void)?
-    public var onContinue: ((String, String, String?) async -> Void)?
+    public var onDispatch: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
+    public var onContinue: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     /// Loads a selected EXISTING thread's real, already-persisted content
     /// (prompt + assistant text of its most recent turn) into
     /// `activeThread*` — without this, opening an old thread always showed
@@ -126,6 +132,7 @@ public final class CursorShellLiveBridge {
     /// and never searched anything real (2026-07-07).
     public var onSearch: ((String) async -> [ChatConversationSearchResult])?
     public var onDecide: ((ApprovalID, Approval.Decision) async -> Void)?
+    public var onAcceptReceipt: ((ChatArtifact) async -> Void)?
     public var onRequestPairing: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     public var onClearInvalid: (() -> Void)?
