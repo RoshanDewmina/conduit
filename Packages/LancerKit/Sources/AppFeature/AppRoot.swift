@@ -775,6 +775,42 @@ public struct AppRoot: View {
                 }
                 showingApprovalReview = true
             }
+            // Siri Phase 2 (resurrected in I1): the one live seam
+            // `StartAgentRunIntent` needs from the app-target intents world,
+            // which can't reach `AppRoot`'s private dispatch machinery
+            // directly. `RunDispatchService` is the UI-independent handle;
+            // this closure is the only place that bridges it back to the
+            // exact same `performDispatch`/`resolveAgentTransport` path a
+            // New Chat send already uses, so a Siri-started run behaves
+            // identically to an in-app one (same governed-approval loop).
+            RunDispatchService.shared.setHandler { machineID, vendor, cwd, prompt, budgetUSD, model, _ in
+                let agentID = "relay|\(machineID)|\(vendor)"
+                let outcome = await performDispatch(
+                    agentID: agentID, cwd: cwd, prompt: prompt,
+                    budgetUSD: budgetUSD, model: model, env: env
+                )
+                switch outcome {
+                case .started(let run):
+                    ActiveRunRegistry.shared.markActive(runId: run.runId)
+                    let agentLabel: String
+                    switch vendor {
+                    case "claudeCode": agentLabel = "Claude Code"
+                    case "codex": agentLabel = "Codex"
+                    case "kimi": agentLabel = "Kimi"
+                    default: agentLabel = "OpenCode"
+                    }
+                    let summary = "Started \(agentLabel). \(run.subtitle.isEmpty ? "Check Lancer for status." : run.subtitle)"
+                    return .started(
+                        runId: run.runId,
+                        conversationId: run.conversationID,
+                        summary: summary
+                    )
+                case .blocked(let message):
+                    return message.isEmpty
+                        ? .blocked("Couldn't start the run.")
+                        : .blocked(message)
+                }
+            }
             await env.syncEngine.start()
             await env.conversationSyncEngine.start()
         }

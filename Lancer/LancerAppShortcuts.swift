@@ -82,5 +82,19 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             shortTitle: "Open Conversation",
             systemImageName: "bubble.left.and.text.bubble.right"
         )
+        // Siri Phase 2 (resurrected in I1): the one shortcut that dispatches a
+        // NEW run rather than controlling/querying an existing one. Always
+        // confirms machine/agent/workspace/prompt before anything runs
+        // (`StartAgentRunIntent.perform()`), and only targets relay-paired
+        // machines — never an approval, never auto-run.
+        AppShortcut(
+            intent: StartAgentRunIntent(),
+            phrases: [
+                "Start an agent run in \(.applicationName)",
+                "Start Claude Code in \(.applicationName)",
+            ],
+            shortTitle: "Start Agent Run",
+            systemImageName: "play.circle"
+        )
     }
 }
