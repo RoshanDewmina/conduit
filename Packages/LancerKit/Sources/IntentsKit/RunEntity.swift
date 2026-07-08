@@ -67,4 +67,28 @@ public struct RunEntityQuery: EntityQuery, EntityStringQuery {
     return entities
   }
 }
+
+/// A bare "pause/stop the run" phrase names no `RunEntity` — this is how
+/// `PauseRunIntent`/`StopRunIntent` (Lancer app target) decide what it means:
+/// act directly when exactly one run is active, otherwise let the caller drive
+/// `IntentParameter.requestDisambiguation` with the candidates here rather than
+/// silently guessing.
+@available(iOS 17.0, *)
+public enum RunResolution: Sendable {
+  case none
+  case sole(RunEntity)
+  case ambiguous([RunEntity])
+}
+
+@available(iOS 17.0, *)
+extension RunEntityQuery {
+  public func resolveActiveRun() async throws -> RunResolution {
+    let active = try await suggestedEntities()
+    switch active.count {
+    case 0: return .none
+    case 1: return .sole(active[0])
+    default: return .ambiguous(active)
+    }
+  }
+}
 #endif

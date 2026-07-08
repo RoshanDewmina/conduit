@@ -30,17 +30,26 @@ enum IntentsKitSupport {
   }
 
   static func hostName(for approval: Approval, db: AppDatabase) async throws -> String {
+    try await hostIdentity(for: approval, db: db).name
+  }
+
+  /// Resolves the approval's originating host to (display name, host UUID string).
+  /// The UUID is what `ApprovalRelay.enqueue` audits under — passing it fixes the
+  /// empty-hostID audit rows the pre-D2 deny intent wrote. `id` stays nil when
+  /// the approval's session can't be tied to a known Host row.
+  static func hostIdentity(for approval: Approval, db: AppDatabase) async throws -> (name: String, id: String?) {
+    let hosts = try await HostRepository(db).all()
     let blocks = try await BlockRepository(db).recent(for: approval.sessionID, limit: 1)
     if let hostName = blocks.first?.prompt.hostName.trimmingCharacters(in: .whitespacesAndNewlines),
        !hostName.isEmpty
     {
-      return hostName
+      let match = hosts.first(where: { $0.name == hostName })
+      return (hostName, match?.id.uuidString)
     }
-    let hosts = try await HostRepository(db).all()
     if let match = hosts.first(where: { $0.id.uuidString == approval.sessionID.uuidString }) {
-      return match.name
+      return (match.name, match.id.uuidString)
     }
-    return "unknown"
+    return ("unknown", nil)
   }
 
   static func normalizedQuery(_ string: String) -> String {

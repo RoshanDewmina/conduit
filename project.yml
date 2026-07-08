@@ -128,6 +128,8 @@ targets:
     dependencies:
       - package: LancerKit
         product: AppFeature
+      - package: LancerKit
+        product: IntentsKit
       - package: Sentry
         product: Sentry
       - sdk: AppIntents.framework

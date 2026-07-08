@@ -12,12 +12,16 @@ public struct ApprovalEntity: AppEntity, Identifiable, Sendable {
 
   public let id: String
   public let title: String
+  /// UUID string of the originating Host row, nil when unresolvable — consumers
+  /// pass it to `ApprovalRelay.enqueue` so deny audits under the real host
+  /// instead of the empty hostID the pre-D2 intent wrote.
+  public let hostID: String?
 
   public var displayRepresentation: DisplayRepresentation {
     DisplayRepresentation(title: "\(title)")
   }
 
-  init(approval: Approval, hostName: String) {
+  init(approval: Approval, hostName: String, hostID: String?) {
     id = approval.id.uuidString
     let summary = IntentsKitSupport.approvalActionSummary(approval)
     title = IntentsKitSupport.approvalDisplayTitle(
@@ -25,6 +29,7 @@ public struct ApprovalEntity: AppEntity, Identifiable, Sendable {
       risk: approval.risk,
       hostName: hostName
     )
+    self.hostID = hostID
   }
 }
 
@@ -59,9 +64,9 @@ public struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
     let pending = try await ApprovalRepository(db).pending()
     var entities: [ApprovalEntity] = []
     for approval in pending {
-      let hostName = try await IntentsKitSupport.hostName(for: approval, db: db)
-      guard include(approval, hostName) else { continue }
-      entities.append(ApprovalEntity(approval: approval, hostName: hostName))
+      let host = try await IntentsKitSupport.hostIdentity(for: approval, db: db)
+      guard include(approval, host.name) else { continue }
+      entities.append(ApprovalEntity(approval: approval, hostName: host.name, hostID: host.id))
     }
     return entities
   }
@@ -70,6 +75,25 @@ public struct ApprovalEntityQuery: EntityQuery, EntityStringQuery {
     include: @escaping (Approval) -> Bool
   ) async throws -> [ApprovalEntity] {
     try await materialize { approval, _ in include(approval) }
+  }
+}
+
+/// "Deny the latest approval" (the pre-D2 phrase, kept working for users' existing
+/// habit) names no `ApprovalEntity` — resolves to the most recent pending one.
+/// `suggestedEntities()` mirrors `ApprovalRepository.pending()`'s
+/// `ORDER BY createdAt DESC`, so the first entry here is always the newest.
+@available(iOS 17.0, *)
+public enum ApprovalResolution: Sendable {
+  case none
+  case mostRecent(ApprovalEntity)
+}
+
+@available(iOS 17.0, *)
+extension ApprovalEntityQuery {
+  public func resolveMostRecentPending() async throws -> ApprovalResolution {
+    let pending = try await suggestedEntities()
+    guard let first = pending.first else { return .none }
+    return .mostRecent(first)
   }
 }
 
