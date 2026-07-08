@@ -258,6 +258,7 @@ public struct ChatArtifact: Codable, Sendable, Identifiable {
         case test
         case preview
         case approval
+        case receipt
     }
 
     public enum Status: String, Codable, Sendable {

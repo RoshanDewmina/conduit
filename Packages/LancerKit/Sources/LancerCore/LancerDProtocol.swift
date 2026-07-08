@@ -505,6 +505,7 @@ public enum DaemonEvent: Sendable {
     case secretRequest(SecretRequestEvent)
     case runOutput(RunOutputParams)
     case runStatus(RunStatusParams)
+    case runReceipt(ProofReceipt)
     case toolStart(ToolStartParams)
     case artifact(AgentArtifactEvent)
     case sessionDiscovered(SessionDiscoveredParams)
@@ -547,6 +548,12 @@ extension DaemonEvent {
                   let p = try? JSONDecoder().decode(RunStatusParams.self, from: paramsData)
             else { return .unknown(method: method) }
             return .runStatus(p)
+        case "agent.run.receipt":
+            guard let params = dict["params"] as? [String: Any],
+                  let paramsData = try? JSONSerialization.data(withJSONObject: params),
+                  let p = try? JSONDecoder().decode(ProofReceipt.self, from: paramsData)
+            else { return .unknown(method: method) }
+            return .runReceipt(p)
         case "agent.tool.start":
             guard let params = dict["params"] as? [String: Any],
                   let paramsData = try? JSONSerialization.data(withJSONObject: params),
@@ -901,11 +908,14 @@ public struct ConversationAppendRequest: Codable, Sendable {
     public let budgetUSD: Double?
     /// When true on a new conversation, the daemon creates a managed git worktree and dispatches into it.
     public let useWorktree: Bool?
+    /// Optional run contract echoed in the terminal proof receipt.
+    public let contract: ProofReceipt.Contract?
 
     public init(
         conversationId: String? = nil, baseSeq: Int = 0, clientTurnId: String,
         agent: String? = nil, cwd: String? = nil, prompt: String, model: String? = nil,
-        budgetUSD: Double? = nil, useWorktree: Bool? = nil
+        budgetUSD: Double? = nil, useWorktree: Bool? = nil,
+        contract: ProofReceipt.Contract? = nil
     ) {
         self.conversationId = conversationId
         self.baseSeq = baseSeq
@@ -916,6 +926,7 @@ public struct ConversationAppendRequest: Codable, Sendable {
         self.model = model
         self.budgetUSD = budgetUSD
         self.useWorktree = useWorktree
+        self.contract = contract
     }
 }
 

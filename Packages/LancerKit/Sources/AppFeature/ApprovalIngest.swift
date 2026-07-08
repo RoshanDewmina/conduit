@@ -80,6 +80,30 @@ public actor ChatRunPersistenceSink {
         guard let runID = params.runId, !runID.isEmpty else { return }
         Task { try? await chatRepo.associateApproval(approvalID: params.id, runID: runID) }
     }
+
+    public func handleRunReceipt(_ receipt: ProofReceipt) {
+        guard !receipt.runId.isEmpty else { return }
+        guard let payloadData = try? JSONEncoder().encode(receipt),
+              let payloadJSON = String(data: payloadData, encoding: .utf8) else { return }
+        Task {
+            if let conversationID = try? await chatRepo.upsertReceipt(
+                runID: receipt.runId,
+                payloadJSON: Self.persistablePayload(payloadJSON)
+            ) {
+                await Self.postThreadArtifactUpdate(conversationID: conversationID)
+            }
+        }
+    }
+
+    private static func postThreadArtifactUpdate(conversationID: String) async {
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerChatArtifactPersisted"),
+                object: nil,
+                userInfo: ["conversationID": conversationID]
+            )
+        }
+    }
 }
 
 public actor ApprovalIngest {
@@ -119,6 +143,10 @@ public actor ApprovalIngest {
                 }
                 if case .artifact(let params) = event {
                     await chatPersistenceSink?.handleArtifact(params)
+                    continue
+                }
+                if case .runReceipt(let receipt) = event {
+                    await chatPersistenceSink?.handleRunReceipt(receipt)
                     continue
                 }
                 if case .approvalPending(let params) = event {

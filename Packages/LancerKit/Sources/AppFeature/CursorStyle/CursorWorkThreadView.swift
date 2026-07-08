@@ -1,6 +1,8 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import LancerCore
+import SessionFeature
 
 /// Work Thread transcript: a user prompt bubble followed by the run's real
 /// live/final output text, with a floating sticky action rail above a
@@ -20,6 +22,7 @@ public struct CursorWorkThreadView: View {
     private let onViewPR: () -> Void
     private let onOpenReview: () -> Void
     private let onOpenComposer: () -> Void
+    private let onOpenComposerPrefilled: (String) -> Void
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
@@ -35,18 +38,32 @@ public struct CursorWorkThreadView: View {
         return liveBridge.pendingApprovalID != nil
     }
 
+    private var displayedArtifacts: [ChatArtifact] {
+        if let liveBridge, !liveBridge.activeThreadArtifacts.isEmpty {
+            return liveBridge.activeThreadArtifacts
+        }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LANCER_CURSOR_MOCK_RECEIPT"] == "1" {
+            return [Self.mockReceiptArtifact]
+        }
+        #endif
+        return []
+    }
+
     public init(
         missionTitle: String = "Fix onboarding pairing flow",
         onBack: @escaping () -> Void = {},
         onViewPR: @escaping () -> Void = {},
         onOpenReview: @escaping () -> Void = {},
-        onOpenComposer: @escaping () -> Void = {}
+        onOpenComposer: @escaping () -> Void = {},
+        onOpenComposerPrefilled: @escaping (String) -> Void = { _ in }
     ) {
         self.missionTitle = missionTitle
         self.onBack = onBack
         self.onViewPR = onViewPR
         self.onOpenReview = onOpenReview
         self.onOpenComposer = onOpenComposer
+        self.onOpenComposerPrefilled = onOpenComposerPrefilled
     }
 
     public var body: some View {
@@ -57,6 +74,7 @@ public struct CursorWorkThreadView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     userPromptBubble
                     narration
+                    artifactCards
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 20)
@@ -185,9 +203,46 @@ public struct CursorWorkThreadView: View {
                     .textSelection(.enabled)
             } else if liveBridge?.activeThreadIsWorking == true {
                 logLine("Working…")
-            } else {
+            } else if displayedArtifacts.isEmpty {
                 logLine("No output recorded for this thread yet.")
             }
+        }
+    }
+
+    // MARK: Artifacts
+
+    @ViewBuilder
+    private var artifactCards: some View {
+        ForEach(displayedArtifacts) { artifact in
+            artifactView(for: artifact)
+        }
+    }
+
+    @ViewBuilder
+    private func artifactView(for artifact: ChatArtifact) -> some View {
+        switch artifact.kind {
+        case .receipt:
+            if let receipt = ReceiptCardModel.decodeReceipt(from: artifact) {
+                ReceiptCardView(
+                    artifact: artifact,
+                    receipt: receipt,
+                    workingDirectory: liveBridge?.activeThreadCWD,
+                    onAccept: {
+                        Task { await liveBridge?.onAcceptReceipt?(artifact) }
+                    },
+                    onRequestAnotherPass: { prefill in
+                        liveBridge?.composerPrefillText = prefill
+                        onOpenComposerPrefilled(prefill)
+                    },
+                    onOpenOnDesktop: { command in
+                        #if os(iOS)
+                        UIPasteboard.general.string = command
+                        #endif
+                    }
+                )
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -196,5 +251,23 @@ public struct CursorWorkThreadView: View {
             .font(CursorType.logLine)
             .foregroundColor(CursorColors.light.secondaryText)
     }
+
+    #if DEBUG
+    private static let mockReceiptArtifact: ChatArtifact = {
+        let payload = """
+        {"schema":"lancer.proof/v0","runId":"r-mock","conversationId":"c-mock","agent":"claude","status":"completed","exitCode":0,"contract":{"goal":"Add proof receipt card UI","doneCriteria":["Receipt card renders","Accept merges acceptedAt"],"validationCommands":["swift test --filter ReceiptCardModelTests"]},"commands":[{"command":"swift test --filter ReceiptCardModelTests","exitCode":0,"kind":"test"}],"filesTouched":[{"path":"Packages/LancerKit/Sources/SessionFeature/Chat/ReceiptCardView.swift","additions":120,"deletions":0}],"tests":{"ran":true,"passed":4,"failed":0},"criteria":[{"text":"Receipt card renders","status":"met","evidence":"ReceiptCardView.swift exists"}],"confidence":{"commands":"complete","files":"complete","tests":"bestEffort"},"resume":{"agent":"claude","vendorSessionId":"sess-mock-ui"}}
+        """
+        return ChatArtifact(
+            id: "receipt:r-mock",
+            conversationID: "c-mock",
+            turnID: "t-mock",
+            runID: "r-mock",
+            kind: .receipt,
+            title: "Run proof",
+            payloadJSON: payload,
+            status: .done
+        )
+    }()
+    #endif
 }
 #endif

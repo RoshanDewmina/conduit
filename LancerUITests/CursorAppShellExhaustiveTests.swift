@@ -770,4 +770,27 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 15), "Swiping composer down should dismiss back to Workspaces")
         snapshot("10h-composer-dismissed-to-workspaces", app: app)
     }
+
+    func testReceiptCardMockShell() {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_ROUTE"] = "receiptCard"
+        app.launchEnvironment["LANCER_CURSOR_MOCK_RECEIPT"] = "1"
+        app.launch()
+
+        let receiptCard = app.otherElements["receipt-card"]
+        XCTAssertTrue(receiptCard.waitForExistence(timeout: 10), "Receipt card should render in mock work thread")
+        snapshot("receipt-card-visible", app: app)
+
+        let acceptButton = app.buttons["receipt-accept"]
+        XCTAssertTrue(acceptButton.waitForExistence(timeout: 5))
+        tapWithRetry(acceptButton, label: "Accept receipt")
+
+        let anotherPass = app.buttons["receipt-another-pass"]
+        XCTAssertTrue(anotherPass.waitForExistence(timeout: 5))
+        tapWithRetry(anotherPass, label: "Request another pass")
+        XCTAssertTrue(isExpandedComposerVisible(app, timeout: 10), "Another pass should open composer")
+        snapshot("receipt-another-pass-composer", app: app)
+    }
 }

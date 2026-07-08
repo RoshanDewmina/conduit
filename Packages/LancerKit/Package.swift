@@ -163,6 +163,7 @@ let package = Package(
         .target(
             name: "SessionFeature",
             dependencies: [
+                "LancerCore",
                 "DesignSystem", "TerminalEngine", "SSHTransport",
                 "AgentKit", "PersistenceKit", "SecurityKit", "NotificationsKit",
             ],

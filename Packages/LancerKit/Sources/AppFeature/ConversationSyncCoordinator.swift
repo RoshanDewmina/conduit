@@ -96,13 +96,15 @@ public actor ConversationSyncCoordinator {
     /// without waiting for a separate fetch.
     public func startConversation(
         agent: String, cwd: String, prompt: String, model: String?, budgetUSD: Double?,
+        contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?, clientTurnID: String,
         transport: ConversationTransport
     ) async -> TurnOutcome {
         await append(
             ConversationAppendRequest(
                 conversationId: nil, baseSeq: 0, clientTurnId: clientTurnID,
-                agent: agent, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD
+                agent: agent, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                contract: contract
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )
@@ -115,13 +117,15 @@ public actor ConversationSyncCoordinator {
     public func continueConversation(
         conversationID: String, baseSeq: Int, prompt: String, clientTurnID: String,
         agent: String? = nil, model: String? = nil, budgetUSD: Double? = nil,
+        contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?,
         transport: ConversationTransport
     ) async -> TurnOutcome {
         await append(
             ConversationAppendRequest(
                 conversationId: conversationID, baseSeq: baseSeq, clientTurnId: clientTurnID,
-                agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD
+                agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                contract: contract
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )

@@ -482,6 +482,30 @@ public struct AppRoot: View {
                 )
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("lancerE2ERunReceipt"))) { note in
+            guard let receipt = note.userInfo?["receipt"] as? ProofReceipt,
+                  case .ready(let env) = environment
+            else { return }
+            Task {
+                guard let payloadData = try? JSONEncoder().encode(receipt),
+                      let payloadJSON = String(data: payloadData, encoding: .utf8),
+                      let conversationID = try? await env.chatRepo.upsertReceipt(
+                        runID: receipt.runId,
+                        payloadJSON: payloadJSON
+                      )
+                else { return }
+                NotificationCenter.default.post(
+                    name: .lancerChatArtifactPersisted,
+                    object: nil,
+                    userInfo: ["conversationID": conversationID]
+                )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
+            guard let conversationID = note.userInfo?["conversationID"] as? String,
+                  case .ready(let env) = environment else { return }
+            Task { await reloadActiveThreadArtifacts(env: env, conversationID: conversationID) }
+        }
         // Relay-delivered approvals: the E2E bridge posts lancerE2EApprovalReceived,
         // but on a relay-only setup there's no SSH ApprovalIngest to land them in the
         // inbox. Map the ApprovalData into an Approval and surface it in the active
@@ -992,7 +1016,7 @@ public struct AppRoot: View {
         cursorLiveBridge.lookupApproval = { [self] id in
             activeInboxViewModel.approvals.first(where: { $0.id == id })
         }
-        cursorLiveBridge.onDispatch = { [self] prompt, cwd, model in
+        cursorLiveBridge.onDispatch = { [self] prompt, cwd, model, contract in
             let agentID = defaultDispatchAgentID(env: env)
             cursorLiveBridge.activeThreadError = nil
             cursorLiveBridge.activeThreadIsWorking = true
@@ -1002,6 +1026,7 @@ public struct AppRoot: View {
                 prompt: prompt,
                 budgetUSD: nil,
                 model: model,
+                contract: contract,
                 env: env
             )
             switch outcome {
@@ -1036,8 +1061,18 @@ public struct AppRoot: View {
             if lastTurn.status == .failed {
                 cursorLiveBridge.activeThreadError = lastTurn.errorMessage
             }
+            await reloadActiveThreadArtifacts(env: env, conversationID: conversationID)
         }
-        cursorLiveBridge.onContinue = { [self] conversationID, prompt, model in
+        cursorLiveBridge.onAcceptReceipt = { [self] artifact in
+            guard case .ready(let env) = environment,
+                  let updatedPayload = ReceiptCardModel.mergeAcceptedAt(into: artifact.payloadJSON) else { return }
+            var updated = artifact
+            updated.payloadJSON = updatedPayload
+            updated.updatedAt = .now
+            try? await env.chatRepo.upsertArtifact(updated)
+            await reloadActiveThreadArtifacts(env: env, conversationID: artifact.conversationID)
+        }
+        cursorLiveBridge.onContinue = { [self] conversationID, prompt, model, contract in
             guard let conv = try? await env.chatRepo.conversation(id: conversationID) else {
                 cursorLiveBridge.activeThreadError = "Couldn't find that conversation to continue."
                 return
@@ -1052,6 +1087,7 @@ public struct AppRoot: View {
                 agentID: conv.agentID,
                 cwd: conv.cwd,
                 model: model ?? conv.model,
+                contract: contract,
                 env: env
             )
             switch outcome {
@@ -1080,6 +1116,23 @@ public struct AppRoot: View {
         }
         cursorLiveBridge.onClearInvalid = { [self] in
             relayFleetStore.removeAllInvalid()
+        }
+    }
+
+    @MainActor
+    private func reloadActiveThreadArtifacts(env: AppEnvironment, conversationID: String) async {
+        guard cursorLiveBridge.selectedThreadID == conversationID else { return }
+        let turns = (try? await env.chatRepo.turns(conversationID: conversationID)) ?? []
+        if let runID = cursorLiveBridge.activeRunID {
+            cursorLiveBridge.activeThreadArtifacts = (try? await env.chatRepo.artifacts(runID: runID)) ?? []
+        } else if let lastTurn = turns.last {
+            cursorLiveBridge.activeRunID = lastTurn.runID
+            cursorLiveBridge.activeThreadArtifacts = (try? await env.chatRepo.artifacts(turnID: lastTurn.id)) ?? []
+        } else {
+            cursorLiveBridge.activeThreadArtifacts = (try? await env.chatRepo.artifacts(conversationID: conversationID)) ?? []
+        }
+        if let conv = try? await env.chatRepo.conversation(id: conversationID) {
+            cursorLiveBridge.activeThreadCWD = conv.cwd
         }
     }
 
@@ -1393,7 +1446,10 @@ public struct AppRoot: View {
         ))
     }
 
-    private func performDispatch(agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil, env: AppEnvironment) async -> ChatDispatchOutcome {
+    private func performDispatch(
+        agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil,
+        contract: ProofReceipt.Contract? = nil, env: AppEnvironment
+    ) async -> ChatDispatchOutcome {
         let vendor = agentID.split(separator: "|").last.map(String.init) ?? agentID
         switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
         case .failure(let message):
@@ -1401,6 +1457,7 @@ public struct AppRoot: View {
         case .success(let resolved):
             let outcome = await env.conversationSyncCoordinator.startConversation(
                 agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                contract: contract,
                 hostName: resolved.hostName, hostID: resolved.hostID,
                 clientTurnID: Self.newClientTurnID(), transport: resolved.transport
             )
@@ -1437,7 +1494,8 @@ public struct AppRoot: View {
 
     /// Appends a follow-up turn to an existing ledger-backed conversation.
     private func performContinueConversation(
-        conversationID: String, baseSeq: Int, prompt: String, agentID: String, cwd: String, model: String?, env: AppEnvironment
+        conversationID: String, baseSeq: Int, prompt: String, agentID: String, cwd: String, model: String?,
+        contract: ProofReceipt.Contract? = nil, env: AppEnvironment
     ) async -> ChatDispatchOutcome {
         switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
         case .failure(let message):
@@ -1445,7 +1503,8 @@ public struct AppRoot: View {
         case .success(let resolved):
             let outcome = await env.conversationSyncCoordinator.continueConversation(
                 conversationID: conversationID, baseSeq: baseSeq, prompt: prompt,
-                clientTurnID: Self.newClientTurnID(), model: model,
+                clientTurnID: Self.newClientTurnID(), model: model, budgetUSD: nil,
+                contract: contract,
                 hostName: resolved.hostName, hostID: resolved.hostID, transport: resolved.transport
             )
             return chatDispatchOutcome(from: outcome, channel: resolved.channel, title: resolved.title)
