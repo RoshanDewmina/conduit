@@ -14,6 +14,7 @@ public struct ReceiptCardView: View {
 
     @State private var filesExpanded = false
     @State private var commandsExpanded = false
+    @State private var showingProofReel = false
     @Environment(\.lancerTokens) private var t
 
     private var accepted: Bool { ReceiptCardModel.isAccepted(payloadJSON: artifact.payloadJSON) }
@@ -91,6 +92,12 @@ public struct ReceiptCardView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("receipt-card")
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        .sheet(isPresented: $showingProofReel) {
+            ProofReelView(receipt: receipt)
+        }
+        #if DEBUG
+        .onAppear { applyDebugProofReelSeamIfNeeded() }
+        #endif
     }
 
     // MARK: - Header
@@ -327,10 +334,28 @@ public struct ReceiptCardView: View {
             ) {
                 if let resumeCommand { onOpenOnDesktop(resumeCommand) }
             }
+            actionButton(
+                title: "Proof Reel",
+                primary: false,
+                disabled: ProofReelModel.stops(from: receipt).isEmpty,
+                identifier: "receipt-proof-reel"
+            ) {
+                showingProofReel = true
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
+
+    #if DEBUG
+    private func applyDebugProofReelSeamIfNeeded() {
+        guard ProcessInfo.processInfo.environment["LANCER_PROOF_REEL_AUTO_PRESENT"] == "1" else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            showingProofReel = true
+        }
+    }
+    #endif
 
     // MARK: - Building blocks
 
