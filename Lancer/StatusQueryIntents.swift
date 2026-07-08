@@ -2,6 +2,7 @@ import AppIntents
 import Foundation
 import IntentsKit
 import LancerCore
+import NotificationsKit
 import PersistenceKit
 import SessionFeature
 
@@ -116,6 +117,10 @@ public struct SearchLancerIntent: AppIntent {
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let matches = try await ConversationEntityQuery().entities(matching: query)
+        // `openAppWhenRun` brings Lancer to the foreground; without this the
+        // app just opened to whatever screen was already showing rather than
+        // the search the spoken result is describing (SiriNavigation, I2).
+        SiriNavigationDispatch.post(SiriNavigationPayload(action: .search, searchQuery: query))
         if matches.isEmpty {
             return .result(dialog: "No conversations match '\(query)'.")
         }
@@ -145,6 +150,10 @@ public struct OpenConversationIntent: AppIntent {
     }
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        .result(dialog: "Opening '\(conversation.title)' from \(conversation.hostName).")
+        // Same gap as `SearchLancerIntent` — `openAppWhenRun` opens Lancer but
+        // previously left navigation entirely up to whatever screen was
+        // already showing (SiriNavigation, I2).
+        SiriNavigationDispatch.post(SiriNavigationPayload(action: .openConversation, conversationId: conversation.id))
+        return .result(dialog: "Opening '\(conversation.title)' from \(conversation.hostName).")
     }
 }

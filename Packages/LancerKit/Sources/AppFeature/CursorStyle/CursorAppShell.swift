@@ -2,6 +2,8 @@
 import SwiftUI
 import DesignSystem
 import AgentKit
+import NotificationsKit
+import PersistenceKit
 
 /// Every reachable push destination in the Cursor-style demo shell. There is
 /// exactly one navigation stack — no tab bar — matching Cursor's own app,
@@ -50,6 +52,10 @@ public struct CursorAppShell: View {
     @State private var showingModelSheet = false
     @State private var composerPlaceholder = "Plan, ask, build..."
     @State private var detailWorkspace: CursorShellLiveBridge.WorkspaceRow? = nil
+    /// Set by `handleSiriNavigation(.search)` right before opening the search
+    /// overlay so it can prefill/run the same query Siri already spoke a
+    /// result count for, instead of opening a blank search (I2).
+    @State private var pendingSearchQuery: String? = nil
 
     private var composerRepoName: String {
         guard let liveBridge else { return "lancer-ios" }
@@ -216,9 +222,14 @@ public struct CursorAppShell: View {
         }
         .sheet(isPresented: $showingSearchOverlay) {
             CursorSearchOverlay(
-                onClose: { showingSearchOverlay = false },
+                initialQuery: pendingSearchQuery,
+                onClose: {
+                    showingSearchOverlay = false
+                    pendingSearchQuery = nil
+                },
                 onSelectResult: { conversationID, title in
                     showingSearchOverlay = false
+                    pendingSearchQuery = nil
                     if let bridge = liveBridge {
                         bridge.selectedThreadID = conversationID
                         bridge.activeThreadPrompt = ""
@@ -230,6 +241,24 @@ public struct CursorAppShell: View {
                     path.append(CursorRoute.workThread(title))
                 }
             )
+        }
+        // Siri navigation (I2): warm-app case. `SearchLancerIntent`/
+        // `OpenConversationIntent` post this after `openAppWhenRun` brings
+        // Lancer to the foreground, so the shell actually lands on the
+        // destination the spoken result described instead of wherever it
+        // already was.
+        .onReceive(NotificationCenter.default.publisher(for: .lancerSiriNavigation)) { note in
+            guard let payload = SiriNavigationPayload(userInfo: note.userInfo ?? [:]) else { return }
+            handleSiriNavigation(payload)
+        }
+        // Cold-launch case: the notification above has no live subscriber
+        // until this view exists, so a Siri navigation that triggered a cold
+        // launch is buffered (mirrors `OpenApprovalBuffer`'s MAJOR-6 fix) and
+        // drained here once the shell is actually up.
+        .task {
+            for payload in SiriNavigationBuffer.shared.drain() {
+                handleSiriNavigation(payload)
+            }
         }
         .sheet(isPresented: $showingRepoPicker) {
             CursorRepoPickerSheet(
@@ -327,6 +356,39 @@ public struct CursorAppShell: View {
     private func popIfPossible() {
         guard !path.isEmpty else { return }
         path.removeLast()
+    }
+
+    // MARK: - Siri navigation (I2)
+
+    private func handleSiriNavigation(_ payload: SiriNavigationPayload) {
+        switch payload.action {
+        case .search:
+            pendingSearchQuery = payload.searchQuery
+            showingSearchOverlay = true
+        case .openConversation:
+            guard let conversationID = payload.conversationId else { return }
+            Task { await openConversationFromSiri(id: conversationID) }
+        }
+    }
+
+    /// Same bridge-state + push sequence `CursorSearchOverlay`'s
+    /// `onSelectResult` already uses, driven from a conversation ID alone
+    /// (Siri only hands over the ID, not a title) — looked up directly via
+    /// `ChatConversationRepository` rather than adding a new bridge closure
+    /// for a single call site.
+    private func openConversationFromSiri(id: String) async {
+        guard let db = try? AppDatabase.openShared(),
+              let conversation = try? await ChatConversationRepository(db).conversation(id: id)
+        else { return }
+        if let bridge = liveBridge {
+            bridge.selectedThreadID = id
+            bridge.activeThreadPrompt = ""
+            bridge.activeThreadResponse = ""
+            bridge.activeThreadError = nil
+            bridge.activeThreadIsWorking = false
+            await bridge.onOpenThread?(id)
+        }
+        path.append(CursorRoute.workThread(conversation.title))
     }
 
     private func openComposer(placeholder: String, prefill: String? = nil) {
