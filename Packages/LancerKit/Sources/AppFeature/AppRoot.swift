@@ -251,6 +251,8 @@ public struct AppRoot: View {
         #if DEBUG
         if usesMockCursorShell {
             CursorAppShell()
+                .cursorTheme(appearance: appearance)
+                .preferredColorScheme(preferredScheme)
         } else {
             mainBody.environment(\.lancerTokens, tokens)
         }
@@ -1044,6 +1046,7 @@ public struct AppRoot: View {
             }
         }
         cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
+        cursorLiveBridge.onOpenReview = { showingApprovalReview = true }
         cursorLiveBridge.onPaired = { [self] client, record in
             addRelayMachine(client: client, record: record, env: env)
         }

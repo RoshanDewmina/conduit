@@ -10,6 +10,7 @@ import DesignSystem
 /// a separate pass.
 public struct CursorOnboardingView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var step: Int = 0
     @State private var showInvalidCodePreview: Bool = false
     private let onComplete: () -> Void
@@ -25,8 +26,7 @@ public struct CursorOnboardingView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CursorColors.light.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
+        .background(CursorColors.resolve(cursorScheme).background.ignoresSafeArea())
     }
 
     @ViewBuilder

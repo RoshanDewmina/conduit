@@ -100,6 +100,26 @@ public struct CursorWorkspaceThreadListView: View {
         )
     }
 
+    private func pendingApprovalBanner(_ liveBridge: CursorShellLiveBridge) -> some View {
+        CursorApprovalBanner(
+            count: 1,
+            onApprove: {
+                guard let approvalID = liveBridge.pendingApprovalID else { return }
+                Task { await liveBridge.onDecide?(approvalID, .approved) }
+            },
+            onReject: {
+                guard let approvalID = liveBridge.pendingApprovalID else { return }
+                Task { await liveBridge.onDecide?(approvalID, .rejected) }
+            },
+            onOpenReview: {
+                liveBridge.onOpenReview?()
+            }
+        )
+        .accessibilityIdentifier("thread-list-approval-banner")
+        .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
+        .padding(.top, 4)
+    }
+
     private func rowModel(
         from row: CursorShellLiveBridge.ThreadRow,
         isActive: Bool
@@ -373,6 +393,10 @@ public struct CursorWorkspaceThreadListView: View {
                     CursorIconButton(systemImageName: "line.3.horizontal", action: onOpenMenu)
                 ]
             )
+
+            if let liveBridge, liveBridge.pendingApprovalID != nil {
+                pendingApprovalBanner(liveBridge)
+            }
 
             Text(workspaceName)
                 .font(CursorType.pageTitle)

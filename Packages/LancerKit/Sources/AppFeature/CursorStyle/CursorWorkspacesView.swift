@@ -43,6 +43,26 @@ public struct CursorWorkspacesView: View {
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
+    private func pendingApprovalBanner(_ liveBridge: CursorShellLiveBridge) -> some View {
+        CursorApprovalBanner(
+            count: 1,
+            onApprove: {
+                guard let approvalID = liveBridge.pendingApprovalID else { return }
+                Task { await liveBridge.onDecide?(approvalID, .approved) }
+            },
+            onReject: {
+                guard let approvalID = liveBridge.pendingApprovalID else { return }
+                Task { await liveBridge.onDecide?(approvalID, .rejected) }
+            },
+            onOpenReview: {
+                liveBridge.onOpenReview?()
+            }
+        )
+        .accessibilityIdentifier("workspaces-approval-banner")
+        .padding(.horizontal, CursorMetrics.actionRailHorizontalPadding)
+        .padding(.top, 4)
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             CursorHeaderBar(
@@ -61,6 +81,10 @@ public struct CursorWorkspacesView: View {
                     phase: liveBridge.connectionPhase,
                     onPair: liveBridge.onRequestPairing
                 )
+            }
+
+            if let liveBridge, liveBridge.pendingApprovalID != nil {
+                pendingApprovalBanner(liveBridge)
             }
 
             Text("Workspaces")

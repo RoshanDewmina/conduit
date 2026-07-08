@@ -165,6 +165,10 @@ public final class CursorShellLiveBridge {
     public var onDecide: ((ApprovalID, Approval.Decision) async -> Void)?
     public var onAcceptReceipt: ((ChatArtifact) async -> Void)?
     public var onRequestPairing: (() -> Void)?
+    /// Opens the app-level Review sheet (`AppRoot.showingApprovalReview`) so a
+    /// dismissed approval can be recovered from Workspaces / thread list — not
+    /// only from the Work Thread banner (2026-07-08 frontend audit).
+    public var onOpenReview: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     public var onClearInvalid: (() -> Void)?
     public var relayMachineCount: Int = 0
