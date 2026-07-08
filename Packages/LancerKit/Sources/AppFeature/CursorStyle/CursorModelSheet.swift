@@ -78,7 +78,6 @@ public struct CursorModelSheet: View {
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
-        .environment(\.cursorScheme, .light)
     }
 
     private func row(for model: CursorModelOption) -> some View {

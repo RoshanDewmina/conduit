@@ -24,6 +24,7 @@ public struct CursorComposerSheet: View {
     @State private var contractGoal: String = ""
     @State private var doneCriteria: [String] = [""]
     @State private var validationCommands: [String] = [""]
+    @State private var showingContextSheet: Bool = false
 
     /// Pass `threadID` to enable draft persistence: the draft is loaded on appear,
     /// saved on every text change, and cleared when the prompt is sent.
@@ -132,8 +133,12 @@ public struct CursorComposerSheet: View {
                         CursorIconButton(
                             systemImageName: "plus",
                             diameter: CursorMetrics.composerToolbarButtonDiameter,
-                            action: onAttach
+                            action: {
+                                onAttach()
+                                showingContextSheet = true
+                            }
                         )
+                        .accessibilityIdentifier("composer.plus")
 
                         modelPickerButton(colors: colors)
 
@@ -191,6 +196,9 @@ public struct CursorComposerSheet: View {
         .onChange(of: contractGoal) { _, _ in persistDrafts(prompt: text) }
         .onChange(of: doneCriteria) { _, _ in persistDrafts(prompt: text) }
         .onChange(of: validationCommands) { _, _ in persistDrafts(prompt: text) }
+        .sheet(isPresented: $showingContextSheet) {
+            CursorContextSheet(onClose: { showingContextSheet = false })
+        }
     }
 
     @ViewBuilder
