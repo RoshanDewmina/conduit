@@ -105,13 +105,21 @@ func rpcRoundTrip(t *testing.T, conn net.Conn, id float64, method string, params
 	if err := writeFrame(conn, data); err != nil {
 		t.Fatalf("write %s: %v", method, err)
 	}
-	respData, err := readFrame(conn)
-	if err != nil {
-		t.Fatalf("read %s reply: %v", method, err)
+	// The control connection also carries pushed event frames (agent.tool.start,
+	// agent.run.status — the fake launcher emits them the instant dispatch
+	// launches), so the first frame after a request is NOT necessarily its
+	// reply. Skip frames until the one carrying our request ID.
+	for {
+		respData, err := readFrame(conn)
+		if err != nil {
+			t.Fatalf("read %s reply: %v", method, err)
+		}
+		var resp rpcMessage
+		if err := json.Unmarshal(respData, &resp); err != nil {
+			t.Fatalf("unmarshal %s reply: %v", method, err)
+		}
+		if respID, ok := resp.ID.(float64); ok && respID == id {
+			return resp
+		}
 	}
-	var resp rpcMessage
-	if err := json.Unmarshal(respData, &resp); err != nil {
-		t.Fatalf("unmarshal %s reply: %v", method, err)
-	}
-	return resp
 }
