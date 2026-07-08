@@ -22,6 +22,12 @@ type e2eRelayClient struct {
 	connected      bool
 	paired         bool
 	messageHandler func(msgType string, payload []byte)
+	// pairedHandler fires after every peer_joined (initial pairing AND every
+	// re-pair after either side reconnects). The router uses it to re-send
+	// still-pending approvals: a phone that reconnected — or a relay that
+	// swapped/orphaned a connection — has no other way to learn about an
+	// escalation sent while delivery was broken.
+	pairedHandler func()
 	stopCh         chan struct{}
 	stopOnce       sync.Once
 	wg             sync.WaitGroup
@@ -234,6 +240,10 @@ func (c *e2eRelayClient) messageLoop() {
 			c.recv.reset()
 
 			log.Printf("e2e: paired with phone (code: %s)", c.pairingCode)
+
+			if c.pairedHandler != nil {
+				c.pairedHandler()
+			}
 
 		case "message":
 			c.mu.Lock()

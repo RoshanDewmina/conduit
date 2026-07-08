@@ -17,7 +17,13 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 RELAY_BASE="${LANCER_RELAY_URL:-wss://conduit-push-y4wpy6zeva-ts.a.run.app}"
 BACKEND="${LANCER_PUSH_BACKEND_URL:-https://conduit-push-y4wpy6zeva-ts.a.run.app}"
-CODE="${LANCER_RELAY_CODE:-314159}"
+# Fresh random code per run. Reusing a fixed code (314159) against the shared
+# relay let leaked daemons from PREVIOUS runs — each with its own keypair —
+# fight the current run's daemon for the same pair slot, which is how the
+# 2026-07-07 silent approval-delivery losses happened. A per-run code also
+# coexists with the relay's key pinning, which hard-rejects a second key on a
+# reused code.
+CODE="${LANCER_RELAY_CODE:-$(printf '%06d' $(((RANDOM * 32768 + RANDOM) % 1000000)))}"
 ISO="/tmp/lancer-relay-e2e/home"
 LOG="/tmp/lancer-relay-e2e/daemon.log"
 HOOK_LOG="/tmp/lancer-relay-e2e/hook.log"
@@ -30,6 +36,14 @@ LANCERD="$REPO/daemon/lancerd/lancerd"
 
 cleanup() { kill "${DAEMON_PID:-}" "${HOOK_PID:-}" 2>/dev/null; }
 trap cleanup EXIT
+
+# Kill daemons/hooks leaked by interrupted previous runs BEFORE wiping state —
+# a stale daemon keeps reconnecting to the relay and steals the pair slot from
+# this run's daemon (exact-path match so the user's resident
+# ~/.lancer/bin/lancerd is never touched).
+pkill -f "^$LANCERD daemon" 2>/dev/null
+pkill -f "^$LANCERD agent-hook" 2>/dev/null
+sleep 1
 
 rm -rf /tmp/lancer-relay-e2e; mkdir -p "$ISO/.lancer"
 rm -f "$MARKER"
@@ -59,8 +73,17 @@ sleep 2
 HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" "$LANCERD" relay-attach "$CODE" >/dev/null 2>&1
 echo "  daemon pid $DAEMON_PID, code $CODE, relay $RELAY_BASE"
 
-# Wait for the daemon's own relay socket to connect before we hand the code to the app.
-for i in $(seq 1 10); do grep -q "connected to relay as daemon" "$LOG" && break; sleep 1; done
+# Wait for the daemon's own relay socket to connect before we hand the code to
+# the app — and FAIL if it doesn't (this loop used to fall through silently,
+# letting a run without any relay-connected daemon proceed to a guaranteed,
+# misleading downstream failure).
+DAEMON_UP=0
+for i in $(seq 1 15); do grep -q "connected to relay as daemon" "$LOG" && { DAEMON_UP=1; break; }; sleep 1; done
+if [ "$DAEMON_UP" != 1 ]; then
+  echo ">>> FAIL: daemon never connected to the relay within 15s — see $LOG"
+  tail -10 "$LOG"
+  exit 1
+fi
 
 echo "=== launch XCUITest (builds+installs+runs; app pairs via LANCER_RELAY_CODE) ==="
 # TEST_RUNNER_* env is forwarded to the XCUITest runner (prefix stripped), where

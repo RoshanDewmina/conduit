@@ -509,3 +509,100 @@ func TestRateLimiterSweepStaleBoundsMemory(t *testing.T) {
 		t.Fatal("sweepStale removed the fresh in-window entry, want it kept")
 	}
 }
+
+// Regression (2026-07-07 silent approval-delivery loss): when a reconnect
+// replaces a role's connection (newest-wins), the REPLACED connection's
+// read-loop cleanup runs afterwards and used to nil the slot unconditionally —
+// clobbering the successor's registration. The successor then believed it was
+// connected while the relay saw nobody, and every message for that role
+// buffered invisibly instead of being forwarded.
+func TestRelayReplacedConnCleanupDoesNotOrphanSuccessor(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "clbr01"
+	daemon1 := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon1.Close()
+	if got := recvJSON(t, daemon1); got["type"] != "waiting" {
+		t.Fatalf("daemon1 first message = %v, want waiting", got["type"])
+	}
+
+	phone := dialRelay(t, srv, "phone", code, "phone-key")
+	defer phone.Close()
+	if got := recvJSON(t, phone); got["type"] != "peer_joined" {
+		t.Fatalf("phone first message = %v, want peer_joined", got["type"])
+	}
+	if got := recvJSON(t, daemon1); got["type"] != "peer_joined" {
+		t.Fatalf("daemon1 second message = %v, want peer_joined", got["type"])
+	}
+
+	// Same-key daemon reconnect: the relay closes daemon1 and registers daemon2.
+	daemon2 := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon2.Close()
+	if got := recvJSON(t, daemon2); got["type"] != "peer_joined" {
+		t.Fatalf("daemon2 first message = %v, want peer_joined", got["type"])
+	}
+	// The phone is re-announced to as well.
+	if got := recvJSON(t, phone); got["type"] != "peer_joined" {
+		t.Fatalf("phone re-announce = %v, want peer_joined", got["type"])
+	}
+
+	// Confirm the server-side close of daemon1 propagated (its read now fails),
+	// then give daemon1's server handler a moment to run its disconnect cleanup
+	// — the exact code path that used to clobber daemon2's slot.
+	_ = daemon1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var raw string
+	if err := websocket.Message.Receive(daemon1, &raw); err == nil {
+		t.Fatalf("daemon1 still readable after replacement, got frame %q", raw)
+	}
+	time.Sleep(300 * time.Millisecond)
+
+	hub.mu.RLock()
+	pair := hub.pairs[code]
+	hub.mu.RUnlock()
+	pair.mu.Lock()
+	daemonSlot := pair.DaemonConn
+	pair.mu.Unlock()
+	if daemonSlot == nil {
+		t.Fatal("pair.DaemonConn is nil — the replaced connection's cleanup clobbered the successor's registration")
+	}
+
+	// And the functional consequence: a phone→daemon message must reach daemon2
+	// live, not vanish into the buffer.
+	cipher := "DDDDdecisionFrame====opaque"
+	sendRelay(t, phone, relayMessage{Type: "message", Target: "daemon", Payload: cipher})
+	fwd := recvJSON(t, daemon2)
+	if fwd["type"] != "message" || fwd["payload"] != cipher {
+		t.Fatalf("daemon2 forwarded frame = %+v, want live delivery of %q", fwd, cipher)
+	}
+}
+
+// The flush path must route each buffered message to ITS target — the buffer
+// can hold traffic for both directions — in the same {type, from, payload}
+// envelope a live forward uses.
+func TestRelayBufferFlushRoutesAndWrapsLikeLiveForward(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "flsh01"
+	daemon := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon.Close()
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message = %v, want waiting", got["type"])
+	}
+
+	buffered := "EEEEapprovalFrame====opaque"
+	sendRelay(t, daemon, relayMessage{Type: "message", Target: "phone", Payload: buffered})
+
+	phone := dialRelay(t, srv, "phone", code, "phone-key")
+	defer phone.Close()
+	if got := recvJSON(t, phone); got["type"] != "peer_joined" {
+		t.Fatalf("phone first message = %v, want peer_joined", got["type"])
+	}
+	replay := recvJSON(t, phone)
+	if replay["type"] != "message" || replay["from"] != "daemon" || replay["payload"] != buffered {
+		t.Fatalf("flushed frame = %+v, want type=message from=daemon payload=%q", replay, buffered)
+	}
+}
