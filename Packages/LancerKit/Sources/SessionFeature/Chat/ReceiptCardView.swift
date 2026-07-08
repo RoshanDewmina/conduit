@@ -84,6 +84,11 @@ public struct ReceiptCardView: View {
             RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
                 .strokeBorder(t.termBorder, lineWidth: 0.75)
         )
+        // .contain keeps the card itself in the accessibility tree as a
+        // container element; without it SwiftUI smears the identifier onto
+        // every child StaticText and otherElements["receipt-card"] matches
+        // nothing (found via the failing exhaustive test's hierarchy dump).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("receipt-card")
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
