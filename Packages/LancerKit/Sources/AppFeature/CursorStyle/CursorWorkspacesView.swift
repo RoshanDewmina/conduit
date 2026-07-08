@@ -9,6 +9,15 @@ public struct CursorWorkspacesView: View {
     @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
+    /// Local-only presentation state for the "Add Repo" sheet (row 6 of the
+    /// 2026-07-08 Cursor screen map). Owned entirely by this view rather than
+    /// threaded through `CursorAppShell` — the "Add Repo" row previously had
+    /// no `Button` wrapper at all (a documented no-op, asserted by
+    /// `CursorAppShellExhaustiveTests.testWorkspacesRoot_HeaderAndRows`), so
+    /// making it open a locally-owned sheet is additive and can't regress
+    /// that or any other existing wiring.
+    @State private var showingAddRepoSheet = false
+
     private let onSelectWorkspace: (String) -> Void
     private let onShowWorkspaceDetail: (String) -> Void
     private let onOpenComposer: () -> Void
@@ -71,13 +80,7 @@ public struct CursorWorkspacesView: View {
                         }
                     } else {
                         seedWorkspaceRows
-
-                        CursorListRow(
-                            iconSystemName: "folder.badge.plus",
-                            title: "Add Repo",
-                            trailingCount: nil,
-                            showChevron: false
-                        )
+                        addRepoRow
                     }
                 }
             }
@@ -85,6 +88,9 @@ public struct CursorWorkspacesView: View {
         .background(colors.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer(onTap: onOpenComposer)
+        }
+        .sheet(isPresented: $showingAddRepoSheet) {
+            CursorAddRepoSheet(onClose: { showingAddRepoSheet = false })
         }
     }
 
@@ -111,6 +117,23 @@ public struct CursorWorkspacesView: View {
                 onShowWorkspaceDetail(workspace.name)
             })
         }
+
+        addRepoRow
+    }
+
+    /// The trailing "Add Repo" row (folder+ icon, no chevron — matches
+    /// IMG_2408) that presents the Add Repo sheet (screen-map row 6).
+    private var addRepoRow: some View {
+        Button(action: { showingAddRepoSheet = true }) {
+            CursorListRow(
+                iconSystemName: "folder.badge.plus",
+                title: "Add Repo",
+                trailingCount: nil,
+                showChevron: false
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("add-repo-row")
     }
 
     private var liveEmptyState: some View {
@@ -243,6 +266,115 @@ public struct CursorWorkspacesView: View {
         .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
             onShowWorkspaceDetail("lancer-mac")
         })
+    }
+}
+
+// MARK: - Add Repo sheet (screen-map row 6, IMG_2414 / dark equivalent)
+
+/// Cursor-style "Add Repo" sheet: X close, centered "Add Repo" title, a
+/// rounded "Repo…" search field, a "Workspaces" section header, and a list
+/// of org/repo rows (muted org segment + bold repo-name segment, no chevron,
+/// no branch affordance — unlike `CursorRepoPickerSheet`'s Active row). This
+/// is a demo/mock affordance only (no daemon/GitHub wiring exists yet for
+/// actually adding a repo) — selecting a row simply dismisses, matching the
+/// no-op pattern already used by the Profile drawer's other placeholder rows.
+private struct CursorAddRepoSheet: View {
+    @Environment(\.cursorScheme) private var cursorScheme
+    @State private var searchText: String = ""
+
+    let onClose: () -> Void
+
+    /// Representative repo list — same account/repos already used by
+    /// `CursorRepoPickerSheet`'s mock "More" section, extended to look like
+    /// the long scrollable list in IMG_2414.
+    private static let allRepos: [CursorRepoPickerOption] = [
+        .init(id: "add-repo-1501-assignment-5", orgName: "RoshanDewmina", repoName: "1501-assignment-5"),
+        .init(id: "add-repo-3004-final-project", orgName: "RoshanDewmina", repoName: "3004-Final-Project"),
+        .init(id: "add-repo-3005-assignment-3", orgName: "RoshanDewmina", repoName: "3005-Assignment-3"),
+        .init(id: "add-repo-5g-advanced-test-suite", orgName: "RoshanDewmina", repoName: "5g-advanced-test-suite"),
+        .init(id: "add-repo-adpack-ai", orgName: "RoshanDewmina", repoName: "adpack-ai"),
+        .init(id: "add-repo-adventure-works-report", orgName: "RoshanDewmina", repoName: "Adventure-Works-Report"),
+        .init(id: "add-repo-astro-bot", orgName: "RoshanDewmina", repoName: "astro-bot"),
+        .init(id: "add-repo-career-builder", orgName: "RoshanDewmina", repoName: "career-builder")
+    ]
+
+    private var filteredRepos: [CursorRepoPickerOption] {
+        guard !searchText.isEmpty else { return Self.allRepos }
+        return Self.allRepos.filter { $0.repoName.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        CursorBottomSheetContainer(
+            title: "Add Repo",
+            leadingButton: (systemImageName: "xmark", action: onClose)
+        ) {
+            VStack(spacing: 0) {
+                addRepoSearchField
+                    .padding(.bottom, CursorMetrics.sectionHeaderTopPadding)
+
+                CursorSectionHeader("Workspaces")
+                ForEach(filteredRepos) { option in
+                    addRepoRow(option)
+                }
+            }
+            .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
+        }
+    }
+
+    /// A `CursorSearchField`-alike with the "Repo…" placeholder the reference
+    /// uses (IMG_2414) — built locally rather than adding a placeholder
+    /// parameter to the shared `CursorSearchField` component, which sits
+    /// outside this task's write-set.
+    private var addRepoSearchField: some View {
+        let colors = CursorColors.resolve(cursorScheme)
+        return HStack(spacing: CursorMetrics.searchFieldIconSpacing) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(colors.secondaryText)
+            TextField("Repo…", text: $searchText)
+                .font(CursorType.rowTitle)
+                .foregroundColor(colors.primaryText)
+                .tint(colors.primaryText)
+        }
+        .padding(.horizontal, CursorMetrics.searchFieldHorizontalPadding)
+        .frame(height: CursorMetrics.searchFieldHeight)
+        .background(Capsule().fill(colors.composerBackground))
+        .padding(.horizontal, CursorMetrics.searchFieldMargin)
+    }
+
+    private func addRepoRow(_ option: CursorRepoPickerOption) -> some View {
+        let colors = CursorColors.resolve(cursorScheme)
+        return Button(action: onClose) {
+            VStack(spacing: 0) {
+                HStack(spacing: CursorMetrics.rowSpacing) {
+                    Image(systemName: "folder")
+                        .font(.system(size: CursorMetrics.rowIconSize - 6, weight: .regular))
+                        .foregroundColor(colors.secondaryText)
+                        .frame(width: CursorMetrics.rowIconSize, height: CursorMetrics.rowIconSize)
+
+                    HStack(spacing: 0) {
+                        Text("\(option.orgName)/")
+                            .font(CursorType.rowTitle)
+                            .foregroundColor(colors.secondaryText)
+                        Text(option.repoName)
+                            .font(CursorType.rowTitle.weight(.semibold))
+                            .foregroundColor(colors.primaryText)
+                    }
+                    .lineLimit(1)
+
+                    Spacer()
+                }
+                .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+                .padding(.vertical, CursorMetrics.rowVerticalPadding)
+                Rectangle()
+                    .fill(colors.hairline)
+                    .frame(height: CursorMetrics.rowHairlineHeight)
+                    .padding(.leading, CursorMetrics.rowHairlineLeadingInsetWithIcon)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("add-repo-sheet-row")
     }
 }
 #endif
