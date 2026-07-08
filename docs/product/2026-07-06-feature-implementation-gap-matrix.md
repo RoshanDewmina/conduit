@@ -1,7 +1,7 @@
 # Lancer Feature Implementation Gap Matrix
 
 Compiled: 2026-07-06  
-Updated: 2026-07-06 — Cursor shell landed on master; live bridge wiring has begun.  
+Updated: 2026-07-08 — Layers 0–4 merged on `master` (`23563bb5`); D0.2 / 5c physical-device gate re-test in progress (owner).  
 Canonical source: [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
 Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
@@ -9,12 +9,12 @@ Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
 | Layer | Status |
 |-------|--------|
-| **Real backend (master)** | Governed loop shipped: pair → dispatch → approve → audit. Chat, relay, policy all wired. No biometric gate — removed entirely 2026-07-07 (permanent). |
-| **Cursor UI shell (master)** | Merged under `AppFeature/CursorStyle`; seeded prototype remains under `LANCER_CURSOR_SHELL=1`. |
-| **Live Cursor shell** | `LANCER_CURSOR_SHELL_LIVE=1` routes through `AppRoot` for pairing, conversation-backed workspace/thread hydration, dispatch, continue, approval decisions, and real Settings handoff. |
-| **Gap** | Tier 0 live-shell proof still needs real daemon/relay E2E: pair → dispatch → approval → follow-up. |
+| **Real backend (master)** | Governed loop shipped: pair → dispatch → approve → audit. Receipt pipeline (`lancer.proof/v0`), question/Ladder events, gated ship actions, observed-session relay mirror on tree. No biometric gate — removed entirely 2026-07-07 (permanent). |
+| **Cursor UI shell (master)** | Merged under `AppFeature/CursorStyle`; A3 design tokens (#57) + A2 dead-code cleanup (#55) landed; R1–R4 surface rebuild open (#63–#66). |
+| **Live Cursor shell** | `LANCER_CURSOR_SHELL_LIVE=1` routes through `AppRoot` for pairing, conversation-backed workspace/thread hydration, dispatch, continue, approval decisions, receipts, question cards, and real Settings handoff. |
+| **Gap** | **D0.2 / 5c physical-device gate** — owner re-test in progress (2026-07-08); prior run FAIL on 5c ([`test-runs/2026-07-08-tier0-device-proof-results.md`](../test-runs/2026-07-08-tier0-device-proof-results.md)); fix #52 merged. Simulator + relay E2E PASS. |
 
-**Tier 0 exit criteria:** send prompt from phone → receive approval → approve → follow-up works through Cursor shell with real `lancerd`.
+**Tier 0 exit criteria:** send prompt from phone → receive approval → approve (including lock-screen 5c) → follow-up works through Cursor shell with real `lancerd` on physical device.
 
 ---
 
@@ -50,13 +50,15 @@ Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
 | Feature | Master | Cursor shell |
 |---------|--------|--------------|
-| Away Digest home (needs-you-first) | Partial — `LancerHomeView` attention cards | `CursorHomeView` exists but **not wired** |
-| Away Launch Composer + launch contract | Missing | Generic composer only |
-| Proof Suite / Proof Reel | Missing (design stub only) | Mock artifact cards in work thread |
+| Away Digest home (needs-you-first) | **Shipped** — attention ordering (#34 Lane C) | Wired in live shell |
+| Away Launch Composer + launch contract | Missing | Generic composer only — **still frozen** |
+| Proof Suite / Proof Reel | **Shipped** — Proof Reel H1 (#51) over run receipts | ReceiptCardView + replay scrubber |
 | Mobile QA Annotation | Missing | Not present |
-| Question Cards + Ladder | Missing | Not present |
-| Git/PR/Merge ship actions | Missing | PR detail mock only |
-| Flight Recorder + Work Search | Missing | Search overlay mock only |
+| Question Cards + Ladder | **Shipped** — E1 events (#49) + E2 QuestionCardView (#44) + E3 voice-answer (#45) | Wired in live shell |
+| Git/PR/Merge ship actions | **Shipped** — gated branch/commit/PR (G, #50) | Daemon RPC; UI partial |
+| Flight Recorder + Work Search | Partial — CoreSpotlight I2 (#41) | Search overlay still mock-heavy |
+| Siri fast-follow (I1–I3, D2/D3) | **Shipped** — #38, #41, #43, #46, #45 | iOS 27 APIs gated `swift(>=6.4)` |
+| Observed sessions + Return-to-Desk | **Shipped** — J1 (#54), J2 (#58), J3 (#59) | "On your Mac" + continuity packet |
 
 ---
 
@@ -85,33 +87,33 @@ Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026
 |-----------|--------|--------------|
 | LIVE_LOOP_RUNBOOK SSH subset | Proven sim + device C2 | Needs live-shell rerun |
 | On-device QA (legacy chat-device checklist, purged 2026-07-06) §1–6 | Shipped in legacy sidebar; Cursor live shell partial | Needs live-shell rerun |
-| On-device QA §7 (APNs lock-screen) | Proven 2026-06-23 (`ARCHITECTURE.md` §0.1) | Needs live-shell rerun |
+| On-device QA §7 (APNs lock-screen) | Fix #52 merged; **re-test in progress** (owner, 2026-07-08) | Prior D0.2 FAIL — result pending |
 
 ---
 
 ## Recommended sequencing
 
-1. Keep Tier 2/Away/Proof expansion frozen until Tier 0 live shell is proven.
-2. Complete live-shell E2E on simulator: pair → dispatch → approve → follow-up.
-3. Fix or formally gate the remaining P0 beta blocker: atomic Emergency Stop (biometric gate P0 is moot — removed entirely 2026-07-07).
-4. Physical device: APNs lock-screen approve through the live shell before external beta.
+1. **Owner:** complete D0.2 / 5c physical-device re-test (post-#52) — gates Tier 0 exit.
+2. Merge A3 R1–R4 surface rebuild (#63–#66) after Tier 0 gate closes.
+3. Remaining frozen: Away Launch Composer, Watch embed, Flight Recorder depth.
+4. P1 billing reconciliation (StoreKit vs Stripe) before external beta.
 
 ---
 
 ## Consolidated status notes (folded from `2026-07-06-lancer-consolidated-status.md`, deleted 2026-07-08)
 
 **Core product decision:** V1 wedge is phone steers/reviews/approves/continues — not a phone IDE.
-Tier 0 exit: pair → dispatch → approval → follow-up against real `lancerd`. Freeze Tier 2 until proven.
+Tier 0 exit: pair → dispatch → approval (incl. 5c lock-screen) → follow-up on physical device. Most Tier 2 lanes merged Jul 7–8; Away Launch Composer + Watch still frozen.
 
 **Worktree warning:** do **not** wholesale-merge `.claude/worktrees/amazing-mayer-246fef` — deletion-heavy
 diff; cherry-pick verified slices only. See
 [`docs/design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md`](../design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md).
 
-**Stale doc reminders:** iOS deployment target is **26.0** (`project.yml`); Cursor shell is merged on
-`master`; tab bar / Control / Activity roots are vestigial; legacy sidebar / Command Home is **deleted**.
+**Stale doc reminders:** iOS deployment target is **26.0** (`project.yml`); Cursor shell + Layers 0–4 on
+`master` (`23563bb5`); tab bar / Control / Activity roots are vestigial; legacy sidebar / Command Home is **deleted**.
 
 **Recommended next actions:**
-1. Owner manual proof on physical iPhone with live shell + `lancerd` ([`LIVE_LOOP_RUNBOOK.md`](../LIVE_LOOP_RUNBOOK.md)).
-2. Device-tolerant live-shell UI test; relay E2E for Cursor-shell approval surface.
-3. Cherry-pick from `codex/tier-0-live-cursor-shell` — do not wholesale-merge `amazing-mayer`.
-4. Hold Tier 2 until B10 in publish checklist is closed.
+1. Owner: complete D0.2 / 5c re-test on physical iPhone ([`LIVE_LOOP_RUNBOOK.md`](../LIVE_LOOP_RUNBOOK.md)) — **in progress**.
+2. Review + merge A3 R1–R4 PRs (#63–#66).
+3. Do not wholesale-merge `amazing-mayer`.
+4. P1 billing reconciliation before external beta.
