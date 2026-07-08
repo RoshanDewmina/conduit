@@ -406,7 +406,7 @@ public struct CursorAppShell: View {
                     // regardless of whether the dispatch even succeeds.
                     path.append(CursorRoute.workThread(payload.prompt))
                 }
-                liveBridge?.composerPrefillText = nil
+                liveBridge.composerPrefillText = nil
                 showingComposerSheet = false
             }
         )
