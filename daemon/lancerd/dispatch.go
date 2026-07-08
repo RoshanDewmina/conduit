@@ -217,6 +217,55 @@ func buildConversationArgv(p conversationLaunchParams) (argv []string, resumeMod
 	}
 }
 
+type runContract struct {
+	Goal               string   `json:"goal"`
+	DoneCriteria       []string `json:"doneCriteria,omitempty"`
+	ValidationCommands []string `json:"validationCommands,omitempty"`
+}
+
+const (
+	contractMaxDoneCriteria       = 8
+	contractMaxDoneCriterionChars = 200
+	contractMaxValidationCommands = 4
+)
+
+func contractTooLarge(c *runContract) bool {
+	if c == nil {
+		return false
+	}
+	if len(c.DoneCriteria) > contractMaxDoneCriteria {
+		return true
+	}
+	for _, crit := range c.DoneCriteria {
+		if len(crit) > contractMaxDoneCriterionChars {
+			return true
+		}
+	}
+	return len(c.ValidationCommands) > contractMaxValidationCommands
+}
+
+func cloneRunContract(c *runContract) *runContract {
+	if c == nil {
+		return nil
+	}
+	return &runContract{
+		Goal:               c.Goal,
+		DoneCriteria:       append([]string(nil), c.DoneCriteria...),
+		ValidationCommands: append([]string(nil), c.ValidationCommands...),
+	}
+}
+
+func runContractToReceipt(c *runContract) *receiptContract {
+	if c == nil {
+		return nil
+	}
+	return &receiptContract{
+		Goal:               c.Goal,
+		DoneCriteria:       append([]string(nil), c.DoneCriteria...),
+		ValidationCommands: append([]string(nil), c.ValidationCommands...),
+	}
+}
+
 type dispatchParams struct {
 	Agent       string  `json:"agent"`
 	CWD         string  `json:"cwd"`
@@ -224,6 +273,7 @@ type dispatchParams struct {
 	BudgetUSD   float64 `json:"budgetUSD"`
 	Model       string  `json:"model"`
 	UseWorktree bool    `json:"useWorktree,omitempty"`
+	Contract    *runContract `json:"contract,omitempty"`
 
 	// worktreePath/worktreeRepoRoot are set by runDispatch (never over the wire —
 	// unexported) so dispatch() can record them on the run BEFORE launching the
@@ -810,6 +860,7 @@ type dispatchRun struct {
 	Model        string // model of the original launch; reused for continues
 	Status       string // running | paused | cancelled | budget-exceeded
 	BudgetUSD    float64
+	Contract     *runContract
 	SessionID    string // captured vendor session/thread id; bound to the conversation ledger via bindVendorSession for exact resume
 	WorktreePath string // non-empty when launched in a daemon-managed per-run worktree
 	RepoRoot     string // repo root for worktree cleanup
@@ -901,6 +952,11 @@ type dispatcher struct {
 	bindVendorSession func(runID, vendorSessionID string) error
 	// onRunTerminal is invoked when a launched run emits exited/failed status.
 	onRunTerminal runTerminalCallback
+	// receiptAccum/receipts track per-run evidence for lancer.proof/v0 (A1).
+	receiptMu    sync.Mutex
+	receiptAccum map[string]*receiptAccumulator
+	receipts     map[string]*runReceipt
+	receiptGit   gitRunner
 }
 
 func newDispatcher() *dispatcher {
@@ -940,6 +996,7 @@ func (d *dispatcher) emitAudit(e AuditEntry) {
 // the process launches.
 func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 	return func(method string, params any) {
+		d.observeReceiptEmit(runID, method, params)
 		if method == "agent.run.vendorSession" {
 			m, _ := params.(map[string]any)
 			vendorSessionID, _ := m["vendorSessionId"].(string)
@@ -956,7 +1013,7 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 			}
 			return
 		}
-		if method == "agent.run.status" && d.onRunTerminal != nil {
+		if method == "agent.run.status" {
 			if m, ok := params.(map[string]any); ok {
 				status, _ := m["status"].(string)
 				exitCode := -1
@@ -967,13 +1024,26 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 					exitCode = int(c)
 				}
 				if status == "exited" || status == "failed" {
-					d.onRunTerminal(runID, status, exitCode)
+					d.finalizeReceipt(runID, status, exitCode)
+					if d.onRunTerminal != nil {
+						d.onRunTerminal(runID, status, exitCode)
+					}
 				}
 			}
 		}
 		if d.emit != nil {
 			d.emit(method, params)
 		}
+	}
+}
+
+func (d *dispatcher) receiptStartFromDispatch(p dispatchParams) receiptStartParams {
+	return receiptStartParams{
+		agent:        p.Agent,
+		model:        p.Model,
+		cwd:          p.CWD,
+		worktreePath: p.worktreePath,
+		contract:     runContractToReceipt(p.Contract),
 	}
 }
 
@@ -1303,6 +1373,10 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
+	if contractTooLarge(p.Contract) {
+		return dispatchResult{Status: "error", Message: "contract too large"}
+	}
+	p.Contract = cloneRunContract(p.Contract)
 
 	// Budget gate (hard stop). BudgetUSD <= 0 means "no cap".
 	d.mu.Lock()
@@ -1350,8 +1424,9 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		audit(AuditEntry{Action: "dispatch-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
 	}
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
 	d.mu.Unlock()
+	d.startReceiptAccum(id, d.receiptStartFromDispatch(p))
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		d.mu.Lock()
@@ -1509,6 +1584,7 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 	}
 	d.runs[id] = &dispatchRun{ID: id, Agent: agent, Prompt: prompt, CWD: cwd, Model: model, Status: "running", BudgetUSD: budget}
 	d.mu.Unlock()
+	d.startReceiptAccum(id, receiptStartParams{agent: agent, model: model, cwd: cwd})
 	handle, err := d.launch(argv, cwd, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		d.mu.Lock()
@@ -1605,6 +1681,7 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	}
 	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD}
 	d.mu.Unlock()
+	d.startReceiptAccum(id, receiptStartParams{agent: p.Vendor, model: p.Model, cwd: p.CWD})
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		d.mu.Lock()
@@ -1684,6 +1761,9 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 	}
 	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
 	d.mu.Unlock()
+	d.startReceiptAccum(runID, d.receiptStartFromDispatch(dispatchParams{
+		Agent: p.Agent, CWD: p.CWD, Model: p.Model, worktreePath: p.worktreePath, worktreeRepoRoot: p.worktreeRepoRoot,
+	}))
 	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
 	if err != nil {
 		d.mu.Lock()
