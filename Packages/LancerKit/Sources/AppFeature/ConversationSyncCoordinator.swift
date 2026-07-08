@@ -183,7 +183,7 @@ public actor ConversationSyncCoordinator {
 
         let response: ConversationAppendResponse
         do {
-            response = try await transport.append(request)
+            response = try await Self.appendWithRetry(request, transport: transport)
         } catch {
             if let id = conversationIDForBanner { publish(.hostOffline, for: id) }
             return .blocked(Self.transportErrorMessage(error))
@@ -351,6 +351,30 @@ public actor ConversationSyncCoordinator {
 
     private static func transportErrorMessage(_ error: Error) -> String {
         "Couldn't reach the host: \(error.localizedDescription)"
+    }
+
+    /// A single failed `append` used to be treated as "host offline" outright,
+    /// which turned a momentary relay hiccup (reconnect in progress, a dropped
+    /// frame) into a hard "couldn't continue, open from a connected host"
+    /// dead end — even while the machine was actively streaming the previous
+    /// turn's output (found live 2026-07-03: a follow-up on a "WORKING" run
+    /// failed this way). Retry a couple of times with a short backoff before
+    /// concluding the host is actually unreachable.
+    private static func appendWithRetry(
+        _ request: ConversationAppendRequest, transport: ConversationTransport, attempts: Int = 3
+    ) async throws -> ConversationAppendResponse {
+        var lastError: Error?
+        for attempt in 0..<attempts {
+            do {
+                return try await transport.append(request)
+            } catch {
+                lastError = error
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                }
+            }
+        }
+        throw lastError ?? CancellationError()
     }
 
     private static func titleFromPrompt(_ prompt: String) -> String {
