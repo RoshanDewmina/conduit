@@ -1,12 +1,12 @@
 # Phone-native terminal, no separate SSH hop — competitor research (2026-07-08)
 
-**Status:** partial. Only the web-research lane completed before the orchestrating
-session was interrupted. The three planned codebase deep-dives — **R1 Orca**,
-**R2 Happier**, **R3 Omnara/lfg/agent-native** — were dispatched as background
-`cursor-agent` (Composer 2.5) processes but died with a process restart before
-returning output; their output files are empty. The repos are still cloned at
-`research-repos/{orca,happier,omnara,lfg,agent-native}` pending a decision on
-whether to re-run them (see open question at the end).
+**Status:** complete. Web lane + all three codebase deep-dives (R1 Orca, R2
+Happier, R3 Omnara/lfg/agent-native) finished; R1–R3 required a re-run after the
+orchestrating session's first attempt died mid-run with a process restart (empty
+output files) — re-dispatched 2026-07-08 evening and all three returned full,
+code-grounded reports. Full per-repo reports (with file:line citations) are archived in
+`docs/product/2026-07-08-terminal-research-appendix/`; key findings folded
+in below. `research-repos/` clones deleted after this pass.
 
 ## Ask
 
@@ -174,12 +174,133 @@ with its own auth and reconnection logic.
    surface and failure mode. PTY should be "new message types on the channel
    that already works," not "a new channel."
 
-## Open gap
+## Codebase deep-dives (R1–R3, completed 2026-07-08 evening re-run)
 
-R1 (Orca — has terminal perf benchmarks worth learning from), R2 (Happier —
-closest architectural cousin), and R3 (Omnara/lfg/agent-native codebase
-detail) never completed. `research-repos/` still has the clones. Re-running
-these against the design recommendations above (particularly to validate #2
-binary framing and #4 scrollback-replay sizing against real implementations)
-is worth doing before locking the wire format — flagged for the next
-orchestration pass rather than blocking J2/A3, which don't depend on it.
+Full reports with file:line evidence: `docs/product/2026-07-08-terminal-research-appendix/`.
+
+### R1 — Orca
+
+Three-tier stack: a long-lived **daemon** (or an SSH-hosted relay for remote)
+owns `node-pty` and never lets the PTY live in the renderer/client. Mobile does
+**not** host PTY — it subscribes to the desktop's existing PTY over a
+**WebSocket** (port 6768) with an **E2EE handshake**, then either a legacy JSON
+`terminal.subscribe` or (required for mobile) **`terminal.multiplex`**: one
+socket, many terminals via `streamId`, with **binary frames** (16-byte header:
+kind/version/opcode/streamId/64-bit seq). This is the closest real-world match
+to Lancer's target design — confirms the recommendation doc already made
+independently (RPC-verb PTY control, binary framing, per-stream seq numbers).
+
+Reconnect has three tiers: warm reattach (daemon returns a snapshot +
+continues streaming), SSH-relay grace period (last **100 KB** replay buffer,
+not cleared after replay so late reconnects still get the tail), and cold
+restore from on-disk history (`meta.json`/`checkpoint.json`/`output.log`,
+checkpoints every ~5s, **5 MB** log cap, explicit **seq-based gap detection**
+that discards the log and falls back to a checkpoint on a gap). Backpressure
+is real and multi-layered — renderer ACKs (`pty:ackData`, 512 KB per-PTY / 8 MB
+total high-water), a `pendingData` 2 MB cap with a `droppedBacklog` flag,
+active-pane reservation so background PTYs don't starve typing — but **the PTY
+producer itself is never throttled**; overflow is recovered from a main-owned
+headless emulator, not by blocking the process. One explicit gap even Orca has:
+the SSH relay's own `pty.ackData` handler is a documented no-op
+(`/* flow control ack -- not yet enforced */`) — client-side ACK tracking
+exists, server-side enforcement doesn't.
+
+Output batching is 8ms (5ms on the mobile runtime path) with a 100ms
+interactive-fast-path bypass for small (<1024 char) responses right after a
+keystroke — validates recommendation #3 (16–50ms chunking) as roughly right,
+maybe even generous. No compression on the terminal wire at all; bounded
+purely by batching/byte budgets.
+
+Worth porting beyond terminal: **workspace session sync with revision
+conflict** (`workspace.get`/`patch`/`presence`), a **shell-ready barrier**
+(queue startup commands until a shell marker appears — useful for Lancer's
+agent-session bootstrap), and **degraded-mode fallback** when the daemon is
+alive but PTY spawn is broken.
+
+### R2 — Happy Coder (Happier)
+
+Architecturally close in spirit but **not** the terminal-multiplex pattern —
+Happy's default, primary path is **structured message sync** (Socket.IO, JSON
+only, no binary framing at all), not an interactive shell over the relay.
+Reconnect/catch-up is **HTTP-based, not socket replay**: a lightweight
+`/v2/changes?after=<cursor>` change-log tells the client what changed, then a
+targeted `GET /v1/sessions/:id/messages?afterSeq=N` fills the transcript gap;
+the socket itself replays nothing on reconnect. This is a genuinely different
+and arguably simpler pattern than Orca's stream-replay model — two-tier
+"what changed, then fetch the specific gap" — worth weighing against
+recommendation #5 (sequence-numbered frame gap detection) as an alternative
+for **Lancer's non-PTY control-plane traffic** (approvals, conversation sync),
+even if PTY itself stays closer to Orca's model.
+
+Happy *does* have an optional embedded-PTY feature (`terminal.embeddedPty`,
+feature-flagged off by default server-side) — but it's poll-based
+(`daemon.terminal.stream.read` with a cursor, not a push stream) with a
+daemon-local ring buffer only (nothing durable on the relay), and gap
+detection returns an explicit `{t:"gap", droppedBefore:N}` rather than
+silently resyncing. Confirms Lancer would be doing something more ambitious
+than Happy's PTY story if it goes with a live push-streamed multiplexed
+terminal per recommendation #1.
+
+Pairing is two flows: initial CLI↔phone is QR/URL + poll-until-authorized
+(`/v1/auth/request` → `/v1/auth/response`, encrypted account-secret transfer
+to the new device's public key); adding a second phone is a similar
+cryptographic account-secret handoff via a short-lived `pairId`. Both are
+"transfer account secret to new device," not "pair this session" — a
+different pairing philosophy than Lancer's per-device relay pairing, not
+directly portable but useful contrast.
+
+Worth porting: the **pending-message queue** pattern (phone can send while
+the agent/daemon is busy; drained when it's free) and the **three-scope
+socket model** (user-scoped / session-scoped / machine-scoped connections
+routing updates differently) as a cleaner way to think about Lancer's own
+relay connection types.
+
+### R3 — Omnara / lfg / agent-native
+
+**Omnara** (this clone is explicitly deprecated; a new closed product exists
+at omnara.com and isn't in this tree) actually runs **two parallel paths**,
+contradicting the "SSE only, no real terminal" assumption made in the earlier
+web-research pass: a default JSONL-tail + SSE structured-chat path, **and** a
+separate `omnara terminal` subcommand that forks a PTY and streams **raw
+terminal bytes** over a framed WebSocket protocol
+(`FRAME_TYPE_OUTPUT/INPUT/RESIZE/METADATA`) to `relay.omnara.com`, fanned out
+to web (xterm.js) and mobile (WebView) viewers. The "session migrates to a
+cloud sandbox when the laptop drops" claim from the web-research pass
+**could not be verified in this deprecated codebase** — no migration/handoff
+code found; it may only exist in the new, uncloned product.
+
+**lfg** is the standout find of this pass and highly relevant: a self-hosted
+Bun control plane, explicitly designed to avoid a separate SSH connection by
+running everything over **Tailscale** instead (same trust-boundary goal as
+Lancer's E2E relay, different transport choice). It streams a **real PTY**
+over WebSocket (`/api/term`, Bun FFI `openpty`) to a browser using
+**ghostty-web** — Ghostty's actual VT engine compiled to WASM — explicitly
+chosen over xterm.js for better Claude-Code-TUI fidelity. It also tails agent
+JSONL transcripts in parallel (same technique as Omnara) with per-line UUIDs
+enabling **dedup on SSE reconnect**, and has a **payload-less push +
+client-fetch** notification pattern (service worker wakes, fetches latest
+state, no encrypted push payload needed) worth comparing against Lancer's
+current APNs approach.
+
+**agent-native** is not a terminal-transport comp at all — its harness-agent
+docs explicitly state "terminal methods are not advertised," i.e. it assumes
+local-shell ownership by design. Its `dispatch` package's approval-queue /
+audit-log pattern is a governance-UX reference, not a terminal one.
+
+### Design-recommendation deltas after R1–R3
+
+The original 8 recommendations (RPC-verb PTY control, binary framing, output
+batching, server-owned-state reconnect, seq-numbered gap detection, explicit
+backpressure, idempotent resize, reuse existing E2E channel) hold up well —
+Orca independently validates most of them almost exactly. Two refinements
+worth folding into the eventual Lancer terminal design doc:
+
+1. **Don't let ACK/backpressure become a promise you don't keep** — Orca's own
+   SSH-relay ACK handler is a known no-op; if Lancer ships recommendation #6
+   (pause/resume), the daemon side must actually enforce it, not just accept
+   the message.
+2. **Consider a lighter, HTTP-cursor-based catch-up for non-PTY sync traffic**
+   (approvals, conversation ledger) even while PTY itself uses push-streamed
+   binary frames — Happy's two-tier change-log-then-fetch model is simpler
+   than a fully bidirectional streaming reconnect story and may fit Lancer's
+   already-durable conversation ledger better than Orca's replay-buffer model.
