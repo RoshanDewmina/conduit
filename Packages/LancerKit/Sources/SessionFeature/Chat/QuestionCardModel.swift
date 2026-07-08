@@ -262,4 +262,48 @@ public enum QuestionCardModel {
         let trimmed = item.freeText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "(no answer)" : trimmed
     }
+
+    // MARK: - Fuzzy option matching (voice-answer Siri intent)
+
+    /// Best-effort case-insensitive match of free-form text (e.g. a Siri
+    /// voice transcript) against an item's option labels — used when the
+    /// caller has no UI to let the user pick a specific option
+    /// (`AnswerQuestionResolver`). Exact label equality (case-insensitive)
+    /// wins outright; otherwise matching is done on whole words (not raw
+    /// substrings) — the longest option label whose word sequence appears
+    /// contiguously in the input's words (or vice versa) wins. Word-boundary
+    /// matching avoids two failure modes a raw substring check has: a short
+    /// label like "A" spuriously matching everything, and a label like "No"
+    /// spuriously matching an unrelated word that merely contains those
+    /// letters (e.g. "not sure" contains "no" as a raw substring but does
+    /// not mean "No"). Returns nil when nothing resembles the input closely
+    /// enough, letting the caller fall back to treating it as free text.
+    public static func fuzzyMatchOption(_ text: String, in item: ItemState) -> String? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty, !item.options.isEmpty else { return nil }
+        if let exact = item.options.first(where: { $0.label.lowercased() == normalized }) {
+            return exact.label
+        }
+        let spokenWords = words(in: normalized)
+        guard !spokenWords.isEmpty else { return nil }
+        let candidates = item.options.filter { option in
+            let labelWords = words(in: option.label.lowercased())
+            guard !labelWords.isEmpty else { return false }
+            return containsSubsequence(labelWords, in: spokenWords)
+                || containsSubsequence(spokenWords, in: labelWords)
+        }
+        return candidates.max(by: { $0.label.count < $1.label.count })?.label
+    }
+
+    private static func words(in text: String) -> [String] {
+        text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+    }
+
+    private static func containsSubsequence(_ needle: [String], in haystack: [String]) -> Bool {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return false }
+        for start in 0...(haystack.count - needle.count) {
+            if Array(haystack[start..<(start + needle.count)]) == needle { return true }
+        }
+        return false
+    }
 }

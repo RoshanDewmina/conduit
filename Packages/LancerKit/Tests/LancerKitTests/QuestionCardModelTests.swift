@@ -397,4 +397,67 @@ private func makeArtifact(event: QuestionPendingParams, answer: QuestionAnswerPa
         )
         #expect(QuestionCardModel.answeredSummary(for: item) == "My answer")
     }
+
+    // MARK: fuzzyMatchOption
+
+    @Test("fuzzyMatchOption matches exact label case-insensitively")
+    func fuzzyMatchExact() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which approach?",
+            options: [.init(label: "Refactor"), .init(label: "Rewrite")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("refactor", in: item) == "Refactor")
+        #expect(QuestionCardModel.fuzzyMatchOption("REWRITE", in: item) == "Rewrite")
+    }
+
+    @Test("fuzzyMatchOption matches when spoken text contains the label")
+    func fuzzyMatchSubstringSpokenContainsLabel() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which approach?",
+            options: [.init(label: "Refactor"), .init(label: "Rewrite")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("let's go with refactor please", in: item) == "Refactor")
+    }
+
+    @Test("fuzzyMatchOption matches when label contains the spoken text")
+    func fuzzyMatchSubstringLabelContainsSpoken() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which file?",
+            options: [.init(label: "main.swift"), .init(label: "AppRoot.swift")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("approot", in: item) == "AppRoot.swift")
+    }
+
+    @Test("fuzzyMatchOption prefers the longest matching label")
+    func fuzzyMatchPrefersLongest() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which?",
+            options: [.init(label: "A"), .init(label: "Alpha")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("alpha", in: item) == "Alpha")
+    }
+
+    @Test("fuzzyMatchOption returns nil when nothing resembles the input")
+    func fuzzyMatchNoMatch() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which approach?",
+            options: [.init(label: "Refactor"), .init(label: "Rewrite")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("something entirely unrelated", in: item) == nil)
+    }
+
+    @Test("fuzzyMatchOption returns nil for blank input")
+    func fuzzyMatchBlankInput() {
+        let item = QuestionCardModel.ItemState(
+            question: "Which approach?",
+            options: [.init(label: "Refactor")]
+        )
+        #expect(QuestionCardModel.fuzzyMatchOption("   ", in: item) == nil)
+    }
+
+    @Test("fuzzyMatchOption returns nil when the item has no options")
+    func fuzzyMatchNoOptions() {
+        let item = QuestionCardModel.ItemState(question: "What do you need?", options: [])
+        #expect(QuestionCardModel.fuzzyMatchOption("Refactor", in: item) == nil)
+    }
 }

@@ -96,5 +96,20 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             shortTitle: "Start Agent Run",
             systemImageName: "play.circle"
         )
+        // AnswerQuestionIntent requires iOS 18 (see its own doc comment for
+        // why) — "if statements in an AppShortcutsBuilder can only be used
+        // with #available clauses" per the AppIntents SDK, which is exactly
+        // this case.
+        if #available(iOS 18.0, *) {
+            AppShortcut(
+                intent: AnswerQuestionIntent(),
+                phrases: [
+                    "Answer the question in \(.applicationName)",
+                    "Answer the agent's question in \(.applicationName)",
+                ],
+                shortTitle: "Answer Question",
+                systemImageName: "questionmark.bubble"
+            )
+        }
     }
 }
