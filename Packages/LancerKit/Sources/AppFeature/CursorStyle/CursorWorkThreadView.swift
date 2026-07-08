@@ -24,7 +24,14 @@ public struct CursorWorkThreadView: View {
     private let onOpenComposer: () -> Void
     private let onOpenComposerPrefilled: (String) -> Void
 
+    @State private var returnPacketPresentation: ReturnPacketPresentation?
+
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
+
+    private struct ReturnPacketPresentation: Identifiable {
+        let receipt: ProofReceipt
+        var id: String { receipt.runId }
+    }
 
     /// Mock shell always shows the banner for UI tests; live shell only when a
     /// pending approval is wired through `CursorShellLiveBridge`.
@@ -98,6 +105,16 @@ public struct CursorWorkThreadView: View {
         // correct regardless of what its host `NavigationStack` does.
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
+        .sheet(item: $returnPacketPresentation) { presentation in
+            CursorReturnPacketView(
+                receipt: presentation.receipt,
+                workingDirectory: liveBridge?.activeThreadCWD,
+                onDismiss: { returnPacketPresentation = nil }
+            )
+        }
+        #if DEBUG
+        .onAppear { applyDebugReturnPacketSeamIfNeeded() }
+        #endif
     }
 
     // MARK: Needs-approval banner
@@ -223,23 +240,26 @@ public struct CursorWorkThreadView: View {
         switch artifact.kind {
         case .receipt:
             if let receipt = ReceiptCardModel.decodeReceipt(from: artifact) {
-                ReceiptCardView(
-                    artifact: artifact,
-                    receipt: receipt,
-                    workingDirectory: liveBridge?.activeThreadCWD,
-                    onAccept: {
-                        Task { await liveBridge?.onAcceptReceipt?(artifact) }
-                    },
-                    onRequestAnotherPass: { prefill in
-                        liveBridge?.composerPrefillText = prefill
-                        onOpenComposerPrefilled(prefill)
-                    },
-                    onOpenOnDesktop: { command in
-                        #if os(iOS)
-                        UIPasteboard.general.string = command
-                        #endif
-                    }
-                )
+                VStack(alignment: .leading, spacing: 10) {
+                    ReceiptCardView(
+                        artifact: artifact,
+                        receipt: receipt,
+                        workingDirectory: liveBridge?.activeThreadCWD,
+                        onAccept: {
+                            Task { await liveBridge?.onAcceptReceipt?(artifact) }
+                        },
+                        onRequestAnotherPass: { prefill in
+                            liveBridge?.composerPrefillText = prefill
+                            onOpenComposerPrefilled(prefill)
+                        },
+                        onOpenOnDesktop: { command in
+                            #if os(iOS)
+                            UIPasteboard.general.string = command
+                            #endif
+                        }
+                    )
+                    returnPacketEntryButton(for: receipt)
+                }
             }
         case .question:
             QuestionCardView(artifact: artifact) { answer in
@@ -256,10 +276,56 @@ public struct CursorWorkThreadView: View {
             .foregroundColor(CursorColors.light.secondaryText)
     }
 
+    private func returnPacketEntryButton(for receipt: ProofReceipt) -> some View {
+        Button {
+            returnPacketPresentation = ReturnPacketPresentation(receipt: receipt)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 14, weight: .medium))
+                Text("Return to desk")
+                    .font(CursorType.bodyText)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(CursorColors.light.primaryText)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(CursorColors.light.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(CursorColors.light.hairline, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("return-packet-open")
+        .disabled(ReturnPacketModel.continuationCommand(
+            receipt: receipt,
+            workingDirectory: liveBridge?.activeThreadCWD
+        ) == nil)
+        .opacity(
+            ReturnPacketModel.continuationCommand(
+                receipt: receipt,
+                workingDirectory: liveBridge?.activeThreadCWD
+            ) == nil ? 0.55 : 1
+        )
+    }
+
     #if DEBUG
+    private func applyDebugReturnPacketSeamIfNeeded() {
+        guard ProcessInfo.processInfo.environment["LANCER_RETURN_PACKET_AUTO_PRESENT"] == "1",
+              let receipt = ReceiptCardModel.decodeReceipt(from: Self.mockReceiptArtifact) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            returnPacketPresentation = ReturnPacketPresentation(receipt: receipt)
+        }
+    }
+
     private static let mockReceiptArtifact: ChatArtifact = {
         let payload = """
-        {"schema":"lancer.proof/v0","runId":"r-mock","conversationId":"c-mock","agent":"claude","status":"completed","exitCode":0,"contract":{"goal":"Add proof receipt card UI","doneCriteria":["Receipt card renders","Accept merges acceptedAt"],"validationCommands":["swift test --filter ReceiptCardModelTests"]},"commands":[{"command":"swift test --filter ReceiptCardModelTests","exitCode":0,"kind":"test"}],"filesTouched":[{"path":"Packages/LancerKit/Sources/SessionFeature/Chat/ReceiptCardView.swift","additions":120,"deletions":0}],"tests":{"ran":true,"passed":4,"failed":0},"criteria":[{"text":"Receipt card renders","status":"met","evidence":"ReceiptCardView.swift exists"}],"confidence":{"commands":"complete","files":"complete","tests":"bestEffort"},"resume":{"agent":"claude","vendorSessionId":"sess-mock-ui"}}
+        {"schema":"lancer.proof/v0","runId":"r-mock","conversationId":"c-mock","agent":"claude","status":"completed","exitCode":0,"contract":{"goal":"Add proof receipt card UI","doneCriteria":["Receipt card renders","Accept merges acceptedAt"],"validationCommands":["swift test --filter ReceiptCardModelTests"]},"commands":[{"command":"swift test --filter ReceiptCardModelTests","exitCode":0,"kind":"test"}],"filesTouched":[{"path":"Packages/LancerKit/Sources/SessionFeature/Chat/ReceiptCardView.swift","additions":120,"deletions":0}],"tests":{"ran":true,"passed":4,"failed":0},"criteria":[{"text":"Receipt card renders","status":"met","evidence":"ReceiptCardView.swift exists"},{"text":"UI tests pass","status":"unmet","evidence":"Return packet UITest pending"}],"git":{"startRef":"main","endRef":"spec/j3-return-to-desk-packet","dirtyAtStart":true,"worktreePath":"/Users/me/proj/.worktrees/j3-return-to-desk"},"confidence":{"commands":"complete","files":"complete","tests":"bestEffort"},"resume":{"agent":"claude","vendorSessionId":"sess-mock-ui"}}
         """
         return ChatArtifact(
             id: "receipt:r-mock",
