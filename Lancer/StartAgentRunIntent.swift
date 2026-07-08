@@ -149,5 +149,11 @@ public struct StartAgentRunIntent: AppIntent {
     }
 }
 
+// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
+// protocols don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
+// predates iOS 27 can't type-check this extension regardless of runtime
+// availability — see LancerLiveActivityWidget.swift DynamicIslandWidthReader.
+#if swift(>=6.4)
 @available(iOS 27.0, *)
 extension StartAgentRunIntent: LongRunningIntent, CancellableIntent, ProgressReportingIntent {}
+#endif
