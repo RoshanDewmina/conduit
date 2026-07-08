@@ -179,6 +179,13 @@ type conversationLaunchParams struct {
 	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
 	IsNew           bool   // true ⇒ first turn of a brand-new conversation
 
+	// Contract mirrors dispatchParams.Contract — see conversationAppendRequest's
+	// identical field (conversation_store.go) for why this exists: without it,
+	// every receipt created through agent.conversations.append (the live
+	// composer's start/continue path) silently lost goal/doneCriteria/
+	// validationCommands even though a plain agent.dispatch carried them fine.
+	Contract *runContract
+
 	// worktreePath/worktreeRepoRoot: see the identical fields on dispatchParams —
 	// same race, same fix, applied here too.
 	worktreePath     string
@@ -1733,6 +1740,13 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
+	// Same cap + clone as dispatch()'s identical gate — a conversation-append
+	// launch is just as attacker-influenceable (phone-supplied) as a plain
+	// dispatch, so it gets the same contract validation, not a looser one.
+	if contractTooLarge(p.Contract) {
+		return dispatchResult{Status: "error", Message: "contract too large"}
+	}
+	p.Contract = cloneRunContract(p.Contract)
 
 	// Budget gate (shared daily total vs this conversation's cap).
 	d.mu.Lock()
@@ -1776,10 +1790,10 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		audit(AuditEntry{Action: "conversation-append-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
 	}
-	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
 	d.mu.Unlock()
 	d.startReceiptAccum(runID, d.receiptStartFromDispatch(dispatchParams{
-		Agent: p.Agent, CWD: p.CWD, Model: p.Model, worktreePath: p.worktreePath, worktreeRepoRoot: p.worktreeRepoRoot,
+		Agent: p.Agent, CWD: p.CWD, Model: p.Model, Contract: p.Contract, worktreePath: p.worktreePath, worktreeRepoRoot: p.worktreeRepoRoot,
 	}))
 	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
 	if err != nil {

@@ -286,6 +286,42 @@ public actor ConversationSyncCoordinator {
                 turn, vendorSessionID: turnEnvelope.vendorSessionId, hostSeqStart: nil, hostSeqEnd: nil
             )
         }
+
+        // A terminal `lancer.proof/v0` receipt is stored on the host ONLY as a
+        // `conversation_events` row (kind "receipt" — see appendRunReceipt in
+        // conversation_store.go); it is never itself a conversation_artifacts
+        // row there. Live delivery (AppRoot's lancerE2ERunReceipt notification
+        // handler) materializes it into a `chat_artifacts` row via
+        // `upsertReceipt` the moment it arrives — but a receipt that lands
+        // while this device is disconnected only ever reaches it as one of
+        // `response.events` here, and ReceiptCardView reads exclusively from
+        // `chat_artifacts`. Without this, a reconnect-and-refresh would mirror
+        // the event into `chat_events` (above) but the receipt card would
+        // never appear. Mirror the live path: materialize any receipt-kind
+        // event into the SAME `chat_artifacts` row `upsertReceipt` would have
+        // written live. Runs after the turns loop above so the `chat_turns`
+        // row `upsertReceipt` keys off of (by run_id) already exists.
+        // `upsertReceipt` upserts by the stable id `"receipt:\(runID)"`, so
+        // re-running this merge for the same receipt (e.g. a re-fetch that
+        // re-delivers already-seen events) is idempotent — no duplicate rows.
+        var materializedReceipt = false
+        for event in response.events where event.kind == "receipt" {
+            guard let runID = event.runId, let payloadJSON = event.payloadJson else { continue }
+            if (try? await chatRepo.upsertReceipt(runID: runID, payloadJSON: payloadJSON)) != nil {
+                materializedReceipt = true
+            }
+        }
+        // Same notification the live path posts after `upsertReceipt`
+        // (AppRoot's lancerE2ERunReceipt handler) — lets an already-open
+        // thread's artifact list pick up a receipt that arrived while this
+        // device was disconnected, without requiring a manual re-open.
+        if materializedReceipt {
+            NotificationCenter.default.post(
+                name: .lancerChatArtifactPersisted,
+                object: nil,
+                userInfo: ["conversationID": response.conversation.id]
+            )
+        }
     }
 
     /// Concatenates a turn's `kind == "output"` events (the ledger's mirror of

@@ -182,15 +182,23 @@ func conversationNow() string {
 // must match the conversation's current last_seq or the append is rejected as a
 // conflict.
 type conversationAppendRequest struct {
-	ConversationID string  `json:"conversationId,omitempty"`
-	BaseSeq        int64   `json:"baseSeq"`
-	ClientTurnID   string  `json:"clientTurnId"`
-	Agent          string  `json:"agent,omitempty"`
-	CWD            string  `json:"cwd,omitempty"`
-	Prompt         string  `json:"prompt"`
-	Model          string  `json:"model,omitempty"`
-	BudgetUSD      float64 `json:"budgetUSD,omitempty"`
-	UseWorktree    bool    `json:"useWorktree,omitempty"`
+	ConversationID string       `json:"conversationId,omitempty"`
+	BaseSeq        int64        `json:"baseSeq"`
+	ClientTurnID   string       `json:"clientTurnId"`
+	Agent          string       `json:"agent,omitempty"`
+	CWD            string       `json:"cwd,omitempty"`
+	Prompt         string       `json:"prompt"`
+	Model          string       `json:"model,omitempty"`
+	BudgetUSD      float64      `json:"budgetUSD,omitempty"`
+	UseWorktree    bool         `json:"useWorktree,omitempty"`
+	// Contract mirrors dispatchParams.Contract (dispatch.go) — the iOS
+	// composer sends the same `contract` key on agent.conversations.append
+	// as it does on a plain agent.dispatch (see ConversationAppendRequest.contract,
+	// LancerDProtocol.swift), so a live-composer-started or -continued turn's
+	// goal/doneCriteria/validationCommands reach the terminal receipt the same
+	// way a direct dispatch's do. Validated/cloned by launchConversationTurn
+	// via the SAME contractTooLarge/cloneRunContract helpers dispatch() uses.
+	Contract *runContract `json:"contract,omitempty"`
 }
 
 // conversationAppendResult mirrors the subset of the agent.conversations.append

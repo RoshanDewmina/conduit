@@ -1,9 +1,11 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // --- buildConversationArgv -------------------------------------------------
@@ -234,5 +236,104 @@ func TestLaunchConversationTurnBindsVendorSessionForExactResume(t *testing.T) {
 	want, _ := resumeArgv("claudeCode", "live-sess-1", "second", "")
 	if strings.Join(lastArgv, " ") != strings.Join(want, " ") {
 		t.Fatalf("turn 2 argv = %v, want %v (exact resume with the bound session id)", lastArgv, want)
+	}
+}
+
+// --- contract threading (PR #34 review finding P1) -------------------------
+//
+// TestLaunchConversationTurnThreadsContract proves launchConversationTurn no
+// longer drops conversationLaunchParams.Contract on the floor: it must land
+// on both the in-memory run record (mirroring dispatch()'s own
+// d.runs[id].Contract assignment — see TestDispatchContract) and, more
+// importantly, on the accumulated receipt startReceiptAccum feeds — the
+// symptom the review finding actually cared about, since a lost contract
+// meant every agent.conversations.append-dispatched run's receipt card could
+// never evaluate doneCriteria.
+func TestLaunchConversationTurnThreadsContract(t *testing.T) {
+	valid := &runContract{
+		Goal:               "thread the contract through conversation append",
+		DoneCriteria:       []string{"receipt echoes the contract verbatim"},
+		ValidationCommands: []string{"go test ./..."},
+	}
+
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		go emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+		return &procHandle{kill: func() {}}, nil
+	}
+
+	res := d.launchConversationTurn("conversation-run-contract", conversationLaunchParams{
+		Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", Model: "sonnet", IsNew: true, Contract: valid,
+	}, allowEval, noAudit)
+	if res.Status != "started" {
+		t.Fatalf("launchConversationTurn status = %q, want started (%s)", res.Status, res.Message)
+	}
+
+	run := d.runs[res.RunID]
+	if run == nil || run.Contract == nil {
+		t.Fatal("expected contract on conversation-launched run record")
+	}
+	if run.Contract.Goal != valid.Goal {
+		t.Fatalf("run contract goal = %q, want %q", run.Contract.Goal, valid.Goal)
+	}
+
+	deadline := time.After(2 * time.Second)
+	var receipt *runReceipt
+	for receipt == nil {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for receipt")
+		default:
+			receipt = d.getReceipt(res.RunID)
+			if receipt == nil {
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+	}
+	if receipt.Contract == nil {
+		t.Fatal("expected contract on conversation-launched run's receipt")
+	}
+	if receipt.Contract.Goal != valid.Goal {
+		t.Fatalf("receipt goal = %q, want %q", receipt.Contract.Goal, valid.Goal)
+	}
+	if !reflect.DeepEqual(receipt.Contract.DoneCriteria, valid.DoneCriteria) {
+		t.Fatalf("receipt doneCriteria = %v, want %v", receipt.Contract.DoneCriteria, valid.DoneCriteria)
+	}
+	if !reflect.DeepEqual(receipt.Contract.ValidationCommands, valid.ValidationCommands) {
+		t.Fatalf("receipt validationCommands = %v, want %v", receipt.Contract.ValidationCommands, valid.ValidationCommands)
+	}
+}
+
+// TestLaunchConversationTurnRejectsOversizedContract proves
+// launchConversationTurn rejects an oversized contract BEFORE launch — same
+// cap, same error shape, same contractTooLarge/cloneRunContract helpers
+// dispatch() itself uses (see TestDispatchContract's "too many done criteria"
+// case) — rather than silently truncating or launching anyway.
+func TestLaunchConversationTurnRejectsOversizedContract(t *testing.T) {
+	criteria := make([]string, contractMaxDoneCriteria+1)
+	for i := range criteria {
+		criteria[i] = "ok"
+	}
+
+	d := newDispatcher()
+	launched := false
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launched = true
+		return &procHandle{kill: func() {}}, nil
+	}
+
+	res := d.launchConversationTurn("conversation-run-oversized", conversationLaunchParams{
+		Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", IsNew: true,
+		Contract: &runContract{Goal: "x", DoneCriteria: criteria},
+	}, allowEval, noAudit)
+
+	if res.Status != "error" || res.Message != "contract too large" {
+		t.Fatalf("launchConversationTurn = %+v, want error contract too large", res)
+	}
+	if launched {
+		t.Fatal("dispatcher.launch must not be called for an oversized contract")
+	}
+	if _, ok := d.runs["conversation-run-oversized"]; ok {
+		t.Fatal("no run record should be created for a rejected oversized contract")
 	}
 }

@@ -522,6 +522,118 @@ func TestConversationsAppendLaunchesAndBindsSessionUnderAllowPolicy(t *testing.T
 	}
 }
 
+// TestConversationsAppendDecodesAndThreadsContract is the RPC-level proof for
+// PR #34 review finding P1: the iOS composer sends a `contract` field on
+// agent.conversations.append (ConversationAppendRequest.contract,
+// LancerDProtocol.swift:912) for both a brand-new conversation and a
+// follow-up — this drives the wire path exactly like a live SSH client would
+// (raw JSON through s.handleMessage, not a Go struct literal) to prove the
+// daemon actually DECODES the "contract" key (conversationAppendRequest.Contract,
+// conversation_store.go) and that launchConversationTurn's synthetic
+// dispatchParams carries it into the terminal receipt — not just that the Go
+// struct field exists.
+func TestConversationsAppendDecodesAndThreadsContract(t *testing.T) {
+	home := t.TempDir()
+	globalPath := policy.GlobalPolicyPath(home)
+	doc := policy.Document{
+		Default: string(policy.EffectAsk),
+		Rules: []policy.Rule{
+			{ID: "allow-all-commands", Effect: string(policy.EffectAllow), Kind: "command"},
+		},
+	}
+	if err := policy.SaveFile(globalPath, doc); err != nil {
+		t.Fatalf("SaveFile policy: %v", err)
+	}
+
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	s.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		go emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+
+	// Raw map (not a conversationAppendRequest{} literal) — this round-trips
+	// through encoding/json exactly the way the wire bytes from an iOS client
+	// would, so a mistyped/missing json tag on the Go struct would fail this
+	// test the same way it fails a real device.
+	sshMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
+		"clientTurnId": "device-1:1",
+		"agent":        "claudeCode",
+		"cwd":          "/proj",
+		"prompt":       "add the contract",
+		"contract": map[string]interface{}{
+			"goal":               "thread the contract end to end",
+			"doneCriteria":       []string{"contract shows up on the receipt"},
+			"validationCommands": []string{"go test ./..."},
+		},
+	})
+	if sshMsg.Error != nil {
+		t.Fatalf("agent.conversations.append error: %+v", sshMsg.Error)
+	}
+	var result conversationAppendResponse
+	decodeInto(t, sshMsg.Result, &result)
+	if result.Status != "started" {
+		t.Fatalf("status = %q, want started (%s)", result.Status, result.Message)
+	}
+
+	deadline := time.After(2 * time.Second)
+	var receipt *runReceipt
+	for receipt == nil {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for receipt")
+		default:
+			receipt = s.dispatcher.getReceipt(result.RunID)
+			if receipt == nil {
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+	}
+	if receipt.Contract == nil {
+		t.Fatal("expected the wire-decoded contract on the receipt")
+	}
+	if receipt.Contract.Goal != "thread the contract end to end" {
+		t.Fatalf("receipt goal = %q, want %q", receipt.Contract.Goal, "thread the contract end to end")
+	}
+	if !reflect.DeepEqual(receipt.Contract.DoneCriteria, []string{"contract shows up on the receipt"}) {
+		t.Fatalf("receipt doneCriteria = %v", receipt.Contract.DoneCriteria)
+	}
+
+	// Oversized contract on the SAME RPC path must be rejected before launch,
+	// not truncated or silently dropped.
+	launched := false
+	s.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launched = true
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	criteria := make([]string, contractMaxDoneCriteria+1)
+	for i := range criteria {
+		criteria[i] = "ok"
+	}
+	oversizedMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
+		"clientTurnId": "device-1:2",
+		"agent":        "claudeCode",
+		"cwd":          "/proj",
+		"prompt":       "oversized contract",
+		"contract": map[string]interface{}{
+			"goal":         "x",
+			"doneCriteria": criteria,
+		},
+	})
+	if oversizedMsg.Error != nil {
+		t.Fatalf("agent.conversations.append (oversized) error: %+v", oversizedMsg.Error)
+	}
+	var oversizedResult conversationAppendResponse
+	decodeInto(t, oversizedMsg.Result, &oversizedResult)
+	if oversizedResult.Status != "error" || oversizedResult.Message != "contract too large" {
+		t.Fatalf("oversized contract result = %+v, want error/contract too large", oversizedResult)
+	}
+	if launched {
+		t.Fatal("dispatcher.launch must not be called for an oversized contract")
+	}
+}
+
 // TestConversationsArchiveSSHAndRelayMatchShape verifies the archive RPC on
 // two structurally identical fresh conversations (one archived via SSH, one
 // via relay) produce the same-shaped response modulo the (expectedly
