@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"os/exec"
+
+	"lancer/lancerd/policy"
 )
 
 // relayClient is the minimal interface the e2eRouter needs from a relay
@@ -144,16 +146,20 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 	switch msgType {
 	case "approvalResponse":
 		var decision struct {
-			ApprovalID      string `json:"approvalID"`
-			Decision        string `json:"decision"`
-			EditedToolInput string `json:"editedToolInput,omitempty"`
-			ContentHash     string `json:"contentHash,omitempty"`
+			ApprovalID      string       `json:"approvalID"`
+			Decision        string       `json:"decision"`
+			EditedToolInput string       `json:"editedToolInput,omitempty"`
+			ContentHash     string       `json:"contentHash,omitempty"`
+			AllowRule       *policy.Rule `json:"allowRule,omitempty"`
 		}
 		if err := json.Unmarshal(payload, &decision); err != nil {
 			log.Printf("e2e: unmarshal approval response failed: %v", err)
 			return
 		}
-		_, ok := r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
+		event, ok := r.server.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
+		if ok && decision.Decision == "approve" && decision.AllowRule != nil {
+			r.server.applyAllowRule(event, decision.AllowRule)
+		}
 		// Every other phone-initiated message in this switch replies with a
 		// typed …Result so the caller has a real round trip to await. This one
 		// never did — the phone treated a successful *outgoing* send as proof

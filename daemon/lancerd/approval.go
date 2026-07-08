@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"lancer/lancerd/policy"
 )
 
 // normID normalizes an approval ID for case-insensitive lookup. UUIDs are
@@ -53,6 +55,14 @@ type ApprovalDecision struct {
 	// deciding on. resolve() rejects a decision whose hash doesn't match the
 	// pending event's stored ContentHash — see computeContentHash.
 	ContentHash string `json:"contentHash"`
+	// AllowRule is an optional scoped, expiring allow rule attached to an
+	// "approve" decision ("approve and remember" — task A4). It is distinct
+	// from the legacy "approveAlways" prefix-matched rule (appendAllowAlways):
+	// that path builds an unscoped, unbounded rule from the command text,
+	// which is fine for a rule the daemon derives itself but is forbidden for
+	// a rule the phone hands the daemon — see policy.ValidateAllowRule, which
+	// every AllowRule is run through before it is ever persisted.
+	AllowRule *policy.Rule `json:"allowRule,omitempty"`
 }
 
 // computeContentHash canonicalizes the fields a user actually reviews before
