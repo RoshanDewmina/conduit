@@ -180,6 +180,7 @@ func (e *policyEngine) setPolicyYAML(cwd, yamlText string) error {
 
 type server struct {
 	approvals  *approvalStore
+	questions  *questionStore
 	policy     *policyEngine
 	audit      *auditLog
 	secrets    *secretsStore
@@ -238,6 +239,7 @@ func (s *server) setEmitter(emit func([]byte) error) {
 func newServer(home string) *server {
 	s := &server{
 		approvals:  newApprovalStore(),
+		questions:  newQuestionStore(),
 		policy:     newPolicyEngine(home),
 		audit:      newAuditLog(home),
 		secrets:    newSecretsStore(home),
@@ -273,6 +275,11 @@ func newServer(home string) *server {
 	// Launch escalation is relaxed only for agents whose per-action hook is
 	// verifiably wired (Claude today); everything else stays fail-closed.
 	s.dispatcher.hookWired = hookWiredForAgent(home)
+	// A question-tool tool_use extracted from stream-json (question.go,
+	// dispatch.go's wrapEmitForRun) registers here, gets relayed, and blocks
+	// the run's stream-scanning goroutine until answered — see
+	// registerAndWaitForQuestion's doc comment for the hold semantics.
+	s.dispatcher.onQuestion = s.registerAndWaitForQuestion
 	// Dispatched runs stream stdout/stderr + status back to the phone through the
 	// same serialized writer the approval-pending notification uses.
 	s.dispatcher.emit = s.emitNotification
@@ -639,6 +646,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			// the pending approval — tell the client rather than lying with a
 			// blanket "ok" it would otherwise treat as delivered.
 			s.writeError(msg.ID, -32001, "approval already resolved, not found, or content hash mismatch")
+			return
+		}
+		s.writeResult(msg.ID, "ok")
+
+	case "agent.question.answer":
+		var answer QuestionAnswer
+		if err := json.Unmarshal(msg.Params, &answer); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if _, ok := s.applyQuestionAnswer(answer); !ok {
+			// Already resolved, never existed, or the answer's item count
+			// didn't match the pending question's — tell the client rather
+			// than lying with a blanket "ok" (mirrors agent.approval.response).
+			s.writeError(msg.ID, -32001, "question already resolved, not found, or item-count mismatch")
 			return
 		}
 		s.writeResult(msg.ID, "ok")
