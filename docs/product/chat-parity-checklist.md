@@ -44,7 +44,7 @@ dropped, so "not built" never reads as an oversight.
 |---|---|---|---|---|---|
 | Persistent history | ✅ | ✅ | ✅ | — | `ChatConversationRepository` (GRDB) |
 | Resume / continue a past chat | ✅ | ✅ | ✅ | P0 | follow-up bar in History continues the run (Phase 3) |
-| Search conversations | ✅ | ✅ | ✅ | P1 | sidebar search (FTS) live as you type |
+| Search conversations | ✅ | ✅ | ✅ | P1 | Cursor shell Search sheet (FTS) live as you type |
 | Rename | ✅ | ✅ | ✅ | P1 | context-menu rename (P1) |
 | Delete | ✅ | ✅ | ✅ | P1 | context-menu delete + confirm (P1) |
 | Pin / star | ✅ | ⬜ | ✅ | P2 | pinned threads sort to top (UserDefaults) |

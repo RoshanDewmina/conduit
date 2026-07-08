@@ -1,11 +1,11 @@
 # Independent verification vs. the Cursor "Lancer UI/UX audit continuation" pass
 
 **Purpose:** a from-scratch, code-first re-audit of all six workflows, run blind to the
-Cursor session's `workflows/01-06-*.md` docs, then compared against them. Goal: catch
+Cursor session's per-workflow docs (purged 2026-07-08; see `lancer-workflows-2026-07-05/`), then compared against them. Goal: catch
 what either pass missed, resolve factual disagreements, and give the owner an
 approve/skip/revise recommendation per workflow — clearing the gate the Cursor session
 left open. See [`2026-06-30-cursor-session-recap.md`](2026-06-30-cursor-session-recap.md)
-for what that session actually did, and the six `workflows/01-06-*.md` docs for its
+for what that session actually did, and the per-workflow docs (purged 2026-07-08; see `lancer-workflows-2026-07-05/`) for its
 full findings (not reproduced here except where directly relevant to a comparison).
 
 **Method:** six subagents, one per workflow, each explicitly forbidden from reading the

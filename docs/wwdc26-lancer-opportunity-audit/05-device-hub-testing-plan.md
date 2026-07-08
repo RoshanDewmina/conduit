@@ -1,5 +1,9 @@
 # 05 — Device Hub testing plan
 
+> **Staleness banner (2026-07-08):** predates Cursor-shell reconciliation; navigation claims
+> below (sidebar/split-view IA) are **stale**. Production UI is the Cursor shell — see
+> `ARCHITECTURE.md` §4.1.
+
 > Grounded in a local, read-only Device Hub/`devicectl` audit run against this machine on
 > 2026-07-02 (Xcode 27.0 build `27A5194q`, `devicectl` 629.3 from `Xcode-beta.app`), plus the
 > July 2 test-run report (`docs/test-runs/2026-07-02-relay-siri-liveactivity-session-report.md`)

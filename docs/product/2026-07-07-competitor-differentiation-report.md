@@ -49,7 +49,7 @@ That is meaningfully different from the competitors, which mostly optimize agent
 
 ## Current Lancer state
 
-Per `docs/STATUS_LEDGER.md` and `docs/product/2026-07-06-lancer-consolidated-status.md`, Lancer is not yet ready to chase every differentiator in code. The immediate engineering bar is still Tier 0:
+Per `docs/STATUS_LEDGER.md` and [`docs/product/2026-07-06-feature-implementation-gap-matrix.md`](2026-07-06-feature-implementation-gap-matrix.md), Lancer is not yet ready to chase every differentiator in code. The immediate engineering bar is still Tier 0:
 
 > pair → dispatch prompt → receive approval → approve/deny → follow-up/continue against real `lancerd`
 
@@ -104,9 +104,78 @@ What to borrow:
 
 How Lancer beats it:
 
-- Native iOS, Live Activities, push actions, biometric gates, Watch potential.
+- Native iOS, Live Activities, push actions, Watch potential.
 - Structured mission/proof artifacts instead of terminal-session mirroring.
-- Better customer-facing promise: “decide from your phone with evidence,” not “remote-control tmux.”
+- Better customer-facing promise: "decide from your phone with evidence," not "remote-control tmux."
+
+## Competitor borrow matrix (folded 2026-07-08)
+
+Shallow clones studied in `.study/competitors/` (T3 mobile, Orca, Happier). See also Omnara/lfg notes below.
+
+### What to borrow
+
+| Priority | Pattern | Source | Lancer fit |
+|----------|---------|--------|------------|
+| P0 | Thread attention pills on list rows | T3 `threadPresentation.ts`, Happier `deriveSessionAttentionState` | Mission-control at a glance |
+| P0 | Connection health banner (offline/reconnect/pair) | Orca `connection-health.ts`, T3 empty states | Relay/SSH drop UX |
+| P0 | Approval UI above composer, live-gated | T3 `PendingApprovalCard.tsx` | Governed loop wedge |
+| P0 | Real Settings handoff, not mock-only | Lancer existing | Policy/audit trust |
+| P1 | Composer draft survives navigation | Happier continuity tests | Phone↔desk handoff |
+| P1 | Pairing confirm + timeout + log | Orca `pair-confirm.tsx` | First-run polish |
+| P1 | Dispatch outbox (offline enqueue) | T3 `thread-outbox-model.ts` | Relay flake resilience |
+| P2 | Notification deep-link dedup | T3 `notificationNavigation.ts` | APNs cold-start |
+| P2 | Resume last active thread | Orca `resume-worktree.ts` | Return-to-work UX |
+
+### What NOT to borrow
+
+| Anti-pattern | Source | Why |
+|--------------|--------|-----|
+| Phone xterm / full terminal mirror | Orca 5K-line session screen | Conflicts with "not a phone IDE" |
+| Stateful encrypted relay server | Happier `apps/server` | Lancer blind relay + daemon truth |
+| Clerk-gated push registration | T3 `remoteRegistration.ts` | Extra account friction |
+| LAN-only WS pairing | Orca default | Lancer needs relay/tailnet story |
+| 4-tab + deep session cockpit | Happier IA | Lancer 3-root Cursor shell |
+
+### Implemented (cursor/user-ready-tier0-9aec)
+
+- `CursorThreadAttention` + thread row pills
+- `CursorConnectionBanner` + `ConnectionPhase`
+- Live-gated approval banner
+- `CursorComposerDraftStore`
+- `CursorRelayPairingSheet` + `SettingsDestination` handoff
+- Bridge wiring for attention, connection phase, relay machine count
+
+## Omnara + lfg study notes (folded 2026-07-08)
+
+Sources: `.study/competitors/omnara` (archived OSS), `.study/competitors/lfg`, `research/_raw/omnara.md`.
+
+### Omnara (archived OSS, Feb 2026)
+
+Three-tier: CLI wrapper → cloud API (Supabase + FastAPI) → Expo mobile/web. **Pivot:** repo archived —
+vendor-CLI adapters drift; Lancer's `lancerd` dispatch + governed hooks are the right layer.
+
+**Borrow:** structured option cards, instance-level attention queue, push scoped to questions.  
+**Avoid:** plaintext cloud relay, chat-parsed approvals, cloud sandbox as V1, voice-first for Tier 0.
+
+### lfg (BennyKok)
+
+Private control plane: Bun server + React PWA; agents in tmux; loopback + Tailscale Serve.
+
+**Borrow:** Ask queue UX (badge + banner + page), transcript-structured prompts (not tmux scrape),
+send-confirm-retry dispatch, diff stat above composer.  
+**Avoid:** unauthenticated loopback API, tmux send-keys as primary path, phone xterm as primary surface.
+
+### Mapped to FEATURE_BACKLOG tiers
+
+| Tier | Borrow | Backlog item |
+|------|--------|----------------|
+| 0 | Structured options + governed `decide()` | Approval → `decide()` |
+| 0 | Push wakes blocked agent | Physical device loop |
+| 1 | Approval banner above composer | Planned P0 (lfg AskCenter) |
+| 1 | Connection health ladder | Planned P0 (Orca + Omnara anti-patterns) |
+| V1+ | Question Cards, Visual Diff, payload-less push reconcile | Post-Tier 0 |
+
+**Reject (backlog §7):** hosted cloud execution, terminal-as-primary-V1, Omnara plaintext relay.
 
 ### 2. Orca
 

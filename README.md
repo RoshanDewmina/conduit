@@ -78,7 +78,7 @@ Three rules keep the codebase honest:
 | M  | Title             | Status |
 |----|-------------------|--------|
 | M0 | Scaffolding       | ✅ verified |
-| M1 | First connect     | ✅ Ed25519 + biometric gate + TOFU + password-at-connect |
+| M1 | First connect     | ✅ Ed25519 + TOFU + password-at-connect *(biometric gate removed 2026-07-07)* |
 | M2 | Real terminal     | ✅ raw PTY via SwiftTerm, auto block↔raw |
 | M3 | Survive           | ✅ tmux auto-attach, auto-reconnect on scene resume |
 | M4 | AI loop           | ✅ `#`-prefix NL→cmd, explain-block streaming |

@@ -12,7 +12,7 @@ Current repo state:
 - Lancer already has five basic App Shortcuts in `Lancer/LancerAppShortcuts.swift`: status, pending approvals, pause, stop, and deny latest approval.
 - Current run control Siri intents are intentionally narrow: `PauseRunIntent` and `StopRunIntent` only work when there is exactly one active run.
 - `DenyLatestApprovalIntent` denies the newest pending approval only. It does not resolve a specific approval entity.
-- In-app chat search already exists through SQLite FTS in `ChatConversationRepository` and UI wiring in `LancerSidebarView`.
+- In-app chat search already exists through SQLite FTS in `ChatConversationRepository` and UI wiring in the **Cursor shell Search sheet** (`CursorSearchOverlay`). *(Supersedes 2026-07-03 reference to deleted `LancerSidebarView`.)*
 - No production AppEntity, IndexedEntity, EntityQuery, IndexedEntityQuery, Core Spotlight, or AppIntentsTesting adoption is present yet.
 
 Apple docs reviewed:

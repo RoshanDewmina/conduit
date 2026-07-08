@@ -25,7 +25,7 @@ Review/Approvals → Machines → Home & Settings. **Start with Onboarding only*
 ## The problem (Onboarding step 1 — "Value + Pair")
 
 Both audits agree on two real issues, detailed in the workflow doc
-(`docs/design-audit/workflows/01-onboarding-pairing.md`):
+(`docs/design-audit/lancer-workflows-2026-07-05/artifacts/01-onboarding.html`; legacy `workflows/01-onboarding-pairing.md` purged 2026-07-08):
 
 1. The user never sees the actual product before being asked to trust it
    with machine access — the current value-proposition content is abstract,

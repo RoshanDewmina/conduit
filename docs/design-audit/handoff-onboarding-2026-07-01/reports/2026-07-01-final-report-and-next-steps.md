@@ -11,9 +11,9 @@ duplicating them.
    a six-workflow audit — Onboarding/Pairing, Home/Attention, Work Thread,
    Review/Approvals/Diff, Machines, Settings — each with severity-rated
    issues, Mobbin competitive research, and a proposed redesign direction.
-   Details: [`2026-06-30-cursor-session-recap.md`](2026-06-30-cursor-session-recap.md),
-   full findings in [`2026-06-30-lancer-ui-ux-audit-packet.md`](2026-06-30-lancer-ui-ux-audit-packet.md)
-   + [`workflows/01-06-*.md`](workflows/). **All six workflows ended
+   Details: [`2026-06-30-cursor-session-recap.md`](2026-06-30-cursor-session-recap.md).
+   The original audit packet and `workflows/01-06` were **purged 2026-07-08**; canonical wireframes
+   are in [`lancer-workflows-2026-07-05/`](../lancer-workflows-2026-07-05/). **All six workflows ended
    "Awaiting approval" — none were approved, skipped, or revised.**
 2. **Independent re-audit** — six subagents, one per workflow, blind to
    Cursor's findings, working from source code + existing screenshots. Found:

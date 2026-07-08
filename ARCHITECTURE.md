@@ -4,7 +4,7 @@
 
 Last updated: 2026-07-06 (Cursor shell design reconciliation)
 Target platform: iOS 26.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on). iOS 27-only affordances are fast-follow candidates and must stay gated or out of the shipping path while the deployment target remains 26.0.
-Status: **production UI target is the Cursor shell** (`AppFeature/CursorStyle`). Governed relay loop is shipped in code; Tier 0 proves `LANCER_CURSOR_SHELL_LIVE=1` end-to-end against real `lancerd`. Legacy sidebar / Command Home remains in tree until Tier 0 retires it.
+Status: **production UI target is the Cursor shell** (`AppFeature/CursorStyle`). Governed relay loop is shipped in code; Tier 0 proves `LANCER_CURSOR_SHELL_LIVE=1` end-to-end against real `lancerd`. Legacy sidebar / Command Home shell was **deleted** (2026-07-06 lean sweep); see §4.1.
 
 ---
 
@@ -42,7 +42,7 @@ the reason for rejection.
 **What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Cursor shell** (3-root IA: Home / Workspaces / Settings — see §4.1). Legacy sidebar / Command Home is deprecated (see §0.1 Deprecated).
+1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Cursor shell** (3-root IA: Home / Workspaces / Settings — see §4.1). Legacy sidebar / Command Home **deleted** (see §0.1 Deprecated).
 2. **`lancerd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/lancerd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
@@ -100,7 +100,7 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - Cross-vendor breadth beyond the four CLIs; open-sourcing `lancerd`.
 
 ### Deprecated / removed
-- **Legacy sidebar / Command Home shell** (`LancerSidebarView`, `SidebarShellState`, drawer IA) — superseded by Cursor shell (§4.1). Retained on `master` until Tier 0 live proof completes; do not extend or screenshot as current design.
+- **Legacy sidebar / Command Home shell** (`LancerSidebarView`, `SidebarShellState`, drawer IA) — **deleted** (2026-07-06); superseded by Cursor shell (§4.1). Do not reintroduce or cite as current design.
 - **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — vestigial; never reintroduce.
 - Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
 - Deleted dead files (2026-06-27 lean sweep): `WorktreesFeature` whole target, `RunnerSetupView`, `EditScheduleSheet`, `LoopDetailView`, `GitStore`, unused Go agent-status helpers, unused quota/secrets/policy/audit helpers, stale StoreKit Conduit metadata, and the one-time `scripts/rebrand-lancer.py`.

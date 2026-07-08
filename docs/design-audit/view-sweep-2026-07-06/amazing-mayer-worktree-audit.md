@@ -85,4 +85,4 @@ Deleting `SettingsView.swift` and `InboxView.swift` without complete replacement
 
 ---
 
-Audit performed against git diff on 2026-07-06. Cross-check with [consolidated status](../../product/2026-07-06-lancer-consolidated-status.md).
+Audit performed against git diff on 2026-07-06. Cross-check with [feature gap matrix](../../product/2026-07-06-feature-implementation-gap-matrix.md).

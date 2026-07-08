@@ -1,3 +1,5 @@
+> **Historical evidence — predates Cursor shell (2026-07-08).** Sidebar/Command Home IA below is not current navigation.
+
 # Phone-ready verification pass — 2026-07-06
 
 Branch/worktree: `claude/amazing-mayer-246fef` (merged `master` Cursor shell)

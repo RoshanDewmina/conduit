@@ -12,7 +12,8 @@ to `master`**:
 - `2583dc0f`, `2bd3f3d8` — cleanup/plan doc
 - `d576998b` — wired `RelayFleetStoreTests` into CI (it was silently not running)
 
-Plan file: `docs/superpowers/plans/2026-07-04-connection-state-confirmed-fixes.md`
+Plan file: merged to `master` (2026-07-04) — see commits `4792c63f`, `33d77253`, `2583dc0f`,
+`2bd3f3d8`, `d576998b`. The original plan lived under `docs/superpowers/plans/` (purged 2026-07-08).
 
 What follows is the report's remaining scope, **not yet built**, ranked by size. Each item
 has a self-contained prompt you can hand to Fable directly — no need to re-explain context,

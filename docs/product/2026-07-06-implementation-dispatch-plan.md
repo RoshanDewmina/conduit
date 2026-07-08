@@ -15,7 +15,7 @@
 **Companion docs:**
 
 - `docs/product/study/2026-07-06-apple-api-map.md` — Apple built-in vs custom
-- `docs/product/study/2026-07-06-omnara-lfg-notes.md` — competitor borrow list
+- `docs/product/2026-07-07-competitor-differentiation-report.md` — competitor borrow list + Omnara/lfg notes (folded 2026-07-08)
 - `docs/product/study/2026-07-06-aggressive-cleanup-spec.md` — legacy delete status
 - `docs/product/OWNER_RELAY_TEST_GUIDE.md` — **you + agent relay session**
 

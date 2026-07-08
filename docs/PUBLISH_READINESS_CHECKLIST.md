@@ -20,15 +20,15 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 | agent-runner (Go) | ✅ pass | `go test ./...` exit 0 |
 | Chat persistence + FTS search | ✅ v10 migrations, `ChatConversationRepository` with 18 tests | `ChatConversationRepositoryTests.swift` |
 | Chat artifact cards + detail views | ✅ 7 card types, detail panels, 14 rendering tests | `ChatArtifactCards.swift`, `ChatArtifactDetailView.swift` |
-| Sidebar shell (iPhone + iPad) | ✅ `LancerSidebarView` + `SidebarShellState`, wired into `AppRoot.swift` | compact: drawer overlay; regular: `NavigationSplitView` |
-| **Sidebar redesign (2026-06-19)** | ✅ full-height drawer, unified Sessions home (All/Needs input/Ready for review tabs), relay hostname grouping in agent picker | Xcode app-target build SUCCEEDED, 385/385 tests pass |
+| **Cursor shell (production UI)** | ✅ `CursorAppShell` under `AppFeature/CursorStyle/` — Home / Workspaces / Settings | `LANCER_CURSOR_SHELL=1` (mock), `LANCER_CURSOR_SHELL_LIVE=1` (live bridge); see `ARCHITECTURE.md` §4.1 |
+| **Cursor shell live bridge (2026-07-06)** | ✅ pairing, workspaces, dispatch, approval, continue wired through `CursorShellLiveBridge` | `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md` |
 | **Live relay dispatch (2026-06-19)** | ✅ phone→relay→daemon dispatch proven live (opencode "Hi" → `dispatch-launched`) | PATH fix in launchd plist; `agentRunContinue` chain verified end-to-end |
 | **Push backend (canonical, reconciled 2026-06-24)** | ✅ Cloud Run **`conduit-push`** (`conduit-push-y4wpy6zeva-ts.a.run.app`, the URL `project.yml:26` ships) — `/health` 200; APNs keys wired, `APPROVAL_RELAY_SECRET` enforced (401 on unauth), lancerd sends Bearer token on `/register`. (Name preserved per rebrand infra-migration; the earlier `lancer-push`/australia-southeast1 reference was doc drift.) | `roshan-agent-f1c2466d` project |
 | Fleet thread routing | ✅ `FleetThreadMapper` with 4 tests | maps host/agent/cwd to conversation |
 | Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop |
 | **Full live governed-approvals loop** | ✅ **proven on simulator** after fixing 2 bugs | `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`; `ARCHITECTURE.md` §0.1 |
 | **App-closed physical-device approval loop** | ✅ **PASSED 2026-06-23** | APNs lock-screen push → approve while app closed → decision round-tripped → agent resumed; see `ARCHITECTURE.md` §0.1 |
-| **Governance home** | ✅ merged | Sidebar route consolidates policy/audit/secrets/drift/doctor/usage without reintroducing a Control tab |
+| **Governance in Settings** | ✅ merged | Policy/audit/secrets/drift/doctor/usage under Settings → Policy & Governance (Cursor shell); no separate Control root |
 | **TestFlight** | ✅ uploaded | Build uploaded; release remains gated on beta validation/App Review/owner store operations |
 | Visual consistency, light+dark | ✅ | polish batch 1 |
 

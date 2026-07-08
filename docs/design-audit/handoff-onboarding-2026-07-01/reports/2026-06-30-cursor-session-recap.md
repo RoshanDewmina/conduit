@@ -4,7 +4,8 @@ This is a narrative recap of the Cursor agent session that produced the current
 six-workflow audit packet. It records what the session *did* and where it left off —
 not audit findings themselves. For findings, read
 [`2026-06-30-lancer-ui-ux-audit-packet.md`](2026-06-30-lancer-ui-ux-audit-packet.md)
-and the linked `workflows/01-06-*.md` docs, which remain the source of truth for the
+(purged 2026-07-08) and the linked per-workflow docs (purged; see
+[`lancer-workflows-2026-07-05/`](../lancer-workflows-2026-07-05/)), which remain historical context for the
 content. This recap exists because the session itself (kickoff instructions, redirects,
 tool-use pattern, capture gaps) currently lives only in Cursor's local SQLite store and
 would otherwise be lost.

@@ -41,8 +41,8 @@ agents found still open:
 - **Workflow 02's "four roots" language is a documentation error** — align it to the 3-root IA in
   the next wireframe touch-up. The **target shipped shell** is the Cursor-style app under
   `AppFeature/CursorStyle/` (`CursorAppShell`, 3 roots: Home / Workspaces / Settings via
-  `LANCER_CURSOR_SHELL` / `LANCER_CURSOR_SHELL_LIVE`). The legacy `LancerSidebarView` sidebar /
-  Command Home remains in-tree but is **deprecated** — an implementation gap, not design truth.
+  `LANCER_CURSOR_SHELL` / `LANCER_CURSOR_SHELL_LIVE`). Legacy `LancerSidebarView` sidebar /
+  Command Home was **deleted** (2026-07-06) — Cursor shell is design truth.
   `ARCHITECTURE.md` §4.1 is flagged for correction to match.
 - **Inbox folds into Home** (as an Away Digest ledger row grouping, not a separate root) — confirmed
   correct direction; the real app hasn't migrated yet (implementation gap, not a design ambiguity).
@@ -136,7 +136,7 @@ correction before it's fully accurate.
 
 | Feature | Category | Wireframe | Notes |
 |---|---|---|---|
-| Away Launch Composer + thin launch contract | Core loop | `workflows/03-work-thread.md`, `artifacts/04-launch-setup.html` | = "Mission Contract" per §3 |
+| Away Launch Composer + thin launch contract | Core loop | `artifacts/04-launch-setup.html`, `artifacts/05-work-thread.html` | = "Mission Contract" per §3 |
 | Mobile attachments (photo/screenshot/video/voice) | Core loop | `artifacts/04-launch-setup.html` | needs picker UI drawn — D15 |
 | Share Sheet / Universal Link Intake | Core loop | `artifacts/04-launch-setup.html` | — |
 | Smart Default Target | Core loop | `artifacts/02-home.html`, `artifacts/03-workspaces.html` | — |
