@@ -151,6 +151,7 @@ public struct StartAgentRunIntent: AppIntent {
         }
     }
 #endif
+}
 
 // Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
 // protocols don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
