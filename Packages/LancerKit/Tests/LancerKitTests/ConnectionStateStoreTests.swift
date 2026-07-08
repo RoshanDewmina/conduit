@@ -116,8 +116,38 @@ import Testing
         store.track(machineID: client.machineID, client: client, pairingUsable: true)
         #expect(store.state(for: client.machineID) == .reconnecting)
 
-        let waiter = Task { await store.waitForAnyConnected(timeout: 3.0) }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        // Root cause of the 2026-07-08 CI flake (run 28977613741): this test
+        // used to race two wall-clock durations against each other — a fixed
+        // `Task.sleep(200ms)` here vs. `waitForAnyConnected`'s own 3.0s
+        // deadline — on the SAME cooperative-thread-pool clock. Both are
+        // computed from roughly the same start time, so a 15x margin sounds
+        // safe but isn't: under a sufficiently overloaded/throttled runner,
+        // `Task.sleep(200ms)` itself can stall for several real seconds
+        // (thread-pool contention, CPU throttling), eating past the waiter's
+        // 3.0s budget before this test ever calls `setStateForTesting` —
+        // timing the waiter out even though the state transition it's
+        // waiting for hasn't happened yet. Two independent fixes:
+        //
+        // 1. `Task.yield()` instead of a timed sleep to hand control to the
+        //    waiter task. This only depends on the scheduler actually
+        //    running ready work, not on a real-time duration, so it can't
+        //    itself become the thing that blows the budget. (It's also not
+        //    load-bearing for correctness: `waitForAnyConnected` checks
+        //    `firstConnectedMachineID` before anything else, so even if the
+        //    waiter's first poll happens strictly after the mutation below,
+        //    it still returns immediately — the yields just make the
+        //    "mid-reconnect" race the test name describes actually happen
+        //    most of the time instead of degenerating to "already connected
+        //    when checked".)
+        // 2. A far more generous timeout (15s vs. the old 3.0s). This is
+        //    free on the fast path — the loop returns the instant the
+        //    machine connects, real test runtime is unaffected — and only
+        //    matters when the runner is so overloaded that scheduling stalls
+        //    for seconds; that's exactly the regime this flake came from.
+        let waiter = Task { await store.waitForAnyConnected(timeout: 15.0) }
+        for _ in 0..<10 {
+            await Task.yield()
+        }
         client.setStateForTesting(pairing: .paired, connection: .connected)
 
         let result = await waiter.value
