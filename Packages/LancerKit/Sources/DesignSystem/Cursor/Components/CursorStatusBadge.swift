@@ -14,6 +14,8 @@ public struct CursorStatusBadge: View {
 
     public enum Kind: Sendable {
         case success
+        case open
+        case merged
         case risk(level: RiskLevel)
     }
 
@@ -33,10 +35,32 @@ public struct CursorStatusBadge: View {
             iconView(colors: colors)
             Text(label)
                 .font(CursorType.statusPill)
-                .foregroundColor(colors.primaryText)
+                .foregroundColor(labelColor(colors))
         }
         .padding(.horizontal, CursorMetrics.statusBadgeHorizontalPadding)
         .padding(.vertical, CursorMetrics.statusBadgeVerticalPadding)
+        .background(badgeBackground(colors))
+        .clipShape(Capsule())
+    }
+
+    private func labelColor(_ colors: CursorColors) -> Color {
+        switch kind {
+        case .merged: return colors.mergedBadgeText
+        case .open: return colors.openBadgeText
+        default: return colors.primaryText
+        }
+    }
+
+    @ViewBuilder
+    private func badgeBackground(_ colors: CursorColors) -> some View {
+        switch kind {
+        case .merged:
+            Capsule().fill(colors.mergedBadgeBackground)
+        case .open:
+            Capsule().fill(colors.openBadgeBackground)
+        default:
+            EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -47,9 +71,17 @@ public struct CursorStatusBadge: View {
                 Circle().fill(colors.successGreen)
                 Image(systemName: "checkmark")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(colors.pillPrimaryText)
+                    .foregroundColor(colors.mergeButtonText)
             }
             .frame(width: CursorMetrics.statusBadgeIconSize, height: CursorMetrics.statusBadgeIconSize)
+        case .open:
+            Circle()
+                .fill(colors.successGreen)
+                .frame(width: 8, height: 8)
+        case .merged:
+            Image(systemName: "arrow.triangle.merge")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(colors.mergedBadgeText)
         case .risk(let level):
             Circle()
                 .fill(riskColor(level, colors: colors))

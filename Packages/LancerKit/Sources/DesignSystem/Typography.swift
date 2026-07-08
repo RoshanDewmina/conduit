@@ -20,6 +20,16 @@ public extension Font {
         .custom(sansFaceName(weight), size: dsSize(style), relativeTo: style)
     }
 
+    /// SF Rounded system face for Cursor-style chrome (section labels, list rows).
+    static func dsRounded(_ style: TextStyle, weight: Weight = .regular) -> Font {
+        .system(size: dsSize(style), weight: weight, design: .rounded)
+    }
+
+    /// SF Rounded at an exact point size.
+    static func dsRoundedPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+
     /// JetBrains Mono for technical context.
     static func dsMono(_ style: TextStyle, weight: Weight = .regular) -> Font {
         .custom(monoFaceName(weight), size: dsSize(style), relativeTo: style)
@@ -64,9 +74,31 @@ public struct DSCapsStyle: ViewModifier {
     }
 }
 
+public struct DSRoundedCapsStyle: ViewModifier {
+    let size: CGFloat
+    @ScaledMetric private var scaledTracking: CGFloat
+
+    public init(size: CGFloat, tracking: CGFloat) {
+        self.size = size
+        self._scaledTracking = ScaledMetric(wrappedValue: tracking)
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .font(.dsRoundedPt(size, weight: .medium))
+            .tracking(scaledTracking)
+            .textCase(.uppercase)
+    }
+}
+
 public extension View {
     func dsCapsStyle(size: CGFloat = 11, trackingMultiplier: CGFloat = 0.08) -> some View {
         modifier(DSCapsStyle(size: size, tracking: size * trackingMultiplier))
+    }
+
+    /// Uppercase section label using SF Rounded instead of mono.
+    func dsRoundedCapsStyle(size: CGFloat = 11, trackingMultiplier: CGFloat = 0.06) -> some View {
+        modifier(DSRoundedCapsStyle(size: size, tracking: size * trackingMultiplier))
     }
 }
 
