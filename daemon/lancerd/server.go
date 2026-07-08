@@ -317,6 +317,40 @@ func (s *server) applyDecision(id, decision, editedToolInput, contentHash string
 	return event, ok
 }
 
+// applyAllowRule persists a scoped, expiring allow rule attached to an
+// "approve" decision ("approve and remember", task A4). This is a separate
+// path from applyDecision/appendAllowAlways's "approveAlways" prefix-matched
+// rule (built by the daemon itself from the command text, unscoped and
+// unbounded); a phone-supplied AllowRule must pass policy.ValidateAllowRule's
+// fail-closed scope+expiry check first. FAIL-SAFE, matching applyDecision: a
+// rejected or failed-to-persist rule never blocks or unwinds the approve
+// itself (already recorded by applyDecision before this runs) — it only means
+// the rule wasn't remembered, so the same event prompts again next time.
+func (s *server) applyAllowRule(event ApprovalEvent, rule *policy.Rule) {
+	if rule == nil {
+		return
+	}
+	if err := policy.ValidateAllowRule(*rule); err != nil {
+		fmt.Fprintf(os.Stderr, "approve-and-remember: rejected rule for approval %s: %v\n", event.ApprovalID, err)
+		return
+	}
+	if err := policy.AppendAllowRule(s.policy.home, *rule); err != nil {
+		fmt.Fprintf(os.Stderr, "approve-and-remember: failed to persist rule for approval %s: %v\n", event.ApprovalID, err)
+		return
+	}
+	if err := s.policy.reload(event.CWD); err != nil {
+		fmt.Fprintf(os.Stderr, "approve-and-remember: policy reload failed after persisting rule for approval %s: %v\n", event.ApprovalID, err)
+	}
+	_ = s.audit.append(AuditEntry{
+		Action:     "remember-rule",
+		Agent:      event.Agent,
+		Kind:       event.Kind,
+		Effect:     rule.Effect,
+		Rule:       rule.ID,
+		ApprovalID: event.ApprovalID,
+	})
+}
+
 // policyEffect adapts the policy engine to the dispatcher's evaluator signature.
 func (s *server) policyEffect(event ApprovalEvent) (string, string, bool) {
 	res := s.policy.evaluate(event)
@@ -633,13 +667,17 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
-		if _, ok := s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash); !ok {
+		event, ok := s.applyDecision(decision.ApprovalID, decision.Decision, decision.EditedToolInput, decision.ContentHash)
+		if !ok {
 			// Already resolved (timeout beat us here, or a duplicate/late
 			// delivery), never existed, or the echoed content hash didn't match
 			// the pending approval — tell the client rather than lying with a
 			// blanket "ok" it would otherwise treat as delivered.
 			s.writeError(msg.ID, -32001, "approval already resolved, not found, or content hash mismatch")
 			return
+		}
+		if decision.Decision == "approve" && decision.AllowRule != nil {
+			s.applyAllowRule(event, decision.AllowRule)
 		}
 		s.writeResult(msg.ID, "ok")
 
