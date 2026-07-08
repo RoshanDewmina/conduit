@@ -70,26 +70,16 @@ struct LancerApp: App {
     private var appRoot: some View {
         AppRoot()
             .onOpenURL { url in
-                guard url.scheme == "lancer" else { return }
-                // Defense-in-depth (SEC-1): the supported hosts take no path. Reject
-                // any extra path segments so a crafted `lancer://auth/<smuggled>`
-                // can't reach a future path-dispatched handler. Query/fragment are
-                // intentionally allowed — the auth callback carries its tokens there.
-                guard url.path.isEmpty || url.path == "/" else { return }
-                switch url.host {
-                case "billing":
-                    // Store the return URL so BillingView / settings can surface it.
-                    UserDefaults.standard.set(url.absoluteString, forKey: "dev.lancer.lastBillingReturnURL")
-                    // Refresh StoreKit entitlements — the user may have completed a
-                    // purchase (StoreKit or Stripe) and returned via the deep link.
+                guard let route = DeepLinkRoute.parse(url) else { return }
+                switch route {
+                case .billing(let returnURL):
+                    UserDefaults.standard.set(returnURL.absoluteString, forKey: "dev.lancer.lastBillingReturnURL")
                     Task {
                         await PurchaseManager.shared.restore()
                         await PurchaseManager.shared.refreshCloudEntitlement()
                     }
-                case "auth":
-                    NotificationCenter.default.post(name: .lancerAuthCallback, object: url)
-                default:
-                    break
+                case .authCallback(let callbackURL):
+                    NotificationCenter.default.post(name: .lancerAuthCallback, object: callbackURL)
                 }
             }
     }
