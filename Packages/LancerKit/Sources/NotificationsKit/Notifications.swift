@@ -42,11 +42,16 @@ public struct PendingApprovalAction: Sendable, Equatable {
     public let sessionID: String
     /// "approve" or "reject".
     public let action: String
+    /// Opaque content binding from the APNs userInfo (force-quit lock-screen
+    /// path). Must ride the buffer so a later AppRoot drain cannot re-forward
+    /// the same decision with an empty hash and overwrite a good POST.
+    public let contentHash: String?
 
-    public init(approvalID: String, sessionID: String, action: String) {
+    public init(approvalID: String, sessionID: String, action: String, contentHash: String? = nil) {
         self.approvalID = approvalID
         self.sessionID = sessionID
         self.action = action
+        self.contentHash = contentHash
     }
 }
 

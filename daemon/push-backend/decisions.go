@@ -124,8 +124,14 @@ func handlePostDecision(w http.ResponseWriter, r *http.Request) {
 	// Idempotent by approvalId: a re-POST (e.g. a phone retry) replaces the prior
 	// record for the same approvalId rather than appending a duplicate, so the
 	// poller delivers — and lancerd applies — each decision exactly once.
+	// Prefer a non-empty ContentHash: a force-quit lock-screen path may POST the
+	// hash first, then a warm AppRoot drain re-POSTs the same decision without
+	// one — overwriting must not strip the binding lancerd's resolve requires.
 	for i := range existing {
 		if existing[i].ApprovalID == rec.ApprovalID {
+			if rec.ContentHash == "" && existing[i].ContentHash != "" {
+				rec.ContentHash = existing[i].ContentHash
+			}
 			existing[i] = rec
 			decisions.bySession[rec.SessionID] = existing
 			decisions.Unlock()

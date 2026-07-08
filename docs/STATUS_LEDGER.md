@@ -27,10 +27,10 @@ Living trackers (update these when code or tests change):
 | Live shell wiring | **Shipped** — `LANCER_CURSOR_SHELL_LIVE=1` + `CursorShellLiveBridge`; Layers 0–3 merged (#34) | gap matrix, `ARCHITECTURE.md` §0.1 |
 | Simulator UI test | PASS | `codex/tier-0-live-cursor-shell`, wave merges #28–#32 |
 | Relay E2E harness | **PASS** — `relay-approval-e2e.sh` through live Cursor shell | [`test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`](test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md) |
-| Physical device governed loop (D0.2) | **Re-test in progress** (owner, 2026-07-08 session) — do not claim PASS or FAIL yet | [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md); prior D0.2 run [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md) (5c FAIL); fix #52 merged |
-| APNs lock-screen approve (5c) | **Re-test in progress** (owner, 2026-07-08 session) — fix #52 landed; result pending | [`test-runs/2026-07-08-5c-root-cause.md`](test-runs/2026-07-08-5c-root-cause.md), PR #52 |
+| Physical device governed loop (D0.2) | **PASS** (owner, 2026-07-08 evening) — host audit `approve` + `deny` | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); prior morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md) |
+| APNs lock-screen approve (5c) | **PASS** — force-quit + lock Approve (`79137ae4…`) and Reject (`461bc3e0…`) | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); #52 + uncommitted content-hash echo/race fixes |
 
-**Still frozen until Tier 0 D0.2 / 5c re-test closes:** Away Launch Composer, Watch embed, wholesale A3 surface rebuild merge (lanes R1–R4 open as PRs #63–#66).
+**Unfrozen by D0.2 / 5c PASS:** Away Launch Composer, Watch embed, wholesale A3 surface rebuild merge (lanes R1–R4 open as PRs #63–#66) — still need review/merge; content-hash fix files still dirty (commit next).
 
 **Unfrozen / merged (2026-07-07–08):** proof receipts + home attention (Layers 0–3, #34); approve-and-remember (#47); deep-link auth/billing paths (#48); Siri entity intents D2/D3 (#46), I1 (#38), I2 (#41), I3 (#43), E3 voice-answer (#45); question/Ladder pipeline E1 (#49) + QuestionCardView E2 (#44); gated git/PR ship actions G (#50); Proof Reel H1 (#51); 5c lock-screen delivery fix (#52); A2 dead-code cleanup (#55); settings feedback rows (#56); A3 design tokens (#57); observed sessions J1–J2 (#54, #58); Return-to-Desk J3 (#59); push `/secret-request` + `/question` routes (#62); append-retry offline fix (#19); daemon/conn test deflake (#60, #61).
 
@@ -65,7 +65,7 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 | Owner relay test session | [`docs/product/OWNER_RELAY_TEST_GUIDE.md`](product/OWNER_RELAY_TEST_GUIDE.md) | Re-reading full runbook each time |
 | Wireframes / UI design | [`docs/design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md`](design-audit/lancer-workflows-2026-07-05/MASTER-REPORT.md) | Superseded intermediate wireframe bundles (removed) |
 | Screenshot evidence (Tier 0) | [`docs/test-runs/user-ready-tier0-2026-07-06/`](test-runs/user-ready-tier0-2026-07-06/), [`docs/test-runs/composer-verify-2026-07-06/`](test-runs/composer-verify-2026-07-06/) | — |
-| Device proof (D0.2 / 5c) | [`docs/test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md), [`docs/test-runs/2026-07-08-5c-root-cause.md`](test-runs/2026-07-08-5c-root-cause.md) | — |
+| Device proof (D0.2 / 5c) | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (**PASS**), morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md), [`test-runs/2026-07-08-5c-root-cause.md`](test-runs/2026-07-08-5c-root-cause.md) | — |
 | 105-item wireframe checklist | [`docs/design-audit/2026-07-05-feature-checklist-for-wireframing.md`](design-audit/2026-07-05-feature-checklist-for-wireframing.md) | — |
 | Away workflow spec | [`docs/product/2026-07-04-v1-paid-away-workflow-spec.md`](product/2026-07-04-v1-paid-away-workflow-spec.md) | — |
 | Launch / TestFlight gates | [`docs/PUBLISH_READINESS_CHECKLIST.md`](PUBLISH_READINESS_CHECKLIST.md) | — |
@@ -130,7 +130,7 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 |-----|----------|--------|
 | BiometricGate fail-open (no passcode) | P0 | **Moot — removed entirely** on `master` 2026-07-07; nothing left to validate |
 | Emergency stop non-atomic | P0 | **Fixed** — daemon latch + RPC (tier-0 branch, merged via #28/#34) |
-| Tier 0 D0.2 / 5c physical-device gate | P0 | **Re-test in progress** (owner, 2026-07-08) — prior FAIL documented; #52 fix merged; result pending |
+| Tier 0 D0.2 / 5c physical-device gate | P0 | **PASS** (owner, 2026-07-08 evening) — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); commit content-hash fixes still pending |
 | JWT HS256-only | P1 | Open |
 | StoreKit IAP dormant vs Stripe cloud entitlement | P1 | Open — billing reconciliation needed |
 | Watch app not embedded in iOS target | P1 | Open |
@@ -141,10 +141,10 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 
 ## Owner-gated checklist
 
-1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **re-test in progress** (2026-07-08 session)
-2. **APNs lock-screen approve (5c)** — **re-test in progress** after #52; screen recording required; do not claim PASS/FAIL until owner completes run
+1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **PASS** (2026-07-08 evening); optional screen recording archive
+2. **APNs lock-screen approve (5c)** — **PASS** — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); **commit** content-hash / race-fix dirty files
 3. **Jul 21 validation gate** — run or explicitly descope
-4. **Review + merge A3 R1–R4 PRs** (#63–#66) after Tier 0 gate closes
+4. **Review + merge A3 R1–R4 PRs** (#63–#66) — Tier 0 gate closed
 
 ---
 
@@ -159,7 +159,7 @@ Major merges on `master` since the prior ledger refresh:
 - **Cleanup + design**: A2 legacy UI/docs delete (#53, #55), A3 design tokens (#57), settings feedback (#56)
 - **Observed sessions + continuity**: J1 relay mirror (#54), J2 "On your Mac" UI (#58), J3 Return-to-Desk (#59)
 - **5c + reliability**: lock-screen decision delivery fix (#52); push `/secret-request` + `/question` (#62); append retry (#19); test deflake (#60, #61)
-- **Owner D0.2 device proof** recorded [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md) — 5c FAIL; fix shipped; owner re-test underway
+- **Owner D0.2 device proof** morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md); evening **PASS** [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md)
 - **Docs**: device-proof results + terminal research (`566dd156`, `7e991c6f`), A3 design reference (`c461d56b`)
 
 Prior Jul 5–6 delta (still accurate): Codex sessions `019f2dec`–`019f3763` chain, wireframe bundle indexed, `ARCHITECTURE.md` §0.1 Cursor shell refresh.

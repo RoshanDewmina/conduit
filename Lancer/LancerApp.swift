@@ -231,6 +231,9 @@ final class LancerNotificationDelegate: NSObject, UNUserNotificationCenterDelega
         let info      = response.notification.request.content.userInfo
         let approvalId = info["approvalId"] as? String ?? ""
         let sessionId  = info["sessionId"]  as? String ?? ""
+        // Opaque content binding from the APNs payload — required when the app
+        // was force-quit and has no local Approval row to read the hash from.
+        let contentHash = info["contentHash"] as? String
 
         switch response.actionIdentifier {
         case "approval.approve", "approval.reject":
@@ -240,12 +243,25 @@ final class LancerNotificationDelegate: NSObject, UNUserNotificationCenterDelega
             // running (app was foregrounded/backgrounded, not force-quit), this
             // updates the live Inbox view model immediately.
             ApprovalActionBuffer.shared.record(
-                PendingApprovalAction(approvalID: approvalId, sessionID: sessionId, action: action)
+                PendingApprovalAction(
+                    approvalID: approvalId,
+                    sessionID: sessionId,
+                    action: action,
+                    contentHash: contentHash
+                )
             )
+            var actionInfo: [String: Any] = [
+                "approvalId": approvalId,
+                "sessionId": sessionId,
+                "action": action,
+            ]
+            if let contentHash, !contentHash.isEmpty {
+                actionInfo["contentHash"] = contentHash
+            }
             NotificationCenter.default.post(
                 name: .lancerApprovalAction,
                 object: nil,
-                userInfo: ["approvalId": approvalId, "sessionId": sessionId, "action": action]
+                userInfo: actionInfo
             )
             guard !approvalId.isEmpty else {
                 completionHandler()
@@ -254,7 +270,7 @@ final class LancerNotificationDelegate: NSObject, UNUserNotificationCenterDelega
             let handlerBox = CompletionHandlerBox(run: completionHandler)
             Task { @MainActor in
                 let taskID = UIApplication.shared.beginBackgroundTask(withName: "dev.lancer.approvalDecision")
-                await Self.deliverDecision(approvalID: approvalId, decision: decision)
+                await Self.deliverDecision(approvalID: approvalId, decision: decision, contentHash: contentHash)
                 handlerBox.run()
                 if taskID != .invalid { UIApplication.shared.endBackgroundTask(taskID) }
             }
@@ -298,8 +314,18 @@ final class LancerNotificationDelegate: NSObject, UNUserNotificationCenterDelega
     /// on-disk redelivery queue — so this is the same delivery guarantee the
     /// Live Activity intent path already relies on, just invoked from a place
     /// that is guaranteed to run even when no scene connects.
-    private static func deliverDecision(approvalID: String, decision: Approval.Decision) async {
+    private static func deliverDecision(
+        approvalID: String,
+        decision: Approval.Decision,
+        contentHash: String?
+    ) async {
         guard let db = try? AppDatabase.openShared() else { return }
-        await ApprovalRelay.shared.enqueue(approvalID: approvalID, decision: decision, db: db, hostID: "")
+        await ApprovalRelay.shared.enqueue(
+            approvalID: approvalID,
+            decision: decision,
+            db: db,
+            hostID: "",
+            contentHash: contentHash
+        )
     }
 }

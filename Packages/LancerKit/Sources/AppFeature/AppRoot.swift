@@ -598,6 +598,25 @@ public struct AppRoot: View {
         else { return }
         let decision: Approval.Decision = (action == "approve") ? .approved : .rejected
         let approvalID = ApprovalID(uuid)
+        let contentHash = info["contentHash"] as? String
+        // Prefer the APNs-echoed hash when the inbox has no local row yet
+        // (force-quit / push-only). inboxVM.decide would forward nil and race
+        // the direct deliverDecision POST, overwriting a good contentHash.
+        if let hash = contentHash, !hash.isEmpty,
+           fleetStore.slot(forApprovalID: approvalID) == nil,
+           !activeInboxViewModel.approvals.contains(where: { $0.id == approvalID }) {
+            Task {
+                guard let db = try? AppDatabase.openShared() else { return }
+                await ApprovalRelay.shared.enqueue(
+                    approvalID: idString,
+                    decision: decision,
+                    db: db,
+                    hostID: "",
+                    contentHash: hash
+                )
+            }
+            return
+        }
         if let slot = fleetStore.slot(forApprovalID: approvalID) {
             selectFleetSlot(slot.id)
             slot.inboxVM.decide(approvalID, decision: decision)
@@ -622,7 +641,8 @@ public struct AppRoot: View {
                 approvalID: action.approvalID,
                 decision: decision,
                 db: env.database,
-                hostID: ""
+                hostID: "",
+                contentHash: action.contentHash
             )
         }
     }

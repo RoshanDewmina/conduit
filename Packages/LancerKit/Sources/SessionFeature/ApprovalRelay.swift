@@ -142,7 +142,8 @@ public final class ApprovalRelay {
         approvalID: String,
         decision: Approval.Decision,
         db: AppDatabase,
-        hostID: String
+        hostID: String,
+        contentHash: String? = nil
     ) async {
         let approvalRepo = ApprovalRepository(db)
         let auditRepo = AuditRepository(db)
@@ -150,11 +151,11 @@ public final class ApprovalRelay {
         // 1. Persist the decision immediately — first-decision-wins. The DB
         //    UPDATE is guarded on `decision IS NULL`, so a stale Live Activity /
         //    banner tap on an already-resolved gate is a no-op here.
-        // Populated from the persisted row below (this call has no in-memory
-        // Approval in scope — it's reached from an AppIntent/Live Activity tap,
-        // not a live view model) so the forwarded decision echoes back the same
-        // contentHash lancerd's approvalStore.resolve verifies against.
-        var contentHash: String?
+        // Prefer a caller-supplied contentHash (APNs userInfo on the force-quit
+        // lock-screen path — no local row yet) and fall back to the persisted
+        // row when one exists (warm Live Activity / AppIntent tap). lancerd's
+        // approvalStore.resolve rejects a missing/mismatched hash.
+        var contentHash = contentHash
         if let uuid = UUID(uuidString: approvalID) {
             let id = ApprovalID(uuid)
             let changed = (try? await approvalRepo.decide(id: id, decision: decision)) ?? false
@@ -171,7 +172,9 @@ public final class ApprovalRelay {
             } else {
                 Notifications.shared.clearDeliveredApproval(id: approvalID)
             }
-            contentHash = (try? await approvalRepo.find(id: id))?.contentHash
+            if contentHash == nil || contentHash?.isEmpty == true {
+                contentHash = (try? await approvalRepo.find(id: id))?.contentHash
+            }
         }
         let hostUUID = UUID(uuidString: hostID) ?? UUID()
         try? await auditRepo.record(

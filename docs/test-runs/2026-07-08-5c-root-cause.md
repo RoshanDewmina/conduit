@@ -213,14 +213,18 @@ compiles clean under strict concurrency). A pre-existing, separate problem — t
 full `LancerKitTests` suite is not safely parallelizable as currently written — is
 real and worth fixing, but out of scope for this checkpoint-5c fix.
 
-## Open / owner-gated
+## Follow-on (evening 2026-07-08) — content-hash echo + race
 
-- **On-device re-run of checkpoint 5c is owner-gated and interactive** (per the
-  task): install this branch's build on the physical iPhone, force-quit, lock,
-  trigger a `fileWrite`/medium-risk `agent-hook` escalation, long-press → Approve
-  (then separately Reject) on the lock screen, and confirm `lancerd`'s `audit.log`
-  shows `approve`/`deny` within ~30s and `queue.json` clears — this was not run by
-  this session.
+#52 closed the "decision never left the phone" gap. Evening re-test then hit
+`approvalStore.resolve` **content hash mismatch**: force-quit has no local DB row,
+APNs originally omitted `contentHash`, and a warm drain POST could overwrite a
+hash-bearing decision. Fix + host-proven PASS (Approve `79137ae4…`, Reject
+`461bc3e0…`) documented in
+[`2026-07-08-tier0-5c-retest-results.md`](2026-07-08-tier0-5c-retest-results.md).
+**D0.2 / checkpoint 5c: PASS.**
+
+## Still open (separate)
+
 - **Full `LancerKitTests` suite flakiness** (see above) is a pre-existing,
   separate problem worth a dedicated fix (likely: run the whole scheme
   `.serialized`, or replace the global-`URLProtocol` test pattern with per-test

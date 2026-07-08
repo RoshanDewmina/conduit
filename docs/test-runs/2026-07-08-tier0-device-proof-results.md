@@ -25,7 +25,7 @@
 | 6b | Force-quit + lock-screen approve | **FAIL** (5c) — phone UX OK, host no decision |
 | 7 | Force-quit + lock-screen reject | **FAIL** — same delivery gap |
 
-**D0.2 / checkpoint 5c: NOT PASSED.** Layers 0–3 last gate remains open.
+**D0.2 / checkpoint 5c: NOT PASSED** (this morning run). Evening re-test **PASS** — see [`2026-07-08-tier0-5c-retest-results.md`](2026-07-08-tier0-5c-retest-results.md) (#52 delivery + content-hash echo/race fixes).
 
 ---
 

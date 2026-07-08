@@ -76,6 +76,10 @@ type approvalEvent struct {
 	Command   string `json:"command"`
 	Risk      string `json:"risk"`
 	HostName  string `json:"hostName"`
+	// ContentHash is the opaque SHA-256 binding lancerd stamped on the pending
+	// approval. Carried into APNs userInfo (not the alert body) so a force-quit
+	// lock-screen Approve/Reject can echo it without a local DB row.
+	ContentHash string `json:"contentHash,omitempty"`
 }
 
 type runCompleteEvent struct {
@@ -514,6 +518,42 @@ func pushRunComplete(deviceToken string, ev runCompleteEvent) error {
 	return nil
 }
 
+// approvalAPNsPayload builds the alert push for a pending approval. The alert
+// body is redacted; contentHash (when present) rides only in custom userInfo so
+// a force-quit lock-screen action can echo it without a local DB row.
+func approvalAPNsPayload(ev approvalEvent) (payload map[string]any, risk, body string) {
+	risk = ev.Risk
+	if risk == "" {
+		risk = "unknown"
+	}
+	title := fmt.Sprintf("Approval needed · %s", ev.HostName)
+	// PRIVACY: never put raw command text, file paths, env values, or secrets
+	// in the APNs alert body — it appears on the lock screen. Use a redacted
+	// summary (risk + tool category). Full detail is fetched in-app post-unlock.
+	body = redactSummary(risk, ev.Command)
+
+	payload = map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{
+				"title": title,
+				"body":  body,
+			},
+			"sound":    "default",
+			"badge":    1,
+			"category": "approval",
+		},
+		"approvalId": ev.ID,
+		"sessionId":  ev.SessionID,
+		"risk":       risk,
+	}
+	// Opaque binding only — never put command/cwd/toolInput in userInfo. The
+	// hash lets the lock-screen action path echo what the human was shown.
+	if ev.ContentHash != "" {
+		payload["contentHash"] = ev.ContentHash
+	}
+	return payload, risk, body
+}
+
 func pushApproval(deviceToken string, ev approvalEvent) error {
 	keyID := mustEnv("APNS_KEY_ID")
 	teamID := mustEnv("APNS_TEAM_ID")
@@ -530,31 +570,7 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 		return fmt.Errorf("make JWT: %w", err)
 	}
 
-	risk := ev.Risk
-	if risk == "" {
-		risk = "unknown"
-	}
-	title := fmt.Sprintf("Approval needed · %s", ev.HostName)
-	// PRIVACY: never put raw command text, file paths, env values, or secrets
-	// in the APNs alert body — it appears on the lock screen. Use a redacted
-	// summary (risk + tool category). Full detail is fetched in-app post-unlock.
-	body := redactSummary(risk, ev.Command)
-
-	payload := map[string]any{
-		"aps": map[string]any{
-			"alert": map[string]string{
-				"title": title,
-				"body":  body,
-			},
-			"sound":    "default",
-			"badge":    1,
-			"category": "approval",
-		},
-		"approvalId": ev.ID,
-		"sessionId":  ev.SessionID,
-		"risk":       risk,
-	}
-
+	payload, risk, body := approvalAPNsPayload(ev)
 	buf, _ := json.Marshal(payload)
 	if err := sendAPNsAlert(deviceToken, bundleID, token, buf, "10"); err != nil {
 		return err

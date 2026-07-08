@@ -1886,6 +1886,10 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 		"hostName":  hostname,
 		"agent":     event.Agent,
 		"toolName":  tool,
+		// contentHash must ride the APNs userInfo so a force-quit lock-screen
+		// Approve/Reject can echo it back — ApprovalRelay.enqueue has no local
+		// DB row in that case, and approvalStore.resolve rejects a missing hash.
+		"contentHash": event.ContentHash,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
