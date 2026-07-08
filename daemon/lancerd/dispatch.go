@@ -720,6 +720,17 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			case "content_block_stop":
 				if pending != nil {
 					emitToolArtifact(emit, runID, pending.toolID, pending.toolName, pending.inputBuf.String())
+					if isQuestionToolName(pending.toolName) {
+						// Internal-only notification, intercepted by
+						// wrapEmitForRun (which has this run's Agent/CWD
+						// context this free function doesn't) to build the
+						// full QuestionEvent via extractQuestionEvent
+						// (question.go) — same pattern as
+						// "agent.run.vendorSession" below.
+						emit("agent.question.raw", map[string]any{
+							"runId": runID, "toolId": pending.toolID, "toolName": pending.toolName, "inputJSON": pending.inputBuf.String(),
+						})
+					}
 					pending = nil
 				}
 			}
@@ -959,6 +970,13 @@ type dispatcher struct {
 	bindVendorSession func(runID, vendorSessionID string) error
 	// onRunTerminal is invoked when a launched run emits exited/failed status.
 	onRunTerminal runTerminalCallback
+	// onQuestion is invoked when a question-tool tool_use completes in a run's
+	// stream-json output (see wrapEmitForRun's "agent.question.raw" case and
+	// question.go's extractQuestionEvent). Nil ⇒ question tool_use calls are
+	// still emitted as ordinary tool artifacts (emitToolArtifact already ran)
+	// but never become a first-class QuestionEvent — no server wired yet, same
+	// fail-safe-no-op convention as bindVendorSession/onRunTerminal being nil.
+	onQuestion func(event QuestionEvent)
 	// receiptAccum/receipts track per-run evidence for lancer.proof/v0 (A1).
 	receiptMu    sync.Mutex
 	receiptAccum map[string]*receiptAccumulator
@@ -1034,6 +1052,23 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 			d.mu.Unlock()
 			if ledgerBacked && d.bindVendorSession != nil {
 				_ = d.bindVendorSession(runID, vendorSessionID)
+			}
+			return
+		}
+		if method == "agent.question.raw" {
+			m, _ := params.(map[string]any)
+			toolID, _ := m["toolId"].(string)
+			toolName, _ := m["toolName"].(string)
+			inputJSON, _ := m["inputJSON"].(string)
+			d.mu.Lock()
+			run := d.runs[runID]
+			d.mu.Unlock()
+			var agent, cwd string
+			if run != nil {
+				agent, cwd = run.Agent, run.CWD
+			}
+			if event, ok := extractQuestionEvent(agent, runID, cwd, toolID, toolName, inputJSON); ok && d.onQuestion != nil {
+				d.onQuestion(event)
 			}
 			return
 		}

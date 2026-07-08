@@ -29,7 +29,10 @@ func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
 	r := &e2eRouter{client: client, server: srv}
 	if client != nil {
 		client.messageHandler = r.handleMessage
-		client.pairedHandler = r.resendPendingApprovals
+		client.pairedHandler = func() {
+			r.resendPendingApprovals()
+			r.resendPendingQuestions()
+		}
 	}
 	return r
 }
@@ -51,6 +54,24 @@ func (r *e2eRouter) resendPendingApprovals() {
 	log.Printf("e2e: re-sending %d pending approval(s) after (re)pair", len(pending))
 	for _, ev := range pending {
 		r.sendApproval(ev)
+	}
+}
+
+// resendPendingQuestions pushes every still-unanswered question to the phone.
+// Mirrors resendPendingApprovals: a question that arrived while the phone was
+// disconnected would otherwise never reach it. The phone upserts by question
+// ID, so duplicates are harmless.
+func (r *e2eRouter) resendPendingQuestions() {
+	if r.server == nil {
+		return
+	}
+	pending := r.server.questions.pendingEvents()
+	if len(pending) == 0 {
+		return
+	}
+	log.Printf("e2e: re-sending %d pending question(s) after (re)pair", len(pending))
+	for _, ev := range pending {
+		r.sendQuestion(ev)
 	}
 }
 
@@ -119,6 +140,42 @@ func (r *e2eRouter) sendApprovalResolved(approvalID, decision string) {
 	}
 }
 
+// sendQuestion routes a QuestionEvent through the E2E relay. Relay "type" is
+// "agentQuestion" — the relay kind the Lane E proposal names explicitly for
+// this event, distinct from the "questionPending"-style naming an
+// approval-mirroring guess would otherwise use.
+func (r *e2eRouter) sendQuestion(ev QuestionEvent) {
+	if r.client == nil || !r.client.isPaired() {
+		log.Printf("e2e: dropped question %s — relay client not paired", ev.QuestionID)
+		return
+	}
+
+	msg := map[string]interface{}{
+		"type": "agentQuestion",
+		"payload": map[string]interface{}{
+			"questionID":    ev.QuestionID,
+			"agent":         ev.Agent,
+			"runId":         ev.RunID,
+			"cwd":           ev.CWD,
+			"questions":     ev.Questions,
+			"allowFreeText": ev.AllowFreeText,
+			"confidence":    ev.Confidence,
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("e2e: marshal question failed: %v", err)
+		return
+	}
+
+	if err := r.client.sendMessage("agentQuestion", data); err != nil {
+		log.Printf("e2e: send question failed: %v", err)
+	} else {
+		log.Printf("e2e: sent question %s over relay", ev.QuestionID)
+	}
+}
+
 // sendStatusUpdate sends agent status through the E2E relay.
 func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, spend float64, hostName string) {
 	if r.client == nil || !r.client.isPaired() {
@@ -181,6 +238,32 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		}
 		if err := r.client.sendMessage("approvalResponseAck", ackData); err != nil {
 			log.Printf("e2e: send approvalResponseAck failed: %v", err)
+		}
+
+	case "questionAnswer":
+		var answer QuestionAnswer
+		if err := json.Unmarshal(payload, &answer); err != nil {
+			log.Printf("e2e: unmarshal questionAnswer failed: %v", err)
+			return
+		}
+		_, ok := r.server.applyQuestionAnswer(answer)
+		// Mirrors approvalResponse's explicit ack below: a successful outgoing
+		// send is not proof of delivery, so tell the phone whether the daemon
+		// actually resolved the question rather than leaving it to guess.
+		ackMsg := map[string]interface{}{
+			"type": "questionAnswerAck",
+			"payload": map[string]interface{}{
+				"questionID": answer.QuestionID,
+				"ok":         ok,
+			},
+		}
+		ackData, err := json.Marshal(ackMsg)
+		if err != nil {
+			log.Printf("e2e: marshal questionAnswerAck failed: %v", err)
+			return
+		}
+		if err := r.client.sendMessage("questionAnswerAck", ackData); err != nil {
+			log.Printf("e2e: send questionAnswerAck failed: %v", err)
 		}
 
 	case "agentDispatch":
