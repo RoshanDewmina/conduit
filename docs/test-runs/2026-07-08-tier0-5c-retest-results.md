@@ -7,7 +7,7 @@
 **Device:** Roshan's iPhone `557A7877-F729-5031-9606-0E04F2B67822`  
 **Relay:** `wss://conduit-push-y4wpy6zeva-ts.a.run.app`  
 **Pairing code (final):** `865601`  
-**Repo tip at proof:** `3fd6674f` + this commit (content-hash / race fixes)  
+**Repo tip at proof:** `732071a7` — content-hash echo + race fixes committed  
 **Pass bar:** host `~/.lancer/audit.log` shows `approve` / `deny` for the exact `approvalId`; hook unblocks. Never PASS from phone UX alone.
 
 ---

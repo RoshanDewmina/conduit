@@ -1,7 +1,7 @@
 # Lancer Feature Implementation Gap Matrix
 
 Compiled: 2026-07-06  
-Updated: 2026-07-08 — Layers 0–4 merged on `master`; D0.2 / 5c physical-device gate **PASS** (evening re-test).  
+Updated: 2026-07-08 (evening) — Layers 0–4 + A3 R1–R4 merged on `master` (`732071a7`); D0.2 / 5c physical-device gate **PASS**.  
 Canonical source: [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
 Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 
@@ -10,9 +10,9 @@ Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 | Layer | Status |
 |-------|--------|
 | **Real backend (master)** | Governed loop shipped: pair → dispatch → approve → audit. Receipt pipeline (`lancer.proof/v0`), question/Ladder events, gated ship actions, observed-session relay mirror on tree. No biometric gate — removed entirely 2026-07-07 (permanent). |
-| **Cursor UI shell (master)** | Merged under `AppFeature/CursorStyle`; A3 design tokens (#57) + A2 dead-code cleanup (#55) landed; R1–R4 surface rebuild open (#63–#66). |
+| **Cursor UI shell (master)** | Merged under `AppFeature/CursorStyle`; A3 design tokens (#57) + A2 dead-code cleanup (#55) + R1–R4 surface rebuild (#63–#66) landed. |
 | **Live Cursor shell** | `LANCER_CURSOR_SHELL_LIVE=1` routes through `AppRoot` for pairing, conversation-backed workspace/thread hydration, dispatch, continue, approval decisions, receipts, question cards, and real Settings handoff. |
-| **Gap** | **D0.2 / 5c closed** — evening PASS ([`test-runs/2026-07-08-tier0-5c-retest-results.md`](../test-runs/2026-07-08-tier0-5c-retest-results.md)); morning FAIL archived. Commit content-hash / race-fix dirty files still pending. |
+| **Gap** | **D0.2 / 5c closed** — evening PASS ([`test-runs/2026-07-08-tier0-5c-retest-results.md`](../test-runs/2026-07-08-tier0-5c-retest-results.md)); fix committed `732071a7`. Next: Away Launch Composer. |
 
 **Tier 0 exit criteria:** send prompt from phone → receive approval → approve (including lock-screen 5c) → follow-up works through Cursor shell with real `lancerd` on physical device.
 
@@ -51,7 +51,7 @@ Scope: Tier 0 phone-usable loop + Cursor shell coverage audit
 | Feature | Master | Cursor shell |
 |---------|--------|--------------|
 | Away Digest home (needs-you-first) | **Shipped** — attention ordering (#34 Lane C) | Wired in live shell |
-| Away Launch Composer + launch contract | Missing | Generic composer only — **still frozen** |
+| Away Launch Composer + launch contract | Missing | Generic composer only — **next lane** (D0.2 gate closed) |
 | Proof Suite / Proof Reel | **Shipped** — Proof Reel H1 (#51) over run receipts | ReceiptCardView + replay scrubber |
 | Mobile QA Annotation | Missing | Not present |
 | Question Cards + Ladder | **Shipped** — E1 events (#49) + E2 QuestionCardView (#44) + E3 voice-answer (#45) | Wired in live shell |
@@ -76,7 +76,7 @@ Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026
 | Emergency Stop not atomic | P0 | **Fixed** (`531685b6`) — daemon latch + RPC |
 | JWT HS256-only | P1 | Open |
 | Dormant StoreKit vs Stripe entitlement | P1 | Open |
-| Watch app not embedded | P1 | Open |
+| Watch app not embedded | P1 | **Cut** — owner decision Jul 8 |
 | Daemon single pairing-slot ceiling | P2 | Open |
 
 ---
@@ -87,33 +87,32 @@ Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026
 |-----------|--------|--------------|
 | LIVE_LOOP_RUNBOOK SSH subset | Proven sim + device C2 | Needs live-shell rerun |
 | On-device QA (legacy chat-device checklist, purged 2026-07-06) §1–6 | Shipped in legacy sidebar; Cursor live shell partial | Needs live-shell rerun |
-| On-device QA §7 (APNs lock-screen) | **PASS** (2026-07-08 evening) — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](../test-runs/2026-07-08-tier0-5c-retest-results.md) | Commit content-hash / race-fix dirty files |
+| On-device QA §7 (APNs lock-screen) | **PASS** (2026-07-08 evening) — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](../test-runs/2026-07-08-tier0-5c-retest-results.md) | Fix committed `732071a7` |
 
 ---
 
 ## Recommended sequencing
 
-1. **Commit** content-hash / race-fix dirty files from 5c PASS (iOS + lancerd + push-backend).
-2. Merge A3 R1–R4 surface rebuild (#63–#66) — Tier 0 gate closed.
-3. Remaining: Away Launch Composer, Watch embed, Flight Recorder depth.
-4. P1 billing reconciliation (StoreKit vs Stripe) before external beta.
+1. **Away Launch Composer** — dedicated launch-setup surface + contract chips (`04-launch-setup.html`).
+2. Layer 4 exit bar gaps: `relay-approval-e2e.sh` question round-trip, owner device question-loop proof, dual-SDK build check, fresh exhaustive UI screenshots post-A3.
+3. P1 billing reconciliation (StoreKit vs Stripe) before external beta.
 
 ---
 
 ## Consolidated status notes (folded from `2026-07-06-lancer-consolidated-status.md`, deleted 2026-07-08)
 
 **Core product decision:** V1 wedge is phone steers/reviews/approves/continues — not a phone IDE.
-Tier 0 exit: pair → dispatch → approval (incl. 5c lock-screen) → follow-up on physical device — **5c PASS** 2026-07-08 evening. Most Tier 2 lanes merged Jul 7–8; Away Launch Composer + Watch still open.
+Tier 0 exit: pair → dispatch → approval (incl. 5c lock-screen) → follow-up on physical device — **5c PASS** 2026-07-08 evening (`732071a7`). Most Tier 2 lanes merged Jul 7–8; Away Launch Composer next; Watch cut.
 
 **Worktree warning:** do **not** wholesale-merge `.claude/worktrees/amazing-mayer-246fef` — deletion-heavy
 diff; cherry-pick verified slices only. See
 [`docs/design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md`](../design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md).
 
-**Stale doc reminders:** iOS deployment target is **26.0** (`project.yml`); Cursor shell + Layers 0–4 on
-`master` (`23563bb5`); tab bar / Control / Activity roots are vestigial; legacy sidebar / Command Home is **deleted**.
+**Stale doc reminders:** iOS deployment target is **26.0** (`project.yml`); Cursor shell + Layers 0–4 + A3 on
+`master` (`732071a7`); tab bar / Control / Activity roots are vestigial; legacy sidebar / Command Home is **deleted**.
 
 **Recommended next actions:**
-1. Commit content-hash / race-fix dirty files from [`test-runs/2026-07-08-tier0-5c-retest-results.md`](../test-runs/2026-07-08-tier0-5c-retest-results.md).
-2. Review + merge A3 R1–R4 PRs (#63–#66).
+1. Away Launch Composer lane (`04-launch-setup.html`).
+2. Layer 4 exit bar: question round-trip e2e + owner device question-loop proof.
 3. Do not wholesale-merge `amazing-mayer`.
 4. P1 billing reconciliation before external beta.
