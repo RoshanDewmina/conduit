@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import IntentsKit
 import LancerCore
 import PersistenceKit
 import SessionFeature
@@ -20,14 +21,28 @@ import SessionFeature
 /// the attached SSH channel then the relay bridge; if neither is live (app never
 /// connected this launch, e.g. Siri invoked while the app was fully closed), the
 /// intent reports that rather than hanging — see `CommandGateway`'s doc comment.
+/// Naming a `machine` (D3) speaks that machine's detail from `MachineEntity` —
+/// deliberately its connection freshness, not a run count: the status snapshot
+/// comes from whichever transport happens to be live and can't be attributed to
+/// a specific named host, and Siri must not present stale/other-host data as
+/// that machine's live state.
 @available(iOS 17.0, *)
 public struct AgentStatusQueryIntent: AppIntent {
     public static let title: LocalizedStringResource = "Agent Status"
-    public static let description = IntentDescription("Check how many agent runs are active right now.")
+    public static let description = IntentDescription("Check how many agent runs are active right now, or ask about a specific machine.")
+
+    @Parameter(title: "Machine")
+    public var machine: MachineEntity?
 
     public init() {}
+    public init(machine: MachineEntity? = nil) {
+        self.machine = machine
+    }
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
+        if let machine {
+            return .result(dialog: Self.machineDetailDialog(machine))
+        }
         switch await CommandGateway.shared.execute(.queryStatus(homeDir: nil)) {
         case .statusSnapshot(let snapshot):
             let running = snapshot.agents.compactMap(\.runningCount).reduce(0, +)
@@ -38,8 +53,20 @@ public struct AgentStatusQueryIntent: AppIntent {
         case .timedOut:
             return .result(dialog: "That machine didn't respond in time.")
         case .transportUnavailable, .denied, .ok:
+            let machines = (try? await MachineEntityQuery().suggestedEntities()) ?? []
+            if machines.isEmpty {
+                return .result(dialog: "No machines are paired with Lancer yet. Open the app to connect one.")
+            }
             return .result(dialog: "Lancer isn't connected to a machine right now. Open the app to reconnect.")
         }
+    }
+
+    static func machineDetailDialog(_ machine: MachineEntity) -> IntentDialog {
+        guard let lastConnected = machine.lastConnectedAt else {
+            return IntentDialog("\(machine.name) (\(machine.hostname)) has never connected from this phone. Open Lancer to connect.")
+        }
+        let relative = RelativeDateTimeFormatter().localizedString(for: lastConnected, relativeTo: .now)
+        return IntentDialog("\(machine.name) (\(machine.hostname)) last connected \(relative). Open Lancer for live status.")
     }
 }
 
@@ -64,5 +91,60 @@ public struct PendingApprovalsQueryIntent: AppIntent {
             return .result(dialog: "No approvals are waiting.")
         }
         return .result(dialog: "\(pending.count) approval\(pending.count == 1 ? "" : "s") waiting for your review.")
+    }
+}
+
+// MARK: - Read-only navigation/search intents (D3)
+
+/// "Search Lancer for X" — read-only over the same FTS index the in-app search
+/// overlay queries (`chat_fts` via `ChatConversationRepository.search`, reached
+/// here through `ConversationEntityQuery`). Opens the app; the spoken result
+/// summarizes what the search found so the answer is useful hands-free too.
+@available(iOS 17.0, *)
+public struct SearchLancerIntent: AppIntent {
+    public static let title: LocalizedStringResource = "Search Lancer"
+    public static let description = IntentDescription("Search your agent conversations.")
+    public static let openAppWhenRun: Bool = true
+
+    @Parameter(title: "Query", requestValueDialog: "What do you want to search for?")
+    public var query: String
+
+    public init() {}
+    public init(query: String) {
+        self.query = query
+    }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let matches = try await ConversationEntityQuery().entities(matching: query)
+        if matches.isEmpty {
+            return .result(dialog: "No conversations match '\(query)'.")
+        }
+        let top = matches[0]
+        if matches.count == 1 {
+            return .result(dialog: "One conversation matches '\(query)': '\(top.title)' on \(top.hostName).")
+        }
+        return .result(dialog: "\(matches.count) conversations match '\(query)' — most recent: '\(top.title)' on \(top.hostName).")
+    }
+}
+
+/// "Open <conversation> in Lancer" — the entity parameter gives search +
+/// disambiguation for free (`ConversationEntityQuery` string-matches over FTS;
+/// multiple hits → system picker). Read-only: opens the app, never dispatches.
+@available(iOS 17.0, *)
+public struct OpenConversationIntent: AppIntent {
+    public static let title: LocalizedStringResource = "Open Conversation"
+    public static let description = IntentDescription("Open one of your agent conversations.")
+    public static let openAppWhenRun: Bool = true
+
+    @Parameter(title: "Conversation", requestValueDialog: "Which conversation?")
+    public var conversation: ConversationEntity
+
+    public init() {}
+    public init(conversation: ConversationEntity) {
+        self.conversation = conversation
+    }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        .result(dialog: "Opening '\(conversation.title)' from \(conversation.hostName).")
     }
 }

@@ -55,12 +55,32 @@ public struct LancerAppShortcuts: AppShortcutsProvider {
             systemImageName: "stop.circle"
         )
         AppShortcut(
-            intent: DenyLatestApprovalIntent(),
+            intent: DenyApprovalIntent(),
             phrases: [
+                // Pre-D2 phrase kept verbatim: with no approval named, the intent
+                // resolves to the most recent pending one, so the old habit still works.
                 "Deny the latest approval in \(.applicationName)",
+                "Deny an approval in \(.applicationName)",
             ],
-            shortTitle: "Deny Latest Approval",
+            shortTitle: "Deny Approval",
             systemImageName: "xmark.shield"
+        )
+        AppShortcut(
+            intent: SearchLancerIntent(),
+            phrases: [
+                "Search \(.applicationName)",
+                "Search my \(.applicationName) conversations",
+            ],
+            shortTitle: "Search",
+            systemImageName: "magnifyingglass"
+        )
+        AppShortcut(
+            intent: OpenConversationIntent(),
+            phrases: [
+                "Open a conversation in \(.applicationName)",
+            ],
+            shortTitle: "Open Conversation",
+            systemImageName: "bubble.left.and.text.bubble.right"
         )
     }
 }

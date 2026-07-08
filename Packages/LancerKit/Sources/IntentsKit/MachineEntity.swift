@@ -12,6 +12,10 @@ public struct MachineEntity: AppEntity, Identifiable, Sendable {
   public let id: String
   public let name: String
   public let hostname: String
+  /// Freshness signal for Siri answers (D3): a status dialog naming this machine
+  /// must say how stale the phone's knowledge of it is, not answer confidently
+  /// from an old row.
+  public let lastConnectedAt: Date?
 
   public var displayRepresentation: DisplayRepresentation {
     DisplayRepresentation(title: "\(name)")
@@ -21,6 +25,7 @@ public struct MachineEntity: AppEntity, Identifiable, Sendable {
     id = host.id.uuidString
     name = host.name
     hostname = host.hostname
+    lastConnectedAt = host.lastConnectedAt
   }
 }
 

@@ -1,4 +1,5 @@
 #if canImport(AppIntents)
+import Foundation
 import Testing
 import LancerCore
 import PersistenceKit
@@ -9,13 +10,18 @@ struct MachineEntityQueryTests {
   @Test("exact ID resolves the machine")
   func exactIDHit() async throws {
     try await IntentsKitTestFixtures.withDatabase { db in
-      let host = LancerCore.Host(name: "mac-studio", hostname: "studio.local", username: "dev")
+      let lastConnected = Date(timeIntervalSince1970: 1_700_000_000)
+      let host = LancerCore.Host(
+        name: "mac-studio", hostname: "studio.local", username: "dev",
+        lastConnectedAt: lastConnected
+      )
       try await HostRepository(db).upsert(host)
 
       let query = MachineEntityQuery()
       let hits = try await query.entities(for: [host.id.uuidString])
       #expect(hits.count == 1)
       #expect(hits[0].name == "mac-studio")
+      #expect(hits[0].lastConnectedAt == lastConnected)
     }
   }
 
