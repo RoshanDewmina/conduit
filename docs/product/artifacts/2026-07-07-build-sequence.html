@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lancer — Build Sequence &amp; Hands-Free Layer</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --surface-2: #1e1e1e;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --muted: #8a8a8a;
+      --accent: #6ea8fe;
+      --green: #3dd68c;
+      --amber: #f5c542;
+      --red: #f87171;
+      --purple: #c084fc;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .topbar a.back { font-size: 13px; color: var(--muted); }
+    header.doc { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 28px; }
+    .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+    h1 { font-size: 1.85rem; font-weight: 600; margin: 0 0 10px; }
+    .lede { color: var(--muted); max-width: 78ch; margin: 0 0 16px; font-size: 15px; }
+    .meta-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+    .pill.gate { border-color: #5c4a12; color: var(--amber); background: #1a1608; }
+    .pill.safe { border-color: #1f6f4a; color: var(--green); background: #0f1f18; }
+    .pill.locked { border-color: #4a3070; color: var(--purple); background: #1a1028; }
+    nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; position: sticky; top: 0; z-index: 10; background: var(--bg); padding: 12px 0; border-bottom: 1px solid var(--border); }
+    nav.toc a { font-size: 13px; padding: 6px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    nav.toc a:hover, nav.toc a.active { border-color: var(--accent); color: var(--accent); }
+    section { margin-bottom: 44px; scroll-margin-top: 72px; }
+    h2 { font-size: 1.3rem; margin: 0 0 8px; }
+    h3 { font-size: 1rem; margin: 20px 0 10px; color: var(--muted); font-weight: 500; }
+    .section-note { color: var(--muted); font-size: 14px; margin: 0 0 16px; max-width: 72ch; }
+    .fact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin: 16px 0; }
+    .fact-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .fact-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+    .fact-card .value { font-size: 1.5rem; font-weight: 600; margin-bottom: 6px; }
+    .fact-card p { margin: 0; font-size: 14px; color: var(--muted); }
+    .mechanics { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .mech-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .mech-card h4 { margin: 0 0 6px; font-size: 14px; }
+    .mech-card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .trust-ladder { display: flex; flex-direction: column; gap: 0; margin: 20px 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .trust-row { display: grid; grid-template-columns: 180px 1fr 120px; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface); align-items: start; }
+    .trust-row:last-child { border-bottom: none; }
+    .trust-row .tier { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .trust-row .tier.free { color: var(--green); }
+    .trust-row .tier.confirm { color: var(--amber); }
+    .trust-row .tier.compensate { color: var(--accent); }
+    .trust-row .tier.app { color: var(--red); }
+    .trust-row .desc { font-size: 14px; }
+    .trust-row .surface { font-size: 12px; color: var(--muted); text-align: right; }
+    @media (max-width: 700px) { .trust-row { grid-template-columns: 1fr; } .trust-row .surface { text-align: left; } }
+    table.cap { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+    table.cap th, table.cap td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.cap th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface-2); }
+    table.cap tr:hover td { background: var(--surface); }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+    .tag.safe { background: #0f1f18; color: var(--green); border: 1px solid #1f6f4a; }
+    .tag.gated { background: #1a1028; color: var(--purple); border: 1px solid #4a3070; }
+    .tag.impossible { background: #1a0f0f; color: var(--red); border: 1px solid #5c3030; }
+    .timeline { position: relative; margin: 24px 0; padding-left: 28px; }
+    .timeline::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
+    .layer { position: relative; margin-bottom: 20px; }
+    .layer::before { content: ""; position: absolute; left: -24px; top: 18px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface-2); border: 2px solid var(--accent); }
+    .layer.gate::before { border-color: var(--amber); background: #1a1608; }
+    .layer.proof::before { border-color: var(--green); }
+    .layer.handsfree::before { border-color: var(--accent); }
+    .layer.sept::before { border-color: var(--purple); }
+    .layer-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+    .layer-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+    .layer-head h3 { margin: 0; color: var(--text); font-size: 1.05rem; }
+    .layer-timing { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .layer-items { margin: 10px 0 0; padding: 0; list-style: none; }
+    .layer-items li { font-size: 14px; padding: 8px 0; border-top: 1px solid var(--border); display: grid; grid-template-columns: 48px 1fr; gap: 12px; }
+    .layer-items li:first-child { border-top: none; padding-top: 0; }
+    .layer-items .id { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+    .layer-items .body strong { display: block; margin-bottom: 2px; }
+    .layer-items .body span { color: var(--muted); font-size: 13px; }
+    .risk { font-size: 12px; color: var(--amber); margin-top: 8px; padding: 8px 10px; background: #1a1608; border-radius: 6px; border-left: 3px solid var(--amber); }
+    .siri-merge { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 16px; }
+    .siri-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; border-top: 3px solid var(--accent); }
+    .siri-card:nth-child(2) { border-top-color: var(--green); }
+    .siri-card:nth-child(3) { border-top-color: var(--purple); }
+    .siri-card .num { font-size: 28px; font-weight: 700; color: var(--muted); line-height: 1; margin-bottom: 8px; }
+    .siri-card h4 { margin: 0 0 8px; font-size: 15px; }
+    .siri-card p { margin: 0; font-size: 13px; color: var(--muted); }
+    .callout { background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 14px 16px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 14px; margin: 16px 0; }
+    .callout strong { color: var(--text); }
+    footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back" href="index.html">&larr; All artifacts</a>
+      <a href="2026-07-07-layers-0-3-spec.html">Layers 0–3 spec &rarr;</a>
+    </div>
+
+    <header class="doc">
+      <p class="eyebrow">2026-07-07 · Build sequence</p>
+      <h1>Core &rarr; Extra, with hands-free folded in</h1>
+      <p class="lede">Companion to the differentiation verdict. Re-weights the master plan around <strong>proof + decision + hands-free trust</strong>. The lock-screen loop ships before Siri — not because Siri is wrong, but because it's demoable this month.</p>
+      <div class="meta-pills">
+        <span class="pill gate">Validation gate: 2026-07-21</span>
+        <span class="pill">iOS 26.0 deployment target</span>
+        <span class="pill locked">iOS 27 GA ~ Sept 14</span>
+        <span class="pill">Evidence: master @ 54a31915</span>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <a href="#facts">Two facts</a>
+      <a href="#mechanics">Mechanics</a>
+      <a href="#trust">Trust line</a>
+      <a href="#capabilities">Capability matrix</a>
+      <a href="#sequence">Layer sequence</a>
+      <a href="#siri">Where Siri lands</a>
+    </nav>
+
+    <section id="facts">
+      <h2>The two facts that decide everything</h2>
+      <div class="fact-grid">
+        <div class="fact-card">
+          <div class="label">Fact 1 — Calendar</div>
+          <div class="value">iOS 27 beta 3</div>
+          <p>Shipped 2026-07-06. Public beta imminent. GA ~<strong>September 14</strong>. App Store cannot require iOS 27 until then. Every feature is <span class="tag safe">26-safe</span> or <span class="tag gated">27-gated</span>.</p>
+        </div>
+        <div class="fact-card">
+          <div class="label">Fact 2 — Clock</div>
+          <div class="value">Jul 21 gate</div>
+          <p>Only Tier 0 physical-device loop + proof-wedge demo matter before the gate. Everything else is post-gate by definition.</p>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Framing correction:</strong> Governance is load-bearing infrastructure, not the pitch wedge. The wedge is proof + decision + hands-free trust. The "it just works" demo <em>this month</em> is lock-screen approval with the phone in your pocket — not a Siri conversation.
+      </div>
+    </section>
+
+    <section id="mechanics">
+      <h2>Hands-free mechanics — one primitive, many surfaces</h2>
+      <p class="section-note">App Intent is the primitive. Siri, Shortcuts, Spotlight, widgets, Live Activity buttons, and Control Center are front ends onto the same intent.</p>
+      <div class="mechanics">
+        <div class="mech-card">
+          <h4>App Intent</h4>
+          <p>One action the system invokes. Build intent + entity layer once; surfaces come nearly free.</p>
+        </div>
+        <div class="mech-card">
+          <h4>App Shortcut</h4>
+          <p>Siri phrase packaging. Provider must live in app target binary — shared packages silently fail registration.</p>
+        </div>
+        <div class="mech-card">
+          <h4>Shortcuts automations</h4>
+          <p>User-composed chains. You enable by shipping good intents — geofenced dispatch is free, not a feature.</p>
+        </div>
+        <div class="mech-card">
+          <h4>Live Activity buttons</h4>
+          <p><code>perform()</code> runs in widget extension — no relay session, no Face ID API. Device unlock only.</p>
+        </div>
+        <div class="mech-card">
+          <h4>Notification actions</h4>
+          <p>Proven 2026-06-23 app-closed. APNs &rarr; long-press &rarr; Approve/Deny. The current demo workhorse.</p>
+        </div>
+        <div class="mech-card" style="border-color: #1f6f4a;">
+          <h4>Gap today</h4>
+          <p><strong>Zero production AppEntity.</strong> "Deny the migration approval on mac-studio" can't work — Siri has nothing to refer to.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust">
+      <h2>Trust &amp; safety line</h2>
+      <p class="section-note">What can run unattended vs. what must open the app. Face ID is gone app-wide (2026-07-07); device unlock is the only human-presence check on unauthenticated surfaces.</p>
+      <div class="trust-ladder">
+        <div class="trust-row">
+          <div class="tier free">Fully hands-free</div>
+          <div class="desc">Read-only: status, pending counts, what finished, find/open. Also <strong>pause</strong> (reversible).</div>
+          <div class="surface">Siri · Widget · LA</div>
+        </div>
+        <div class="trust-row">
+          <div class="tier confirm">+ Confirmation</div>
+          <div class="desc"><strong>Stop</strong>, <strong>deny</strong> (fail-safe), voice-answer Question Cards with read-back confirm.</div>
+          <div class="surface">Siri · Shortcut</div>
+        </div>
+        <div class="trust-row">
+          <div class="tier compensate">+ Protocol controls</div>
+          <div class="desc">Low-risk <strong>approve</strong> from LA/notification only after content-hash binding + risk-tier fail-closed policy.</div>
+          <div class="surface">LA · APNs</div>
+        </div>
+        <div class="trust-row">
+          <div class="tier app">Must open app</div>
+          <div class="desc">Medium/high/critical approve, git push/merge, pairing, billing, policy edits. Voice-approve permanently rejected.</div>
+          <div class="surface">Deep link</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="capabilities">
+      <h2>Capability matrix</h2>
+      <table class="cap">
+        <thead>
+          <tr><th>Capability</th><th>Gate</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Siri status / pending / find / open / pause / stop / deny (entity-aware)</td><td><span class="tag safe">26-safe</span></td><td>Post-gate week 3. Real, cheap, demoable.</td></tr>
+          <tr><td>Voice-answer Question Card</td><td><span class="tag safe">26-safe</span></td><td>With Question Cards (Layer 4).</td></tr>
+          <tr><td>Lock-screen / LA approve (low-risk)</td><td><span class="tag safe">26-safe</span> + hash/tier</td><td>Centerpiece of hands-free. Layer 3.</td></tr>
+          <tr><td>Push-to-start Live Activity (app closed)</td><td><span class="tag safe">26-safe</span></td><td>Layer 3 daemon — token + sender work.</td></tr>
+          <tr><td>Spotlight semantic search over runs</td><td><span class="tag gated">27-gated</span></td><td>September lane. Cross-session memory via OS.</td></tr>
+          <tr><td>View Annotations — pause this run</td><td><span class="tag gated">Unverified gate</span></td><td>September prototype.</td></tr>
+          <tr><td>Siri long-running mission dispatch</td><td><span class="tag gated">27-gated</span></td><td>September — "tell Siri to start work."</td></tr>
+          <tr><td>On-device Foundation Models copilot</td><td><span class="tag safe">26-safe</span> framework</td><td>Advisory only; device/region gated.</td></tr>
+          <tr><td>Face ID before LA button</td><td><span class="tag impossible">Impossible</span></td><td>No API in shipped SDK. Design around risk tiers.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="sequence">
+      <h2>Build sequence — core to extra</h2>
+      <p class="section-note">Each layer independently shippable. Makes the previous layer's promise more credible.</p>
+
+      <div class="timeline">
+        <div class="layer gate">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 0 — The gate</h3>
+              <span class="layer-timing">days 0–1</span>
+            </div>
+            <p class="section-note" style="margin:0">Nothing below matters until Tier 0 passes on a physical device.</p>
+            <ul class="layer-items">
+              <li><span class="id">T0</span><span class="body"><strong>Tier 0 physical-device loop</strong><span>Pair &rarr; dispatch &rarr; approve &rarr; follow-up on real iPhone + lancerd. Fix stale "Face ID" checklist wording first.</span></span></li>
+            </ul>
+            <div class="risk">Risks: stale checklist step 4; relay approval persistence has sim-only coverage — device APNs timing is where it breaks.</div>
+          </div>
+        </div>
+
+        <div class="layer proof">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 1 — Proof slice</h3>
+              <span class="layer-timing">days 2–10</span>
+            </div>
+            <ul class="layer-items">
+              <li><span class="id">1a</span><span class="body"><strong>Proof Receipt card</strong><span>Files, commands/tests, done-criteria checklist, accept / another-pass / open-on-desktop. Daemon emits structured end-of-mission summary.</span></span></li>
+              <li><span class="id">1b</span><span class="body"><strong>Needs-you-first Home</strong><span>Attention-ordered ledger, all-clear state. Wrong "all clear" is the worst failure — bias to uncertainty when relay degraded.</span></span></li>
+              <li><span class="id">1c</span><span class="body"><strong>Launch contract preview</strong><span>Chips: repo, machine, agent, run-mode, "proof expected." Display-grade — "asked of the agent," not guaranteed.</span></span></li>
+            </ul>
+            <div class="risk">Risks: vendor heterogeneity (ship confidence flags); scope creep toward Reel — receipt is cards, not playback.</div>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 2 — Validation support</h3>
+              <span class="layer-timing">days 7–14</span>
+            </div>
+            <p class="section-note" style="margin:0">Interview-driven iteration on Layer 1. Stripe payment link for billing. No new build items — deliberately.</p>
+          </div>
+        </div>
+
+        <div class="layer handsfree">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 3 — Hands-free loop</h3>
+              <span class="layer-timing">weeks 3–5 · all 26-safe</span>
+            </div>
+            <ul class="layer-items">
+              <li><span class="id">3a</span><span class="body"><strong>Live Activity lifecycle</strong><span>Stop killing Activity on background. Drive updates via push token. (Note: implementation spec says this is already fixed in code.)</span></span></li>
+              <li><span class="id">3b</span><span class="body"><strong>Relay LA tokens + push-to-start</strong><span>Register Activity tokens over relay; add start sender to push-backend.</span></span></li>
+              <li><span class="id">3c</span><span class="body"><strong>riskLevel + risk-gated buttons</strong><span>Low: inline Approve/Deny. Above: "Review in Lancer" deep link.</span></span></li>
+              <li><span class="id">3d</span><span class="body"><strong>Content-hash + fail-closed</strong><span>Protocol compensating controls for unauthenticated approve surfaces.</span></span></li>
+              <li><span class="id">3e</span><span class="body"><strong>Siri Phase 1</strong><span>AppEntity layer + entity-aware shortcuts. No approve intent, ever.</span></span></li>
+            </ul>
+            <div class="risk">Real engineering problem: LiveActivityIntent runs in extension — needs shared relay client or stage + background wake.</div>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 4 — Full away loop</h3>
+              <span class="layer-timing">weeks 5–8</span>
+            </div>
+            <ul class="layer-items">
+              <li><span class="id">4</span><span class="body"><strong>Question Cards + Ladder</strong><span>Structured agent-asks flow + voice-answer intent.</span></span></li>
+              <li><span class="id">4</span><span class="body"><strong>Return-to-Desk packet</strong><span>One recap surface: branch, contract, receipt, risks, continuation command.</span></span></li>
+              <li><span class="id">4</span><span class="body"><strong>Git/PR ship actions</strong><span>High-tier by definition — never unauthenticated.</span></span></li>
+              <li><span class="id">4</span><span class="body"><strong>Proof Reel</strong><span>Only if interviews demand it. 30s structured replay, not video.</span></span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="layer sept">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 5 — September (iOS 27)</h3>
+              <span class="layer-timing">GA ~ Sept 14</span>
+            </div>
+            <p class="section-note" style="margin:0">Raise deployment target, then: AppIntentsTesting &rarr; IndexedEntityQuery semantic search &rarr; View Annotations &rarr; LongRunningIntent &rarr; Foundation Models copilot (advisory only).</p>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-card">
+            <div class="layer-head">
+              <h3>Layer 6 — Extras</h3>
+              <span class="layer-timing">evidence-dependent</span>
+            </div>
+            <p class="section-note" style="margin:0">Cross-vendor second opinion, Clips intake, team tier, StandBy widgets, True Handoff, Burn Switch.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="siri">
+      <h2>Where Siri actually lands</h2>
+      <p class="section-note">Three separate things at three different times — not one "Siri feature."</p>
+      <div class="siri-merge">
+        <div class="siri-card">
+          <div class="num">1</div>
+          <h4>Lock-screen loop — Layer 3</h4>
+          <p>Highest-value hands-free surface. All iOS-26-safe. Blockers are Lancer bugs, not Apple gates. This is the "it just works" demo — not Siri.</p>
+        </div>
+        <div class="siri-card">
+          <div class="num">2</div>
+          <h4>Siri Phase 1 — Layer 3e/4</h4>
+          <p>Entities + read/pause/stop/deny + voice-answer. ~1 week. Fixes real bugs. Does not move a 07-21 purchase decision.</p>
+        </div>
+        <div class="siri-card">
+          <div class="num">3</div>
+          <h4>Magical Siri — Layer 5</h4>
+          <p>Semantic search, onscreen awareness, Siri-dispatched missions, on-device copilot. Every symbol is iOS 27 hard-gated.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:20px">
+        <strong>Trust line holds across all three:</strong> reads go free; deny/stop/answers need confirmation; low-risk approve needs hash + tiers; everything else opens the app. Since Face ID is gone, 3d is not optional if hands-free approve ships.
+      </div>
+    </section>
+
+    <footer>
+      Source: <code>2026-07-07-lancer-build-sequence-and-hands-free-layer.md</code> · Claude Fable 5 · Evidence through git <code>54a31915</code>
+    </footer>
+  </div>
+
+  <script>
+    const links = document.querySelectorAll('nav.toc a');
+    const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+    sections.forEach(s => s && obs.observe(s));
+  </script>
+</body>
+</html>
