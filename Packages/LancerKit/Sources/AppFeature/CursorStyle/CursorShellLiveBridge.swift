@@ -134,6 +134,13 @@ public final class CursorShellLiveBridge {
 
     public var relayHealthy: Bool { connectionPhase == .connected }
 
+    /// Called when the user submits an answer to a question card. The artifact is
+    /// provided so the caller can update its payloadJSON with the answered state via
+    /// `QuestionCardModel.mergeAnswer` and re-persist via `upsertArtifact`.
+    /// The `QuestionAnswerParams` should be forwarded to the daemon via
+    /// `DaemonChannel.sendQuestionAnswer` or `E2ERelayBridge.sendQuestionAnswer`.
+    public var onAnswerQuestion: ((ChatArtifact, QuestionAnswerParams) async -> Void)?
+
     public var onDispatch: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     public var onContinue: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     /// Loads a selected EXISTING thread's real, already-persisted content

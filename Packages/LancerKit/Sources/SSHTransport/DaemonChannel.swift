@@ -210,6 +210,22 @@ public actor DaemonChannel {
         try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
     }
 
+    /// Send an `agent.question.answer` JSON-RPC notification to resolve a pending
+    /// question. Fire-and-forget (no id / no expected reply) — mirrors `respond`
+    /// for approvals but without a content-hash or decision field.
+    public func sendQuestionAnswer(_ answer: QuestionAnswerParams) async throws {
+        guard let writer = stdinWriter else { throw DaemonChannelError.notRunning }
+        guard let paramsData = try? JSONEncoder().encode(answer),
+              let paramsDict = (try? JSONSerialization.jsonObject(with: paramsData)) as? [String: Any] else { return }
+        let envelope: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": "agent.question.answer",
+            "params": paramsDict,
+        ]
+        guard let json = try? JSONSerialization.data(withJSONObject: envelope) else { return }
+        try await writer.write(ByteBuffer(bytes: DaemonFraming.frame(json)))
+    }
+
     /// Run health checks on the remote daemon
     public func runDoctor() async throws -> DoctorReport {
         let data = try await sendRPC(method: "agent.doctor", params: [String: String]())
