@@ -5,10 +5,12 @@ import SwiftUI
 /// Ship & History's "Mark Ready" button.
 public struct CursorPillButton: View {
     public enum Style: Sendable {
-        /// Dark/filled, e.g. "Mark Ready".
+        /// Dark/filled neutral, e.g. toolbar actions.
         case primary
         /// Outline, e.g. "View PR +858 -38".
         case secondary
+        /// Full-width green merge CTA, e.g. "Squash & Merge" (IMG_2411).
+        case success
     }
 
     /// One colored text segment, e.g. `("+858", .green)` or `("View PR", nil)`
@@ -94,6 +96,7 @@ public struct CursorPillButton: View {
         switch style {
         case .primary: return colors.pillPrimaryText
         case .secondary: return colors.pillSecondaryText
+        case .success: return colors.mergeButtonText
         }
     }
 
@@ -104,13 +107,15 @@ public struct CursorPillButton: View {
             Capsule().fill(colors.pillPrimaryBackground)
         case .secondary:
             Capsule().fill(colors.cardBackground)
+        case .success:
+            Capsule().fill(colors.mergeButtonBackground)
         }
     }
 
     @ViewBuilder
     private func border(_ colors: CursorColors) -> some View {
         switch style {
-        case .primary:
+        case .primary, .success:
             EmptyView()
         case .secondary:
             Capsule().stroke(colors.pillSecondaryBorder, lineWidth: CursorMetrics.pillButtonBorderWidth)
