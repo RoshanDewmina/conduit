@@ -17,12 +17,29 @@ import (
 // s.handleMessage (the real SSH transport entrypoint) and returns the framed
 // rpcMessage response, capturing it via the emitter seam the same way
 // server_test.go's TestDeviceRegister/TestRunControlRPCs do.
+//
+// The shared s.emit sink also carries async run notifications (e.g.
+// agent.run.status / agent.run.receipt), which a background goroutine
+// spawned by a launched run can deliver at any time — including after this
+// call's RPC response, or after a later call has already installed its own
+// emitter. writeResult/writeError (server.go) never set Method; every
+// notification (emitNotification) never sets ID/Result. Filtering on that
+// shape is what makes this deterministic: a stray notification racing in on
+// this or a subsequent call's channel is ignored instead of silently
+// clobbering the buffered slot meant for the real RPC response (this was the
+// root cause of the flaky TestConversationsAppendDecodesAndThreadsContract:
+// the oversized-contract call's resultCh occasionally captured the prior
+// call's agent.run.receipt notification instead of its own response).
 func callSSHRPC(t *testing.T, s *server, method string, params any) rpcMessage {
 	t.Helper()
 	resultCh := make(chan rpcMessage, 1)
 	s.setEmitter(func(data []byte) error {
 		var m rpcMessage
 		_ = json.Unmarshal(data, &m)
+		if m.Method != "" {
+			// Async notification, not this call's RPC response — ignore.
+			return nil
+		}
 		select {
 		case resultCh <- m:
 		default:
