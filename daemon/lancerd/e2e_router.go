@@ -515,10 +515,15 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		var p struct {
 			HomeDir string `json:"homeDir,omitempty"`
 		}
-		if err := json.Unmarshal(payload, &p); err != nil {
-			log.Printf("e2e: unmarshal agentSessionsList failed: %v", err)
-			return
+		if len(payload) > 0 {
+			if err := json.Unmarshal(payload, &p); err != nil {
+				log.Printf("e2e: unmarshal agentSessionsList failed: %v", err)
+				return
+			}
 		}
+		// Mirrors the SSH agent.sessions.list arm (server.go) exactly — same
+		// buildSessionIndex call — so both transports return an identical
+		// payload shape by construction, not by convention.
 		sessions, err := buildSessionIndex(p.HomeDir)
 		if sessions == nil {
 			sessions = []SessionInfo{}
@@ -540,10 +545,17 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			log.Printf("e2e: unmarshal agentSessionsTranscript failed: %v", err)
 			return
 		}
+		// Mirrors the SSH agent.sessions.transcript arm (server.go) exactly —
+		// same loadSessionTranscript call (including sinceLine caps and
+		// resetRequired semantics) — so both transports return an identical
+		// payload shape by construction, not by convention.
 		result, err := loadSessionTranscript("", p.SessionID, p.SinceLine)
-		log.Printf("e2e: transcript sessionId=%q since=%d → %d msgs, err=%v", p.SessionID, p.SinceLine, len(result.Messages), err)
+		messages := result.Messages
+		if messages == nil {
+			messages = []SessionMessage{}
+		}
 		payloadOut := map[string]interface{}{
-			"messages":      result.Messages,
+			"messages":      messages,
 			"nextLine":      result.NextLine,
 			"resetRequired": result.ResetRequired,
 		}

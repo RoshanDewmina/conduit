@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -376,6 +377,207 @@ func TestE2ERouterSessionContinueDenied(t *testing.T) {
 	if result.Status != "denied" {
 		t.Fatalf("want denied, got %+v", result)
 	}
+}
+
+// TestE2ERouterSessionsListSSHAndRelayMatchShape proves the SSH JSON-RPC path
+// (agent.sessions.list) and the relay path (agentSessionsList) return identical
+// session payloads for the same on-disk transcript fixtures.
+func TestE2ERouterSessionsListSSHAndRelayMatchShape(t *testing.T) {
+	home := t.TempDir()
+	id := "aaaaaaaa-0000-0000-0000-000000000001"
+	lines := []string{
+		`{"type":"user","sessionId":"` + id + `","cwd":"/Users/x/repo","message":{"role":"user","content":"hello"}}`,
+		`{"type":"ai-title","aiTitle":"fix-dead-buttons","sessionId":"` + id + `"}`,
+	}
+	writeSessionFixture(t, home, "-Users-x-repo", id, lines, time.Now().Add(-10*time.Minute))
+
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	sshMsg := callSSHRPC(t, s, "agent.sessions.list", map[string]interface{}{"homeDir": home})
+	if sshMsg.Error != nil {
+		t.Fatalf("SSH agent.sessions.list error: %+v", sshMsg.Error)
+	}
+	var sshResult struct {
+		Sessions []SessionInfo `json:"sessions"`
+	}
+	decodeInto(t, sshMsg.Result, &sshResult)
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, s)
+	router.client = client
+	env := callRelay(t, router, client, "agentSessionsList", map[string]interface{}{"homeDir": home})
+	if env.Type != "sessionsListResult" {
+		t.Fatalf("relay type = %q, want sessionsListResult", env.Type)
+	}
+	var relayPayload struct {
+		Sessions []SessionInfo `json:"sessions"`
+		Error    string        `json:"error"`
+	}
+	decodeInto(t, env.Payload, &relayPayload)
+	if relayPayload.Error != "" {
+		t.Fatalf("unexpected relay error: %q", relayPayload.Error)
+	}
+	if !reflect.DeepEqual(sshResult.Sessions, relayPayload.Sessions) {
+		t.Fatalf("SSH and relay list results differ:\nSSH:   %+v\nRelay: %+v", sshResult.Sessions, relayPayload.Sessions)
+	}
+	if len(sshResult.Sessions) != 1 {
+		t.Fatalf("expected 1 observed session, got %d", len(sshResult.Sessions))
+	}
+	if sshResult.Sessions[0].Source != "transcriptObserved" {
+		t.Fatalf("source = %q, want transcriptObserved", sshResult.Sessions[0].Source)
+	}
+}
+
+// TestE2ERouterSessionsTranscript verifies relay transcript fetch for valid,
+// unknown, and malformed session requests — mirroring the SSH arm's params
+// validation and loadSessionTranscript semantics.
+func TestE2ERouterSessionsTranscript(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := "bbbbbbbb-0000-0000-0000-000000000002"
+	lines := []string{
+		`{"type":"user","sessionId":"` + id + `","cwd":"/Users/x/repo2","message":{"role":"user","content":"hi"}}`,
+		`{"type":"assistant","sessionId":"` + id + `","message":{"role":"assistant","content":[{"type":"text","text":"hello back"}]}}`,
+	}
+	writeSessionFixture(t, home, "-Users-x-repo2", id, lines, time.Now())
+
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	cases := []struct {
+		name          string
+		payload       []byte
+		wantNoMessage bool
+		wantError     bool
+		wantMsgsMin   int
+	}{
+		{
+			name: "valid session returns transcript",
+			payload: mustJSON(t, map[string]interface{}{
+				"sessionId": id,
+				"sinceLine": 0,
+			}),
+			wantMsgsMin: 1,
+		},
+		{
+			name: "unknown session returns error field",
+			payload: mustJSON(t, map[string]interface{}{
+				"sessionId": "no-such-session",
+				"sinceLine": 0,
+			}),
+			wantError: true,
+		},
+		{
+			name:          "missing sessionId fails closed",
+			payload:       mustJSON(t, map[string]interface{}{"sinceLine": 0}),
+			wantNoMessage: true,
+		},
+		{
+			name:          "malformed params fails closed",
+			payload:       []byte(`{not-json`),
+			wantNoMessage: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakeRelayClient{paired: true}
+			router := newE2ERouter(nil, s)
+			router.client = client
+
+			router.handleMessage("agentSessionsTranscript", tc.payload)
+
+			msgType, data := client.lastMessage()
+			if tc.wantNoMessage {
+				if msgType != "" {
+					t.Fatalf("expected no relay message, got type=%q data=%s", msgType, data)
+				}
+				return
+			}
+			if msgType != "sessionsTranscriptResult" {
+				t.Fatalf("expected sessionsTranscriptResult, got %q", msgType)
+			}
+			var env struct {
+				Type    string `json:"type"`
+				Payload struct {
+					Messages      []SessionMessage `json:"messages"`
+					NextLine      int              `json:"nextLine"`
+					ResetRequired bool             `json:"resetRequired"`
+					Error         string           `json:"error"`
+				} `json:"payload"`
+			}
+			if err := json.Unmarshal(data, &env); err != nil {
+				t.Fatalf("unmarshal envelope: %v", err)
+			}
+			if env.Payload.Messages == nil {
+				t.Fatal("expected messages to be [] not null")
+			}
+			if tc.wantError {
+				if env.Payload.Error == "" {
+					t.Fatal("expected error field for unknown session")
+				}
+				return
+			}
+			if env.Payload.Error != "" {
+				t.Fatalf("unexpected error: %q", env.Payload.Error)
+			}
+			if len(env.Payload.Messages) < tc.wantMsgsMin {
+				t.Fatalf("got %d messages, want at least %d", len(env.Payload.Messages), tc.wantMsgsMin)
+			}
+		})
+	}
+}
+
+// TestE2ERouterSessionsTranscriptSSHAndRelayMatchShape proves the SSH
+// agent.sessions.transcript arm and agentSessionsTranscript relay arm agree
+// on payload shape for a valid observed session.
+func TestE2ERouterSessionsTranscriptSSHAndRelayMatchShape(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := "cccccccc-0000-0000-0000-000000000003"
+	lines := []string{
+		`{"type":"user","sessionId":"` + id + `","cwd":"/Users/x/repo3","message":{"role":"user","content":"ping"}}`,
+		`{"type":"assistant","sessionId":"` + id + `","message":{"role":"assistant","content":[{"type":"text","text":"pong"}]}}`,
+	}
+	writeSessionFixture(t, home, "-Users-x-repo3", id, lines, time.Now())
+
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	req := map[string]interface{}{"sessionId": id, "sinceLine": 0}
+	sshMsg := callSSHRPC(t, s, "agent.sessions.transcript", req)
+	if sshMsg.Error != nil {
+		t.Fatalf("SSH agent.sessions.transcript error: %+v", sshMsg.Error)
+	}
+	var sshResult SessionTranscriptResult
+	decodeInto(t, sshMsg.Result, &sshResult)
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, s)
+	router.client = client
+	env := callRelay(t, router, client, "agentSessionsTranscript", req)
+	if env.Type != "sessionsTranscriptResult" {
+		t.Fatalf("relay type = %q, want sessionsTranscriptResult", env.Type)
+	}
+	var relayResult SessionTranscriptResult
+	decodeInto(t, env.Payload, &relayResult)
+
+	if !reflect.DeepEqual(sshResult, relayResult) {
+		t.Fatalf("SSH and relay transcript results differ:\nSSH:   %+v\nRelay: %+v", sshResult, relayResult)
+	}
+	if len(sshResult.Messages) == 0 {
+		t.Fatal("expected non-empty transcript messages")
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
 }
 
 // TestE2ERouterFsList verifies that an inbound agentFsList message reaches
