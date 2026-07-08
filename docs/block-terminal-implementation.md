@@ -172,8 +172,8 @@ xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/
 # launch the LIVE block session (real SSH) — run as a STANDALONE command
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
-env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 \
-    SIMCTL_CHILD_LANCER_DESTINATION=sessions \
+env SIMCTL_CHILD_LANCER_CURSOR_SHELL_LIVE=1 \
+    SIMCTL_CHILD_LANCER_DESTINATION=review \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
     SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
     SIMCTL_CHILD_LANCER_TEST_PW="$PW" \
@@ -184,15 +184,17 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 ```
 
 ### Debug entry points
-- `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=sessions` seeds a localhost host
-  and drives the real sidebar/session path over SSH (the live block pipeline).
+- `LANCER_CURSOR_SHELL_LIVE=1` + `LANCER_DESTINATION=review` — live Cursor shell with approval
+  surface (`CursorReviewView`). Primary DEBUG path for governed-loop work.
+- `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=inbox` — legacy SSH block-session harness
+  (historical; sidebar/Command Home shell deleted 2026-07-06).
 - `LANCER_TERMINAL_TEST=1` → `DebugTerminalHarness` → raw-only `LiveTerminalView`
   (routed in `Lancer/LancerApp.swift`, not `AppRoot`).
 
 ### Env vars the harnesses read
 - `LANCER_TEST_HOST` (default `127.0.0.1`), `LANCER_TEST_PORT` (`22`),
   `LANCER_TEST_USER` (`roshansilva`), `LANCER_TEST_PW`.
-- `LANCER_DESTINATION=sessions` launches into the Command Home/session shell.
+- `LANCER_DESTINATION=review` — Cursor shell approval surface; `inbox` for legacy SSH harness.
 
 ### Gotchas
 - **Env-var propagation:** launch as a STANDALONE command with `env VAR=… xcrun
@@ -253,5 +255,5 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 | Block card UI | `SessionFeature/Chat/ToolCardView.swift`, `ChatTranscriptView.swift` |
 | Composer | `SessionFeature/Chat/ChatInputBar.swift`, `DesignSystem/TerminalSafeTextField.swift` |
 | Canonical block card (design system) | `DesignSystem/Components/Composites.swift` (`DSBlockCard`) |
-| Debug harnesses | `DebugTerminalHarness.swift`; live session coverage uses `LANCER_DAEMON_E2E=1` through the real sidebar/session path |
+| Debug harnesses | `DebugTerminalHarness.swift`; live session coverage uses `LANCER_DAEMON_E2E=1` through the legacy SSH block path (sidebar deleted; prefer `LANCER_CURSOR_SHELL_LIVE=1`) |
 | Raw terminal view + model | `SessionFeature/LiveTerminalView.swift`, `TerminalEngine/RawTerminalView.swift` |

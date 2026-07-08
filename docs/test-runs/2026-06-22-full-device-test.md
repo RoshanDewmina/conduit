@@ -1,3 +1,5 @@
+> **Historical evidence — predates Cursor shell (2026-07-08).** Sidebar/Command Home IA below is not current navigation.
+
 # Full device test — 2026-06-22
 
 > Live end-to-end test of Lancer on **Roshan's iPhone** (iOS 27.0, device

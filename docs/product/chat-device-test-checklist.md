@@ -6,8 +6,8 @@
 
 ## 0. Setup
 - [ ] App installed on device, opened, notifications allowed on first launch.
-- [ ] Paired with a machine (relay code via `lancerd pair`, or SSH host). Sidebar footer shows
-      "Relay connected".
+- [ ] Paired with a machine (relay code via `lancerd pair`, or SSH host). Settings → Connection
+      shows relay connected.
 - [ ] At least one agent shows in the composer's agent chip (e.g. "Claude · mac-studio").
 
 ## 1. Composer (inline, ChatGPT/Claude style)
@@ -44,14 +44,14 @@
 - [ ] **Regenerate** re-runs the last prompt as a fresh turn. _(P2)_
 
 ## 5. History (resume)
-- [ ] Open a past conversation from the sidebar.
+- [ ] Open a past conversation from **Workspaces** (thread list for a repo or All Repos).
 - [ ] Persisted turns render (prose + any terminal/error cards + artifacts).
 - [ ] A **follow-up bar** is present (conversation is resumable, not read-only).
 - [ ] Sending a follow-up **continues the run** (new turn streams live) and persists.
 - [ ] Offline host → a clear "couldn't continue" alert (no silent failure).
 
-## 6. Conversation management (sidebar)
-- [ ] Search field filters chats live as you type (FTS).
+## 6. Conversation management (Cursor shell)
+- [ ] Open the **Search** sheet (toolbar) and filter chats live as you type (FTS).
 - [ ] Long-press a thread → context menu with **Rename** and **Delete**.
 - [ ] Rename → title updates immediately in the list.
 - [ ] Delete → confirm dialog → row disappears; gone after relaunch.
@@ -73,12 +73,12 @@ real taps + the live loop:
 - **Rendered + screenshotted (dark + forced-light):** markdown reply with bold/inline-code/ordered
   list; `swift` code card with syntax highlighting (keyword/string/comment tints) + Copy + wrap;
   `/` autocomplete (LANCER + AGENT sections, filtered by `/re`); `@` file mention (filtered by
-  `@App`); inline composer; sidebar (search, nav, recent threads, relay footer). Route
-  `chat-overlays[-light|-dark]` added as the fixture.
+  `@App`); inline composer; Cursor shell (Search sheet, Workspaces thread list, connection banner).
+  Route `chat-overlays[-light|-dark]` added as the fixture.
 - **Accessibility tree audited** (real interaction proof, since sim HID taps don't fire SwiftUI
-  actions here): composer — Send correctly **disabled when empty**, agent chip / options / hamburger
-  all labeled; `/` + `@` rows are enabled AXButtons with combined labels + badges; code card Copy /
-  wrap present; sidebar thread rows (which host rename/pin/delete context menus) present + labeled.
+  actions here): composer — Send correctly **disabled when empty**, agent chip / options / shell
+  controls all labeled; `/` + `@` rows are enabled AXButtons with combined labels + badges; code card Copy /
+  wrap present; Workspaces thread rows (rename/pin/delete context menus) present + labeled.
 
 **Not verifiable on the simulator — must be the device pass (§1–§7 below):** firing button actions
 (tap-and-observe), long-press context menus (rename/delete/pin/edit-resend) actually opening, live

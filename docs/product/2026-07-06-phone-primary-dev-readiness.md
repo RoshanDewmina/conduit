@@ -22,8 +22,7 @@ Evidence hub: [`docs/test-runs/2026-07-06-phone-ready-pass.md`](../test-runs/202
 
 | Shell | Sim automated | Device build | Manual checklist |
 |-------|---------------|--------------|------------------|
-| Sidebar / New Chat | TapInjection + relay E2E | Install PASS | Unlock phone → LIVE_LOOP 5a/5b |
-| Cursor live (`LANCER_CURSOR_SHELL_LIVE=1`) | `CursorShellLiveApprovalTests` | Same binary | Same + composer dispatch smoke |
+| Cursor live (`LANCER_CURSOR_SHELL_LIVE=1`) | `CursorShellLiveApprovalTests` + relay E2E | Install PASS | Unlock phone → LIVE_LOOP 5a/5b + composer dispatch smoke |
 
 ## Owner-gated before TestFlight
 

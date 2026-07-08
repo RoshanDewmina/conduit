@@ -10,6 +10,8 @@
 > bug found the same session. Only the two BiometricGate-specific lines below have been corrected
 > inline — the rest of this file needs a full refresh against current `git log`/`gh pr list`, not a
 > read-as-is. Don't trust "Fixed"/"Shipped"/"PASS" claims here without cross-checking the live repo.
+> **Sidebar/Command Home IA refs scrubbed from active docs 2026-07-08** (A2 audit); historical
+> evidence files may still mention the old shell.
 
 Living trackers (update these when code or tests change):
 
@@ -72,7 +74,7 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 | Agent working rules | [`AGENTS.md`](../AGENTS.md) + [`docs/AGENT_READ_FIRST.md`](AGENT_READ_FIRST.md) | — |
 | Session archaeology (Jul 3–6) | [`docs/audits/2026-07-06-conversation-audit.md`](audits/2026-07-06-conversation-audit.md) | Re-running full transcript audits |
 
-**Removed 2026-07-06:** V1_* specs, `LAUNCH_AUDIT`, July-4 product strategy batch, `superpowers/`, competitive-intelligence, wwdc26 audit, design-redo, design-questions, old sidebar handoffs, `workflows/01-06`, `screenshots/current`, `lancer-ui-prototype/`, pre–Jul-6 `test-runs/`. Scope lives in master plan + `FEATURE_BACKLOG.md`.
+**Removed 2026-07-06 (declared); stragglers actually deleted 2026-07-08 (A2 audit):** V1_* specs, `LAUNCH_AUDIT`, July-4 product strategy batch, `superpowers/`, competitive-intelligence, wwdc26 audit, design-redo, design-questions, old sidebar handoffs, `workflows/01-06`, `screenshots/current`, `lancer-ui-prototype/`, pre–Jul-6 `test-runs/`. Scope lives in master plan + `FEATURE_BACKLOG.md`.
 
 ---
 

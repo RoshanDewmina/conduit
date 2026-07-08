@@ -82,12 +82,11 @@
 Only compiler **warnings** in our code (8 total) are "getter took >300ms to type-check" hints — compile-time
 only, no runtime effect. See §4.
 
-**Open test debt — `UI-IA-1` (tracked 2026-06-19):** four `LancerUITests/TapInjectionProofTests` are
-**quarantined with `XCTSkip`** — tab-bar and legacy sidebar navigation assumptions. Production UI target
-is the **Cursor shell** (`LANCER_CURSOR_SHELL_LIVE=1`). **Re-enable** with Cursor-shell navigation
-(workspaces → approval banner / review sheet) — see `CursorAppShellExhaustiveTests` and
-`docs/test-runs/user-ready-tier0-2026-07-06/`. Preserve injection-proof value (approve-applies,
-Face-ID opt-in, saved-host reconnect, TOFU) — rewrite, don't delete.
+**Open test debt — `UI-IA-1` (tracked 2026-06-19, updated 2026-07-08):** legacy tab-bar/sidebar
+`TapInjectionProofTests` XCTSkip cases were **removed**; the file now runs **Cursor-shell**
+injection proofs (`LANCER_CURSOR_SHELL_LIVE=1`). Remaining skips: opt-in relay E2E (owner-gated)
+and one permanently-skipped SSH path. See `CursorAppShellExhaustiveTests` and
+`docs/test-runs/user-ready-tier0-2026-07-06/`.
 
 ---
 

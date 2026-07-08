@@ -129,13 +129,13 @@ cd daemon/lancerd && LANCERD_BINARY=./lancerd ../../scripts/validation/resident-
 
 ---
 
-## PHASE 3 — SSH loop on the simulator (Approve unblocks the agent)
+## PHASE 3 — Cursor shell approval loop on the simulator
 
 This is the proven path; use it to confirm your environment before going to device. The repeatable harness:
 ```bash
 ./scripts/relay-regression.sh
 ```
-What it does: builds the app, installs to the booted sim, launches with `LANCER_CURSOR_SHELL_LIVE=1` (or legacy `LANCER_DAEMON_E2E=1` on deprecated sidebar path), seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve**, screenshots `after-approval`.
+What it does: builds the app, installs to the booted sim, launches with `LANCER_CURSOR_SHELL_LIVE=1`, seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve** on the Review surface, screenshots `after-approval`.
 
 Manual equivalent (if you want to drive it yourself):
 ```bash
@@ -143,7 +143,7 @@ xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
 xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/Lancer.app
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
-env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 SIMCTL_CHILD_LANCER_DESTINATION=sessions \
+env SIMCTL_CHILD_LANCER_CURSOR_SHELL_LIVE=1 SIMCTL_CHILD_LANCER_DESTINATION=review \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
     SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted dev.lancer.mobile

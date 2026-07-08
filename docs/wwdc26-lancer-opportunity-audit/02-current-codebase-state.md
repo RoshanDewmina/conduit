@@ -1,5 +1,9 @@
 # 02 — Current codebase state
 
+> **Staleness banner (2026-07-08):** predates Cursor-shell reconciliation; navigation claims
+> below (sidebar/split-view shell) are **stale**. Production UI is the Cursor shell — see
+> `ARCHITECTURE.md` §4.1.
+
 > Compiled 2026-07-02 by direct source inspection (five parallel read-only subagents covering
 > Device Hub/testing, product architecture/persistence, security/approval-flow, App
 > Intents/Siri, and Live Activities/WidgetKit) plus independent verification of `project.yml`,

@@ -95,3 +95,23 @@ Per master plan §6–§8. See [`2026-07-05-lancer-feature-master-plan.md`](2026
 2. Complete live-shell E2E on simulator: pair → dispatch → approve → follow-up.
 3. Fix or formally gate the remaining P0 beta blocker: atomic Emergency Stop (biometric gate P0 is moot — removed entirely 2026-07-07).
 4. Physical device: APNs lock-screen approve through the live shell before external beta.
+
+---
+
+## Consolidated status notes (folded from `2026-07-06-lancer-consolidated-status.md`, deleted 2026-07-08)
+
+**Core product decision:** V1 wedge is phone steers/reviews/approves/continues — not a phone IDE.
+Tier 0 exit: pair → dispatch → approval → follow-up against real `lancerd`. Freeze Tier 2 until proven.
+
+**Worktree warning:** do **not** wholesale-merge `.claude/worktrees/amazing-mayer-246fef` — deletion-heavy
+diff; cherry-pick verified slices only. See
+[`docs/design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md`](../design-audit/view-sweep-2026-07-06/amazing-mayer-worktree-audit.md).
+
+**Stale doc reminders:** iOS deployment target is **26.0** (`project.yml`); Cursor shell is merged on
+`master`; tab bar / Control / Activity roots are vestigial; legacy sidebar / Command Home is **deleted**.
+
+**Recommended next actions:**
+1. Owner manual proof on physical iPhone with live shell + `lancerd` ([`LIVE_LOOP_RUNBOOK.md`](../LIVE_LOOP_RUNBOOK.md)).
+2. Device-tolerant live-shell UI test; relay E2E for Cursor-shell approval surface.
+3. Cherry-pick from `codex/tier-0-live-cursor-shell` — do not wholesale-merge `amazing-mayer`.
+4. Hold Tier 2 until B10 in publish checklist is closed.
