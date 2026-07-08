@@ -35,16 +35,20 @@ actor SiriRelevanceCoordinator {
 
         await donateIntents(for: snapshot)
 
+#if swift(>=6.4)
         if #available(iOS 27.0, *) {
             await donateRelevantEntities(for: snapshot)
         }
+#endif
     }
 
     func clearAll() async {
         lastSnapshot = SiriRelevanceSnapshot()
+#if swift(>=6.4)
         if #available(iOS 27.0, *) {
             try? await RelevantEntities.shared.removeAllEntities()
         }
+#endif
     }
 
     private func donateIntents(for snapshot: SiriRelevanceSnapshot) async {
@@ -124,6 +128,7 @@ actor SiriRelevanceCoordinator {
         }
     }
 
+#if swift(>=6.4)
     @available(iOS 27.0, *)
     private func donateRelevantEntities(for snapshot: SiriRelevanceSnapshot) async {
         let entities = await relevantEntities(for: snapshot)
@@ -197,4 +202,5 @@ actor SiriRelevanceCoordinator {
             break
         }
     }
+#endif
 }

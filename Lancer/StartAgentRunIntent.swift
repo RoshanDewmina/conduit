@@ -58,9 +58,11 @@ public struct StartAgentRunIntent: AppIntent {
     public init() {}
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
+#if swift(>=6.4)
         if #available(iOS 27.0, *) {
             return try await performLongRunning()
         }
+#endif
         return try await performStandard()
     }
 
@@ -89,6 +91,7 @@ public struct StartAgentRunIntent: AppIntent {
         }
     }
 
+#if swift(>=6.4)
     @available(iOS 27.0, *)
     private func performLongRunning() async throws -> some IntentResult & ProvidesDialog {
         switch try await StartAgentRunSupport.prepare(
@@ -147,7 +150,7 @@ public struct StartAgentRunIntent: AppIntent {
             )
         }
     }
-}
+#endif
 
 // Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
 // protocols don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
