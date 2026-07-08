@@ -1,6 +1,8 @@
 #if canImport(AppIntents)
 import Foundation
+import LancerCore
 import PersistenceKit
+import SSHTransport
 
 /// Injectable seams for entity queries. Production wiring (e.g. `ActiveRunRegistry`)
 /// lands in D2 when `RunControlIntents` is refactored; tests override these hooks.
@@ -22,6 +24,19 @@ public enum IntentsKitDependencies {
   /// Mirror of `ActiveRunRegistry.shared.activeRunIDs`. Defaults empty until D2 wires it.
   nonisolated(unsafe) public static var activeRunIDs: @Sendable () -> [String] = {
     taskActiveRunIDs ?? []
+  }
+
+  @TaskLocal static var taskRelayMachines: [RelayMachineRecord]?
+
+  /// Relay-paired machines (Siri Phase 2, I1): mirrors `RelayMachineMigration.readIndex()`,
+  /// the same Keychain-persisted snapshot `RelayFleetStore` hydrates from at launch — kept
+  /// as an injectable seam (rather than calling the `@MainActor` Keychain reader directly
+  /// from entity queries, which run off-main) so tests never touch the real device Keychain.
+  nonisolated(unsafe) public static var relayMachineSnapshots: @Sendable () async -> [RelayMachineRecord] = {
+    if let taskRelayMachines {
+      return taskRelayMachines
+    }
+    return await RelayMachineMigration.readIndex()
   }
 }
 #endif

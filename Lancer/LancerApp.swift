@@ -41,6 +41,8 @@ struct LancerApp: App {
         // re-registering shortcuts after a locale/parameter change.
         if #available(iOS 17.0, *) {
             LancerAppShortcuts.updateAppShortcutParameters()
+            SiriSurfaceBootstrap.install()
+            SiriSurfaceBootstrap.refreshOnLaunch()
         }
     }
 

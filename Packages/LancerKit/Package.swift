@@ -138,7 +138,7 @@ let package = Package(
         ),
         .target(
             name: "IntentsKit",
-            dependencies: ["LancerCore", "PersistenceKit"],
+            dependencies: ["LancerCore", "PersistenceKit", "SSHTransport"],
             swiftSettings: swiftSettings
         ),
 
@@ -268,7 +268,7 @@ let package = Package(
         ),
         .testTarget(
             name: "IntentsKitTests",
-            dependencies: ["IntentsKit", "LancerCore", "PersistenceKit"],
+            dependencies: ["IntentsKit", "LancerCore", "PersistenceKit", "SSHTransport", "SessionFeature"],
             swiftSettings: swiftSettings
         ),
     ]
