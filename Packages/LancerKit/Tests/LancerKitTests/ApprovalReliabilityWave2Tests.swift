@@ -203,6 +203,7 @@ struct ExactlyOnceDecisionTests {
 }
 
 #if os(iOS)
+import InboxFeature
 import SessionFeature
 
 @Suite("M8/M9 — relay decision body uses the agreed session id")
@@ -226,6 +227,59 @@ struct RelayDecisionBodyTests {
         #expect(obj["sessionId"] as? String == sessionID)
         #expect(obj["decision"] as? String == "approve")
         #expect(obj["approvalId"] as? String == "11111111-0000-0000-0000-000000000001")
+    }
+}
+
+@Suite("Relay approval decision race")
+@MainActor
+struct RelayApprovalDecisionRaceTests {
+
+    @Test("pending in-memory relay approval forwards when durable row is not present yet")
+    func inMemoryPendingApprovalStillForwardsDecision() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+        let approval = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "printf ready",
+            cwd: "/repo",
+            risk: .medium,
+            contentHash: "shown-content"
+        )
+        let recorder = DecisionRecorder()
+        let vm = LiveInboxViewModel(
+            repository: repo,
+            onDecision: { id, decision, edited, contentHash in
+                await recorder.record(id: id, decision: decision, edited: edited, contentHash: contentHash)
+            },
+            clearDeliveredApproval: { _ in }
+        )
+        vm.approvals = [approval]
+
+        vm.decide(approval.id, decision: .approved)
+        try await Task.sleep(for: .milliseconds(50))
+
+        let recorded = await recorder.value
+        #expect(recorded?.id == approval.id)
+        #expect(recorded?.decision == .approved)
+        #expect(recorded?.edited == nil)
+        #expect(recorded?.contentHash == "shown-content")
+    }
+}
+
+private actor DecisionRecorder {
+    struct Value: Sendable {
+        let id: ApprovalID
+        let decision: Approval.Decision
+        let edited: String?
+        let contentHash: String?
+    }
+
+    private(set) var value: Value?
+
+    func record(id: ApprovalID, decision: Approval.Decision, edited: String?, contentHash: String?) {
+        value = Value(id: id, decision: decision, edited: edited, contentHash: contentHash)
     }
 }
 #endif

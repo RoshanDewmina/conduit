@@ -145,3 +145,47 @@ func TestRealLauncherCleanExit(t *testing.T) {
 		t.Fatalf("want exited/0, got %+v", last)
 	}
 }
+
+func TestRealLauncherNoOutputFailureStillEmitsFailedStatus(t *testing.T) {
+	var mu sync.Mutex
+	var outputs []map[string]any
+	var statuses []map[string]any
+	emit := func(method string, params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch method {
+		case "agent.run.output":
+			outputs = append(outputs, params.(map[string]any))
+		case "agent.run.status":
+			statuses = append(statuses, params.(map[string]any))
+		}
+	}
+
+	if _, err := realLauncher([]string{"sh", "-c", "exit 1"}, "", "run-no-output", emit); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		mu.Lock()
+		done := len(statuses) >= 2
+		mu.Unlock()
+		if done || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(outputs) != 0 {
+		t.Fatalf("expected no output chunks, got %+v", outputs)
+	}
+	if len(statuses) < 2 {
+		t.Fatalf("want running+failed status, got %+v", statuses)
+	}
+	last := statuses[len(statuses)-1]
+	if last["status"] != "failed" || last["exitCode"].(int) != 1 {
+		t.Fatalf("want failed/1, got %+v", last)
+	}
+}

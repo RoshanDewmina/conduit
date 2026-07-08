@@ -76,11 +76,9 @@ final class LegacyUIRemovalTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
 
-        let headerButtons = app.buttons.matching(NSPredicate(format: "identifier != 'plus'"))
-        XCTAssertGreaterThan(headerButtons.count, 0)
-        headerButtons.element(boundBy: 0).tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.09, dy: 0.11)).tap()
 
-        let appSettings = app.staticTexts["App Settings"]
+        let appSettings = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "App Settings")).firstMatch
         XCTAssertTrue(appSettings.waitForExistence(timeout: 15))
         appSettings.tap()
 

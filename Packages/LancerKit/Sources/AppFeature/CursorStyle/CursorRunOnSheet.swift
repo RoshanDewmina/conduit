@@ -31,18 +31,13 @@ public struct CursorRunOnSheet: View {
     private let onSelect: (CursorRunTargetOption) -> Void
 
     public init(
-        activeTargets: [CursorRunTargetOption] = [
-            CursorRunTargetOption(id: "mac-mini-studio", icon: "desktopcomputer", title: "Mac Mini Studio", isSelected: true)
-        ],
-        moreTargets: [CursorRunTargetOption] = [
-            CursorRunTargetOption(id: "mac-mini-studio-more", icon: "desktopcomputer", title: "Mac Mini Studio", isSelected: true),
-            CursorRunTargetOption(id: "home-server", icon: "server.rack", title: "Home Server", isSelected: false)
-        ],
+        activeTargets: [CursorRunTargetOption]? = nil,
+        moreTargets: [CursorRunTargetOption]? = nil,
         onClose: @escaping () -> Void = {},
         onSelect: @escaping (CursorRunTargetOption) -> Void = { _ in }
     ) {
-        self.activeTargets = activeTargets
-        self.moreTargets = moreTargets
+        self.activeTargets = activeTargets ?? []
+        self.moreTargets = moreTargets ?? []
         self.onClose = onClose
         self.onSelect = onSelect
     }
@@ -53,19 +48,38 @@ public struct CursorRunOnSheet: View {
             leadingButton: (systemImageName: "xmark", action: onClose)
         ) {
             VStack(spacing: 0) {
-                CursorSectionHeader("Active")
-                ForEach(activeTargets) { target in
-                    row(for: target)
-                }
+                if activeTargets.isEmpty && moreTargets.isEmpty {
+                    emptyState
+                } else {
+                    CursorSectionHeader("Active")
+                    ForEach(activeTargets) { target in
+                        row(for: target)
+                    }
 
-                CursorSectionHeader("More")
-                ForEach(moreTargets) { target in
-                    row(for: target)
+                    CursorSectionHeader("More")
+                    ForEach(moreTargets) { target in
+                        row(for: target)
+                    }
                 }
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
         .environment(\.cursorScheme, .light)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No run target selected")
+                .font(CursorType.rowTitle)
+                .foregroundColor(CursorColors.light.primaryText)
+            Text("Pair a machine or open a conversation from a paired host to choose where prompts run.")
+                .font(CursorType.rowSecondary)
+                .foregroundColor(CursorColors.light.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func row(for target: CursorRunTargetOption) -> some View {

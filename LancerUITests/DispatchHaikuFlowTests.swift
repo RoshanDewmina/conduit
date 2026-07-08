@@ -54,7 +54,10 @@ final class DispatchHaikuFlowTests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "arrow.up")).firstMatch.tap()
         }
 
-        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 20),
-                      "Dispatch should dismiss composer back to shell")
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "List the top-level folders")).firstMatch.waitForExistence(timeout: 20),
+            "Dispatch should dismiss composer and open the new work thread for the submitted prompt"
+        )
+        XCTAssertFalse(app.buttons["composer.send"].exists, "Composer sheet should be dismissed after dispatch")
     }
 }

@@ -51,6 +51,62 @@ public struct CursorAppShell: View {
     @State private var composerPlaceholder = "Plan, ask, build..."
     @State private var detailWorkspace: CursorShellLiveBridge.WorkspaceRow? = nil
 
+    private var composerRepoName: String {
+        guard let liveBridge else { return "lancer-ios" }
+        return liveBridge.composerCWD.isEmpty ? "Home" : liveBridge.composerCWD
+    }
+
+    private var runTargetOptions: [CursorRunOnSheet.CursorRunTargetOption] {
+        guard let liveBridge else { return [] }
+        var seen: Set<String> = []
+        var options: [CursorRunOnSheet.CursorRunTargetOption] = []
+        for target in liveBridge.workspaces.flatMap(\.runTargets) where !seen.contains(target.machineID) {
+            seen.insert(target.machineID)
+            options.append(.init(
+                id: target.machineID,
+                icon: "desktopcomputer",
+                title: target.hostName,
+                isSelected: options.isEmpty
+            ))
+        }
+        return options
+    }
+
+    private var activeRepoOption: CursorRepoPickerOption? {
+        guard liveBridge != nil else { return nil }
+        return CursorRepoPickerOption(
+            id: "live-\(composerRepoName)",
+            orgName: "Local",
+            repoName: composerRepoName,
+            branchName: nil
+        )
+    }
+
+    private var liveRepoOptions: [CursorRepoPickerOption]? {
+        guard let liveBridge else { return nil }
+        return liveBridge.workspaces.map {
+            CursorRepoPickerOption(id: "live-\($0.id)", orgName: "Local", repoName: $0.name)
+        }
+    }
+
+    private var mockRepoPickerActive: CursorRepoPickerOption {
+        CursorRepoPickerOption(id: "mock-active-lancer-ios", orgName: "RoshanDewmina", repoName: "lancer-ios", branchName: "master")
+    }
+
+    private var mockRepoPickerMore: [CursorRepoPickerOption] {
+        [
+            CursorRepoPickerOption(id: "mock-more-command-center", orgName: "RoshanDewmina", repoName: "command-center"),
+            CursorRepoPickerOption(id: "mock-more-hermes", orgName: "roshandewmina", repoName: "hermes")
+        ]
+    }
+
+    private var mockRunTargetOptions: [CursorRunOnSheet.CursorRunTargetOption] {
+        [
+            .init(id: "mock-mac-mini-studio", icon: "desktopcomputer", title: "Mac Mini Studio", isSelected: true),
+            .init(id: "mock-home-server", icon: "server.rack", title: "Home Server", isSelected: false)
+        ]
+    }
+
     public init(liveBridge: CursorShellLiveBridge? = nil) {
         self.liveBridge = liveBridge
         #if DEBUG
@@ -93,6 +149,8 @@ public struct CursorAppShell: View {
         switch ProcessInfo.processInfo.environment["LANCER_CURSOR_ROUTE"] {
         case "reviewDiff":
             path.append(CursorRoute.reviewDiff)
+        case "prDetail":
+            path.append(CursorRoute.prDetail)
         case "workThread":
             path.append(CursorRoute.workThread("Fix onboarding pairing flow"))
         case "receiptCard":
@@ -175,8 +233,14 @@ public struct CursorAppShell: View {
         }
         .sheet(isPresented: $showingRepoPicker) {
             CursorRepoPickerSheet(
+                active: liveBridge == nil ? mockRepoPickerActive : activeRepoOption,
+                recents: liveBridge == nil ? [] : liveRepoOptions,
+                more: liveBridge == nil ? mockRepoPickerMore : [],
                 onClose: { showingRepoPicker = false },
-                onSelect: { _ in showingRepoPicker = false }
+                onSelect: { option in
+                    liveBridge?.composerCWD = option.repoName == "Home" ? "" : option.repoName
+                    showingRepoPicker = false
+                }
             )
         }
         .sheet(isPresented: $showingComposerSheet) {
@@ -217,7 +281,7 @@ public struct CursorAppShell: View {
                     onBack: { popIfPossible() },
                     onSelectThread: { title in
                         if let bridge = liveBridge,
-                           let row = bridge.threads(for: name).first(where: { $0.title == title }) {
+                           let row = liveThread(named: title, in: name, bridge: bridge) {
                             bridge.selectedThreadID = row.id
                             bridge.composerCWD = row.repoName
                             // Clear stale state from whatever was last viewed,
@@ -302,7 +366,7 @@ public struct CursorAppShell: View {
     private var composerSheetChain: some View {
         CursorComposerSheet(
             threadID: liveBridge?.selectedThreadID ?? "composer.new",
-            repoName: liveBridge?.composerCWD.isEmpty == false ? (liveBridge?.composerCWD ?? "lancer-ios") : "lancer-ios",
+            repoName: composerRepoName,
             modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
             placeholder: composerPlaceholder,
             prefillText: liveBridge?.composerPrefillText,
@@ -311,7 +375,7 @@ public struct CursorAppShell: View {
             onPickModel: { showingModelSheet = true },
             onSend: liveBridge == nil ? nil : { payload in
                 guard let liveBridge else { return }
-                let repoName = liveBridge.composerCWD.isEmpty ? "command-center" : liveBridge.composerCWD
+                let repoName = liveBridge.composerCWD.isEmpty ? "Home" : liveBridge.composerCWD
                 let model = liveBridge.composerModelSlug
                 if let threadID = liveBridge.selectedThreadID {
                     // Same real-state update as a fresh dispatch — without
@@ -348,6 +412,8 @@ public struct CursorAppShell: View {
         )
         .sheet(isPresented: $showingRunOnSheet) {
             CursorRunOnSheet(
+                activeTargets: liveBridge == nil ? mockRunTargetOptions : runTargetOptions,
+                moreTargets: liveBridge == nil ? nil : [],
                 onClose: { showingRunOnSheet = false },
                 onSelect: { _ in showingRunOnSheet = false }
             )
@@ -369,6 +435,17 @@ public struct CursorAppShell: View {
                 }
             )
         }
+    }
+
+    private func liveThread(
+        named title: String,
+        in workspaceName: String,
+        bridge: CursorShellLiveBridge
+    ) -> CursorShellLiveBridge.ThreadRow? {
+        if workspaceName == "All Repos" {
+            return bridge.threadsByWorkspace.values.flatMap { $0 }.first { $0.title == title }
+        }
+        return bridge.threads(for: workspaceName).first { $0.title == title }
     }
 }
 #endif

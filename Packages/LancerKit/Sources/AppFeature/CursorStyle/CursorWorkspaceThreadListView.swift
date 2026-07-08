@@ -404,6 +404,13 @@ public struct CursorWorkspaceThreadListView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+
+                        if liveBridge != nil,
+                           todayThreads.isEmpty,
+                           yesterdayThreads.isEmpty,
+                           earlierThreads.isEmpty {
+                            liveEmptyState
+                        }
                     }
                 }
             }
@@ -413,6 +420,21 @@ public struct CursorWorkspaceThreadListView: View {
             CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
+    }
+
+    private var liveEmptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No threads yet")
+                .font(CursorType.rowTitle)
+                .foregroundColor(CursorColors.light.primaryText)
+            Text("Send a prompt from this workspace to start the first conversation.")
+                .font(CursorType.rowSecondary)
+                .foregroundColor(CursorColors.light.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 #endif

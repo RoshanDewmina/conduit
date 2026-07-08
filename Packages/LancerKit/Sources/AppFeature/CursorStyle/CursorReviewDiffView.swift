@@ -256,9 +256,14 @@ public struct CursorReviewDiffView: View {
     }
 
     private func applyDecision(_ local: Decision, relay: Approval.Decision?) {
-        decision = local
-        guard let relay, let liveBridge, let approvalID = liveBridge.pendingApprovalID else { return }
-        Task { await liveBridge.onDecide?(approvalID, relay) }
+        guard let relay, let liveBridge, let approvalID = liveBridge.pendingApprovalID else {
+            decision = local
+            return
+        }
+        Task {
+            await liveBridge.onDecide?(approvalID, relay)
+            decision = local
+        }
     }
 
     private var decisionStatusLine: some View {

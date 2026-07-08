@@ -158,6 +158,7 @@ public struct AppRoot: View {
     @State private var connectionError: String?
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
+    @State private var relayApprovalsByID: [ApprovalID: Approval] = [:]
     @State private var runOutputStore = RunOutputStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -204,6 +205,18 @@ public struct AppRoot: View {
     @State private var showingCursorRelayPairing = false
     /// Presents the Cursor-style approval review sheet (replaces legacy Inbox).
     @State private var showingApprovalReview = false
+    #if DEBUG
+    /// Set by `applyDebugLaunchSeams()` when `LANCER_DESTINATION=inbox` is requested
+    /// but no approval is pending yet (a relay-only launch, before the escalation has
+    /// arrived) — opening the sheet immediately on a nil `pendingApprovalID` showed an
+    /// empty "No pending approval" placeholder that never updated even after the real
+    /// approval landed seconds later (root-caused 2026-07-08: the already-presented
+    /// sheet doesn't re-bind on a later state change the way a fresh `.sheet` open
+    /// does). Deferring to the same onPendingApprovalsChanged event that already
+    /// correctly sets pendingApprovalID matches the production notification-tap flow
+    /// above, which never opens the sheet before pendingApprovalID is real.
+    @State private var pendingDebugApprovalReviewSeam = false
+    #endif
     /// Idempotency guard for `configureRelayFleetStore` — it used to check
     /// `e2eBridge == nil`, but there's no single bridge anymore.
     @State private var configuredRelayFleetStore = false
@@ -435,7 +448,7 @@ public struct AppRoot: View {
                params.status == "exited" || params.status == "failed" {
                 cursorLiveBridge.activeThreadIsWorking = false
                 if params.status == "failed" || params.exitCode != 0 {
-                    cursorLiveBridge.activeThreadError = runOutputStore.run(params.runId)?.text
+                    cursorLiveBridge.activeThreadError = runOutputStore.run(params.runId)?.failureSummary
                 }
             }
             if case .ready(let env) = environment,
@@ -443,16 +456,20 @@ public struct AppRoot: View {
                 // Persist the run's accumulated output back onto the turn so the
                 // history view shows the real reply on reopen instead of
                 // "(no output recorded)". (The live store is in-memory only.)
-                let finalText = runOutputStore.run(params.runId)?.text ?? ""
+                let run = runOutputStore.run(params.runId)
+                let finalText = run?.text ?? ""
+                let status: ChatTurn.Status = params.status == "exited" && params.exitCode == 0 ? .completed : .failed
+                let errorMessage = status == .failed ? run?.failureSummary : nil
                 Task {
                     try? await env.chatRepo.updateTurnOutput(
                         runID: params.runId,
                         assistantText: finalText,
-                        status: params.status == "exited" && params.exitCode == 0 ? .completed : .failed
+                        status: status,
+                        errorMessage: errorMessage
                     )
                     try? await env.chatRepo.updateArtifactStatuses(
                         runID: params.runId,
-                        status: params.status == "exited" && params.exitCode == 0 ? .done : .failed
+                        status: status == .completed ? .done : .failed
                     )
                 }
             }
@@ -536,44 +553,37 @@ public struct AppRoot: View {
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
             }
-            // Persist to the durable store, not just the in-memory VM below —
-            // this is NOT optional durability polish: LiveInboxViewModel.decide()
-            // (InboxViewModel+Live.swift) guards its DB UPDATE on `WHERE id=?
-            // AND decision IS NULL`, and only calls `onDecision` (which forwards
-            // the decision over the relay) when that UPDATE actually matched a
-            // row. Without this row existing, a relay-only approval's Approve tap
-            // flips the LOCAL UI (via `applyDecision`, unconditional) but the
-            // decision never reaches the daemon — reproduced via
-            // relay-approval-e2e.sh 2026-07-07: xcodebuild rc=0 (UI showed
-            // "Approved") yet the host hook never unblocked and the audit log
-            // never gained an "approve" entry. This upsert previously raced
-            // `onPendingApprovalsChanged`'s count==0 branch and popped the
-            // Review sheet shut before Approve could be tapped at all (a
-            // separate bug, fixed above by cross-checking the in-memory list
-            // before clearing `pendingApprovalID` rather than by removing this
-            // write).
+            relayApprovalsByID[approval.id] = approval
+            // Persist before making the approval tappable in the live VM. The
+            // decision path forwards only after the repository row resolves, so
+            // inserting into memory first can show "Approved" locally while the
+            // daemon never receives the relay decision.
             if case .ready(let env) = environment {
                 Task { @MainActor in
                     let repo = approvalRepository ?? ApprovalRepository(env.database)
+                    let vm = liveInboxVM ?? inboxVM
                     do {
                         try await repo.upsert(approval)
                         Self.logger.info("lancerE2EApprovalReceived: upsert OK id=\(approval.id.uuidString, privacy: .public)")
                     } catch {
                         Self.logger.error("lancerE2EApprovalReceived: upsert FAILED id=\(approval.id.uuidString, privacy: .public) error=\(String(describing: error), privacy: .public)")
                     }
+                    if !vm.approvals.contains(where: { $0.id == approval.id }) {
+                        vm.approvals.insert(approval, at: 0)
+                    }
+                    if selectedFleetSlot == nil {
+                        fleetStore.relayInboxVM = vm
+                    }
                 }
-            }
-            let vm = activeInboxViewModel
-            if !vm.approvals.contains(where: { $0.id == approval.id }) {
-                vm.approvals.insert(approval, at: 0)
-            }
-            // Only a true relay-only setup (no fleet/SSH slot) needs this —
-            // a slot's own inboxVM is already covered by FleetStore's
-            // per-slot loop, so pointing relayInboxVM at it too would be
-            // redundant (harmless, since attentionItems dedupes by approval
-            // id, but there's no reason to point it at slot state at all).
-            if selectedFleetSlot == nil {
-                fleetStore.relayInboxVM = vm
+            } else {
+                let vm = liveInboxVM ?? inboxVM
+                if !vm.approvals.contains(where: { $0.id == approval.id }) {
+                    vm.approvals.insert(approval, at: 0)
+                }
+                // Only a true relay-only setup (no fleet/SSH slot) needs this.
+                if selectedFleetSlot == nil {
+                    fleetStore.relayInboxVM = vm
+                }
             }
         }
         // The daemon resolved a pending approval without ever hearing back from
@@ -816,10 +826,16 @@ public struct AppRoot: View {
         guard let dest = ProcessInfo.processInfo.environment["LANCER_DESTINATION"] else { return }
         switch dest {
         case "inbox", "approval", "review":
-            cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
             cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
-            showingApprovalReview = true
+            if let pending = activeInboxViewModel.approvals.first(where: \.isPending) {
+                cursorLiveBridge.pendingApprovalID = pending.id
+                showingApprovalReview = true
+            } else {
+                // Nothing pending yet (relay-only launch) — defer opening the sheet
+                // until a real approval actually arrives; see pendingDebugApprovalReviewSeam.
+                pendingDebugApprovalReviewSeam = true
+            }
         case "settings", "governance": showingCursorSettings = true
         default: break
         }
@@ -974,6 +990,12 @@ public struct AppRoot: View {
                 await MainActor.run {
                     if let idString, let uuid = UUID(uuidString: idString) {
                         cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
+                        #if DEBUG
+                        if pendingDebugApprovalReviewSeam {
+                            pendingDebugApprovalReviewSeam = false
+                            showingApprovalReview = true
+                        }
+                        #endif
                     } else if count == 0 {
                         // Cross-check against the in-memory list before trusting a
                         // DB-observation "0 pending" snapshot: a relay approval is
@@ -1014,7 +1036,10 @@ public struct AppRoot: View {
     @MainActor
     private func setupCursorLiveBridge(env: AppEnvironment) {
         cursorLiveBridge.lookupApproval = { [self] id in
-            activeInboxViewModel.approvals.first(where: { $0.id == id })
+            selectedFleetSlot?.inboxVM.approvals.first(where: { $0.id == id })
+                ?? liveInboxVM?.approvals.first(where: { $0.id == id })
+                ?? inboxVM.approvals.first(where: { $0.id == id })
+                ?? relayApprovalsByID[id]
         }
         cursorLiveBridge.onDispatch = { [self] prompt, cwd, model, contract in
             let agentID = defaultDispatchAgentID(env: env)
@@ -1105,7 +1130,20 @@ public struct AppRoot: View {
         }
         cursorLiveBridge.onDecide = { [self] id, decision in
             if let slot = fleetStore.slot(forApprovalID: id) {
-                slot.inboxVM.decide(id, decision: decision)
+                await slot.inboxVM.decideAndWait(id, decision: decision)
+            } else if let relayVM = liveInboxVM, relayVM.approvals.contains(where: { $0.id == id }) {
+                await relayVM.decideAndWait(id, decision: decision)
+            } else if let approval = relayApprovalsByID[id], approval.isPending {
+                var decided = approval
+                decided.decision = decision
+                decided.decidedAt = .now
+                relayApprovalsByID[id] = decided
+                await ApprovalRelay.shared.forwardDecisionOnly(
+                    approvalID: id.uuidString,
+                    decision: decision,
+                    editedToolInput: nil,
+                    contentHash: approval.contentHash
+                )
             } else {
                 activeInboxViewModel.decide(id, decision: decision)
             }
@@ -1197,7 +1235,7 @@ public struct AppRoot: View {
             }
             let names = Array(counts.keys).sorted()
             cursorLiveBridge.reloadWorkspaces(
-                from: names.isEmpty ? ["command-center"] : names,
+                from: names,
                 threadCounts: counts,
                 runTargetsByRepo: runTargetsByRepo
             )

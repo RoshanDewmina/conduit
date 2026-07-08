@@ -23,6 +23,14 @@ public final class RunOutputStore {
             chunks.sorted { $0.seq < $1.seq }.map(\.chunk).joined()
         }
 
+        public var failureSummary: String? {
+            guard status == "failed" || (exitCode.map { $0 != 0 } ?? false) else { return nil }
+            let output = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !output.isEmpty { return output }
+            if let exitCode { return "Run failed with exit code \(exitCode)." }
+            return "Run failed."
+        }
+
         public var isTerminal: Bool {
             status == "exited" || status == "failed"
         }
