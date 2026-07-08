@@ -64,6 +64,11 @@ YAML
 
 echo "=== clean app inbox state (uninstall so no stale pending cards) ==="
 xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
+# The sim keychain survives uninstall: each prior run's debug-seam pairing
+# leaves an orphaned private key that hydrates as a ghost "re-pair required"
+# machine on every launch (22 accumulated by 2026-07-08). Reset for a truly
+# hermetic run.
+xcrun simctl keychain "$UDID" reset 2>/dev/null || true
 
 echo "=== start resident daemon (isolated HOME, production relay) ==="
 HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" LANCER_RELAY_E2E_FAKE_DISPATCH=1 \

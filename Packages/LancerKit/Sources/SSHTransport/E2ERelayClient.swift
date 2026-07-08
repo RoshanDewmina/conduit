@@ -589,7 +589,14 @@ public final class E2ERelayClient: ObservableObject {
             pairingState = .unpaired
 
         case "message":
-            guard let key = sessionKey, let payload = msg.payload else { return }
+            guard let key = sessionKey, let payload = msg.payload else {
+                // A frame arriving before peer_joined derived the session key
+                // (or after a disconnect reset it) is undecryptable — but it
+                // must never vanish without a trace: this exact zero-log drop
+                // shape cost a day of relay-delivery debugging (2026-07-07).
+                Self.logger.error("relay message dropped: sessionKey=\(self.sessionKey != nil, privacy: .public) payload=\(msg.payload != nil, privacy: .public)")
+                return
+            }
             do {
                 let frameData = Data(payload.utf8)
                 let frame = try JSONDecoder().decode(PairingCrypto.EncryptedFrame.self, from: frameData)

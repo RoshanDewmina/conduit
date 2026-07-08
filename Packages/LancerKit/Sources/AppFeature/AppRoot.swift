@@ -829,11 +829,13 @@ public struct AppRoot: View {
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
             cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
             if let pending = activeInboxViewModel.approvals.first(where: \.isPending) {
+                Self.logger.info("applyDebugLaunchSeams: opening Review with pending id=\(pending.id.uuidString, privacy: .public)")
                 cursorLiveBridge.pendingApprovalID = pending.id
                 showingApprovalReview = true
             } else {
                 // Nothing pending yet (relay-only launch) — defer opening the sheet
                 // until a real approval actually arrives; see pendingDebugApprovalReviewSeam.
+                Self.logger.info("applyDebugLaunchSeams: nothing pending, deferring Review sheet")
                 pendingDebugApprovalReviewSeam = true
             }
         case "settings", "governance": showingCursorSettings = true
@@ -988,6 +990,7 @@ public struct AppRoot: View {
         },
             onPendingApprovalsChanged: { [self] count, _, idString in
                 await MainActor.run {
+                    Self.logger.info("onPendingApprovalsChanged: count=\(count, privacy: .public) id=\(idString ?? "nil", privacy: .public) seamDeferred=\(pendingDebugApprovalReviewSeam, privacy: .public)")
                     if let idString, let uuid = UUID(uuidString: idString) {
                         cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
                         #if DEBUG

@@ -83,6 +83,8 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 
 	if err := r.client.sendMessage("approval", data); err != nil {
 		log.Printf("e2e: send approval failed: %v", err)
+	} else {
+		log.Printf("e2e: sent approval %s over relay", ev.ApprovalID)
 	}
 }
 
