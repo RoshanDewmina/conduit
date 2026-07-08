@@ -16,6 +16,8 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
     public let isActive: Bool
     public let statusLine: CursorThreadStatus
     public let attention: CursorThreadAttention?
+    /// Attention-reason detail shown as the row subtitle when present.
+    public let attentionDetail: String?
 
     public init(
         id: UUID = UUID(),
@@ -23,7 +25,8 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
         repoName: String,
         isActive: Bool,
         statusLine: CursorThreadStatus,
-        attention: CursorThreadAttention? = nil
+        attention: CursorThreadAttention? = nil,
+        attentionDetail: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -31,6 +34,7 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
         self.isActive = isActive
         self.statusLine = statusLine
         self.attention = attention
+        self.attentionDetail = attentionDetail
     }
 }
 
@@ -62,7 +66,15 @@ public struct CursorThreadRow: View {
                         .foregroundColor(colors.primaryText)
 
                     HStack(spacing: CursorMetrics.threadRowStatusSpacing) {
-                        statusLineView(colors: colors)
+                        if let detail = model.attentionDetail, !detail.isEmpty {
+                            Text(detail)
+                                .font(CursorType.rowSecondary)
+                                .foregroundColor(colors.secondaryText)
+                                .lineLimit(2)
+                                .accessibilityIdentifier("thread-attention-detail-\(model.id.uuidString)")
+                        } else {
+                            statusLineView(colors: colors)
+                        }
                         if let attention = model.attention {
                             attentionPill(attention, colors: colors)
                         }
