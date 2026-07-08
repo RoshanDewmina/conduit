@@ -27,7 +27,7 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 | Fleet thread routing | ✅ `FleetThreadMapper` with 4 tests | maps host/agent/cwd to conversation |
 | Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop |
 | **Full live governed-approvals loop** | ✅ **proven on simulator** after fixing 2 bugs | `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`; `ARCHITECTURE.md` §0.1 |
-| **App-closed physical-device approval loop** | ✅ **PASSED 2026-06-23** | APNs lock-screen push → approve while app closed → decision round-tripped → agent resumed; see `ARCHITECTURE.md` §0.1 |
+| **App-closed physical-device approval loop** | ❌ **FAILED re-run 2026-07-08** | Lock-screen action on phone (force-quit) does not reach `audit.log`; see `docs/test-runs/2026-07-08-tier0-device-proof-results.md`. Prior 2026-06-23 claim not revalidated. |
 | **Governance in Settings** | ✅ merged | Policy/audit/secrets/drift/doctor/usage under Settings → Policy & Governance (Cursor shell); no separate Control root |
 | **TestFlight** | ✅ uploaded | Build uploaded; release remains gated on beta validation/App Review/owner store operations |
 | Visual consistency, light+dark | ✅ | polish batch 1 |
@@ -62,7 +62,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 ## C. Tests that REMAIN (not yet covered)
 
 - [ ] **C1 — Live E2E on a real *remote* host.** Only localhost-sim subset done. Needs a real SSH host. ⏸ owner-gated.
-- [x] **C2 — Physical-device APNs, app *closed*. ✅ PASSED 2026-06-23.** Background app → gated action → APNs lock-screen push → tapped Approve on lock screen (app never foregrounded) → decision round-tripped → agent ran. Proof: audit `escalate→approve`, file created, run completed. Required fixing a 5-bug chain (bundle id, relay device-registration, /approval auth, sandbox APNs fallback, foreground re-registration) — see `ARCHITECTURE.md` §0.1.
+- [ ] **C2 — Physical-device APNs, app *closed* (checkpoint 5c).** Prior claim ✅ 2026-06-23 **not revalidated.** Owner re-run **FAILED 2026-07-08** (`docs/test-runs/2026-07-08-tier0-device-proof-results.md`): lock-screen long-press Approve/Reject works on phone (app stays closed) but decision does **not** reach `audit.log` when force-quit (`f8e24db0`, `98e45e0e` — escalate only). In-app approve + relay 5b pass on same build. Cloud Run: `BadDeviceToken` on production APNs host (dev Xcode build).
 - [ ] **C3 — Expand the app-target UI suite.** Add: onboarding completeness, StoreKit IAP purchase, approve-from-lockscreen tests.
 - [ ] **C4 — Reconnect / session-loss hardening as tests.** Background, network switch, daemon restart. Partial: daemon-restart durability for the conversation ledger specifically was live-verified 2026-07-03 (9 real conversations across 3 vendors, full turn/event/vendor-session data, survived a complete `lancerd` process restart byte-for-byte; dispatch resumed working immediately after) — see `ARCHITECTURE.md` §0.1 / §11.2. iOS-side background/network-switch/reconnect behavior remains untested.
 - [ ] **C5 — StoreKit IAP purchase verified in TestFlight** (sandbox account). ⏸ owner-gated.
@@ -75,7 +75,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 
 - [x] **D1 — Confirm APNs secrets on the *running* backend.** ✅ Set on Cloud Run `lancer-push` (australia-southeast1) + hermes-box `relay.env`. `APPROVAL_RELAY_SECRET` enforced.
 - [ ] **D2 — App Store Connect setup.** App record, Push + CloudKit + App Groups entitlements, IAP `dev.lancer.mobile.pro` Non-Consumable $14.99, privacy nutrition label, screenshots, reviewer notes. **CloudKit schema note (added 2026-07-03):** the cross-device conversation sync feature adds a custom private-DB zone (`LancerConversations`) with two new record types (`Conversation`, `ConversationTurnChunk` — see `ARCHITECTURE.md` §11.2 and `SyncKit/ConversationCloudRecords.swift`). These are auto-created in the **Development** CloudKit environment the first time the app runs against it; before the App Store build ships, promote the schema from Development to **Production** in the CloudKit Dashboard (Container → Schema → Deploy Schema Changes) or new-device users will fail to sync conversations against a container that only knows the old (Hosts/Snippets) record types.
-- [x] **D3 — Physical-device validation** (= C2). ✅ PASSED 2026-06-23.
+- [ ] **D3 — Physical-device validation** (= C2). Blocked on C2 — 2026-07-08 re-run failed lock-screen decision delivery (see results doc above).
 - [ ] **D4 — Vanity domain + DNS.** Repoint `LANCER_PUSH_BACKEND_URL` off `sslip.io` to `push.conduit.dev`.
 - [x] **D5 — Archive → TestFlight upload.** ✅ TestFlight build uploaded; release/App Review remains owner-gated after beta validation.
 
