@@ -19,13 +19,19 @@ public struct CursorSearchOverlay: View {
     @State private var searchTask: Task<Void, Never>?
     @FocusState private var isSearchFieldFocused: Bool
 
+    /// Prefilled/auto-run query — set when Siri's `SearchLancerIntent`
+    /// navigates here (I2) so the overlay shows the same search it already
+    /// spoke a result count for, instead of opening blank.
+    private let initialQuery: String?
     private let onClose: () -> Void
     private let onSelectResult: (_ conversationID: String, _ title: String) -> Void
 
     public init(
+        initialQuery: String? = nil,
         onClose: @escaping () -> Void = {},
         onSelectResult: @escaping (_ conversationID: String, _ title: String) -> Void = { _, _ in }
     ) {
+        self.initialQuery = initialQuery
         self.onClose = onClose
         self.onSelectResult = onSelectResult
     }
@@ -97,7 +103,13 @@ public struct CursorSearchOverlay: View {
         }
         .frame(maxHeight: .infinity)
         .environment(\.cursorScheme, .light)
-        .onAppear { isSearchFieldFocused = true }
+        .onAppear {
+            isSearchFieldFocused = true
+            if let initialQuery, !initialQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchText = initialQuery
+                runSearch(initialQuery)
+            }
+        }
     }
 
     private var filterChipsRow: some View {

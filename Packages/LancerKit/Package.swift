@@ -251,6 +251,7 @@ let package = Package(
                 "TerminalEngine",
                 "AgentKit",
                 "DiffKit",
+                "NotificationsKit",
                 "PersistenceKit",
                 "SyncKit",
                 "PreviewKit",
