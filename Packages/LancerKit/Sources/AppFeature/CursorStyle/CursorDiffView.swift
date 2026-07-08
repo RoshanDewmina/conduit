@@ -4,8 +4,8 @@ import DesignSystem
 
 /// One line of a unified diff: a context line present on both sides, an added
 /// line (new-file only), or a removed line (old-file only).
-public struct CursorDiffLine: Identifiable, Sendable {
-    public enum Kind: Sendable {
+public struct CursorDiffLine: Identifiable, Sendable, Hashable {
+    public enum Kind: Sendable, Hashable {
         case unchanged
         case added
         case removed
@@ -105,6 +105,92 @@ public struct CursorDiffView: View {
         case .added: return colors.diffAddedBackground
         case .removed: return colors.diffRemovedBackground
         }
+    }
+}
+
+/// Full file-viewer screen (row 12, IMG_2427): a pinned header row (back
+/// chevron, filename, extension badge, diff counts) above a scrollable
+/// `CursorDiffView`, on the very-dark green-tinted `codeBlockBackground` in
+/// dark mode per the reference. Pushed from `CursorPRDetailView`'s file list.
+public struct CursorFileDiffScreen: View {
+    @Environment(\.cursorScheme) private var cursorScheme
+
+    private let fileName: String
+    private let fullPath: String
+    private let additions: Int
+    private let deletions: Int
+    private let lines: [CursorDiffLine]
+    private let onBack: () -> Void
+
+    public init(
+        fileName: String,
+        fullPath: String,
+        additions: Int,
+        deletions: Int,
+        lines: [CursorDiffLine],
+        onBack: @escaping () -> Void = {}
+    ) {
+        self.fileName = fileName
+        self.fullPath = fullPath
+        self.additions = additions
+        self.deletions = deletions
+        self.lines = lines
+        self.onBack = onBack
+    }
+
+    public var body: some View {
+        let colors = CursorColors.resolve(cursorScheme)
+        VStack(spacing: 0) {
+            fileHeader(colors: colors)
+            Rectangle().fill(colors.hairline).frame(height: CursorMetrics.rowHairlineHeight)
+            ScrollView([.vertical, .horizontal]) {
+                CursorDiffView(collapsedContextLineCount: 0, lines: lines)
+            }
+            .background(colors.codeBlockBackground)
+        }
+        .background(colors.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .accessibilityIdentifier("file-diff-screen")
+    }
+
+    private func fileHeader(colors: CursorColors) -> some View {
+        HStack(spacing: CursorMetrics.rowSpacing) {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(colors.primaryText)
+            }
+            .buttonStyle(.plain)
+
+            fileExtensionBadge(colors: colors)
+
+            Text(fileName)
+                .font(CursorType.rowTitle)
+                .foregroundColor(colors.primaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 8)
+            CursorDiffStatText(added: additions, removed: deletions)
+        }
+        .padding(.horizontal, CursorMetrics.headerHorizontalPadding)
+        .padding(.vertical, 12)
+        .background(colors.sheetBackground)
+    }
+
+    private func fileExtensionBadge(colors: CursorColors) -> some View {
+        let ext = (fullPath as NSString).pathExtension.uppercased()
+        let label = ext.isEmpty ? "•" : String(ext.prefix(2))
+        return Text(label)
+            .font(CursorType.diffLineNumber)
+            .foregroundColor(colors.mutedText)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(colors.hairline, lineWidth: 1)
+            )
     }
 }
 
