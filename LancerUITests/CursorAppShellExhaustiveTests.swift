@@ -752,4 +752,26 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         XCTAssertTrue(isExpandedComposerVisible(app, timeout: 10), "Another pass should open composer")
         snapshot("receipt-another-pass-composer", app: app)
     }
+
+    func testSettings_SupportFeedbackRows() throws {
+        let app = launchSkipOnboarding()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        avatarCoordinate(app).tap()
+        XCTAssertTrue(app.staticTexts["Profile"].waitForExistence(timeout: 10))
+
+        let appSettings = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "App Settings")).firstMatch
+        XCTAssertTrue(appSettings.waitForExistence(timeout: 5))
+        appSettings.tap()
+        XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 10))
+
+        XCTAssertTrue(
+            app.buttons["settings-suggest-feature"].waitForExistence(timeout: 5),
+            "Suggest a Feature row should exist on Settings"
+        )
+        XCTAssertTrue(
+            app.buttons["settings-report-issue"].waitForExistence(timeout: 5),
+            "Report an Issue row should exist on Settings"
+        )
+    }
 }

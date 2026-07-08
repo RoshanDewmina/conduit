@@ -9,6 +9,7 @@ import SettingsFeature
 /// the legacy policy-bridge `SettingsView`.
 public struct CursorSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var purchaseManager = PurchaseManager.shared
     @State private var showingPairing = false
     @State private var activeDestination: SettingsDestination?
@@ -132,6 +133,18 @@ public struct CursorSettingsView: View {
                         activeDestination = .plan
                     }
 
+                    CursorSectionHeader("Support")
+                    externalLinkRow(
+                        title: "Suggest a Feature",
+                        accessibilityIdentifier: "settings-suggest-feature",
+                        url: Self.suggestFeatureURL
+                    )
+                    externalLinkRow(
+                        title: "Report an Issue",
+                        accessibilityIdentifier: "settings-report-issue",
+                        url: Self.reportIssueURL
+                    )
+
                     CursorSectionHeader("Legal & Reset")
                     row(
                         title: "Privacy policy",
@@ -189,6 +202,13 @@ public struct CursorSettingsView: View {
         purchaseManager.hasCloudEntitlement ? "Lancer Cloud · active" : "Away Mode Solo"
     }
 
+    private static let suggestFeatureURL = URL(
+        string: "https://github.com/RoshanDewmina/conduit/issues/new?labels=enhancement&title=%5BFeature%5D%20"
+    )!
+    private static let reportIssueURL = URL(
+        string: "https://github.com/RoshanDewmina/conduit/issues/new?labels=bug&title=%5BBug%5D%20"
+    )!
+
     private var accountBanner: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Local account")
@@ -243,6 +263,39 @@ public struct CursorSettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(accessibilityIdentifier ?? title)
+    }
+
+    @ViewBuilder
+    private func externalLinkRow(
+        title: String,
+        accessibilityIdentifier: String,
+        url: URL
+    ) -> some View {
+        let colors = CursorColors.light
+        Button {
+            openURL(url)
+        } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: CursorMetrics.rowSpacing) {
+                    Text(title)
+                        .font(CursorType.rowTitle)
+                        .foregroundColor(colors.primaryText)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(colors.mutedText)
+                }
+                .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+                .padding(.vertical, CursorMetrics.rowVerticalPadding)
+                Rectangle()
+                    .fill(colors.hairline)
+                    .frame(height: CursorMetrics.rowHairlineHeight)
+                    .padding(.leading, CursorMetrics.rowHorizontalPadding)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 
