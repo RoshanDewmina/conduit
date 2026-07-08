@@ -13,6 +13,15 @@ public enum CommandRequest: Sendable {
     case resume(runId: String)
     case cancel(runId: String)
     case queryStatus(homeDir: String?)
+    /// Sends a resolved answer for a `.question` ChatArtifact (Lane E) — used
+    /// by `AnswerQuestionIntent` (Siri voice-answer). `id` is the
+    /// `ChatArtifact.id` the answer was resolved against, so the handler can
+    /// re-fetch it and merge `answer` into its stored payload for local
+    /// persistence. Entirely separate from `respondApproval`: this case must
+    /// never gain an "approve" variant of any kind (see
+    /// `DenyLatestApprovalIntent`'s doc comment) — questions and approvals
+    /// are different artifacts with different risk profiles.
+    case answerQuestion(id: String, answer: QuestionAnswerParams)
 }
 
 public enum CommandOutcome: Sendable, Equatable {
@@ -83,6 +92,8 @@ public final class CommandGateway {
             return await sendRunControl(runId: runId, action: "stop")
         case let .queryStatus(homeDir):
             return await queryStatus(homeDir: homeDir)
+        case let .answerQuestion(id, answer):
+            return await answerQuestion(id: id, answer: answer)
         }
     }
 
@@ -150,6 +161,55 @@ public final class CommandGateway {
             Self.logger.warning("queryStatus: relay query failed: \(error.localizedDescription, privacy: .public)")
             return .transportUnavailable
         }
+    }
+
+    /// Sends a voice-answered question to the daemon (`AnswerQuestionIntent`'s
+    /// confirmation-gated flow — see that type's doc comment) and mirrors the
+    /// UI submit path's persistence step (`QuestionCardView`'s `onAnswer`)
+    /// so the answered state survives relaunch even though this call has no
+    /// live view model watching the artifact. Delivery failure short-circuits
+    /// before persistence: if the daemon never received the answer, the
+    /// local artifact should keep showing as pending rather than silently
+    /// appear answered.
+    private func answerQuestion(id: String, answer: QuestionAnswerParams) async -> CommandOutcome {
+        guard await deliverQuestionAnswer(answer) else { return .transportUnavailable }
+        await persistAnsweredQuestion(id: id, answer: answer)
+        return .ok
+    }
+
+    /// Delivers a question answer via the connected transport, in the same
+    /// priority order as `sendRunControl`/`queryStatus`: the attached SSH
+    /// channel first, then the relay bridge if paired.
+    private func deliverQuestionAnswer(_ answer: QuestionAnswerParams) async -> Bool {
+        if let channel = approvalRelay.channel {
+            do {
+                try await channel.sendQuestionAnswer(answer)
+                return true
+            } catch {
+                Self.logger.warning("answerQuestion: SSH channel send failed for questionId=\(answer.questionId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        guard let bridge = await firstConnectedBridge() else { return false }
+        return await bridge.sendQuestionAnswer(answer)
+    }
+
+    /// Merges the sent answer into the artifact's stored payload and
+    /// upserts it, matching `QuestionCardModel.mergeAnswer`'s contract used
+    /// by the UI submit path. Best-effort: a failure here does not flip the
+    /// reported `CommandOutcome` back to a failure — the daemon has already
+    /// received the answer (the durable source of truth); only this
+    /// device's local mirror would keep showing it as pending until the
+    /// next sync.
+    private func persistAnsweredQuestion(id: String, answer: QuestionAnswerParams) async {
+        guard let db = try? AppDatabase.openShared() else { return }
+        let repo = ChatConversationRepository(db)
+        guard let artifact = try? await repo.artifact(id: id),
+              let mergedJSON = QuestionCardModel.mergeAnswer(into: artifact.payloadJSON, answer: answer)
+        else { return }
+        var updated = artifact
+        updated.payloadJSON = mergedJSON
+        updated.status = .done
+        try? await repo.upsertArtifact(updated)
     }
 }
 #endif

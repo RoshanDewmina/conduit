@@ -250,6 +250,47 @@ public actor ChatConversationRepository {
         }
     }
 
+    /// The most recent `.question` artifact with no submitted answer yet,
+    /// across all conversations — used by the voice-answer Siri intent
+    /// (`AnswerQuestionIntent`, `Lancer` app target), which has no specific
+    /// conversation/artifact in scope to look up from (mirrors
+    /// `ApprovalRepository.pending()`'s bare-repository pattern used by
+    /// `DenyLatestApprovalIntent`). Answered state is decoded and checked in
+    /// Swift rather than via a `json_extract` SQL filter, matching every
+    /// other artifact query in this repository (all of which decode-then-
+    /// filter) — this never assumes SQLite's JSON1 extension is compiled
+    /// into the bundled database.
+    public func latestUnansweredQuestion() async throws -> ChatArtifact? {
+        try await db.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM chat_artifacts WHERE kind = 'question'
+                ORDER BY created_at DESC LIMIT 200
+            """)
+            for row in rows {
+                guard let artifact = Self.decodeArtifact(row),
+                      let data = artifact.payloadJSON.data(using: .utf8),
+                      let payload = try? JSONDecoder().decode(QuestionArtifactPayload.self, from: data)
+                else { continue }
+                if payload.answer == nil { return artifact }
+            }
+            return nil
+        }
+    }
+
+    /// A single artifact row by id, or `nil` if none exists. Mirrors
+    /// `conversation(id:)`; used by `CommandGateway.answerQuestion` to
+    /// re-fetch the exact artifact a Siri intent resolved against (by id)
+    /// before merging its answer into the stored payload, since
+    /// `CommandRequest.answerQuestion` only carries the artifact id.
+    public func artifact(id: String) async throws -> ChatArtifact? {
+        try await db.dbWriter.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM chat_artifacts WHERE id = ?", arguments: [id]) else {
+                return nil
+            }
+            return Self.decodeArtifact(row)
+        }
+    }
+
     public func associateApproval(approvalID: String, runID: String) async throws {
         try await db.dbWriter.write { db in
             guard let turn = try Row.fetchOne(db, sql: "SELECT * FROM chat_turns WHERE run_id = ?", arguments: [runID]) else { return }
