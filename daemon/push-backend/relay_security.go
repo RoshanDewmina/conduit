@@ -11,10 +11,10 @@ import (
 )
 
 // Limits for the approval-relay endpoints (/register, /approval, /run-complete,
-// /approval/decision, /decisions). These endpoints carry only small JSON control
-// messages and — unlike the hosted-engine endpoints — are not behind an
-// entitlement bearer token, so they need their own input bounds to resist
-// memory-exhaustion DoS.
+// /secret-request, /question, /approval/decision, /decisions). These endpoints
+// carry only small JSON control messages and — unlike the hosted-engine
+// endpoints — are not behind an entitlement bearer token, so they need their
+// own input bounds to resist memory-exhaustion DoS.
 const (
 	// maxRelayBodyBytes bounds every relay request body. 64 KiB is generous for a
 	// device token / approval id / decision while preventing unbounded reads.
@@ -33,10 +33,10 @@ const (
 // Two-tier authentication model for the approval relay
 //
 // Tier 1 — CONTROL PLANE (deployment-wide shared secret, APPROVAL_RELAY_SECRET):
-//   guards /register, /approval, /run-complete. These are lancerd→backend (and
-//   app→backend for APNs registration) control messages. The shared secret lets
-//   lancerd bootstrap a session's relayToken BEFORE any per-session capability
-//   exists. Enforced by relayAuthorized().
+//   guards /register, /approval, /run-complete, /secret-request, /question.
+//   These are lancerd→backend (and app→backend for APNs registration) control
+//   messages. The shared secret lets lancerd bootstrap a session's relayToken
+//   BEFORE any per-session capability exists. Enforced by relayAuthorized().
 //
 // Tier 2 — PER-SESSION CAPABILITY (relayToken): guards POST /approval/decision
 //   (from the app) and GET /decisions (from lancerd). lancerd mints a random
