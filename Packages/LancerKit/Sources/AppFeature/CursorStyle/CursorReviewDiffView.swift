@@ -2,6 +2,7 @@
 import SwiftUI
 import DesignSystem
 import LancerCore
+import os
 
 /// A governed-approval review screen: request, scope, risk, evidence,
 /// decision, audit — bound to the REAL pending `Approval` behind
@@ -31,6 +32,11 @@ public struct CursorReviewDiffView: View {
 
     private var approval: Approval? {
         guard let id = liveBridge?.pendingApprovalID else { return nil }
+        // Prefer the Observable-tracked object (re-renders when set); the
+        // lookup closure reads untracked AppRoot @State and is fallback only.
+        if let resolved = liveBridge?.pendingApproval, resolved.id == id {
+            return resolved
+        }
         return liveBridge?.lookupApproval?(id)
     }
 
@@ -58,6 +64,10 @@ public struct CursorReviewDiffView: View {
         .environment(\.cursorScheme, .light)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review-diff-screen")
+        .onAppear {
+            Logger(subsystem: "dev.lancer.mobile", category: "CursorReviewDiffView")
+                .info("review onAppear: bridge=\(liveBridge != nil, privacy: .public) pendingID=\(liveBridge?.pendingApprovalID?.uuidString ?? "nil", privacy: .public) bound=\(approval != nil, privacy: .public)")
+        }
     }
 
     // MARK: Header

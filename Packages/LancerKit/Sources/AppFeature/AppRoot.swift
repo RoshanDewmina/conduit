@@ -410,6 +410,7 @@ public struct AppRoot: View {
             }
             if let approval = activeInboxViewModel.approvals.first(where: { $0.id.uuidString.lowercased() == approvalIDString.lowercased() }) {
                 cursorLiveBridge.pendingApprovalID = approval.id
+                cursorLiveBridge.pendingApproval = approval
             } else if let uuid = UUID(uuidString: approvalIDString) {
                 cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
             }
@@ -746,8 +747,11 @@ public struct AppRoot: View {
                 // observe() stream may not have emitted yet when this .task runs.
                 if let pending = try? await env.approvalRepo.pending().first {
                     cursorLiveBridge.pendingApprovalID = pending.id
+                    cursorLiveBridge.pendingApproval = pending
                 } else {
-                    cursorLiveBridge.pendingApprovalID = activeInboxViewModel.approvals.first(where: \.isPending)?.id
+                    let pending = activeInboxViewModel.approvals.first(where: \.isPending)
+                    cursorLiveBridge.pendingApprovalID = pending?.id
+                    cursorLiveBridge.pendingApproval = pending
                 }
                 if let all = try? await env.approvalRepo.all() {
                     liveInboxVM?.approvals = all
@@ -831,6 +835,7 @@ public struct AppRoot: View {
             if let pending = activeInboxViewModel.approvals.first(where: \.isPending) {
                 Self.logger.info("applyDebugLaunchSeams: opening Review with pending id=\(pending.id.uuidString, privacy: .public)")
                 cursorLiveBridge.pendingApprovalID = pending.id
+                cursorLiveBridge.pendingApproval = pending
                 showingApprovalReview = true
             } else {
                 // Nothing pending yet (relay-only launch) — defer opening the sheet
@@ -988,11 +993,12 @@ public struct AppRoot: View {
                 contentHash: contentHash
             )
         },
-            onPendingApprovalsChanged: { [self] count, _, idString in
+            onPendingApprovalsChanged: { [self] count, _, firstPending in
                 await MainActor.run {
-                    Self.logger.info("onPendingApprovalsChanged: count=\(count, privacy: .public) id=\(idString ?? "nil", privacy: .public) seamDeferred=\(pendingDebugApprovalReviewSeam, privacy: .public)")
-                    if let idString, let uuid = UUID(uuidString: idString) {
-                        cursorLiveBridge.pendingApprovalID = ApprovalID(uuid)
+                    Self.logger.info("onPendingApprovalsChanged: count=\(count, privacy: .public) id=\(firstPending?.id.uuidString ?? "nil", privacy: .public) seamDeferred=\(pendingDebugApprovalReviewSeam, privacy: .public)")
+                    if let firstPending {
+                        cursorLiveBridge.pendingApprovalID = firstPending.id
+                        cursorLiveBridge.pendingApproval = firstPending
                         #if DEBUG
                         if pendingDebugApprovalReviewSeam {
                             pendingDebugApprovalReviewSeam = false
@@ -1013,6 +1019,7 @@ public struct AppRoot: View {
                         // failure-moment UI-hierarchy dump showing Workspaces root).
                         if !self.activeInboxViewModel.approvals.contains(where: \.isPending) {
                             cursorLiveBridge.pendingApprovalID = nil
+                            cursorLiveBridge.pendingApproval = nil
                         }
                     }
                 }
@@ -1039,10 +1046,14 @@ public struct AppRoot: View {
     @MainActor
     private func setupCursorLiveBridge(env: AppEnvironment) {
         cursorLiveBridge.lookupApproval = { [self] id in
-            selectedFleetSlot?.inboxVM.approvals.first(where: { $0.id == id })
+            let found = selectedFleetSlot?.inboxVM.approvals.first(where: { $0.id == id })
                 ?? liveInboxVM?.approvals.first(where: { $0.id == id })
                 ?? inboxVM.approvals.first(where: { $0.id == id })
                 ?? relayApprovalsByID[id]
+            if found == nil {
+                Self.logger.error("lookupApproval MISS: id=\(id.uuidString, privacy: .public) liveVM=\(liveInboxVM?.approvals.count ?? -1, privacy: .public) relayByID=\(relayApprovalsByID.count, privacy: .public)")
+            }
+            return found
         }
         cursorLiveBridge.onDispatch = { [self] prompt, cwd, model, contract in
             let agentID = defaultDispatchAgentID(env: env)
@@ -2030,11 +2041,11 @@ public struct AppRoot: View {
                         contentHash: contentHash
                     )
                 },
-                onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, approvalID in
+                onPendingApprovalsChanged: { [weak vm] pendingCount, agentName, firstPending in
                     await vm?.setLiveActivityPendingApprovals(
                         pendingCount,
                         agentName: agentName,
-                        approvalID: approvalID
+                        approvalID: firstPending?.id.uuidString
                     )
                 }
             )

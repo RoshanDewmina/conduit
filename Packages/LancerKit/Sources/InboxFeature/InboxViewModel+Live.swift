@@ -10,14 +10,14 @@ public final class LiveInboxViewModel: InboxViewModel {
     /// The 4th param is the resolved approval's `contentHash` (nil if the row
     /// never carried one) — see `InboxViewModel.decisionSink`'s doc comment.
     private let onDecision: (@Sendable (ApprovalID, Approval.Decision, String?, String?) async -> Void)?
-    private let onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)?
+    private let onPendingApprovalsChanged: (@Sendable (Int, String?, Approval?) async -> Void)?
     private let clearDeliveredApproval: @Sendable (String) -> Void
     @ObservationIgnored nonisolated(unsafe) private var observationTask: Task<Void, Never>?
 
     public init(
         repository: ApprovalRepository,
         onDecision: (@Sendable (ApprovalID, Approval.Decision, String?, String?) async -> Void)? = nil,
-        onPendingApprovalsChanged: (@Sendable (Int, String?, String?) async -> Void)? = nil,
+        onPendingApprovalsChanged: (@Sendable (Int, String?, Approval?) async -> Void)? = nil,
         clearDeliveredApproval: @escaping @Sendable (String) -> Void = { id in
             Notifications.shared.clearDeliveredApproval(id: id)
         }
@@ -41,7 +41,7 @@ public final class LiveInboxViewModel: InboxViewModel {
                     await self.onPendingApprovalsChanged?(
                         pending.count,
                         pending.first.map(Self.agentLabel(for:)),
-                        pending.first?.id.uuidString
+                        pending.first
                     )
                 }
             } catch { /* observation ended */ }

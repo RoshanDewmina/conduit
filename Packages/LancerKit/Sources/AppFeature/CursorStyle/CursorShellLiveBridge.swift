@@ -74,6 +74,16 @@ public final class CursorShellLiveBridge {
     public var workspaces: [WorkspaceRow] = []
     public var threadsByWorkspace: [String: [ThreadRow]] = [:]
     public var pendingApprovalID: ApprovalID?
+    /// The resolved approval behind `pendingApprovalID`, set by whoever sets
+    /// the ID when they already hold the object. This is Observable-TRACKED
+    /// state, unlike `lookupApproval` below, whose body reads AppRoot's
+    /// @State (`liveInboxVM` etc.) — state the Review sheet's render graph
+    /// does not observe. When the sheet's first render raced those properties
+    /// (they read nil for a few ms at launch), the lookup returned nil and
+    /// nothing ever triggered a re-render: the sheet sat on "No pending
+    /// approval" forever while the approval was in the store (2026-07-08,
+    /// relay-approval-e2e). Setting the object here re-renders deterministically.
+    public var pendingApproval: Approval?
     /// Looks up the REAL `Approval` (command, cwd, risk, agent, tool name…)
     /// behind `pendingApprovalID` — without this, CursorReviewDiffView had no
     /// way to render anything but hardcoded example content, meaning a real
