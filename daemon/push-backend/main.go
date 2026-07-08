@@ -98,6 +98,33 @@ type runStartEvent struct {
 	RedactedSummary string  `json:"redactedSummary,omitempty"`
 }
 
+// secretRequestEvent is the body for POST /secret-request — posted by
+// lancerd's postSecretRequestPush (server.go) whenever an agent asks for a
+// stored credential and the running phone client isn't attached to catch the
+// live agent.secret.request notification. Mirrors approvalEvent's shape.
+type secretRequestEvent struct {
+	ID             string `json:"id"`
+	SessionID      string `json:"sessionId"`
+	Agent          string `json:"agent"`
+	ToolName       string `json:"toolName"`
+	CredentialType string `json:"credentialType"`
+	RequestedScope string `json:"requestedScope"`
+	HostName       string `json:"hostName"`
+}
+
+// questionEvent is the body for POST /question — posted by lancerd's
+// postQuestionPush (question.go) whenever an agent's AskUserQuestion (or
+// equivalent) tool call is pending and the running phone client isn't
+// attached to catch the live agent.question.pending notification. Deliberately
+// carries no question text or option labels — see pushQuestion's redaction note.
+type questionEvent struct {
+	ID         string `json:"id"`
+	SessionID  string `json:"sessionId"`
+	Agent      string `json:"agent"`
+	HostName   string `json:"hostName"`
+	Confidence string `json:"confidence,omitempty"`
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/relay", handleWebSocketRelay)
@@ -106,6 +133,8 @@ func main() {
 	mux.HandleFunc("POST /approval", handleApproval)
 	mux.HandleFunc("POST /run-complete", handleRunComplete)
 	mux.HandleFunc("POST /run-start", handleRunStart)
+	mux.HandleFunc("POST /secret-request", handleSecretRequest)
+	mux.HandleFunc("POST /question", handleQuestion)
 	mux.HandleFunc("/approval/decision", handlePostDecision)
 	mux.HandleFunc("/decisions", handlePollDecisions)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -344,6 +373,91 @@ func handleRunStart(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// pushSecretRequestFn is the seam tests swap to avoid real APNs calls.
+var pushSecretRequestFn = pushSecretRequest
+
+// handleSecretRequest: POST /secret-request. Guarded by the same Tier-1
+// control-plane secret as /approval and /run-complete. lancerd's
+// postSecretRequestPush (server.go) posts here whenever an agent asks for a
+// stored credential and the phone isn't attached to catch the live
+// agent.secret.request notification over the direct channel.
+func handleSecretRequest(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var ev secretRequestEvent
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
+		return
+	}
+
+	registry.RLock()
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
+	registry.RUnlock()
+	if !ok || token == "" {
+		log.Printf("no device token for session %s — dropping secret-request", ev.SessionID)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	if err := pushSecretRequestFn(token, ev); err != nil {
+		log.Printf("APNs secret-request push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// pushQuestionFn is the seam tests swap to avoid real APNs calls.
+var pushQuestionFn = pushQuestion
+
+// handleQuestion: POST /question. Guarded by the same Tier-1 control-plane
+// secret as /approval and /run-complete. lancerd's postQuestionPush
+// (question.go) posts here whenever an agent's question (AskUserQuestion or
+// equivalent) is pending and the phone isn't attached to catch the live
+// agent.question.pending notification — closing the gap where a
+// backgrounded/killed app never learns the agent is blocked waiting on input.
+func handleQuestion(w http.ResponseWriter, r *http.Request) {
+	if !relayAuthorized(w, r) {
+		return
+	}
+	var ev questionEvent
+	if !decodeRelayJSON(w, r, &ev) {
+		return
+	}
+	if ev.SessionID == "" {
+		http.Error(w, "sessionId required", http.StatusBadRequest)
+		return
+	}
+
+	registry.RLock()
+	rec, ok := registry.sessions[ev.SessionID]
+	var token string
+	if ok {
+		token = rec.apnsToken
+	}
+	registry.RUnlock()
+	if !ok || token == "" {
+		log.Printf("no device token for session %s — dropping question", ev.SessionID)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	if err := pushQuestionFn(token, ev); err != nil {
+		log.Printf("APNs question push failed: %v", err)
+		http.Error(w, "push failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func pushRunComplete(deviceToken string, ev runCompleteEvent) error {
 	keyID := mustEnv("APNS_KEY_ID")
 	teamID := mustEnv("APNS_TEAM_ID")
@@ -450,6 +564,99 @@ func pushApproval(deviceToken string, ev approvalEvent) error {
 	_ = pushLiveActivityApproval(ev.SessionID, ev.ID, risk, body, nil)
 
 	return nil
+}
+
+// pushSecretRequest sends an APNs alert for a pending agent.secret.request.
+//
+// PRIVACY: never put the credential's name, its requestedScope, or the
+// requesting tool's raw arguments in the alert body — it appears on the lock
+// screen. The credential TYPE category (e.g. "API key") is the most specific
+// thing surfaced there; full detail is fetched in-app post-unlock, same
+// discipline as pushApproval's redactSummary.
+func pushSecretRequest(deviceToken string, ev secretRequestEvent) error {
+	keyID := mustEnv("APNS_KEY_ID")
+	teamID := mustEnv("APNS_TEAM_ID")
+	keyPath := mustEnv("APNS_KEY_PATH")
+	bundleID := mustEnv("APNS_BUNDLE_ID")
+
+	key, err := loadP8Key(keyPath)
+	if err != nil {
+		return fmt.Errorf("load APNs key: %w", err)
+	}
+	token, err := makeJWT(keyID, teamID, key)
+	if err != nil {
+		return fmt.Errorf("make JWT: %w", err)
+	}
+
+	title := fmt.Sprintf("Credential requested · %s", ev.HostName)
+	body := redactCredentialSummary(ev.CredentialType)
+
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]string{"title": title, "body": body},
+			"sound":    "default",
+			"badge":    1,
+			"category": "secret-request",
+		},
+		"requestId": ev.ID,
+		"sessionId": ev.SessionID,
+	}
+
+	buf, _ := json.Marshal(payload)
+	return sendAPNsAlert(deviceToken, bundleID, token, buf, "10")
+}
+
+// redactCredentialSummary returns a non-sensitive summary for a secret-request
+// alert body. Only a generic credential-type category is surfaced — never the
+// credential's name, value, or requested scope.
+func redactCredentialSummary(credentialType string) string {
+	kind := strings.TrimSpace(credentialType)
+	if kind == "" {
+		kind = "a credential"
+	} else {
+		kind = "a " + kind + " credential"
+	}
+	return fmt.Sprintf("An agent is requesting access to %s", kind)
+}
+
+// pushQuestion sends an APNs alert for a pending agent.question.pending event.
+//
+// PRIVACY: never put the question text, option labels, or free-text answer
+// hints in the alert body — it appears on the lock screen. This is the whole
+// point of the gap this closes (an unattended app must not leak
+// AskUserQuestion content via a push preview). Full detail is fetched in-app
+// post-unlock, same discipline as pushApproval's redactSummary.
+func pushQuestion(deviceToken string, ev questionEvent) error {
+	keyID := mustEnv("APNS_KEY_ID")
+	teamID := mustEnv("APNS_TEAM_ID")
+	keyPath := mustEnv("APNS_KEY_PATH")
+	bundleID := mustEnv("APNS_BUNDLE_ID")
+
+	key, err := loadP8Key(keyPath)
+	if err != nil {
+		return fmt.Errorf("load APNs key: %w", err)
+	}
+	token, err := makeJWT(keyID, teamID, key)
+	if err != nil {
+		return fmt.Errorf("make JWT: %w", err)
+	}
+
+	title := fmt.Sprintf("Question pending · %s", ev.HostName)
+	body := "Agent has a question and is waiting for your input"
+
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]string{"title": title, "body": body},
+			"sound":    "default",
+			"badge":    1,
+			"category": "question",
+		},
+		"questionId": ev.ID,
+		"sessionId":  ev.SessionID,
+	}
+
+	buf, _ := json.Marshal(payload)
+	return sendAPNsAlert(deviceToken, bundleID, token, buf, "10")
 }
 
 // sendAPNsAlert POSTs an alert payload to APNs, trying the production host first

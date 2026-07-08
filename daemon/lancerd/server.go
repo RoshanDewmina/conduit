@@ -1949,6 +1949,48 @@ func (s *server) postSecretRequestPush(dev *registeredDevice, req SecretRequestP
 	resp.Body.Close()
 }
 
+// postQuestionPush notifies the push-backend of a pending agent question
+// (AskUserQuestion or equivalent) so the phone gets an APNs alert even when
+// backgrounded/killed — mirrors postApprovalPush / postSecretRequestPush.
+// Deliberately omits the question text and option labels from the wire
+// payload entirely (not just the alert body): notifyQuestionPending (question.go)
+// is the only caller and never has a reason to forward them here, since the
+// backend's pushQuestion always renders a generic, non-identifying alert.
+func (s *server) postQuestionPush(dev *registeredDevice, event QuestionEvent) {
+	hostname, _ := os.Hostname()
+	payload := map[string]interface{}{
+		"id":         event.QuestionID,
+		"sessionId":  dev.SessionID,
+		"agent":      event.Agent,
+		"hostName":   hostname,
+		"confidence": event.Confidence,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(dev.PushBackendURL, "/") + "/question"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Tier-1 endpoint — same Bearer auth as /approval, /secret-request and /register.
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "push-backend question POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "push-backend /question rejected: HTTP %d\n", resp.StatusCode)
+	}
+}
+
 // postRelayRegistration registers sessionId → relayToken with the backend's
 // control-plane /register endpoint, authenticated by APPROVAL_RELAY_SECRET (when
 // configured). This lets the backend validate the per-session Bearer token the

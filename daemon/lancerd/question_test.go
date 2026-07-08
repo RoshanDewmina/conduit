@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -469,5 +471,99 @@ func TestQuestionWrapEmitForRunSkipsOrdinaryTool(t *testing.T) {
 
 	if invoked {
 		t.Fatalf("d.onQuestion must not fire for a non-question tool")
+	}
+}
+
+// --- push-backend delivery (GAP 2: closes the app-backgrounded/killed hole) -
+
+// TestPostQuestionPush verifies postQuestionPush POSTs to /question with the
+// session-scoped payload and, crucially, never includes the question text or
+// option labels anywhere in the wire body — mirrors TestPostApprovalPush
+// (server_test.go).
+func TestPostQuestionPush(t *testing.T) {
+	var received []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/question" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		received = make([]byte, r.ContentLength)
+		r.Body.Read(received)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	s := newServer(t.TempDir())
+	dev := &registeredDevice{
+		PushBackendURL: srv.URL,
+		SessionID:      "device-session-q1",
+	}
+
+	event := QuestionEvent{
+		QuestionID: "question-abc",
+		Agent:      "claudeCode",
+		Confidence: "complete",
+		Questions: []QuestionItem{{
+			Question: "Do you want to deploy to prod with the rotated database credentials?",
+			Options:  []QuestionOption{{Label: "Yes"}, {Label: "No"}},
+		}},
+	}
+
+	s.postQuestionPush(dev, event)
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(received, &payload); err != nil {
+		t.Fatalf("could not decode payload: %v (raw: %s)", err, received)
+	}
+	if payload["sessionId"] != "device-session-q1" {
+		t.Errorf("sessionId = %v, want device-session-q1", payload["sessionId"])
+	}
+	if payload["id"] != "question-abc" {
+		t.Errorf("id = %v, want question-abc", payload["id"])
+	}
+	if !strings.Contains(string(received), "\"confidence\":\"complete\"") {
+		t.Errorf("expected confidence in payload, got %s", received)
+	}
+	if strings.Contains(string(received), "deploy to prod") || strings.Contains(string(received), "rotated database credentials") {
+		t.Fatalf("postQuestionPush must never include question text on the wire: %s", received)
+	}
+}
+
+// TestNotifyQuestionPendingPostsPushWhenDeviceRegistered verifies
+// notifyQuestionPending fires postQuestionPush whenever a push-registered
+// device is present — the actual production wiring this gap closes, since
+// registerAndWaitForQuestion (question.go) is the only production caller of
+// notifyQuestionPending and previously only ever hit writeFramed/e2e.
+func TestNotifyQuestionPendingPostsPushWhenDeviceRegistered(t *testing.T) {
+	withStateDir(t)
+	pushed := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case pushed <- r.URL.Path:
+		default:
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	s := newServer(serverHome())
+	s.deviceMu.Lock()
+	s.device = &registeredDevice{PushBackendURL: srv.URL, SessionID: "sess-notify"}
+	s.deviceMu.Unlock()
+
+	s.notifyQuestionPending(QuestionEvent{
+		QuestionID: "notify-q-1",
+		Agent:      "claudeCode",
+		Questions:  []QuestionItem{{Question: "Proceed?"}},
+	})
+
+	select {
+	case path := <-pushed:
+		if path != "/question" {
+			t.Fatalf("pushed to %q, want /question", path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("notifyQuestionPending did not POST to the push backend within 2s")
 	}
 }

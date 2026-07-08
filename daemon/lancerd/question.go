@@ -403,16 +403,24 @@ func (s *server) registerAndWaitForQuestion(event QuestionEvent) {
 
 // notifyQuestionPending relays a newly-registered question to every channel
 // an approval-pending event already uses: the attach client (if connected,
-// via the same writeFramed path as marshalPendingNotification) and the E2E
-// relay (if paired, via e2eRouter.sendQuestion) — mirrors
-// handleHookWithNotify's approval path (server.go) plus
-// e2eRouter.sendApproval.
+// via the same writeFramed path as marshalPendingNotification), the E2E
+// relay (if paired, via e2eRouter.sendQuestion), and — mirroring
+// handleHookWithNotify's postApprovalPush call (server.go) — the
+// push-backend APNs alert, so a backgrounded/killed app still learns the
+// agent is waiting on input instead of only the live-attached client ever
+// finding out.
 func (s *server) notifyQuestionPending(event QuestionEvent) {
 	if notification, err := marshalPendingQuestionNotification(event); err == nil {
 		s.writeFramed(notification)
 	}
 	if s.e2e != nil {
 		s.e2e.sendQuestion(event)
+	}
+	s.deviceMu.RLock()
+	dev := s.device
+	s.deviceMu.RUnlock()
+	if dev != nil && dev.PushBackendURL != "" {
+		go s.postQuestionPush(dev, event)
 	}
 }
 
