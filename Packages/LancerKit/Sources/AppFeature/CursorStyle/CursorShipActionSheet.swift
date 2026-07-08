@@ -105,7 +105,6 @@ public struct CursorShipActionSheet: View {
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
-        .environment(\.cursorScheme, .light)
     }
 
     // MARK: Risk badge

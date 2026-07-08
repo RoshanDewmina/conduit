@@ -25,6 +25,7 @@ public struct CursorWorkThreadView: View {
     private let onOpenComposerPrefilled: (String) -> Void
 
     @State private var returnPacketPresentation: ReturnPacketPresentation?
+    @State private var copiedToastText: String?
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
@@ -81,6 +82,7 @@ public struct CursorWorkThreadView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     userPromptBubble
                     narration
+                    changesCard
                     artifactCards
                 }
                 .padding(.horizontal, 16)
@@ -115,6 +117,25 @@ public struct CursorWorkThreadView: View {
         #if DEBUG
         .onAppear { applyDebugReturnPacketSeamIfNeeded() }
         #endif
+        .overlay(alignment: .top) {
+            if let copiedToastText {
+                CursorCopiedToast(text: copiedToastText)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onAppear { scheduleToastDismiss() }
+            }
+        }
+    }
+
+    private func scheduleToastDismiss() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1600))
+            withAnimation(.easeInOut(duration: 0.2)) { copiedToastText = nil }
+        }
+    }
+
+    private func showCopiedToast(_ text: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { copiedToastText = text }
     }
 
     // MARK: Needs-approval banner
@@ -159,26 +180,58 @@ public struct CursorWorkThreadView: View {
     // MARK: Header
 
     private var header: some View {
-        CursorHeaderBar(
-            leading: AnyView(
-                CursorIconButton(systemImageName: "chevron.left", action: onBack)
-            ),
-            trailing: [
-                CursorIconButton(systemImageName: "ellipsis", action: {})
-            ]
-        )
+        HStack(spacing: CursorMetrics.headerSpacing) {
+            CursorIconButton(systemImageName: "chevron.left", action: onBack)
+            Spacer()
+            threadOverflowMenu
+        }
+        .padding(.horizontal, CursorMetrics.headerHorizontalPadding)
+        .padding(.top, CursorMetrics.headerTopPadding)
         .overlay(alignment: .center) {
             HStack(spacing: 6) {
                 Text(missionTitle)
                     .font(CursorType.sheetTitle)
-                    .foregroundColor(CursorColors.light.primaryText)
+                    .foregroundColor(colors.primaryText)
                     .lineLimit(1)
                 Image(systemName: "display")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(CursorColors.light.secondaryText)
+                    .foregroundColor(colors.secondaryText)
             }
             .padding(.top, CursorMetrics.headerTopPadding)
         }
+    }
+
+    /// Row-13 "…" menu (Pin / Rename / Mark as Unread / Archive / Copy ID /
+    /// Share, IMG_2429). Only "Copy ID" has a real effect (clipboard + toast)
+    /// — Pin/Rename/Mark-Unread/Archive/Share have no backing RPC in Lancer's
+    /// V1 model yet, so they're present for pixel-closeness but intentionally
+    /// no-op (see report: "wiring needs").
+    private var threadOverflowMenu: some View {
+        Menu {
+            Button { } label: { Label("Pin", systemImage: "pin") }
+            Button { } label: { Label("Rename", systemImage: "pencil") }
+            Button { } label: { Label("Mark as Unread", systemImage: "bell.badge") }
+            Button { } label: { Label("Archive", systemImage: "archivebox") }
+            Divider()
+            Button {
+                #if os(iOS)
+                UIPasteboard.general.string = liveBridge?.selectedThreadID ?? missionTitle
+                #endif
+                showCopiedToast("Copied ID")
+            } label: { Label("Copy ID", systemImage: "doc.on.doc") }
+            Button { } label: { Label("Share", systemImage: "square.and.arrow.up") }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(colors.iconButtonBackground)
+                    .overlay(Circle().stroke(colors.iconButtonBorder, lineWidth: 1))
+                    .frame(width: CursorMetrics.headerButtonDiameter, height: CursorMetrics.headerButtonDiameter)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: CursorMetrics.headerIconSize, weight: .medium))
+                    .foregroundColor(colors.primaryText)
+            }
+        }
+        .accessibilityIdentifier("work-thread-overflow-menu")
     }
 
     // MARK: User prompt bubble
@@ -197,10 +250,10 @@ public struct CursorWorkThreadView: View {
             Spacer(minLength: 48)
             Text(displayedPrompt)
                 .font(CursorType.bodyText)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(CursorColors.light.cardBackground)
+                .background(colors.userBubbleBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
         }
     }
@@ -212,11 +265,11 @@ public struct CursorWorkThreadView: View {
             if let error = liveBridge?.activeThreadError, !error.isEmpty {
                 Text(error)
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.dangerRed)
+                    .foregroundColor(colors.dangerRed)
             } else if let text = liveBridge?.activeThreadResponse, !text.isEmpty {
                 Text(text)
                     .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.primaryText)
+                    .foregroundColor(colors.primaryText)
                     .textSelection(.enabled)
             } else if liveBridge?.activeThreadIsWorking == true {
                 logLine("Working…")
@@ -233,6 +286,98 @@ public struct CursorWorkThreadView: View {
         ForEach(displayedArtifacts) { artifact in
             artifactView(for: artifact)
         }
+    }
+
+    /// The most recent receipt among the displayed artifacts, if any — source
+    /// for the "Changes N" card and "View PR" pill (IMG_2410/2412). No fake
+    /// diffstat is ever synthesized: this is nil (and the card/pill don't
+    /// render) unless a real `ProofReceipt.filesTouched` exists.
+    private var activeReceipt: ProofReceipt? {
+        displayedArtifacts.compactMap(ReceiptCardModel.decodeReceipt(from:)).first { receipt in
+            !(receipt.filesTouched?.isEmpty ?? true)
+        }
+    }
+
+    // MARK: Changes card + View PR pill (IMG_2410/2412)
+
+    @ViewBuilder
+    private var changesCard: some View {
+        if let receipt = activeReceipt, let files = receipt.filesTouched, !files.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Changes")
+                        .font(CursorType.cardTitle)
+                        .foregroundColor(colors.primaryText)
+                    Text("\(files.count)")
+                        .font(CursorType.rowSecondary)
+                        .foregroundColor(colors.secondaryText)
+                    Spacer()
+                }
+                .padding(.horizontal, CursorMetrics.cardPadding)
+                .padding(.top, CursorMetrics.cardPadding)
+                .padding(.bottom, 8)
+
+                ForEach(Array(files.enumerated()), id: \.offset) { index, file in
+                    VStack(spacing: 0) {
+                        HStack(spacing: CursorMetrics.rowSpacing) {
+                            fileExtensionBadge(for: file.path)
+                            Text(shortFileName(file.path))
+                                .font(CursorType.rowTitle)
+                                .foregroundColor(colors.primaryText)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            CursorDiffStatText(added: file.additions, removed: file.deletions)
+                        }
+                        .padding(.horizontal, CursorMetrics.cardPadding)
+                        .padding(.vertical, 10)
+                        if index < files.count - 1 {
+                            Rectangle()
+                                .fill(colors.hairline)
+                                .frame(height: CursorMetrics.rowHairlineHeight)
+                                .padding(.leading, CursorMetrics.cardPadding + CursorMetrics.rowIconSize + CursorMetrics.rowSpacing)
+                        }
+                    }
+                }
+            }
+            .background(colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous))
+            .accessibilityIdentifier("work-thread-changes-card")
+
+            viewPRPill(files: files)
+        }
+    }
+
+    private func viewPRPill(files: [ProofReceipt.FileTouched]) -> some View {
+        let added = files.reduce(0) { $0 + $1.additions }
+        let removed = files.reduce(0) { $0 + $1.deletions }
+        return HStack {
+            CursorPillButton(
+                segments: [
+                    .init("View PR "),
+                    .init("+\(added)", color: colors.successGreen),
+                    .init(" -\(removed)", color: colors.dangerRed)
+                ],
+                style: .secondary,
+                action: onViewPR
+            )
+            .accessibilityIdentifier("work-thread-view-pr-pill")
+            Spacer()
+        }
+        .padding(.top, 4)
+    }
+
+    private func fileExtensionBadge(for path: String) -> some View {
+        let ext = (path as NSString).pathExtension.uppercased()
+        let label = ext.isEmpty ? "•" : String(ext.prefix(2))
+        return Text(label)
+            .font(CursorType.diffLineNumber)
+            .foregroundColor(colors.mutedText)
+            .frame(width: CursorMetrics.rowIconSize, height: CursorMetrics.rowIconSize)
+    }
+
+    private func shortFileName(_ path: String) -> String {
+        (path as NSString).lastPathComponent
     }
 
     @ViewBuilder
@@ -273,7 +418,7 @@ public struct CursorWorkThreadView: View {
     private func logLine(_ text: String) -> some View {
         Text(text)
             .font(CursorType.logLine)
-            .foregroundColor(CursorColors.light.secondaryText)
+            .foregroundColor(colors.secondaryText)
     }
 
     private func returnPacketEntryButton(for receipt: ProofReceipt) -> some View {
@@ -289,14 +434,14 @@ public struct CursorWorkThreadView: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundColor(CursorColors.light.primaryText)
+            .foregroundColor(colors.primaryText)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(CursorColors.light.cardBackground)
+            .background(colors.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(CursorColors.light.hairline, lineWidth: 0.5)
+                    .stroke(colors.hairline, lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
